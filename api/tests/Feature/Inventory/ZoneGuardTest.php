@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\StockMovementService;
@@ -18,7 +19,7 @@ use Tests\TestCase;
 
 /**
  * F-02 — the movement/reservation choke point must refuse quarantine and
- * scrap-zone stock for consumption, regardless of which caller reaches it.
+ * scrap-zone consumption and allow quarantine release only through an MRB.
  *
  * MaterialIssueService and PickingListService guard their own lookups, but any
  * other path (Delivery, future services) could still move held stock. The
@@ -29,9 +30,13 @@ class ZoneGuardTest extends TestCase
     use RefreshDatabase;
 
     private StockMovementService $movements;
+
     private Item $item;
+
     private WarehouseLocation $goodLocation;
+
     private WarehouseLocation $quarantineLocation;
+
     private WarehouseLocation $scrapLocation;
 
     protected function setUp(): void
@@ -53,12 +58,12 @@ class ZoneGuardTest extends TestCase
 
         foreach ([$this->goodLocation, $this->quarantineLocation, $this->scrapLocation] as $location) {
             StockLevel::create([
-                'item_id'           => $this->item->id,
-                'location_id'       => $location->id,
-                'quantity'          => '10.000',
+                'item_id' => $this->item->id,
+                'location_id' => $location->id,
+                'quantity' => '10.000',
                 'reserved_quantity' => '0.000',
                 'weighted_avg_cost' => '5.0000',
-                'lock_version'      => 0,
+                'lock_version' => 0,
             ]);
         }
     }
@@ -115,23 +120,36 @@ class ZoneGuardTest extends TestCase
         ));
     }
 
-    public function test_transfer_out_of_quarantine_zone_is_allowed(): void
+    public function test_unlinked_transfer_out_of_quarantine_zone_is_blocked_without_side_effects(): void
     {
-        // Quarantine mechanics rely on transfers out (MRB release), so a
-        // transfer must NOT trip the consumption guard.
-        $this->movements->move(new StockMovementInput(
-            type: StockMovementType::Transfer,
-            itemId: $this->item->id,
-            fromLocationId: $this->quarantineLocation->id,
-            toLocationId: $this->goodLocation->id,
-            quantity: '1.000',
-            unitCost: '5.00',
-        ));
+        $beforeMovements = StockMovement::query()->where('item_id', $this->item->id)->count();
 
-        $level = StockLevel::where('item_id', $this->item->id)
+        try {
+            $this->movements->move(new StockMovementInput(
+                type: StockMovementType::Transfer,
+                itemId: $this->item->id,
+                fromLocationId: $this->quarantineLocation->id,
+                toLocationId: $this->goodLocation->id,
+                quantity: '1.000',
+                unitCost: '5.00',
+            ));
+            $this->fail('An unlinked transfer must not release quarantine stock.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertSame(
+                'Quarantine stock can leave only through the authorized MRB release workflow.',
+                $exception->getMessage(),
+            );
+        }
+
+        $quarantineLevel = StockLevel::where('item_id', $this->item->id)
             ->where('location_id', $this->quarantineLocation->id)
             ->firstOrFail();
-        $this->assertSame('9.000', (string) $level->quantity);
+        $goodLevel = StockLevel::where('item_id', $this->item->id)
+            ->where('location_id', $this->goodLocation->id)
+            ->firstOrFail();
+        $this->assertSame('10.000', (string) $quarantineLevel->quantity);
+        $this->assertSame('10.000', (string) $goodLevel->quantity);
+        $this->assertSame($beforeMovements, StockMovement::query()->where('item_id', $this->item->id)->count());
     }
 
     public function test_reservation_in_quarantine_zone_is_blocked(): void

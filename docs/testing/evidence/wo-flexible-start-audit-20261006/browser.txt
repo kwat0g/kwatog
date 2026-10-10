@@ -1,0 +1,5 @@
+Live readiness {"ready":true,"mode":"late","blockers":[]}
+AUDIT acknowledgement clears after unchanged 30-second readiness refresh.
+AUDIT button targets [{"label":"","height":18},{"label":"Close","height":32},{"label":"Reschedule","height":32},{"label":"Start production","height":32}]
+AUDIT absence warning remains visible; incorrect rescheduling route confirmed separately by backend probe.
+Audit probes completed; no page errors or live WO mutations.

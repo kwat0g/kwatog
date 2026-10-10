@@ -84,17 +84,17 @@ class Asset extends Model
 
     public function machine(): HasOne
     {
-        return $this->hasOne(\App\Modules\MRP\Models\Machine::class, 'asset_id');
+        return $this->hasOne(\App\Modules\MRP\Models\Machine::class, 'asset_id')->withTrashed();
     }
 
     public function mold(): HasOne
     {
-        return $this->hasOne(\App\Modules\MRP\Models\Mold::class, 'asset_id');
+        return $this->hasOne(\App\Modules\MRP\Models\Mold::class, 'asset_id')->withTrashed();
     }
 
     public function vehicle(): HasOne
     {
-        return $this->hasOne(\App\Modules\SupplyChain\Models\Vehicle::class, 'asset_id');
+        return $this->hasOne(\App\Modules\SupplyChain\Models\Vehicle::class, 'asset_id')->withTrashed();
     }
 
     /**

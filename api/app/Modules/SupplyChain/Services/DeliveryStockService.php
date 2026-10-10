@@ -13,12 +13,11 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
-use App\Modules\Quality\Enums\InspectionStage;
-use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStockReservationStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryStockReservation;
+use Illuminate\Database\Eloquent\Builder;
 
 /** Dispatch runs inside DeliveryService's locked lifecycle transaction. */
 class DeliveryStockService
@@ -32,8 +31,10 @@ class DeliveryStockService
     {
         $delivery->loadMissing([
             'items.salesOrderItem.product',
-            'items.inspection.workOrderOutput.workOrder',
+            'items.inspection.ncr', 'items.inspection.resultAuthors', 'items.inspection.workOrderOutput.workOrder',
             'items.inspection.workOrderOutput.productionReceiptMovement',
+            'items.stockAllocation.output.workOrder', 'items.stockAllocation.output.productionReceiptMovement',
+            'items.stockAllocation.salesOrderItem.product.inspectionSpec.currentRevision',
         ]);
 
         // Resolve all evidence before changing stock, then acquire stock rows
@@ -58,8 +59,12 @@ class DeliveryStockService
             $firstMovementId = null;
             foreach ($reservations as $reservation) {
                 $quantity = $reservation->remainingQuantity();
-                if (bccomp($quantity, $remaining, 3) > 0) $quantity = $remaining;
-                if (bccomp($quantity, '0', 3) <= 0) continue;
+                if (bccomp($quantity, $remaining, 3) > 0) {
+                    $quantity = $remaining;
+                }
+                if (bccomp($quantity, '0', 3) <= 0) {
+                    continue;
+                }
                 $movement = $this->movements->move(new StockMovementInput(
                     type: StockMovementType::Delivery,
                     itemId: (int) $item->id,
@@ -75,7 +80,9 @@ class DeliveryStockService
                 ));
                 $firstMovementId ??= $movement->id;
                 $remaining = bcsub($remaining, $quantity, 3);
-                if (bccomp($remaining, '0', 3) === 0) break;
+                if (bccomp($remaining, '0', 3) === 0) {
+                    break;
+                }
             }
             if (bccomp($remaining, '0', 3) > 0) {
                 throw new BusinessRuleException("Approved lot {$receipt->lot_number} is short by {$remaining} for {$item->code}. Ask Warehouse to make this lot available in an active finished-goods bin before dispatch.");
@@ -84,18 +91,23 @@ class DeliveryStockService
             $line->forceFill(['stock_movement_id' => $firstMovementId])->save();
         }
     }
+
     /** Read-only pick guidance; physical availability is checked again at dispatch. */
     public function preparation(Delivery $delivery): array
     {
         $delivery->loadMissing([
-            'items.salesOrderItem.product', 'items.inspection.workOrderOutput.workOrder',
+            'items.salesOrderItem.product', 'items.inspection.ncr', 'items.inspection.resultAuthors', 'items.inspection.workOrderOutput.workOrder',
             'items.inspection.workOrderOutput.productionReceiptMovement',
+            'items.stockAllocation.output.workOrder', 'items.stockAllocation.output.productionReceiptMovement',
+            'items.stockAllocation.salesOrderItem.product.inspectionSpec.currentRevision',
         ]);
         $result = [];
         $planned = [];
         $plannedLots = [];
         foreach ($delivery->items as $line) {
-            if ($line->stock_movement_id !== null) continue;
+            if ($line->stock_movement_id !== null) {
+                continue;
+            }
             $row = ['delivery_item_id' => $line->hash_id, 'product' => $line->salesOrderItem?->product?->part_number,
                 'quantity' => (string) $line->quantity, 'lot_number' => null, 'locations' => [], 'shortage' => (string) $line->quantity, 'message' => null];
             try {
@@ -111,18 +123,24 @@ class DeliveryStockService
                     // what the pick guidance offers. Reading the raw reserved
                     // figure made a fully reserved shipment look short.
                     $reserved = bcsub((string) $level->reserved_quantity,
-                        $this->ownActiveHold((int) $delivery->id, (int) $item->id, (int) $level->location_id, (string) $receipt->lot_number), 3);
-                    if (bccomp($reserved, '0', 3) < 0) $reserved = '0.000';
+                        $this->ownActiveHold((int) $delivery->id, (int) $item->id, (int) $level->location_id), 3);
+                    if (bccomp($reserved, '0', 3) < 0) {
+                        $reserved = '0.000';
+                    }
                     $available = bcsub(bcsub((string) $level->quantity, $reserved, 3), $planned[$key] ?? '0', 3);
                     $lotAvailable = bcsub($this->lots->lotQuantity((int) $item->id, (int) $level->location_id, (string) $receipt->lot_number), $plannedLots[$lotKey] ?? '0', 3);
                     $quantity = bccomp($available, $lotAvailable, 3) < 0 ? $available : $lotAvailable;
                     $quantity = bccomp($quantity, $remaining, 3) < 0 ? $quantity : $remaining;
-                    if (bccomp($quantity, '0', 3) <= 0) continue;
+                    if (bccomp($quantity, '0', 3) <= 0) {
+                        continue;
+                    }
                     $row['locations'][] = ['code' => $level->location->full_code, 'quantity' => $quantity];
                     $planned[$key] = bcadd($planned[$key] ?? '0', $quantity, 3);
                     $plannedLots[$lotKey] = bcadd($plannedLots[$lotKey] ?? '0', $quantity, 3);
                     $remaining = bcsub($remaining, $quantity, 3);
-                    if (bccomp($remaining, '0', 3) === 0) break;
+                    if (bccomp($remaining, '0', 3) === 0) {
+                        break;
+                    }
                 }
                 $row['shortage'] = $remaining;
                 if (bccomp($remaining, '0', 3) > 0) {
@@ -133,10 +151,11 @@ class DeliveryStockService
             }
             $result[] = $row;
         }
+
         return $result;
     }
 
-    public function eligibleLevels(int $itemId): \Illuminate\Database\Eloquent\Builder
+    public function eligibleLevels(int $itemId): Builder
     {
         return StockLevel::query()->where('item_id', $itemId)
             ->whereHas('location', fn ($q) => $q->where('is_active', true)
@@ -154,13 +173,12 @@ class DeliveryStockService
     }
 
     /** The part of a bin's reservation this delivery holds for that lot. */
-    private function ownActiveHold(int $deliveryId, int $itemId, int $locationId, string $lotNumber): string
+    private function ownActiveHold(int $deliveryId, int $itemId, int $locationId): string
     {
         $rows = DeliveryStockReservation::query()
             ->where('delivery_id', $deliveryId)
             ->where('item_id', $itemId)
             ->where('location_id', $locationId)
-            ->where('lot_number', $lotNumber)
             ->where('status', DeliveryStockReservationStatus::Reserved)
             ->get(['quantity', 'consumed_quantity', 'released_quantity']);
 
@@ -179,12 +197,18 @@ class DeliveryStockService
         $inspection = $line->inspection;
         $output = $inspection?->workOrderOutput;
         $workOrder = $output?->workOrder;
+        $workOrder?->assertProcessQualityReleased();
         $receipt = $output?->productionReceiptMovement;
+        $receipt = $receipt
+            ? StockMovement::query()->lockForUpdate()->find($receipt->id)
+            : null;
         $product = $line->salesOrderItem?->product;
-        if (! $inspection || $inspection->stage !== InspectionStage::Outgoing
-            || $inspection->status !== InspectionStatus::Passed || ! $inspection->isMakerChecked()
-            || ! $workOrder || (int) $workOrder->sales_order_id !== (int) $delivery->sales_order_id
-            || (int) $workOrder->sales_order_item_id !== (int) $line->sales_order_item_id
+        if ($line->sales_order_stock_allocation_id && $inspection && $line->stockAllocation && $line->salesOrderItem) {
+            app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->assertAllocationForDelivery($line->stockAllocation, $line->salesOrderItem, $inspection, (string) $line->quantity, (float) $line->stockAllocation->transferred_quantity > 0);
+        }
+        if (! $inspection || ! $inspection->canReleaseOutgoing()
+            || ! $workOrder || (! $line->sales_order_stock_allocation_id && ((int) $workOrder->sales_order_id !== (int) $delivery->sales_order_id
+            || (int) $workOrder->sales_order_item_id !== (int) $line->sales_order_item_id))
             || (int) $inspection->product_id !== (int) $product?->id) {
             throw new BusinessRuleException('Dispatch requires a reviewed outgoing inspection linked to this sales-order line. Ask Quality to reconcile the delivery evidence.');
         }
@@ -198,7 +222,12 @@ class DeliveryStockService
             throw new BusinessRuleException('The approved output has no traceable finished-goods receipt. Ask Production and Warehouse to reconcile its receipt and lot before dispatch.');
         }
 
+        if (! $receipt->gl_handoff_status?->isResolved()) {
+            throw new BusinessRuleException(
+                "Delivery {$delivery->delivery_number} cannot reserve or dispatch its approved finished-goods lot until the General Ledger handoff is resolved. Ask Accounting to retry the linked stock movement."
+            );
+        }
+
         return [$item, $receipt];
     }
-
 }

@@ -9,13 +9,14 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
-use App\Common\Support\SearchOperator;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Enums\DepreciationMethod;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Models\AssetDepreciation;
 use App\Modules\Assets\Models\AssetTransfer;
@@ -26,6 +27,7 @@ use App\Modules\SupplyChain\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -46,13 +48,15 @@ class AssetService
         $q = Asset::query()->with([
             'department:id,name,code',
             'disposalRequester:id,name',
-            'machine:id,asset_id,machine_code,name',
-            'mold:id,asset_id,mold_code,name',
-            'vehicle:id,asset_id,plate_number,name',
+            'machine:id,asset_id,machine_code,name,deleted_at',
+            'mold:id,asset_id,mold_code,name,deleted_at',
+            'vehicle:id,asset_id,plate_number,name,deleted_at',
         ]);
 
         foreach (['category', 'status', 'department_id'] as $f) {
-            if (! empty($filters[$f])) $q->where($f, $filters[$f]);
+            if (! empty($filters[$f])) {
+                $q->where($f, $filters[$f]);
+            }
         }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
@@ -60,6 +64,7 @@ class AssetService
                 ->where('asset_code', SearchOperator::like(), $term)
                 ->orWhere('name', SearchOperator::like(), $term));
         }
+
         return $q->orderBy('asset_code')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 
@@ -76,10 +81,53 @@ class AssetService
             'depreciations.journalEntry:id',
             'disposalRequester:id,name',
             'approvalRecords.approver:id,name',
-            'machine:id,asset_id,machine_code,name',
-            'mold:id,asset_id,mold_code,name',
-            'vehicle:id,asset_id,plate_number,name',
+            'machine:id,asset_id,machine_code,name,deleted_at',
+            'mold:id,asset_id,mold_code,name,deleted_at',
+            'vehicle:id,asset_id,plate_number,name,deleted_at',
         ]);
+    }
+
+    public function associationOptions(Asset $asset, array $filters): LengthAwarePaginator
+    {
+        if ($asset->status === AssetStatus::Disposed) {
+            throw new BusinessRuleException('Disposed assets cannot be associated with operational records.');
+        }
+        if ($asset->disposal_requested_by !== null) {
+            throw new BusinessRuleException('Assets with a pending disposal request cannot be associated with operational records.');
+        }
+
+        [$modelClass, $codeColumn] = match ($asset->category) {
+            AssetCategory::Machine => [Machine::class, 'machine_code'],
+            AssetCategory::Mold => [Mold::class, 'mold_code'],
+            AssetCategory::Vehicle => [Vehicle::class, 'plate_number'],
+            default => throw new BusinessRuleException('This asset category cannot be associated with an operational record.'),
+        };
+
+        $isAlreadyAssociated = Machine::withTrashed()->where('asset_id', $asset->getKey())->exists()
+            || Mold::withTrashed()->where('asset_id', $asset->getKey())->exists()
+            || Vehicle::withTrashed()->where('asset_id', $asset->getKey())->exists();
+        $query = $modelClass::query()->where('asset_id', $isAlreadyAssociated ? $asset->getKey() : null);
+        if ($isAlreadyAssociated) {
+            $query->withTrashed();
+        }
+
+        if (! empty($filters['search'])) {
+            $term = '%'.trim((string) $filters['search']).'%';
+            $query->where(fn (Builder $builder) => $builder
+                ->where($codeColumn, SearchOperator::like(), $term)
+                ->orWhere('name', SearchOperator::like(), $term));
+        }
+
+        $targets = $query
+            ->orderBy($codeColumn)
+            ->paginate(min((int) ($filters['per_page'] ?? 50), 100));
+        $targets->setCollection($targets->getCollection()->map(static fn (Model $target): array => [
+            'id' => $target->hash_id,
+            'code' => $target->getAttribute($codeColumn),
+            'name' => $target->name,
+        ]));
+
+        return $targets;
     }
 
     /**
@@ -87,19 +135,22 @@ class AssetService
      * The Assets module owns this write so no second polymorphic link is
      * introduced beside the canonical foreign key.
      *
-     * @param array{target_type:string, target_id:int|null} $data
+     * @param  array{target_type:string, target_id:int|null}  $data
      */
     public function associate(Asset $asset, array $data): Asset
     {
         return DB::transaction(function () use ($asset, $data): Asset {
             $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
-            if ($locked->status === AssetStatus::Disposed) {
+            if ($data['target_id'] !== null && $locked->status === AssetStatus::Disposed) {
                 throw new BusinessRuleException('Disposed assets cannot be associated with operational records.');
+            }
+            if ($data['target_id'] !== null && $locked->disposal_requested_by !== null) {
+                throw new BusinessRuleException('Assets with a pending disposal request cannot be associated with operational records.');
             }
 
             if ($data['target_id'] === null) {
                 foreach ([Machine::class, Mold::class, Vehicle::class] as $modelClass) {
-                    $modelClass::query()
+                    $modelClass::withTrashed()
                         ->where('asset_id', $locked->getKey())
                         ->lockForUpdate()
                         ->get()
@@ -135,12 +186,12 @@ class AssetService
                 if ($otherClass === $modelClass) {
                     continue;
                 }
-                if ($otherClass::query()->where('asset_id', $locked->getKey())->lockForUpdate()->exists()) {
+                if ($otherClass::withTrashed()->where('asset_id', $locked->getKey())->lockForUpdate()->exists()) {
                     throw new BusinessRuleException('This asset already has an association; clear it before changing the operational record.');
                 }
             }
 
-            if ($modelClass::query()
+            if ($modelClass::withTrashed()
                 ->where('asset_id', $locked->getKey())
                 ->where('id', '<>', $target->getKey())
                 ->lockForUpdate()
@@ -164,23 +215,24 @@ class AssetService
             $this->assertSalvageWithinCost((string) $salvage, (string) $data['acquisition_cost']);
 
             $asset = Asset::create([
-                'asset_code'        => $this->sequences->generate('asset'),
-                'name'              => $data['name'],
-                'description'       => $data['description'] ?? null,
-                'category'          => AssetCategory::from((string) $data['category'])->value,
-                'department_id'     => $data['department_id'] ?? null,
-                'acquisition_date'  => $data['acquisition_date'],
-                'acquisition_cost'  => $data['acquisition_cost'],
+                'asset_code' => $this->sequences->generate('asset'),
+                'name' => $data['name'],
+                'description' => $data['description'] ?? null,
+                'category' => AssetCategory::from((string) $data['category'])->value,
+                'department_id' => $data['department_id'] ?? null,
+                'acquisition_date' => $data['acquisition_date'],
+                'acquisition_cost' => $data['acquisition_cost'],
                 'useful_life_years' => (int) $data['useful_life_years'],
-                'depreciation_method' => $data['depreciation_method'] ?? \App\Modules\Assets\Enums\DepreciationMethod::StraightLine->value,
-                'salvage_value'     => $salvage,
-                'status'            => AssetStatus::Active->value,
-                'location'          => $data['location'] ?? null,
+                'depreciation_method' => $data['depreciation_method'] ?? DepreciationMethod::StraightLine->value,
+                'salvage_value' => $salvage,
+                'status' => AssetStatus::Active->value,
+                'location' => $data['location'] ?? null,
                 'insurance_policy_no' => $data['insurance_policy_no'] ?? null,
-                'insurance_provider'  => $data['insurance_provider'] ?? null,
-                'insurance_expiry'    => $data['insurance_expiry'] ?? null,
-                'insured_value'       => $data['insured_value'] ?? null,
+                'insurance_provider' => $data['insurance_provider'] ?? null,
+                'insurance_expiry' => $data['insurance_expiry'] ?? null,
+                'insured_value' => $data['insured_value'] ?? null,
             ]);
+
             return $asset->fresh();
         });
     }
@@ -235,6 +287,7 @@ class AssetService
             }
             $locked->fill($changes);
             $locked->save();
+
             return $locked->fresh();
         });
     }
@@ -278,6 +331,9 @@ class AssetService
             if ($this->approvals->nextStep($locked) !== null) {
                 throw new BusinessRuleException('A disposal request is already pending approval for this asset.');
             }
+            if ($this->hasOperationalAssociation($locked)) {
+                throw new BusinessRuleException('Disassociate this asset from its machine, mold or vehicle before disposal.');
+            }
 
             $disposedDate = CarbonImmutable::parse((string) ($data['disposed_date'] ?? now()->toDateString()))->startOfDay();
             $acquisitionDate = CarbonImmutable::parse($locked->acquisition_date->toDateString())->startOfDay();
@@ -287,6 +343,7 @@ class AssetService
             if ($disposedDate->gt(CarbonImmutable::today())) {
                 throw new BusinessRuleException('Disposal date cannot be in the future.');
             }
+            $this->assertDisposalNotBeforeDepreciation($locked, $disposedDate);
             $this->periods->assertPostingAllowed($disposedDate->toDateString());
 
             $reason = trim((string) ($data['remarks'] ?? $data['disposal_reason'] ?? ''));
@@ -298,9 +355,9 @@ class AssetService
 
             $locked->forceFill([
                 'disposal_request_amount' => $disposalAmount,
-                'disposal_request_date'   => $disposedDate->toDateString(),
+                'disposal_request_date' => $disposedDate->toDateString(),
                 'disposal_request_reason' => $reason,
-                'disposal_requested_by'   => $by->id,
+                'disposal_requested_by' => $by->id,
             ])->save();
 
             try {
@@ -311,12 +368,12 @@ class AssetService
                 // columns nor the operator — fail the submission whole.
                 Log::warning('asset_disposal approval submit failed', [
                     'asset_id' => $locked->getKey(),
-                    'error'    => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
 
                 throw new BusinessRuleException(
                     'The asset disposal approval workflow is not configured, so this disposal cannot be requested. '
-                    . 'Ask an administrator to set up the "Asset Disposal Approval" workflow.'
+                    .'Ask an administrator to set up the "Asset Disposal Approval" workflow.'
                 );
             }
 
@@ -348,8 +405,8 @@ class AssetService
             if ($this->approvals->isFullyApproved($locked)) {
                 $this->dispose($locked, [
                     'disposal_amount' => (string) $locked->disposal_request_amount,
-                    'disposed_date'   => optional($locked->disposal_request_date)?->toDateString(),
-                    'remarks'         => (string) $locked->disposal_request_reason,
+                    'disposed_date' => optional($locked->disposal_request_date)?->toDateString(),
+                    'remarks' => (string) $locked->disposal_request_reason,
                 ], $by);
             }
 
@@ -420,9 +477,9 @@ class AssetService
     {
         $locked->forceFill([
             'disposal_request_amount' => null,
-            'disposal_request_date'   => null,
+            'disposal_request_date' => null,
             'disposal_request_reason' => null,
-            'disposal_requested_by'   => null,
+            'disposal_requested_by' => null,
         ])->save();
     }
 
@@ -473,6 +530,7 @@ class AssetService
             // Surface the canonical closed-period error before checking the
             // operator-entered reason. This keeps a closed-period rejection
             // actionable even when an old client omitted the new reason field.
+            $this->assertDisposalNotBeforeDepreciation($locked, $disposedDate);
             $this->periods->assertPostingAllowed($disposedDate->toDateString());
 
             $reason = trim((string) ($data['remarks'] ?? $data['disposal_reason'] ?? ''));
@@ -533,30 +591,39 @@ class AssetService
             }
 
             $je = $this->journals->create([
-                'date'           => $disposedDate->toDateString(),
-                'description'    => 'Disposal of asset '.$locked->asset_code.' — '.$locked->name.' — Reason: '.$reason,
+                'date' => $disposedDate->toDateString(),
+                'description' => 'Disposal of asset '.$locked->asset_code.' — '.$locked->name.' — Reason: '.$reason,
                 'reference_type' => Asset::class,
-                'reference_id'   => $locked->id,
-                'lines'          => $lines,
+                'reference_id' => $locked->id,
+                'lines' => $lines,
             ], $by);
-            $this->journals->post($je, $by);
+            $this->journals->postSystem($je, (int) $by->id);
 
             $locked->forceFill([
-                'status'          => AssetStatus::Disposed->value,
-                'disposed_date'   => $disposedDate->toDateString(),
+                'status' => AssetStatus::Disposed->value,
+                'disposed_date' => $disposedDate->toDateString(),
                 'disposal_amount' => $disposalAmount,
                 'disposal_reason' => $reason,
                 // The proposal columns describe a live request; once executed
                 // the canonical disposal_* columns are the record. Cleared in
                 // the same save so one disposal = one audit row.
                 'disposal_request_amount' => null,
-                'disposal_request_date'   => null,
+                'disposal_request_date' => null,
                 'disposal_request_reason' => null,
-                'disposal_requested_by'   => null,
+                'disposal_requested_by' => null,
             ])->save();
 
             return $locked->fresh();
         });
+    }
+
+    private function assertDisposalNotBeforeDepreciation(Asset $asset, CarbonImmutable $date): void
+    {
+        $latest = $asset->depreciations()->whereNotNull('journal_entry_id')
+            ->orderByDesc('period_year')->orderByDesc('period_month')->first();
+        if ($latest !== null && $date->format('Y-m') < sprintf('%04d-%02d', $latest->period_year, $latest->period_month)) {
+            throw new BusinessRuleException('Disposal date precedes posted depreciation. Finance must review a correction before disposal.');
+        }
     }
 
     public function delete(Asset $asset): void
@@ -565,6 +632,9 @@ class AssetService
             $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
             if ($locked->status !== AssetStatus::Active) {
                 throw new BusinessRuleException('Only active assets without financial or custody history can be deleted.');
+            }
+            if ($this->hasOperationalAssociation($locked)) {
+                throw new BusinessRuleException('Disassociate this asset from its machine, mold or vehicle before deletion.');
             }
             if (AssetDepreciation::query()->where('asset_id', $locked->getKey())->exists()) {
                 throw new BusinessRuleException('Asset has depreciation history; dispose instead.');
@@ -582,17 +652,17 @@ class AssetService
 
     private function hasOperationalAssociation(Asset $asset): bool
     {
-        return Machine::query()->where('asset_id', $asset->getKey())->exists()
-            || Mold::query()->where('asset_id', $asset->getKey())->exists()
-            || Vehicle::query()->where('asset_id', $asset->getKey())->exists();
+        return Machine::withTrashed()->where('asset_id', $asset->getKey())->exists()
+            || Mold::withTrashed()->where('asset_id', $asset->getKey())->exists()
+            || Vehicle::withTrashed()->where('asset_id', $asset->getKey())->exists();
     }
 
     private function loadAssociationRelations(Asset $asset): Asset
     {
         return $asset->load([
-            'machine:id,asset_id,machine_code,name',
-            'mold:id,asset_id,mold_code,name',
-            'vehicle:id,asset_id,plate_number,name',
+            'machine:id,asset_id,machine_code,name,deleted_at',
+            'mold:id,asset_id,mold_code,name,deleted_at',
+            'vehicle:id,asset_id,plate_number,name,deleted_at',
         ]);
     }
 }

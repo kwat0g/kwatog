@@ -26,16 +26,16 @@ class SalesOrderResponse extends Model
     protected $fillable = [
         'sales_order_id', 'customer_id', 'portal_user_id',
         'response_type', 'status', 'proposed_delivery_date',
-        'notes', 'responded_at',
+        'notes', 'responded_at', 'proposed_by',
         'resolved_by', 'resolved_at', 'resolution_notes',
     ];
 
     protected $casts = [
         'proposed_delivery_date' => 'date',
-        'responded_at'           => 'datetime',
-        'resolved_at'            => 'datetime',
-        'response_type'          => SalesOrderResponseType::class,
-        'status'                 => SalesOrderResponseStatus::class,
+        'responded_at' => 'datetime',
+        'resolved_at' => 'datetime',
+        'response_type' => SalesOrderResponseType::class,
+        'status' => SalesOrderResponseStatus::class,
     ];
 
     public function salesOrder(): BelongsTo

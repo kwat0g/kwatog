@@ -22,6 +22,7 @@ const bucketColors: Record<string, string> = {
 };
 
 type OpenBill = VendorStatementOfAccount['open_bills'][number];
+type OpenInvoice = OpenBill & { supplier_invoice_number?: string | null };
 
 export default function SupplierStatementOfAccountPage() {
   const { data: soa, isLoading, isError, refetch } = useQuery({
@@ -33,8 +34,8 @@ export default function SupplierStatementOfAccountPage() {
     (soa?.aging_bucket_options ?? []).map((option) => [option.value, option.label]),
   );
 
-  const billColumns: Column<OpenBill>[] = [
-    { key: 'bill_number', header: 'Bill #', cell: (r) => <span className="font-mono font-medium">{r.bill_number}</span> },
+  const billColumns: Column<OpenInvoice>[] = [
+    { key: 'supplier_invoice_number', header: 'Supplier invoice', cell: (r) => <span className="font-mono font-medium">{r.supplier_invoice_number ?? r.bill_number}</span> },
     {
       key: 'po',
       header: 'PO',
@@ -108,9 +109,9 @@ export default function SupplierStatementOfAccountPage() {
             </KpiGrid>
 
             <DataTable
-              tableKey="portal-supplier-open-bills"
+              tableKey="portal-supplier-open-invoices"
               columns={billColumns}
-              data={soa.open_bills}
+              data={soa.open_invoices ?? soa.open_bills}
               emptyState={
                 <EmptyState icon="circle-check" title="No open bills" description="All bills are paid." />
               }

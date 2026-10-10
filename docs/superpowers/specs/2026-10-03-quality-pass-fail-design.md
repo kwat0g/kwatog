@@ -1,0 +1,13 @@
+# Quality Inspection: PASS / FAIL per checklist item
+
+Each specification or quality-plan parameter appears once with PASS and FAIL buttons, regardless of how many sampled pieces carry readings for that parameter. Operators inspect the planned sample, mark exceptions FAIL, describe each problem, and may use PASS all remaining after verifying the remaining checks. Nothing starts passed automatically. Save draft supports partial progress; Submit inspection requires all parameters answered. Any failed check proposes a failed inspection.
+
+Checklist decisions are stored separately from numeric measurement evidence on the canonical first measurement row for each parameter. Group identity uses immutable specification item identifiers where present, otherwise the full parameter definition. Decisions never invent readings, sample defect counts or per-piece claims. A PASS cannot contradict saved failed evidence. Existing review, calibration, NCR, certificate and downstream release gates remain in force. The measurement entry interface is fully replaced. Inspection details and links are always visible above the checklist, with no dropdown or numeric, sample-count or per-piece forms. Existing saved measurement evidence remains stored for history and eligible certificates.
+
+For more than twelve checks, search and Needs attention help operators find unanswered or failed checks. PASS all remaining applies to every unanswered check, including hidden checks, and preserves failures and their descriptions. Save and Submit stay visible while scrolling. Keyboard focus advances when a passed check disappears from Needs attention.
+
+The same workflow covers incoming, in-process, outgoing, supplier return and customer return. Existing records retain their measured evidence and terminal outcomes. The five draft demonstration records remain available for inspection.
+
+The record flow appears first. Inspection details and the checklist occupy the main column; linked records and the SPC capability summary occupy the right column, with SPC directly below the links. Mobile stacks these sections. Read-only AQL limits, authors, timestamps, checker history, notes, product/item links and saved evidence remain available. Sample defects display “Not recorded” until a count exists; measurement defect totals remain distinct. SPC describes saved readings for the current specification revision.
+
+Acceptance: one decision per parameter, explicit bulk PASS leaves failures unchanged, failure problems required, partial drafts preserved, incomplete submission refused, foreign/duplicate parameters refused, checker separation and certificate evidence preserved.

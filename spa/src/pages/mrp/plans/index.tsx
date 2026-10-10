@@ -186,6 +186,27 @@ export default function MrpPlansListPage() {
       {can('mrp.runs.view') && (
         <MrpRunStatusPanel latest={latestVisibleRun} recent={runHistory.data?.data} />
       )}
+      {can('mrp.runs.view') && (latestRun.isError || runHistory.isError) && (
+        <div
+          role="alert"
+          className="mx-5 mb-3 flex flex-wrap items-center gap-3 text-sm text-danger-fg"
+        >
+          <span>
+            MRP run status could not load. Displayed plans may not reflect the latest run.
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              void latestRun.refetch();
+              void runHistory.refetch();
+              void refetch();
+            }}
+          >
+            Refresh run status
+          </Button>
+        </div>
+      )}
       <FilterBar
         filters={filterConfig}
         values={filters}

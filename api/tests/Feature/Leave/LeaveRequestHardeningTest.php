@@ -356,6 +356,55 @@ class LeaveRequestHardeningTest extends TestCase
         $this->assertSame('original DTR', $restored->remarks);
     }
 
+    public function test_hr_approval_cannot_complete_when_prior_attendance_is_archived(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $head = $this->user('department_head', $this->employee($department->id));
+        $hr = $this->user('hr_officer');
+        $date = $this->workDate();
+        $archived = Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => $date,
+            'regular_hours' => '8.00',
+            'overtime_hours' => '0.00',
+            'night_diff_hours' => '0.00',
+            'tardiness_minutes' => 0,
+            'undertime_minutes' => 0,
+            'day_type_rate' => '1.00',
+            'status' => 'present',
+            'is_manual_entry' => true,
+            'remarks' => 'archived DTR',
+        ]);
+        $archived->delete();
+
+        $request = $this->submit($employee, $this->vacation, ['start_date' => $date]);
+        $this->actingAs($head)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-dept")
+            ->assertOk();
+
+        $response = $this->actingAs($hr)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-hr");
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('message', "Attendance for {$date} is archived. Restore it before approving leave.");
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertNull($request->fresh()->hr_approved_at);
+        $this->assertSame('0.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $this->vacation->id)
+            ->where('year', now()->year)
+            ->value('used'));
+        $step = DB::table('approval_records')
+            ->where('approvable_type', $request->getMorphClass())
+            ->where('approvable_id', $request->id)
+            ->where('step_order', 2)
+            ->first();
+        $this->assertSame('pending', $step->action);
+        $this->assertTrue((bool) $step->is_current);
+        $this->assertSoftDeleted('attendances', ['id' => $archived->id]);
+    }
+
     public function test_cancellation_uses_the_approval_snapshot_after_a_holiday_change(): void
     {
         $department = Department::query()->firstOrFail();

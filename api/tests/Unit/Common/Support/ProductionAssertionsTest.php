@@ -26,6 +26,11 @@ class ProductionAssertionsTest extends TestCase
         }
     }
 
+    public function test_demo_data_seeding_is_disabled_by_default_in_the_suite(): void
+    {
+        $this->assertFalse(config('app.seed_demo_data'));
+    }
+
     private function asProduction(): void
     {
         app()->detectEnvironment(fn () => 'production');
@@ -42,6 +47,7 @@ class ProductionAssertionsTest extends TestCase
         // assertion below must fail for the right reason, not because
         // SESSION_SECURE_COOKIE happened to be unset.
         config()->set('session.secure', true);
+        config()->set('app.seed_demo_data', false);
     }
 
     public function test_no_throw_in_local_environment_even_with_dev_defaults(): void

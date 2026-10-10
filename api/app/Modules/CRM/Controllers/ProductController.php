@@ -14,6 +14,7 @@ use App\Modules\CRM\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 class ProductController
 {
@@ -37,6 +38,7 @@ class ProductController
     public function store(StoreProductRequest $request): JsonResponse
     {
         $product = $this->service->create($request->validated());
+
         return (new ProductResource($product))->response()->setStatusCode(201);
     }
 
@@ -52,12 +54,28 @@ class ProductController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json(null, 204);
+    }
+
+    public function proposeFinancialChange(Request $request, Product $product): ProductResource
+    {
+        $data = $request->validate(['standard_cost' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'], 'minimum_selling_price' => ['present', 'nullable', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'], 'base_selling_price' => ['present', 'nullable', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'], 'notes' => ['required', 'string', 'max:1000']]);
+
+        return new ProductResource($this->service->proposeFinancialChange($product, $request->user(), $data));
+    }
+
+    public function decideFinancialChange(Request $request, Product $product): ProductResource
+    {
+        $data = $request->validate(['proposal_id' => ['required', 'uuid'], 'decision' => ['required', Rule::in(['approve', 'reject'])], 'notes' => ['required', 'string', 'max:1000']]);
+
+        return new ProductResource($this->service->decideFinancialChange($product, $request->user(), $data));
     }
 
     public function restore(Product $product): JsonResponse
     {
         $this->service->restore($product);
+
         return response()->json(['message' => 'Product restored.']);
     }
 }

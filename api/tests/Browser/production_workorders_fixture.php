@@ -24,8 +24,13 @@ use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Attendance\Models\Shift;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Services\ShiftAssignmentService;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Support\Facades\DB;
 
 $database = (string) config('database.connections.pgsql.database');
@@ -47,6 +52,7 @@ if (Product::query()->where('part_number', $productCode)->exists()) {
 foreach ([
     Database\Seeders\RolePermissionSeeder::class,
     Database\Seeders\SettingsSeeder::class,
+    ChartOfAccountsSeeder::class,
     Database\Seeders\DepartmentSeeder::class,
     Database\Seeders\PositionSeeder::class,
     Database\Seeders\DemoAccountSeeder::class,
@@ -60,6 +66,7 @@ $settings->set('modules.production', true, 'modules');
 $settings->set('modules.inventory', true, 'modules');
 $settings->set('modules.quality', true, 'modules');
 $settings->set('modules.maintenance', true, 'modules');
+$settings->set('modules.accounting', true, 'modules');
 
 $manager = User::query()->where('email', 'production@ogami.test')->firstOrFail();
 $ppc = User::query()->where('email', 'ppc@ogami.test')->firstOrFail();
@@ -242,11 +249,50 @@ $defect = DefectType::query()->create([
 ]);
 $shift = Shift::query()->create([
     'name' => 'PWO shift '.$suffix,
-    'start_time' => '07:00',
-    'end_time' => '16:00',
-    'break_minutes' => 60,
+    'start_time' => '00:00',
+    'end_time' => '00:00',
+    'break_minutes' => 0,
     'grace_minutes' => 0,
+    'is_night_shift' => true,
     'is_active' => true,
+]);
+$productionDepartment = Department::query()->firstOrCreate(
+    ['code' => 'PROD'],
+    ['name' => 'Production', 'is_active' => true],
+);
+if (! $productionDepartment->is_active) {
+    $productionDepartment->update(['is_active' => true]);
+}
+$outputOperator = Employee::factory()->create([
+    'first_name' => 'Audit',
+    'last_name' => 'Operator '.$suffix,
+    'department_id' => $productionDepartment->id,
+    'status' => 'active',
+]);
+$outputOperatorUser = User::factory()->withRole('employee')->create([
+    'name' => $outputOperator->full_name,
+    'email' => 'pwo-operator-'.$suffix.'@ogami.test',
+    'employee_id' => $outputOperator->id,
+    'is_active' => true,
+    'must_change_password' => false,
+]);
+$coverageStart = now()->timezone(config('app.timezone'))->startOfDay();
+app(ShiftAssignmentService::class)->assignToEmployee(
+    $outputOperator->id,
+    $shift->id,
+    $coverageStart->toDateString(),
+    null,
+    [1, 2, 3, 4, 5, 6, 7],
+);
+Attendance::query()->create([
+    'employee_id' => $outputOperator->id,
+    'date' => $coverageStart->toDateString(),
+    'shift_id' => $shift->id,
+    'time_in' => $coverageStart,
+    'time_out' => null,
+    'status' => 'present',
+    'is_manual_entry' => true,
+    'remarks' => 'Isolated production browser audit staffing fixture',
 ]);
 
 $workOrders = app(WorkOrderService::class);
@@ -307,7 +353,8 @@ $fixture = [
     'main_work_order_id' => $mainWo->hash_id,
     'main_work_order_number' => $mainWo->wo_number,
     'qc_checker_email' => $qcChecker->email,
-    'output_operator_id' => $manager->employee?->hash_id,
+    'output_operator_id' => $outputOperator->hash_id,
+    'output_operator_email' => $outputOperatorUser->email,
     'shift_name' => $shift->name,
     'material_lot_number' => 'PWO-LOT-'.$suffix,
 ];

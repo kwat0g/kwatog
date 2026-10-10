@@ -47,7 +47,7 @@ class DowntimeSummaryMetricsTest extends TestCase
             'description' => 'Signed-diff regression fixture',
         ]);
 
-        $summary = app(DowntimeAnalyticsService::class)->summary(null, $from, $to);
+        $summary = app(DowntimeAnalyticsService::class)->summary($machineId, $from, $to);
 
         $this->assertSame(120, $summary['total_downtime_minutes']);
         $this->assertSame(1, $summary['breakdown_count']);
@@ -97,5 +97,112 @@ class DowntimeSummaryMetricsTest extends TestCase
         $this->assertSame(240, $summary['total_downtime_minutes']);
         $this->assertSame(1, $summary['breakdown_count']);
         $this->assertSame(120.0, $summary['mttr_minutes']);
+    }
+
+    public function test_fleet_availability_uses_all_machine_minutes(): void
+    {
+        $first = Machine::factory()->create();
+        Machine::factory()->create();
+        $from = Carbon::parse('2026-08-01 00:00:00');
+        $to = Carbon::parse('2026-08-02 00:00:00');
+        MachineDowntime::create([
+            'machine_id' => $first->id,
+            'start_time' => '2026-08-01 09:00:00',
+            'end_time' => '2026-08-01 11:00:00',
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Two-hour outage on one of two machines',
+        ]);
+
+        $this->assertSame(95.83, app(DowntimeAnalyticsService::class)->summary(null, $from, $to)['availability_pct']);
+    }
+
+    public function test_mttr_uses_only_resolved_breakdowns_ending_in_window_and_their_full_duration(): void
+    {
+        $machine = Machine::factory()->create();
+        $from = Carbon::parse('2026-08-01 00:00:00');
+        $to = Carbon::parse('2026-08-02 00:00:00');
+
+        foreach ([
+            ['2026-07-31 23:00:00', '2026-08-01 03:00:00', 'Resolved after window starts'],
+            ['2026-08-01 09:00:00', '2026-08-01 11:00:00', 'Resolved inside window'],
+            ['2026-08-01 22:00:00', null, 'Still open at window end'],
+            ['2026-08-01 23:30:00', '2026-08-02 01:00:00', 'Closed after window end'],
+        ] as [$start, $end, $description]) {
+            MachineDowntime::create([
+                'machine_id' => $machine->id,
+                'start_time' => $start,
+                'end_time' => $end,
+                'category' => MachineDowntimeCategory::Breakdown->value,
+                'description' => $description,
+            ]);
+        }
+
+        $summary = app(DowntimeAnalyticsService::class)->summary((int) $machine->id, $from, $to);
+
+        $this->assertSame(420, $summary['total_downtime_minutes']);
+        $this->assertSame(3, $summary['breakdown_count']);
+        $this->assertSame(2, $summary['resolved_breakdown_count']);
+        $this->assertSame(2, $summary['open_breakdown_count']);
+        $this->assertSame(180.0, $summary['mttr_minutes']);
+        $this->assertSame(70.83, $summary['availability_pct']);
+    }
+
+    public function test_open_fault_affects_fleet_calendar_availability_but_not_mttr(): void
+    {
+        $first = Machine::factory()->create();
+        Machine::factory()->create();
+        $from = Carbon::parse('2026-08-01 00:00:00');
+        $to = Carbon::parse('2026-08-02 00:00:00');
+        MachineDowntime::create([
+            'machine_id' => $first->id,
+            'start_time' => '2026-08-01 23:00:00',
+            'end_time' => null,
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Open breakdown',
+        ]);
+
+        $summary = app(DowntimeAnalyticsService::class)->summary(null, $from, $to);
+
+        $this->assertSame(60, $summary['total_downtime_minutes']);
+        $this->assertSame(1, $summary['open_breakdown_count']);
+        $this->assertSame(0, $summary['resolved_breakdown_count']);
+        $this->assertNull($summary['mttr_minutes']);
+        $this->assertSame(97.92, $summary['availability_pct']);
+    }
+
+    public function test_pareto_handles_downtime_shorter_than_one_minute(): void
+    {
+        $machine = Machine::factory()->create();
+        MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'start_time' => now()->subSeconds(30),
+            'end_time' => now(),
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Short interruption',
+        ]);
+
+        $pareto = app(DowntimeAnalyticsService::class)->categoryPareto();
+        $this->assertSame(0, $pareto[0]['minutes']);
+        $this->assertSame(100.0, $pareto[0]['percent']);
+    }
+
+    public function test_reversed_breakdown_interval_never_produces_negative_metrics(): void
+    {
+        $machine = Machine::factory()->create();
+        $from = Carbon::parse('2026-08-01 00:00:00');
+        $to = Carbon::parse('2026-08-02 00:00:00');
+        MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'start_time' => '2026-08-01 12:00:00',
+            'end_time' => '2026-08-01 11:00:00',
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Invalid reversed interval',
+        ]);
+
+        $summary = app(DowntimeAnalyticsService::class)->summary((int) $machine->id, $from, $to);
+
+        $this->assertGreaterThanOrEqual(0, $summary['total_downtime_minutes']);
+        $this->assertGreaterThanOrEqual(0, $summary['mtbf_hours']);
+        $this->assertNull($summary['mttr_minutes']);
     }
 }

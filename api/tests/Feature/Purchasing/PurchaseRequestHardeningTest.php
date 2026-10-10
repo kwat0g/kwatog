@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Enums\PermissionOverrideType;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -91,7 +94,25 @@ class PurchaseRequestHardeningTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.count', 2);
 
-        $this->actingAs($this->user('department_head', $department))
+        $this->assertFalse($requesterTwo->hasPermission('purchasing.pr.approve'));
+        $this->actingAs($requesterTwo)
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertForbidden();
+
+        // An explicit per-user grant opens the count endpoint for a role that
+        // holds no step; its badge stays zero because role eligibility still
+        // comes from the workflow, not from the permission alone.
+        $noStepApprover = $this->user('department_head', $department);
+        UserPermissionOverride::create([
+            'user_id' => $noStepApprover->id,
+            'permission_id' => Permission::where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $this->user('system_admin')->id,
+            'reason' => 'Exercise an authorized user with no purchase-request workflow step.',
+        ]);
+        $noStepApprover->flushPermissionsCache();
+
+        $this->actingAs($noStepApprover)
             ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
             ->assertOk()
             ->assertJsonPath('data.count', 0);

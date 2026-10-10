@@ -26,6 +26,7 @@ export interface P2pChainBill {
   id: string;
   bill_number: string;
   status: string;
+  payment_approval_pending?: boolean;
 }
 
 export interface P2pChainInput {
@@ -41,7 +42,9 @@ export function buildP2pChain(input: P2pChainInput): ChainStep[] {
   // buildGrnChain convention: only accepted receipts advance the chain. A
   // rejected receipt is stuck (pending re-delivery), not in progress.
   const hasGrn = grns.length > 0;
-  const hasReceivedGrn = grns.some((g) => g.status === 'accepted' || g.status === 'partial_accepted');
+  const hasReceivedGrn = grns.some(
+    (g) => g.status === 'accepted' || g.status === 'partial_accepted',
+  );
   const isRejected = grns.some((g) => g.status === 'rejected');
   // A cancelled bill no longer carries the payable; the Bill step reopens.
   const liveBills = bills.filter((b) => b.status !== 'cancelled');
@@ -51,16 +54,20 @@ export function buildP2pChain(input: P2pChainInput): ChainStep[] {
   // step is satisfied rather than shown as outstanding.
   const grnSatisfied = hasReceivedGrn || (hasBill && !hasGrn);
   const isPaid = bills.some((b) => b.status === 'paid');
+  const awaitingVp = bills.some((b) => b.payment_approval_pending);
   // A draft bill is staged, not yet a payable: posting it is the next action,
   // and nothing can be paid until it is posted.
-  const isBillPosted = bills.some((b) => b.status === 'unpaid' || b.status === 'partial' || b.status === 'paid');
+  const isBillPosted = bills.some(
+    (b) => b.status === 'unpaid' || b.status === 'partial' || b.status === 'paid',
+  );
   const firstGrn = grns[0];
   const firstBill = liveBills[0] ?? bills[0];
 
   return [
     {
       key: 'pr',
-      label: pr ? `PR ${pr.number}` : 'PR',
+      label: pr?.number ?? 'PR',
+      shortLabel: 'PR',
       date: pr?.date ? formatDate(pr.date) : undefined,
       state: pr ? 'done' : 'pending',
       href: pr ? `/purchasing/purchase-requests/${pr.id}` : undefined,
@@ -68,7 +75,8 @@ export function buildP2pChain(input: P2pChainInput): ChainStep[] {
     },
     {
       key: 'po',
-      label: po ? `PO ${po.number}` : 'PO',
+      label: po?.number ?? 'PO',
+      shortLabel: 'PO',
       date: po?.date ? formatDate(po.date) : undefined,
       state: po ? 'done' : 'pending',
       href: po ? `/purchasing/purchase-orders/${po.id}` : undefined,
@@ -79,6 +87,7 @@ export function buildP2pChain(input: P2pChainInput): ChainStep[] {
     {
       key: 'grn',
       label: hasReceivedGrn ? 'GRN Received' : 'GRN',
+      shortLabel: 'GRN',
       date: firstGrn?.received_date ? formatDate(firstGrn.received_date) : undefined,
       state: grnSatisfied ? 'done' : isRejected ? 'pending' : hasGrn || po ? 'active' : 'pending',
       href: firstGrn ? `/inventory/grn/${firstGrn.id}` : undefined,
@@ -97,6 +106,7 @@ export function buildP2pChain(input: P2pChainInput): ChainStep[] {
     {
       key: 'bill',
       label: 'Bill',
+      shortLabel: 'Bill',
       state: isBillPosted ? 'done' : hasBill || hasReceivedGrn ? 'active' : 'pending',
       href: firstBill ? `/accounting/bills/${firstBill.id}` : undefined,
       description: isBillPosted
@@ -104,16 +114,19 @@ export function buildP2pChain(input: P2pChainInput): ChainStep[] {
         : hasBill
           ? `Draft bill ${firstBill.bill_number} staged — post it to record the payable`
           : hasReceivedGrn
-          ? 'Draft AP bill auto-creates when the GRN is accepted'
-          : 'Awaiting an accepted receipt',
+            ? 'Draft AP bill auto-creates when the GRN is accepted'
+            : 'Awaiting an accepted receipt',
     },
     {
       key: 'paid',
       label: 'Paid',
+      shortLabel: 'Paid',
       state: isPaid ? 'done' : isBillPosted ? 'active' : 'pending',
       href: firstBill ? `/accounting/bills/${firstBill.id}` : undefined,
       description: isPaid
         ? 'Bill settled — the AP payment entry was posted'
+        : awaitingVp
+          ? 'Payment request recorded — awaiting VP approval before posting'
         : isBillPosted
           ? 'Record a payment on the bill to complete the chain'
           : hasBill

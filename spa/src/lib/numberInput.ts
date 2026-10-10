@@ -79,6 +79,7 @@ export function onNumberWheel(e: WheelEvent<HTMLInputElement>): void {
 export function numberInputProps(opts: NumberInputOpts = {}) {
   return {
     type: 'number' as const,
+    step: opts.decimal === false ? 1 : 'any',
     inputMode: (opts.decimal === false ? 'numeric' : 'decimal') as 'numeric' | 'decimal',
     onKeyDown: onNumberKeyDown(opts),
     onWheel: onNumberWheel,

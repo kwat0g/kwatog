@@ -4,7 +4,7 @@ vi.mock('@/hooks/useBadges', () => ({
   useBadges: () => ({ getBadge: () => undefined }),
 }));
 
-import { SECTIONS, isNavItemVisible } from './Sidebar';
+import { SECTIONS, isNavItemVisible, navItemForPermissions } from './Sidebar';
 
 function item(path: string) {
   const found = SECTIONS.flatMap((section) => section.items).find((entry) => entry.to === path);
@@ -19,6 +19,7 @@ const allFeatures = new Set([
   'payroll',
   'quality',
   'hr',
+  'crm',
   'production',
   'mrp',
   'inventory',
@@ -29,6 +30,17 @@ const allFeatures = new Set([
 ]);
 
 describe('role-aligned sidebar permissions', () => {
+  it('shows supervisor machine and maintenance navigation through explicit read permissions', () => {
+    const context = {
+      permissions: new Set(['maintenance.view', 'maintenance.wo.assign', 'maintenance.wo.verify', 'mrp.machines.view', 'assets.view']),
+      features: new Set(['maintenance', 'mrp', 'assets']),
+      roleSlug: 'maintenance_supervisor',
+    };
+    expect(isNavItemVisible(item('/mrp/machines'), context)).toBe(true);
+    expect(isNavItemVisible(item('/maintenance/work-orders'), context)).toBe(true);
+    expect(isNavItemVisible(item('/maintenance/schedules'), context)).toBe(true);
+    expect(isNavItemVisible(item('/hr/separations'), context)).toBe(false);
+  });
   it('does not turn PPC self-service permissions into back-office HR navigation', () => {
     const ppcPermissions = new Set([
       'attendance.view',
@@ -49,7 +61,7 @@ describe('role-aligned sidebar permissions', () => {
       permissions: new Set([
         'attendance.edit',
         'leave.approve_hr',
-        'payroll.periods.compute',
+        'payroll.periods.view',
         'payroll.statutory.export',
       ]),
       features: allFeatures,
@@ -85,15 +97,17 @@ describe('role-aligned sidebar permissions', () => {
 
     expect(paths).not.toContain('/calendar');
     expect(paths).not.toContain('/hr/training/matrix');
-    expect(paths).not.toContain('/hr/trainings');
+    expect(paths).toContain('/hr/trainings');
     expect(paths).not.toContain('/hr/skills');
     expect(paths).not.toContain('/quality/capability');
     expect(paths).not.toContain('/maintenance/downtime');
-    expect(paths).not.toContain('/crm/inquiries');
+    expect(paths).toContain('/crm/inquiries');
     expect(paths).not.toContain('/quality/calibration');
-    expect(paths).not.toContain('/hr/recruitment');
+    expect(paths).toContain('/hr/recruitment');
     expect(paths).not.toContain('/admin/sod');
     expect(paths).not.toContain('/inventory/scanner');
+    expect(paths).not.toContain('/supply-chain/shipments');
+    expect(paths).not.toContain('/inventory/mrb');
   });
 
   it('uses labels that describe each primary destination', () => {
@@ -108,12 +122,10 @@ describe('role-aligned sidebar permissions', () => {
     expect(item('/inventory/items').label).toBe('Inventory Items');
     expect(item('/inventory/grn').label).toBe('Goods Receipts (GRN)');
     expect(item('/inventory/material-issues').label).toBe('Material Issues');
-    expect(item('/inventory/mrb').label).toBe('Quarantine Holds (MRB)');
     expect(item('/inventory/stock-levels').label).toBe('Inventory Stock Levels');
     expect(item('/inventory/transfer-orders').label).toBe('Inventory Transfers');
-    expect(item('/inventory/picking').label).toBe('Order Picking');
+    expect(item('/inventory/picking').label).toBe('Material Handover');
     expect(item('/supply-chain/deliveries').label).toBe('Outbound Deliveries');
-    expect(item('/supply-chain/shipments').label).toBe('Inbound Shipments');
     expect(item('/supply-chain/fleet').label).toBe('Delivery Fleet');
     expect(item('/quality/inspection-specs').label).toBe('Inspection Specifications');
     expect(item('/quality/inspections').label).toBe('Quality Inspections');
@@ -121,7 +133,7 @@ describe('role-aligned sidebar permissions', () => {
     expect(item('/quality/traceability').label).toBe('Lot Traceability');
     expect(item('/accounting/invoices').label).toBe('Accounts Receivable Invoices');
     expect(item('/accounting/bills').label).toBe('Accounts Payable Bills');
-    expect(item('/dashboard/finance').label).toBe('Finance Dashboard');
+    expect(item('/dashboard').label).toBe('Dashboard');
     expect(item('/hr/attendance').label).toBe('Attendance & DTR');
     expect(item('/hr/leaves').label).toBe('Leave Management');
     expect(item('/payroll/periods').label).toBe('Payroll Processing');
@@ -220,7 +232,7 @@ describe('role-aligned sidebar permissions', () => {
       finance_officer: ['inventory.adjust.approve'],
       production_manager: ['inventory.view'],
       ppc_head: [],
-      purchasing_officer: ['inventory.view', 'inventory.grn.create'],
+      purchasing_officer: ['inventory.view'],
       warehouse_staff: [
         'inventory.view',
         'inventory.issue.create',
@@ -261,12 +273,14 @@ describe('role-aligned sidebar permissions', () => {
     ];
     const rolePermissions: Record<string, string[]> = {
       system_admin: [],
-      vice_president: ['purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view'],
+      vice_president: ['purchasing.view', 'purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view'],
       hr_officer: [],
-      finance_officer: ['purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view'],
+      finance_officer: ['purchasing.view', 'purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view'],
       production_manager: ['purchasing.view'],
       ppc_head: [],
       purchasing_officer: [
+        'purchasing.chain.view',
+        'purchasing.view',
         'purchasing.pr.create',
         'purchasing.po.create',
         'purchasing.rfq.view',
@@ -276,7 +290,7 @@ describe('role-aligned sidebar permissions', () => {
       qc_inspector: ['purchasing.rfq.view'],
       maintenance_tech: [],
       impex_officer: ['purchasing.view'],
-      department_head: ['purchasing.pr.approve'],
+      department_head: ['purchasing.view', 'purchasing.pr.approve'],
       employee: [],
       driver: [],
       sales_officer: [],
@@ -284,11 +298,13 @@ describe('role-aligned sidebar permissions', () => {
     };
     const expected: Record<string, string[]> = {
       system_admin: procurementPaths,
-      vice_president: procurementPaths.slice(0, 4),
-      finance_officer: procurementPaths.slice(0, 4),
+      vice_president: procurementPaths.slice(1, 4),
+      finance_officer: procurementPaths.slice(1, 4),
       purchasing_officer: procurementPaths,
       qc_inspector: ['/purchasing/rfqs'],
-      department_head: ['/purchasing/chain', '/purchasing/purchase-requests'],
+      department_head: ['/purchasing/purchase-orders', '/purchasing/purchase-requests'],
+      production_manager: ['/purchasing/purchase-orders', '/purchasing/purchase-requests'],
+      impex_officer: ['/purchasing/purchase-orders', '/purchasing/purchase-requests'],
     };
 
     for (const [roleSlug, permissions] of Object.entries(rolePermissions)) {
@@ -298,9 +314,14 @@ describe('role-aligned sidebar permissions', () => {
     }
   });
 
-  it('keeps the Finance sidebar focused on the dashboard, budgeting, invoices, bills, vendors, and primary statements', () => {
+  it('uses shared Dashboard and permission-gates Finance pricing reviews', () => {
     const finance = {
-      permissions: new Set(['dashboard.accounting.view', 'budgeting.view']),
+      permissions: new Set([
+        'dashboard.accounting.view',
+        'budgeting.view',
+        'crm.price_agreements.approve',
+        'inventory.costs.review',
+      ]),
       features: allFeatures,
       roleSlug: 'finance_officer',
     };
@@ -310,16 +331,18 @@ describe('role-aligned sidebar permissions', () => {
       roleSlug: 'employee',
     };
 
-    expect(isNavItemVisible(item('/dashboard/finance'), finance)).toBe(true);
-    expect(isNavItemVisible(item('/dashboard/finance'), employee)).toBe(false);
+    expect(SECTIONS.flatMap((section) => section.items).some((entry) => entry.to === '/dashboard/finance')).toBe(false);
+    expect(isNavItemVisible(item('/dashboard'), finance)).toBe(true);
+    expect(isNavItemVisible(item('/dashboard'), employee)).toBe(true);
     expect(isNavItemVisible(item('/budgeting'), finance)).toBe(true);
     expect(isNavItemVisible(item('/budgeting'), employee)).toBe(false);
+    // Pricing requests / cost reviews live as tabs on /crm/price-agreements, not in the sidebar.
+    expect(SECTIONS.flatMap((section) => section.items).some((entry) => entry.to.startsWith('/crm/price-agreements/'))).toBe(false);
 
     const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map(
       (entry) => entry.to,
     );
     expect(financePaths).toEqual([
-      '/dashboard/finance',
       '/budgeting',
       '/accounting/invoices',
       '/accounting/bills',
@@ -342,5 +365,33 @@ describe('role-aligned sidebar permissions', () => {
 
     expect(isNavItemVisible(item('/payroll/periods'), finance)).toBe(true);
     expect(isNavItemVisible(item('/payroll/statutory'), finance)).toBe(false);
+  });
+});
+
+
+describe('approval navigation boundaries', () => {
+  it('exposes only the specific loan, clearance and complaint reads', () => {
+    for (const [path, permission] of [
+      ['/hr/loans', 'loans.view'],
+      ['/hr/separations', 'hr.separation.view'],
+      ['/crm/complaints', 'crm.complaints.view'],
+      ['/payroll/periods', 'payroll.periods.view'],
+      ['/payroll/adjustments', 'payroll.adjustments.view'],
+    ]) {
+      expect(isNavItemVisible(item(path), { permissions: new Set([permission]), features: allFeatures })).toBe(true);
+      expect(isNavItemVisible(item(path), { permissions: new Set(['payroll.view', 'hr.directory.view']), features: allFeatures })).toBe(false);
+    }
+  });
+
+  it('names restricted HR queues by responsibility', () => {
+    expect(navItemForPermissions(item('/hr/employees'), new Set(['hr.salary_adjustments.view'])).label).toBe('Salary Adjustments');
+    expect(navItemForPermissions(item('/hr/employees'), new Set(['hr.employees.view'])).label).toBe('Employees');
+    expect(navItemForPermissions(item('/hr/profile-update-requests'), new Set(['hr.employees.view'])).label).toBe('Profile Change Requests');
+    expect(navItemForPermissions(item('/hr/profile-update-requests'), new Set(['hr.profile_updates.finance_review'])).label).toBe('Bank Account Changes');
+  });
+
+  it('keeps default labels while permission data is unavailable', () => {
+    expect(navItemForPermissions(item('/hr/employees'), undefined).label).toBe('Employees');
+    expect(navItemForPermissions(item('/hr/profile-update-requests'), undefined).label).toBe('Bank Account Changes');
   });
 });

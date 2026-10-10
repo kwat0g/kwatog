@@ -27,7 +27,7 @@ class SupplierInvoiceStatusMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Supplier invoice {$this->bill->bill_number} received");
+        return new Envelope(subject: 'Supplier invoice '.($this->bill->supplierInvoice?->number ?? $this->bill->bill_number).' received');
     }
 
     public function content(): Content
@@ -38,7 +38,8 @@ class SupplierInvoiceStatusMail extends Mailable implements ShouldQueue
             markdown: 'emails/supplier/invoice-status',
             with: [
                 'bill' => $this->bill,
-                'portalUrl' => $base.'/portal/supplier/invoices/'.$this->bill->hash_id,
+                'supplierInvoice' => $this->bill->supplierInvoice,
+                'portalUrl' => $base.'/portal/supplier/invoices/'.($this->bill->supplierInvoice?->hash_id ?? $this->bill->hash_id),
             ],
         );
     }
@@ -48,7 +49,7 @@ class SupplierInvoiceStatusMail extends Mailable implements ShouldQueue
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Supplier invoice email',
-            "The confirmation email for supplier invoice {$this->bill->bill_number} could not be delivered. Review the submission and use the supplier portal or an approved channel.",
+            'The confirmation email for supplier invoice '.($this->bill->supplierInvoice?->number ?? $this->bill->bill_number).' could not be delivered. Review the submission and use the supplier portal or an approved channel.',
             [
                 'link_to' => '/accounting/bills/'.$this->bill->hash_id,
                 'entity_type' => 'bill',

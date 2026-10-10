@@ -104,13 +104,14 @@ export function ShortClosePoModal({
                   <tr key={item.id} className={trCls}>
                     <Td mono>{item.item.code}</Td>
                     <Td align="right" mono>
-                      {formatQuantity(item.quantity)}
+                      {formatQuantity(item.quantity)} {item.unit ?? item.item.unit_of_measure}
                     </Td>
                     <Td align="right" mono>
-                      {formatQuantity(item.quantity_received)}
+                      {formatQuantity(item.quantity_received)} {item.item.unit_of_measure}
                     </Td>
                     <Td align="right" mono className="font-medium">
-                      {formatQuantity(item.quantity_open ?? item.quantity_remaining)}
+                      {formatQuantity(item.quantity_open ?? item.quantity_remaining)}{' '}
+                      {item.item.unit_of_measure}
                     </Td>
                   </tr>
                 ))}

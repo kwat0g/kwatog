@@ -19,6 +19,7 @@ import type { SupplierQuoteWrite } from '@/types/purchasing';
 
 type VatTreatment = SupplierQuoteWrite['vat_treatment'];
 type Line = { quoting: boolean; quantity: string; price: string; deliverBy: string };
+const validOfferedQuantity = /^\d+(?:\.\d{1,3})?$/;
 
 const errMsg = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -110,6 +111,9 @@ export default function SupplierRfqQuotePage() {
     if (!(Number(line.price) > 0)) issues.push(`Enter a unit price for ${item.description}.`);
     if (!(Number(line.quantity) > 0) || Number(line.quantity) > Number(item.quantity)) {
       issues.push(`${item.description}: quantity must be more than 0 and at most ${formatQuantity(item.quantity)}.`);
+    }
+    if (Number(line.quantity) > 0 && !validOfferedQuantity.test(line.quantity.trim())) {
+      issues.push(`${item.description}: quantity can have no more than 3 decimal places.`);
     }
     return issues;
   });
@@ -204,12 +208,16 @@ export default function SupplierRfqQuotePage() {
         backLabel="RFQ"
       />
 
-      <div className="px-5 py-4 space-y-4 max-w-4xl">
+      <div className="min-w-0 w-full px-5 py-4 space-y-4">
         <Panel title="Your prices">
           <div className="space-y-4">
             {rfq.items.map((item) => {
               const line = lines[item.id];
               if (!line) return null;
+              const quantityError =
+                Number(line.quantity) > 0 && !validOfferedQuantity.test(line.quantity.trim())
+                  ? 'Use no more than 3 decimal places.'
+                  : undefined;
               return (
                 <div key={item.id} className="border-b border-subtle pb-4 last:border-0 last:pb-0">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -245,6 +253,7 @@ export default function SupplierRfqQuotePage() {
                       />
                       <Input
                         label="Quantity"
+                        error={quantityError}
                         inputMode="decimal"
                         value={line.quantity}
                         onChange={(e) => setLine(item.id, { quantity: e.target.value })}

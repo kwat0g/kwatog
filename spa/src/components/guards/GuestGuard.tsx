@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { SessionRetry } from './SessionRetry';
 import { useAuthStore } from '@/stores/authStore';
 import { SkeletonLoginPage } from '@/components/ui/Skeleton';
 
@@ -16,16 +17,20 @@ interface GuestGuardProps {
  */
 export function GuestGuard({ children }: GuestGuardProps) {
   const location = useLocation();
-  const { isAuthenticated, isLoading, user, bootstrap } = useAuthStore();
+ const attemptedBootstrap = useRef(false);
+  const { isAuthenticated, isLoading, user, bootstrap, bootstrapError } = useAuthStore();
   const hasPortalIntent = (location.state as { realm?: string } | null)?.realm != null;
 
  useEffect(() => {
- if (!isAuthenticated && !user && isLoading) {
+ if (!attemptedBootstrap.current && !isAuthenticated && !user && isLoading && !bootstrapError) {
+ attemptedBootstrap.current = true;
  void bootstrap();
  }
- }, [isAuthenticated, user, isLoading, bootstrap]);
+ }, [isAuthenticated, user, isLoading, bootstrap, bootstrapError]);
 
  if (isLoading) return <SkeletonLoginPage />;
+
+  if (bootstrapError) return <SessionRetry />;
 
   if (isAuthenticated && !hasPortalIntent) {
  return <Navigate to={user?.must_change_password ? '/change-password' : '/dashboard'} replace />;

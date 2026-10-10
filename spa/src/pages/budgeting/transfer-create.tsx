@@ -34,10 +34,11 @@ export default function BudgetTransferCreatePage() {
   const [reason, setReason] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const { data: fiscalYears, isLoading: yearsLoading } = useQuery({
+  const yearsQuery = useQuery({
     queryKey: ['budget-fiscal-years'],
     queryFn: () => budgetingApi.fiscalYears(),
   });
+  const { data: fiscalYears, isLoading: yearsLoading } = yearsQuery;
 
   const budgetsQuery = useQuery({
     queryKey: ['budgets', 'transfer-source', fiscalYearId],
@@ -60,6 +61,9 @@ export default function BudgetTransferCreatePage() {
     queryFn: () => budgetingApi.show(toBudgetId),
     enabled: !!toBudgetId,
   });
+  const lookups = [yearsQuery, budgetsQuery, fromBudgetQuery, toBudgetQuery];
+  const lookupFailed = lookups.some(query => query.isError);
+  const lookupPending = lookups.some(query => query.isFetching);
 
   const saveMutation = useMutation({
     mutationFn: () => budgetingApi.requestTransfer({
@@ -78,6 +82,7 @@ export default function BudgetTransferCreatePage() {
   });
 
   const submit = () => {
+    if (lookupFailed || lookupPending) return;
     const next: Record<string, string> = {};
     if (!fiscalYearId) next.fiscal_year_id = 'Select a fiscal year.';
     if (!fromLineId) next.from_line = 'Select a source line.';
@@ -103,18 +108,27 @@ export default function BudgetTransferCreatePage() {
         backTo="/budgeting/transfers"
         backLabel="Transfers"
       />
+      {lookupFailed && <div role="alert" className="text-sm text-danger-fg">
+        Budget transfer options could not be loaded. Current allocation records are required before requesting a transfer.
+        <Button type="button" variant="secondary" size="sm" onClick={() => {
+          void yearsQuery.refetch();
+          if (fiscalYearId) void budgetsQuery.refetch();
+          if (fromBudgetId) void fromBudgetQuery.refetch();
+          if (toBudgetId) void toBudgetQuery.refetch();
+        }}>Retry transfer options</Button>
+      </div>}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Source Line">
           <div className="space-y-4">
-            <Select label="Fiscal Year" value={fiscalYearId} onChange={(event) => { setFiscalYearId(event.target.value); setFromBudgetId(''); setToBudgetId(''); setFromLineId(''); setToLineId(''); }} required error={fieldErrors.fiscal_year_id}>
+            <Select searchable label="Fiscal Year" value={fiscalYearId} onChange={(event) => { setFiscalYearId(event.target.value); setFromBudgetId(''); setToBudgetId(''); setFromLineId(''); setToLineId(''); }} required error={fieldErrors.fiscal_year_id}>
               <option value="">Select fiscal year...</option>
               {(fiscalYears ?? []).map((fy) => <option key={fy.id} value={fy.id}>FY {fy.year} ({fy.status_label ?? fy.status})</option>)}
             </Select>
-            <Select label="Source Budget (live only)" value={fromBudgetId} onChange={(event) => { setFromBudgetId(event.target.value); setFromLineId(''); }} required disabled={!fiscalYearId}>
+            <Select searchable label="Source Budget (live only)" value={fromBudgetId} onChange={(event) => { setFromBudgetId(event.target.value); setFromLineId(''); }} required disabled={!fiscalYearId}>
               <option value="">Select budget...</option>
               {liveBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.name}{budget.department ? ` — ${budget.department.name}` : ''}</option>)}
             </Select>
-            <Select label="Source Line" value={fromLineId} onChange={(event) => setFromLineId(event.target.value)} required error={fieldErrors.from_line} disabled={!fromBudgetId}>
+            <Select searchable label="Source Line" value={fromLineId} onChange={(event) => setFromLineId(event.target.value)} required error={fieldErrors.from_line} disabled={!fromBudgetId}>
               <option value="">Select line...</option>
               {(fromBudgetQuery.data?.line_items ?? []).map((line) => (
                 <option key={line.id} value={line.id}>{line.account?.code} — {line.account?.name} ({formatPeso(line.annual_total)} annual)</option>
@@ -124,11 +138,11 @@ export default function BudgetTransferCreatePage() {
         </Panel>
         <Panel title="Destination Line">
           <div className="space-y-4">
-            <Select label="Destination Budget (live only)" value={toBudgetId} onChange={(event) => { setToBudgetId(event.target.value); setToLineId(''); }} required disabled={!fiscalYearId}>
+            <Select searchable label="Destination Budget (live only)" value={toBudgetId} onChange={(event) => { setToBudgetId(event.target.value); setToLineId(''); }} required disabled={!fiscalYearId}>
               <option value="">Select budget...</option>
               {liveBudgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.name}{budget.department ? ` — ${budget.department.name}` : ''}</option>)}
             </Select>
-            <Select label="Destination Line" value={toLineId} onChange={(event) => setToLineId(event.target.value)} required error={fieldErrors.to_line} disabled={!toBudgetId}>
+            <Select searchable label="Destination Line" value={toLineId} onChange={(event) => setToLineId(event.target.value)} required error={fieldErrors.to_line} disabled={!toBudgetId}>
               <option value="">Select line...</option>
               {(toBudgetQuery.data?.line_items ?? []).map((line) => (
                 <option key={line.id} value={line.id}>{line.account?.code} — {line.account?.name} ({formatPeso(line.annual_total)} annual)</option>
@@ -144,7 +158,7 @@ export default function BudgetTransferCreatePage() {
       </div>
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={() => navigate('/budgeting/transfers')}>Cancel</Button>
-        <Button variant="primary" onClick={submit} loading={saveMutation.isPending} disabled={!fromLineId || !toLineId || !amount}>
+        <Button variant="primary" onClick={submit} loading={saveMutation.isPending} disabled={lookupFailed || lookupPending || !fromLineId || !toLineId || !amount}>
           Request Transfer
         </Button>
       </div>

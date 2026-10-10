@@ -1028,7 +1028,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
 
     // ───────────────── PO state gate / incoterm / validation ───────────────
 
-    public function test_shipment_creation_accepts_only_receivable_purchase_orders(): void
+    public function test_shipment_creation_requires_a_supplier_dispatched_purchase_order(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
 
@@ -1048,7 +1048,11 @@ class ImportShipmentCustomsAuditTest extends TestCase
                 'purchase_order_id' => $po->hash_id,
             ]);
 
-            if (in_array($status, PurchaseOrderStatus::receivable(), true)) {
+            if (in_array($status, [
+                PurchaseOrderStatus::Sent,
+                PurchaseOrderStatus::Acknowledged,
+                PurchaseOrderStatus::PartiallyReceived,
+            ], true)) {
                 $r->assertCreated();
                 $shipment = Shipment::query()->where('purchase_order_id', $po->id)->firstOrFail();
                 $this->assertSame(ShipmentStatus::Ordered, $shipment->status);
@@ -1074,51 +1078,226 @@ class ImportShipmentCustomsAuditTest extends TestCase
         }
     }
 
-    /**
-     * INVARIANT: the submitted Incoterm is persisted.
-     * Measured before the fix: validated by `CreateShipmentRequest`, echoed as
-     * null, and silently dropped by `ShipmentService::create()`, so a 201 came
-     * back with the operator's choice gone and the column left null.
-     *
-     * FIXED on create. Two halves remain in the plan, deliberately:
-     *   - `updateMeta` still cannot set it (its allow-list is unchanged);
-     *   - the customs PDFs still render `$po->incoterm`, because whether a
-     *     shipment term OVERRIDES or INHERITS the PO's is a trade-document
-     *     decision, not a dropped-input bug.
-     */
-    public function test_probe_submitted_incoterm_is_persisted_on_create(): void
+    public function test_shipment_create_tracks_the_first_container_for_customs_clearance(): void
+    {
+        $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
+        $po = $this->seedPo($user, 1, '1000.00');
+        $number = 'TCLU'.strtoupper(substr(uniqid(), -7));
+        $containerType = (new Container)->getMorphClass();
+        $containerCount = Container::query()->count();
+        $auditCount = DB::table('audit_logs')->where('model_type', $containerType)->count();
+
+        $created = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id,
+            'container_number' => $number,
+        ])->assertCreated();
+
+        $shipment = Shipment::query()->latest('id')->firstOrFail();
+        $container = Container::query()->where('shipment_id', $shipment->id)->first();
+
+        $this->assertSame($number, $created->json('data.container_number'));
+        $this->assertNotNull($container, 'clearance requires a tracked Container row, not only a legacy text field');
+        $this->assertSame($number, $container->container_number);
+        $this->assertSame($containerCount + 1, Container::query()->count());
+        $this->assertSame($auditCount + 1, DB::table('audit_logs')->where('model_type', $containerType)->count());
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $user->id,
+            'action' => 'created',
+            'model_type' => $containerType,
+            'model_id' => $container->id,
+        ]);
+    }
+
+    public function test_container_list_exposes_archived_rows_for_restore(): void
+    {
+        $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
+        $po = $this->seedPo($user, 1, '1000.00');
+        $shipment = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id,
+            'container_number' => 'TCLU-primary',
+        ])->assertCreated()->json('data.id');
+
+        $container = $this->actingAs($user)->postJson("/api/v1/supply-chain/shipments/{$shipment}/containers", [
+            'container_number' => 'TCLU-archived',
+        ])->assertCreated()->json('data.id');
+        $this->actingAs($user)->deleteJson("/api/v1/supply-chain/containers/{$container}")
+            ->assertNoContent();
+
+        $withArchived = $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipment}/containers?trashed=with")
+            ->assertOk()
+            ->json('data');
+        $archived = collect($withArchived)->firstWhere('id', $container);
+        $this->assertNotNull($archived, 'the archived container must remain reachable for recovery');
+        $this->assertNotNull($archived['deleted_at']);
+
+        $active = $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipment}/containers")
+            ->assertOk()
+            ->json('data');
+        $this->assertCount(1, $active);
+
+        $this->actingAs($user)->patchJson("/api/v1/supply-chain/containers/{$container}/restore")
+            ->assertOk();
+        $restored = $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipment}/containers")
+            ->assertOk()
+            ->json('data');
+        $this->assertCount(2, $restored);
+    }
+
+    public function test_shipment_container_summary_and_search_follow_active_container_records(): void
+    {
+        $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
+        $po = $this->seedPo($user, 1, '1000.00');
+        $shipmentId = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id,
+            'container_number' => 'TCLU-primary',
+        ])->assertCreated()->json('data.id');
+        $shipmentModel = Shipment::query()->where('purchase_order_id', $po->id)->latest('id')->firstOrFail();
+        $firstContainer = Container::query()
+            ->where('shipment_id', $shipmentModel->id)
+            ->orderBy('id')
+            ->firstOrFail();
+        $firstId = $firstContainer->hash_id;
+
+        $this->actingAs($user)->postJson("/api/v1/supply-chain/shipments/{$shipmentId}/containers", [
+            'container_number' => 'TEMU-secondary',
+        ])->assertCreated();
+        $this->actingAs($user)->putJson("/api/v1/supply-chain/containers/{$firstId}", [
+            'container_number' => 'FCIU-updated',
+        ])->assertOk();
+        $currentMatches = $this->actingAs($user)->getJson('/api/v1/supply-chain/shipments?search=FCIU-updated')
+            ->assertOk()->json('data');
+        $this->assertSame($shipmentId, collect($currentMatches)->first()['id']);
+        $staleMatches = $this->actingAs($user)->getJson('/api/v1/supply-chain/shipments?search=TCLU-primary')
+            ->assertOk()->json('data');
+        $this->assertFalse(collect($staleMatches)->contains('id', $shipmentId));
+
+        $containerAuditCount = DB::table('audit_logs')
+            ->where('model_type', $firstContainer->getMorphClass())
+            ->where('model_id', $firstContainer->id)
+            ->count();
+        $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipmentId}", [
+            'container_number' => 'MSCU-api-edit',
+        ])->assertOk()->assertJsonPath('data.container_number', 'MSCU-api-edit');
+        $this->assertSame($containerAuditCount + 1, DB::table('audit_logs')
+            ->where('model_type', $firstContainer->getMorphClass())
+            ->where('model_id', $firstContainer->id)
+            ->count());
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $user->id,
+            'action' => 'updated',
+            'model_type' => $firstContainer->getMorphClass(),
+            'model_id' => $firstContainer->id,
+        ]);
+        $this->assertSame('MSCU-api-edit', $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipmentId}")
+            ->assertOk()->json('data.container_number'));
+
+        $auditCountBeforeClear = DB::table('audit_logs')
+            ->where('model_type', $firstContainer->getMorphClass())
+            ->where('model_id', $firstContainer->id)
+            ->count();
+        $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipmentId}", [
+            'container_number' => null,
+        ])->assertUnprocessable();
+        $this->assertSame($auditCountBeforeClear, DB::table('audit_logs')
+            ->where('model_type', $firstContainer->getMorphClass())
+            ->where('model_id', $firstContainer->id)
+            ->count());
+        $this->assertSame('MSCU-api-edit', $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipmentId}")
+            ->assertOk()->json('data.container_number'));
+
+        $matches = $this->actingAs($user)->getJson('/api/v1/supply-chain/shipments?search=MSCU-api-edit')
+            ->assertOk()->json('data');
+        $this->assertSame($shipmentId, collect($matches)->first()['id']);
+        $staleMatches = $this->actingAs($user)->getJson('/api/v1/supply-chain/shipments?search=FCIU-updated')
+            ->assertOk()->json('data');
+        $this->assertFalse(collect($staleMatches)->contains('id', $shipmentId));
+
+        $this->actingAs($user)->deleteJson("/api/v1/supply-chain/containers/{$firstId}")->assertNoContent();
+        $this->assertSame('TEMU-secondary', $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipmentId}")
+            ->assertOk()->json('data.container_number'));
+        $this->actingAs($user)->patchJson("/api/v1/supply-chain/containers/{$firstId}/restore")->assertOk();
+        $this->assertSame('MSCU-api-edit', $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipments/{$shipmentId}")
+            ->assertOk()->json('data.container_number'));
+    }
+
+    public function test_shipment_detail_lists_archived_documents_for_restore(): void
+    {
+        $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
+        $po = $this->seedPo($user, 1, '1000.00');
+        $shipment = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id,
+        ])->assertCreated()->json('data.id');
+
+        $document = $this->actingAs($user)->postJson("/api/v1/supply-chain/shipments/{$shipment}/documents", [
+            'document_type' => 'bill_of_lading',
+            'file' => $this->realPdf('archived-bill-of-lading.pdf'),
+        ])->assertCreated()->json('data.id');
+        $this->actingAs($user)->deleteJson("/api/v1/supply-chain/shipment-documents/{$document}")
+            ->assertNoContent();
+
+        $detail = $this->actingAs($user)->getJson("/api/v1/supply-chain/shipments/{$shipment}")
+            ->assertOk()
+            ->json('data');
+        $archived = collect($detail['documents'] ?? [])->firstWhere('id', $document);
+        $this->assertNotNull($archived, 'archived evidence must remain visible for restore');
+        $this->assertNotNull($archived['deleted_at']);
+    }
+
+    public function test_shipment_incoterm_must_match_purchase_order(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $po = $this->seedPo($user, 1, '1000.00');
         $po->forceFill(['incoterm' => 'FOB'])->save();
 
-        $r = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+        $shipmentType = (new Shipment)->getMorphClass();
+        $shipmentCount = Shipment::query()->count();
+        $auditCount = DB::table('audit_logs')->where('model_type', $shipmentType)->count();
+        $sequenceBefore = DB::table('document_sequences')
+            ->where('document_type', 'shipment')
+            ->value('last_number');
+
+        $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
             'purchase_order_id' => $po->hash_id,
             'incoterm' => 'DDP',
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'Shipment incoterm must match the purchase order incoterm.');
+
+        $this->assertSame($shipmentCount, Shipment::query()->count());
+        $this->assertSame($auditCount, DB::table('audit_logs')->where('model_type', $shipmentType)->count());
+        $this->assertSame($sequenceBefore, DB::table('document_sequences')
+            ->where('document_type', 'shipment')
+            ->value('last_number'));
+
+        $matching = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+            'purchase_order_id' => $po->hash_id,
+            'incoterm' => 'FOB',
         ])->assertCreated();
+        $this->assertSame('FOB', $matching->json('data.incoterm'));
+        $shipmentId = $matching->json('data.id');
+        $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipmentId}", [
+            'incoterm' => 'DDP',
+        ])->assertOk();
+        $this->assertSame('FOB', Shipment::query()
+            ->where('shipment_number', $matching->json('data.shipment_number'))
+            ->firstOrFail()
+            ->incoterm?->value);
 
-        $stored = Shipment::query()->latest('id')->firstOrFail();
-        fwrite(STDERR, '[M043 incoterm] submitted=DDP response='.json_encode($r->json('data.incoterm'))
-            .' stored='.json_encode($stored->incoterm?->value)." po=FOB\n");
-
-        $this->assertSame('DDP', $r->json('data.incoterm'), 'the response echoes what was submitted');
-        $this->assertSame('DDP', $stored->incoterm?->value, 'the column carries it');
-        $this->assertSame('FOB', $po->fresh()->incoterm?->value, 'the PO term is untouched');
-
-        // Still invalid values are refused, and omitting it stays null.
-        $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
-            'purchase_order_id' => $po->hash_id, 'incoterm' => 'NOPE',
-        ])->assertStatus(422);
-        $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
+        $inherited = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
             'purchase_order_id' => $po->hash_id,
         ])->assertCreated();
-        $this->assertNull(Shipment::query()->latest('id')->first()->incoterm);
-
-        // RECORDED, still open: updateMeta drops it.
-        $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$stored->hash_id}",
-            ['incoterm' => 'FOB'])->assertOk();
-        $this->assertSame('DDP', $stored->fresh()->incoterm?->value,
-            'RECORDED: updateMeta still cannot change the Incoterm — see action plan B7');
+        $this->assertSame('FOB', $inherited->json('data.incoterm'));
+        $this->assertSame('FOB', Shipment::query()
+            ->where('purchase_order_id', $po->id)
+            ->orderByDesc('id')
+            ->firstOrFail()
+            ->incoterm?->value);
     }
 
     /**
@@ -1313,7 +1492,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
             'the seeded impex_officer must hold the manage permission');
 
         $po = $this->seedPo($impex, 2, '1000.00');
-        $po->forceFill(['status' => 'sent'])->save();
+        $po->forceFill(['status' => 'sent', 'incoterm' => 'CIF'])->save();
 
         $steps = [];
 

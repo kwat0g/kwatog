@@ -12,13 +12,17 @@ use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Services\InspectionSpecService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use RuntimeException;
 use Tests\TestCase;
+use Tests\Support\HasAssignedProductionCrew;
 
 /**
  * OGAMI-015 — machine double-booking guard in WorkOrderService::confirm().
@@ -34,6 +38,7 @@ use Tests\TestCase;
 class WorkOrderMachineConflictTest extends TestCase
 {
     use RefreshDatabase;
+    use HasAssignedProductionCrew;
 
     private WorkOrderService $service;
 
@@ -48,8 +53,9 @@ class WorkOrderMachineConflictTest extends TestCase
         // Silence chain/broadcast events fired after a status change.
         Event::fake();
 
+        $this->seed(RolePermissionSeeder::class);
         $this->service = app(WorkOrderService::class);
-        $this->user = User::factory()->create();
+        $this->user = User::factory()->withRole('production_manager')->create();
         $this->product = Product::create([
             'part_number' => 'WO-CONF-1',
             'name' => 'Conflict Product',
@@ -57,6 +63,9 @@ class WorkOrderMachineConflictTest extends TestCase
             'standard_cost' => 10.00,
             'is_active' => true,
         ]);
+        app(InspectionSpecService::class)->upsertForProduct($this->product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual'],
+        ], $this->user->id);
     }
 
     private function machine(): Machine
@@ -81,21 +90,25 @@ class WorkOrderMachineConflictTest extends TestCase
         ]);
     }
 
-    private function plannedWo(?Machine $machine = null, ?Mold $mold = null): WorkOrder
+    private function plannedWo(?Machine $machine = null, ?Mold $mold = null, ?Carbon $start = null, ?Carbon $end = null): WorkOrder
     {
         if ($machine && $mold) {
             $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
         }
 
-        return WorkOrder::factory()->create([
+        $workOrder = WorkOrder::factory()->create([
             'product_id' => $this->product->id,
             'machine_id' => $machine?->id,
             'mold_id' => $mold?->id,
             'status' => WorkOrderStatus::Planned->value,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'quantity_target' => 10,
+            'planned_start' => ($start ?? Carbon::now()->addHour())->toDateTimeString(),
+            'planned_end' => ($end ?? Carbon::now()->addDays(2))->toDateTimeString(),
             'created_by' => $this->user->id,
         ]);
+        $this->assignProductionCrew($workOrder, User::factory()->create());
+
+        return $workOrder;
     }
 
     private function schedule(WorkOrder $wo, Machine $machine, Mold $mold, Carbon $start, Carbon $end): ProductionSchedule
@@ -168,7 +181,6 @@ class WorkOrderMachineConflictTest extends TestCase
             'work_order_class' => 'non_stock',
             'exception_reason' => 'Assembly dependency test',
             'exception_authorized_by' => $this->user->id,
-            'status' => WorkOrderStatus::Confirmed->value,
         ])->save();
         $child = $this->plannedWo();
         $child->forceFill([
@@ -179,29 +191,101 @@ class WorkOrderMachineConflictTest extends TestCase
             'status' => WorkOrderStatus::Completed->value,
         ])->save();
 
-        $started = $this->service->start($parent->fresh(), $this->user->id);
+        $confirmed = $this->service->confirm($parent->fresh());
+        $this->travelTo($confirmed->planned_start);
+        $started = $this->service->start($confirmed, $this->user->id);
 
         $this->assertSame(WorkOrderStatus::InProgress, $started->status);
     }
 
-    /**
-     * No schedule rows on either side → blanket conflict. A machine bound to a
-     * Confirmed WO blocks confirming a second WO.
-     */
+    /** An active legacy WO without a slot must block a second machine reservation. */
     public function test_confirm_blocked_when_machine_has_active_wo_without_schedules(): void
     {
         $machine = $this->machine();
         $mold = $this->mold();
 
         $existing = $this->plannedWo($machine, $mold);
-        $this->service->confirm($existing); // now Confirmed on the machine
-
+        $existing->forceFill(['status' => WorkOrderStatus::Confirmed->value])->save();
         $second = $this->plannedWo($machine, $this->mold());
+        $before = [
+            'existing_status' => $existing->fresh()->status,
+            'second_status' => $second->fresh()->status,
+            'schedules' => ProductionSchedule::query()->count(),
+        ];
+        $thrown = null;
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('already committed to active work order');
+        try {
+            $this->service->confirm($second);
+        } catch (BusinessRuleException $exception) {
+            $thrown = $exception;
+        }
 
-        $this->service->confirm($second);
+        $this->assertInstanceOf(BusinessRuleException::class, $thrown, 'Active unscheduled equipment ownership must block confirmation.');
+        $this->assertStringContainsString('without an approved production slot', $thrown->getMessage());
+        $this->assertSame($before, [
+            'existing_status' => $existing->fresh()->status,
+            'second_status' => $second->fresh()->status,
+            'schedules' => ProductionSchedule::query()->count(),
+        ]);
+        $this->assertSame(WorkOrderStatus::Planned, $second->fresh()->status);
+    }
+
+    public function test_confirm_api_rejects_active_unscheduled_equipment_ownership_without_writes(): void
+    {
+        $machine = $this->machine();
+        $mold = $this->mold();
+
+        $existing = $this->plannedWo($machine, $mold);
+        $existing->forceFill(['status' => WorkOrderStatus::Confirmed->value])->save();
+        $second = $this->plannedWo($machine, $mold);
+        $crew = app(WorkOrderAssignmentService::class)->currentCrew($second);
+        $schedule = ProductionSchedule::create([
+            'work_order_id' => $second->id,
+            'machine_id' => $machine->id,
+            'mold_id' => $mold->id,
+            'scheduled_start' => $second->planned_start,
+            'scheduled_end' => $second->planned_end,
+            'priority_order' => 1,
+            'status' => 'pending',
+            'reserves_capacity' => true,
+        ]);
+        $before = [
+            'existing' => $existing->fresh()->getRawOriginal(),
+            'second' => $second->fresh()->getRawOriginal(),
+            'schedule' => $schedule->fresh()->getRawOriginal(),
+            'machine' => $machine->fresh()->getRawOriginal(),
+            'mold' => $mold->fresh()->getRawOriginal(),
+            'reservations' => DB::table('material_reservations')->count(),
+            'stock_movements' => DB::table('stock_movements')->count(),
+            'audit_logs' => DB::table('audit_logs')->count(),
+            'event_outbox' => DB::table('event_outbox')->count(),
+            'chain_step_runs' => DB::table('chain_step_runs')->count(),
+        ];
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/production/work-orders/{$second->hash_id}/confirm", [
+                'schedule_id' => $schedule->hash_id,
+                'schedule_updated_at' => $schedule->updated_at->toISOString(),
+                'expected_crew_id' => $crew->hash_id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', fn ($message): bool => is_string($message) && str_contains($message, 'without an approved production slot'));
+
+        $after = [
+            'existing' => $existing->fresh()->getRawOriginal(),
+            'second' => $second->fresh()->getRawOriginal(),
+            'schedule' => $schedule->fresh()->getRawOriginal(),
+            'machine' => $machine->fresh()->getRawOriginal(),
+            'mold' => $mold->fresh()->getRawOriginal(),
+            'reservations' => DB::table('material_reservations')->count(),
+            'stock_movements' => DB::table('stock_movements')->count(),
+            'audit_logs' => DB::table('audit_logs')->count(),
+            'event_outbox' => DB::table('event_outbox')->count(),
+            'chain_step_runs' => DB::table('chain_step_runs')->count(),
+        ];
+
+        $this->assertSame($before, $after);
+        $this->assertSame(WorkOrderStatus::Planned, $second->fresh()->status);
     }
 
     /**
@@ -218,20 +302,22 @@ class WorkOrderMachineConflictTest extends TestCase
     {
         $machine = $this->machine();
 
-        $existing = $this->plannedWo($machine, $this->mold());
+        $firstMold = $this->mold();
+        $firstStart = Carbon::now()->addDay()->setTime(8, 0);
+        $firstEnd = $firstStart->copy()->addHours(4);
+        $existing = $this->plannedWo($machine, $firstMold, $firstStart, $firstEnd);
         $this->schedule(
-            $existing, $machine, $this->mold(),
-            Carbon::parse('2026-07-01 08:00'), Carbon::parse('2026-07-01 12:00'),
+            $existing, $machine, $firstMold, $firstStart, $firstEnd,
         );
         $this->service->confirm($existing);
 
-        $second = $this->plannedWo($machine, $this->mold());
+        $secondMold = $this->mold();
+        $secondStart = $firstStart->copy()->addHours(2);
+        $secondEnd = $secondStart->copy()->addHours(4);
+        $second = $this->plannedWo($machine, $secondMold, $secondStart, $secondEnd);
         $this->expectException(QueryException::class);
         // Overlaps 10:00–14:00 with the confirmed 08:00–12:00 window.
-        $this->schedule(
-            $second, $machine, $this->mold(),
-            Carbon::parse('2026-07-01 10:00'), Carbon::parse('2026-07-01 14:00'),
-        );
+        $this->schedule($second, $machine, $secondMold, $secondStart, $secondEnd);
     }
 
     public function test_overlapping_schedule_windows_are_rejected_for_a_shared_mold_across_machines(): void
@@ -239,15 +325,16 @@ class WorkOrderMachineConflictTest extends TestCase
         $machineA = $this->machine();
         $machineB = $this->machine();
         $mold = $this->mold();
-        $first = $this->plannedWo($machineA, $mold);
-        $second = $this->plannedWo($machineB, $mold);
-
+        $firstStart = Carbon::now()->addDay()->setTime(8, 0);
+        $secondStart = $firstStart->copy()->addHours(2);
+        $first = $this->plannedWo($machineA, $mold, $firstStart, $firstStart->copy()->addHours(4));
+        $second = $this->plannedWo($machineB, $mold, $secondStart, $secondStart->copy()->addHours(4));
         $this->schedule(
             $first,
             $machineA,
             $mold,
-            Carbon::parse('2026-07-01 08:00'),
-            Carbon::parse('2026-07-01 12:00'),
+            $firstStart,
+            $firstStart->copy()->addHours(4),
         );
 
         $this->expectException(QueryException::class);
@@ -255,8 +342,8 @@ class WorkOrderMachineConflictTest extends TestCase
             $second,
             $machineB,
             $mold,
-            Carbon::parse('2026-07-01 10:00'),
-            Carbon::parse('2026-07-01 14:00'),
+            $secondStart,
+            $secondStart->copy()->addHours(4),
         );
     }
 
@@ -267,18 +354,23 @@ class WorkOrderMachineConflictTest extends TestCase
     {
         $machine = $this->machine();
 
-        $existing = $this->plannedWo($machine, $this->mold());
+        $firstMold = $this->mold();
+        $firstStart = Carbon::now()->addDay()->setTime(8, 0);
+        $firstEnd = $firstStart->copy()->addHours(4);
+        $existing = $this->plannedWo($machine, $firstMold, $firstStart, $firstEnd);
         $this->schedule(
-            $existing, $machine, $this->mold(),
-            Carbon::parse('2026-07-01 08:00'), Carbon::parse('2026-07-01 12:00'),
+            $existing, $machine, $firstMold, $firstStart, $firstEnd,
         );
         $this->service->confirm($existing);
 
-        $second = $this->plannedWo($machine, $this->mold());
+        $secondMold = $this->mold();
+        $secondStart = $firstEnd->copy();
+        $secondEnd = $secondStart->copy()->addHours(4);
+        $second = $this->plannedWo($machine, $secondMold, $secondStart, $secondEnd);
         // Starts exactly when the first ends — no overlap (half-open interval).
         $this->schedule(
-            $second, $machine, $this->mold(),
-            Carbon::parse('2026-07-01 12:00'), Carbon::parse('2026-07-01 16:00'),
+            $second, $machine, $secondMold,
+            $secondStart, $secondEnd,
         );
 
         $confirmed = $this->service->confirm($second);

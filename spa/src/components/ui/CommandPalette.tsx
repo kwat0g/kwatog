@@ -32,7 +32,7 @@ import { focusRingInset } from '@/lib/focus';
 import { useDebounce } from '@/hooks/useDebounce';
 import { LinkButton } from './LinkButton';
 import { Button } from './Button';
-import { SECTIONS, isNavItemVisible } from '@/components/layout/Sidebar';
+import { SECTIONS, isNavItemVisible, navItemForPermissions } from '@/components/layout/Sidebar';
 import { useAuthStore } from '@/stores/authStore';
 import { useRecentItemsStore } from '@/stores/recentItemsStore';
 
@@ -265,7 +265,7 @@ export function CommandPalette({ open, onClose }: Props) {
         ...section,
         items: section.items.filter((item) =>
           isNavItemVisible(item, { permissions, features, roleSlug }),
-        ),
+        ).map((item) => navItemForPermissions(item, permissions)),
       })).filter((s) => s.items.length > 0),
     [permissions, features, roleSlug],
   );

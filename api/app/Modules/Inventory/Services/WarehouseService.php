@@ -6,7 +6,9 @@ namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -34,6 +36,7 @@ class WarehouseService
     {
         $q = Warehouse::query();
         TrashedFilter::apply($q, $filters);
+
         return $q->orderBy('name')->get();
     }
 
@@ -55,6 +58,7 @@ class WarehouseService
                     ->orderBy('id')
                     ->lockForUpdate()
                     ->pluck('id');
+                $this->assertNoPendingAdjustments($locationIds->all());
                 if (StockLevel::query()
                     ->whereIn('location_id', $locationIds)
                     ->where(fn ($query) => $query->where('quantity', '>', 0)->orWhere('reserved_quantity', '>', 0))
@@ -64,6 +68,7 @@ class WarehouseService
             }
 
             $locked->update($data);
+
             return $locked->fresh();
         });
     }
@@ -77,11 +82,14 @@ class WarehouseService
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->pluck('id');
+            $this->assertNoPendingAdjustments($locationIds->all());
             $hasStock = StockLevel::query()
                 ->whereIn('location_id', $locationIds)
                 ->where(fn ($query) => $query->where('quantity', '>', 0)->orWhere('reserved_quantity', '>', 0))
                 ->exists();
-            if ($hasStock) throw new BusinessRuleException('Cannot delete a warehouse with stock or reservations. Deactivate instead.');
+            if ($hasStock) {
+                throw new BusinessRuleException('Cannot delete a warehouse with stock or reservations. Deactivate instead.');
+            }
             $locked->delete();
         });
     }
@@ -94,6 +102,15 @@ class WarehouseService
     public function updateZone(WarehouseZone $z, array $data): WarehouseZone
     {
         return DB::transaction(function () use ($z, $data) {
+            if (array_key_exists('warehouse_id', $data)) {
+                $targetWarehouse = Warehouse::query()
+                    ->lockForUpdate()
+                    ->find((int) $data['warehouse_id']);
+                if (! $targetWarehouse || ! $targetWarehouse->is_active) {
+                    throw new BusinessRuleException('Cannot move a zone into an inactive warehouse.');
+                }
+            }
+
             $locked = WarehouseZone::query()->lockForUpdate()->findOrFail($z->id);
             $locationIds = $locked->locations()->orderBy('id')->lockForUpdate()->pluck('id');
             $zoneType = $data['zone_type'] ?? null;
@@ -112,6 +129,9 @@ class WarehouseService
                 ->exists()) {
                 throw new BusinessRuleException('Cannot reclassify a zone with stock or reservations. Move or release its inventory first.');
             }
+            if ($changesInventoryClass) {
+                $this->assertNoPendingAdjustments($locationIds->all());
+            }
 
             $locked->update($data);
 
@@ -124,11 +144,14 @@ class WarehouseService
         DB::transaction(function () use ($z): void {
             $locked = WarehouseZone::query()->lockForUpdate()->findOrFail($z->id);
             $locIds = $locked->locations()->orderBy('id')->lockForUpdate()->pluck('id');
+            $this->assertNoPendingAdjustments($locIds->all());
             $hasStock = StockLevel::query()
                 ->whereIn('location_id', $locIds)
                 ->where(fn ($query) => $query->where('quantity', '>', 0)->orWhere('reserved_quantity', '>', 0))
                 ->exists();
-            if ($hasStock) throw new BusinessRuleException('Cannot delete a zone with stock or reservations.');
+            if ($hasStock) {
+                throw new BusinessRuleException('Cannot delete a zone with stock or reservations.');
+            }
             $locked->delete();
         });
     }
@@ -158,11 +181,17 @@ class WarehouseService
             if ($targetZoneId !== (int) $locked->zone_id && $hasStock) {
                 throw new BusinessRuleException('Cannot move a location with stock or reservations to another zone. Move or release its inventory first.');
             }
+            if ($targetZoneId !== (int) $locked->zone_id) {
+                $this->assertNoPendingAdjustments([(int) $locked->id]);
+            }
             $deactivating = array_key_exists('is_active', $data)
                 && filter_var($data['is_active'], FILTER_VALIDATE_BOOLEAN) === false
                 && $locked->is_active;
             if ($deactivating && $hasStock) {
                 throw new BusinessRuleException('Cannot deactivate a location with stock or reservations. Move or release its inventory first.');
+            }
+            if ($deactivating) {
+                $this->assertNoPendingAdjustments([(int) $locked->id]);
             }
 
             $locked->update($data);
@@ -231,7 +260,21 @@ class WarehouseService
                 ->exists()) {
                 throw new BusinessRuleException('Cannot delete a location with stock or reservations.');
             }
+            $this->assertNoPendingAdjustments([(int) $locked->id]);
             $locked->delete();
         });
+    }
+
+    /** @param array<int, int> $locationIds */
+    private function assertNoPendingAdjustments(array $locationIds): void
+    {
+        if ($locationIds === [] || ! StockAdjustment::query()
+            ->where('status', StockAdjustmentStatus::Pending->value)
+            ->whereIn('location_id', $locationIds)
+            ->exists()) {
+            return;
+        }
+
+        throw new BusinessRuleException('Resolve pending stock adjustments before changing or deleting their warehouse, zone, or location.');
     }
 }

@@ -35,10 +35,8 @@ class InventoryDashboardService
             ->value('v');
 
         // Aggregate availability per item.
-        $availabilities = DB::table('stock_levels')
-            ->select('item_id', DB::raw('SUM(quantity - reserved_quantity) AS available'))
-            ->groupBy('item_id')
-            ->pluck('available', 'item_id');
+        $levels = \App\Modules\Inventory\Models\StockLevel::query()->with('location.zone.warehouse')->get();
+        $availabilities = app(StockLocationSummaryService::class)->availabilityByItem($levels)->map(fn ($availability) => $availability['usable_quantity']);
 
         $items = Item::query()->where('is_active', true)
             ->select('id', 'code', 'name', 'reorder_point', 'safety_stock', 'lead_time_days', 'is_critical')

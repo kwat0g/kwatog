@@ -32,10 +32,14 @@ class ReleaseMrbRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'disposition'        => ['required', Rule::in(NcrDisposition::values())],
+            'disposition' => ['required', Rule::in(NcrDisposition::values())],
             // Required only for rework/use_as_is (validated in the service too).
             'target_location_id' => ['nullable', 'integer', 'exists:warehouse_locations,id'],
-            'notes'              => ['nullable', 'string', 'max:1000'],
+            'inspected_quantity' => ['nullable', 'decimal:0,3', 'gt:0'],
+            'evidence_reference' => ['nullable', 'string', 'max:500'],
+            'concession_approval_reference' => ['nullable', 'string', 'max:500'],
+            'recovery_passed' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

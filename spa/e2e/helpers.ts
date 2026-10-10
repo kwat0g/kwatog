@@ -46,6 +46,17 @@ const DEFAULT_FEATURES = [
   'search', 'notifications', 'b2b_portals', 'forecasting', 'budgeting',
 ];
 
+const DASHBOARD_TARGETS = [
+  { key: 'admin', path: '/dashboard/admin', permission: 'dashboard.admin.view', name: 'System Administrator' },
+  { key: 'plant-manager', path: '/dashboard/plant-manager', permission: 'dashboard.plant_manager.view', name: 'Plant Manager' },
+  { key: 'hr', path: '/dashboard/hr', permission: 'dashboard.hr.view', name: 'HR' },
+  { key: 'ppc', path: '/dashboard/ppc', permission: 'dashboard.ppc.view', name: 'PPC' },
+  { key: 'finance', path: '/dashboard/finance', permission: 'dashboard.accounting.view', name: 'Finance' },
+  { key: 'purchasing', path: '/dashboard/purchasing', permission: 'dashboard.purchasing.view', name: 'Purchasing' },
+  { key: 'warehouse', path: '/dashboard/warehouse', permission: 'dashboard.warehouse.view', name: 'Warehouse' },
+  { key: 'quality', path: '/dashboard/quality', permission: 'dashboard.quality.view', name: 'Quality' },
+] as const;
+
 export const USERS: Record<string, MockUser> = {
   hr: {
     id: 'u1', name: 'HR Officer', email: 'hr@ogami.test',
@@ -100,6 +111,21 @@ export async function mockAuth(page: Page, user: MockUser): Promise<void> {
       }),
     });
   });
+  const dashboardCandidates = DASHBOARD_TARGETS
+    .filter((target) => user.roleSlug === 'system_admin' || user.permissions.includes(target.permission))
+    .map((target) => ({ ...target, holder_count: 1 }));
+  await page.route('**/api/v1/dashboard/dispatch', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          target: dashboardCandidates[0] ?? { path: '/dashboard/default', key: null, name: null, permission: null },
+          candidates: dashboardCandidates,
+        },
+      }),
+    });
+  });
   // Authenticated layouts always request these two background resources.
   // Mocking them prevents a real 401 from the local API proxy from triggering
   // the production interceptor's session-expired redirect during isolated E2E.
@@ -146,8 +172,12 @@ export async function mockAuth(page: Page, user: MockUser): Promise<void> {
   await page.route('**/api/v1/broadcasting/auth', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ auth: 'mock' }) });
   });
-  await page.route('**/api/v1/dashboard/layout', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+  await page.route('**/api/v1/dashboard/layout**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [], meta: { layout_version: 'mock-layout-version' } }),
+    });
   });
   await page.route('**/api/v1/dashboards/copq-widget?*', async (route) => {
     await route.fulfill({

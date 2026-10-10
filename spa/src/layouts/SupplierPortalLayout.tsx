@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { queryClient } from '@/lib/queryClient';
@@ -9,7 +9,10 @@ import { FullPageLoader } from '@/components/ui/Spinner';
 import { PortalBootstrapError } from '@/components/ui/PortalBootstrapError';
 
 export default function SupplierPortalLayout() {
+ const location = useLocation();
  const navigate = useNavigate();
+ const currentPath = useRef(location.pathname);
+ currentPath.current = location.pathname;
  const [user, setUser] = useState<SupplierPortalUser | null>(null);
  const [isLoading, setIsLoading] = useState(true);
  const [bootstrapError, setBootstrapError] = useState(false);
@@ -31,7 +34,7 @@ export default function SupplierPortalLayout() {
  .catch((error: unknown) => {
  if (cancelled) return;
  if (axios.isAxiosError(error) && error.response?.status === 401) {
-  navigate('/sign-in', { state: { realm: 'supplier' }, replace: true });
+  navigate('/sign-in', { state: { realm: 'supplier', from: currentPath.current }, replace: true });
  } else {
  setBootstrapError(true);
  }

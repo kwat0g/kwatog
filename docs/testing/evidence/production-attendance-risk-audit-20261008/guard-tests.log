@@ -1,0 +1,18 @@
+
+   PASS  Tests\Feature\Attendance\PunchServiceTest
+  ✓ night shift out after midnight attaches to start day                33.51s  
+
+   PASS  Tests\Feature\Production\WorkOrderAttendanceSafetyTest
+  ✓ early start requires verified attendance and preserves approved tim… 5.91s  
+  ✓ fifteen minute grace uses existing reservation and later start requ… 4.67s  
+  ✓ late acknowledgement does not override equipment conflicts or deadl… 4.80s  
+  ✓ invalid punch cannot be overridden by presence confirmation          2.98s  
+
+   PASS  Tests\Feature\Production\WorkOrderExecutionReadinessTest
+  ✓ early start requires verified attendance and preserves approved tim… 5.05s  
+  ✓ fifteen minute grace uses existing reservation and later start requ… 3.25s  
+  ✓ late acknowledgement does not override equipment conflicts or deadl… 3.55s  
+
+  Tests:    8 passed (54 assertions)
+  Duration: 67.14s
+

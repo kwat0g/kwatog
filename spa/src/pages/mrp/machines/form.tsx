@@ -129,7 +129,7 @@ export function MachineForm({ initial, mode }: Props) {
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
-      className="max-w-3xl mx-auto px-5 py-4"
+      className="min-w-0 w-full px-5 py-4"
     >
       <FormDraftBanner safety={safety} inset={false} />
       <fieldset className="mb-8">

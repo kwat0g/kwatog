@@ -114,7 +114,7 @@ class DriverDeliveryService
             ]);
         }
 
-        return $this->deliveries->updateStatus($delivery, $nextStatus, null);
+        return $this->deliveries->updateStatus($delivery, $nextStatus, null, $driver);
     }
 
     public function uploadReceipt(User $driver, Delivery $delivery, UploadedFile $file): Delivery

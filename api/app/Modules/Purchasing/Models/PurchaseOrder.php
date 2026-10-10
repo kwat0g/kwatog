@@ -14,6 +14,7 @@ use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use Database\Factories\PurchaseOrderFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -96,9 +97,9 @@ class PurchaseOrder extends Model
      */
     public function receiptStatusOr(PurchaseOrderStatus $fallback): PurchaseOrderStatus
     {
-        $lines = $this->items()->get(['quantity', 'quantity_received', 'quantity_accepted']);
+        $lines = $this->items()->with('item')->get();
         if ($lines->isNotEmpty() && $lines->every(
-            fn (PurchaseOrderItem $l): bool => bccomp((string) $l->quantity_accepted, (string) $l->quantity, 3) >= 0
+            fn (PurchaseOrderItem $l): bool => bccomp((string) $l->quantity_accepted, $l->baseOrderedQuantity(), 3) >= 0
         )) {
             return PurchaseOrderStatus::Received;
         }
@@ -112,6 +113,11 @@ class PurchaseOrder extends Model
     public function goodsReceiptNotes(): HasMany
     {
         return $this->hasMany(GoodsReceiptNote::class);
+    }
+
+    public function supplierReturns(): HasMany
+    {
+        return $this->hasMany(ReturnRequest::class)->where('type', 'supplier_return');
     }
 
     public function bills(): HasMany
@@ -155,6 +161,7 @@ class PurchaseOrder extends Model
                     fn (GoodsReceiptNote $grn): bool => $grn->status !== GrnStatus::Draft
                 );
             }
+
             return $this->goodsReceiptNotes()
                 ->where('status', '!=', GrnStatus::Draft->value)
                 ->exists();
@@ -221,8 +228,9 @@ class PurchaseOrder extends Model
 
     public function getQuantityReceivedPercentAttribute(): float
     {
-        $totalOrdered = (float) $this->items()->sum('quantity');
-        $totalReceived = (float) $this->items()->sum('quantity_received');
+        $lines = $this->relationLoaded('items') ? $this->items : $this->items()->with('item')->get();
+        $totalOrdered = (float) $lines->sum(fn (PurchaseOrderItem $line) => $line->baseOrderedQuantity());
+        $totalReceived = (float) $lines->sum('quantity_received');
         if ($totalOrdered <= 0) {
             return 0.0;
         }
@@ -232,8 +240,9 @@ class PurchaseOrder extends Model
 
     public function getQuantityAcceptedPercentAttribute(): float
     {
-        $ordered = (float) $this->items()->sum('quantity');
-        $accepted = (float) $this->items()->sum('quantity_accepted');
+        $lines = $this->relationLoaded('items') ? $this->items : $this->items()->with('item')->get();
+        $ordered = (float) $lines->sum(fn (PurchaseOrderItem $line) => $line->baseOrderedQuantity());
+        $accepted = (float) $lines->sum('quantity_accepted');
 
         return $ordered > 0 ? round(($accepted / $ordered) * 100, 2) : 0.0;
     }

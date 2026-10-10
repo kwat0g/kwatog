@@ -8,6 +8,7 @@ const InspectionSpecsListPage = lazy(() => import('@/pages/quality/inspection-sp
 const InspectionSpecEditorPage = lazy(() => import('@/pages/quality/inspection-specs/editor'));
 const InspectionsListPage = lazy(() => import('@/pages/quality/inspections'));
 const InspectionDetailPage = lazy(() => import('@/pages/quality/inspections/detail'));
+const WorkOrderFinalInspectionPage = lazy(() => import('@/pages/quality/inspections/work-order-final'));
 const InspectionCreatePage = lazy(() => import('@/pages/quality/inspections/create'));
 const QualityDashboardPage = lazy(() => import('@/pages/quality/dashboard'));
 const NcrsListPage = lazy(() => import('@/pages/quality/ncrs'));
@@ -51,6 +52,8 @@ export const qualityRoutes = (
  element={<PermissionGuard permission="quality.inspections.manage"><InspectionCreatePage /></PermissionGuard>} />
  <Route path="/quality/inspections/:id"
  element={<PermissionGuard permission="quality.inspections.view"><InspectionDetailPage /></PermissionGuard>} />
+ <Route path="/quality/work-orders/:id/final-inspection"
+ element={<PermissionGuard permission="quality.inspections.view"><WorkOrderFinalInspectionPage /></PermissionGuard>} />
  <Route path="/quality/ncrs"
  element={<PermissionGuard permission="quality.ncr.view"><NcrsListPage /></PermissionGuard>} />
  <Route path="/quality/ncrs/effectiveness"

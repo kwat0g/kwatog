@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\ProductRouting;
@@ -21,9 +22,14 @@ use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Services\InspectionSpecService;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use RuntimeException;
+use Tests\Support\HasAssignedProductionCrew;
 use Tests\TestCase;
 
 /**
@@ -35,6 +41,7 @@ use Tests\TestCase;
 class WorkOrderSplitReservationTest extends TestCase
 {
     use RefreshDatabase;
+    use HasAssignedProductionCrew;
 
     private WorkOrderService $service;
     private User $user;
@@ -47,6 +54,8 @@ class WorkOrderSplitReservationTest extends TestCase
     {
         parent::setUp();
 
+        $this->seed([ChartOfAccountsSeeder::class, SettingsSeeder::class]);
+        $this->seed(RolePermissionSeeder::class);
         $this->service = app(WorkOrderService::class);
         $this->user    = User::factory()->create();
         $this->product = Product::create([
@@ -56,6 +65,9 @@ class WorkOrderSplitReservationTest extends TestCase
             'standard_cost'   => 10.00,
             'is_active'       => true,
         ]);
+        app(InspectionSpecService::class)->upsertForProduct($this->product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual', 'is_critical' => false],
+        ], $this->user->id);
 
         $this->item = Item::factory()->create(['name' => 'Split Material']);
         $this->locA = WarehouseLocation::factory()->create(['code' => 'SPLIT-A']);
@@ -78,10 +90,12 @@ class WorkOrderSplitReservationTest extends TestCase
         $wo = WorkOrder::factory()->create([
             'product_id'    => $this->product->id,
             'status'        => WorkOrderStatus::Planned->value,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end'   => Carbon::today()->addDays(2)->toDateTimeString(),
+            'quantity_target' => 10,
+            'planned_start' => Carbon::now()->addHour()->toDateTimeString(),
+            'planned_end'   => Carbon::now()->addDays(2)->toDateTimeString(),
             'created_by'    => $this->user->id,
         ]);
+        $this->assignProductionCrew($wo, $this->user);
 
         WorkOrderMaterial::create([
             'work_order_id'         => $wo->id,
@@ -96,7 +110,7 @@ class WorkOrderSplitReservationTest extends TestCase
 
     private function machine(): \App\Modules\MRP\Models\Machine
     {
-        return \App\Modules\MRP\Models\Machine::factory()->create(['status' => 'idle']);
+        return Machine::factory()->create(['status' => 'idle']);
     }
 
     private function mold(): Mold
@@ -162,10 +176,11 @@ class WorkOrderSplitReservationTest extends TestCase
         $wo = app(WorkOrderService::class)->createDraft([
             'product_id' => $this->product->id,
             'quantity_target' => 15,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'planned_start' => Carbon::now()->addHour()->toDateTimeString(),
+            'planned_end' => Carbon::now()->addDays(2)->toDateTimeString(),
             'created_by' => $this->user->id,
         ]);
+        $this->assignProductionCrew($wo, $this->user);
 
         $material = $wo->materials->firstOrFail();
         $this->assertSame('10.0000', (string) $material->standard_unit_cost);
@@ -181,11 +196,18 @@ class WorkOrderSplitReservationTest extends TestCase
         $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
         $confirmed = app(WorkOrderService::class)->confirm($wo, $machine->id, $mold->id);
-        $operator = User::factory()->create();
-        app(WorkOrderService::class)->start($confirmed, $operator->id);
+        $productionManager = User::factory()->withRole('production_manager')->create();
+        $this->travelTo($confirmed->planned_start);
+        app(WorkOrderService::class)->start($confirmed, $productionManager->id);
 
+        $materialIssue = StockMovement::query()
+            ->where('reference_type', 'work_order')
+            ->where('reference_id', $wo->id)
+            ->where('movement_type', 'material_issue')
+            ->firstOrFail();
+        $this->assertTrue($materialIssue->gl_handoff_status?->isResolved());
         $this->assertSame(
-            $operator->id,
+            $productionManager->id,
             StockMovement::query()
                 ->where('reference_type', 'work_order')
                 ->where('reference_id', $wo->id)
@@ -218,8 +240,8 @@ class WorkOrderSplitReservationTest extends TestCase
         $wo = $this->service->createDraft([
             'product_id' => $this->product->id,
             'quantity_target' => 15,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'planned_start' => Carbon::now()->addHour()->toDateTimeString(),
+            'planned_end' => Carbon::now()->addDays(2)->toDateTimeString(),
             'created_by' => $this->user->id,
         ]);
 

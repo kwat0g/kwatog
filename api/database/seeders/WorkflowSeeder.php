@@ -43,9 +43,9 @@ class WorkflowSeeder extends Seeder
                 'name'          => 'Company Loan Approval',
                 'steps' => [
                     ['order' => 1, 'role' => 'department_head',    'label' => 'Department Head'],
-                    ['order' => 2, 'role' => 'production_manager', 'label' => 'Manager'],
+                    ['order' => 2, 'role' => 'hr_officer',         'label' => 'HR Officer'],
                     ['order' => 3, 'role' => 'finance_officer',    'label' => 'Finance / Accounting'],
-                    ['order' => 4, 'role' => 'vice_president',     'label' => 'VP / Approver'],
+                    ['order' => 4, 'role' => 'vice_president',     'label' => 'VP / Approver', 'threshold' => '50000.00'],
                 ],
             ],
             // 2026-09-10 — PR chain redesign. Creators are department heads and
@@ -90,8 +90,7 @@ class WorkflowSeeder extends Seeder
                 'workflow_type' => 'bill_payment',
                 'name'          => 'Bill Payment Approval',
                 'steps' => [
-                    ['order' => 1, 'role' => 'finance_officer', 'label' => 'Finance Officer'],
-                    ['order' => 2, 'role' => 'vice_president',  'label' => 'VP'],
+                    ['order' => 1, 'role' => 'vice_president', 'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
             [

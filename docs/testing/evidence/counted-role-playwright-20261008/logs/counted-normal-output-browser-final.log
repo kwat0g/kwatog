@@ -1,0 +1,7 @@
+PASS Support role is denied with a valid output payload and submission key { status: 422 }
+PASS Recorder reports normal output after sample quality release {
+  beforePhysical: 6,
+  afterPhysical: 7,
+  good: 1,
+  rawStockUnchanged: true
+}

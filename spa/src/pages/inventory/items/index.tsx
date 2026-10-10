@@ -237,6 +237,7 @@ export default function ItemsListPage() {
  <div>
  <div className="font-medium">{r.name}</div>
  <div className="text-xs text-muted">{r.category?.name ?? '—'} · {r.item_type_label}</div>
+ {r.classification_needs_review && <span className="text-xs text-warning-fg">Classification needs review</span>}
  </div>
  ) },
  { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
@@ -335,25 +336,25 @@ export default function ItemsListPage() {
    <StatCard
      label="Active Items"
      value={data.data.filter(i => i.is_active).length}
-     helper="in current view"
+     helper="on this page"
      linkTo="?is_active=true"
    />
    <StatCard
      label="Inactive Items"
      value={data.data.filter(i => !i.is_active).length}
-     helper="in current view"
+     helper="on this page"
      linkTo="?is_active=false"
    />
    <StatCard
      label={stockStatusLabel('low')}
      value={data.data.filter(i => i.stock_status === 'low').length}
-     helper="in current view"
+     helper="on this page"
      linkTo="?stock_status=low"
    />
    <StatCard
      label={stockStatusLabel('critical')}
      value={data.data.filter(i => i.stock_status === 'critical').length}
-     helper="in current view"
+     helper="on this page"
      linkTo="?stock_status=critical"
      className="border-danger/30 bg-danger-bg/20"
    />
@@ -361,7 +362,7 @@ export default function ItemsListPage() {
   )}
 
 {data && data.data.length === 0 && (
- <ListEmptyState />
+ <ListEmptyState searchTerm={filters.search || (filters.stock_status ? `stock status: ${filters.stock_status}` : undefined)} />
  )}
 
 

@@ -4,21 +4,26 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Inventory\Enums\MrbStatus;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Requests\MrbIndexRequest;
 use App\Modules\Inventory\Requests\MrbQualityOptionsRequest;
 use App\Modules\Inventory\Requests\ReleaseMrbRequest;
 use App\Modules\Inventory\Requests\StoreMrbRequest;
 use App\Modules\Inventory\Resources\MaterialReviewRecordResource;
 use App\Modules\Inventory\Services\QuarantineService;
+use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\Quality\Enums\NcrDisposition;
-use App\Modules\Inventory\Enums\MrbStatus;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\Accounting\Exceptions\ClosedPeriodException;
-use App\Modules\Inventory\Exceptions\InsufficientStockException;
-use App\Modules\Inventory\Exceptions\InvalidMovementException;
 
 /**
  * REC-08 — Material Review Board (hold / release nonconforming stock).
@@ -53,9 +58,22 @@ class MrbController
         )]);
     }
 
-    public function show(MaterialReviewRecord $mrb): MaterialReviewRecordResource
+    public function sourceLots(Request $request): JsonResponse
     {
-        return new MaterialReviewRecordResource($this->service->show($mrb));
+        $request->validate(['item_id' => 'required|string', 'location_id' => 'required|string']);
+        $item = HashIdFilter::decode($request->input('item_id'), Item::class);
+        $location = HashIdFilter::decode($request->input('location_id'), WarehouseLocation::class);
+        abort_unless($item && $location, 422, 'Choose a valid item and source location.');
+
+        return response()->json(['data' => app(StockLocationSummaryService::class)->lots($item, $location)]);
+    }
+
+    public function show(Request $request, MaterialReviewRecord $mrb): MaterialReviewRecordResource
+    {
+        $record = $this->service->show($mrb);
+        $record->setAttribute('release_capabilities', $this->service->releaseCapabilities($record, $request->user()));
+
+        return new MaterialReviewRecordResource($record);
     }
 
     /** Raise a hold (quarantine stock). */
@@ -82,6 +100,7 @@ class MrbController
                 $request->user(),
                 isset($data['target_location_id']) ? (int) $data['target_location_id'] : null,
                 $data['notes'] ?? null,
+                array_replace(array_intersect_key($data, array_flip(['inspected_quantity', 'evidence_reference', 'recovery_passed', 'concession_approval_reference'])), ['recovery_passed' => $request->boolean('recovery_passed')]),
             );
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);

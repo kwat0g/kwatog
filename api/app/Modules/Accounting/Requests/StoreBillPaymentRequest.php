@@ -27,7 +27,8 @@ class StoreBillPaymentRequest extends FormRequest
             'payment_date'     => ['required', 'date'],
             'amount'           => ['required', 'numeric', 'min:0.01'],
             'payment_method'   => ['required', Rule::in(PaymentMethod::values())],
-            'reference_number' => ['nullable', 'string', 'max:50'],
+            'reference_number' => ['required', 'string', 'max:50'],
+            'proof_file'       => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'idempotency_key'  => ['required', 'string', 'max:128', 'regex:/^[A-Za-z0-9._:-]+$/'],
         ];
     }

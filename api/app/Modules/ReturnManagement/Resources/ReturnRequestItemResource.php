@@ -13,6 +13,7 @@ class ReturnRequestItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'reused_incoming_inspection_id' => $this->resource->reusedIncomingInspection()?->hash_id,
             'id'                => $this->hash_id,
             // These leaked the raw integer PKs of products / items straight to
             // the client, which the URL-obfuscation rule forbids and which the
@@ -69,9 +70,16 @@ class ReturnRequestItemResource extends JsonResource
             'disposition'       => $this->disposition,
             'disposition_label' => DispositionType::tryFrom((string) $this->disposition)?->label(),
             'disposition_notes' => $this->disposition_notes,
-            // 2026-08-08 — dispose-time movement: customer restock/rework lines
-            // come back into stock, supplier return_to_supplier lines ship out.
-            // The quantity actually moved lands here for the UI to show.
+            'mrb' => $this->whenLoaded('materialReviewRecord', fn () => $this->materialReviewRecord ? [
+                'id' => $this->materialReviewRecord->hash_id,
+                'mrb_number' => $this->materialReviewRecord->mrb_number,
+                'status' => $this->materialReviewRecord->status->value,
+                'status_label' => $this->materialReviewRecord->status->label(),
+                'release_movement_id' => $this->materialReviewRecord->release_movement_id
+                    ? \App\Common\Support\HashId::encode((int) $this->materialReviewRecord->release_movement_id)
+                    : null,
+            ] : null),
+            // Quantity actually moved into good stock, scrapped, or returned.
             'moved_quantity' => $this->stock_movement_quantity !== null
                 && bccomp((string) $this->stock_movement_quantity, '0', 3) > 0
                     ? (string) $this->stock_movement_quantity

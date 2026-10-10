@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -16,13 +17,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Machine extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected static function newFactory(): Factory
     {
@@ -30,22 +31,22 @@ class Machine extends Model
     }
 
     protected $fillable = [
+        'current_work_order_id', 'current_rework_ncr_id',
         'machine_code', 'name', 'tonnage', 'machine_type',
         'operators_required', 'available_hours_per_day', 'status',
-        'current_work_order_id',
         'asset_id',
         'running_hours_total',
         'running_hours_updated_at',
     ];
 
     protected $casts = [
-        'status'                  => MachineStatus::class,
-        'tonnage'                 => 'integer',
-        'operators_required'      => 'decimal:1',
+        'status' => MachineStatus::class,
+        'tonnage' => 'integer',
+        'operators_required' => 'decimal:1',
         'available_hours_per_day' => 'decimal:1',
-        'current_work_order_id'   => 'integer',
-        'asset_id'                => 'integer',
-        'running_hours_total'     => 'decimal:2',
+        'current_work_order_id' => 'integer',
+        'asset_id' => 'integer',
+        'running_hours_total' => 'decimal:2',
         'running_hours_updated_at' => 'datetime',
     ];
 
@@ -61,7 +62,7 @@ class Machine extends Model
 
     public function asset(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\Assets\Models\Asset::class, 'asset_id');
+        return $this->belongsTo(Asset::class, 'asset_id');
     }
 
     public function scopeAvailable(Builder $q): Builder
@@ -100,7 +101,7 @@ class Machine extends Model
                         WorkOrderStatus::InProgress->value,
                         WorkOrderStatus::Paused->value,
                     ]))
-                    ->update(['status' => ProductionScheduleStatus::Superseded->value]);
+                    ->update(['status' => ProductionScheduleStatus::Superseded->value, 'reserves_capacity' => false]);
             }
         });
     }

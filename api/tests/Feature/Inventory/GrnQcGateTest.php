@@ -67,7 +67,7 @@ class GrnQcGateTest extends TestCase
             'item_id' => $item->id,
             'description' => 'Material',
             'quantity' => '100.000',
-            'unit' => 'pcs',
+            'unit' => $item->unit_of_measure,
             'unit_price' => '10.00',
             'total' => '1000.00',
             'quantity_received' => '0.000',
@@ -197,7 +197,7 @@ class GrnQcGateTest extends TestCase
         $this->grnSvc->accept($grn->fresh(), $this->user);
     }
 
-    public function test_cancelled_inspection_does_not_block_acceptance(): void
+    public function test_cancelled_only_inspection_cannot_authorize_acceptance(): void
     {
         $item = Item::factory()->create(['is_active' => true]);
         $grn = $this->createGrnFor($item);
@@ -207,9 +207,8 @@ class GrnQcGateTest extends TestCase
             ->where('entity_id', $grn->id)
             ->update(['status' => 'cancelled']);
 
-        $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
-
-        $this->assertSame(GrnStatus::Accepted, $accepted->status);
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->grnSvc->accept($grn->fresh(), $this->user);
     }
 
     public function test_grn_without_qc_eligible_lines_and_no_inspection_is_accepted(): void
@@ -248,7 +247,7 @@ class GrnQcGateTest extends TestCase
 
     public function test_fractional_terminal_single_screen_qc_cannot_truncate_and_accept(): void
     {
-        $item = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         [$po, $poItem] = $this->makePoAndLine($item);
         $location = WarehouseLocation::factory()->create();
 

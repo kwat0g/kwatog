@@ -10,6 +10,7 @@ import { employeesApi } from '@/api/hr/employees';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useDebounce } from '@/hooks/useDebounce';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -20,7 +21,6 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { cn } from '@/lib/cn';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
-import { useDebounce } from '@/hooks/useDebounce';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 const schema = z.object({
@@ -39,17 +39,16 @@ export default function CreateLoanPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const [employeeSearch, setEmployeeSearch] = useState('');
- const debouncedEmployeeSearch = useDebounce(employeeSearch, 300);
 
- const { data: employeesResp } = useQuery({
- queryKey: ['hr', 'employees', 'active', debouncedEmployeeSearch],
+ const employeesQuery = useQuery({
+ queryKey: ['hr', 'employees', 'active', employeeSearch],
  queryFn: ({ signal }) => employeesApi.list({
  per_page: 100,
  status: 'active',
- search: debouncedEmployeeSearch || undefined,
+ search: employeeSearch || undefined,
  }, signal),
  });
- const employees = employeesResp?.data ?? [];
+ const employees = employeesQuery.data?.data ?? [];
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
@@ -67,10 +66,11 @@ export default function CreateLoanPage() {
  const principal = watch('principal');
  const periods = watch('pay_periods');
 
- const { data: loanTypes = [] } = useQuery({
+ const loanTypesQuery = useQuery({
  queryKey: ['loans', 'types'],
  queryFn: loansApi.types,
  });
+ const { data: loanTypes = [] } = loanTypesQuery;
 
  useEffect(() => {
  if (!loanType && loanTypes.length > 0) {
@@ -78,11 +78,15 @@ export default function CreateLoanPage() {
  }
  }, [loanType, loanTypes, setValue]);
 
- const { data: limits } = useQuery({
+ const limitsQuery = useQuery({
  queryKey: ['loans', 'limits', employeeId, loanType],
  queryFn: () => loansApi.limits(employeeId, loanType),
  enabled: !!employeeId && !!loanType,
  });
+ const limits = limitsQuery.data;
+ const lookups = [employeesQuery, loanTypesQuery, ...(employeeId && loanType ? [limitsQuery] : [])];
+ const lookupFailed = lookups.some(query => query.isError);
+ const lookupPending = lookups.some(query => query.isFetching);
 
  // The preview route carries `throttle:sensitive` (10/min). Firing it from an
  // effect keyed on a raw watch() sent one request per keystroke, which
@@ -123,7 +127,12 @@ export default function CreateLoanPage() {
  <div>
  <PageHeader title="New loan request" backTo="/hr/loans" backLabel="Loans" />
       <FormDraftBanner safety={safety} />
- <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4 space-y-4">
+ {lookupFailed && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+ Loan options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+ lookups.forEach(query => { if (query.isError) void query.refetch(); });
+ }}>Retry options</Button>
+ </div>}
+ <form onSubmit={handleSubmit((d) => { if (limits && !limits.has_active && !lookupFailed && !lookupPending) mutation.mutate(d); }, onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Type & employee">
  <div className="space-y-3">
  <fieldset>
@@ -135,7 +144,7 @@ export default function CreateLoanPage() {
  <span>
  <span className="block font-medium">{type.label}</span>
  <span className="block text-xs text-muted">
- {type.approval_steps} approval steps · {type.interest_rate_percent ? type.interest_rate_percent + '%' : formatPercent(type.interest_rate)} annual interest
+ {type.vp_approval_threshold ? `${type.approval_steps - 1} approvals; VP required at ${formatPeso(type.vp_approval_threshold)} or more` : `${type.approval_steps} approval steps`} · {type.interest_rate_percent ? type.interest_rate_percent + '%' : formatPercent(type.interest_rate)} annual interest
  </span>
  </span>
  </label>
@@ -143,20 +152,15 @@ export default function CreateLoanPage() {
  </div>
  {errors.loan_type && <p className="mt-1 text-xs text-danger-fg">{errors.loan_type.message}</p>}
  </fieldset>
- <Input
- label="Find employee"
- value={employeeSearch}
- onChange={(event) => setEmployeeSearch(event.target.value)}
- placeholder="Name or employee number"
- />
- <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
+
+ <Select searchable onSearch={(value) => setEmployeeSearch(value)} title="Name or employee number" label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
  <option value="">— Select —</option>
  {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name} ({e.employee_no})</option>)}
  </Select>
  {limits && (
  <div className="text-xs text-muted">
  Max principal: <span className="font-mono tabular-nums text-primary">{formatPeso(limits.principal_max)}</span>
- {limits.has_active && <span className="text-danger-fg ml-2">· employee already has an active {loanType.replace('_', ' ')}</span>}
+ {limits.has_active && <p role="status" className="text-danger-fg mt-1">This employee already has a pending or active loan or cash advance. No new request is allowed until it is closed.</p>}
  </div>
  )}
  </div>
@@ -210,7 +214,7 @@ export default function CreateLoanPage() {
 
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/loans')}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || !limits || limits.has_active || lookupFailed || lookupPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
  </FormActions>

@@ -7,6 +7,7 @@ namespace App\Modules\HR\Resources;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Services\SeparationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -18,9 +19,12 @@ class ClearanceResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $cleared = collect($this->clearance_items ?? [])
+        $service = app(SeparationService::class);
+        $items = $service->visibleChecklistItems($this->clearance_items ?? [], $request->user());
+        $financial = $request->user()?->hasPermission('hr.separation.view_all') ?? false;
+        $cleared = collect($items)
             ->filter(fn ($i) => ($i['status'] ?? '') === 'cleared')->count();
-        $total   = count($this->clearance_items ?? []);
+        $total   = count($items);
 
         return [
             'id'                  => $this->hash_id,
@@ -38,19 +42,20 @@ class ClearanceResource extends JsonResource
                     'id'    => $this->employee->position->hash_id,
                     'title' => $this->employee->position->title,
                 ] : null,
-                'pay_type'     => $this->employee->pay_type,
-                'date_hired'   => optional($this->employee->date_hired)?->toDateString(),
+                'pay_type'     => $financial ? $this->employee->pay_type : null,
+                'date_hired'   => $financial ? optional($this->employee->date_hired)?->toDateString() : null,
             ] : null),
             'separation_date'     => optional($this->separation_date)?->toDateString(),
             'separation_reason'   => $this->separation_reason instanceof \BackedEnum ? $this->separation_reason->value : $this->separation_reason,
-            'clearance_items'     => $this->clearanceItems(),
+            'clearance_items'     => $this->clearanceItems($items, $request),
+            'can_view_final_pay'  => $financial,
             'cleared_count'       => $cleared,
             'items_total'         => $total,
             'progress_pct'        => $total > 0 ? (int) round(($cleared / $total) * 100) : 0,
             'final_pay_computed'  => (bool) $this->final_pay_computed,
-            'final_pay_amount'    => $this->final_pay_amount !== null ? (string) $this->final_pay_amount : null,
-            'final_pay_breakdown' => $this->final_pay_breakdown,
-            'journal_entry'       => $this->journal_entry_id ? (function () {
+            'final_pay_amount'    => $financial && $this->final_pay_amount !== null ? (string) $this->final_pay_amount : null,
+            'final_pay_breakdown' => $financial ? $this->final_pay_breakdown : null,
+            'journal_entry'       => $financial && $this->journal_entry_id ? (function () {
                 $je = JournalEntry::find($this->journal_entry_id);
                 return $je ? ['id' => $je->hash_id, 'entry_number' => $je->entry_number] : null;
             })() : null,
@@ -63,7 +68,7 @@ class ClearanceResource extends JsonResource
                 'id' => $this->finalizer->hash_id, 'name' => $this->finalizer->name,
             ] : null),
             'finalized_at'        => optional($this->finalized_at)?->toISOString(),
-            'remarks'             => $this->remarks,
+            'remarks'             => $financial ? $this->remarks : null,
             'created_at'          => optional($this->created_at)?->toISOString(),
             'updated_at'          => optional($this->updated_at)?->toISOString(),
         ];
@@ -78,9 +83,8 @@ class ClearanceResource extends JsonResource
      *
      * @return array<int, array<string, mixed>>
      */
-    private function clearanceItems(): array
+    private function clearanceItems(array $items, Request $request): array
     {
-        $items = $this->clearance_items ?? [];
         if ($items === []) {
             return [];
         }
@@ -96,12 +100,13 @@ class ClearanceResource extends JsonResource
             ? collect()
             : User::query()->whereIn('id', $signerIds)->get(['id', 'name'])->keyBy('id');
 
-        return array_map(function ($item) use ($signers) {
+        return array_map(function ($item) use ($signers, $request) {
             $rawId = $item['signed_by'] ?? null;
             $signer = is_numeric($rawId) ? $signers->get((int) $rawId) : null;
 
             $item['signed_by'] = $signer?->hash_id;
             $item['signed_by_name'] = $signer?->name;
+            $item['can_sign'] = app(SeparationService::class)->canSignChecklistItem($item, $request->user());
 
             return $item;
         }, $items);

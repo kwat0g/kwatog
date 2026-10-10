@@ -50,6 +50,8 @@ class InvoiceBirFieldsTest extends TestCase
 
         return $svc->create(array_merge([
             'customer_id' => $customer->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'BIR calculation test',
             'date'        => '2026-04-01',
             'due_date'    => '2026-04-30',
             'items'       => [[

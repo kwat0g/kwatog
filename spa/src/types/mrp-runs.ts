@@ -6,39 +6,46 @@ export type MrpRunTrigger = 'scheduled' | 'manual' | 'automatic';
 export type MrpRunStatus = 'running' | 'completed' | 'partial' | 'failed';
 
 export interface MrpRunConflict {
- work_order_id: string;
- wo_number: string;
- reasons: string[];
+  work_order_id: string;
+  wo_number: string;
+  reasons: string[];
 }
 
 export interface MrpRunSchedulingSummary {
- scheduled: Array<Record<string, unknown>>;
- conflicts: MrpRunConflict[];
+  scheduled: Array<Record<string, unknown>>;
+  conflicts: MrpRunConflict[];
 }
 
 export interface MrpRunSummary extends Record<string, unknown> {
- trigger_reason?: string;
- scheduling?: MrpRunSchedulingSummary;
+  per_sales_order?: Array<{
+    so_id?: string;
+    so_number?: string;
+    error?: string;
+    error_code?: string;
+    recovery_action?: string;
+  }>;
+  trigger_reason?: string;
+  scheduling?: MrpRunSchedulingSummary;
 }
 
 export interface MrpRun {
- id: string; // hash_id
- run_at: string;
- triggered_by: MrpRunTrigger;
- triggered_by_label?: string;
- triggered_by_user: { id: string; name: string } | null;
- sales_orders_evaluated: number;
- shortages_found: number;
- prs_created: number;
- prs_updated: number;
- plans_generated: number;
- duration_ms: number | null;
- status: MrpRunStatus;
- status_label?: string;
- failed_sales_orders?: number;
- error_message: string | null;
- error_code?: string | null;
- recovery_action?: string | null;
- summary: MrpRunSummary;
- created_at: string;
+  id: string; // hash_id
+  run_at: string;
+  triggered_by: MrpRunTrigger;
+  triggered_by_label?: string;
+  triggered_by_user: { id: string; name: string } | null;
+  sales_orders_evaluated: number;
+  shortages_found: number;
+  prs_created: number;
+  prs_updated: number;
+  plans_generated: number;
+  duration_ms: number | null;
+  status: MrpRunStatus;
+  status_label?: string;
+  failed_sales_orders?: number;
+  error_message: string | null;
+  error_code?: string | null;
+  recovery_action?: string | null;
+  summary: MrpRunSummary;
+  created_at: string;
 }

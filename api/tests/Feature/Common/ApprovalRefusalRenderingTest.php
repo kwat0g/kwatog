@@ -6,6 +6,9 @@ namespace Tests\Feature\Common;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
+use App\Modules\Production\Exceptions\RoutingVersionConflictException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -181,6 +184,21 @@ class ApprovalRefusalRenderingTest extends TestCase
         $this->assertFalse(
             $handler->shouldReport(new ForbiddenActionException('You cannot act on a record you submitted.')),
             'An authorization refusal must not write an error log line.',
+        );
+        $expectedConflicts = [
+            new BusinessRuleException('Only pending records can be changed.'),
+            new ClosedPeriodException(2026, 10, '2026-10-31'),
+            new DashboardLayoutConflictException('v2'),
+            new RoutingVersionConflictException(),
+        ];
+        $reportedConflicts = array_map(
+            static fn ($exception) => $exception::class,
+            array_filter($expectedConflicts, fn ($exception) => $handler->shouldReport($exception)),
+        );
+        $this->assertSame(
+            [],
+            $reportedConflicts,
+            'Expected conflicts must not write error log lines: '.implode(', ', $reportedConflicts),
         );
         $this->assertTrue(
             $handler->shouldReport(new RuntimeException('Something actually broke.')),

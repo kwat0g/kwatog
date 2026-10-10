@@ -140,6 +140,7 @@ export default function SelfServiceLoansPage() {
   });
 
  const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);
+ const hasActiveLoan = (data?.active.length ?? 0) > 0;
  const loanTypeLabels = new Map((data?.loan_types ?? []).map((type) => [type.value, type.label]));
 
  return (
@@ -148,12 +149,13 @@ export default function SelfServiceLoansPage() {
  title="Loans & Cash Advances"
  subtitle={data ? `${data.active.length} active · ${data.history.length} past` : undefined}
  actions={
- <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => setShowApply(true)}>
+ <Button variant="primary" size="sm" icon={<LuPlus size={14} />} disabled={!data || isError || hasActiveLoan} onClick={() => setShowApply(true)}>
  Apply for a loan
  </Button>
  }
  />
  <div className="px-5 py-4 space-y-4">
+ {hasActiveLoan && <p role="status" className="text-sm text-muted">You already have a pending or active loan or cash advance. No new request is allowed until it is closed.</p>}
  {isLoading && <SkeletonTable columns={7} rows={4} />}
 
  {isError && (
@@ -201,9 +203,9 @@ export default function SelfServiceLoansPage() {
  )}
 
  <ApplyLoanModal
- isOpen={showApply}
+ isOpen={showApply && !hasActiveLoan}
  onClose={() => setShowApply(false)}
- onSubmit={(v) => apply.mutate(v)}
+ onSubmit={(v) => { if (data && !isError && !hasActiveLoan) apply.mutate(v); }}
  pending={apply.isPending}
  loanTypes={data?.loan_types ?? []}
  maxPayPeriods={data?.max_pay_periods}
@@ -235,7 +237,7 @@ function ApplyLoanModal({
  onClose: () => void;
  onSubmit: (v: FormValues) => void;
  pending: boolean;
- loanTypes: Array<{ value: string; label: string }>;
+ loanTypes: SelfServiceLoansResponse['loan_types'];
  maxPayPeriods?: number;
 }) {
  const {
@@ -259,11 +261,12 @@ function ApplyLoanModal({
 
  const watchedAmount = watch('amount');
  const watchedLoanType = watch('loan_type');
+ const selectedType = loanTypes.find((type) => type.value === watchedLoanType);
  const watchedPeriods = watch('periods');
  const debouncedAmount = useDebounce(watchedAmount, 500);
  const debouncedPeriods = useDebounce(watchedPeriods, 300);
 
- const { data: preview, isFetching: previewLoading } = useQuery({
+ const { data: preview, isFetching: previewLoading, isError: previewFailed, refetch: refetchPreview } = useQuery({
  queryKey: ['loan-preview', watchedLoanType, debouncedAmount, debouncedPeriods],
  queryFn: () => selfServiceApi.previewLoanAmortization(
  watchedLoanType,
@@ -295,6 +298,9 @@ function ApplyLoanModal({
  >
  {loanTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
+ {selectedType?.vp_approval_threshold && (
+ <p className="text-xs text-muted">VP approval required at {formatPeso(selectedType.vp_approval_threshold)} or more.</p>
+ )}
  <div className="grid grid-cols-2 gap-3">
  <Input
  label="Amount"
@@ -316,6 +322,9 @@ function ApplyLoanModal({
  />
  </div>
  {/* Amortization preview */}
+ {previewFailed && <div role="alert" className="text-sm text-danger-fg">
+ Amortization preview could not be loaded. You can still submit; the server calculates the schedule. <Button variant="secondary" size="sm" onClick={() => void refetchPreview()}>Retry preview</Button>
+ </div>}
  {Number(watchedAmount) > 0 && Number(watchedPeriods) >= 1 && (
  <div className="rounded-md border border-default bg-surface p-3 space-y-2">
  <div className="flex items-center justify-between text-xs text-muted">

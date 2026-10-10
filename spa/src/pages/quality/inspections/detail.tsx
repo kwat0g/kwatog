@@ -1,39 +1,29 @@
-/**
- * Sprint 7 — Task 60 — Inspection detail / measurement-recording page.
- *
- * The page lists the seeded measurements in one table, grouped by sample_index. The inspector
- * fills in measured_value (auto pass/fail for dimensional/functional via
- * tolerance window) or toggles is_pass (visual checks). Save patches the
- * batch; Complete finalises the inspection (passed/failed by AQL plan).
- */
-import { useEffect, useState } from 'react';
+/** Batch decisions replace measurement entry at every inspection stage. */
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
-import { LuCheck, LuBan, LuSave, LuFileDown } from '@/lib/icons';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
+import { LuCheck, LuBan, LuFileDown } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
-import { analyticsApi, type SpcCapabilityItem } from '@/api/quality/analytics';
+import { analyticsApi } from '@/api/quality/analytics';
 import { capabilityApi } from '@/api/quality/capability';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
-import { usePermission } from '@/hooks/usePermission';
-import type { InspectionMeasurement, InspectionStatus } from '@/types/quality';
+import { ChainHeader } from '@/components/chain/ChainHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { Input } from '@/components/ui/Input';
-import { SpecToleranceBar } from '@/components/ui/SpecToleranceBar';
-import { cn } from '@/lib/cn';
+import { usePermission } from '@/hooks/usePermission';
+import type { InspectionStatus } from '@/types/quality';
 import { formatDateTime } from '@/lib/formatDate';
-import { LotResultPanel } from './components/LotResultPanel';
+import { formatQuantity } from '@/lib/formatNumber';
+import { InspectionChecklistPanel } from './components/InspectionChecklistPanel';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
   {
@@ -45,33 +35,16 @@ const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | '
     cancelled: 'neutral',
   };
 
-const isNumericMeasurement = (measurement?: InspectionMeasurement): boolean =>
-  Boolean(
-    measurement &&
-    (measurement.evaluation_mode === 'numeric' ||
-      (measurement.evaluation_mode === undefined &&
-        (measurement.tolerance_min !== null || measurement.tolerance_max !== null))),
-  );
-
-interface RowDraft {
-  id: string;
-  measured_value: string; // keep as string to allow empty input
-  is_pass: boolean | null;
-  notes: string;
-  dirty: boolean;
-}
-
 export default function InspectionDetailPage() {
+  const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
-  const [confirmComplete, setConfirmComplete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmReviewPass, setConfirmReviewPass] = useState(false);
   // The decision the reason dialog will submit — set by the button clicked,
   // not inferred from proposed_result (which made "Fail inspection" submit a pass).
-  const [reasonDecision, setReasonDecision] = useState<'passed' | 'failed' | null>(null);
+  const [reasonDecision, setReasonDecision] = useState<'failed' | null>(null);
   const [cocLoading, setCocLoading] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -91,9 +64,21 @@ export default function InspectionDetailPage() {
     enabled: Boolean(id),
     staleTime: 30_000,
   });
+  const confirmedCheckCapture =
+    data?.counted_capture?.version === 3 &&
+    data.counted_capture.evidence_method === 'confirmed_checks';
   const { data: spcOptions } = useQuery({
     queryKey: ['quality', 'spc', 'options'],
     queryFn: capabilityApi.options,
+    enabled: data?.capture_method === 'measurement' && !confirmedCheckCapture && can('quality.specs.view'),
+    staleTime: 300_000,
+  });
+  const spc = useQuery({
+    queryKey: ['quality', 'spc', data?.spec?.id],
+    queryFn: () => analyticsApi.spcForSpec(data!.spec!.id),
+    enabled: Boolean(
+      data?.capture_method === 'measurement' && !confirmedCheckCapture && data?.spec?.id && can('quality.specs.view'),
+    ),
     staleTime: 300_000,
   });
   const statusLabel = inspectionOptions?.statuses?.find(
@@ -102,102 +87,16 @@ export default function InspectionDetailPage() {
   const stageLabel = inspectionOptions?.stages?.find(
     (option) => option.value === data?.stage,
   )?.label;
-  const measurementResultLabels = new Map(
-    (inspectionOptions?.measurement_results ?? []).map((option) => [option.value, option.label]),
-  );
-  const cpkThresholds = spcOptions?.capability_thresholds;
-
-  const spc = useQuery({
-    queryKey: ['quality', 'spc', data?.spec?.id],
-    queryFn: () => analyticsApi.spcForSpec(data!.spec!.id),
-    enabled: Boolean(data?.spec?.id && can('quality.specs.view')),
-    staleTime: 300_000,
-  });
-
-  // Seed local drafts whenever the server payload arrives.
-  useEffect(() => {
-    if (!data?.measurements) return;
-    setDrafts((existing) => {
-      const next: Record<string, RowDraft> = {};
-      for (const m of data.measurements!) {
-        next[m.id] = existing[m.id]?.dirty
-          ? existing[m.id]
-          : {
-              id: m.id,
-              measured_value: m.measured_value === null ? '' : String(m.measured_value),
-              is_pass: m.is_pass,
-              notes: m.notes ?? '',
-              dirty: false,
-            };
-      }
-      return next;
-    });
-  }, [data]);
-
-  const save = useMutation({
-    mutationFn: () => {
-      const dirty = Object.values(drafts).filter((d) => d.dirty);
-      return inspectionsApi.recordMeasurements(id, {
-        measurements: dirty.map((d) => {
-          const measurement = data?.measurements?.find((m) => m.id === d.id);
-          const hasTolerance = isNumericMeasurement(measurement);
-          return {
-            id: d.id,
-            // AUDIT NOTE (M056) — decimals should stay strings end to end per
-            // CLAUDE.md, but InspectionMeasurementResource returns measured_value
-            // as a JSON float, so RecordMeasurementsData is typed `number`.
-            // Switching only this direction would half-migrate the contract; the
-            // resource + type + tolerance-bar change is tracked as a separate item.
-            ...(hasTolerance
-              ? { measured_value: d.measured_value === '' ? null : Number(d.measured_value) }
-              : {}),
-            ...(!hasTolerance ? { is_pass: d.is_pass } : {}),
-            notes: d.notes || null,
-          };
-        }),
-      });
-    },
-    onSuccess: () => {
-      toast.success('Measurements saved');
-      // M056 — the seeding effect above deliberately preserves rows still
-      // flagged dirty, so leaving the flags set after a successful save kept
-      // the table showing stale local values and Save permanently enabled.
-      // Clear them here; the refetched server payload is the source of truth.
-      setDrafts((existing) => {
-        const cleared: Record<string, RowDraft> = {};
-        for (const [rowId, draft] of Object.entries(existing)) {
-          cleared[rowId] = { ...draft, dirty: false };
-        }
-        return cleared;
-      });
-      qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
-    },
-    onError: (e: AxiosError<{ message?: string }>) => {
-      toast.error(e.response?.data?.message ?? 'Save failed');
-    },
-  });
-
-  const complete = useMutation({
-    mutationFn: () => inspectionsApi.complete(id),
-    onSuccess: (insp) => {
-      toast.success(
-        insp.status === 'awaiting_review'
-          ? 'Inspection submitted for checker review.'
-          : `Inspection ${insp.status === 'passed' ? 'PASSED' : 'FAILED'}`,
-      );
-      qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
-      setConfirmComplete(false);
-    },
-    onError: (e: AxiosError<{ message?: string }>) => {
-      toast.error(e.response?.data?.message ?? 'Could not complete');
-    },
-  });
-
   const cancel = useMutation({
-    mutationFn: (reason: string) => inspectionsApi.cancel(id, reason),
+    mutationFn: (reason: string) =>
+      inspectionsApi.cancel(
+        id,
+        reason,
+        data?.capture_method === 'checklist' || data?.counted_capture ? data.result_version : undefined,
+      ),
     onSuccess: () => {
       toast.success('Inspection cancelled');
-      qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
+      qc.invalidateQueries({ queryKey: ['quality', 'inspections'] });
       setConfirmCancel(false);
     },
     onError: (e: AxiosError<{ message?: string }>) => {
@@ -205,12 +104,28 @@ export default function InspectionDetailPage() {
     },
   });
 
+  const [confirmReplace, setConfirmReplace] = useState(false);
+  const replace = useMutation({
+    mutationFn: (reason: string) =>
+      inspectionsApi.replaceChecklist(id, reason, data?.result_version ?? 0),
+    onSuccess: (next) => {
+      toast.success('New PASS/FAIL inspection created. Historical evidence preserved.');
+      window.location.assign(`/quality/inspections/${next.id}`);
+    },
+    onError: (error: AxiosError<{ message?: string }>) =>
+      toast.error(error.response?.data?.message ?? 'Could not replace this inspection.'),
+  });
   const review = useMutation({
     mutationFn: ({ decision, remarks }: { decision: 'passed' | 'failed'; remarks?: string }) =>
-      inspectionsApi.review(id, decision, remarks),
+      inspectionsApi.review(
+        id,
+        decision,
+        remarks,
+        data?.capture_method === 'checklist' || data?.counted_capture ? data.result_version : undefined,
+      ),
     onSuccess: (insp) => {
       toast.success(`Inspection ${insp.status === 'passed' ? 'approved' : 'failed'} by checker.`);
-      qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
+      qc.invalidateQueries({ queryKey: ['quality', 'inspections'] });
       setConfirmReviewPass(false);
       setReasonDecision(null);
     },
@@ -237,41 +152,47 @@ export default function InspectionDetailPage() {
     );
   }
 
-  // Group measurements by sample_index; each sample is one row group.
-  const grouped: Record<number, InspectionMeasurement[]> = {};
-  for (const m of data.measurements ?? []) {
-    (grouped[m.sample_index] ??= []).push(m);
-  }
-  const sampleIndices = Object.keys(grouped)
-    .map(Number)
-    .sort((a, b) => a - b);
-
   const isTerminal = ['awaiting_review', 'passed', 'failed', 'cancelled'].includes(data.status);
-  const dirtyCount = Object.values(drafts).filter((d) => d.dirty).length;
-  const unresolvedCount = (data.measurements ?? []).filter((m) => m.is_pass === null).length;
-  // Lot-checklist captures live in the panel, not in `drafts`, so the status line
-  // reads their progress from the saved payload instead.
-  const lotChecklistStarted =
-    data.sample_defect_count != null ||
-    (data.measurements ?? []).some((m) => m.is_pass !== null || m.measured_value !== null);
+  const evidence = (data.measurements ?? []).filter(
+    (row) => row.measured_value != null || row.is_pass != null || Boolean(row.notes),
+  );
+  const thresholds = spcOptions?.capability_thresholds;
+  const waitingForTrial = Boolean(data.startup_trial_required && (!data.startup_trial ||
+    data.startup_trial.recorded_quantity !== data.startup_trial.required_quantity || !data.startup_trial.output_id));
+  const hasTrial = Boolean(data.startup_trial?.output_id);
+  const hasRequiredSizeReadings = Boolean(data.measurements?.some((row) =>
+    row.evaluation_mode === 'numeric' ||
+    (row.parameter_type === 'dimensional' &&
+      (row.tolerance_min != null || row.tolerance_max != null)),
+  ));
+  const nextAction =
+    waitingForTrial ? `Production: record ${data.startup_trial?.required_quantity ?? data.sample_size} trial pieces before QC evidence can be entered.` : data.status === 'awaiting_review'
+      ? `Independent QC reviewer: review the proposed ${(data.proposed_result ?? 'result').toUpperCase()}.`
+      : data.status === 'failed'
+        ? data.ncr
+          ? `QC disposition owner: follow ${data.ncr.ncr_number}. Stock remains subject to its disposition and release checks.`
+          : data.count_only_incoming && Number(data.sample_defect_count) > 0
+            ? `QC confirmed ${data.sample_defect_count} defective pieces. Warehouse accepts the good pieces; Purchasing reviews their supplier return in Return Management.`
+            : 'QC disposition owner: inspect the failed source and reconcile its recovery handoff before stock release.'
+        : data.status === 'passed'
+          ? data.stage === 'incoming'
+            ? `Warehouse: ${data.incoming_acceptance?.status === 'accepted' ? 'linked receipt is accepted.' : 'check the linked receipt for material acceptance.'}`
+            : 'Inspection passed. Check linked source records for the next production, return, or warehouse action.'
+          : data.status === 'cancelled'
+            ? 'Cancelled evidence cannot authorize stock release.'
+            : data.counted_capture ? data.sampling_basis === 'lot'
+              ? hasRequiredSizeReadings ? 'QC: confirm material defects and enter required size readings, then submit.' : 'QC: confirm material defects, then submit inspection.'
+              : hasRequiredSizeReadings ? 'QC: record defective pieces and required size readings, then submit.' : 'QC: record defective pieces, then submit inspection.'
+              : data.count_only_incoming ? 'QC inspector: count every piece, record and segregate defects, then submit.' : 'QC inspector: complete the checklist, then submit inspection.';
 
-  const updateDraft = (mId: string, patch: Partial<RowDraft>) => {
-    setDrafts((s) => ({ ...s, [mId]: { ...s[mId], ...patch, dirty: true } }));
-  };
-
-  // Visual / functional checks with no tolerance window that nobody has
-  // decided yet. Filling them is a shortcut only: the inspector still saves,
-  // completes, and an outgoing result still goes to its checker.
-  const pendingManualIds = (data.measurements ?? [])
-    .filter((m) => !isNumericMeasurement(m) && drafts[m.id]?.is_pass === null)
-    .map((m) => m.id);
-  const passPendingManualChecks = () => {
-    setDrafts((s) => {
-      const next = { ...s };
-      for (const mId of pendingManualIds) next[mId] = { ...next[mId], is_pass: true, dirty: true };
-      return next;
-    });
-  };
+  if (
+    data.counted_capture?.workflow === 'finish_first_v1' &&
+    [2, 3].includes(data.counted_capture.version) &&
+    data.final_work_order_id &&
+    data.status !== 'cancelled'
+  ) {
+    return <Navigate replace to={`/quality/work-orders/${data.final_work_order_id}/final-inspection`} />;
+  }
 
   return (
     <div>
@@ -294,38 +215,25 @@ export default function InspectionDetailPage() {
               : (stageLabel ?? data.stage)
         }
         actions={
-          <div className="flex items-center gap-2">
-            {!isTerminal && can('quality.inspections.manage') && (
+          <div className="flex flex-wrap items-center gap-2">
+            {data.ncr?.href && (
+              <Button variant="secondary" size="sm" onClick={() => navigate(data.ncr!.href!)}>
+                Open NCR
+              </Button>
+            )}
+            {data.work_order_output &&
+              ['passed', 'failed'].includes(data.status) &&
+              can('quality.ncr.manage') && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/quality/ncrs/new?inspection_id=${data.id}`)}
+                >
+                  {data.ncr ? 'Report another defect' : 'Report defect'}
+                </Button>
+              )}
+            {!isTerminal && !hasTrial && can('quality.inspections.manage') && (
               <>
-                {/* The lot checklist carries its own Save draft / Submit result. */}
-                {data.inspection_mode !== 'lot_checklist' && (
-                  <>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<LuSave size={14} />}
-                      loading={save.isPending}
-                      disabled={dirtyCount === 0}
-                      onClick={() => save.mutate()}
-                    >
-                      Save ({dirtyCount})
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<LuCheck size={14} />}
-                      disabled={unresolvedCount > 0 || dirtyCount > 0}
-                      title={
-                        dirtyCount > 0
-                          ? 'Save your measurement edits before completing — completion is computed from saved evidence.'
-                          : undefined
-                      }
-                      onClick={() => setConfirmComplete(true)}
-                    >
-                      Complete
-                    </Button>
-                  </>
-                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -336,8 +244,13 @@ export default function InspectionDetailPage() {
                 </Button>
               </>
             )}
+            {can('quality.inspections.manage') && data.can_replace_checklist && !hasTrial && (
+              <Button variant="secondary" onClick={() => setConfirmReplace(true)}>
+                Replace with PASS/FAIL checklist
+              </Button>
+            )}
             {/* can_review also excludes the maker — the service refuses self-review. */}
-            {data.can_review && (
+            {data.can_review && !waitingForTrial && (
               <>
                 {data.proposed_result === 'passed' ? (
                   <Button
@@ -362,480 +275,574 @@ export default function InspectionDetailPage() {
                   <Button variant="danger" size="sm" onClick={() => setReasonDecision('failed')}>
                     Fail inspection
                   </Button>
-                ) : (
-                  <Button variant="primary" size="sm" onClick={() => setReasonDecision('passed')}>
-                    Pass as override
-                  </Button>
-                )}
+                ) : null}
               </>
             )}
             {/* CoC available for passed outgoing inspections */}
-            {data.stage === 'outgoing' && data.status === 'passed' && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<LuFileDown size={14} />}
-                loading={cocLoading}
-                onClick={async () => {
-                  setCocLoading(true);
-                  try {
-                    await inspectionsApi.generateCoC(id);
-                  } catch {
-                    toast.error('Could not generate CoC — try again.');
-                  } finally {
-                    setCocLoading(false);
-                  }
-                }}
-              >
-                Certificate of Conformance
-              </Button>
-            )}
+            {data.stage === 'outgoing' &&
+              data.status === 'passed' &&
+              (data.coc_unavailable_reason ? (
+                <p role="status" className="max-w-md text-xs text-warning-fg">
+                  Certificate unavailable: {data.coc_unavailable_reason}
+                </p>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuFileDown size={14} />}
+                  loading={cocLoading}
+                  onClick={async () => {
+                    setCocLoading(true);
+                    try {
+                      await inspectionsApi.generateCoC(id);
+                    } catch (error) {
+                      const certificateError = error as AxiosError<{ message?: string }>;
+                      toast.error(
+                        certificateError.response?.data?.message ??
+                          'Could not generate CoC — try again.',
+                      );
+                    } finally {
+                      setCocLoading(false);
+                    }
+                  }}
+                >
+                  Certificate of Conformance
+                </Button>
+              ))}
           </div>
         }
       />
 
-      {inspectionChain && (
-        <div className="px-5 py-3 border-b border-default">
-          <ChainHeader steps={inspectionChain} />
-        </div>
-      )}
-
-      <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
-          <Panel title="Sample plan">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
-                <dd className="font-mono">{data.stage_label ?? data.stage}</dd>
+      <div className="bg-surface px-4 py-5 sm:px-5 space-y-5">
+        {inspectionChain && inspectionChain.length > 0 && (
+          <section
+            aria-label="Record flow"
+            className="rounded-md border border-default bg-canvas px-4 py-3"
+          >
+            <h2 className="mb-3 text-sm font-medium text-primary">Record flow</h2>
+            <ChainHeader steps={inspectionChain} />
+          </section>
+        )}
+        {!waitingForTrial && <p role="status" className="rounded-md border border-default bg-canvas px-4 py-3 text-sm">
+          <span className="font-medium">Next action: </span>
+          {nextAction}
+        </p>}
+        <div className="grid gap-5 lg:grid-cols-3 lg:items-start">
+          <section
+            aria-label="Inspection details"
+            className="min-w-0 rounded-md border border-default bg-canvas lg:col-span-2"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-default px-4 py-3">
+              <h2 className="text-sm font-medium text-primary">Inspection details</h2>
+            </div>
+            <div className="px-4 py-4">
+              <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3">
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">Stage</dt>
+                  <dd className="mt-1 text-sm text-primary break-words font-medium">
+                    {data.stage_label ?? stageLabel ?? data.stage}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">
+                    {data.capture_method === 'checklist' ? 'Source quantity' : 'Batch quantity'}
+                  </dt>
+                  <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                    {data.capture_method === 'checklist'
+                      ? `${data.source_quantity} ${data.source_uom_code}`
+                      : formatQuantity(data.batch_quantity)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">
+                    {data.counted_capture ? 'Checked quantity' : data.capture_method === 'checklist' &&
+                    data.sampling_basis === 'piece' &&
+                    data.sample_size === data.batch_quantity
+                      ? 'Full piece coverage'
+                      : data.sampling_basis === 'lot'
+                        ? 'Lot coverage'
+                        : 'Inspect sample'}
+                  </dt>
+                  <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                    {formatQuantity(data.counted_capture?.required_quantity ?? data.sample_size)}
+                    {data.counted_capture ? data.sampling_basis === 'lot' ? ' lot' : ' pieces' : data.capture_method === 'checklist'
+                      ? data.sampling_basis === 'lot'
+                        ? ' lot'
+                        : ' pieces'
+                      : ''}
+                  </dd>
+                </div>
+                {data.counted_capture || data.capture_method === 'checklist' ? (
+                  <div className="min-w-0 sm:col-span-2">
+                    <dt className="text-xs text-muted">Acceptance rule</dt>
+                    <dd className="mt-1 text-sm">
+                      {data.counted_capture ? `${data.count_only_incoming
+                        ? 'Pass requires zero defective pieces.'
+                        : data.sampling_basis === 'lot'
+                        ? 'Pass requires no material defects or other failed requirements.'
+                        : 'Pass requires zero defective pieces and no other failed requirements.'}${hasRequiredSizeReadings ? ' Required size readings must meet limits.' : ''}` : data.count_only_incoming
+                        ? 'Count every piece. Segregate defective pieces; the good quantity is reviewed for acceptance.'
+                        : 'All checks must pass. Follow the approved sampling plan.'}
+                    </dd>
+                  </div>
+                ) : (
+                  <>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted">AQL code</dt>
+                      <dd className="mt-1 text-sm text-primary break-words font-medium">
+                        {data.aql_code ?? '—'}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted">Acceptance limit</dt>
+                      <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                        {formatQuantity(data.accept_count)}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted">Rejection limit</dt>
+                      <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                        {formatQuantity(data.reject_count)}
+                      </dd>
+                    </div>
+                  </>
+                )}
+                {!!data.counted_capture?.dimensional_quantity && (
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">Size sample</dt>
+                    <dd className="mt-1 text-sm">{data.counted_capture.dimensional_quantity} pieces</dd>
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">{data.sampling_basis === 'lot' ? 'Material defects' : data.count_only_incoming ? 'Defective pieces' : 'Sample defects'}</dt>
+                  <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                    {data.sample_defect_count != null
+                      ? data.sampling_basis === 'lot'
+                        ? Number(data.sample_defect_count) > 0
+                          ? 'Affected lot'
+                          : 'No affected lot'
+                        : formatQuantity(data.sample_defect_count)
+                      : 'Not recorded'}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted">
+                    {data.stage === 'outgoing'
+                      ? 'Approved for release'
+                      : data.stage === 'incoming'
+                        ? 'Warehouse acceptance'
+                        : 'Source status'}
+                  </dt>
+                  <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                    {data.stage === 'outgoing'
+                      ? `${formatQuantity(data.accepted_quantity)} pieces`
+                      : data.stage === 'incoming'
+                        ? data.incoming_acceptance
+                          ? `${data.incoming_acceptance.quantity_accepted} ${data.incoming_acceptance.unit} · ${data.incoming_acceptance.status_label}`
+                          : (data.entity_context?.status_label ?? 'Check linked receipt')
+                        : (data.entity_context?.status_label ??
+                          data.entity_context?.status ??
+                          'See linked source')}
+                  </dd>
+                </div>
+                {evidence.some((row) => row.is_pass != null) && (
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">
+                      {data.capture_method === 'checklist'
+                        ? 'Failed size checks'
+                        : 'Measurement defects'}
+                    </dt>
+                    <dd className="mt-1 text-sm text-primary font-mono tabular-nums">
+                      {formatQuantity(data.defect_count)}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </section>
+          <div className="min-w-0 lg:col-span-2">
+            {data.startup_trial && data.startup_trial.recorded_quantity > 0 && <p className="mb-3 text-sm text-muted">
+              Recorded startup sample: {data.startup_trial.recorded_quantity} pieces · {formatDateTime(data.startup_trial.captured_at)}
+            </p>}
+            <InspectionChecklistPanel
+              key={data.id}
+              inspection={data}
+              canManage={data.can_manage ?? can('quality.inspections.manage')}
+            />
+          </div>
+          <aside
+            aria-label="Inspection context"
+            className="min-w-0 space-y-5 lg:col-start-3 lg:row-start-1 lg:row-span-4"
+          >
+            <section
+              aria-label="Linked records"
+              className="min-w-0 rounded-md border border-default bg-canvas"
+            >
+              <div className="border-b border-default px-4 py-3">
+                <h2 className="text-sm font-medium text-primary">Linked records</h2>
               </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Batch</dt>
-                <dd className="font-mono tabular-nums">{data.batch_quantity}</dd>
+              <div className="px-4 py-4">
+                {data.product ||
+                data.item ||
+                data.entity_context ||
+                data.work_order_output ||
+                data.spec ||
+                data.quality_plan ? (
+                  <LinkedRecords
+                    className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 [&_a]:break-words [&_span]:break-words"
+                    groups={[
+                      ...(data.product
+                        ? [
+                            {
+                              label: 'Product',
+                              items: [
+                                {
+                                  id: `${data.product.part_number} — ${data.product.name}`,
+                                  href: can('crm.products.view')
+                                    ? `/crm/products/${data.product.id}`
+                                    : undefined,
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.item
+                        ? [
+                            {
+                              label: 'Inventory item',
+                              items: [
+                                {
+                                  id: `${data.item.code} — ${data.item.name}`,
+                                  href: can('inventory.view')
+                                    ? `/inventory/items/${data.item.id}`
+                                    : undefined,
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.entity_context
+                        ? [
+                            {
+                              label: 'Source record',
+                              items: [
+                                {
+                                  id: data.entity_context.reference ?? data.entity_context.type,
+                                  href: data.entity_context.href ?? undefined,
+                                  meta:
+                                    data.entity_context.status_label ?? data.entity_context.status,
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.work_order_output
+                        ? [
+                            {
+                              label: 'Output batch',
+                              items: [
+                                {
+                                  id:
+                                    data.work_order_output.batch_code ?? data.work_order_output.id,
+                                  href:
+                                    can('production.work_orders.view') &&
+                                    data.work_order_output.work_order
+                                      ? `/production/work-orders/${data.work_order_output.work_order.id}`
+                                      : undefined,
+                                  meta: `${data.work_order_output.work_order?.wo_number ?? 'Work order'} · good ${data.work_order_output.good_count}`,
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.ncr
+                        ? [
+                            {
+                              label: 'Nonconformance / recovery',
+                              items: [
+                                {
+                                  id: data.ncr.ncr_number,
+                                  href: data.ncr.href ?? undefined,
+                                  meta: `${data.ncr.status_label}${data.ncr.disposition_label ? ` · ${data.ncr.disposition_label}` : ''}`,
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.replaces_inspection_id
+                        ? [
+                            {
+                              label: 'Preserved history',
+                              items: [
+                                {
+                                  id: 'Previous inspection',
+                                  href: `/quality/inspections/${data.replaces_inspection_id}`,
+                                  meta: 'Original evidence retained',
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.spec
+                        ? [
+                            {
+                              label: 'Inspection spec',
+                              items: [
+                                {
+                                  id:
+                                    data.spec.version === null
+                                      ? 'Legacy revision unknown'
+                                      : `v${data.spec.version}`,
+                                  href: !can('quality.specs.view')
+                                    ? undefined
+                                    : data.spec?.revision_id
+                                      ? `/quality/inspection-specs/spec/${data.spec.id}?revision=${data.spec.revision_id}`
+                                      : data.product
+                                        ? `/quality/inspection-specs/${data.product.id}`
+                                        : undefined,
+                                  meta:
+                                    data.spec.revision_status === 'legacy_unknown'
+                                      ? 'historical revision not pinned'
+                                      : data.spec.is_active
+                                        ? 'active'
+                                        : 'archived',
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                      ...(data.quality_plan
+                        ? [
+                            {
+                              label: 'Quality plan',
+                              items: [
+                                {
+                                  id: `v${data.quality_plan.version}`,
+                                  href:
+                                    can('inventory.view') && data.item
+                                      ? `/inventory/items/${data.item.id}/quality-plans`
+                                      : undefined,
+                                  meta: data.quality_plan.sampling_method,
+                                },
+                              ],
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                ) : (
+                  <p className="text-sm text-muted">No linked records.</p>
+                )}
               </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Sample</dt>
-                <dd className="font-mono tabular-nums">
-                  {data.sample_size}
-                  {data.aql_code ? <span className="ml-2 text-muted">[{data.aql_code}]</span> : null}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Ac / Re</dt>
-                <dd className="font-mono tabular-nums">
-                  {data.accept_count} / {data.reject_count}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Defects</dt>
-                <dd
-                  className={`font-mono tabular-nums ${
-                    data.defect_count > data.accept_count ? 'text-danger-fg' : ''
-                  }`}
+            </section>
+            {data.capture_method !== 'checklist' &&
+              data.spec &&
+              thresholds &&
+              spc.data &&
+              Object.keys(spc.data).length > 0 && (
+                <section
+                  aria-label="SPC capability indices"
+                  className="min-w-0 rounded-md border border-default bg-canvas"
                 >
-                  {data.defect_count}
-                </dd>
+                  <div className="border-b border-default px-4 py-3">
+                    <h2 className="text-sm font-medium text-primary">SPC capability indices</h2>
+                    <p className="mt-1 text-xs text-muted">
+                      Current specification revision · saved measurement history · Cpk ≥{' '}
+                      {thresholds.ongoing.toFixed(2)} ongoing · ≥ {thresholds.launch.toFixed(2)} new
+                      product launch
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className={tableCls}>
+                      <thead>
+                        <tr className={theadTrCls}>
+                          <Th>Dimension</Th>
+                          <Th align="right">Cp / Cpk</Th>
+                          <Th>Rating</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.values(spc.data).map((item) => (
+                          <tr key={item.parameter_name} className={trCls}>
+                            <Td>
+                              {item.parameter_name} {item.unit ? `(${item.unit})` : ''}
+                              <p className="mt-1 text-2xs text-muted">
+                                Mean{' '}
+                                <span className="font-mono tabular-nums">
+                                  {item.mean.toFixed(3)}
+                                </span>
+                                {' · '}
+                                {item.sample_count} samples
+                              </p>
+                            </Td>
+                            <Td align="right" mono>
+                              {item.cp.toFixed(2)} / {item.cpk.toFixed(2)}
+                            </Td>
+                            <Td>
+                              <Chip
+                                variant={
+                                  item.cpk >= thresholds.launch
+                                    ? 'success'
+                                    : item.cpk >= thresholds.ongoing
+                                      ? 'info'
+                                      : item.cpk >= thresholds.action
+                                        ? 'warning'
+                                        : 'danger'
+                                }
+                              >
+                                {item.cpk >= thresholds.launch
+                                  ? 'Excellent'
+                                  : item.cpk >= thresholds.ongoing
+                                    ? 'Capable'
+                                    : item.cpk >= thresholds.action
+                                      ? 'Marginal'
+                                      : 'Not capable'}
+                              </Chip>
+                            </Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+            <section
+              aria-label="Inspection history"
+              className="rounded-md border border-default bg-canvas"
+            >
+              <h2 className="border-b border-default px-4 py-3 text-sm font-medium">
+                Inspection history
+              </h2>
+              <div className="border-t border-default px-4 py-4">
+                <dl className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">Inspection created by</dt>
+                    <dd className="mt-1 text-sm text-primary break-words font-medium">
+                      {data.inspector?.name ?? '—'}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">Results recorded by</dt>
+                    <dd className="mt-1 text-sm text-primary break-words font-medium">
+                      {data.result_authors?.map((author) => author.name).join(', ') ||
+                        'Not recorded'}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">Created</dt>
+                    <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                      {formatDateTime(data.created_at)}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">Started</dt>
+                    <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                      {formatDateTime(data.started_at)}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted">Completed</dt>
+                    <dd className="mt-1 text-sm text-primary break-words font-mono tabular-nums">
+                      {formatDateTime(data.completed_at)}
+                    </dd>
+                  </div>
+                  {data.reviewer && (
+                    <div>
+                      <dt className="text-xs text-muted">Reviewed by</dt>
+                      <dd className="mt-1 text-sm text-primary">{data.reviewer.name}</dd>
+                    </div>
+                  )}
+                  {data.reviewed_at && (
+                    <div>
+                      <dt className="text-xs text-muted">Reviewed</dt>
+                      <dd className="mt-1 text-sm font-mono tabular-nums">
+                        {formatDateTime(data.reviewed_at)}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
               </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Inspection created by</dt>
-                <dd>{data.inspector?.name ?? '—'}</dd>
+              {(data.notes || data.review_remarks || data.status === 'awaiting_review') && (
+                <div className="border-t border-default px-4 py-3 space-y-3 text-sm">
+                  {data.status === 'awaiting_review' && (
+                    <p className="text-warning-fg">
+                      Awaiting checker review · proposed{' '}
+                      {(data.proposed_result ?? data.recorded_result)?.toUpperCase() ?? '—'}
+                    </p>
+                  )}
+                  {data.notes && (
+                    <div>
+                      <p className="mb-1 text-xs text-muted">Notes</p>
+                      <p className="whitespace-pre-line break-words">{data.notes}</p>
+                    </div>
+                  )}
+                  {data.review_remarks && (
+                    <div>
+                      <p className="mb-1 text-xs text-muted">Checker remarks</p>
+                      <p className="whitespace-pre-line break-words">{data.review_remarks}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </aside>
+          {!data.counted_capture && data.capture_method !== 'checklist' && evidence.length > 0 && (
+            <section
+              aria-label="Saved measurement evidence"
+              className="min-w-0 rounded-md border border-default bg-canvas lg:col-span-2"
+            >
+              <div className="border-b border-default px-4 py-3">
+                <h2 className="text-sm font-medium text-primary">Saved measurement evidence</h2>
+                <p className="mt-1 text-xs text-muted">
+                  Previously recorded readings. Batch decisions preserve this measurement evidence.
+                </p>
               </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Results recorded by</dt>
-                <dd>{data.result_authors?.map((author) => author.name).join(', ') || 'Not recorded'}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Started</dt>
-                <dd className="font-mono tabular-nums">{formatDateTime(data.started_at)}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Completed</dt>
-                <dd className="font-mono tabular-nums">{formatDateTime(data.completed_at)}</dd>
-              </div>
-            </dl>
-          </Panel>
-
-          {/* Lot checklist mode */}
-          {data.inspection_mode === 'lot_checklist' ? (
-            <LotResultPanel inspection={data} isTerminal={isTerminal} />
-          ) : (
-            <>
-              <Panel
-                title="Measurements"
-                meta={`${sampleIndices.length} sample${sampleIndices.length === 1 ? '' : 's'}`}
-                actions={
-                  !isTerminal && pendingManualIds.length > 0 ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={<LuCheck size={14} />}
-                      onClick={passPendingManualChecks}
-                    >
-                      Pass {pendingManualIds.length} open manual check
-                      {pendingManualIds.length === 1 ? '' : 's'}
-                    </Button>
-                  ) : null
-                }
-                noPadding
-              >
+              <div className="overflow-x-auto">
                 <table className={tableCls}>
                   <thead>
                     <tr className={theadTrCls}>
                       <Th>Sample</Th>
-                      <Th>Parameter</Th>
-                      <Th align="right">Nominal</Th>
-                      <Th align="right">Tolerance</Th>
-                      <Th align="right">Measured</Th>
-                      <Th align="center">Pass</Th>
+                      <Th>Check</Th>
+                      <Th align="right">Reading</Th>
+                      <Th>Saved result</Th>
                       <Th>Notes</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sampleIndices.flatMap((idx) =>
-                      grouped[idx].map((m, position) => {
-                        const draft = drafts[m.id];
-                        if (!draft) return null;
-                        const hasTolerance = isNumericMeasurement(m);
-                        const numericTol = hasTolerance
-                          ? `${m.tolerance_min ?? '−∞'} … ${m.tolerance_max ?? '+∞'}`
-                          : '—';
-                        return (
-                          <tr key={m.id} className={trCls}>
-                            {position === 0 && (
-                              <Td rowSpan={grouped[idx].length} mono className="align-top">
-                                #{idx}
-                              </Td>
-                            )}
-                            <Td>
-                              <div className="flex items-center gap-2">
-                                <span>{m.parameter_name}</span>
-                                {m.is_critical && <Chip variant="danger">Critical</Chip>}
-                                <span className="text-2xs uppercase text-muted">
-                                  {m.parameter_type_label ?? m.parameter_type}
-                                </span>
-                              </div>
-                            </Td>
-                            <Td align="right" mono>
-                              {m.nominal_value ?? '—'} {m.unit_of_measure ?? ''}
-                            </Td>
-                            <Td align="right" mono>
-                              {numericTol}
-                            </Td>
-                            <Td align="right" mono>
-                              {hasTolerance ? (
-                                <div className="flex flex-col items-end gap-1">
-                                  <Input
-                                    fieldSize="sm"
-                                    type="number"
-                                    step="any"
-                                    disabled={isTerminal}
-                                    aria-label={`Measured value — ${m.parameter_name}, sample ${m.sample_index}${m.unit_of_measure ? ` (${m.unit_of_measure})` : ''}`}
-                                    containerClassName="inline-flex w-24"
-                                    className="text-right font-mono tabular-nums"
-                                    value={draft.measured_value}
-                                    onChange={(e) =>
-                                      updateDraft(m.id, { measured_value: e.target.value })
-                                    }
-                                  />
-                                  <SpecToleranceBar
-                                    nominal={m.nominal_value}
-                                    min={m.tolerance_min}
-                                    max={m.tolerance_max}
-                                    value={draft.measured_value}
-                                    unit={m.unit_of_measure ?? ''}
-                                    className="mt-0.5"
-                                  />
-                                </div>
-                              ) : (
-                                <span className="text-muted text-2xs">Manual result</span>
-                              )}
-                            </Td>
-                            <Td align="center">
-                              {!hasTolerance ? (
-                                <Select
-                                  fieldSize="sm"
-                                  containerClassName="inline-flex w-24"
-                                  aria-label={`${m.parameter_type_label ?? m.parameter_type} result`}
-                                  disabled={isTerminal}
-                                  value={
-                                    draft.is_pass === null ? '' : draft.is_pass ? 'pass' : 'fail'
-                                  }
-                                  onChange={(e) =>
-                                    updateDraft(m.id, {
-                                      is_pass:
-                                        e.target.value === '' ? null : e.target.value === 'pass',
-                                    })
-                                  }
-                                >
-                                  <option value="">—</option>
-                                  {(inspectionOptions?.measurement_results ?? []).map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </Select>
-                              ) : draft.is_pass === null ? (
-                                <span className="text-muted text-2xs">—</span>
-                              ) : draft.is_pass ? (
-                                <Chip variant="success">
-                                  {measurementResultLabels.get('pass') ?? 'Pass'}
-                                </Chip>
-                              ) : (
-                                <Chip variant="danger">
-                                  {measurementResultLabels.get('fail') ?? 'Fail'}
-                                </Chip>
-                              )}
-                            </Td>
-                            <Td>
-                              <Input
-                                fieldSize="sm"
-                                type="text"
-                                disabled={isTerminal}
-                                aria-label={`${m.parameter_name} notes`}
-                                containerClassName="inline-flex min-w-32"
-                                value={draft.notes}
-                                onChange={(e) => updateDraft(m.id, { notes: e.target.value })}
-                              />
-                            </Td>
-                          </tr>
-                        );
-                      }),
-                    )}
+                    {evidence.map((row) => (
+                      <tr key={row.id} className={trCls}>
+                        <Td mono>{row.sample_index === 0 ? 'Batch' : row.sample_index}</Td>
+                        <Td>{row.parameter_name}</Td>
+                        <Td align="right" mono>
+                          {row.measured_value ?? '—'} {row.unit_of_measure}
+                        </Td>
+                        <Td>
+                          {row.is_pass == null ? (
+                            '—'
+                          ) : (
+                            <Chip variant={row.is_pass ? 'success' : 'danger'}>
+                              {row.is_pass ? 'PASS' : 'FAIL'}
+                            </Chip>
+                          )}
+                        </Td>
+                        <Td className="whitespace-pre-line break-words">{row.notes ?? '—'}</Td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
-              </Panel>
-            </>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <Panel title="Status">
-            {data.status === 'awaiting_review' ? (
-              <div className="flex items-center gap-2">
-                <Chip variant="warning">Awaiting checker</Chip>
-                <span className="text-sm text-muted">
-                  Proposed:{' '}
-                  <span className="font-mono tabular-nums">{data.proposed_result ?? '—'}</span>
-                </span>
               </div>
-            ) : isTerminal ? (
-              <div className="text-sm text-muted">
-                Finalised{' '}
-                <span className="font-mono tabular-nums">{formatDateTime(data.completed_at)}</span>
-              </div>
-            ) : data.inspection_mode === 'lot_checklist' && !lotChecklistStarted ? (
-              <Chip variant="neutral">Not started</Chip>
-            ) : unresolvedCount > 0 ? (
-              <Chip variant="warning">{unresolvedCount} pending</Chip>
-            ) : data.defect_count > data.accept_count ? (
-              <Chip variant="danger">
-                Defects <span className="font-mono tabular-nums">{data.defect_count}</span> &gt; Ac{' '}
-                <span className="font-mono tabular-nums">{data.accept_count}</span> — will fail
-              </Chip>
-            ) : (
-              <Chip variant="success">Ready to complete</Chip>
-            )}
-          </Panel>
-
-          {data.notes && (
-            <Panel title="Notes">
-              <p className="whitespace-pre-line text-sm">{data.notes}</p>
-            </Panel>
+            </section>
           )}
-
-          {/* SPC Capability indices for this spec */}
-          {data.spec && spc.data && cpkThresholds && Object.keys(spc.data).length > 0 && (
-            <Panel
-              title="SPC capability indices"
-              meta={`${Object.keys(spc.data).length} dimension${Object.keys(spc.data).length === 1 ? '' : 's'}`}
-            >
-              <table className={cn(tableCls, 'mt-2')}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Dimension</Th>
-                    <Th align="right">Mean</Th>
-                    <Th align="right">Cp</Th>
-                    <Th align="right">Cpk</Th>
-                    <Th align="right">n</Th>
-                    <Th>Rating</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.values(spc.data).map((item: SpcCapabilityItem) => {
-                    const variant =
-                      item.cpk >= cpkThresholds.launch
-                        ? 'success'
-                        : item.cpk >= cpkThresholds.ongoing
-                          ? 'info'
-                          : item.cpk >= cpkThresholds.action
-                            ? 'warning'
-                            : 'danger';
-                    const label =
-                      item.cpk >= cpkThresholds.launch
-                        ? 'Excellent'
-                        : item.cpk >= cpkThresholds.ongoing
-                          ? 'Capable'
-                          : item.cpk >= cpkThresholds.action
-                            ? 'Marginal'
-                            : 'Not capable';
-                    return (
-                      <tr key={item.parameter_name} className={trCls}>
-                        <Td>
-                          {item.parameter_name}
-                          {item.unit ? ` (${item.unit})` : ''}
-                        </Td>
-                        <Td align="right" mono>
-                          {item.mean.toFixed(3)}
-                        </Td>
-                        <Td align="right" mono>
-                          {item.cp.toFixed(2)}
-                        </Td>
-                        <Td align="right" mono className="font-medium">
-                          {item.cpk.toFixed(2)}
-                        </Td>
-                        <Td align="right" mono className="text-muted">
-                          {item.sample_count}
-                        </Td>
-                        <Td>
-                          <Chip variant={variant}>{label}</Chip>
-                        </Td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="text-2xs text-muted mt-2">
-                Capability targets: Cpk ≥ {cpkThresholds.ongoing.toFixed(2)} ongoing · ≥{' '}
-                {cpkThresholds.launch.toFixed(2)} new product launch
-              </p>
-            </Panel>
-          )}
-
-          {/* Provenance links are permission-aware: the API omits href when the
-     viewer cannot open the source module. */}
-          {(data.product ||
-            data.item ||
-            data.spec ||
-            data.quality_plan ||
-            data.entity_context ||
-            data.work_order_output) && (
-            <Panel title="Linked records">
-              <LinkedRecords
-                groups={[
-                  ...(data.product
-                    ? [
-                        {
-                          label: 'Product',
-                          items: [
-                            {
-                              id: `${data.product.part_number} — ${data.product.name}`,
-                              href: `/crm/products/${data.product.id}`,
-                            },
-                          ],
-                        },
-                      ]
-                    : []),
-                  ...(data.item
-                    ? [
-                        {
-                          label: 'Inventory item',
-                          items: [
-                            {
-                              id: `${data.item.code} — ${data.item.name}`,
-                              href: `/inventory/items/${data.item.id}`,
-                            },
-                          ],
-                        },
-                      ]
-                    : []),
-                  ...(data.entity_context
-                    ? [
-                        {
-                          label: 'Source record',
-                          items: [
-                            {
-                              id: data.entity_context.reference ?? data.entity_context.type,
-                              href: data.entity_context.href ?? undefined,
-                              meta: data.entity_context.status_label ?? data.entity_context.status,
-                            },
-                          ],
-                        },
-                      ]
-                    : []),
-                  ...(data.work_order_output
-                    ? [
-                        {
-                          label: 'Output batch',
-                          items: [
-                            {
-                              id: data.work_order_output.batch_code ?? data.work_order_output.id,
-                              href: data.work_order_output.work_order
-                                ? `/production/work-orders/${data.work_order_output.work_order.id}`
-                                : undefined,
-                              meta: `${data.work_order_output.work_order?.wo_number ?? 'Work order'} · good ${data.work_order_output.good_count}`,
-                            },
-                          ],
-                        },
-                      ]
-                    : []),
-                  ...(data.spec
-                    ? [
-                        {
-                          label: 'Inspection spec',
-                          items: [
-                            {
-                              id:
-                                data.spec.version === null
-                                  ? 'Legacy revision unknown'
-                                  : `v${data.spec.version}`,
-                              href: data.spec?.revision_id
-                                ? `/quality/inspection-specs/spec/${data.spec.id}?revision=${data.spec.revision_id}`
-                                : data.product
-                                  ? `/quality/inspection-specs/${data.product.id}`
-                                  : undefined,
-                              meta:
-                                data.spec.revision_status === 'legacy_unknown'
-                                  ? 'historical revision not pinned'
-                                  : data.spec.is_active
-                                    ? 'active'
-                                    : 'archived',
-                            },
-                          ],
-                        },
-                      ]
-                    : []),
-                  ...(data.quality_plan
-                    ? [
-                        {
-                          label: 'Quality plan',
-                          items: [
-                            {
-                              id: `v${data.quality_plan.version}`,
-                              meta: data.quality_plan.sampling_method,
-                            },
-                          ],
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            </Panel>
-          )}
-          <Panel title="Actions">
-            <Link to="/quality/inspections" className="text-xs text-accent hover:underline">
-              ← Back to inspections
-            </Link>
-          </Panel>
         </div>
       </div>
-
-      <ConfirmDialog
-        isOpen={confirmComplete}
-        title="Complete inspection?"
-        description="This will finalise the inspection and lock all measurements. The system will compute pass/fail using the AQL plan."
-        confirmLabel="Complete"
-        onConfirm={() => complete.mutate()}
-        onClose={() => setConfirmComplete(false)}
-        pending={complete.isPending}
+      <ReasonDialog
+        isOpen={confirmReplace}
+        title="Replace legacy inspection?"
+        description="Creates an unanswered inspection using the approved PASS/FAIL revision. Historical evidence stays preserved; known failures require recovery instead."
+        confirmLabel="Create checklist inspection"
+        onConfirm={(reason) => replace.mutate(reason)}
+        onClose={() => setConfirmReplace(false)}
+        pending={replace.isPending}
       />
       <ReasonDialog
         isOpen={confirmCancel}
@@ -858,21 +865,11 @@ export default function InspectionDetailPage() {
       <ReasonDialog
         isOpen={reasonDecision !== null}
         title={
-          reasonDecision === 'passed'
-            ? 'Override inspection to pass?'
-            : data.proposed_result === 'failed'
-              ? 'Confirm inspection failure?'
-              : 'Override inspection to fail?'
+          data.proposed_result === 'failed' ? 'Confirm inspection failure?' : 'Fail inspection?'
         }
-        description="Record the checker reason. This decision is permanent once the inspection is released."
-        confirmLabel={
-          reasonDecision === 'passed'
-            ? 'Pass as override'
-            : data.proposed_result === 'failed'
-              ? 'Confirm failure'
-              : 'Fail inspection'
-        }
-        variant={reasonDecision === 'passed' ? 'warning' : 'danger'}
+        description="Record the checker reason. The failed verdict remains in the inspection history."
+        confirmLabel={data.proposed_result === 'failed' ? 'Confirm failure' : 'Fail inspection'}
+        variant="danger"
         onConfirm={(remarks) => {
           if (reasonDecision) review.mutate({ decision: reasonDecision, remarks });
         }}

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Exceptions\IllegalStatusTransitionException;
@@ -27,7 +29,7 @@ class MachineService
         'idle' => ['running', 'maintenance', 'breakdown', 'offline'],
         'running' => ['idle', 'breakdown', 'maintenance'],
         'breakdown' => ['maintenance', 'idle'],
-        'maintenance' => ['idle'],
+        'maintenance' => ['idle', 'breakdown', 'offline'],
         'offline' => ['idle'],
     ];
 
@@ -76,6 +78,10 @@ class MachineService
     public function update(Machine $m, array $data): Machine
     {
         return DB::transaction(function () use ($m, $data) {
+            $m = Machine::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id && array_intersect(array_keys($data), ['tonnage', 'available_hours_per_day', 'machine_type', 'status'])) {
+                throw new BusinessRuleException('Release active machine ownership before changing capacity.');
+            }
             $m->update($data);
 
             return $m->fresh();
@@ -84,7 +90,20 @@ class MachineService
 
     public function delete(Machine $m): void
     {
-        $m->delete();
+        DB::transaction(function () use ($m): void {
+            $machine = Machine::query()->lockForUpdate()->findOrFail($m->id);
+            if ($machine->current_work_order_id) {
+                throw new BusinessRuleException('Cannot archive an occupied machine.');
+            }
+            if (MaintenanceWorkOrder::where('maintainable_type', 'machine')->where('maintainable_id', $machine->id)->where('status', 'in_progress')->exists()) {
+                throw new BusinessRuleException('Complete active maintenance before archiving equipment.');
+            }
+            if ($machine->asset_id !== null) {
+                throw new BusinessRuleException('Disassociate this asset before archiving the machine.');
+            }
+
+            $machine->delete();
+        });
     }
 
     public function transitionStatus(Machine $m, MachineStatus $to, ?string $reason = null): Machine
@@ -95,6 +114,12 @@ class MachineService
             // the transition so scheduler/resource changes cannot race this
             // lifecycle boundary.
             $row = Machine::query()->lockForUpdate()->findOrFail($m->id);
+            if ($row->current_work_order_id && in_array($to, [MachineStatus::Idle, MachineStatus::Maintenance], true)) {
+                throw new BusinessRuleException('Pause and explicitly release owned production before changing machine service state.');
+            }
+            if ($to === MachineStatus::Idle && MaintenanceWorkOrder::query()->where('maintainable_type', 'machine')->where('maintainable_id', $row->id)->where('status', 'in_progress')->exists()) {
+                throw new BusinessRuleException('Complete active maintenance before restoring the machine.');
+            }
             $from = $row->status?->value ?? 'idle';
             $allowed = self::allowedTransitions()[$from] ?? [];
             if (! in_array($to->value, $allowed, true)) {

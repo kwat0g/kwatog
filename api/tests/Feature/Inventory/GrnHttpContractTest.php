@@ -46,6 +46,7 @@ class GrnHttpContractTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     // Maker-checker: an incoming inspection counts only when a different user checks it.
     private User $checker;
 
@@ -359,6 +360,27 @@ class GrnHttpContractTest extends TestCase
         $this->assertSame(0, GrnItem::query()->count());
     }
 
+    public function test_finalize_draft_requires_a_supplier_shipment(): void
+    {
+        [$po, $poItem, , $location] = $this->fixture();
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent->value, 'sent_to_supplier_at' => now()])->save();
+        $draft = $this->svc->createDraftForPo($po->fresh(), $this->user);
+        $this->assertNotNull($draft);
+
+        $this->actingAs($this->user)
+            ->patchJson("/api/v1/inventory/grn/{$draft->hash_id}/finalize", [
+                'items' => [[
+                    'purchase_order_item_id' => $poItem->hash_id,
+                    'location_id' => $location->hash_id,
+                    'quantity_received' => '5.000',
+                ]],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('supplier_shipment_id');
+
+        $this->assertSame(GrnStatus::Draft, $draft->fresh()->status);
+    }
+
     #[DataProvider('malformedNumbers')]
     public function test_finalize_draft_refuses_a_malformed_quantity(string $value): void
     {
@@ -498,9 +520,19 @@ class GrnHttpContractTest extends TestCase
         $accepted = $this->svc->accept($grn->fresh(), $this->user);
 
         $this->assertSame(GrnStatus::Accepted, $accepted->status);
+        $this->assertTrue(Item::withTrashed()->findOrFail($item->id)->trashed());
+        $this->assertNotNull($accepted->journal_entry_id, 'GRN acceptance must post its GL entry.');
+        $this->assertDatabaseHas('journal_entries', [
+            'id' => $accepted->journal_entry_id,
+            'status' => 'posted',
+        ]);
         $this->assertSame('10.000', (string) StockLevel::query()
             ->where('item_id', $item->id)->where('location_id', $location->id)
             ->firstOrFail()->quantity);
+        $this->assertSame(1, DB::table('stock_movements')
+            ->where('reference_type', 'goods_receipt_note')
+            ->where('reference_id', $grn->id)
+            ->count());
     }
 
     // ── Unit cost enforcement: receipt cost is always the PO price ────────────

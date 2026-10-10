@@ -19,7 +19,7 @@ class DeliveryItem extends Model
 
     protected $fillable = [
         'delivery_id', 'sales_order_item_id', 'inspection_id',
-        'stock_movement_id',
+        'stock_movement_id', 'sales_order_stock_allocation_id',
         'quantity', 'customer_received_quantity', 'unit_price',
     ];
 
@@ -28,6 +28,11 @@ class DeliveryItem extends Model
         'customer_received_quantity' => 'decimal:3',
         'unit_price' => 'decimal:2',
     ];
+
+    public function stockAllocation(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\CRM\Models\SalesOrderStockAllocation::class, 'sales_order_stock_allocation_id');
+    }
 
     public function delivery(): BelongsTo
     {

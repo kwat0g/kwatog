@@ -60,6 +60,31 @@ function makeRevenueData(overrides: Record<string, unknown> = {}): Record<string
 
 test.describe('Finance Dashboard — Revenue Forecast Panel', () => {
 
+  test('blocks financial values and retries when currency settings fail', async ({ page }, testInfo) => {
+    testInfo.annotations.push(
+      { type: 'expected-http-response', description: '503 GET /api/v1/business-policies' },
+      { type: 'expected-http-response', description: '503 GET /api/v1/business-policies' },
+    );
+    await mockAuth(page, USERS.finance);
+    let policyRequests = 0;
+    await page.route('**/api/v1/business-policies', async (route) => {
+      policyRequests += 1;
+      await route.fulfill(policyRequests <= 2
+        ? { status: 503, json: { message: 'Temporarily unavailable.' } }
+        : { status: 200, json: { data: { functional_currency_code: 'PHP' } } });
+    });
+    await mockDashboardApi(page, API_URL, makeRevenueData());
+
+    await page.goto(PAGE_URL);
+    await expect.poll(() => policyRequests).toBe(2);
+    await expect(page.getByRole('alert')).toContainText('Business currency settings are unavailable.');
+    await expect(page.getByText('Cash on hand')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Retry business settings' }).click();
+    await expect(page.getByText('Cash on hand')).toBeVisible();
+    await expect(page.getByText('₱2,500,000.00')).toBeVisible();
+    expect(policyRequests).toBe(3);
+  });
+
   test('renders revenue forecast with uptrend and formatted PHP values', async ({ page }) => {
     await setupDashboard(page, API_URL, USERS.finance, makeRevenueData());
 
@@ -136,6 +161,10 @@ test.describe('Finance Dashboard — Revenue Forecast Panel', () => {
   });
 
   test('shows error state when API fails', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '500 GET /api/v1/dashboards/finance' },
+      { type: 'expected-http-response', description: '500 GET /api/v1/dashboards/finance' },
+    );
     await setupDashboard(page, API_URL, USERS.finance, {}, { status: 500 });
     await expect(page.getByRole('heading', { name: "Can't load this dashboard" })).toBeVisible();
   });

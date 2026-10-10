@@ -14,17 +14,21 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Quality\Enums\InspectionParameterType;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
-use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -91,7 +95,11 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
         ]);
         $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
-        $destination = WarehouseLocation::factory()->create();
+        $targetZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $quarantineZone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $destination = WarehouseLocation::factory()->create(['zone_id' => $targetZone->id]);
 
         $rma = ReturnRequest::create([
             'rma_number'  => 'RMA-NOINV-' . substr(uniqid(), -5),
@@ -116,21 +124,99 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
             'total'                      => '1000.00',
         ]);
 
-        $service = app(ReturnRequestService::class);
-        $received = $service->receive($rma, [$line->id => '8.000'], $quarantine->id, $by);
-        $inspected = $service->inspect($received, 'Eight units returned.', $by);
-        Inspection::query()
+        $warehouse = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $qc = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->actingAs($warehouse)
+            ->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/receive', [
+                'received_quantities' => [$line->hash_id => '8.000'],
+                'quarantine_location_id' => $quarantine->hash_id,
+                'final_receipt' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'received');
+        $this->assertSame(ReturnRequestStatus::Received, $rma->fresh()->status);
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $quarantine->id)->value('quantity'));
+
+        $this->actingAs($qc)
+            ->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/inspect')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'inspected');
+        $inspection = Inspection::query()
             ->where('entity_type', 'return_request')
             ->where('entity_id', $rma->id)
-            ->update(['status' => 'passed', 'completed_at' => now()]);
+            ->firstOrFail();
+        $measurements = InspectionMeasurement::query()->where('inspection_id', $inspection->id)->get();
+        $this->assertNotEmpty($measurements, 'The return inspection must have real measurement rows.');
+        $this->actingAs($qc)
+            ->patchJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/measurements', [
+                'measurements' => $measurements->map(fn (InspectionMeasurement $measurement): array => [
+                    'id' => $measurement->hash_id,
+                    'is_pass' => true,
+                ])->all(),
+            ])
+            ->assertOk();
+        $this->actingAs($qc)
+            ->postJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/complete')
+            ->assertOk();
+        $this->assertSame(InspectionStatus::Passed, $inspection->fresh()->status);
+
         $caseOwner = User::factory()->create(['role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id')]);
         $this->assertFalse($caseOwner->hasPermission('inventory.view'));
         $this->actingAs($caseOwner)->getJson('/api/v1/inventory/warehouse')->assertOk();
+        $movementCountBeforeDisposition = StockMovement::query()->count();
         $this->actingAs($caseOwner)->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/dispose', [
             'dispositions' => [['item_id' => $line->hash_id, 'disposition' => 'restock']],
-            'location_id' => $destination->hash_id,
         ])->assertOk();
-        $this->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/complete')->assertOk();
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $line->id)->firstOrFail();
+        $this->assertSame('held', $mrb->status->value);
+        $this->assertSame($caseOwner->id, (int) $mrb->held_by);
+        $this->assertSame($movementCountBeforeDisposition, StockMovement::query()->count());
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $quarantine->id)->value('quantity'));
+
+        $this->actingAs($caseOwner)
+            ->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/complete')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Every customer-return restock or rework line needs a completed MRB disposition before the RMA can complete.');
+        $this->assertSame(ReturnRequestStatus::Inspected, $rma->fresh()->status);
+        $this->assertNotNull($rma->fresh()->credit_note_id);
+        $this->assertSame('draft', $rma->fresh()->creditNote->status->value);
+        $this->assertSame('held', $mrb->fresh()->status->value);
+
+        $reviewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $this->actingAs($reviewer)
+            ->postJson('/api/v1/inventory/mrb/'.$mrb->hash_id.'/release', [
+                'disposition' => 'use_as_is',
+                'target_location_id' => $destination->hash_id,
+                'inspected_quantity' => '8.000',
+                'evidence_reference' => 'RMA-NOINVOICE-REINSPECTION-'.$rma->rma_number,
+                'recovery_passed' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'released');
+        $mrb->refresh();
+        $line->refresh();
+        $this->assertNotSame($caseOwner->id, $reviewer->id);
+        $this->assertSame($reviewer->id, (int) $mrb->released_by);
+        $this->assertSame('released', $line->quarantine_status);
+        $this->assertSame('8.000', (string) $line->stock_movement_quantity);
+        $this->assertSame('0.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $quarantine->id)->value('quantity'));
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $destination->id)->value('quantity'));
+        $movementCountAfterRelease = StockMovement::query()->count();
+        $this->actingAs($caseOwner)
+            ->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/complete')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+        $this->assertSame($movementCountAfterRelease, StockMovement::query()->count());
         $disposed = $rma->fresh();
 
         $this->assertSame(ReturnRequestStatus::Completed, $disposed->status);

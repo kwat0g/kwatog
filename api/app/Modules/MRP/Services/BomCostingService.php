@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
@@ -35,10 +36,17 @@ class BomCostingService
         $this->manufacturedComponents->reset();
 
         return DB::transaction(function () use ($bom): Bom {
+            Product::query()->whereKey($bom->product_id)->lockForUpdate()->firstOrFail();
+            $bom->refresh();
+            if (! $bom->is_active || $bom->trashed()) {
+                throw new BusinessRuleException('Historical BOM cost snapshots cannot be recalculated. Publish a new version instead.');
+            }
+            $this->invalidateForItems(Item::query()->where('code', Product::query()->whereKey($bom->product_id)->value('part_number'))->pluck('id')->all());
             $this->recalculateBom($bom, []);
+            app(\App\Modules\CRM\Services\PricingReviewService::class)->request([(int) $bom->product_id], 'bom_or_routing_changed');
 
             return $bom->fresh()->load(['product', 'items.item']);
-        });
+        }, 3);
     }
 
     /**
@@ -48,22 +56,48 @@ class BomCostingService
     public function ensureFresh(Bom $bom): Bom
     {
         return DB::transaction(function () use ($bom): Bom {
+            Product::query()->whereKey($bom->product_id)->lockForUpdate()->firstOrFail();
             $this->manufacturedComponents->reset();
             $this->ensureFreshBom($bom, []);
 
             return $bom->fresh()->load(['product', 'items.item']);
-        });
+        }, 3);
+    }
+
+    /** Invalidate current estimates only; historical BOM costs remain frozen. */
+    public function invalidateForItems(array $itemIds): void
+    {
+        $visited = [];
+        $products = [];
+        while ($itemIds !== []) {
+            $boms = Bom::query()->active()
+                ->whereHas('items', fn ($query) => $query->whereIn('item_id', $itemIds))
+                ->whereNotIn('id', $visited)->get(['id', 'product_id']);
+            if ($boms->isEmpty()) {
+                break;
+            }
+            $products = [...$products, ...$boms->pluck('product_id')->all()];
+            $ids = $boms->pluck('id')->all();
+            Bom::query()->active()->whereIn('id', $ids)->update(['costed_at' => null]);
+            $visited = [...$visited, ...$ids];
+            $codes = Product::query()->whereIn('id', $boms->pluck('product_id'))->pluck('part_number');
+            $itemIds = Item::query()->whereIn('code', $codes)->pluck('id')->all();
+        }
+        app(\App\Modules\CRM\Services\PricingReviewService::class)->request($products, 'component_cost_or_conversion_changed');
     }
 
     /** @param list<int> $path */
-    private function ensureFreshBom(Bom $bom, array $path): void
+    private function ensureFreshBom(Bom $bom, array $path): bool
     {
         $productId = (int) $bom->product_id;
         if (in_array($productId, $path, true)) {
-            return;
+            return false;
         }
 
         $bom->refresh();
+        if (! $bom->is_active || $bom->trashed()) {
+            return false;
+        }
         $costedAt = $bom->costed_at;
         $stale = $costedAt === null;
         $lines = BomItem::query()
@@ -93,9 +127,9 @@ class BomCostingService
                 continue;
             }
 
-            $this->ensureFreshBom($nested, [...$path, $productId]);
+            $nestedChanged = $this->ensureFreshBom($nested, [...$path, $productId]);
             $nested->refresh();
-            if ($costedAt === null || $nested->updated_at?->gt($costedAt)) {
+            if ($nestedChanged || $costedAt === null || $nested->updated_at?->gt($costedAt)) {
                 $stale = true;
             }
         }
@@ -103,6 +137,8 @@ class BomCostingService
         if ($stale) {
             $this->recalculateBom($bom, []);
         }
+
+        return $stale;
     }
 
     /**
@@ -111,6 +147,11 @@ class BomCostingService
      */
     private function recalculateBom(Bom $bom, array $path): array
     {
+        $locked = Bom::withTrashed()->whereKey($bom->id)->lockForUpdate()->firstOrFail();
+        if (! $locked->is_active || $locked->trashed()) {
+            throw new BusinessRuleException('Historical BOM cost snapshots cannot be recalculated. Publish a new version instead.');
+        }
+        $bom->refresh();
         $this->integrity->assertValid($bom);
         $productId = (int) $bom->product_id;
         if (in_array($productId, $path, true)) {
@@ -179,6 +220,7 @@ class BomCostingService
         }
 
         $conversionCosts = $this->routingCosts($productId, $bom);
+        $warnings = [...$warnings, ...$conversionCosts['warnings']];
         $totalCost = Money::add(
             $materialCost,
             $conversionCosts['labor_cost'],
@@ -217,7 +259,7 @@ class BomCostingService
      * Cycle time is the per-unit time; setup time needs a batch-size policy and
      * is therefore not silently charged to every unit.
      *
-     * @return array{labor_cost:string, machine_cost:string, overhead_cost:string, has_routing:bool}
+     * @return array{labor_cost:string, machine_cost:string, overhead_cost:string, has_routing:bool, warnings:list<array<string, string>>}
      */
     private function routingCosts(int $productId, Bom $bom): array
     {
@@ -232,13 +274,28 @@ class BomCostingService
             'machine_cost' => Money::zero(),
             'overhead_cost' => Money::zero(),
             'has_routing' => $routing !== null,
+            'warnings' => [],
         ];
 
         if ($routing === null) {
+            $costs['warnings'][] = ['type' => 'missing_routing', 'item_code' => '', 'message' => 'Materials only: no active routing supplies labor, machine or overhead costs.'];
             return $costs;
         }
 
+        if ($routing->operations->isEmpty()) {
+            $costs['warnings'][] = ['type' => 'empty_routing', 'item_code' => '', 'message' => 'The active routing has no operations; conversion costs need review.'];
+        }
+
         foreach ($routing->operations as $operation) {
+            if (bccomp((string) $operation->labor_rate_per_hour, '0', 4) <= 0
+                || bccomp((string) $operation->overhead_rate_per_hour, '0', 4) <= 0
+                || ($operation->machine_id !== null && bccomp((string) $operation->machine_rate_per_hour, '0', 4) <= 0)) {
+                $costs['warnings'][] = ['type' => 'missing_operation_rates', 'item_code' => '', 'message' => "Operation {$operation->operation_name} has zero labor, overhead or assigned-machine rates; review cost completeness."];
+            }
+            if (bccomp((string) $operation->cycle_time_minutes, '0', 2) <= 0
+                && bccomp((string) $operation->setup_time_minutes, '0', 2) <= 0) {
+                $costs['warnings'][] = ['type' => 'missing_operation_time', 'item_code' => '', 'message' => "Operation {$operation->operation_name} has no cycle or setup time; conversion costs need review."];
+            }
             $hours = bcdiv((string) $operation->cycle_time_minutes, '60', 8);
             $setupHours = bcdiv((string) $operation->setup_time_minutes, '60', 8);
             $batchSize = max('1.000', (string) $bom->cost_batch_size);

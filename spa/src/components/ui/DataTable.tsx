@@ -82,6 +82,8 @@ export interface DataTableProps<T> {
   tableKey?: string;
   /** Renders an inline expandable detail row when set. The chevron column appears at the start. */
   renderExpanded?: (row: T) => ReactNode;
+  /** Make the row itself toggle its details, while preserving links and other controls. */
+  expandOnRowClick?: boolean;
   /**
    * Row context-menu items. Opens on right-click, and from the keyboard via the
    * ContextMenu key or Shift+F10 on the focused row — without that second path
@@ -142,6 +144,7 @@ export function DataTable<T>({
   className,
   tableKey,
   renderExpanded,
+  expandOnRowClick = false,
   rowContextMenu,
   stickyHeader = true,
   enableColumnVisibilityToggle,
@@ -308,6 +311,8 @@ export function DataTable<T>({
   const pinnedTDClass = 'sticky bg-canvas';
 
   const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0);
+  const rowExpands = Boolean(renderExpanded && expandOnRowClick && !onRowClick);
+  const rowInteractive = Boolean(onRowClick || selectable || rowExpands);
 
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
 
@@ -351,7 +356,10 @@ export function DataTable<T>({
         setSelected(new Set());
       }
 
-      if (e.key === 'Enter' && onRowClick) {
+      if (
+        (e.key === 'Enter' && (onRowClick || rowExpands)) ||
+        (e.key === ' ' && rowExpands && !selectable)
+      ) {
         e.preventDefault();
         target.click();
       }
@@ -374,7 +382,7 @@ export function DataTable<T>({
         setCtxMenu({ x: box.left + 8, y: box.bottom, items });
       }
     },
-    [onRowClick, selectable, selected.size, rowContextMenu, rowForElement],
+    [onRowClick, rowExpands, selectable, selected.size, rowContextMenu, rowForElement],
   );
 
   return (
@@ -517,11 +525,11 @@ export function DataTable<T>({
                 return (
                   <Fragment key={rid}>
                     <tr
-                      tabIndex={onRowClick || selectable ? 0 : undefined}
+                      tabIndex={rowInteractive ? 0 : undefined}
                       className={cn(
                         'border-b border-subtle transition-colors duration-fast relative group',
-                        (onRowClick || selectable) && 'cursor-pointer active:scale-[0.998]',
-                        (onRowClick || selectable) &&
+                        rowInteractive && 'cursor-pointer active:scale-[0.998]',
+                        rowInteractive &&
                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
                         isSelected
                           ? 'bg-accent/10 hover:bg-accent/15 outline outline-2 outline-accent -outline-offset-2 z-10'
@@ -536,6 +544,7 @@ export function DataTable<T>({
                         // Skip row click if the user is currently highlighting text.
                         if (window.getSelection()?.toString().length) return;
                         onRowClick?.(row);
+                        if (rowExpands) toggleExpanded(rid);
                       }}
                       onContextMenu={
                         rowContextMenu
@@ -562,6 +571,7 @@ export function DataTable<T>({
                           <button
                             type="button"
                             aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
+                            aria-expanded={isExpanded}
                             onClick={() => toggleExpanded(rid)}
                             className={cn(
                               'h-5 w-5 inline-flex items-center justify-center rounded text-muted hover:bg-subtle hover:text-primary cursor-pointer',

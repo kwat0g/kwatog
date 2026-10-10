@@ -34,18 +34,18 @@ class PayslipNotificationDedupeTest extends TestCase
 
     public function test_redelivered_finalize_event_does_not_stack_duplicate_payslip_notices(): void
     {
-        $period   = PayrollPeriod::factory()->create();
+        $period = PayrollPeriod::factory()->create(['status' => 'finalized']);
         $employee = Employee::factory()->create();
-        $user     = User::factory()->create();
+        $user = User::factory()->create();
         $user->forceFill(['employee_id' => $employee->id])->save();
 
         Payroll::factory()->create([
             'payroll_period_id' => $period->id,
-            'employee_id'       => $employee->id,
+            'employee_id' => $employee->id,
         ]);
 
         $listener = new NotifyEmployeesOnPayrollFinalized(app(NotificationService::class));
-        $event    = new PayrollPeriodFinalized($period->fresh());
+        $event = new PayrollPeriodFinalized($period->fresh());
 
         // First delivery, then a redelivery after a simulated partial failure.
         $listener->handle($event);

@@ -69,6 +69,14 @@ codex/
 .antigravitycli/
 .playwright-mcp/
 .codex/
+codex-session-*.md
+
+# Root node_modules (only Vite/Vitest caches land here; spa/node_modules is the real install)
+/node_modules/
+
+# Test-run outputs
+spa/artifacts/
+spa/playwright-live-report/
 
 # Audit-session coordination locks are runtime state, not source. They were
 # committed by accident in 167de85e; a fresh checkout would resurrect stale locks

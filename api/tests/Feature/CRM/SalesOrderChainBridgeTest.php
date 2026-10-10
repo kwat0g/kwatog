@@ -21,7 +21,11 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Models\MrpRun;
+use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -99,6 +103,8 @@ class SalesOrderChainBridgeTest extends TestCase
             $cr['scheduling_conflicts'],
             'The chain response must expose the capacity planner conflict for the unassigned work order.',
         );
+        $productionStep = collect($this->soService->chain($result['so']))->firstWhere('key', 'in_production');
+        $this->assertStringContainsString('QC: configure the actual inspection specification', $productionStep['description']);
 
         // Each WO summary has required keys.
         foreach ($cr['work_orders'] as $woSummary) {
@@ -126,6 +132,34 @@ class SalesOrderChainBridgeTest extends TestCase
         $pr = PurchaseRequest::where('mrp_plan_id', $plan->id)->first();
         $this->assertNotNull($pr, 'Purchase request should be created for shortages.');
         $this->assertTrue((bool) $pr->is_auto_generated, 'PR should be marked auto-generated.');
+    }
+
+    public function test_pending_equipment_proposal_is_reported_as_auto_scheduled_before_wo_confirmation(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Confirmed);
+        $wo = WorkOrder::factory()->create(['sales_order_id' => $so->id, 'status' => 'planned',
+            'machine_id' => null, 'mold_id' => null]);
+        $machine = Machine::factory()->create();
+        $mold = Mold::create(['mold_code' => 'SUMMARY-MOLD', 'name' => 'Summary mold',
+            'product_id' => $wo->product_id, 'cavity_count' => 1, 'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 120, 'setup_time_minutes' => 0, 'status' => 'available',
+            'max_shots_before_maintenance' => 100000, 'lifetime_max_shots' => 1000000]);
+        $slot = ProductionSchedule::create([
+            'work_order_id' => $wo->id, 'machine_id' => $machine->id, 'mold_id' => $mold->id,
+            'scheduled_start' => now()->addHour(), 'scheduled_end' => now()->addHours(2),
+            'status' => 'pending', 'reserves_capacity' => true, 'priority_order' => 0,
+        ]);
+        $service = \Mockery::mock(SalesOrderService::class)->makePartial();
+        $service->shouldReceive('confirm')->once()->andReturn($so);
+
+        $summary = $service->confirmWithChainResult($so)['chain_result'];
+
+        $this->assertSame(1, $summary['auto_scheduled']);
+        $this->assertSame(0, $summary['needs_manual']);
+        $this->assertFalse($summary['work_orders'][0]['needs_manual_scheduling']);
+        $this->assertSame($slot->scheduled_start->toIso8601String(), $summary['work_orders'][0]['scheduled_start']);
+        $this->assertStringContainsString($machine->machine_code, $summary['work_orders'][0]['machine']);
+        $this->assertNull($wo->fresh()->machine_id, 'Proposal reporting must not confirm the WO.');
     }
 
     public function test_cancel_retires_mrp_auto_purchase_requests(): void
@@ -162,6 +196,23 @@ class SalesOrderChainBridgeTest extends TestCase
         $this->assertNotNull($cr['planning_error']);
         $this->assertStringContainsString('inactive', $cr['planning_error']['message']);
         $this->assertNull($so->fresh()->mrp_plan_id);
+        $step = collect($this->soService->chain($so->fresh()))->firstWhere('key', 'mrp_planned');
+        $this->assertSame('rejected', $step['state']);
+        $this->assertStringContainsString('inactive', $step['description']);
+        $this->assertSame('/mrp/plans', $step['href']);
+    }
+
+    public function test_unrelated_failed_run_does_not_mark_an_order_as_failed(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Confirmed);
+        MrpRun::create([
+            'run_at' => now(), 'triggered_by' => 'manual', 'status' => 'failed',
+            'error_message' => 'Different order failed.',
+            'summary' => ['sales_order_ids' => [$so->id + 1000]],
+        ]);
+        $step = collect($this->soService->chain($so))->firstWhere('key', 'mrp_planned');
+        $this->assertSame('active', $step['state']);
+        $this->assertStringNotContainsString('Different order', $step['description']);
     }
 
     public function test_confirm_so_handles_missing_bom_gracefully(): void
@@ -243,7 +294,7 @@ class SalesOrderChainBridgeTest extends TestCase
             ->postJson("/api/v1/crm/sales-orders/{$so->hash_id}/confirm");
 
         $response->assertStatus(422);
-        $response->assertJsonFragment(['message' => 'Only draft sales orders can be confirmed.']);
+        $response->assertJsonFragment(['message' => 'Only unconfirmed sales orders can be confirmed.']);
     }
 
     public function test_confirm_endpoint_rejects_empty_so(): void

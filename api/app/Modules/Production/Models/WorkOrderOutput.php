@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Models;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
@@ -27,18 +28,60 @@ class WorkOrderOutput extends Model
         'idempotency_key', 'idempotency_fingerprint',
         'production_receipt_handoff_status', 'production_receipt_handoff_message',
         'production_receipt_handoff_at', 'production_receipt_movement_id',
-        'material_lineage',
+        'material_lineage', 'receipt_unit_cost',
+        'rework_ncr_id', 'rework_source_output_id',
+        'work_order_crew_id', 'crew_snapshot', 'recording_reason',
+        'material_handover_exception',
+        'trial_inspection_id', 'trial_quantity', 'trial_settled_at',
+        'held_quantity', 'held_settled_at', 'production_started_at', 'production_finished_at',
     ];
 
     protected $casts = [
+        'held_quantity' => 'integer', 'held_settled_at' => 'datetime',
+        'production_started_at' => 'datetime', 'production_finished_at' => 'datetime',
         'recorded_at' => 'datetime',
+        'trial_inspection_id' => 'integer',
+        'trial_quantity' => 'integer',
+        'trial_settled_at' => 'datetime',
+        'receipt_unit_cost' => 'decimal:4',
         'good_count' => 'integer',
         'reject_count' => 'integer',
         'production_receipt_handoff_status' => ProductionReceiptHandoffStatus::class,
         'production_receipt_handoff_at' => 'datetime',
         'production_receipt_movement_id' => 'integer',
         'material_lineage' => 'array',
+        'crew_snapshot' => 'array',
+        'material_handover_exception' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $output): void {
+            if ($output->getOriginal('production_started_at') !== null
+                && $output->isDirty(['production_started_at', 'production_finished_at', 'work_order_id', 'work_order_crew_id', 'crew_snapshot', 'recorded_by', 'recorded_at', 'batch_code'])) {
+                throw new BusinessRuleException('Historical production source, crew and actual times are immutable.');
+            }
+            if ($output->getOriginal('trial_inspection_id') !== null
+                && $output->isDirty(['trial_inspection_id', 'trial_quantity', 'work_order_id'])) {
+                throw new BusinessRuleException('Captured trial quantity and source are immutable.');
+            }
+        });
+        static::deleting(function (self $output): void {
+            if ($output->trial_inspection_id !== null || $output->production_started_at !== null) {
+                throw new BusinessRuleException('Captured trial evidence cannot be deleted.');
+            }
+        });
+    }
+
+    public function trialInspection(): BelongsTo
+    {
+        return $this->belongsTo(Inspection::class, 'trial_inspection_id');
+    }
+
+    public function getPhysicalCountAttribute(): int
+    {
+        return $this->trial_quantity ?? ($this->total_count + (int) $this->held_quantity);
+    }
 
     public function workOrder(): BelongsTo
     {

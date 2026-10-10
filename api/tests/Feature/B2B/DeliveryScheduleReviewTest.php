@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -202,5 +203,30 @@ class DeliveryScheduleReviewTest extends TestCase
         $this->actingAs($viewOnly)
             ->postJson("/api/v1/b2b/portal-access/delivery-schedules/{$schedule->hash_id}/acknowledge")
             ->assertStatus(403);
+    }
+
+    public function test_supplier_plans_are_read_only_to_purchasing_and_portal_access(): void
+    {
+        $buyer = $this->actor(['purchasing.view', 'purchasing.po.view_all', 'purchasing.delivery_schedules.review']);
+        $po = PurchaseOrder::factory()->create();
+        $otherPo = PurchaseOrder::factory()->create();
+        $supplier = $this->supplierSchedule(['purchase_order_id' => $po->id, 'vendor_id' => $po->vendor_id]);
+        $customer = $this->customerSchedule(['purchase_order_id' => $po->id]);
+        $base = "/api/v1/b2b/purchase-orders/{$po->hash_id}/delivery-schedules";
+
+        $this->actingAs($buyer)->postJson("{$base}/{$supplier->hash_id}/acknowledge")
+            ->assertStatus(410);
+        $this->actingAs($buyer)->postJson("{$base}/{$supplier->hash_id}/reject", ['reason' => 'Retired'])
+            ->assertStatus(410);
+        $this->actingAs($buyer)->postJson("{$base}/{$customer->hash_id}/acknowledge")->assertNotFound();
+        $this->actingAs($buyer)->postJson("/api/v1/b2b/purchase-orders/{$otherPo->hash_id}/delivery-schedules/{$supplier->hash_id}/reject", ['reason' => 'Wrong PO'])->assertNotFound();
+
+        $hiddenBuyer = $this->actor(['purchasing.view', 'purchasing.delivery_schedules.review']);
+        $this->actingAs($hiddenBuyer)->postJson("{$base}/{$supplier->hash_id}/reject", ['reason' => 'Hidden'])->assertNotFound();
+        $this->actingAs($this->actor(['inventory.view']))->postJson("{$base}/{$supplier->hash_id}/acknowledge")->assertForbidden();
+        $this->actingAs($this->actor(['b2b.portal_access.manage']))
+            ->postJson("/api/v1/b2b/portal-access/delivery-schedules/{$supplier->hash_id}/acknowledge")
+            ->assertStatus(410);
+        $this->assertSame('submitted', $supplier->fresh()->status->value);
     }
 }

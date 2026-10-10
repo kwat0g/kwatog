@@ -52,6 +52,7 @@ class CreditNoteTest extends TestCase
         return User::create([
             'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'is_active' => true,
         ]);
     }
 
@@ -321,6 +322,83 @@ class CreditNoteTest extends TestCase
                 'amount' => '50.00',
             ]],
         ], $by);
+    }
+
+    public function test_credit_from_paid_invoice_is_held_and_can_be_applied_to_a_later_open_invoice(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Paid Return Customer', 'payment_terms_days' => 30]);
+        $paidInvoice = Invoice::create([
+            'invoice_number' => 'INV-CN-PAID-SOURCE-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'status' => 'paid',
+            'is_vatable' => false,
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '100.00',
+            'balance' => '0.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+        $credit = $this->svc->finalize($this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'is_vatable' => false,
+            'customer_id' => $customer->id,
+            'invoice_id' => $paidInvoice->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Returned goods from paid invoice',
+                'amount' => '50.00',
+            ]],
+        ], $by), $by);
+        $journalCount = JournalEntry::query()->count();
+
+        try {
+            $this->svc->apply($credit, ['invoice_id' => $paidInvoice->id, 'amount' => '50.00'], $by);
+            $this->fail('A credit cannot be applied to an invoice that is already paid.');
+        } catch (BusinessRuleException $e) {
+            $this->assertSame('A credit note can only be applied to a finalized or partially paid invoice.', $e->getMessage());
+        }
+
+        $this->assertSame('paid', $paidInvoice->fresh()->status->value);
+        $this->assertSame('0.00', (string) $paidInvoice->fresh()->balance);
+        $this->assertSame('finalized', $credit->fresh()->status->value);
+        $this->assertSame('50.00', (string) $credit->fresh()->balance);
+        $this->assertSame(0, CreditNoteApplication::query()->where('credit_note_id', $credit->id)->count());
+        $this->assertSame($journalCount, JournalEntry::query()->count());
+
+        $openInvoice = Invoice::create([
+            'invoice_number' => 'INV-CN-FUTURE-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'is_vatable' => false,
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '0.00',
+            'balance' => '100.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+
+        $this->svc->apply($credit, ['invoice_id' => $openInvoice->id, 'amount' => '50.00'], $by);
+
+        $this->assertSame('paid', $paidInvoice->fresh()->status->value);
+        $this->assertSame('partial', $openInvoice->fresh()->status->value);
+        $this->assertSame('50.00', (string) $openInvoice->fresh()->balance);
+        $this->assertSame('applied', $credit->fresh()->status->value);
+        $this->assertSame('0.00', (string) $credit->fresh()->balance);
+        $this->assertDatabaseHas('credit_note_applications', [
+            'credit_note_id' => $credit->id,
+            'invoice_id' => $openInvoice->id,
+            'amount' => '50.00',
+        ]);
     }
 
     public function test_applying_customer_credit_reduces_invoice_balance(): void

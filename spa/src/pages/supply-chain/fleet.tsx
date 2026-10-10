@@ -194,8 +194,15 @@ export default function FleetPage() {
      </Select>
      <Input label="Capacity (kg)" type="number" min="0" step="0.01" value={form.capacity_kg} onChange={(event) => setForm((current) => ({ ...current, capacity_kg: event.target.value }))} />
     </div>
-    <Select label="Status" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}>
-     {(vehicleOptions?.statuses ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    <Select
+     label="Status"
+     helper="In use is set by delivery dispatch and released when the delivery ends."
+     value={form.status}
+     onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}
+    >
+     {(vehicleOptions?.statuses ?? [])
+      .filter((option) => option.value !== 'in_use' || form.status === 'in_use')
+      .map((option) => <option key={option.value} value={option.value} disabled={option.value === 'in_use'}>{option.label}</option>)}
     </Select>
     <Textarea label="Notes" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} maxLength={500} rows={3} />
     <ModalFooter>
@@ -210,7 +217,7 @@ export default function FleetPage() {
    onClose={() => setArchiveId(null)}
    onConfirm={() => { if (archiveId) archive.mutate(archiveId); }}
    title="Archive this vehicle?"
-   description="Vehicles with scheduled or active deliveries cannot be archived. Historical delivery records remain readable after a successful archive."
+   description="Vehicles with scheduled or active deliveries or linked assets cannot be archived. Disassociate the fixed asset first. Historical delivery records remain readable after a successful archive."
    confirmLabel="Archive vehicle"
    variant="danger"
    pending={archive.isPending}

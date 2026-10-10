@@ -54,16 +54,19 @@ export default function TrainingFormPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
 
- const { data: depts = [] } = useQuery({
+ const departmentsQuery = useQuery({
  queryKey: ['hr', 'departments', 'tree'],
  queryFn: () => departmentsApi.tree(),
  });
 
- const { data: training, isLoading: loadingTraining } = useQuery({
+ const trainingQuery = useQuery({
  queryKey: ['hr', 'training', id],
  queryFn: () => trainingsApi.show(id!),
  enabled: isEdit,
  });
+ const { data: depts = [] } = departmentsQuery;
+ const { data: training, isLoading: loadingTraining } = trainingQuery;
+ const lookupBlocked = departmentsQuery.isError || departmentsQuery.isFetching || (isEdit && (trainingQuery.isError || trainingQuery.isFetching));
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
@@ -103,13 +106,20 @@ export default function TrainingFormPage() {
  const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
  if (isEdit && loadingTraining) return <SkeletonForm />;
+ if (isEdit && trainingQuery.isError && !training) return <EmptyState icon="alert-circle" title="Training could not be loaded" action={<Button variant="secondary" onClick={() => void trainingQuery.refetch()}>Retry training</Button>} />;
  if (isEdit && !loadingTraining && !training) return <EmptyState icon="alert-circle" title="Training not found" />;
 
  return (
  <div>
  <PageHeader title={isEdit ? 'Edit training' : 'Add training'} backTo="/hr/trainings" backLabel="Trainings" />
       <FormDraftBanner safety={safety} />
- <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid())} className="max-w-2xl mx-auto px-5 py-4">
+ {departmentsQuery.isError && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+ Training departments could not be loaded. <Button type="button" variant="secondary" size="sm" onClick={() => void departmentsQuery.refetch()}>Retry departments</Button>
+ </div>}
+ {isEdit && trainingQuery.isError && training && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+ Training could not be refreshed. <Button type="button" variant="secondary" size="sm" onClick={() => void trainingQuery.refetch()}>Retry training</Button>
+ </div>}
+ <form onSubmit={handleSubmit((d) => { if (!lookupBlocked) mutation.mutate(d); }, onFormInvalid())} className="min-w-0 w-full px-5 py-4">
  <Panel title="Training details">
  <div className="space-y-3">
  <Input label="Name" required {...register('name')} error={errors.name?.message} />
@@ -118,7 +128,7 @@ export default function TrainingFormPage() {
  <Input label="Duration (hours)" type="number" min="0" {...register('duration_hours')} error={errors.duration_hours?.message} />
  <Input label="Validity (months)" type="number" min="1" {...register('validity_months')} error={errors.validity_months?.message} />
  </div>
- <Select label="Department" {...register('department_id')} error={errors.department_id?.message}>
+ <Select searchable label="Department" {...register('department_id')} error={errors.department_id?.message}>
  <option value="">— All departments —</option>
  {depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
  </Select>
@@ -127,7 +137,7 @@ export default function TrainingFormPage() {
  </Panel>
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/trainings')}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || lookupBlocked} loading={mutation.isPending}>
  {isEdit ? 'Save changes' : 'Create training'}
  </Button>
  </FormActions>

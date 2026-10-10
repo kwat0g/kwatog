@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/lib/formatDate';
 // Series X / Task X5 — freshness for a page whose data moves under the user.
 //
 // Originally a "Refreshing…" pill that appeared only while a refetch was in
@@ -68,7 +69,7 @@ export function RefreshingIndicator({ queryKey, label = 'Refreshing…' }: Props
   return (
     <span
       className="inline-flex items-center text-2xs text-muted ml-2 align-middle"
-      title={new Date(lastUpdated).toLocaleString()}
+      title={formatDateTime(new Date(lastUpdated))}
     >
       Updated {formatAge(Date.now() - lastUpdated)}
     </span>

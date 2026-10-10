@@ -82,8 +82,8 @@ export default function GrnListPage() {
  searchPlaceholder="Search GRN number…" />
  {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
  {isError && <EmptyState icon="alert-circle" title="Failed to load GRNs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
- <ListEmptyState />
+ {!isError && data && data.data.length === 0 && (
+ <ListEmptyState searchTerm={filters.search || (filters.status ? `status: ${filters.status.replaceAll("_", " ")}` : filters.from || filters.to ? "selected dates" : undefined)} />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

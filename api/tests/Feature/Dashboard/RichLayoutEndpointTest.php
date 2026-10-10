@@ -10,6 +10,8 @@ use Database\Seeders\DashboardRoleLayoutSeeder;
 use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RichLayoutEndpointTest extends TestCase
@@ -32,6 +34,39 @@ class RichLayoutEndpointTest extends TestCase
         $this->actingAs($user);
 
         return $user;
+    }
+
+    public function test_maintenance_supervisor_has_machine_visibility_and_operational_dashboard_defaults(): void
+    {
+        $user = $this->actingAsRole('maintenance_supervisor');
+        $this->assertTrue($user->hasPermission('mrp.machines.view'));
+        $this->assertFalse($user->hasPermission('mrp.machines.manage'));
+        $this->assertTrue($user->hasPermission('maintenance.wo.assign'));
+        $this->assertTrue($user->hasPermission('maintenance.wo.verify'));
+        $keys = collect($this->getJson('/api/v1/dashboard/layout')->assertOk()->json('data'))->pluck('key')->all();
+        foreach (['machine.status', 'maintenance.open_wos', 'maintenance.due_schedules', 'assets.under_maintenance'] as $key) {
+            $this->assertContains($key, $keys);
+        }
+    }
+
+    public function test_supervisor_visibility_migration_is_repeatable_and_preserves_personal_layouts(): void
+    {
+        $user = $this->actingAsRole('maintenance_supervisor');
+        $permissionId = DB::table('permissions')->where('slug', 'mrp.machines.view')->value('id');
+        DB::table('role_permissions')->where('role_id', $user->role_id)->where('permission_id', $permissionId)->delete();
+        DB::table('dashboard_layouts')->where('owner_type', 'role')->where('owner_id', $user->role_id)->delete();
+        DB::table('dashboard_layouts')->insert([
+            'owner_type' => 'user', 'owner_id' => $user->id, 'widget_key' => 'self.leave_balance',
+            'position_x' => 0, 'position_y' => 0, 'width' => 4, 'height' => 4,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        Cache::forget("auth:role_perms:{$user->role_id}");
+        $migration = require database_path('migrations/2026_10_10_000500_restore_maintenance_supervisor_visibility.php');
+        $migration->up();
+        $migration->up();
+        $this->assertTrue($user->fresh()->hasPermission('mrp.machines.view'));
+        $this->assertSame(9, DB::table('dashboard_layouts')->where('owner_type', 'role')->where('owner_id', $user->role_id)->count());
+        $this->assertSame(['self.leave_balance'], DB::table('dashboard_layouts')->where('owner_type', 'user')->where('owner_id', $user->id)->pluck('widget_key')->all());
     }
 
     public function test_plain_layout_carries_render_kind(): void

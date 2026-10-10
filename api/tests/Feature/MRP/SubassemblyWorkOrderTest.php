@@ -56,6 +56,7 @@ class SubassemblyWorkOrderTest extends TestCase
         $this->subassembly = $this->product('SA-HIER-001');
         $this->subassemblyItem = Item::factory()->create([
             'code' => $this->subassembly->part_number,
+            'item_type' => 'finished_good',
             'unit_of_measure' => 'pcs',
             'standard_cost' => '8.0000',
         ]);
@@ -99,6 +100,16 @@ class SubassemblyWorkOrderTest extends TestCase
         $this->assertSame('20.000', (string) $root->materials()->firstOrFail()->bom_quantity);
         $this->assertSame('60.000', (string) $child->materials()->firstOrFail()->bom_quantity);
         $this->assertSame($plan->id, $child->mrp_plan_id);
+    }
+
+    public function test_child_dates_share_root_deadline_without_subtracting_days(): void
+    {
+        $so = $this->salesOrder(10);
+        $this->engine->runForActiveSalesOrders(MrpRunTrigger::Manual, $so->created_by, [$so->id]);
+        $root = WorkOrder::where('sales_order_id', $so->id)->whereNull('parent_wo_id')->firstOrFail();
+        $child = WorkOrder::where('parent_wo_id', $root->id)->firstOrFail();
+        $this->assertSame($root->planned_end->toDateTimeString(), $child->planned_end->toDateTimeString());
+        $this->assertSame($root->planned_start->toDateTimeString(), $child->planned_start->toDateTimeString());
     }
 
     public function test_rerunning_mrp_does_not_duplicate_subassembly_work_orders(): void

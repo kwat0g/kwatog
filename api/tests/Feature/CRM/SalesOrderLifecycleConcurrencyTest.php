@@ -35,7 +35,7 @@ class SalesOrderLifecycleConcurrencyTest extends TestCase
             $this->service->confirm($stale);
             $this->fail('A stale confirmation must not resurrect a cancelled sales order.');
         } catch (BusinessRuleException $e) {
-            $this->assertSame('Only draft sales orders can be confirmed.', $e->getMessage());
+            $this->assertSame('Only unconfirmed sales orders can be confirmed.', $e->getMessage());
         }
 
         $this->assertSame(SalesOrderStatus::Cancelled, $so->fresh()->status);

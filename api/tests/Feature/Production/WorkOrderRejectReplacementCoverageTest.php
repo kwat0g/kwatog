@@ -7,35 +7,67 @@ namespace Tests\Feature\Production;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialHandover;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\MaterialIssueService;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
-use App\Modules\Production\Models\DefectType;
-use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Enums\WoOperationStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\DefectType;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WoOperationService;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Services\InspectionSpecService;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
+use Tests\Support\HasAssignedProductionCrew;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\TestCase;
 
 class WorkOrderRejectReplacementCoverageTest extends TestCase
 {
+    use HasAssignedProductionCrew;
+    use HasPassedInProcessQc;
     use RefreshDatabase;
 
     public function test_reported_reject_is_accepted_but_later_replacement_output_requires_incremental_material(): void
     {
         Event::fake();
+        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class, SettingsSeeder::class]);
         $user = User::factory()->create();
+        $productionManager = User::factory()->withRole('production_manager')->create();
+        $warehouseRecorder = User::factory()->withRole('warehouse_staff')->create();
         $product = Product::factory()->create();
+        Item::factory()->create([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood->value,
+            'name' => 'Finished good for '.$product->part_number,
+            'unit_of_measure' => $product->unit_of_measure,
+        ]);
+        $finishedGoodsWarehouse = Warehouse::factory()->create();
+        $finishedGoodsZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $finishedGoodsWarehouse->id,
+            'zone_type' => WarehouseZoneType::FinishedGoods->value,
+        ]);
+        WarehouseLocation::factory()->create(['zone_id' => $finishedGoodsZone->id]);
+        app(InspectionSpecService::class)->upsertForProduct($product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual'],
+        ], $user->id);
         $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
         StockLevel::create([
@@ -50,8 +82,8 @@ class WorkOrderRejectReplacementCoverageTest extends TestCase
             'product_id' => $product->id,
             'status' => WorkOrderStatus::Planned->value,
             'quantity_target' => 5,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'planned_start' => Carbon::now()->addHour()->toDateTimeString(),
+            'planned_end' => Carbon::now()->addDays(2)->toDateTimeString(),
             'work_order_class' => 'standard',
             'material_plan_source' => 'bom',
             'created_by' => $user->id,
@@ -90,27 +122,32 @@ class WorkOrderRejectReplacementCoverageTest extends TestCase
             'is_active' => true,
         ]);
 
+        $this->assignProductionCrew($workOrder, $user);
         $workOrders = app(WorkOrderService::class);
-        $started = $workOrders->start(
-            $workOrders->confirm($workOrder, $machine->id, $mold->id),
-            $user->id,
-        );
+        $confirmed = $workOrders->confirm($workOrder, $machine->id, $mold->id);
+        $this->travelTo($confirmed->planned_start);
+        $started = $workOrders->start($confirmed, $productionManager->id);
+        $this->passInProcessQc($started);
+        $this->confirmIssuedMaterial($started, $user, $warehouseRecorder);
         $outputs = app(WorkOrderOutputService::class);
 
-        $first = $outputs->record($started, [
+        $first = $outputs->record($started, $this->outputForCrew($started, [
             'good_count' => 3,
             'reject_count' => 1,
             'defects' => [['defect_type_id' => $defectType->id, 'count' => 1]],
-        ], $user->id, 'reject-coverage-first-output');
+        ], $user), $user->id, 'reject-coverage-first-output');
 
         $this->assertSame(3, (int) $first->good_count);
         $this->assertSame(1, (int) $first->reject_count);
         $this->assertSame(4, (int) $started->fresh()->quantity_produced);
+        $firstReceipt = StockMovement::query()->findOrFail($first->production_receipt_movement_id);
+        $this->assertTrue($firstReceipt->gl_handoff_status?->isResolved());
 
         // Routed operation output records the same physical units as canonical
         // output. It must not be added a second time to the consumption floor.
         $operation = WoOperation::create([
             'work_order_id' => $started->id,
+            'operator_id' => $user->employee_id,
             'sequence' => 1,
             'operation_name' => 'Injection',
             'status' => WoOperationStatus::InProgress,
@@ -131,11 +168,11 @@ class WorkOrderRejectReplacementCoverageTest extends TestCase
         $this->assertSame('4.0000', (string) $operation->fresh()->qty_completed);
 
         try {
-            $outputs->record($started->fresh(), [
+            $outputs->record($started->fresh(), $this->outputForCrew($started->fresh(), [
                 'good_count' => 2,
                 'reject_count' => 0,
                 'defects' => [],
-            ], $user->id, 'reject-coverage-final-output-before-issue');
+            ], $user), $user->id, 'reject-coverage-final-output-before-issue');
             $this->fail('Recording two more pieces must require six total material units after five were issued for the target.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('1.000', $e->getMessage());
@@ -156,13 +193,23 @@ class WorkOrderRejectReplacementCoverageTest extends TestCase
             ]],
         ], $user);
 
+        $materialIssue = StockMovement::query()
+            ->where('reference_type', 'work_order')
+            ->where('reference_id', $started->id)
+            ->where('movement_type', 'material_issue')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertTrue($materialIssue->gl_handoff_status?->isResolved());
+
+        $this->confirmIssuedMaterial($started, $user, $warehouseRecorder);
+
         $operations->recordOutput($operation->fresh(), 2);
 
-        $last = $outputs->record($started->fresh(), [
+        $last = $outputs->record($started->fresh(), $this->outputForCrew($started->fresh(), [
             'good_count' => 2,
             'reject_count' => 0,
             'defects' => [],
-        ], $user->id, 'reject-coverage-final-output-after-issue');
+        ], $user), $user->id, 'reject-coverage-final-output-after-issue');
         $workOrder = $started->fresh();
 
         $this->assertSame(2, (int) $last->good_count);
@@ -171,5 +218,18 @@ class WorkOrderRejectReplacementCoverageTest extends TestCase
         $this->assertSame(5, (int) $workOrder->quantity_good);
         $this->assertSame(1, (int) $workOrder->quantity_rejected);
         $this->assertSame('5.000', (string) $workOrder->materials()->value('actual_quantity_issued'), 'Automatic counters remain auto-only.');
+        $lastReceipt = StockMovement::query()->findOrFail($last->production_receipt_movement_id);
+        $this->assertTrue($lastReceipt->gl_handoff_status?->isResolved());
+    }
+
+    private function confirmIssuedMaterial(WorkOrder $workOrder, User $recipient, User $warehouseRecorder): void
+    {
+        foreach (StockMovement::query()->forWorkOrder($workOrder->id)->pendingHandover()->withHandoverBalance()->get() as $source) {
+            MaterialHandover::create([
+                'stock_movement_id' => $source->id, 'received_by_employee_id' => $recipient->employee_id,
+                'recipient_name' => $recipient->employee->full_name, 'recorded_by' => $warehouseRecorder->id,
+                'quantity' => $source->remaining_quantity, 'handed_over_at' => now(),
+            ]);
+        }
     }
 }

@@ -64,9 +64,13 @@ describe('response error interceptor', () => {
   // The lost-session tests below flip it.
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('window', { location: { pathname: '/dashboard', href: '' } });
     vi.spyOn(sessionProbe, 'check').mockResolvedValue(false);
   });
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it('reports a 429 and quotes Retry-After', async () => {
     await expect(
@@ -126,6 +130,7 @@ describe('response error interceptor', () => {
   it('clears the query cache on 401 so no stale cross-user data survives', async () => {
     await expect(reject({ status: 401, url: '/things' })).rejects.toBeTruthy();
     expect(queryClient.clear).toHaveBeenCalled();
+    expect(window.location.href).toBe('/sign-in');
   });
 
   it('does not redirect on the login attempt itself', async () => {
@@ -147,6 +152,13 @@ describe('response error interceptor', () => {
     expect(queryClient.clear).not.toHaveBeenCalled();
     expect(replay).toHaveBeenCalledOnce();
     vi.mocked(client.request).mockRestore();
+  });
+
+  it('does not navigate or clear cached identity when the session probe is temporarily unavailable', async () => {
+    vi.mocked(sessionProbe.check).mockRejectedValue({ response: { status: 429 } });
+    await expect(reject({ status: 401, url: '/production/work-orders' })).rejects.toBeTruthy();
+    expect(queryClient.clear).not.toHaveBeenCalled();
+    expect(window.location.href).not.toBe('/sign-in');
   });
 
   it('does not re-probe a request it already replayed once', async () => {

@@ -19,7 +19,7 @@ class Collection extends Model
     protected $fillable = [
         'invoice_id', 'cash_account_id', 'collection_date',
         'amount', 'payment_method', 'reference_number', 'idempotency_key',
-        'journal_entry_id', 'created_by',
+        'journal_entry_id', 'created_by', 'manual_reason',
     ];
 
     protected $casts = [

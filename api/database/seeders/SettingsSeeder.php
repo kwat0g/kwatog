@@ -72,8 +72,8 @@ class SettingsSeeder extends Seeder
             ['key' => 'company.longitude', 'value' => $company['longitude'], 'group' => 'company', 'label' => 'Facility Longitude', 'description' => 'GPS longitude coordinate of the primary manufacturing plant.'],
             ['key' => 'company.punch_radius_m', 'value' => 200, 'group' => 'company', 'label' => 'Time in/out radius (m)', 'description' => 'Distance from the plant centre within which an employee may time in/out.'],
             ['key' => 'company.punch_max_accuracy_m', 'value' => 100, 'group' => 'company', 'label' => 'Time in/out max GPS error (m)', 'description' => 'Worst GPS accuracy accepted for a time in/out.'],
-            ['key' => 'attendance.punch_early_minutes', 'value' => 15, 'group' => 'attendance', 'label' => 'Punch window: minutes before shift', 'description' => 'How early before shift start an employee may time in. Pay still starts at shift start.'],
-            ['key' => 'attendance.punch_late_minutes', 'value' => 120, 'group' => 'attendance', 'label' => 'Punch window: minutes after shift', 'description' => 'How late after shift end an employee may still time out. Approved overtime extends it by the approved hours.'],
+            ['key' => 'attendance.punch_early_minutes', 'value' => 120, 'group' => 'attendance', 'label' => 'Punch window: minutes before shift', 'description' => 'How early before shift start an employee may time in.'],
+            ['key' => 'attendance.punch_late_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch window: minutes after shift', 'description' => 'How late after shift end an employee may still time out.'],
             ['key' => 'attendance.punch_early_out_grace_minutes', 'value' => 15, 'group' => 'attendance', 'label' => 'Punch: early time-out grace (min)', 'description' => 'How many minutes before shift end an employee may time out.'],
             ['key' => 'attendance.punch_min_work_minutes', 'value' => 30, 'group' => 'attendance', 'label' => 'Punch: minimum work before time-out (min)', 'description' => 'Minimum minutes between the latest time-in punch and a time-out.'],
             ['key' => 'attendance.punch_late_in_cutoff_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch: late time-in cutoff (min)', 'description' => 'The first time-in of the day is refused later than this many minutes after shift start.'],
@@ -213,6 +213,8 @@ class SettingsSeeder extends Seeder
             ],
 
             // ── Maintenance ──────────────────────────────────
+            ['key' => 'maintenance.closed_loop.enabled', 'value' => false, 'group' => 'maintenance', 'label' => 'Verified Maintenance Recovery', 'description' => 'Require independent recovery verification for newly created maintenance orders.'],
+            ['key' => 'maintenance.automation.actor_roles', 'value' => ['maintenance_supervisor'], 'group' => 'maintenance', 'label' => 'Automation Actor Roles', 'description' => 'Active roles allowed to own generated maintenance work orders, in priority order.'],
             ['key' => 'maintenance.predictive.temperature.max', 'value' => 85.0, 'group' => 'maintenance', 'label' => 'Temperature Maximum', 'description' => 'Maximum safe machine temperature in °C.'],
             ['key' => 'maintenance.predictive.vibration.max', 'value' => 7.1, 'group' => 'maintenance', 'label' => 'Vibration Maximum', 'description' => 'Maximum safe vibration velocity in mm/s.'],
             ['key' => 'maintenance.predictive.pressure.min', 'value' => 2.0, 'group' => 'maintenance', 'label' => 'Pressure Minimum', 'description' => 'Minimum safe hydraulic pressure in bar.'],
@@ -428,7 +430,6 @@ class SettingsSeeder extends Seeder
             ['key' => 'accounting.accounts.payroll_cash_code', 'value' => '1010', 'group' => 'accounting', 'label' => 'Payroll Cash Account Code', 'description' => 'Chart-of-accounts mapping used for payroll net-pay disbursements.'],
             ['key' => 'accounting.delivery_confirmed.notification_roles', 'value' => ['finance_officer'], 'group' => 'accounting', 'label' => 'Delivery Confirmed Notification Roles', 'description' => 'Roles notified when a delivery is confirmed.'],
             ['key' => 'budgeting.enforcement_mode', 'value' => 'warn', 'group' => 'budgeting', 'label' => 'Budget Enforcement Mode', 'description' => 'Default warn: over-ceiling spend is logged and needs acknowledgment before PR/PO approval. Set to block to hard-stop over-ceiling submissions; off disables the gate.'],
-            ['key' => 'accounting.je_self_post_limit', 'value' => 0, 'group' => 'accounting', 'label' => 'Journal Entry Self-Post Limit', 'description' => 'Manual journal total below which maker-checker may be bypassed.'],
             ['key' => 'inventory.adjustment_approval_threshold', 'value' => 0, 'group' => 'inventory', 'label' => 'Inventory Adjustment Approval Threshold', 'description' => 'Absolute adjustment value above which approval is required.'],
             ['key' => 'inventory.over_receipt_tolerance_pct', 'value' => 0, 'group' => 'inventory', 'label' => 'Over-Receipt Tolerance (%)', 'description' => 'Allowed receipt overage as a percentage of ordered quantity.'],
             ['key' => 'quality.ncr.replacement_work_order_lead_days', 'value' => 7, 'group' => 'quality', 'label' => 'NCR Replacement Work Order Lead Days', 'description' => 'Planned duration for replacement work orders created from scrap NCRs.'],

@@ -8,10 +8,12 @@ use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -147,6 +149,27 @@ class DraftGrnOnPoSentTest extends TestCase
         $this->assertSame(1, GoodsReceiptNote::where('purchase_order_id', $po->id)->count());
     }
 
+    public function test_draft_grn_shows_bins_where_its_item_has_stock(): void
+    {
+        $po = $this->makeSentPo();
+        event(new PurchaseOrderSent($po->fresh()));
+        $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)->firstOrFail();
+        $item = Item::findOrFail($po->items()->firstOrFail()->item_id);
+        $stored = WarehouseLocation::factory()->create();
+        $empty = WarehouseLocation::factory()->create();
+        $blocked = WarehouseLocation::factory()->create(['is_blocked' => true]);
+        StockLevel::factory()->create(['item_id' => $item->id, 'location_id' => $stored->id, 'quantity' => '25.000']);
+        StockLevel::factory()->create(['item_id' => $item->id, 'location_id' => $empty->id, 'quantity' => '0.000']);
+        StockLevel::factory()->create(['item_id' => $item->id, 'location_id' => $blocked->id, 'quantity' => '5.000']);
+        $warehouse = User::factory()->create(['role_id' => Role::where('slug', 'warehouse_staff')->value('id')]);
+
+        $this->actingAs($warehouse)
+            ->getJson("/api/v1/inventory/grn/{$grn->hash_id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items.0.item.stored_bins')
+            ->assertJsonPath('data.items.0.item.stored_bins.0.id', $stored->hash_id);
+    }
+
     public function test_stale_sent_event_after_cancellation_does_not_stage_a_draft_grn(): void
     {
         $po = $this->makeSentPo();
@@ -199,6 +222,33 @@ class DraftGrnOnPoSentTest extends TestCase
         // Incoming QC inspection was created (synchronous trigger).
         $this->assertSame(1, Inspection::where('entity_type', 'grn')
             ->where('entity_id', $result->id)->count());
+    }
+
+    public function test_finalize_links_only_a_dispatch_from_the_same_po(): void
+    {
+        $po = $this->makeSentPo();
+        event(new PurchaseOrderSent($po->fresh()));
+        $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)->firstOrFail();
+        $other = $this->makeSentPo();
+        $foreignDispatch = SupplierShipment::factory()->create(['purchase_order_id' => $other->id]);
+        $dispatch = SupplierShipment::factory()->create(['purchase_order_id' => $po->id]);
+        $location = WarehouseLocation::factory()->create();
+        $by = User::factory()->create();
+        $lines = [[
+            'purchase_order_item_id' => $po->items()->firstOrFail()->hash_id,
+            'location_id' => $location->id,
+            'quantity_received' => '80.000',
+        ]];
+        try {
+            app(GrnService::class)->finalizeDraft($grn, $lines, $by, $foreignDispatch->hash_id);
+            $this->fail('A foreign PO shipment was accepted.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+            $this->assertSame('Supplier shipment does not belong to this purchase order.', $exception->getMessage());
+        }
+        $this->assertSame(GrnStatus::Draft, $grn->fresh()->status);
+        $result = app(GrnService::class)->finalizeDraft($grn, $lines, $by, $dispatch->hash_id);
+        $this->assertSame($dispatch->id, $result->supplier_shipment_id);
+        $this->assertSame('80.00', $po->fresh()->items()->firstOrFail()->quantity_received);
     }
 
     public function test_finalize_respects_the_over_receipt_cap(): void

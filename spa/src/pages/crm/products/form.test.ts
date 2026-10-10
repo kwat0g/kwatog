@@ -19,3 +19,9 @@ describe('CRM product form revenue account', () => {
     expect(productFormSchema.safeParse({ ...product, revenue_account_id: '' }).success).toBe(true);
   });
 });
+
+it('rejects zero selling prices and a base price below the minimum', () => {
+  expect(productFormSchema.safeParse({ ...product, base_selling_price: '0.00' }).success).toBe(false);
+  expect(productFormSchema.safeParse({ ...product, base_selling_price: '20.00', minimum_selling_price: '22.00' }).success).toBe(false);
+  expect(productFormSchema.safeParse({ ...product, base_selling_price: '25.00', minimum_selling_price: '22.00', portal_visibility: 'standard' }).success).toBe(true);
+});

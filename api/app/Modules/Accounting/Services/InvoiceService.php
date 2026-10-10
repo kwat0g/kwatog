@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Support\SearchOperator;
 
 use App\Common\Services\ChainBroadcaster;
@@ -78,7 +79,8 @@ class InvoiceService
 
     public function show(Invoice $invoice): Invoice
     {
-        return $invoice->load([
+        $invoice->load([
+            'paymentSubmissions',
             'customer',
             'items.revenueAccount:id,code,name',
             'collections.cashAccount:id,code,name',
@@ -86,10 +88,14 @@ class InvoiceService
             'journalEntry:id,entry_number,date,status,total_debit,total_credit',
             // 2026-08-08 — compact O2C stepper: the upstream SO + delivery.
             'salesOrder:id,so_number',
-            'delivery:id,delivery_number',
+            'delivery:id,delivery_number,status',
             // role_id required so User's $with=['role'] eager-load can resolve.
             'creator:id,name,role_id',
+            'prebillApprover:id,name,role_id',
+            'auditLogs.user:id,name,role_id',
         ]);
+
+        return $invoice;
     }
 
     /** Create a draft invoice (no JE yet). */
@@ -102,9 +108,6 @@ class InvoiceService
             }
             if ($lifecycle === 'prebill' && trim((string) ($data['prebill_reason'] ?? '')) === '') {
                 throw new BusinessRuleException('An approved prebill requires a reason.');
-            }
-            if ($lifecycle === 'prebill' && ! $by->hasPermission('accounting.invoices.prebill_approve')) {
-                throw new BusinessRuleException('You are not authorized to approve a prebill invoice.');
             }
             $customerId = HashIdFilter::decode($data['customer_id'], Customer::class);
             if (! $customerId) {
@@ -132,8 +135,8 @@ class InvoiceService
                 'sales_order_id' => $source['sales_order_id'],
                 'delivery_id'    => $source['delivery_id'],
                 'lifecycle_type' => $lifecycle,
-                'prebill_approved_by' => $lifecycle === 'prebill' ? $by->id : null,
-                'prebill_approved_at' => $lifecycle === 'prebill' ? now() : null,
+                'prebill_approved_by' => null,
+                'prebill_approved_at' => null,
                 'prebill_reason' => $lifecycle === 'prebill' ? trim((string) $data['prebill_reason']) : null,
                 'date'           => $data['date'],
                 'due_date'       => $data['due_date']
@@ -172,10 +175,38 @@ class InvoiceService
             if ($lockedInvoice->status !== InvoiceStatus::Draft) {
                 throw new BusinessRuleException('Only draft invoices can be edited.');
             }
+            $lockedInvoice->load('items');
+            if (! hash_equals($lockedInvoice->revisionToken(), (string) $data['expected_revision'])) {
+                throw new BusinessRuleException('Invoice changed since you opened it. Reload it before editing.');
+            }
+            if ($lockedInvoice->lifecycle_type !== 'prebill') {
+                throw new BusinessRuleException('Only manual prebill invoices can be edited. Standard invoices must be corrected through their delivery workflow.');
+            }
+            if (($data['lifecycle_type'] ?? $lockedInvoice->lifecycle_type) !== 'prebill'
+                || ! empty($data['sales_order_id'])
+                || ! empty($data['delivery_id'])) {
+                throw new BusinessRuleException('A prebill invoice cannot change lifecycle or source links.');
+            }
+            $customerId = HashIdFilter::decode($data['customer_id'] ?? null, Customer::class);
+            if ($customerId === null || (int) $customerId !== (int) $lockedInvoice->customer_id) {
+                throw new BusinessRuleException('The invoice customer cannot be changed after creation.');
+            }
+            if ($lockedInvoice->items()->whereNotNull('source_delivery_item_id')->exists()) {
+                throw new BusinessRuleException('Source-linked invoice lines cannot be edited through the prebill workflow.');
+            }
+            $prebillReason = trim((string) ($data['prebill_reason'] ?? $lockedInvoice->prebill_reason));
+            if ($prebillReason === '') {
+                throw new BusinessRuleException('A prebill approval reason is required.');
+            }
 
             $classification = $this->resolveClassification($data, $lockedInvoice);
             $isVatable = $classification === VatClassification::Vatable;
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
+            foreach ($items as $item) {
+                if ($item['source_delivery_item_id'] !== null) {
+                    throw new BusinessRuleException('Prebill invoice lines cannot be linked to delivery items.');
+                }
+            }
             $discount = $this->normalizeDiscount(
                 $data['senior_pwd_discount'] ?? (string) $lockedInvoice->senior_pwd_discount,
                 $subtotal,
@@ -197,12 +228,78 @@ class InvoiceService
                 'total_amount' => $total,
                 'balance'      => $total, // no payments yet on a draft
                 'remarks'      => $data['remarks'] ?? $lockedInvoice->remarks,
+                'prebill_reason' => $prebillReason,
+                'prebill_approved_by' => null,
+                'prebill_approved_at' => null,
             ]);
 
             InvoiceItem::where('invoice_id', $lockedInvoice->id)->forceDelete();
             foreach ($items as $row) {
                 InvoiceItem::create(array_merge($row, ['invoice_id' => $lockedInvoice->id]));
             }
+            return $this->show($lockedInvoice->fresh());
+        });
+    }
+
+    public function approvePrebill(Invoice $invoice, User $by): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $by): Invoice {
+            $lockedInvoice = Invoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoice->getKey());
+            if ($lockedInvoice->status !== InvoiceStatus::Draft) {
+                throw new BusinessRuleException('Only draft invoices can be approved for prebilling.');
+            }
+            if ($lockedInvoice->lifecycle_type !== 'prebill') {
+                throw new BusinessRuleException('Only prebill invoices require prebill approval.');
+            }
+            if ((int) $lockedInvoice->created_by === (int) $by->id) {
+                throw new ForbiddenActionException(
+                    'You cannot approve a prebill invoice you created. A different user must approve it (segregation of duties).',
+                );
+            }
+            if (trim((string) $lockedInvoice->prebill_reason) === '') {
+                throw new BusinessRuleException('A prebill approval reason is required.');
+            }
+            if ($lockedInvoice->prebill_approved_by !== null || $lockedInvoice->prebill_approved_at !== null) {
+                if ((int) $lockedInvoice->prebill_approved_by === (int) $by->id
+                    && $lockedInvoice->prebill_approved_at !== null) {
+                    return $this->show($lockedInvoice);
+                }
+
+                throw new BusinessRuleException('This prebill invoice has already been approved by another user.');
+            }
+
+            $updates = DB::table('audit_logs')
+                ->where('model_type', $lockedInvoice->getMorphClass())
+                ->where('model_id', $lockedInvoice->id)
+                ->where('action', 'updated')
+                ->orderBy('id')
+                ->get(['id', 'user_id', 'new_values']);
+            $lastApprovalId = 0;
+            foreach ($updates as $update) {
+                $changes = is_array($update->new_values)
+                    ? $update->new_values
+                    : (json_decode((string) $update->new_values, true) ?: []);
+                if (($changes['prebill_approved_by'] ?? null) !== null) {
+                    $lastApprovalId = (int) $update->id;
+                }
+            }
+            $hasEditedSinceApproval = $updates->contains(
+                fn (object $update): bool => (int) $update->id > $lastApprovalId
+                    && (int) $update->user_id === (int) $by->id,
+            );
+            if ($hasEditedSinceApproval) {
+                throw new ForbiddenActionException(
+                    'You cannot approve a prebill invoice you edited after its last approval. A different user must review it (segregation of duties).',
+                );
+            }
+
+            $lockedInvoice->forceFill([
+                'prebill_approved_by' => $by->id,
+                'prebill_approved_at' => now(),
+            ])->save();
+
             return $this->show($lockedInvoice->fresh());
         });
     }
@@ -219,6 +316,24 @@ class InvoiceService
                 ->findOrFail($invoice->getKey());
             if ($lockedInvoice->status !== InvoiceStatus::Draft) {
                 throw new BusinessRuleException('Only draft invoices can be finalized.');
+            }
+            if ($lockedInvoice->lifecycle_type === 'prebill') {
+                if ($lockedInvoice->created_by !== null
+                    && (int) $lockedInvoice->created_by === (int) $by->id) {
+                    throw new ForbiddenActionException(
+                        'You cannot finalize an invoice you created. A different user must post it (segregation of duties).',
+                    );
+                }
+                if ($lockedInvoice->prebill_approved_by === null || $lockedInvoice->prebill_approved_at === null) {
+                    throw new BusinessRuleException(
+                        'A prebill invoice must be approved by a different user before finalization.',
+                    );
+                }
+                if ((int) $lockedInvoice->prebill_approved_by === (int) $by->id) {
+                    throw new ForbiddenActionException(
+                        'A different user must finalize a prebill invoice than the user who approved it (segregation of duties).',
+                    );
+                }
             }
 
             // OGAMI-001 — block finalizing into a closed period.
@@ -250,6 +365,14 @@ class InvoiceService
                         throw new BusinessRuleException('This delivery still needs cost posting. Open its Stock and accounting panel, repair the reported setup issue and retry customer cost before finalizing the invoice.');
                     }
                 }
+            }
+
+            if ($lockedInvoice->lifecycle_type !== 'prebill'
+                && $lockedInvoice->created_by !== null
+                && (int) $lockedInvoice->created_by === (int) $by->id) {
+                throw new ForbiddenActionException(
+                    'You cannot finalize an invoice you created. A different user must post it (segregation of duties).',
+                );
             }
 
             $this->assertCreditLimit(
@@ -305,7 +428,7 @@ class InvoiceService
                 'reference_id'   => $lockedInvoice->id,
                 'lines'          => $lines,
             ], $by);
-            $je = $this->journals->post($je, $by);
+            $je = $this->journals->postSystem($je, (int) $by->id);
 
             $lockedInvoice->update([
                 'invoice_number'   => $invoiceNumber,
@@ -356,14 +479,19 @@ class InvoiceService
                 return $lockedInvoice;
             }
 
+            if ($lockedInvoice->paymentSubmissions()->where('status', 'pending')->exists()) {
+                throw new BusinessRuleException('Review or reject the pending customer payment before cancelling this invoice.');
+            }
+
             if ($lockedInvoice->journal_entry_id) {
                 $lockedInvoice->loadMissing('journalEntry');
                 $je = $lockedInvoice->journalEntry;
                 if ($je && $je->status === JournalEntryStatus::Posted) {
-                    $this->journals->reverse(
+                    $reversalDate = $je->date->isFuture() ? $je->date : now();
+                    $this->journals->reverseSource(
                         $je,
                         $by,
-                        now(),
+                        $reversalDate,
                         "Invoice {$lockedInvoice->invoice_number} cancellation",
                     );
                 }
@@ -392,6 +520,7 @@ class InvoiceService
 
     public function recordCollection(Invoice $invoice, array $data, User $by): InvoiceCollection
     {
+        \Illuminate\Support\Facades\Validator::make($data, ['amount' => ['required', 'numeric', 'decimal:0,2', 'max:9999999999999.99']])->validate();
         $amount = Money::round2((string) $data['amount']);
 
         return DB::transaction(function () use ($invoice, $data, $amount, $by) {
@@ -401,6 +530,7 @@ class InvoiceService
             $lockedInvoice = Invoice::query()
                 ->lockForUpdate()
                 ->findOrFail($invoice->getKey());
+            app(InvoicePaymentSubmissionService::class)->assertCollectionSource($lockedInvoice, $data, $by);
             if (Money::lte($amount, '0')) {
                 throw new BusinessRuleException('Amount must be > 0.');
             }
@@ -425,7 +555,9 @@ class InvoiceService
                     if (Money::cmp((string) $existing->amount, $amount) !== 0
                         || (int) $existing->cash_account_id !== $cashAccountId
                         || $existing->collection_date->toDateString() !== (string) $data['collection_date']
-                        || $existing->payment_method?->value !== (string) $data['payment_method']) {
+                        || $existing->payment_method?->value !== (string) $data['payment_method']
+                        || $existing->reference_number !== ($data['reference_number'] ?? null)
+                        || $existing->manual_reason !== (isset($data['payment_submission_id']) ? null : trim($data['manual_reason']))) {
                         throw new BusinessRuleException('The idempotency key was already used with a different collection payload.');
                     }
 
@@ -449,6 +581,7 @@ class InvoiceService
                 'reference_number' => $data['reference_number'] ?? null,
                 'idempotency_key'  => $idempotencyKey,
                 'created_by'       => $by->id,
+                'manual_reason'    => isset($data['payment_submission_id']) ? null : trim($data['manual_reason']),
             ]);
 
             $arId = $this->configuredAccountId($this->accounts->ar());
@@ -462,7 +595,7 @@ class InvoiceService
                     ['account_id' => $arId,          'debit' => '0.00',  'credit' => $amount, 'description' => 'AR settled'],
                 ],
             ], $by);
-            $je = $this->journals->post($je, $by);
+            $je = $this->journals->postSystem($je, (int) $by->id);
             $coll->update(['journal_entry_id' => $je->id]);
             $this->receipts->issueForCollection($coll->fresh(['invoice']), $by);
 
@@ -744,10 +877,25 @@ class InvoiceService
             }
         }
 
+        $standardInvoice = ($data['lifecycle_type'] ?? 'standard') === 'standard';
+        if ($standardInvoice && ($salesOrderId === null || $deliveryId === null)) {
+            throw new BusinessRuleException('A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.');
+        }
+
         if ($deliveryId !== null) {
             $delivery = Delivery::query()->lockForUpdate()->find($deliveryId);
             if (! $delivery || (int) $delivery->sales_order_id !== $salesOrderId) {
                 throw new BusinessRuleException('Selected delivery does not belong to the selected sales order.');
+            }
+            if ($standardInvoice && $delivery->status !== DeliveryStatus::Confirmed) {
+                throw new BusinessRuleException('A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.');
+            }
+            if ($standardInvoice && ($delivery->invoice_id !== null || Invoice::query()
+                ->where('delivery_id', $delivery->id)
+                ->where('lifecycle_type', 'standard')
+                ->where('status', '!=', InvoiceStatus::Cancelled->value)
+                ->exists())) {
+                throw new BusinessRuleException('This delivery already has an invoice and cannot be invoiced again.');
             }
             app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
         }

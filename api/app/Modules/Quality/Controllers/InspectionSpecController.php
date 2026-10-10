@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\CRM\Models\Product;
+use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecRevision;
-use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Requests\UpsertInspectionSpecRequest;
 use App\Modules\Quality\Resources\InspectionSpecResource;
 use App\Modules\Quality\Resources\InspectionSpecRevisionResource;
@@ -32,6 +32,7 @@ class InspectionSpecController
     public function options(): JsonResponse
     {
         return response()->json(['data' => [
+            'checklist_capture_enabled' => (bool) config('inspection.checklist_capture_enabled'),
             'parameter_types' => array_map(
                 static fn (InspectionParameterType $type): array => ['value' => $type->value, 'label' => $type->label()],
                 InspectionParameterType::cases(),
@@ -69,14 +70,19 @@ class InspectionSpecController
             $data['items'],
             $request->user()->id,
             $data['notes'] ?? null,
+            $data['capture_method'] ?? 'measurement',
         );
+
         return new InspectionSpecResource($spec);
     }
 
     public function forProduct(Product $product): JsonResponse
     {
         $spec = $this->service->forProduct($product->id);
-        if (! $spec) return response()->json(['data' => null]);
+        if (! $spec) {
+            return response()->json(['data' => null]);
+        }
+
         return response()->json(['data' => (new InspectionSpecResource($spec))->resolve()]);
     }
 

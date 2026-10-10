@@ -12,7 +12,9 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\MRP\Events\MrpPlanGenerated;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
@@ -64,6 +66,7 @@ class NcrReplacementSoLineageTest extends TestCase
             ? WorkOrder::factory()->create(['product_id' => $product->id, 'quantity_target' => 10])
             : null;
         $original = WorkOrder::factory()->create([
+            'status' => 'closed',
             'product_id' => $product->id,
             'sales_order_id' => $order?->id,
             'sales_order_item_id' => $line?->id,
@@ -77,6 +80,17 @@ class NcrReplacementSoLineageTest extends TestCase
             'good_count' => 10,
             'reject_count' => 0,
         ]);
+        if ($output) {
+            $item = Item::factory()->create(['code' => $product->part_number, 'item_type' => 'finished_good']);
+            $zone = WarehouseZone::factory()->create(['zone_type' => 'finished_goods']);
+            $location = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+            $receipt = StockMovement::create([
+                'movement_type' => 'production_receipt', 'item_id' => $item->id, 'quantity' => '10', 'unit_cost' => '5.00', 'total_cost' => '50.00',
+                'to_location_id' => $location->id, 'reference_type' => 'work_order_output', 'reference_id' => $output->id, 'created_by' => $user->id, 'lot_number' => 'ORIGINAL-'.$output->id,
+            ]);
+            $output->forceFill(['production_receipt_movement_id' => $receipt->id])->save();
+            StockLevel::create(['item_id' => $item->id, 'location_id' => $location->id, 'quantity' => 10, 'reserved_quantity' => 0, 'weighted_avg_cost' => '5.00']);
+        }
         $inspection = Inspection::create([
             'inspection_number' => 'QC-T-'.substr(uniqid(), -8),
             'stage' => 'outgoing',
@@ -104,6 +118,16 @@ class NcrReplacementSoLineageTest extends TestCase
             ]);
         }
 
+        if ($disposition === NcrDisposition::Rework) {
+            $checker = User::factory()->create();
+            $sorter = User::factory()->create();
+            $inspection->forceFill(['inspector_id' => $user->id, 'reviewed_by' => $checker->id, 'reviewed_at' => now()])->save();
+            $ncr = app(NcrService::class)->setDisposition($ncr, 'rework', 'Sort completed.', null, $checker, '0', [
+                'inspected_quantity' => '10', 'performed_by' => $sorter->id, 'evidence_reference' => 'SORT-10', 'recovery_passed' => true,
+            ]);
+
+            return [WorkOrder::findOrFail($ncr->rework_work_order_id), $order, $line, $ncr, $original];
+        }
         $closed = app(NcrService::class)->close($ncr, $user);
         $replacementId = $disposition === NcrDisposition::Scrap
             ? $closed->replacement_work_order_id : $closed->rework_work_order_id;

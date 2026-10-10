@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
@@ -11,6 +12,7 @@ use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Enums\MoldEventType;
 use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Events\MoldShotLimitNearing;
@@ -94,6 +96,10 @@ class MoldService
     public function update(Mold $m, array $data): Mold
     {
         $mold = DB::transaction(function () use ($m, $data) {
+            $m = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id && array_intersect(array_keys($data), ['product_id', 'cavity_count', 'output_rate_per_hour', 'max_shots_before_maintenance', 'lifetime_max_shots', 'setup_time_minutes', 'status'])) {
+                throw new BusinessRuleException('Release active mold ownership before changing production capacity or product.');
+            }
             $m->update($data);
 
             return $m->fresh()->load('product:id,part_number,name,unit_of_measure');
@@ -105,7 +111,20 @@ class MoldService
 
     public function delete(Mold $m): void
     {
-        $m->delete();
+        DB::transaction(function () use ($m): void {
+            $mold = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($mold->current_work_order_id) {
+                throw new BusinessRuleException('Cannot archive an installed mold.');
+            }
+            if (MaintenanceWorkOrder::where('maintainable_type', 'mold')->where('maintainable_id', $mold->id)->where('status', 'in_progress')->exists()) {
+                throw new BusinessRuleException('Complete active maintenance before archiving equipment.');
+            }
+            if ($mold->asset_id !== null) {
+                throw new BusinessRuleException('Disassociate this asset before archiving the mold.');
+            }
+
+            $mold->delete();
+        });
         ProductionDashboardService::forgetCache();
     }
 
@@ -116,6 +135,10 @@ class MoldService
     public function syncCompatibility(Mold $m, array $machineIds): Mold
     {
         $mold = DB::transaction(function () use ($m, $machineIds) {
+            $m = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id) {
+                throw new BusinessRuleException('Release the installed mold before changing compatibility.');
+            }
             $m->compatibleMachines()->sync($machineIds);
 
             return $this->show($m->fresh());
@@ -135,6 +158,10 @@ class MoldService
     {
         $fresh = DB::transaction(function () use ($m, $count) {
             $row = Mold::lockForUpdate()->find($m->id);
+            if ($count < 0 || (int) $row->current_shot_count + $count > (int) $row->max_shots_before_maintenance
+                || ((int) $row->lifetime_max_shots > 0 && (int) $row->lifetime_total_shots + $count > (int) $row->lifetime_max_shots)) {
+                throw new BusinessRuleException('Mold maintenance or lifetime limit would be exceeded.');
+            }
             $beforePct = $row->shot_percentage;
             $row->current_shot_count = $row->current_shot_count + $count;
             $row->lifetime_total_shots = $row->lifetime_total_shots + $count;
@@ -174,6 +201,11 @@ class MoldService
     public function resetShotCount(Mold $m, ?string $performedBy = null): Mold
     {
         $mold = DB::transaction(function () use ($m, $performedBy) {
+            $m = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id) {
+                throw new BusinessRuleException('Release active equipment before resetting or retiring the mold.');
+            }
+
             MoldHistory::create([
                 'mold_id' => $m->id,
                 'event_type' => MoldEventType::MaintenanceCompleted->value,
@@ -182,6 +214,9 @@ class MoldService
                 'event_date' => now()->toDateString(),
                 'shot_count_at_event' => $m->current_shot_count,
             ]);
+            if (MaintenanceWorkOrder::query()->where('maintainable_type', 'mold')->where('maintainable_id', $m->id)->where('status', 'in_progress')->exists()) {
+                throw new BusinessRuleException('Complete active mold maintenance before changing service state.');
+            }
             $m->update([
                 'current_shot_count' => 0,
                 'status' => MoldStatus::Available->value,
@@ -201,6 +236,13 @@ class MoldService
     public function commission(Mold $m, ?string $performedBy = null): Mold
     {
         $mold = DB::transaction(function () use ($m, $performedBy) {
+            $m = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id) {
+                throw new BusinessRuleException('Cannot commission an installed mold.');
+            }
+            if (MaintenanceWorkOrder::query()->where('maintainable_type', 'mold')->where('maintainable_id', $m->id)->where('status', 'in_progress')->exists()) {
+                throw new BusinessRuleException('Complete active mold maintenance before changing service state.');
+            }
             $m->update([
                 'commissioned_at' => now()->toDateString(),
                 'status' => MoldStatus::Available->value,
@@ -229,6 +271,14 @@ class MoldService
     public function decommission(Mold $m, ?string $reason = null, ?string $performedBy = null): Mold
     {
         $mold = DB::transaction(function () use ($m, $reason, $performedBy) {
+            $m = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id) {
+                throw new BusinessRuleException('Release active equipment before resetting or retiring the mold.');
+            }
+
+            if (MaintenanceWorkOrder::query()->where('maintainable_type', 'mold')->where('maintainable_id', $m->id)->where('status', 'in_progress')->exists()) {
+                throw new BusinessRuleException('Complete active mold maintenance before changing service state.');
+            }
             $m->update([
                 'decommissioned_at' => now()->toDateString(),
                 'status' => MoldStatus::Retired->value,
@@ -267,6 +317,10 @@ class MoldService
     public function recordMaintenance(Mold $m, float $cost = 0.0, ?string $description = null, ?string $performedBy = null): Mold
     {
         $mold = DB::transaction(function () use ($m, $cost, $description, $performedBy) {
+            $m = Mold::query()->lockForUpdate()->findOrFail($m->id);
+            if ($m->current_work_order_id) {
+                throw new BusinessRuleException('Release installed mold before recording maintenance.');
+            }
             MoldHistory::create([
                 'mold_id' => $m->id,
                 'event_type' => MoldEventType::MaintenanceCompleted->value,

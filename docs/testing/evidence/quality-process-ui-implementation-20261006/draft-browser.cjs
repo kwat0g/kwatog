@@ -1,0 +1,25 @@
+const {chromium,expect}=require('/home/ec2-user/kwatog/spa/node_modules/@playwright/test');
+const fs=require('node:fs');
+const fixture=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'draft-fixture.json'),'utf8'));
+(async()=>{const browser=await chromium.launch({headless:true});try{
+const context=await browser.newContext({baseURL:'http://localhost:18080'});
+const headers={Origin:'http://localhost:18080',Referer:'http://localhost:18080/',Accept:'application/json'};
+await context.request.get('/sanctum/csrf-cookie',{headers});const token=(await context.cookies()).find(c=>c.name==='XSRF-TOKEN');
+const login=await context.request.post('/api/v1/auth/sign-in',{headers:{...headers,'X-XSRF-TOKEN':decodeURIComponent(token.value)},data:{email:fixture.account,password:'password'}});if(login.status()!==200)throw new Error(await login.text());
+const page=await context.newPage();await page.goto(`/quality/inspections/${fixture.id}`);
+const panel=page.getByRole('region',{name:'Inspection checklist',exact:true});
+await panel.getByRole('button',{name:'FAIL Surface condition',exact:true}).click();
+await panel.getByRole('textbox',{name:'Problem for Surface condition',exact:true}).fill('Crack observed.');
+await panel.getByRole('button',{name:'Yes',exact:true}).click();await panel.getByRole('spinbutton',{name:'Unique defective pieces',exact:true}).fill('1');
+await panel.getByRole('checkbox',{name:/I confirm all required/}).check();
+await page.waitForTimeout(650);
+let dialogs=0;page.on('dialog',async dialog=>{dialogs++;await dialog.dismiss();});
+await page.getByRole('link',{name:'Back to inspections',exact:true}).click();await expect(page).toHaveURL(new RegExp(fixture.id));expect(dialogs).toBe(1);
+page.removeAllListeners('dialog');page.on('dialog',dialog=>dialog.accept());await page.reload();
+await page.getByRole('button',{name:'Restore',exact:true}).click();
+await expect(panel.getByRole('textbox',{name:'Problem for Surface condition',exact:true})).toHaveValue('Crack observed.');
+await expect(panel.getByRole('spinbutton',{name:'Unique defective pieces',exact:true})).toHaveValue('1');
+await expect(panel.getByRole('checkbox',{name:/I confirm all required/})).not.toBeChecked();
+const saved=(await(await context.request.get(`/api/v1/quality/inspections/${fixture.id}`,{headers})).json()).data;expect(saved.result_version).toBe(0);expect(saved.status).toBe('draft');
+console.log('Real browser: unsaved navigation blocked, local draft restored including defect count, coverage not restored, server result unchanged.');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

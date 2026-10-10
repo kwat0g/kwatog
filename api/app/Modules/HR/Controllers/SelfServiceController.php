@@ -224,13 +224,13 @@ class SelfServiceController
         $historyLimit = $this->settings->requiredInt('self_service.history_limit', 1, 500);
         $activeRows = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
-            ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
+            ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value, LoanStatus::WriteOffPending->value])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
         $historyRows = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
-            ->whereNotIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
+            ->whereNotIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value, LoanStatus::WriteOffPending->value])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit($historyLimit)
@@ -367,15 +367,14 @@ class SelfServiceController
         $minHours = $this->settings->requiredFloat('attendance.ot.request_min_hours', 0.01);
         $maxHours = $this->settings->requiredFloat('attendance.ot.request_max_hours', $minHours);
         $futureDays = $this->settings->requiredInt('attendance.ot.request_future_days', 0);
-        $pastDays = $this->settings->requiredInt('attendance.ot.request_past_days', 0);
         $today = now()->startOfDay();
 
         $validated = $request->validate([
-            'date' => ['required', 'date', 'after_or_equal:'.$today->copy()->subDays($pastDays)->toDateString(), 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
+            'date' => ['required', 'date', 'after_or_equal:'.$today->toDateString(), 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
             'hours_requested' => ['required', 'numeric', 'min:'.$minHours, 'max:'.$maxHours],
             'reason' => ['required', 'string', 'min:5', 'max:2000'],
         ], [
-            'date.after_or_equal' => 'Overtime is outside the configured request window.',
+            'date.after_or_equal' => 'Choose today or a later date.',
             'date.before_or_equal' => 'Overtime is outside the configured request window.',
             'hours_requested.max' => 'Overtime exceeds the configured daily limit.',
             'reason.min' => 'Please provide a meaningful reason (at least 5 characters).',

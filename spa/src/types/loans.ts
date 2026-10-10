@@ -66,6 +66,7 @@ export interface LoanTypeOption {
  interest_rate: string;
  interest_rate_percent?: string;
  approval_steps: number;
+ vp_approval_threshold?: string | null;
 }
 
 export interface LoanLimits {

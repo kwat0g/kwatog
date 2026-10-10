@@ -124,6 +124,7 @@ class PayrollPeriodResource extends JsonResource
             // GL link (set by service.show() when the period has been posted).
             // We expose only the human-readable entry_number, never the integer id.
             'gl_entry_number'     => $this->resource->gl_entry_number ?? null,
+            'gl_reversal'         => $this->resource->gl_reversal ?? null,
             'gl_handoff_status'       => $this->gl_handoff_status?->value ?? PayrollGlHandoffStatus::NotStarted->value,
             'gl_handoff_status_label' => $this->gl_handoff_status?->label() ?? PayrollGlHandoffStatus::NotStarted->label(),
             'gl_handoff_note'         => $this->gl_handoff_note,
@@ -183,6 +184,16 @@ class PayrollPeriodResource extends JsonResource
     {
         $status = $this->status?->value ?? (string) $this->getRawOriginal('status');
         $completed = static fn (array $statuses): string => in_array($status, $statuses, true) ? 'done' : 'pending';
+
+        if ($status === 'voided') {
+            return [
+                ['key' => 'draft', 'label' => 'Draft', 'state' => 'done'],
+                ['key' => 'processing', 'label' => 'Computed', 'state' => 'done'],
+                ['key' => 'approved', 'label' => 'Approved', 'state' => 'done'],
+                ['key' => 'finalized', 'label' => 'Finalized', 'state' => 'done'],
+                ['key' => 'voided', 'label' => 'Voided', 'state' => 'done'],
+            ];
+        }
 
         return [
             ['key' => 'draft', 'label' => 'Draft', 'state' => 'done'],

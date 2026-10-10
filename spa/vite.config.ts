@@ -12,12 +12,13 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
+    watch: { ignored: ['**/*test-results/**', '**/.playwright-artifacts*/**', '**/e2e-real/results/**', '**/*playwright*report/**'] },
     // Native Windows development serves the SPA on the standard localhost
     // port; Laravel remains on 8000 and receives the API proxy traffic below.
     port: 80,
     strictPort: true,
     // Direct proxy for local dev without docker (kept for convenience).
-    proxy: {
+    proxy: process.env.VITE_DISABLE_API_PROXY === 'true' ? {} : {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
       '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
     },
@@ -25,7 +26,7 @@ export default defineConfig({
       // When accessed through the Nginx proxy on port 80, the browser
       // must connect its HMR WebSocket to the same origin — not Vite's
       // internal port 5173. Override clientPort so it matches NGINX_PORT.
-      protocol: 'ws',
+      protocol: process.env.VITE_HMR_PROTOCOL === 'wss' ? 'wss' : 'ws',
       host: process.env.VITE_HMR_HOST || 'localhost',
       clientPort: Number(process.env.VITE_HMR_PORT) || Number(process.env.NGINX_PORT) || 80,
     },

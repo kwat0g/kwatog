@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import { focusFirstInvalidField, reportMutationError } from '@/lib/formErrors';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
@@ -48,11 +49,19 @@ export default function BudgetCreatePage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [hydrated, setHydrated] = useState(false);
 
-  const { data: fiscalYears, isLoading: yearsLoading } = useQuery<FiscalYear[]>({ queryKey: ['budget-fiscal-years'], queryFn: () => budgetingApi.fiscalYears() });
-  const { data: budget } = useQuery<Budget>({ queryKey: ['budget', id], queryFn: () => budgetingApi.show(id!), enabled: editing });
-  const { data: accountPage } = useQuery({ queryKey: ['accounts', 'budget-options'], queryFn: () => accountsApi.list({ per_page: 200 }) });
-  const { data: departments } = useQuery({ queryKey: ['departments'], queryFn: () => departmentsApi.tree() });
-  const { data: budgetOptions } = useQuery({ queryKey: ['budgets', 'options'], queryFn: () => budgetingApi.options(), staleTime: 300_000 });
+  const yearsQuery = useQuery<FiscalYear[]>({ queryKey: ['budget-fiscal-years'], queryFn: () => budgetingApi.fiscalYears() });
+  const budgetQuery = useQuery<Budget>({ queryKey: ['budget', id], queryFn: () => budgetingApi.show(id!), enabled: editing });
+  const accountsQuery = useQuery({ queryKey: ['accounts', 'budget-options'], queryFn: () => accountsApi.list({ per_page: 200 }) });
+  const departmentsQuery = useQuery({ queryKey: ['departments'], queryFn: () => departmentsApi.tree() });
+  const optionsQuery = useQuery({ queryKey: ['budgets', 'options'], queryFn: () => budgetingApi.options(), staleTime: 300_000 });
+  const fiscalYears = yearsQuery.data;
+  const budget = budgetQuery.data;
+  const accountPage = accountsQuery.data;
+  const departments = departmentsQuery.data;
+  const budgetOptions = optionsQuery.data;
+  const requiredLookups = [yearsQuery, accountsQuery, optionsQuery];
+  const lookupFailed = requiredLookups.some(query => query.isError);
+  const lookupPending = requiredLookups.some(query => query.isFetching);
 
   useEffect(() => {
     if (hydrated) return;
@@ -102,6 +111,7 @@ export default function BudgetCreatePage() {
   });
 
   const submit = () => {
+    if (lookupFailed || lookupPending || (editing && (budgetQuery.isError || budgetQuery.isFetching))) return;
     const next: Record<string, string> = {};
     if (!fiscalYearId) next.fiscal_year_id = 'Select a fiscal year.';
     if (!name.trim()) next.name = 'Enter a budget name.';
@@ -124,17 +134,29 @@ export default function BudgetCreatePage() {
   const selectedYear = fiscalYears?.find((fy) => fy.id === fiscalYearId);
   const selectedDepartment = departments?.find((department: { id: string }) => department.id === departmentId);
 
-  if (yearsLoading || (editing && !budget)) return <SkeletonDetail />;
+  if (editing && budgetQuery.isError && !budget) return <EmptyState icon="alert-circle" title="Budget could not be loaded" action={<Button variant="secondary" onClick={() => void budgetQuery.refetch()}>Retry budget</Button>} />;
+  if (editing && budgetQuery.isLoading && !budget) return <SkeletonDetail />;
 
   return (
     <div className="p-5 space-y-6">
       <PageHeader title={editing ? 'Edit Budget' : 'Create Budget'} subtitle="Set monthly allocations per eligible leaf account" backTo={editing ? `/budgeting/${id}` : '/budgeting'} backLabel="Budgeting" />
+      {lookupFailed && <div role="alert" className="text-sm text-danger-fg">
+        Budget options could not be loaded. Saving requires current fiscal years, accounts, and budget policy.
+        <Button type="button" variant="secondary" size="sm" onClick={() => { void yearsQuery.refetch(); void accountsQuery.refetch(); void departmentsQuery.refetch(); void optionsQuery.refetch(); }}>Retry budget options</Button>
+      </div>}
+      {departmentsQuery.isError && <div role="alert" className="text-sm text-warning-fg">
+        Department choices could not be loaded. You can create a company-wide budget or retry the department list.
+        <Button type="button" variant="secondary" size="sm" onClick={() => void departmentsQuery.refetch()}>Retry departments</Button>
+      </div>}
+      {editing && budgetQuery.isError && budget && <div role="alert" className="text-sm text-danger-fg">
+        Budget could not be refreshed. <Button type="button" variant="secondary" size="sm" onClick={() => void budgetQuery.refetch()}>Retry budget</Button>
+      </div>}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Budget Details"><div className="space-y-4">
-          <Select label="Fiscal Year" value={fiscalYearId} onChange={(event) => setFiscalYearId(event.target.value)} required error={fieldErrors.fiscal_year_id}><option value="">Select fiscal year...</option>{(fiscalYears ?? []).map((fy) => <option key={fy.id} value={fy.id}>FY {fy.year} ({fy.status_label ?? fy.status})</option>)}</Select>
+          <Select searchable label="Fiscal Year" value={fiscalYearId} onChange={(event) => setFiscalYearId(event.target.value)} required error={fieldErrors.fiscal_year_id}><option value="">Select fiscal year...</option>{(fiscalYears ?? []).map((fy) => <option key={fy.id} value={fy.id}>FY {fy.year} ({fy.status_label ?? fy.status})</option>)}</Select>
           <Input label="Budget Name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Annual operating budget" required error={fieldErrors.name} />
           <Select label="Budget Type" value={budgetType} onChange={(event) => setBudgetType(event.target.value)} required error={fieldErrors.budget_type}><option value="">— Select budget type —</option>{(budgetOptions?.budget_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
-          <Select label="Department (optional)" value={departmentId ?? ''} onChange={(event) => setDepartmentId(event.target.value || null)}><option value="">Company-wide</option>{(departments ?? []).map((department: { id: string; name: string }) => <option key={department.id} value={department.id}>{department.name}</option>)}</Select>
+          <Select searchable label="Department (optional)" helper="Leave blank for company-wide budget." value={departmentId ?? ''} onChange={(event) => setDepartmentId(event.target.value || null)}><option value="">Company-wide</option>{(departments ?? []).map((department: { id: string; name: string }) => <option key={department.id} value={department.id}>{department.name}</option>)}</Select>
         </div></Panel>
         <Panel title="Summary"><div className="space-y-3 text-sm">
           <div className="flex justify-between py-2 border-b border-default/50"><span className="text-muted">Fiscal Year</span><span className="font-medium">{selectedYear?.year ?? '—'}</span></div>
@@ -148,11 +170,11 @@ export default function BudgetCreatePage() {
       <Panel title="Line Items" meta={<Button size="sm" onClick={addLineItem}><LuPlus size={14} /> Add Line</Button>}>
         {fieldErrors.line_items && <p className="mb-2 text-xs text-danger-fg" role="alert">{fieldErrors.line_items}</p>}
         <div className="overflow-x-auto"><table className={tableCls}><thead><tr className={theadTrCls}><Th className="min-w-[230px] sticky left-0 bg-canvas">Account</Th>{MONTHS.map((month) => <Th align="right" className="font-mono w-[60px]" key={month.key}>{month.label}</Th>)}<Th align="right" className="w-[80px]">Annual</Th><Th className="w-[40px]" /></tr></thead><tbody>
-          {lineItems.map((line, index) => <tr key={index} className={trCls}><Td className="sticky left-0 bg-canvas"><Select fieldSize="sm" aria-label="Account" value={line.account_id} onChange={(event) => updateLineItem(index, 'account_id', event.target.value)}><option value="">Select account…</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</Select></Td>{MONTHS.map((month) => <Td key={month.key}><Input fieldSize="sm" type="number" min="0" step="0.01" aria-label={`${month.label} amount`} className="text-right font-mono tabular-nums" value={line[month.key]} onChange={(event) => updateLineItem(index, month.key, event.target.value)} placeholder="0.00" /></Td>)}<Td align="right" mono className="font-medium">{formatCompactCurrency(calcAnnual(line), 1_000, 'K')}</Td><Td><Button type="button" variant="ghost" size="sm" iconOnly icon={<LuTrash2 size={14} />} onClick={() => removeLineItem(index)} title="Remove line" aria-label="Remove line" className="text-muted hover:text-danger-fg" /></Td></tr>)}
+          {lineItems.map((line, index) => <tr key={index} className={trCls}><Td className="sticky left-0 bg-canvas"><Select searchable fieldSize="sm" aria-label="Account" value={line.account_id} onChange={(event) => updateLineItem(index, 'account_id', event.target.value)}><option value="">Select account…</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</Select></Td>{MONTHS.map((month) => <Td key={month.key}><Input fieldSize="sm" type="number" min="0" step="0.01" aria-label={`${month.label} amount`} className="text-right font-mono tabular-nums" value={line[month.key]} onChange={(event) => updateLineItem(index, month.key, event.target.value)} placeholder="0.00" /></Td>)}<Td align="right" mono className="font-medium">{formatCompactCurrency(calcAnnual(line), 1_000, 'K')}</Td><Td><Button type="button" variant="ghost" size="sm" iconOnly icon={<LuTrash2 size={14} />} onClick={() => removeLineItem(index)} title="Remove line" aria-label="Remove line" className="text-muted hover:text-danger-fg" /></Td></tr>)}
         </tbody></table></div>
       </Panel>
 
-      <div className="flex justify-end gap-3"><Button variant="secondary" onClick={() => navigate(editing ? `/budgeting/${id}` : '/budgeting')}>Cancel</Button><Button variant="primary" onClick={submit} loading={saveMutation.isPending} disabled={!fiscalYearId || !name.trim()}>{editing ? 'Save Draft' : 'Create Budget'}</Button></div>
+      <div className="flex justify-end gap-3"><Button variant="secondary" onClick={() => navigate(editing ? `/budgeting/${id}` : '/budgeting')}>Cancel</Button><Button variant="primary" onClick={submit} loading={saveMutation.isPending} disabled={lookupFailed || lookupPending || (editing && (budgetQuery.isError || budgetQuery.isFetching)) || !fiscalYearId || !name.trim()}>{editing ? 'Save Draft' : 'Create Budget'}</Button></div>
     </div>
   );
 }

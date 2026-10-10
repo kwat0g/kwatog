@@ -9,6 +9,7 @@ use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Enums\SupplierAgingBucket;
 use App\Modules\B2B\Policies\SupplierPoCapabilities;
@@ -88,10 +89,10 @@ class SupplierPortalService
                     PurchaseOrderStatus::PartiallyReceived,
                 ]))
                 // Include supplier_declined only if the latest response is still pending
-                ->orWhere(function ($q): void {
-                    $q->where('status', PurchaseOrderStatus::SupplierDeclined->value)
-                        ->whereHas('latestResponse', fn ($r) => $r->where('status', 'pending'));
-                });
+                    ->orWhere(function ($q): void {
+                        $q->where('status', PurchaseOrderStatus::SupplierDeclined->value)
+                            ->whereHas('latestResponse', fn ($r) => $r->where('status', 'pending'));
+                    });
             })->count();
 
         // POs with at least one line quantity > quantity_received (still need to be fulfilled)
@@ -100,8 +101,10 @@ class SupplierPortalService
             ->whereHas('items', fn ($query) => $query->whereColumn('quantity', '>', 'quantity_received'))
             ->count();
 
-        $unpaidInvoiceCount = Bill::where('vendor_id', $vendorId)
-            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->count();
+        $unpaidInvoiceCount = SupplierInvoice::where('vendor_id', $vendorId)
+            ->whereNull('voided_at')
+            ->whereHas('bills', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value]))
+            ->count();
 
         $totalUnpaid = Money::add(...Bill::where('vendor_id', $vendorId)
             ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
@@ -112,12 +115,18 @@ class SupplierPortalService
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
             ->where(fn ($query) => $this->whereSupplierVisible($query))
             ->with(['items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
-            ->withExists(['goodsReceiptNotes as has_invoiceable_receipt' => fn ($q) => SupplierPoCapabilities::constrainInvoiceable($q)])
+            ->withExists([
+                'goodsReceiptNotes as has_invoiceable_receipt' => fn ($q) => SupplierPoCapabilities::constrainInvoiceable($q),
+                'supplierReturns as has_qc_replacement_return' => fn ($q) => $q
+                    ->where('source_key', 'like', 'grn-rejection:%')
+                    ->whereNull('replacement_purchase_order_id')
+                    ->whereNotIn('status', ['cancelled', 'rejected']),
+            ])
             ->orderByDesc('created_at')->limit(5)->get();
 
-        $recentInvoices = Bill::where('vendor_id', $vendorId)
-            ->whereIn('status', $this->supplierVisibleBillStatusValues())
-            ->with('purchaseOrder:id,po_number')
+        $recentInvoices = SupplierInvoice::where('vendor_id', $vendorId)
+            ->whereNull('voided_at')
+            ->with(['purchaseOrder:id,po_number', 'bills.goodsReceiptNote:id,grn_number', 'bills.items', 'bills.payments', 'documents'])
             ->orderByDesc('created_at')->limit(5)->get();
 
         // RFQs still waiting for this supplier's quotation.
@@ -145,7 +154,13 @@ class SupplierPortalService
         $query = PurchaseOrder::where('vendor_id', $vendorId)
             ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
             ->withCount('goodsReceiptNotes')
-            ->withExists(['goodsReceiptNotes as has_invoiceable_receipt' => fn ($q) => SupplierPoCapabilities::constrainInvoiceable($q)])
+            ->withExists([
+                'goodsReceiptNotes as has_invoiceable_receipt' => fn ($q) => SupplierPoCapabilities::constrainInvoiceable($q),
+                'supplierReturns as has_qc_replacement_return' => fn ($q) => $q
+                    ->where('source_key', 'like', 'grn-rejection:%')
+                    ->whereNull('replacement_purchase_order_id')
+                    ->whereNotIn('status', ['cancelled', 'rejected']),
+            ])
             ->where(fn ($query) => $this->whereSupplierVisible($query));
 
         if (! empty($filters['status'])) {
@@ -193,7 +208,10 @@ class SupplierPortalService
             // array is non-empty) had never once displayed.
             'goodsReceiptNotes' => static fn ($query) => $query
                 ->select(['id', 'purchase_order_id', 'grn_number', 'received_date', 'status', 'rejected_reason'])
-                ->with(['bills' => fn ($q) => $q->select(['id', 'goods_receipt_note_id', 'status', 'supplier_invoice_number'])])
+                ->with(['bills' => fn ($q) => $q
+                    ->select(['id', 'goods_receipt_note_id', 'status', 'provenance_type', 'supplier_invoice_number', 'supplier_invoice_id', 'total_amount'])
+                    ->withCount('payments')
+                    ->with(['items', 'supplierInvoice:id,number'])])
                 ->orderBy('id'),
             // Restoring the rows above re-arms a boundary that was previously
             // masked by the same bug: `bills` had no status predicate, so the
@@ -201,12 +219,21 @@ class SupplierPortalService
             // deliberately hides would have crossed here instead. Both endpoints
             // now read the one allowlist.
             'bills' => fn ($query) => $query
-                ->select(['id', 'purchase_order_id', 'bill_number', 'total_amount', 'amount_paid', 'balance', 'status', 'due_date', 'supplier_invoice_number'])
+                ->select(['id', 'purchase_order_id', 'bill_number', 'total_amount', 'amount_paid', 'balance', 'status', 'due_date', 'supplier_invoice_number', 'supplier_invoice_id'])
+                ->with('supplierInvoice:id,number')
                 ->whereIn('status', $this->supplierVisibleBillStatusValues())
                 ->orderBy('id'),
             'purchaseRequest:id,pr_number',
-            'supplierShipment',
-            'supplierShipments',
+            'supplierShipment' => fn ($query) => $query
+                ->withExists(['goodsReceiptNotes as received_grn_exists' => fn ($q) => $q->whereNotNull('received_date')])
+                ->with('items.purchaseOrderItem', 'purchaseOrder', 'returnRequest:id,rma_number,replacement_due_date'),
+            'supplierShipments' => fn ($query) => $query
+                ->withExists(['goodsReceiptNotes as received_grn_exists' => fn ($q) => $q->whereNotNull('received_date')])
+                ->with('items.purchaseOrderItem', 'purchaseOrder', 'returnRequest:id,rma_number,replacement_due_date'),
+            'supplierReturns' => fn ($query) => $query
+                ->whereNotIn('status', ['draft', 'pending_approval', 'cancelled', 'rejected'])
+                ->with('items.item:id,code,name,unit_of_measure', 'replacementPurchaseOrder:id,po_number')
+                ->orderBy('id'),
         ]);
 
         // The `status_label` this used to setAttribute() here is already derived
@@ -234,7 +261,6 @@ class SupplierPortalService
             $portalUserId,
             [
                 'type' => 'accept',
-                'proposed_delivery_date' => $data['expected_delivery_date'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ],
         ));
@@ -338,7 +364,7 @@ class SupplierPortalService
     public function statementOfAccount(int $vendorId): array
     {
         $openBills = Bill::where('vendor_id', $vendorId)
-            ->with('purchaseOrder:id,po_number')
+            ->with(['purchaseOrder:id,po_number', 'supplierInvoice.bills:id,supplier_invoice_id,status'])
             ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
             ->orderBy('due_date')
             ->get();
@@ -354,6 +380,36 @@ class SupplierPortalService
             }
             $totalOutstanding = Money::add($totalOutstanding, $balance);
         }
+
+        $openInvoices = $openBills->groupBy(static fn (Bill $bill): string => $bill->supplier_invoice_id
+            ? 'invoice:'.$bill->supplier_invoice_id : 'bill:'.$bill->id)
+            ->map(static function ($group): array {
+                $first = $group->first();
+                $invoice = $first->supplierInvoice;
+                $balance = $group->reduce(
+                    static fn (string $sum, Bill $bill): string => Money::add($sum, (string) $bill->balance),
+                    Money::zero(),
+                );
+                $partiallyPaid = $invoice?->bills->contains(static fn (Bill $bill): bool => in_array($bill->status, [BillStatus::Partial, BillStatus::Paid], true)) ?? false;
+
+                return [
+                    'id' => $invoice?->hash_id ?? $first->hash_id,
+                    'supplier_invoice_number' => $invoice?->number,
+                    'bill_number' => $group->count().' AP bill'.($group->count() === 1 ? '' : 's'),
+                    'date' => optional($invoice?->date ?? $first->date)->toDateString(),
+                    'due_date' => $group->sortBy('due_date')->first()?->due_date?->toDateString(),
+                    'total_amount' => (string) ($invoice?->gross_total ?? $first->total_amount),
+                    'balance' => $balance,
+                    'status' => $partiallyPaid ? 'partial' : 'unpaid',
+                    'status_label' => $partiallyPaid ? 'Partially paid' : 'Unpaid',
+                    'is_overdue' => $group->contains(static fn (Bill $bill): bool => $bill->isOverdue()),
+                    'aging_bucket' => $first->agingBucket(),
+                    'purchase_order' => $first->purchaseOrder ? [
+                        'id' => $first->purchaseOrder->hash_id,
+                        'po_number' => $first->purchaseOrder->po_number,
+                    ] : null,
+                ];
+            })->values();
 
         $vendor = Vendor::find($vendorId);
 
@@ -372,6 +428,7 @@ class SupplierPortalService
                 SupplierAgingBucket::cases(),
             ),
             'open_bills' => $openBills,
+            'open_invoices' => $openInvoices,
             'as_of_date' => now()->toDateString(),
         ];
     }

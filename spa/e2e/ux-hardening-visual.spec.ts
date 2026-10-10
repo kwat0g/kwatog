@@ -52,7 +52,7 @@ async function offscreenElements(page: Page): Promise<string[]> {
 test.describe('responsive grids', () => {
   test('an invoice detail page fits a 375px viewport', async ({ page }) => {
     await page.setViewportSize(PHONE);
-    await page.route('**/api/v1/accounting/invoices/*', async (route) => {
+    await page.route('**/api/v1/invoices/inv1', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -69,6 +69,7 @@ test.describe('responsive grids', () => {
       });
     });
     await loginAs(page, 'finance', '/accounting/invoices/inv1');
+    await expect(page.getByText('INV-202604-0008', { exact: true })).toBeVisible();
     await page.waitForTimeout(400);
 
     expect(await offscreenElements(page)).toEqual([]);
@@ -194,7 +195,7 @@ test.describe('pagination', () => {
   test('the rows-per-page control renders next to the pager', async ({ page }) => {
     await page.setViewportSize(DESKTOP);
     await page.route('**/api/v1/hr/employees*', async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -222,7 +223,7 @@ test.describe('pagination', () => {
 test.describe('column-selectable export', () => {
   test('the employees list offers a column-selectable export', async ({ page }) => {
     await page.route('**/api/v1/hr/employees*', async (r) => {
-      if (r.request().method() !== 'GET') return r.continue();
+      if (r.request().method() !== 'GET') return r.fallback();
       await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         data: [], meta: { current_page: 1, last_page: 1, per_page: 25, total: 0, from: 0, to: 0 } }) });
     });

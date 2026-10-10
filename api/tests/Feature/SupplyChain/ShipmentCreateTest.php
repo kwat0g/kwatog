@@ -47,7 +47,7 @@ class ShipmentCreateTest extends TestCase
         return User::factory()->create(['role_id' => $role->id]);
     }
 
-    private function approvedPo(User $by): PurchaseOrder
+    private function shipmentReadyPo(User $by): PurchaseOrder
     {
         $vendor = Vendor::create(['name' => 'Vendor '.uniqid(), 'is_active' => true]);
         $po = PurchaseOrder::create([
@@ -59,7 +59,7 @@ class ShipmentCreateTest extends TestCase
             'total_amount' => '5600.00',
             'created_by' => $by->id,
         ]);
-        $po->forceFill(['status' => 'approved'])->save();
+        $po->forceFill(['status' => 'sent'])->save();
 
         return $po;
     }
@@ -67,7 +67,7 @@ class ShipmentCreateTest extends TestCase
     public function test_create_shipment_persists_container_number(): void
     {
         $user = $this->impexUser();
-        $po = $this->approvedPo($user);
+        $po = $this->shipmentReadyPo($user);
 
         $response = $this->actingAs($user)
             ->postJson('/api/v1/supply-chain/shipments', [
@@ -92,7 +92,7 @@ class ShipmentCreateTest extends TestCase
     public function test_create_shipment_without_container_number(): void
     {
         $user = $this->impexUser();
-        $po = $this->approvedPo($user);
+        $po = $this->shipmentReadyPo($user);
 
         $this->actingAs($user)
             ->postJson('/api/v1/supply-chain/shipments', [
@@ -111,7 +111,7 @@ class ShipmentCreateTest extends TestCase
     public function test_update_meta_persists_container_number(): void
     {
         $user = $this->impexUser();
-        $po = $this->approvedPo($user);
+        $po = $this->shipmentReadyPo($user);
 
         $created = $this->actingAs($user)
             ->postJson('/api/v1/supply-chain/shipments', [

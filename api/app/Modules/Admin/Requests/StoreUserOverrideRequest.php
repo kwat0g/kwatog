@@ -28,7 +28,15 @@ class StoreUserOverrideRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'permission_slug' => ['required', 'string', 'exists:permissions,slug'],
+            'permission_slug' => [
+                'required',
+                'string',
+                Rule::notIn([
+                    'accounting.journal.self_post_override',
+                    'accounting.journal.self_post_override.retired',
+                ]),
+                'exists:permissions,slug',
+            ],
             'type'            => ['required', Rule::in([
                 PermissionOverrideType::Grant->value,
                 PermissionOverrideType::Revoke->value,

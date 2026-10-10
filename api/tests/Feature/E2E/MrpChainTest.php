@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\E2E;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Attendance\Models\Shift;
+use App\Modules\Attendance\Services\ShiftAssignmentService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\PricingMethod;
@@ -12,6 +14,8 @@ use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
@@ -25,7 +29,13 @@ use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderCrew;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Services\InspectionSpecService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\UomSeeder;
@@ -204,6 +214,30 @@ class MrpChainTest extends TestCase
         ]);
     }
 
+    private function productionEmployee(): Employee
+    {
+        $department = Department::firstOrCreate(['code' => 'PROD'], ['name' => 'Production', 'is_active' => true]);
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+            'employee_id' => $employee->id,
+        ]);
+        $shift = Shift::firstOrCreate(['name' => 'MRP chain full-day coverage'], [
+            'start_time' => '00:00',
+            'end_time' => '00:00',
+            'is_active' => true,
+        ]);
+        app(ShiftAssignmentService::class)->assignToEmployee(
+            $employee->id,
+            $shift->id,
+            now()->subDay()->toDateString(),
+            null,
+            [1, 2, 3, 4, 5, 6, 7],
+        );
+
+        return $employee;
+    }
+
     // ------------------------------------------------------------------
     // 1. Confirm → plan → auto-PR for shortages, missing-BOM diagnostics
     // ------------------------------------------------------------------
@@ -293,6 +327,10 @@ class MrpChainTest extends TestCase
     public function test_rerun_reconciles_children_and_work_order_lifecycle(): void
     {
         $product = $this->makeProduct();
+        app(InspectionSpecService::class)->upsertForProduct($product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual',
+                'acceptance_criterion' => 'No cracks, contamination, or visible surface damage.', 'is_critical' => false],
+        ], $this->productionManager->id);
         $resin = $this->makeRawItem();
         $this->createBomOverHttp($product, $resin, '2.0000');
 
@@ -345,20 +383,13 @@ class MrpChainTest extends TestCase
         $wo->refresh();
         $this->assertSame($planV2->id, $wo->mrp_plan_id, 'rerun repoints the reused WO to the new plan');
 
-        // ------------------------------------------------------------------
-        // Wrong time: confirm without machine + mold is refused.
-        // ------------------------------------------------------------------
+        // A confirmation without the reviewed schedule and crew snapshot is refused.
         $this->actingAs($this->ppcHead)
             ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", [])
-            ->assertStatus(422);
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['schedule_id', 'schedule_updated_at', 'expected_crew_id']);
 
-        // Wrong actor: the sales officer cannot confirm work orders.
         $machine = Machine::factory()->create(['status' => 'idle']);
-        $this->actingAs($this->soOfficer)
-            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", [
-                'machine_id' => $machine->id,
-            ])
-            ->assertStatus(403);
 
         // Wrong data: a mold for a DIFFERENT product is refused.
         $otherMold = Mold::create([
@@ -374,16 +405,6 @@ class MrpChainTest extends TestCase
             'lifetime_max_shots' => 1000000,
             'status' => 'available',
         ]);
-        $this->actingAs($this->ppcHead)
-            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", [
-                'machine_id' => $machine->id,
-                'mold_id' => $otherMold->id,
-            ])
-            ->assertStatus(422);
-
-        // ------------------------------------------------------------------
-        // ACT — confirm onto a compatible machine + mold: materials reserved.
-        // ------------------------------------------------------------------
         $mold = Mold::create([
             'mold_code' => 'MD-'.substr(uniqid(), -5),
             'name' => 'Relay cover mold',
@@ -399,17 +420,91 @@ class MrpChainTest extends TestCase
         ]);
         $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
+        $employee = $this->productionEmployee();
         $this->actingAs($this->ppcHead)
-            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", [
-                'machine_id' => $machine->id,
-                'mold_id' => $mold->id,
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/assignment-suggestion", [
+                'minimum_workers' => 1,
+                'maximum_workers' => 1,
             ])
+            ->assertOk()
+            ->assertJsonPath('data.schedule.machine_id', $machine->hash_id)
+            ->assertJsonPath('data.schedule.mold_id', $mold->hash_id);
+
+        $schedule = ProductionSchedule::query()
+            ->where('work_order_id', $wo->id)
+            ->whereNull('rework_ncr_id')
+            ->where('reserves_capacity', true)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('pending', $schedule->status->value);
+        $this->assertSame(WorkOrderStatus::Planned->value, $wo->fresh()->status->value);
+        $this->assertSame(0, \App\Modules\Inventory\Models\MaterialReservation::query()
+            ->where('work_order_id', $wo->id)->count());
+
+        $this->actingAs($this->ppcHead)
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/crew", [
+                'employee_ids' => [$employee->hash_id],
+                'recorder_employee_id' => $employee->hash_id,
+                'minimum_workers' => 1,
+                'maximum_workers' => 1,
+                'expected_crew_id' => null,
+                'reason' => 'Initial crew assignment for MRP chain.',
+            ])
+            ->assertOk();
+
+        $crew = WorkOrderCrew::query()
+            ->where('work_order_id', $wo->id)
+            ->whereNull('rework_ncr_id')
+            ->whereNull('ended_at')
+            ->firstOrFail();
+        $schedule->refresh();
+        $this->assertSame('pending', $schedule->status->value);
+        $this->assertSame(WorkOrderStatus::Planned->value, $wo->fresh()->status->value);
+
+        $confirmPayload = [
+            'schedule_id' => $schedule->hash_id,
+            'schedule_updated_at' => $schedule->updated_at->toIso8601String(),
+            'expected_crew_id' => $crew->hash_id,
+            'machine_id' => $machine->hash_id,
+            'mold_id' => $mold->hash_id,
+        ];
+
+        // A sales officer cannot confirm an otherwise valid reviewed assignment.
+        $this->actingAs($this->soOfficer)
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", $confirmPayload)
+            ->assertForbidden();
+
+        // A mold for another product is refused without changing the reviewed assignment.
+        $beforeBadMold = [
+            'work_order_status' => $wo->fresh()->status->value,
+            'schedule_status' => $schedule->fresh()->status->value,
+            'reservations' => \App\Modules\Inventory\Models\MaterialReservation::query()
+                ->where('work_order_id', $wo->id)->count(),
+        ];
+        $this->actingAs($this->ppcHead)
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", array_replace($confirmPayload, [
+                'mold_id' => $otherMold->hash_id,
+            ]))
+            ->assertUnprocessable();
+        $this->assertSame($beforeBadMold['work_order_status'], $wo->fresh()->status->value);
+        $this->assertSame($beforeBadMold['schedule_status'], $schedule->fresh()->status->value);
+        $this->assertSame($beforeBadMold['reservations'], \App\Modules\Inventory\Models\MaterialReservation::query()
+            ->where('work_order_id', $wo->id)->count());
+
+        // PPC confirms only after reviewing the current schedule and crew; stock is reserved once.
+        $this->actingAs($this->ppcHead)
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", $confirmPayload)
             ->assertOk();
 
         $wo->refresh();
         $this->assertSame(WorkOrderStatus::Confirmed->value, $wo->status->value);
         $this->assertSame($machine->id, $wo->machine_id);
         $this->assertSame($mold->id, $wo->mold_id);
+        $this->assertSame('confirmed', $schedule->fresh()->status->value);
+        $this->assertSame($crew->id, WorkOrderCrew::query()
+            ->where('work_order_id', $wo->id)
+            ->whereNull('ended_at')
+            ->value('id'));
         // Materials were reserved against stock at confirm.
         $this->assertSame(
             1,
@@ -420,23 +515,32 @@ class MrpChainTest extends TestCase
 
         // Double confirm is refused — already past planned.
         $this->actingAs($this->ppcHead)
-            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", [
-                'machine_id' => $machine->id,
-                'mold_id' => $mold->id,
-            ])
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/confirm", $confirmPayload)
             ->assertStatus(409);
 
         // ------------------------------------------------------------------
         // ACT — production starts the WO: InProgress, machine flips to
         // running (production_manager holds the lifecycle permission).
         // ------------------------------------------------------------------
+        $this->travelTo($schedule->scheduled_start);
         $this->actingAs($this->productionManager)
-            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/start", [])
+            ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/start", [
+                'expected_crew_id' => $crew->hash_id,
+                'presence_confirmed_employee_ids' => [$employee->hash_id],
+            ])
             ->assertOk();
 
         $wo->refresh();
         $this->assertSame(WorkOrderStatus::InProgress->value, $wo->status->value);
         $machine->refresh();
         $this->assertSame('running', $machine->status->value ?? $machine->getRawOriginal('status'));
+        $processInspection = Inspection::query()
+            ->where('stage', InspectionStage::InProcess->value)
+            ->where('entity_type', 'work_order')
+            ->where('entity_id', $wo->id)
+            ->whereNull('wo_operation_id')
+            ->sole();
+        $this->assertSame(InspectionStatus::Draft, $processInspection->status);
+        $this->assertSame(10, (int) $processInspection->batch_quantity);
     }
 }

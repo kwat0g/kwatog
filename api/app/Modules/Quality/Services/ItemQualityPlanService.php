@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
-use App\Modules\Accounting\Models\Vendor;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Models\ItemQualityPlan;
+use App\Modules\Quality\Support\ChecklistDefinition;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class ItemQualityPlanService
@@ -29,9 +32,16 @@ class ItemQualityPlanService
 
     public function createRevision(Item $item, array $data, User $user): ItemQualityPlan
     {
+        if (($data['capture_method'] ?? 'measurement') === 'checklist') {
+            ChecklistDefinition::assertEnabled();
+            $data['parameters'] = ChecklistDefinition::validate($data['parameters'], 'parameters');
+        } elseif (config('inspection.checklist_capture_enabled')) {
+            ChecklistDefinition::requireInstructions($data['parameters'], 'parameters');
+        }
         $vendorId = $this->vendorId($data['vendor_id'] ?? null);
 
         return DB::transaction(function () use ($item, $data, $user, $vendorId): ItemQualityPlan {
+            Item::query()->lockForUpdate()->findOrFail($item->id);
             $current = ItemQualityPlan::query()
                 ->where('item_id', $item->id)
                 ->where('vendor_id', $vendorId)
@@ -40,13 +50,21 @@ class ItemQualityPlanService
                 ->first();
 
             if ($current?->is_active) {
+                $start = Carbon::parse($data['effective_from'] ?? now()->toDateString());
+                if ($start->lt($current->effective_from)) {
+                    throw new BusinessRuleException('A new revision cannot start before the current revision.');
+                }
                 $current->update([
-                    'is_active' => false,
-                    'effective_to' => now()->subDay()->toDateString(),
+                    'is_active' => $start->isFuture(),
+                    'effective_to' => max($current->effective_from->toDateString(), min(
+                        $current->effective_to?->toDateString() ?? $start->copy()->subDay()->toDateString(),
+                        $start->copy()->subDay()->toDateString(),
+                    )),
                 ]);
             }
 
             $plan = ItemQualityPlan::query()->create([
+                'capture_method' => $data['capture_method'] ?? 'measurement',
                 'item_id' => $item->id,
                 'vendor_id' => $vendorId,
                 'version' => ($current?->version ?? 0) + 1,
@@ -72,7 +90,8 @@ class ItemQualityPlanService
     {
         $plan->update([
             'is_active' => false,
-            'effective_to' => min(now()->toDateString(), $plan->effective_to?->toDateString() ?? now()->toDateString()),
+            'effective_to' => max($plan->effective_from->toDateString(),
+                min(now()->toDateString(), $plan->effective_to?->toDateString() ?? now()->toDateString())),
         ]);
 
         return $plan->fresh()->load(['item:id,code,name', 'vendor:id,name', 'creator:id,name']);

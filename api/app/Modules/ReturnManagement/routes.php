@@ -24,6 +24,7 @@ Route::middleware(['auth:sanctum', 'feature:return_management'])->prefix('return
     /* ─── Return requests (RMA) ─── */
     Route::get('/return-requests',                    [ReturnRequestController::class, 'index'])  ->middleware('permission:return_management.view');
     Route::get('/return-requests/{returnRequest}',     [ReturnRequestController::class, 'show'])   ->middleware('permission:return_management.view');
+    Route::get('/return-requests/{returnRequest}/defect-photo', [ReturnRequestController::class, 'defectPhoto'])->middleware('permission:return_management.view');
     Route::post('/return-requests',                    [ReturnRequestController::class, 'store'])  ->middleware('permission:return_management.manage');
     Route::patch('/return-requests/{returnRequest}',   [ReturnRequestController::class, 'update']) ->middleware('permission:return_management.manage');
 
@@ -37,6 +38,7 @@ Route::middleware(['auth:sanctum', 'feature:return_management'])->prefix('return
     Route::post('/return-requests/{returnRequest}/receive',  [ReturnRequestController::class, 'receive']) ->middleware('permission:return_management.receive');
     Route::post('/return-requests/{returnRequest}/inspect',  [ReturnRequestController::class, 'inspect']) ->middleware('permission:return_management.inspect');
     Route::post('/return-requests/{returnRequest}/retry-inspection', [ReturnRequestController::class, 'retryInspection'])->middleware('permission:return_management.inspect');
+    Route::post('/return-requests/{returnRequest}/items/{line}/split', [ReturnRequestController::class, 'splitItem'])->middleware('permission:return_management.dispose');
     Route::post('/return-requests/{returnRequest}/dispose',  [ReturnRequestController::class, 'dispose']) ->middleware('permission:return_management.dispose');
     Route::post('/return-requests/{returnRequest}/complete', [ReturnRequestController::class, 'complete'])->middleware('permission:return_management.complete');
     Route::post('/return-requests/{returnRequest}/cancel',   [ReturnRequestController::class, 'cancel'])  ->middleware('permission:return_management.manage');

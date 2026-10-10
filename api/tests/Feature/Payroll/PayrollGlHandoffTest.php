@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Services\ChainBottleneckService;
+use App\Common\Services\OutboxDispatcher;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Common\Models\OutboxMessage;
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollGlHandoffStatus;
@@ -25,6 +28,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -61,6 +65,13 @@ class PayrollGlHandoffTest extends TestCase
             'gl_handoff_status' => $status->isLocked() ? PayrollGlHandoffStatus::Pending->value : PayrollGlHandoffStatus::NotStarted->value,
             'gl_handoff_at' => $status->isLocked() ? now() : null,
         ])->save();
+
+        if ($status === PayrollPeriodStatus::Approved) {
+            $approver = User::factory()->create([
+                'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+            ]);
+            $period->forceFill(['approved_by' => $approver->id, 'approved_at' => now()])->save();
+        }
 
         if ($withPayroll) {
             Payroll::factory()->create([
@@ -144,6 +155,52 @@ class PayrollGlHandoffTest extends TestCase
         app(PostPayrollToGlOnRequested::class)->handle($event);
 
         $this->assertSame(1, DB::table('journal_entries')
+            ->where('reference_type', 'payroll_period')
+            ->where('reference_id', $period->id)
+            ->count());
+    }
+
+    public function test_gl_request_survives_bank_file_update_after_publication(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        $period = $this->makePeriod(PayrollPeriodStatus::Finalized, true);
+        $dedupe = 'test-payroll-gl-after-bank-file';
+        Bus::fake([DispatchOutboxMessage::class]);
+        $this->recordRequest($period, $dedupe);
+
+        $this->travel(5)->seconds();
+        $period->markBankFileGenerated();
+
+        $outboxId = DB::table('event_outbox')->where('dedupe_key', $dedupe)->value('id');
+        app(OutboxDispatcher::class)->dispatch((string) $outboxId);
+
+        $this->assertSame(OutboxMessage::STATUS_PUBLISHED,
+            DB::table('event_outbox')->where('id', $outboxId)->value('status'));
+        $this->assertSame(PayrollGlHandoffStatus::Posted, $period->fresh()->gl_handoff_status);
+        $this->assertNotNull($period->fresh()->journal_entry_id);
+        $this->assertSame(1, DB::table('journal_entries')
+            ->where('reference_type', 'payroll_period')
+            ->where('reference_id', $period->id)
+            ->count());
+    }
+
+    public function test_gl_request_for_a_newer_voided_period_is_skipped(): void
+    {
+        $period = $this->makePeriod(PayrollPeriodStatus::Finalized, true);
+        $dedupe = 'test-payroll-gl-before-void';
+        Bus::fake([DispatchOutboxMessage::class]);
+        $this->recordRequest($period, $dedupe);
+
+        $this->travel(5)->seconds();
+        $period->forceFill(['status' => PayrollPeriodStatus::Voided->value])->save();
+
+        $outboxId = DB::table('event_outbox')->where('dedupe_key', $dedupe)->value('id');
+        app(OutboxDispatcher::class)->dispatch((string) $outboxId);
+
+        $this->assertSame(OutboxMessage::STATUS_PUBLISHED,
+            DB::table('event_outbox')->where('id', $outboxId)->value('status'));
+        $this->assertSame(PayrollGlHandoffStatus::NotRequired, $period->fresh()->gl_handoff_status);
+        $this->assertSame(0, DB::table('journal_entries')
             ->where('reference_type', 'payroll_period')
             ->where('reference_id', $period->id)
             ->count());

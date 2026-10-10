@@ -25,7 +25,6 @@ class StoreOvertimeRequestRequest extends FormRequest
     public function rules(): array
     {
         $settings = app(SettingsService::class);
-        $pastDays = $settings->requiredInt('attendance.ot.request_past_days', 0);
         $futureDays = $settings->requiredInt('attendance.ot.request_future_days', 0);
         $minHours = $settings->requiredFloat('attendance.ot.request_min_hours', 0.01);
         $maxHours = min(
@@ -35,7 +34,7 @@ class StoreOvertimeRequestRequest extends FormRequest
         $today = now()->startOfDay();
         return [
             'employee_id'      => ['required', 'string'],
-            'date'             => ['required', 'date', 'after_or_equal:'.$today->copy()->subDays($pastDays)->toDateString(), 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
+            'date'             => ['required', 'date', 'after_or_equal:'.$today->toDateString(), 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
             'hours_requested'  => ['required', 'numeric', 'min:'.$minHours, 'max:'.$maxHours],
             'reason'           => ['required', 'string', 'min:5', 'max:2000'],
         ];
@@ -44,7 +43,7 @@ class StoreOvertimeRequestRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'date.after_or_equal'  => 'OT date is outside the configured request window.',
+            'date.after_or_equal'  => 'Choose today or a later date.',
             'date.before_or_equal' => 'OT date is outside the configured request window.',
             'hours_requested.max'  => 'OT exceeds the configured daily limit.',
             'reason.min'           => 'Please provide a meaningful reason (at least 5 characters).',

@@ -36,5 +36,7 @@ final class StockMovementInput
         public readonly ?int $deliveryReturnItemId = null,
         /** Exact ordinary customer-return RRI authorized for a customer receipt. */
         public readonly ?int $customerReturnItemId = null,
+        /** Internal authorization supplied only by the locked MRB release workflow. */
+        public readonly ?int $mrbReleaseId = null,
     ) {}
 }

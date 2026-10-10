@@ -92,7 +92,7 @@ export const hrRoutes = (
  />
  <Route
  path="/hr/profile-update-requests"
- element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
+ element={<PermissionGuard anyOf={['hr.employees.view', 'hr.profile_updates.finance_review']}><ProfileUpdateRequestsPage /></PermissionGuard>}
  />
  </Route>
 

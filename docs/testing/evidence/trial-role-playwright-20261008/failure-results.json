@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "name": "Independent QC recovery retains original FAIL, receives four good and one scrap",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "method": "GET",
+      "path": "/quality/ncrs/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/l49YDNXb3e/outputs",
+      "status": 200
+    }
+  ]
+}

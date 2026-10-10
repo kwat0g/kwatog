@@ -22,7 +22,7 @@ class ItemCategory extends Model
         return ItemCategoryFactory::new();
     }
 
-    protected $fillable = ['name', 'parent_id'];
+    protected $fillable = ['name', 'parent_id', 'item_type'];
 
     public function parent(): BelongsTo
     {

@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Payroll\Enums\PayrollAnomalyType;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAnomalyFlag;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -222,14 +225,69 @@ class PayrollAnomalyService
 
     public function resolve(PayrollAnomalyFlag $flag, int $userId, ?string $remarks): PayrollAnomalyFlag
     {
-        return DB::transaction(function () use ($flag, $userId, $remarks) {
-            $flag->update([
+        return DB::transaction(function () use ($flag, $userId, $remarks): PayrollAnomalyFlag {
+            // Match finalization's lock order so a reviewer cannot race the
+            // unresolved-flag gate while the period is being finalized.
+            $period = PayrollPeriod::query()->lockForUpdate()->find($flag->payroll_period_id);
+            if (! $period) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
+            if (! in_array($period->status, [PayrollPeriodStatus::Computed, PayrollPeriodStatus::Approved], true)) {
+                throw new BusinessRuleException('Payroll anomalies can only be reviewed while the period is computed or approved.');
+            }
+
+            $locked = PayrollAnomalyFlag::query()
+                ->where('payroll_period_id', $period->id)
+                ->lockForUpdate()
+                ->find($flag->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Payroll anomaly flag not found.');
+            }
+            if ($locked->is_resolved) {
+                throw new BusinessRuleException('This payroll anomaly has already been reviewed.');
+            }
+
+            $makerIds = array_map(
+                static fn ($id): int => (int) $id,
+                array_filter([$period->created_by, $period->computed_by], static fn ($id): bool => $id !== null),
+            );
+            if (in_array($userId, $makerIds, true)) {
+                throw new ForbiddenActionException('You created or computed this payroll. A different authorized reviewer must resolve its anomaly flags.');
+            }
+
+            $resolvedAt = now();
+            $oldValues = [
+                'is_resolved' => (bool) $locked->is_resolved,
+                'resolved_by' => $locked->resolved_by,
+                'resolved_at' => optional($locked->resolved_at)->toIso8601String(),
+                'resolution_remarks' => $locked->resolution_remarks,
+            ];
+            $locked->update([
                 'is_resolved'        => true,
                 'resolved_by'        => $userId,
-                'resolved_at'        => now(),
+                'resolved_at'        => $resolvedAt,
                 'resolution_remarks' => $remarks,
             ]);
-            return $flag->fresh();
+
+            AuditLog::create([
+                'user_id' => $userId,
+                'actor_type' => 'user',
+                'action' => 'payroll.anomaly.resolve',
+                'model_type' => PayrollAnomalyFlag::class,
+                'model_id' => $locked->id,
+                'old_values' => $oldValues,
+                'new_values' => [
+                    'is_resolved' => true,
+                    'resolved_by' => $userId,
+                    'resolved_at' => $resolvedAt->toIso8601String(),
+                    'resolution_remarks' => $remarks,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => $resolvedAt,
+            ]);
+
+            return $locked->fresh();
         });
     }
 

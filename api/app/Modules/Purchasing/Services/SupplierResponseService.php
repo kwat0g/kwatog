@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\Mail;
  * accept → acknowledged, propose → supplier_proposed, decline →
  * supplier_declined. Purchasing is notified so the reply is acted on.
  *
- * `resolve()` is the internal entry point (purchasing.po.approve holders).
+ * `resolve()` is the internal entry point for purchase-order operators.
  * Accepting a `propose` applies the counter-offer to the PO lines and
  * recomputes the money; rejecting returns the PO to `sent` so the supplier
  * can respond again. Everything financial runs under `lockForUpdate()`.
@@ -75,6 +75,15 @@ class SupplierResponseService
             $type = PurchaseOrderResponseType::tryFrom((string) $data['type']);
             if ($type === null) {
                 throw new BusinessRuleException('Invalid supplier response type.');
+            }
+            if ($type === PurchaseOrderResponseType::Accept && ! empty($data['proposed_delivery_date'])) {
+                throw new BusinessRuleException('Accepting a purchase order cannot change its delivery date. Propose changes instead.');
+            }
+            if ($type === PurchaseOrderResponseType::Propose
+                && empty($data['items'])
+                && (empty($data['proposed_delivery_date'])
+                    || $data['proposed_delivery_date'] === $row->expected_delivery_date?->toDateString())) {
+                throw new BusinessRuleException('Change the delivery date or at least one line before sending a proposal.');
             }
 
             // Supplier accept is terminal for the portal side. A browser
@@ -134,12 +143,9 @@ class SupplierResponseService
 
             // Transition the PO to the state that describes the reply. An
             // accept resolves immediately (no purchasing decision needed); the
-            // supplier's agreed date lands on `confirmed_delivery_date`, never
-            // on OGAMI's `expected_delivery_date`.
+            // acceptance confirms OGAMI's required date as written.
             if ($type === PurchaseOrderResponseType::Accept) {
-                if (! empty($data['proposed_delivery_date'])) {
-                    $row->confirmed_delivery_date = $data['proposed_delivery_date'];
-                }
+                $row->confirmed_delivery_date = $row->expected_delivery_date;
                 $row->status = PurchaseOrderStatus::Acknowledged;
             } elseif ($type === PurchaseOrderResponseType::Propose) {
                 $row->status = PurchaseOrderStatus::SupplierProposed;
@@ -166,6 +172,12 @@ class SupplierResponseService
         string $decision,
         ?string $notes = null,
     ): PurchaseOrderResponse {
+        if (! $by->hasPermission('purchasing.po.responses.resolve')) {
+            throw new BusinessRuleException('Only purchase-order operators may resolve supplier responses.');
+        }
+        if (! in_array($decision, ['accept', 'reject'], true)) {
+            throw new BusinessRuleException('Invalid supplier response decision.');
+        }
         return DB::transaction(function () use ($response, $by, $decision, $notes): PurchaseOrderResponse {
             $locked = PurchaseOrderResponse::query()
                 ->lockForUpdate()
@@ -176,6 +188,9 @@ class SupplierResponseService
             }
 
             $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($locked->purchase_order_id);
+            if (! app(\App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::class)->canView($by, $po)) {
+                throw new BusinessRuleException('You do not have permission to resolve this supplier response.');
+            }
 
             if ($decision === 'accept') {
                 if ($locked->response_type === PurchaseOrderResponseType::Propose) {
@@ -260,6 +275,12 @@ class SupplierResponseService
 
             $this->broadcastChain($po->fresh());
 
+            if ($locked->status === PurchaseOrderResponseStatus::PendingApproval) {
+                app(NotificationService::class)->sendPortalInApp(SupplierPortalUser::where('vendor_id', $locked->vendor_id)->where('is_active', true)->get(), 'purchase_order.awaiting_approval', [
+                    'title' => $po->po_number.' awaits approval', 'message' => 'Your proposed price change requires company approval. Wait for the final decision before scheduling against changed terms.',
+                    'link_to' => '/portal/supplier/purchase-orders/'.$po->hash_id, 'entity_type' => 'purchase_order', 'entity_id' => $po->hash_id,
+                ], 'po:response:'.$locked->id.':pending_approval');
+            }
             // Only email supplier decision for immediate paths (decline accept, propose reject).
             // For price-increase re-approval, email is sent when approval completes.
             if ($decision !== 'accept' || $locked->status !== PurchaseOrderResponseStatus::PendingApproval) {
@@ -318,6 +339,13 @@ class SupplierResponseService
      */
     private function computeProposalTotalsInternal(PurchaseOrderResponse $response, PurchaseOrder $po): array
     {
+        if ($response->items->isEmpty()) {
+            return [
+                'subtotal' => (string) $po->subtotal,
+                'vat_amount' => (string) $po->vat_amount,
+                'total_amount' => (string) $po->total_amount,
+            ];
+        }
         $subtotal = Money::zero();
 
         foreach ($response->items as $item) {
@@ -376,6 +404,9 @@ class SupplierResponseService
      */
     public function applyProposal(PurchaseOrderResponse $response, PurchaseOrder $po): void
     {
+        if ($response->items->isEmpty()) {
+            return;
+        }
         $linesByLine = $po->items()->lockForUpdate()->get()->keyBy('id');
         $subtotal = Money::zero();
 
@@ -427,8 +458,10 @@ class SupplierResponseService
         try {
             $audience = User::query()
                 ->where('is_active', true)
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'purchasing.po.approve'))
-                ->get();
+                ->with('role')
+                ->get()
+                ->filter(fn (User $user) => $user->hasPermission('purchasing.po.responses.resolve')
+                    && app(\App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::class)->canView($user, $po));
 
             $this->notifications->send($audience, 'supplier.po_responded', [
                 'title'       => "PO {$po->po_number} — supplier {$response->response_type->label()}",
@@ -456,6 +489,10 @@ class SupplierResponseService
     {
         try {
             $po = $response->purchaseOrder;
+            app(NotificationService::class)->sendPortalInApp(SupplierPortalUser::where('vendor_id', $response->vendor_id)->where('is_active', true)->get(), 'purchase_order.response_decided', [
+                'title' => 'Decision on '.$po->po_number, 'message' => $decision === 'accept' ? 'Purchasing accepted your response. Review the current order and schedule delivery when it is ready.' : 'Purchasing rejected your response. Review the decision and contact Purchasing for the next proposal.',
+                'link_to' => '/portal/supplier/purchase-orders/'.$po->hash_id, 'entity_type' => 'purchase_order', 'entity_id' => $po->hash_id,
+            ], 'po:response:'.$response->id.':'.$decision);
             $recipients = SupplierPortalUser::query()
                 ->where('vendor_id', $response->vendor_id)
                 ->where('is_active', true)

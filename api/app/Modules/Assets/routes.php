@@ -15,6 +15,7 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('assets')->group(f
     Route::get('/options', [AssetController::class, 'options'])->middleware('permission:assets.view');
     Route::get('/', [AssetController::class, 'index'])->middleware('permission:assets.view');
     Route::post('/', [AssetController::class, 'store'])->middleware('permission:assets.create');
+    Route::get('/{asset}/association-options', [AssetController::class, 'associationOptions'])->middleware('permission:assets.update');
     Route::get('/{asset}', [AssetController::class, 'show'])->middleware('permission:assets.view');
     Route::put('/{asset}', [AssetController::class, 'update'])->middleware('permission:assets.update');
     Route::patch('/{asset}/association', [AssetController::class, 'associate'])->middleware('permission:assets.update');

@@ -22,7 +22,7 @@ GRN, Incoming QC, Bill and Payment chain.
 | PR situation | Start RFQ allowed |
 |---|---|
 | Any PR (manual or auto) with sourcing method **Competitive RFQ** — approved on submit (need only, no Finance/VP chain; money is approved on the PO at the awarded price) | yes |
-| Any approved PR whose Direct PO conversion fell to **manual_required** (no preferred supplier or price) | yes — sourcing method switches to RFQ |
+| Any approved PR whose Direct PO conversion fell to **manual_required** (no preferred supplier or price) | no — buyer assigns supplier through Convert to PO |
 | PR after an RFQ was **awarded with a remainder** or **cancelled** | yes (new RFQ) — or Direct PO for what is left |
 | A PR with an active RFQ (draft / open / closed) | no — one active RFQ per PR |
 

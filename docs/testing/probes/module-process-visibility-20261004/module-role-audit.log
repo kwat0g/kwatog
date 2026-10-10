@@ -1,0 +1,19 @@
+PASS system_admin (112 checks, 78 visible routes)
+PASS vice_president (51 checks, 17 visible routes)
+PASS hr_officer (53 checks, 19 visible routes)
+PASS finance_officer (56 checks, 22 visible routes)
+PASS production_manager (62 checks, 28 visible routes)
+PASS ppc_head (54 checks, 20 visible routes)
+PASS purchasing_officer (56 checks, 22 visible routes)
+PASS warehouse_staff (53 checks, 19 visible routes)
+PASS qc_inspector (51 checks, 17 visible routes)
+PASS maintenance_tech (44 checks, 10 visible routes)
+PASS impex_officer (44 checks, 10 visible routes)
+PASS department_head (50 checks, 16 visible routes)
+PASS employee (39 checks, 5 visible routes)
+PASS driver (40 checks, 6 visible routes)
+PASS sales_officer (44 checks, 10 visible routes)
+PASS customer_service_officer (48 checks, 14 visible routes)
+CONFIGURATION: 0 observations of missing/invalid company VAT policy
+
+=== 872 RBAC browser checks across 16 roles; 0 failure(s) ===

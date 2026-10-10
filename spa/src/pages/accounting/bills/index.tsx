@@ -50,7 +50,7 @@ export default function BillsPage() {
  { key: 'due_date', header: 'Due', cell: (r) => <NumCell className={r.is_overdue ? 'text-danger-fg' : undefined}>{formatDate(r.due_date)}</NumCell> },
  { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
  { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.payment_approval_pending ? 'warning' : chipVariantForStatus(r.status)}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
  ];
 
  const filterConfig: FilterConfig[] = [

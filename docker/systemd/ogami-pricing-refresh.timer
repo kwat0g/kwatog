@@ -1,0 +1,10 @@
+[Unit]
+Description=Process OGAMI BOM and pricing refresh requests each minute
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

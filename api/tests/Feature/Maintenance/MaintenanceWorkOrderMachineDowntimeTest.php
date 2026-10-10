@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Maintenance;
 
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
+use App\Modules\Attendance\Models\Shift;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
@@ -40,7 +46,23 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
     {
         parent::setUp();
         $this->svc = app(MaintenanceWorkOrderService::class);
-        $this->tech = User::factory()->create(['is_active' => true]);
+        $department = Department::firstOrCreate(['code' => 'MAINT'], ['name' => 'Maintenance']);
+        $employee = Employee::factory()->create(['department_id' => $department->id, 'status' => 'active']);
+        $role = Role::firstOrCreate(['slug' => 'maintenance_tech'], ['name' => 'Maintenance Technician']);
+        $this->tech = User::factory()->create([
+            'role_id' => $role->id, 'employee_id' => $employee->id, 'is_active' => true,
+        ]);
+        $shift = Shift::create([
+            'name' => 'Downtime maintenance shift', 'start_time' => '00:00', 'end_time' => '23:59', 'is_active' => true,
+        ]);
+        EmployeeShiftAssignment::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'effective_date' => now()->toDateString(), 'working_days' => [now()->dayOfWeekIso],
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour(),
+        ]);
     }
 
     // ─── MT-03: ledger opens at start, closes at complete/cancel ─────
@@ -71,6 +93,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $row = MachineDowntime::query()->where('maintenance_order_id', $wo->id)->firstOrFail();
         $row->update(['start_time' => now()->subMinutes(40)]);
 
+        $this->recordPassed($wo);
         $this->svc->complete($wo, ['downtime_minutes' => 45, 'remarks' => 'done'], $this->tech);
 
         $this->assertSame(MachineStatus::Idle, $machine->fresh()->status);
@@ -98,6 +121,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
             'description' => 'Duplicate interval regression',
         ]);
 
+        $this->recordPassed($wo);
         $this->svc->complete($wo, ['downtime_minutes' => 999], $this->tech);
 
         $this->assertSame(40, $wo->fresh()->downtime_minutes);
@@ -141,7 +165,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
             'max_shots_before_maintenance' => 100000,
             'lifetime_max_shots' => 1000000,
             'current_shot_count' => 5000,
-            'status' => 'in_use',
+            'status' => 'maintenance',
         ]);
         $wo = MaintenanceWorkOrder::create([
             'mwo_number' => 'MWO-'.substr(uniqid(), -8),
@@ -150,9 +174,11 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
             'type' => 'preventive',
             'description' => 'Mold PM',
             'status' => MaintenanceWorkOrderStatus::InProgress->value,
+            'assigned_to' => $this->tech->employee_id,
             'created_by' => $this->tech->id,
         ]);
 
+        $this->recordPassed($wo);
         $this->svc->complete($wo, [], $this->tech);
 
         $this->assertSame(MachineStatus::Idle, $machine->fresh()->status);
@@ -197,10 +223,18 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
             'type' => 'preventive',
             'description' => 'Mold PM',
             'status' => MaintenanceWorkOrderStatus::InProgress->value,
+            'assigned_to' => $this->tech->employee_id,
             'created_by' => $this->tech->id,
         ]);
 
-        $this->svc->complete($wo, [], $this->tech);
+        try {
+            $this->recordPassed($wo);
+            $this->svc->complete($wo, [], $this->tech);
+            $this->fail('Maintenance must not complete while production owns the mold.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('maintainable_id', $exception->errors());
+        }
+        $this->assertSame('in_progress', $wo->fresh()->status->value);
 
         $this->assertSame('in_use', $mold->fresh()->status->value);
     }
@@ -214,11 +248,13 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $machine = Machine::factory()->create(['status' => MachineStatus::Idle->value]);
         $wo = $this->machineMwo(MaintenanceWorkOrderStatus::Open, $machine);
         $this->svc->start($wo, $this->tech);
+        $this->recordPassed($wo);
         $this->svc->complete($wo, [], $this->tech);
 
         $machine2 = Machine::factory()->create(['status' => MachineStatus::Idle->value]);
         $wo2 = $this->machineMwo(MaintenanceWorkOrderStatus::Open, $machine2);
         $this->svc->start($wo2, $this->tech);
+        $this->recordPassed($wo2);
         $this->svc->cancel($wo2, null, $this->tech);
 
         Event::assertDispatched(MachineStatusChanged::class, fn (MachineStatusChanged $e): bool => $e->machine->id === $machine->id && $e->from === 'idle' && $e->to === 'maintenance');
@@ -241,6 +277,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $this->svc->start($wo, $this->tech);
         $this->assertSame(MachineStatus::Maintenance, $machine->fresh()->status);
 
+        $this->recordPassed($wo);
         $this->svc->complete($wo, ['downtime_minutes' => 30], $this->tech);
 
         $this->assertSame(MachineStatus::Idle, $machine->fresh()->status);
@@ -267,6 +304,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $row = MachineDowntime::query()->where('maintenance_order_id', $wo->id)->firstOrFail();
         $row->update(['start_time' => now()->subMinutes(30)]);
 
+        $this->recordPassed($wo);
         $this->svc->complete($wo, [], $this->tech);
 
         $oee = app(OeeService::class)->calculate(
@@ -289,7 +327,17 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
             'type' => 'corrective',
             'description' => 'Hydraulic leak',
             'status' => $status->value,
+            'assigned_to' => $this->tech->employee_id,
             'created_by' => $this->tech->id,
         ]);
+    }
+
+    private function recordPassed(MaintenanceWorkOrder $order): void
+    {
+        $this->svc->recordWork($order, [
+            'finding' => 'Equipment inspected',
+            'action_taken' => 'Completed the required maintenance',
+            'result' => 'passed',
+        ], $this->tech);
     }
 }

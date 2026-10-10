@@ -21,12 +21,13 @@ interface Props {
 export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  const queryClient = useQueryClient();
  const items = useMemo(() => rma.items ?? [], [rma.items]);
- const { data: options } = useQuery({
+ const { data: options, isFetching: optionsLoading, isError: optionsError, refetch: refetchOptions } = useQuery({
  queryKey: ['return-management', 'options', rma.type, rma.finance_only],
  queryFn: () => returnManagementApi.options({ type: rma.type, finance_only: rma.finance_only === true }),
  staleTime: 5 * 60 * 1000,
  });
- const dispositionOptions = useMemo(() => (options?.dispositions ?? []) as Array<{ value: DispositionType; label: string }>, [options?.dispositions]);
+ const qcSupplierReturn = rma.requires_defect_evidence === true;
+ const dispositionOptions = useMemo(() => ((options?.dispositions ?? []) as Array<{ value: DispositionType; label: string }>).filter((option) => !qcSupplierReturn || option.value === 'return_to_supplier'), [options?.dispositions, qcSupplierReturn]);
  // Deliberately NOT pre-filled. The dialog used to default every line to the
  // first option (Scrap), so accepting the defaults silently wrote off the
  // whole return and raised an NCR per line. Disposition is irreversible —
@@ -35,13 +36,13 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  () => Object.fromEntries(
  items.map((item) => [item.id, { disposition: '' as const, notes: '' }])
  )
- ); const [createReplacementPo, setCreateReplacementPo] = useState(false);
- // 2026-08-08 — restock lines are received back into stock the moment the
- // disposition is recorded, so customer-return disposals must name the
- // destination warehouse location.
+ ); const [createReplacementPo, setCreateReplacementPo] = useState(qcSupplierReturn);
+ const [requiredDeliveryDate, setRequiredDeliveryDate] = useState('');
+ // Customer-return good stock stays in quarantine until its separate MRB
+ // release chooses a destination. Supplier returns still need a source.
  const [locationId, setLocationId] = useState('');
 
- const { data: warehouses } = useQuery({
+ const { data: warehouses, isFetching: warehousesLoading, isError: warehousesError, refetch: refetchWarehouses } = useQuery({
   queryKey: ['warehouse-tree'],
   queryFn: () => warehouseApi.tree(),
   staleTime: 5 * 60 * 1000,
@@ -57,13 +58,12 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  ), [warehouses]);
 
  const hasMissingDisposition = items.some((item) => !dispositions[item.id]?.disposition);
- // 2026-08-08 — any movement line needs a location: customer restock/rework
- // lines come back into stock, supplier return_to_supplier lines ship out.
+ // Supplier return_to_supplier lines still ship at disposition. Customer
+ // restock/rework destinations are chosen during MRB release.
  const needsLocation = items.some((item) =>
-  rma.type === 'supplier_return'
-   ? dispositions[item.id]?.disposition === 'return_to_supplier'
-   : ['restock', 'rework'].includes(dispositions[item.id]?.disposition as string),
+  rma.type === 'supplier_return' && dispositions[item.id]?.disposition === 'return_to_supplier' && !(Number(item.moved_quantity) > 0),
  );
+ const needsDeliveryDate = rma.type === 'supplier_return' && (qcSupplierReturn || createReplacementPo);
 
  const mutation = useMutation({
   mutationFn: () => {
@@ -72,10 +72,14 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
     disposition: dispositions[item.id]!.disposition as DispositionType,
     notes: dispositions[item.id]?.notes || undefined,
    }));
-   return returnManagementApi.dispose(rma.id, payload, createReplacementPo, needsLocation ? locationId : undefined);
+   return returnManagementApi.dispose(rma.id, payload, qcSupplierReturn || createReplacementPo, needsLocation ? locationId : undefined, needsDeliveryDate ? requiredDeliveryDate : undefined);
   },
- onSuccess: () => {
- toast.success('Disposition recorded successfully.');
+ onSuccess: (result) => {
+ if (needsDeliveryDate && result.replacement_purchase_order?.status !== 'sent') {
+  toast.error('Return arranged. Replacement PO needs supplier dispatch; check its status.');
+ } else {
+  toast.success(qcSupplierReturn ? 'Return arranged and replacement PO sent to supplier.' : 'Disposition recorded successfully.');
+ }
  queryClient.invalidateQueries({ queryKey: ['return-request', rma.id] });
  onClose();
  },
@@ -104,13 +108,19 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  };
 
  return (
- <Modal isOpen={isOpen} onClose={onClose} title="Dispose Return Items" size="lg"> <div className="space-y-4">
+ <Modal isOpen={isOpen} onClose={onClose} title={qcSupplierReturn ? 'Finish earlier supplier return' : 'Dispose Return Items'} size="lg"> <div className="space-y-4">
+  {optionsError && <div role="alert" className="text-sm text-danger-fg">
+   Disposition options could not be loaded. <Button variant="secondary" size="sm" onClick={() => refetchOptions()}>Retry dispositions</Button>
+  </div>}
+  {needsLocation && warehousesError && <div role="alert" className="text-sm text-danger-fg">
+   Warehouse locations could not be loaded. <Button variant="secondary" size="sm" onClick={() => refetchWarehouses()}>Retry locations</Button>
+  </div>}
   <p className="text-sm text-muted">
-   Set the disposition for each returned item. Scrap and rework items will auto-create an NCR.
+   {qcSupplierReturn ? 'QC already checked these defective pieces. Arranging the return creates a replacement purchase order and sends it to the supplier portal.' : 'Set the disposition for each returned item. Scrap and rework items will auto-create an NCR.'}
    {rma.is_truck_return ? ' This depot return does not create a customer credit.' : rma.type === 'customer_return' && ' Any credit follows the agreed resolution and requires Finance review. No-charge replacements do not also issue a return credit.'}
    {' '}
    {rma.type === 'customer_return' && (
-    <span className="text-success-fg font-medium">Lines disposed as Restock are received back into stock immediately.</span>
+    <span className="text-warning-fg font-medium">Restock and rework lines stay in quarantine until a separate MRB reviewer re-inspects and releases them.</span>
    )}
   </p>
 
@@ -162,13 +172,11 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  ))}
  </tbody>
  </table>
- </div>  {/* 2026-08-08 — movement happens right here: customer restock/rework lines
-      land back in stock, supplier return_to_supplier lines ship out. Either
-      way the location is required the moment such a line is chosen. */}
+  </div>  {/* Supplier-return stock ships from this location when disposition is recorded. */}
   {needsLocation && (
    <div className="rounded-md border border-success/40 bg-success-bg/10 px-4 py-3">
     <label className="text-xs font-medium text-success-fg">
-     {rma.type === 'supplier_return' ? 'Warehouse location for returned goods' : 'Warehouse location for restocked goods'}
+     Warehouse location for returned goods
     </label>
     <Select
      className="mt-1.5"
@@ -184,17 +192,26 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
      ))}
     </Select>
     <p className="mt-1.5 text-xs text-muted">
-     {rma.type === 'supplier_return'
-      ? 'Lines returned to the supplier leave stock at this location when the disposition is recorded.'
-      : 'Restock and rework lines are received back into stock at this location when the disposition is recorded.'}
+     Lines returned to the supplier leave stock at this location when the disposition is recorded.
     </p>
    </div>
+  )}
+
+  {needsDeliveryDate && (
+   <Input
+    label="Required delivery date"
+    type="date"
+    required
+    min={new Date().toISOString().slice(0, 10)}
+    value={requiredDeliveryDate}
+    onChange={(e) => setRequiredDeliveryDate(e.target.value)}
+   />
   )}
 
   <div className="flex items-center justify-between gap-2 pt-2">
    {/* Supplier returns can raise a replacement PO in the same step; the
        backend supported it but nothing in the UI ever set the flag. */}
-   {rma.type === 'supplier_return' ? (
+   {rma.type === 'supplier_return' && !qcSupplierReturn ? (
     <label className="flex items-center gap-2 text-sm">
      <input
       type="checkbox"
@@ -210,9 +227,9 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
      variant="primary"
      loading={mutation.isPending}
      onClick={() => mutation.mutate()}
-     disabled={items.length === 0 || hasMissingDisposition || dispositionOptions.length === 0 || (needsLocation && !locationId)}
+     disabled={items.length === 0 || hasMissingDisposition || optionsLoading || optionsError || dispositionOptions.length === 0 || (needsLocation && (!locationId || warehousesLoading || warehousesError)) || (needsDeliveryDate && (!requiredDeliveryDate || requiredDeliveryDate < new Date().toISOString().slice(0, 10)))}
     >
-     {mutation.isPending ? 'Recording...' : 'Record Disposition'}
+     {mutation.isPending ? 'Recording...' : qcSupplierReturn ? 'Finish earlier return' : 'Record Disposition'}
     </Button>
    </div>
   </div>

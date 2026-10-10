@@ -21,6 +21,7 @@ class UpdateMaintenanceScheduleRequest extends FormRequest
             'description'       => ['sometimes', 'required', 'string', 'max:200'],
             'interval_type'     => ['sometimes', 'required', Rule::in(MaintenanceScheduleInterval::values())],
             'interval_value'    => ['sometimes', 'required', 'integer', 'min:1'],
+            'estimated_duration_minutes' => ['sometimes', 'required', 'integer', 'between:15,480'],
             'last_performed_at' => ['nullable', 'date'],
             'is_active'         => ['nullable', 'boolean'],
         ];

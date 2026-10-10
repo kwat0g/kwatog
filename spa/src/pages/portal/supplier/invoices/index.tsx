@@ -12,7 +12,7 @@ import { CompanyName } from '@/components/brand/CompanyName';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import type { SupplierBillSummary } from '@/types/b2b';
+import type { SupplierInvoiceSummary } from '@/types/b2b';
 
 type InvoiceFilters = { page: number; per_page: number; status?: string };
 
@@ -27,7 +27,7 @@ export default function SupplierInvoicesPage() {
     placeholderData: (prev) => prev,
   });
 
-  const columns: Column<SupplierBillSummary>[] = [
+  const columns: Column<SupplierInvoiceSummary>[] = [
     {
       key: 'supplier_invoice_number',
       header: 'Your invoice #',
@@ -37,7 +37,7 @@ export default function SupplierInvoicesPage() {
     },
     {
       key: 'bill_number',
-      header: 'OGAMI bill #',
+      header: 'AP match',
       cell: (r) => <span className="font-mono text-muted">{r.bill_number}</span>,
     },
     {
@@ -80,9 +80,12 @@ export default function SupplierInvoicesPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
+        { value: 'submitted', label: 'Submitted' },
         { value: 'unpaid', label: 'Unpaid' },
         { value: 'partial', label: 'Partially paid' },
         { value: 'paid', label: 'Paid' },
+        { value: 'requires_correction', label: 'Requires correction' },
+        { value: 'voided', label: 'Voided' },
       ],
     },
   ];
@@ -93,9 +96,9 @@ export default function SupplierInvoicesPage() {
         title="Invoices"
         subtitle={
           data ? (
-            <>{data.meta.total} bills you have issued to <CompanyName /></>
+            <>{data.meta.total} invoices you have submitted to <CompanyName /></>
           ) : (
-            <>Bills you have issued to <CompanyName /></>
+            <>Invoices you have submitted to <CompanyName /></>
           )
         }
       />

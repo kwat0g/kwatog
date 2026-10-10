@@ -96,7 +96,7 @@ class SelfServiceLoanLifecycleTest extends TestCase
         $this->actingAs($user)
             ->postJson('/api/v1/hr/self-service/loans', $payload)
             ->assertStatus(422)
-            ->assertJsonFragment(['message' => 'An active or pending cash_advance already exists for this employee.']);
+            ->assertJsonFragment(['message' => 'This employee already has a pending or active loan or cash advance.']);
 
         $this->assertSame(1, EmployeeLoan::query()->where('employee_id', $employee->id)->count());
     }

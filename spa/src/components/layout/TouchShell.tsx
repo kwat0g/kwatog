@@ -5,6 +5,7 @@ import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { Button } from '@/components/ui/Button';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { OfflineBanner, usePausedMutationCount } from '@/components/ui/OfflineBanner';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -73,26 +74,31 @@ export function TouchShell({
   useEffect(() => {
     const { pushOverride, popOverride } = useThemeStore.getState();
     pushOverride('floor');
-    document.title = `${eyebrow} · ERP`;
+    document.title = `${eyebrow} · Ogami ERP`;
     return () => popOverride();
   }, [eyebrow]);
-
-  const hasTabs = Boolean(tabs?.length);
 
   function isActive(to: string, exact?: boolean) {
     return exact ? location.pathname === to : location.pathname.startsWith(to);
   }
 
+  const hasTabs = Boolean(tabs?.length);
+  const activeTab = tabs?.find((tab) => isActive(tab.to, tab.exact));
+
   return (
     <div className="min-h-screen flex flex-col bg-surface text-primary">
       <header className="sticky top-0 z-10 border-b border-default bg-canvas">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-muted font-medium flex items-center gap-1.5">
-              {EyebrowIcon && <EyebrowIcon className="w-3.5 h-3.5" aria-hidden />}
-              {eyebrow}
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <BrandLogo invertOnDark alt="Ogami ERP" className="h-6 w-auto shrink-0" />
+            <div className="min-w-0">
+              <div className="text-xs uppercase tracking-wider text-muted font-medium flex items-center gap-1.5">
+                {EyebrowIcon && <EyebrowIcon className="w-3.5 h-3.5" aria-hidden />}
+                {eyebrow}
+              </div>
+              <div className="font-medium leading-tight truncate">{user?.name ?? fallbackName}</div>
+              {activeTab && <div className="text-xs text-secondary truncate">{activeTab.label}</div>}
             </div>
-            <div className="font-medium leading-tight">{user?.name ?? fallbackName}</div>
           </div>
           <Button
             variant="ghost"

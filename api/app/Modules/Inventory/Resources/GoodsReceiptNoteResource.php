@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Common\Support\Money;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -77,6 +78,22 @@ class GoodsReceiptNoteResource extends JsonResource
                 'id'              => $this->shipment->hash_id,
                 'shipment_number' => $this->shipment->shipment_number,
                 'status'          => $this->shipment->status?->value,
+            ] : null),
+            'supplier_shipment' => $this->whenLoaded('supplierShipment', fn () => $this->supplierShipment ? [
+                'id' => $this->supplierShipment->hash_id,
+                'tracking_number' => $this->supplierShipment->tracking_number,
+                'items' => $this->supplierShipment->items->map(function ($line): array {
+                    $receivedBase = $this->items->where('purchase_order_item_id', $line->purchase_order_item_id)
+                        ->reduce(static fn (string $sum, $row): string => bcadd($sum, (string) $row->quantity_received, 3), '0.000');
+                    $received = $line->purchaseOrderItem?->purchaseQuantity($receivedBase, 2) ?? '0.00';
+                    return [
+                        'purchase_order_item_id' => $line->purchaseOrderItem?->hash_id,
+                        'quantity_shipped' => (string) $line->quantity_shipped,
+                        'quantity_received' => $received,
+                        'difference' => Money::sub($received, (string) $line->quantity_shipped),
+                        'unit' => $line->purchaseOrderItem?->unit,
+                    ];
+                })->values()->all(),
             ] : null),
             'receiver'        => $this->whenLoaded('receiver', fn () => $this->receiver ? [
                 'id'   => $this->receiver->hash_id,

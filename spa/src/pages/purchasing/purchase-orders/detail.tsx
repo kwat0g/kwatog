@@ -476,11 +476,11 @@ export default function PurchaseOrderDetailPage() {
               )}
             {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
           </div>
-        )}{' '}
-        <Panel title="Procure-to-pay chain">
-          {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
-   Approval detail lives in the approval timeline below. */}
+        )}
+        <Panel title="Procure-to-pay chain" bodyClassName="px-4 py-3">
           <ChainHeader
+            stretch
+            showStatusMessages={false}
             steps={buildP2pChain({
               pr: data.purchase_request
                 ? { id: data.purchase_request.id, number: data.purchase_request.pr_number }
@@ -492,43 +492,96 @@ export default function PurchaseOrderDetailPage() {
           />
         </Panel>
       </div>
-      <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
-        <div className="col-span-2 space-y-4">
+      <div className="px-5 grid grid-cols-1 lg:grid-cols-3 gap-4 pb-6">
+        <div className="lg:col-span-2 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             <StatCard label="Subtotal" value={formatPeso(data.subtotal)} />
             <StatCard label="VAT" value={formatPeso(data.vat_amount)} />
             <StatCard label="Total" value={formatPeso(data.total_amount)} />
-            <StatCard label="Received" value={`${data.quantity_received_pct.toFixed(0)}%`} />
+            <StatCard label="Received" value={`${data.quantity_received_pct.toFixed(2)}%`} />
           </div>
-          <Panel title="Header">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm">
+          <Panel title="Line items" meta={<span className="sm:hidden">Swipe for prices</span>}>
+            <div
+              className="overflow-x-auto"
+              role="region"
+              aria-label="Purchase order line items"
+              tabIndex={0}
+            >
+              <table className={`${tableCls} min-w-[720px]`}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Item</Th>
+                    <Th>Description</Th>
+                    <Th align="right">Qty</Th>
+                    <Th align="right">Received</Th>
+                    <Th>Unit</Th>
+                    <Th align="right">Unit price</Th>
+                    <Th align="right">Total</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items?.map((l) => (
+                    <tr key={l.id} className={trCls}>
+                      <Td mono>{l.item.code}</Td>
+                      <Td>
+                        {l.description}
+                        {chargeParts(l.rfq_commercial).length > 0 && (
+                          <div className="text-2xs text-muted">
+                            +{' '}
+                            {chargeParts(l.rfq_commercial)
+                              .map(([label, v]) => `${label} ${formatPeso(v)}`)
+                              .join(' · ')}
+                          </div>
+                        )}
+                      </Td>
+                      <Td align="right" mono>
+                        {formatQuantity(l.quantity)}
+                      </Td>
+                      <Td align="right" mono>
+                        {formatQuantity(l.quantity_received)} {l.item.unit_of_measure}
+                      </Td>
+                      <Td>{l.unit ?? l.item.unit_of_measure}</Td>
+                      <Td align="right" mono>
+                        {formatPeso(l.unit_price)}
+                      </Td>
+                      <Td align="right" mono className="font-medium">
+                        {formatPeso(l.total)}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* RFQ header charges are in the subtotal but on no line, so
+                    the lines alone did not add up to it. */}
+                {chargeParts(data.rfq_commercial).length > 0 && (
+                  <tfoot>
+                    {chargeParts(data.rfq_commercial).map(([label, v]) => (
+                      <tr key={label} className={trCls}>
+                        <Td colSpan={6} className="text-muted">
+                          {label} (quoted, allocated to lines on receipt)
+                        </Td>
+                        <Td align="right" mono>
+                          {formatPeso(v)}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </Panel>
+          <Panel title="Order details">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt>
-                <dd>{data.vendor?.name ?? '—'}</dd>
+                <dd className="font-medium text-primary">{data.vendor?.name ?? '—'}</dd>
               </div>
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Date</dt>
+                <dt className="text-2xs uppercase tracking-wider text-muted">PO date</dt>
                 <dd className="font-mono">{formatDate(data.date)}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Expected</dt>
-                <dd className="font-mono">
-                  {data.expected_delivery_date ? formatDate(data.expected_delivery_date) : '—'}
-                </dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Incoterm</dt>
                 <dd className="font-mono">{data.incoterm ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Approved by</dt>
-                <dd>{data.approver?.name ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Approved at</dt>
-                <dd className="font-mono">
-                  {data.approved_at ? formatDate(data.approved_at) : '—'}
-                </dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Sent at</dt>
@@ -537,7 +590,7 @@ export default function PurchaseOrderDetailPage() {
                 </dd>
               </div>
               {data.purchase_request && (
-                <div className="col-span-3">
+                <div className="sm:col-span-2">
                   <dt className="text-2xs uppercase tracking-wider text-muted">From PR</dt>
                   <dd>
                     <Link
@@ -550,7 +603,7 @@ export default function PurchaseOrderDetailPage() {
                 </div>
               )}
               {data.rfq && (
-                <div className="col-span-3">
+                <div className="sm:col-span-2">
                   <dt className="text-2xs uppercase tracking-wider text-muted">Awarded from RFQ</dt>
                   <dd>
                     <Link to={`/purchasing/rfqs/${data.rfq.id}`} className="font-mono text-accent">
@@ -563,7 +616,7 @@ export default function PurchaseOrderDetailPage() {
                 </div>
               )}
               {data.remarks && (
-                <div className="col-span-3">
+                <div className="sm:col-span-2">
                   <dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt>
                   <dd>{data.remarks}</dd>
                 </div>
@@ -666,8 +719,8 @@ export default function PurchaseOrderDetailPage() {
                 </div>
                 {data.supplier_dispatch.status === 'portal_available' && (
                   <p className="text-muted">
-                    The approved PO is visible to active supplier portal users. Confirm only after
-                    the supplier has actually been notified.
+                    Supplier portal notification published. Automatic send confirmation is pending;
+                    refresh shortly.
                   </p>
                 )}
                 {data.supplier_dispatch.status === 'manual_required' && (
@@ -696,72 +749,8 @@ export default function PurchaseOrderDetailPage() {
             </Panel>
           )}
           {!['draft', 'pending_approval', 'approved'].includes(data.status) && (
-            <SupplierActivityPanel purchaseOrderId={data.id} />
+            <SupplierActivityPanel purchaseOrderId={data.id} orderedLines={data.items ?? []} />
           )}
-          <Panel title="Line items">
-            <div className="overflow-x-auto">
-              <table className={`${tableCls} min-w-[720px]`}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Item</Th>
-                    <Th>Description</Th>
-                    <Th align="right">Qty</Th>
-                    <Th align="right">Received</Th>
-                    <Th>Unit</Th>
-                    <Th align="right">Unit price</Th>
-                    <Th align="right">Total</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items?.map((l) => (
-                    <tr key={l.id} className={trCls}>
-                      <Td mono>{l.item.code}</Td>
-                      <Td>
-                        {l.description}
-                        {chargeParts(l.rfq_commercial).length > 0 && (
-                          <div className="text-2xs text-muted">
-                            +{' '}
-                            {chargeParts(l.rfq_commercial)
-                              .map(([label, v]) => `${label} ${formatPeso(v)}`)
-                              .join(' · ')}
-                          </div>
-                        )}
-                      </Td>
-                      <Td align="right" mono>
-                        {formatQuantity(l.quantity)}
-                      </Td>
-                      <Td align="right" mono>
-                        {formatQuantity(l.quantity_received)}
-                      </Td>
-                      <Td>{l.unit ?? l.item.unit_of_measure}</Td>
-                      <Td align="right" mono>
-                        {formatPeso(l.unit_price)}
-                      </Td>
-                      <Td align="right" mono className="font-medium">
-                        {formatPeso(l.total)}
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-                {/* RFQ header charges are in the subtotal but on no line, so
-                    the lines alone did not add up to it. */}
-                {chargeParts(data.rfq_commercial).length > 0 && (
-                  <tfoot>
-                    {chargeParts(data.rfq_commercial).map(([label, v]) => (
-                      <tr key={label} className={trCls}>
-                        <Td colSpan={6} className="text-muted">
-                          {label} (quoted, allocated to lines on receipt)
-                        </Td>
-                        <Td align="right" mono>
-                          {formatPeso(v)}
-                        </Td>
-                      </tr>
-                    ))}
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </Panel>
         </div>
         <div className="space-y-4">
           {latestResponse && (
@@ -854,7 +843,7 @@ export default function PurchaseOrderDetailPage() {
                     <p className="text-secondary">{latestResponse.resolution_notes}</p>
                   </div>
                 )}
-                {latestResponse.status === 'pending' && can('purchasing.po.approve') && (
+                {latestResponse.status === 'pending' && can('purchasing.po.responses.resolve') && (
                   <div className="flex justify-end gap-2 border-t border-subtle pt-3">
                     <Button
                       size="xs"
@@ -879,9 +868,11 @@ export default function PurchaseOrderDetailPage() {
               </div>
             </Panel>
           )}
-          <Panel title="Approval chain">
-            <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
-          </Panel>
+          {!!data.approval_records?.length && (
+            <Panel title="Approval chain">
+              <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
+            </Panel>
+          )}
           {/* ADV5 — Billing process panel: GRN → 3-way match → Bill → Payment. */}
           {data.status !== 'draft' &&
             data.status !== 'pending_approval' &&

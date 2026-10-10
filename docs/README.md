@@ -32,6 +32,7 @@ external-evidence gate (F-030).
 - `DEMO-SCRIPT.md` — live defense walkthrough.
 - `DEFENSE-TRACEABILITY.md` — adviser requirement-to-implementation mapping.
 - `SUPPLIER-RFQ-BIDDING-PLAN.md` - approved supplier RFQ bidding requirements and implementation plan.
+- [RFQ-BIDDING-PROCESS-STUDY.md](RFQ-BIDDING-PROCESS-STUDY.md) — current source study from RFQ sourcing through receipt, payment and returns, with verification evidence and open risks.
 - `defense-screenshots/` — current defense evidence.
 - `atelier-baseline/` — retained before/after visual baseline.
 

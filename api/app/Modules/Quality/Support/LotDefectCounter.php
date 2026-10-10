@@ -33,8 +33,10 @@ final class LotDefectCounter
     public static function for(Inspection $inspection, Collection $rows): array
     {
         $criticalFail = $rows->contains(
-            static fn (InspectionMeasurement $row): bool => $row->is_critical && $row->is_pass === false
+            static fn (InspectionMeasurement $row): bool => $row->is_critical && ($row->is_pass === false || $row->evaluate() === false || $row->item_result === 'failed')
         );
+
+        $criticalFail = $criticalFail || $inspection->critical_defect === true;
 
         $failed = static fn (InspectionMeasurement $row): bool => $row->is_pass === false;
 
@@ -51,7 +53,7 @@ final class LotDefectCounter
         }
 
         return [
-            'defects' => $rows->filter($failed)->pluck('sample_index')->unique()->count(),
+            'defects' => max((int) ($inspection->sample_defect_count ?? 0), $rows->filter($failed)->pluck('sample_index')->unique()->count()),
             'criticalFail' => $criticalFail,
         ];
     }

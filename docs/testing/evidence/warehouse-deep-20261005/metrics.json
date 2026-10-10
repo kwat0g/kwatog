@@ -1,0 +1,16 @@
+{
+  "visits": 40,
+  "apiFailures": 0,
+  "browserExceptions": 0,
+  "viewports": [
+    1440,
+    390
+  ],
+  "overflow": [
+    {
+      "route": "/inventory/warehouse-map",
+      "viewport": 390,
+      "documentWidth": 968
+    }
+  ]
+}

@@ -68,7 +68,7 @@ export function fromLeaveRequest(req: LeaveRequest): ApprovalStep[] {
  : 'pending';
 
  const hrAction: ApprovalAction =
- status === 'approved'
+ req.hr_approved_at || status === 'approved'
  ? 'approved'
  : isRejected && req.dept_approved_at
  ? 'rejected'

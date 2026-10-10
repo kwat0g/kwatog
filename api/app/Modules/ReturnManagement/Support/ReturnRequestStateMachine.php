@@ -15,6 +15,7 @@ final class ReturnRequestStateMachine
     public const TRANSITIONS = [
         ReturnRequestStatus::Draft->value => [
             ReturnRequestStatus::PendingApproval->value,
+            ReturnRequestStatus::Approved->value,
             ReturnRequestStatus::Cancelled->value,
         ],
         ReturnRequestStatus::PendingApproval->value => [
@@ -24,6 +25,7 @@ final class ReturnRequestStateMachine
         ],
         ReturnRequestStatus::Approved->value => [
             ReturnRequestStatus::Received->value,
+            ReturnRequestStatus::Inspected->value,
             ReturnRequestStatus::Cancelled->value,
         ],
         ReturnRequestStatus::Received->value => [ReturnRequestStatus::Inspected->value],

@@ -1,0 +1,147 @@
+{
+  "results": [
+    {
+      "name": "Warehouse, manager and assigned workers sign in through real UI",
+      "status": "passed"
+    },
+    {
+      "name": "Start creates one issue; receipt remains pending",
+      "status": "passed"
+    },
+    {
+      "name": "QC inspector completes auto-created in-process PASS checklist",
+      "status": "passed",
+      "detail": "In-process PASS becomes final; separate review is required for outgoing/incoming release"
+    },
+    {
+      "name": "Normal output blocked while Warehouse receipt missing",
+      "status": "passed"
+    },
+    {
+      "name": "Manager records explicit exception through output UI",
+      "status": "passed"
+    },
+    {
+      "name": "Warehouse grouped queue prefills original source and recorder; confirms through UI",
+      "status": "passed"
+    },
+    {
+      "name": "Receipt replay stays single; mobile history readable",
+      "status": "passed"
+    },
+    {
+      "name": "Assigned worker records normal output after handover",
+      "status": "passed"
+    },
+    {
+      "name": "Employee, HR and sales cannot confirm Warehouse handover",
+      "status": "passed"
+    },
+    {
+      "name": "No browser exceptions or API server errors",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/quality/inspections/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/quality/inspections/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/lZQYjvYywx/outputs",
+      "status": 422,
+      "message": "Warehouse handover is pending. Ask Warehouse to confirm before recording output."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/material-handovers/sources?work_order_id=lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/inventory/material-handovers/group",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/my-work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/lZQYjvYywx/outputs",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/inventory/material-handovers/group",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/inventory/material-handovers/group",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/inventory/material-handovers/group",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    }
+  ]
+}

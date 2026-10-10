@@ -1,0 +1,16 @@
+Worker options: 41 employees, 16 queries
+
+   PASS  Tests\Feature\Production\ProductionAttendanceConnectionTest
+  ✓ accepted reentry is present without erasing payroll clock out       19.49s  
+  ✓ clock in before shift is explained as shift coverage not missing at… 1.61s  
+  ✓ worker options batch reads and do not reuse stale attendance         3.05s  
+  ✓ missing calendar and overtime do not imply shift coverage            1.51s  
+  ✓ shift and calendar edits cannot break a committed work order         1.50s  
+  ✓ clock out notifies managers and blocks new operations not historica… 1.85s  
+  ✓ punched shift history requires a future assignment and new shift de… 1.67s  
+  ✓ expired active work requires hr impact review                        1.39s  
+  ✓ future half day leave and account deactivation notify owners         1.83s  
+
+  Tests:    9 passed (35 assertions)
+  Duration: 35.64s
+

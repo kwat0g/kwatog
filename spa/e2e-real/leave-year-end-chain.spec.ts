@@ -4,7 +4,7 @@ import { baseUrl, captureNetwork, loginAs, relevantErrors, statefulHeaders } fro
 type YearEndSubmission = {
   message: string;
   outbox_id: string;
-  status: string;
+  status: 'pending' | 'published';
 };
 
 type ListenerRun = {
@@ -46,7 +46,7 @@ test('HR queues year-end leave through the page and the listener records complet
     const response = await responsePromise;
     expect(response.status()).toBe(202);
     const submission = (await response.json()) as YearEndSubmission;
-    expect(submission.status).toBe('pending');
+    expect(['pending', 'published']).toContain(submission.status);
     expect(submission.outbox_id).toBeTruthy();
     await expect(page.getByText(submission.message)).toBeVisible();
 

@@ -1,0 +1,1 @@
+PASS Material lot preserves kilograms and derives FAIL from affected-lot confirmation { quantity: '200.500', unit: 'kg', affectedLots: 1, result: 'failed' }

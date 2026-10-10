@@ -1,0 +1,236 @@
+{
+  "database": "ogami_test_inventory_browser_invmuvrv1h9",
+  "phase": "stock-count",
+  "checks": [
+    {
+      "name": "Real cookie login: warehouse@ogami.test"
+    },
+    {
+      "name": "Real cookie login: warehouse-checker@ogami.test"
+    },
+    {
+      "name": "Real cookie login: warehouse-finisher@ogami.test"
+    },
+    {
+      "name": "Real cookie login: finance@ogami.test"
+    },
+    {
+      "name": "Warehouse stock count freezes a zone; separate checker approves variance, third actor completes; Finance approves gated adjustment",
+      "evidence": {
+        "maker": "warehouse@ogami.test",
+        "checker": "warehouse-checker@ogami.test",
+        "completer": "warehouse-finisher@ogami.test",
+        "lines": [
+          {
+            "item": "AUD-RESIN",
+            "location": "AUD-WH-RAW-AUD-RECEIPT",
+            "system": "5.000",
+            "counted": "5.000"
+          },
+          {
+            "item": "AUD-RESERVED",
+            "location": "AUD-WH-RAW-AUD-RESERVED-BIN",
+            "system": "20.000",
+            "counted": "20.000"
+          },
+          {
+            "item": "AUD-RESERVED",
+            "location": "AUD-WH-RAW-AUD-FREE-BIN",
+            "system": "4.000",
+            "counted": "3.000"
+          }
+        ],
+        "freeze": {
+          "attemptedTransfer": 201,
+          "executeDuringCount": 422,
+          "unchangedQuantity": "4.000",
+          "cancelled": 204
+        },
+        "variance": {
+          "system": "4.000",
+          "counted": "3.000",
+          "delta": "-1.000",
+          "approvalRequired": true
+        },
+        "makerSelfApprovalStatus": 422,
+        "independentApprovalStatus": 200,
+        "checkerCompletionDeniedStatus": 422,
+        "checkerCompletionDeniedMessage": "A different user must complete a stock count after recording or approving a line.",
+        "stockUnchangedAfterCheckerCompletionAttempt": "4.000",
+        "duplicateCompletionDeniedStatus": 422,
+        "duplicateCompletionDeniedMessage": "Session must be in progress to complete.",
+        "completionAuditCount": "1",
+        "sessionStatus": "completed",
+        "opening": {
+          "quantity": "4.000",
+          "value": "50.00"
+        },
+        "afterCountApproval": {
+          "quantity": "3.000",
+          "value": "37.50",
+          "weightedAverageCost": "12.5000"
+        },
+        "adjustment": {
+          "statusBeforeFinance": "pending",
+          "warehouseApprovalStatus": 403,
+          "financeStatus": "approved"
+        },
+        "closing": {
+          "quantity": "2.000",
+          "value": "25.00",
+          "weightedAverageCost": "12.5000"
+        },
+        "stockCardMovementCount": 3,
+        "stockCountVarianceMovement": {
+          "id": "DqpX79YWv2",
+          "type": "adjustment_out",
+          "quantity": "1.000",
+          "referenceType": "stock_count_session"
+        }
+      }
+    }
+  ],
+  "findings": [],
+  "artifacts": [
+    "/tmp/warehouse-real-browser-final/stock-count/success-stock-count-approved.png"
+  ],
+  "browserErrors": [],
+  "diagnostics": {
+    "consoleErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse-finisher@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-finisher@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-finisher@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      },
+      {
+        "email": "finance@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "finance@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      }
+    ],
+    "failedRequests": [],
+    "httpErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/transfer-orders/l49YDNXb3e/execute",
+        "status": 422
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/stock-counts/items/jnVYkWYkvp/approve",
+        "status": 422
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/stock-counts/5KZYy8gNxw/complete",
+        "status": 422
+      },
+      {
+        "email": "warehouse-finisher@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-finisher@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-finisher@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/stock-counts/5KZYy8gNxw/complete",
+        "status": 422
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "PATCH",
+        "path": "/api/v1/inventory/stock-adjustments/l49YDNXb3e/approve",
+        "status": 403
+      },
+      {
+        "email": "finance@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "finance@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      }
+    ]
+  },
+  "serverLog": "/tmp/warehouse-real-browser-final/server.log"
+}

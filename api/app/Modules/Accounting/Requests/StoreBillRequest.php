@@ -22,7 +22,7 @@ class StoreBillRequest extends FormRequest
             'goods_receipt_note_id'        => ['nullable', 'string'],
             'provenance_type'              => ['required', 'in:stock,service,landed_cost'],
             'exception_evidence'           => ['required_if:provenance_type,service', 'string', 'max:2000'],
-            'exception_approved'           => ['required_if:provenance_type,service', 'boolean', 'accepted'],
+            'exception_approved'           => ['accepted_if:provenance_type,service'],
             'landed_cost_shipment_id'      => ['required_if:provenance_type,landed_cost', 'nullable', 'string'],
             'department_id'                => ['nullable', 'string'],
             'date'                         => ['required', 'date'],

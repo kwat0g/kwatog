@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Attendance;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\AuditLog;
+use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\EmployeeShiftAssignment;
 use App\Modules\Attendance\Models\Holiday;
@@ -16,11 +18,10 @@ use App\Modules\Attendance\Services\HolidayService;
 use App\Modules\Attendance\Services\OvertimeService;
 use App\Modules\Attendance\Services\ShiftAssignmentService;
 use App\Modules\Attendance\Services\ShiftService;
-use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -193,7 +194,7 @@ class AttendanceHardeningTest extends TestCase
         $service->assignToEmployee($future->id, $oldShift->id, '2026-06-15');
         $this->assertRule(
             fn () => $service->assignToEmployee($future->id, $newShift->id, '2026-06-01', '2026-06-30'),
-            'overlaps an existing future assignment',
+            'This employee already has a shift starting June 15, 2026. End or remove it before assigning another.',
         );
         $this->assertSame(1, EmployeeShiftAssignment::where('employee_id', $future->id)->count());
     }
@@ -331,6 +332,60 @@ class AttendanceHardeningTest extends TestCase
         $this->assertNotSoftDeleted('shifts', ['id' => $shift->id]);
         $this->assertNotSoftDeleted('holidays', ['id' => $holiday->id]);
         $this->assertNotSoftDeleted('attendances', ['id' => $attendance->id]);
+    }
+
+    public function test_working_days_are_preserved_and_legacy_calendars_are_not_guessed(): void
+    {
+        $service = app(ShiftAssignmentService::class);
+        $shift = $this->shift('Calendar shift');
+        foreach ([[1, 2, 3, 4, 5], [7], [1, 2, 3, 4, 5, 6], null] as $days) {
+            $employee = Employee::factory()->create();
+            $service->assignToEmployee($employee->id, $shift->id, '2026-10-01', '2026-10-31', $days);
+            $assignment = EmployeeShiftAssignment::where('employee_id', $employee->id)->firstOrFail();
+            $this->assertSame($days, $assignment->working_days);
+        }
+        foreach ([[], [0], [8], [1, 1], ['1'], [1.5]] as $invalid) {
+            $this->assertRule(
+                fn () => $service->assignToEmployee(Employee::factory()->create()->id, $shift->id, '2026-10-01', null, $invalid),
+                'Working days must contain unique ISO weekdays from 1 to 7.',
+            );
+        }
+    }
+
+    public function test_assignment_api_requires_calendar_and_hr_configuration_preserves_dates_and_audit(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $admin = User::factory()->withRole('system_admin')->create();
+        $employee = Employee::factory()->create();
+        $shift = $this->shift('API calendar shift');
+        $payload = ['shift_id' => $shift->hash_id, 'effective_date' => '2026-10-01'];
+        $this->actingAs($admin)->postJson("/api/v1/attendance/shifts/assign-employee/{$employee->hash_id}", $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors('working_days');
+        $this->postJson('/api/v1/attendance/shifts/bulk-assign', $payload + ['department_id' => $employee->department->hash_id])
+            ->assertUnprocessable()->assertJsonValidationErrors('working_days');
+        foreach ([[], [1, 1], [8], ['1']] as $invalid) {
+            $this->postJson("/api/v1/attendance/shifts/assign-employee/{$employee->hash_id}", $payload + ['working_days' => $invalid])
+                ->assertUnprocessable();
+        }
+        app(ShiftAssignmentService::class)->assignToEmployee($employee->id, $shift->id, '2026-10-01', '2026-10-31');
+        $assignment = EmployeeShiftAssignment::where('employee_id', $employee->id)->firstOrFail();
+        $this->getJson('/api/v1/attendance/shift-assignments')->assertOk()->assertJsonPath('data.0.working_days', null);
+        $this->patchJson("/api/v1/attendance/shift-assignments/{$assignment->hash_id}/working-days", ['working_days' => [7]])
+            ->assertOk()->assertJsonPath('data.working_days', [7]);
+        $this->assertSame('2026-10-01', $assignment->fresh()->effective_date->toDateString());
+        $this->assertSame('2026-10-31', $assignment->fresh()->end_date->toDateString());
+        $audit = AuditLog::where('model_type', EmployeeShiftAssignment::class)
+            ->where('model_id', $assignment->id)->where('action', 'updated')->firstOrFail();
+        $this->assertSame($admin->id, $audit->user_id);
+        $this->assertSame([7], $audit->new_values['working_days']);
+        $outsider = User::factory()->withRole('employee')->create();
+        $this->actingAs($outsider)->patchJson("/api/v1/attendance/shift-assignments/{$assignment->hash_id}/working-days", ['working_days' => [1]])
+            ->assertForbidden();
+        $this->assertSame([7], $assignment->fresh()->working_days);
+        $inactive = User::factory()->withRole('system_admin')->create(['is_active' => false]);
+        $this->actingAs($inactive)->patchJson("/api/v1/attendance/shift-assignments/{$assignment->hash_id}/working-days", ['working_days' => [1]])
+            ->assertUnauthorized();
+        $this->assertSame([7], $assignment->fresh()->working_days);
     }
 
     private function overtime(Employee $employee, string $date = '2026-04-10'): OvertimeRequest

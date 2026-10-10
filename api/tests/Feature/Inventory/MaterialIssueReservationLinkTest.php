@@ -61,6 +61,27 @@ class MaterialIssueReservationLinkTest extends TestCase
         ]);
     }
 
+    public function test_split_lot_slip_replays_without_reallocating_or_double_issuing(): void
+    {
+        $item = Item::factory()->create();
+        $location = WarehouseLocation::factory()->create();
+        foreach (['A', 'B'] as $lot) {
+            $this->movements->move(new \App\Modules\Inventory\Support\StockMovementInput(
+                type: \App\Modules\Inventory\Enums\StockMovementType::GrnReceipt, itemId: $item->id,
+                toLocationId: $location->id, quantity: '5.000', unitCost: '2.0000', lotNumber: $lot));
+        }
+        $payload = ['idempotency_key' => 'split-lot-replay', 'issued_date' => now()->toDateString(), 'items' => [[
+            'item_id' => $item->id, 'location_id' => $location->id, 'quantity_issued' => '8.000',
+        ]]];
+        $first = $this->issues->create($payload, $this->user);
+        $second = $this->issues->create($payload, $this->user);
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(['A', 'B'], $first->items->pluck('lot_number')->all());
+        $this->assertSame(['5.000', '3.000'], $first->items->pluck('quantity_issued')->all());
+        $this->assertSame('16.00', (string) $first->total_value);
+        $this->assertSame('2.000', (string) $this->level($item, $location)->quantity);
+    }
+
     private function level(Item $item, WarehouseLocation $location): StockLevel
     {
         return StockLevel::where('item_id', $item->id)

@@ -23,6 +23,12 @@ class GrnRejectedReturnUomTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['inspection.checklist_capture_enabled' => true]);
+    }
+
     private function receipt(string $purchaseUom, string $quantity): array
     {
         $receiver = User::factory()->create(['is_active' => true]);
@@ -78,8 +84,17 @@ class GrnRejectedReturnUomTest extends TestCase
     {
         [$service, $grn, $receiver] = $this->receipt('BAG', '10');
         $this->expectBasePricedReturn('10.000');
+        $inspection = Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->firstOrFail();
+        $resultVersion = (int) $inspection->result_version;
 
         $service->reject($grn, 'Incoming QC rejected both bags', $receiver);
+
+        $this->assertSame('cancelled', $inspection->fresh()->status->value);
+        $this->assertSame($resultVersion + 1, (int) $inspection->fresh()->result_version);
+        $this->assertSame('rejected', $grn->fresh()->status->value);
     }
 
     public function test_remainder_rejection_passes_base_quantity_and_base_price_to_supplier_return(): void

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Listeners;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\NotificationService;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\Accounting\Events\InvoiceFinalized;
 use App\Modules\Accounting\Mail\CustomerInvoiceFinalizedMail;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +25,10 @@ class EmailCustomerOnInvoiceFinalized implements ShouldQueue
             'salesOrder',
         ]);
 
+        app(NotificationService::class)->sendPortalInApp(CustomerPortalUser::where('customer_id', $invoice->customer_id)->where('is_active', true)->get(), 'invoice.finalized', [
+            'title' => 'Invoice '.$invoice->invoice_number.' is ready', 'message' => 'Review your invoice and payment terms in the customer portal.',
+            'link_to' => '/portal/customer/invoices/'.$invoice->hash_id, 'entity_type' => 'invoice', 'entity_id' => $invoice->hash_id,
+        ], 'invoice:'.$invoice->id.':finalized');
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
             'link_to' => '/accounting/invoices/'.$invoice->hash_id,

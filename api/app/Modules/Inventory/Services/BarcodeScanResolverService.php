@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\StockCountItem;
+use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\WarehouseLocation;
-use App\Modules\Inventory\Enums\GrnStatus;
-use App\Modules\Inventory\Enums\StockCountItemStatus;
-use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use Illuminate\Validation\ValidationException;
 
 /**
  * T2.1 — Resolves a scanned barcode to a typed entity + state-aware
@@ -27,19 +31,72 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
  */
 class BarcodeScanResolverService
 {
-    public function resolve(string $barcode, array $context = []): array
+    public function resolve(string $barcode, array $context = [], ?User $actor = null): array
     {
+        $actor ??= auth()->user();
+        abort_unless($actor && $actor->hasPermission('inventory.view'), 403);
+        $this->validateContext($context, $actor);
         $code = strtoupper(trim($barcode));
         if ($code === '') {
             return $this->unknown();
         }
 
-        return match (true) {
+        $result = match (true) {
             str_starts_with($code, 'WO-') => $this->resolveWorkOrder($code, $context),
             str_starts_with($code, 'PO-') => $this->resolvePurchaseOrder($code, $context),
             str_starts_with($code, 'GRN-') => $this->resolveGrn($code, $context),
             default => $this->resolveInventoryCode($code, $context),
         };
+        $entityPermission = match ($result['type']) {
+            'work_order' => 'production.work_orders.view',
+            'purchase_order' => 'purchasing.view',
+            'goods_receipt_note' => 'inventory.view',
+            default => null,
+        };
+        if ($entityPermission) {
+            abort_unless($actor->hasPermission($entityPermission), 403);
+        }
+        $permissions = [
+            'view_item' => 'inventory.view', 'view_bin' => 'inventory.warehouse.manage',
+            'view_wo' => 'production.work_orders.view', 'view_po' => 'purchasing.view',
+            'view_grn' => 'inventory.view', 'open_grn' => 'inventory.grn.create',
+            'report_output' => 'production.wo.record', 'report_defect' => 'production.wo.record',
+            'issue_to_wo' => 'inventory.issue.create', 'add_to_grn' => 'inventory.grn.create',
+            'pick_for_issue' => 'inventory.picking.view', 'record_count' => 'inventory.stock_count.manage',
+        ];
+        $result['suggested_actions'] = array_values(array_filter($result['suggested_actions'],
+            fn ($action) => isset($permissions[$action['action']]) && $actor->hasPermission($permissions[$action['action']])));
+
+        return $result;
+    }
+
+    private function validateContext(array $context, User $actor): void
+    {
+        $contracts = [
+            'wo_id' => [WorkOrder::class, ['inventory.issue.create'], ['confirmed', 'in_progress', 'paused']],
+            'grn_id' => [GoodsReceiptNote::class, ['inventory.grn.create'], ['pending_qc']],
+            'material_issue_id' => [MaterialIssueSlip::class,
+                ['inventory.issue.create', 'inventory.picking.view'], ['issued']],
+            'stock_count_session_id' => [StockCountSession::class,
+                ['inventory.stock_count.manage'], ['in_progress']],
+        ];
+        foreach ($context as $key => $value) {
+            if (! isset($contracts[$key])) {
+                throw ValidationException::withMessages(['context' => 'Choose a supported scan context.']);
+            }
+            if ($value === null || $value === '') {
+                continue;
+            }
+            [$model, $permissions, $statuses] = $contracts[$key];
+            foreach ($permissions as $permission) {
+                abort_unless($actor->hasPermission($permission), 403);
+            }
+            $id = $this->decodeNumericOrHash($value);
+            $record = $id ? $model::query()->find($id) : null;
+            if (! $record || ! in_array($this->statusValue($record->status), $statuses, true)) {
+                throw ValidationException::withMessages(['context.'.$key => 'Choose an active eligible context record.']);
+            }
+        }
     }
 
     private function resolveInventoryCode(string $code, array $context): array
@@ -234,7 +291,7 @@ class BarcodeScanResolverService
         if (is_string($woHash) && $woHash !== '') {
             $woId = $this->decodeHashId($woHash);
             $wo = $woId ? WorkOrder::query()->find($woId) : null;
-            if ($wo && in_array($this->statusValue($wo->status), ['released', 'in_progress', 'confirmed'], true)) {
+            if ($wo && in_array($this->statusValue($wo->status), ['paused', 'in_progress', 'confirmed'], true)) {
                 $actions[] = [
                     'action' => 'issue_to_wo',
                     'label' => "Issue to {$wo->wo_number}",

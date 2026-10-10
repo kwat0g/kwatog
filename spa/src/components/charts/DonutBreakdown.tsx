@@ -56,8 +56,8 @@ export function DonutBreakdown({
  </div>
  )}
  <div className="flex flex-wrap gap-3 justify-center mt-2">
- {data.map((entry) => (
- <div key={entry.name} className="flex items-center gap-1.5 text-xs">
+ {data.map((entry, index) => (
+ <div key={`${entry.name}-${index}`} className="flex items-center gap-1.5 text-xs">
  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
  <span className="text-muted">{entry.name}</span>
  <span className="font-mono tabular-nums">{entry.value}</span>

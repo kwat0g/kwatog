@@ -53,6 +53,7 @@ final class AccountingAccountPolicyService
         'accounting.accounts.asset_disposal_gain_code' => AccountType::Revenue,
         'accounting.accounts.depreciation_expense_code' => AccountType::Expense,
         'accounting.accounts.material_consumption_code' => AccountType::Expense,
+        'accounting.accounts.maintenance_consumption_code' => AccountType::Expense,
         'accounting.accounts.inventory_adjustment_code' => AccountType::Expense,
         'accounting.accounts.delivery_cogs_code' => AccountType::Expense,
         'accounting.accounts.delivery_loss_code' => AccountType::Expense,

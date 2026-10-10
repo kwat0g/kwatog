@@ -6,6 +6,8 @@ use App\Modules\Inventory\Controllers\GoodsReceiptNoteController;
 use App\Modules\Inventory\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Controllers\ItemCategoryController;
 use App\Modules\Inventory\Controllers\ItemController;
+use App\Modules\Inventory\Controllers\ItemCostReviewController;
+use App\Modules\Inventory\Controllers\MaterialHandoverController;
 use App\Modules\Inventory\Controllers\MaterialIssueSlipController;
 use App\Modules\Inventory\Controllers\MrbController;
 use App\Modules\Inventory\Controllers\StockAdjustmentController;
@@ -22,6 +24,9 @@ use App\Modules\Quality\Controllers\ItemQualityPlanController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->group(function () {
+    Route::get('/cost-reviews', [ItemCostReviewController::class, 'index'])->middleware('permission:inventory.costs.review');
+    Route::post('/cost-reviews/{itemCostReview}/renew', [ItemCostReviewController::class, 'renew'])->middleware('permission:inventory.costs.review');
+    Route::post('/cost-reviews/{itemCostReview}/decide', [ItemCostReviewController::class, 'decide'])->middleware('permission:inventory.costs.approve');
 
     /* ─── Item categories ─── */
     Route::get('/item-categories', [ItemCategoryController::class, 'index'])->middleware('permission:inventory.view');
@@ -108,6 +113,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
 
     /* ─── Stock ─── */
     Route::get('/stock-levels', [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
+    Route::get('/material-reservations', [StockLevelController::class, 'reservations'])->middleware('permission:inventory.view');
     Route::get('/stock-movements/options', [StockMovementController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/stock-movements', [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/stock-movements/{stockMovement}/return-options', [StockMovementController::class, 'returnOptions'])->middleware('permission:inventory.issue.create');
@@ -115,6 +121,13 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/stock-movements/{stockMovement}/retry-gl', [StockMovementController::class, 'retryGlHandoff'])->middleware('permission:accounting.journal.post');
     Route::post('/scan/resolve', [WarehouseScanController::class, 'resolve'])->middleware('permission:inventory.view');
     Route::get('/scan/options', [WarehouseScanController::class, 'options'])->middleware('permission:inventory.view');
+    Route::get('/scan/records', [WarehouseScanController::class, 'records'])->middleware('permission:inventory.view');
+    Route::post('/maintenance-part-requests/{partRequest}/handover', [MaterialHandoverController::class, 'confirmMaintenanceRequest'])->middleware('permission:inventory.issue.create');
+    Route::get('/material-handovers', [MaterialHandoverController::class, 'index'])->middleware('permission:inventory.picking.view');
+    Route::get('/material-handovers/sources', [MaterialHandoverController::class, 'sources'])->middleware('permission:inventory.picking.view');
+    Route::post('/material-handovers/group', [MaterialHandoverController::class, 'storeGroup'])->middleware('permission:inventory.issue.create');
+    Route::get('/stock-movements/{stockMovement}/handover-options', [MaterialHandoverController::class, 'options'])->middleware('permission:inventory.issue.create');
+    Route::post('/stock-movements/{stockMovement}/handover', [MaterialHandoverController::class, 'store'])->middleware('permission:inventory.issue.create');
     Route::get('/stock-adjustments/options', [StockAdjustmentController::class, 'options'])
         ->middleware('permission_any:inventory.adjust,inventory.adjust.approve');
     Route::get('/stock-adjustments', [StockAdjustmentController::class, 'index'])
@@ -178,6 +191,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/mrb/options', [MrbController::class, 'options'])->middleware('permission:inventory.mrb.view');
     Route::get('/mrb', [MrbController::class, 'index'])->middleware('permission:inventory.mrb.view');
     Route::get('/mrb/quality-options', [MrbController::class, 'qualityOptions'])->middleware('permission:inventory.mrb.view');
+    Route::get('/mrb/source-lots', [MrbController::class, 'sourceLots'])->middleware('permission:inventory.mrb.manage');
     Route::get('/mrb/{mrb}', [MrbController::class, 'show'])->middleware('permission:inventory.mrb.view');
     Route::post('/mrb', [MrbController::class, 'store'])->middleware('permission:inventory.mrb.manage');
     Route::post('/mrb/{mrb}/release', [MrbController::class, 'release'])->middleware('permission:inventory.mrb.manage');

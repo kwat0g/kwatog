@@ -61,7 +61,10 @@ class MaterialIssueReservationInvariantTest extends TestCase
         $this->issues = app(MaterialIssueService::class);
         $this->movements = app(StockMovementService::class);
         $this->user = User::factory()->create();
-        $this->item = Item::factory()->create(['name' => 'Reservation Invariant Material']);
+        $this->item = Item::factory()->create([
+            'name' => 'Reservation Invariant Material',
+            'unit_of_measure' => 'kg',
+        ]);
         $this->location = WarehouseLocation::factory()->create(['code' => 'RSV-'.substr(uniqid(), -5)]);
 
         StockLevel::create([

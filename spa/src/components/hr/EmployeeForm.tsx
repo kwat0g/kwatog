@@ -16,8 +16,11 @@ import { digitsOnly } from '@/lib/phFormat';
 import { onFormInvalid } from '@/lib/formErrors';
 import { actionLabel } from '@/lib/labels';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
+import { SkeletonForm } from '@/components/ui/Skeleton';
 import type { Employee } from '@/types/hr';
-import { localIsoDate } from '@/lib/formatDate';
+import { localIsoDate, manilaIsoDate, formatDate, formatTime } from '@/lib/formatDate';
+import { WorkingDaysPicker } from './WorkingDaysPicker';
+import { DEFAULT_WORKING_DAYS, sameDays } from '@/lib/workingDays';
 
 // Names: letters, spaces, periods, apostrophes, hyphens. Up to 100 chars.
 const namePattern = /^[\p{L}\s.'-]+$/u;
@@ -128,6 +131,8 @@ export const employeeSchema = z
       .or(z.literal('')),
 
     shift_id: z.string().optional().or(z.literal('')),
+    // Edit only: ISO weekdays (1–7) for the shift assignment. Undefined on create.
+    working_days: z.array(z.number().int().min(1).max(7)).optional(),
     // Internal form-only marker: compensation is required on create but is
     // intentionally omitted from the generic edit payload.
     __edit: z.boolean().optional(),
@@ -157,6 +162,10 @@ export const employeeSchema = z
   .refine((d) => !d.semi_monthly_rate || Number(d.semi_monthly_rate) <= 9_999_999.99, {
     message: 'Maximum 9,999,999.99',
     path: ['semi_monthly_rate'],
+  })
+  .refine((d) => d.__edit !== true || !d.shift_id || (d.working_days?.length ?? 0) > 0, {
+    message: 'Select at least one working day.',
+    path: ['working_days'],
   });
 
 export type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -196,12 +205,21 @@ const FIELD_LABELS: Partial<Record<keyof EmployeeFormValues, string>> = {
   bank_name: 'Bank name',
   bank_account_no: 'Account number',
   shift_id: 'Shift',
+  working_days: 'Working days',
 };
+
+/** The employee's current shift assignment, loaded by the edit page before the form mounts. */
+export interface InitialShift {
+  shift_id: string;
+  /** null = no custom schedule (the default Monday–Saturday applies). */
+  working_days: number[] | null;
+}
 
 function defaults(
   employee?: Employee | null,
   canEditSensitive = true,
   isEditing = false,
+  initialShift?: InitialShift | null,
 ): EmployeeFormValues {
   return {
     first_name: employee?.first_name ?? '',
@@ -234,7 +252,7 @@ function defaults(
     position_id: employee?.position?.id ?? '',
     employment_type: employee?.employment_type ?? '',
     pay_type: employee?.pay_type ?? '',
-    date_hired: employee?.date_hired ?? '',
+    date_hired: employee?.date_hired ?? (isEditing ? '' : manilaIsoDate()),
     date_regularized: employee?.date_regularized ?? '',
     basic_monthly_salary: employee?.basic_monthly_salary ?? '',
     semi_monthly_rate: employee?.semi_monthly_rate ?? '',
@@ -242,7 +260,8 @@ function defaults(
     bank_name: canEditSensitive ? (employee?.bank_name ?? '') : '',
     bank_account_no: canEditSensitive ? (employee?.bank_account_no ?? '') : '',
 
-    shift_id: '',
+    shift_id: initialShift?.shift_id ?? '',
+    working_days: isEditing ? (initialShift?.working_days ?? DEFAULT_WORKING_DAYS) : undefined,
     __edit: isEditing,
   };
 }
@@ -256,6 +275,12 @@ interface Props {
   registerSetError?: (fn: (field: keyof EmployeeFormValues, msg: string) => void) => void;
   submitLabel: string;
   canEditSensitive?: boolean;
+  /** Edit only: prefill the shift + schedule from the current assignment. */
+  initialShift?: InitialShift | null;
+  /** Edit only: false renders the shift as read-only (no `attendance.shifts.manage`). */
+  canAssignShift?: boolean;
+  /** Conversion only: keep employment details supplied by the job posting. */
+  lockPostingFields?: boolean;
 }
 
 export function EmployeeForm({
@@ -266,6 +291,9 @@ export function EmployeeForm({
   registerSetError,
   submitLabel,
   canEditSensitive: sensitivePermission = true,
+  initialShift,
+  canAssignShift = true,
+  lockPostingFields = false,
 }: Props) {
   const isEditing = Boolean(employee?.id);
   const canEditSensitive = !isEditing || sensitivePermission;
@@ -275,10 +303,10 @@ export function EmployeeForm({
     watch,
     setError,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
-    defaultValues: defaults(employee, canEditSensitive, isEditing),
+    defaultValues: defaults(employee, canEditSensitive, isEditing, initialShift),
   });
 
   useEffect(() => {
@@ -287,17 +315,19 @@ export function EmployeeForm({
 
   const payType = watch('pay_type');
   const departmentId = watch('department_id');
+  const shiftId = watch('shift_id');
+  const workingDays = watch('working_days');
 
-  const { data: departments = [] } = useQuery({
+  const { data: departments = [], isLoading: departmentsLoading } = useQuery({
     queryKey: ['hr', 'departments', 'tree'],
     queryFn: () => departmentsApi.tree(),
   });
-  const { data: shiftsResp } = useQuery({
+  const { data: shiftsResp, isLoading: shiftsLoading } = useQuery({
     queryKey: ['attendance', 'shifts', 'all'],
     queryFn: () => shiftsApi.list({ per_page: 100 }),
   });
-  const shifts = shiftsResp?.data ?? [];
-  const { data: employeeOptions } = useQuery({
+  const shifts = useMemo(() => shiftsResp?.data ?? [], [shiftsResp]);
+  const { data: employeeOptions, isLoading: optionsLoading } = useQuery({
     queryKey: ['hr', 'employee-options'],
     queryFn: () => employeesApi.options(),
   });
@@ -305,15 +335,51 @@ export function EmployeeForm({
   const payTypes = employeeOptions?.pay_types ?? [];
   const genders = employeeOptions?.genders ?? [];
   const civilStatuses = employeeOptions?.civil_statuses ?? [];
-  const { data: positionsResp } = useQuery({
+  const { data: positionsResp, isLoading: positionsLoading } = useQuery({
     queryKey: ['hr', 'positions', 'all', departmentId],
     queryFn: () => positionsApi.list({ department_id: departmentId, per_page: 100 }),
     enabled: !!departmentId,
   });
   const positions = useMemo(() => positionsResp?.data ?? [], [positionsResp]);
 
+  // Native selects take their value from the form when they mount and are not
+  // re-synced when their options arrive later, so mounting early left Gender,
+  // Department, Position… blank (and failed validation) on a cold page load.
+  // On edit, hold the form until every option list it prefills from has loaded.
+  const loadingOptions =
+    isEditing &&
+    (departmentsLoading || shiftsLoading || optionsLoading || (!!departmentId && positionsLoading));
+
   const todayStr = localIsoDate();
+  const currentShiftName = useMemo(() => {
+    const current = shifts.find((s) => s.id === initialShift?.shift_id);
+
+    return current
+      ? `${current.name} (${formatTime(current.start_time)}–${formatTime(current.end_time)})`
+      : null;
+  }, [shifts, initialShift]);
+  const shiftChanged = isEditing && (shiftId ?? '') !== (initialShift?.shift_id ?? '');
+  const daysChanged =
+    isEditing &&
+    !!shiftId &&
+    !shiftChanged &&
+    !sameDays(workingDays, initialShift?.working_days ?? DEFAULT_WORKING_DAYS);
+  const shiftNote = shiftChanged
+    ? `Saving assigns this shift starting today (${formatDate(todayStr)}).`
+    : daysChanged
+      ? 'Saving updates the working days of the current assignment.'
+      : isEditing && initialShift?.shift_id && initialShift.working_days === null
+        ? 'No custom schedule is set, so Monday to Saturday is assumed.'
+        : null;
   const minBirthStr = localIsoDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 365.25 * 15));
+
+  if (loadingOptions) {
+    return (
+      <div className="mx-auto max-w-4xl px-5 py-4">
+        <SkeletonForm />
+      </div>
+    );
+  }
 
   return (
     <form
@@ -494,12 +560,14 @@ export function EmployeeForm({
         </div>
       </Section>
 
-      <Section title="Employment">
+      <Section title="Employment" hint={lockPostingFields ? 'Details supplied by the job posting are locked.' : undefined}>
         <div className="grid grid-cols-2 gap-3">
           <Select
             label="Department"
             required
             {...register('department_id')}
+            disabled={lockPostingFields && !!employee?.department?.id}
+            value={departmentId}
             error={errors.department_id?.message}
           >
             <option value="">— Select —</option>
@@ -513,8 +581,9 @@ export function EmployeeForm({
             label="Position"
             required
             {...register('position_id')}
+            value={watch('position_id')}
             error={errors.position_id?.message}
-            disabled={!departmentId}
+            disabled={!departmentId || (lockPostingFields && !!employee?.position?.id)}
           >
             <option value="">{departmentId ? '— Select —' : '— Pick department first —'}</option>
             {positions.map((p) => (
@@ -527,6 +596,8 @@ export function EmployeeForm({
             label="Employment type"
             required
             {...register('employment_type')}
+            disabled={lockPostingFields && !!employee?.employment_type}
+            value={watch('employment_type')}
             error={errors.employment_type?.message}
           >
             <option value="">— Select —</option>
@@ -554,7 +625,7 @@ export function EmployeeForm({
             label="Date hired"
             type="date"
             required
-            max={todayStr}
+            max={manilaIsoDate()}
             min="1980-01-01"
             {...register('date_hired')}
             error={errors.date_hired?.message}
@@ -611,20 +682,59 @@ export function EmployeeForm({
 
       <Section
         title="Shift assignment"
-        hint="Optional. Assign a shift during creation. Can also be changed later from the employee profile."
+        hint={
+          isEditing
+            ? 'Changes take effect today.'
+            : 'Optional. Assign a shift during creation. Can also be changed later from the employee profile.'
+        }
       >
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Shift" {...register('shift_id')} error={errors.shift_id?.message}>
-            <option value="">— Not assigned —</option>
-            {shifts
-              .filter((s) => s.is_active)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.start_time}–{s.end_time})
-                </option>
-              ))}
-          </Select>
-        </div>
+        {isEditing && !canAssignShift ? (
+          <p className="max-w-lg rounded-md border border-default bg-elevated/30 px-3 py-2 text-sm text-muted">
+            {currentShiftName
+              ? `${currentShiftName}. You do not have access to change shifts.`
+              : 'No shift assigned. You do not have access to change shifts.'}
+          </p>
+        ) : (
+          <div className="flex max-w-lg flex-col gap-4">
+            <Controller
+              name="shift_id"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  label="Shift"
+                  {...field}
+                  value={field.value ?? ''}
+                  error={errors.shift_id?.message}
+                >
+                  {!(isEditing && initialShift?.shift_id) && (
+                    <option value="">— Not assigned —</option>
+                  )}
+                  {shifts
+                    .filter((s) => s.is_active || s.id === initialShift?.shift_id)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({formatTime(s.start_time)}–{formatTime(s.end_time)})
+                      </option>
+                    ))}
+                </Select>
+              )}
+            />
+            {isEditing && shiftId && (
+              <Controller
+                name="working_days"
+                control={control}
+                render={({ field }) => (
+                  <WorkingDaysPicker
+                    value={field.value ?? []}
+                    onChange={field.onChange}
+                    error={errors.working_days?.message}
+                  />
+                )}
+              />
+            )}
+            {shiftNote && <p className="text-xs text-muted">{shiftNote}</p>}
+          </div>
+        )}
       </Section>
 
       {canEditSensitive ? (
@@ -696,11 +806,12 @@ export function EmployeeForm({
       )}
 
       {canEditSensitive ? (
-        <Section title="Banking">
+        <Section title="Banking" hint={isEditing ? 'read-only here' : undefined}>
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Bank name"
               maxLength={100}
+              readOnly={isEditing}
               {...register('bank_name')}
               error={errors.bank_name?.message}
             />
@@ -709,10 +820,21 @@ export function EmployeeForm({
               className="font-mono"
               maxLength={50}
               placeholder="Enter bank account number"
+              readOnly={isEditing}
               {...register('bank_account_no')}
               error={errors.bank_account_no?.message}
             />
           </div>
+          {isEditing && (
+            <p className="mt-3 rounded-md border border-default bg-elevated/30 px-3 py-2 text-sm text-muted">
+              Bank details can&apos;t be changed here. They go through an approval request that HR
+              and Finance review.{' '}
+              <Link className="text-link hover:underline" to="/hr/profile-update-requests">
+                Open Bank Account Changes
+              </Link>
+              .
+            </p>
+          )}
         </Section>
       ) : (
         <Section title="Banking">
@@ -723,6 +845,11 @@ export function EmployeeForm({
       )}
 
       <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+        {isEditing && (
+          <p aria-live="polite" className="mr-auto text-xs text-muted">
+            {isDirty ? 'You have unsaved changes.' : 'No changes to save.'}
+          </p>
+        )}
         <Button
           type="button"
           variant="secondary"
@@ -734,7 +861,7 @@ export function EmployeeForm({
         <Button
           type="submit"
           variant="primary"
-          disabled={isSubmitting || isPending}
+          disabled={isSubmitting || isPending || (isEditing && !isDirty)}
           loading={isPending}
         >
           {actionLabel(submitLabel, isPending)}

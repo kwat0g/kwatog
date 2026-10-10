@@ -1,0 +1,11 @@
+[Unit]
+Description=OGAMI Laravel scheduler tick
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ec2-user
+WorkingDirectory=/home/ec2-user/kwatog
+ExecStart=/usr/bin/docker exec ogami-api php artisan schedule:run-fail-fast --no-interaction
+TimeoutStartSec=3600

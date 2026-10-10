@@ -1,7 +1,7 @@
 /** ADV8 — Downtime analytics dashboard. */
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LuActivity, LuClock, LuTrendingDown, LuTrendingUp, LuTimer, LuChartColumnIncreasing } from '@/lib/icons';
+import { LuActivity, LuClock, LuTimer, LuChartColumnIncreasing } from '@/lib/icons';
 import { downtimeAnalyticsApi } from '@/api/maintenance/downtimeAnalytics';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Chip } from '@/components/ui/Chip';
@@ -18,6 +18,8 @@ import type { TopMachineDowntime, MachineDowntimeSummary } from '@/types/mainten
 function DowntimeSummaryPlaceholder() {
  return (
  <>
+ <div className="h-24 animate-pulse rounded-md bg-elevated" />
+ <div className="h-24 animate-pulse rounded-md bg-elevated" />
  <div className="h-24 animate-pulse rounded-md bg-elevated" />
  <div className="h-24 animate-pulse rounded-md bg-elevated" />
  <div className="h-24 animate-pulse rounded-md bg-elevated" />
@@ -40,33 +42,19 @@ function formatMinutes(mins: number): string {
  return `${mins}m`;
 }
 
-function StatCard({ label, value, icon: Icon, trend }: { label: string; value: string; icon: typeof LuActivity; trend?: 'up' | 'down' | 'neutral' }) {
+function StatCard({ label, value, helper, icon: Icon }: { label: string; value: string; helper: string; icon: typeof LuActivity }) {
  return (
  <Panel className="p-4">
  <div className="flex items-start justify-between">
  <div>
  <p className="text-2xs uppercase tracking-wider text-muted">{label}</p>
  <p className="mt-1 text-xl font-medium tabular-nums">{value}</p>
+ <p className="mt-1 text-2xs text-muted">{helper}</p>
  </div>
  <div className="rounded-md bg-elevated p-2">
  <Icon size={16} className="text-primary" />
  </div>
  </div>
- {trend && (
- <div className="mt-2 flex items-center gap-1 text-2xs">
- {trend === 'up' ? (
- <>
- <LuTrendingUp size={12} className="text-danger-fg" />
- <span className="text-danger-fg">Higher than avg</span>
- </>
- ) : trend === 'down' ? (
- <>
- <LuTrendingDown size={12} className="text-success-fg" />
- <span className="text-success-fg">Better than avg</span>
- </>
- ) : null}
- </div>
- )}
  </Panel>
  );
 }
@@ -88,17 +76,17 @@ export default function DowntimeAnalyticsPage() {
  placeholderData: (prev) => prev,
  });
 
- const { data: trend, isLoading: trendLoading } = useQuery({
+ const { data: trend, isLoading: trendLoading, isError: trendError, refetch: trendRefetch } = useQuery({
  queryKey: ['downtime-analytics', 'daily-trend', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.dailyTrend({ days, search: filters.search || undefined }),
  });
 
- const { data: topMachines, isLoading: topLoading } = useQuery({
+ const { data: topMachines, isLoading: topLoading, isError: topError, refetch: topRefetch } = useQuery({
  queryKey: ['downtime-analytics', 'top-machines', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.topMachines({ days, limit: 10, search: filters.search || undefined }),
  });
 
- const { data: allMachines, isLoading: allLoading } = useQuery({
+ const { data: allMachines, isLoading: allLoading, isError: allError, refetch: allRefetch } = useQuery({
  queryKey: ['downtime-analytics', 'all-machines', days, filters.search],
  queryFn: () => downtimeAnalyticsApi.allMachines({ days, search: filters.search || undefined }),
  });
@@ -142,7 +130,7 @@ export default function DowntimeAnalyticsPage() {
  { key: 'name', header: 'Name', cell: (r) => r.machine.name },
  {
  key: 'availability',
- header: 'Availability',
+ header: <span title="Uptime divided by calendar time across the selected machines">Calendar availability</span>,
  align: 'right',
  cell: (r) => {
  const pct = r.summary.availability_pct;
@@ -156,18 +144,18 @@ export default function DowntimeAnalyticsPage() {
  },
  {
  key: 'mtbf',
- header: 'MTBF',
+ header: <span title="Calendar uptime divided by breakdowns that started in the selected period">Calendar MTBF estimate</span>,
  align: 'right',
  cell: (r) => (
- <span className="tabular-nums">{r.summary.mtbf_hours ? `${r.summary.mtbf_hours.toFixed(1)}h` : '—'}</span>
+ <span className="tabular-nums">{r.summary.mtbf_hours != null ? `${r.summary.mtbf_hours.toFixed(1)}h` : '—'}</span>
  ),
  },
  {
  key: 'mttr',
- header: 'MTTR',
+ header: <span title="Average full duration of breakdowns resolved in the selected period">MTTR for resolved breakdowns</span>,
  align: 'right',
  cell: (r) => (
- <span className="tabular-nums">{r.summary.mttr_minutes ? formatMinutes(r.summary.mttr_minutes) : '—'}</span>
+ <span className="tabular-nums">{r.summary.mttr_minutes != null ? formatMinutes(r.summary.mttr_minutes) : '—'}</span>
  ),
  },
  {
@@ -218,34 +206,46 @@ export default function DowntimeAnalyticsPage() {
  )}
 
  {/* Summary stats */}
- <div className="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+ <div className="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
  {summaryLoading ? (
  <DowntimeSummaryPlaceholder />
  ) : summary ? (
  <>
  <StatCard
- label="Total Downtime"
+ label="Total downtime"
  value={formatMinutes(summary.total_downtime_minutes)}
+ helper="Clipped overlap in selected period"
  icon={LuClock}
- trend={policyQ.data && summary.total_downtime_minutes > policyQ.data.total_warning_minutes ? 'up' : 'down'}
  />
  <StatCard
- label="MTBF"
- value={summary.mtbf_hours ? `${summary.mtbf_hours.toFixed(1)}h` : '—'}
+ label="Calendar MTBF estimate"
+ value={summary.mtbf_hours != null ? `${summary.mtbf_hours.toFixed(1)}h` : '—'}
+ helper="Calendar uptime per breakdown started in period"
  icon={LuTimer}
- trend={policyQ.data && summary.mtbf_hours && summary.mtbf_hours > policyQ.data.mtbf_good_hours ? 'down' : 'up'}
  />
  <StatCard
- label="MTTR"
- value={summary.mttr_minutes ? formatMinutes(summary.mttr_minutes) : '—'}
+ label="MTTR for resolved breakdowns"
+ value={summary.mttr_minutes != null ? formatMinutes(summary.mttr_minutes) : '—'}
+ helper="Average full duration; resolved in selected period"
  icon={LuActivity}
- trend={policyQ.data && summary.mttr_minutes && summary.mttr_minutes < policyQ.data.mttr_good_minutes ? 'down' : 'up'}
  />
  <StatCard
- label="Availability"
+ label="Calendar availability"
  value={summary.availability_pct == null ? '—' : `${summary.availability_pct.toFixed(1)}%`}
+ helper="Uptime divided by calendar machine time"
  icon={LuChartColumnIncreasing}
- trend={summary.availability_pct != null && policyQ.data?.availability_good_pct != null && summary.availability_pct >= policyQ.data.availability_good_pct ? 'down' : 'up'}
+ />
+ <StatCard
+ label="Resolved breakdowns"
+ value={String(summary.resolved_breakdown_count)}
+ helper="Ended during selected period"
+ icon={LuActivity}
+ />
+ <StatCard
+ label="Open breakdowns"
+ value={String(summary.open_breakdown_count)}
+ helper="Unresolved at selected period end"
+ icon={LuActivity}
  />
  </>
  ) : null}
@@ -257,6 +257,8 @@ export default function DowntimeAnalyticsPage() {
  <h3 className="text-sm font-medium">Daily downtime trend</h3>
  {trendLoading ? (
  <div className="mt-4 h-40 animate-pulse rounded bg-elevated" />
+ ) : trendError ? (
+ <EmptyState icon="alert-circle" title="Failed to load downtime trend" action={<Button variant="secondary" onClick={() => trendRefetch()}>Retry</Button>} />
  ) : trend && trend.length > 0 ? (
  <div className="mt-4">
  <div className="flex h-40 items-end gap-1">
@@ -290,6 +292,8 @@ export default function DowntimeAnalyticsPage() {
  <h3 className="text-sm font-medium">Top machines by downtime</h3>
  {topLoading ? (
  <SkeletonTable columns={4} rows={5} />
+ ) : topError ? (
+ <EmptyState icon="alert-circle" title="Failed to load top machines" action={<Button variant="secondary" onClick={() => topRefetch()}>Retry</Button>} />
  ) : topMachines && topMachines.length > 0 ? (
  <div className="mt-4">
  <DataTable columns={topColumns} data={topMachines} />
@@ -306,6 +310,8 @@ export default function DowntimeAnalyticsPage() {
  <h3 className="text-sm font-medium">Machine availability summary</h3>
  {allLoading ? (
  <SkeletonTable columns={7} rows={5} />
+ ) : allError ? (
+ <EmptyState icon="alert-circle" title="Failed to load machine summaries" action={<Button variant="secondary" onClick={() => allRefetch()}>Retry</Button>} />
  ) : allMachines && allMachines.length > 0 ? (
  <div className="mt-4">
  <DataTable columns={machineColumns} data={allMachines} />

@@ -1,0 +1,17 @@
+app/Modules/Accounting/Services/Statements/BalanceSheetService.php
+app/Modules/Accounting/Services/CreditNoteService.php
+app/Modules/Accounting/Requests/ApplyCreditNoteRequest.php
+app/Modules/Accounting/Models/CreditNoteApplication.php
+app/Modules/Assets/Services/AssetService.php
+app/Modules/Maintenance/Services/SparePartUsageService.php
+app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php
+app/Modules/Maintenance/Requests/RecordSparePartUsageRequest.php
+app/Modules/Maintenance/Models/SparePartUsage.php
+app/Modules/Maintenance/Models/MaintenanceWorkOrder.php
+app/Modules/MRP/Services/MachineService.php
+app/Modules/SupplyChain/Services/ImpexDocumentService.php
+app/Common/Services/Export/ExportRunner.php
+app/Common/Mail/ScheduledExportMail.php
+app/Console/Commands/RunDueScheduledExports.php
+database/migrations/2026_10_06_000001_add_major_integrity_operation_identity.php
+tests/Feature/Operations/MajorIntegrityRegressionTest.php

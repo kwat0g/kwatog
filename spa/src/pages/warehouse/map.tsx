@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LuSearch, LuBan} from '@/lib/icons';
+import { LuSearch, LuBan } from '@/lib/icons';
 import { warehouseMapApi } from '@/api/inventory/warehouseWms';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,6 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -47,18 +48,27 @@ export default function WarehouseMapPage() {
   const { can } = usePermission();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedBinId = searchParams.get('location_id');
 
   const canCount = can('inventory.stock_count.view');
+  const canMap = can('inventory.warehouse.manage');
   const rawView =
     pathname === '/inventory/stock-count' || searchParams.get('view') === 'count' ? 'count' : 'map';
   const view = rawView === 'count' && !canCount ? 'map' : rawView;
   const setView = (v: 'map' | 'count') => {
     // Always land on the canonical /inventory/warehouse-map URL so the
     // /inventory/stock-count alias is normalised away on toggle.
-    navigate(v === 'count' ? '/inventory/warehouse-map?view=count' : '/inventory/warehouse-map', {
-      replace: true,
-    });
+    navigate(
+      v === 'count'
+        ? canMap
+          ? '/inventory/warehouse-map?view=count'
+          : '/inventory/stock-count'
+        : '/inventory/warehouse-map',
+      {
+        replace: true,
+      },
+    );
   };
 
   // A user without stock_count access landing on ?view=count is forced to map
@@ -69,8 +79,8 @@ export default function WarehouseMapPage() {
     }
   }, [rawView, canCount, pathname, navigate]);
 
-  const [activeWh, setActiveWh] = useState<string | null>(null);
-  const [activeZone, setActiveZone] = useState<string | null>(null);
+  const [activeWh, setActiveWh] = useState<string | null>(searchParams.get('warehouse_id'));
+  const [activeZone, setActiveZone] = useState<string | null>(searchParams.get('zone_id'));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | null>(null);
   const [binQuery, setBinQuery] = useState('');
@@ -78,7 +88,22 @@ export default function WarehouseMapPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['warehouse', 'map'],
     queryFn: () => warehouseMapApi.map(),
+    enabled: canMap && view === 'map',
   });
+  useEffect(() => {
+    if (!linkedBinId || !data) return;
+    for (const warehouse of data) {
+      for (const currentZone of warehouse.zones) {
+        const location = currentZone.locations.find((bin) => bin.id === linkedBinId);
+        if (location) {
+          setActiveWh(warehouse.id);
+          setActiveZone(currentZone.id);
+          setSelectedBin({ id: location.id, detail: location });
+          return;
+        }
+      }
+    }
+  }, [data, linkedBinId]);
 
   const wh = data?.find((w) => w.id === activeWh) ?? data?.[0];
   const zones = wh?.zones ?? [];
@@ -116,18 +141,18 @@ export default function WarehouseMapPage() {
   const binDetail = useQuery({
     queryKey: ['warehouse', 'bin', selectedBin?.id],
     queryFn: () => warehouseMapApi.binDetail(selectedBin!.id),
-    enabled: !!selectedBin,
+    enabled: canMap && view === 'map' && !!selectedBin,
   });
 
   return (
     <div>
       <PageHeader
-        title="Warehouse Map"
+        title={view === 'count' ? 'Stock counts' : 'Warehouse map'}
         subtitle={
           data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined
         }
         actions={
-          canCount ? (
+          canCount && canMap ? (
             <SegmentedControl
               size="sm"
               label="Warehouse map view"
@@ -185,11 +210,19 @@ export default function WarehouseMapPage() {
               <>
                 {/* Warehouse selector */}
                 {data.length > 1 && (
-                  <SegmentedControl
-                    size="sm"
+                  <SearchableSelect
                     label="Warehouse"
                     value={wh?.id ?? ''}
                     onChange={(id) => {
+                      setSearchParams(
+                        (params) => {
+                          params.set('warehouse_id', id);
+                          params.delete('zone_id');
+                          params.delete('location_id');
+                          return params;
+                        },
+                        { replace: true },
+                      );
                       setActiveWh(id);
                       setActiveZone(null);
                       setSelectedBin(null);
@@ -201,7 +234,7 @@ export default function WarehouseMapPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   {/* Zone sidebar */}
-                  <div className="col-span-3 space-y-1">
+                  <div className="md:col-span-3 min-w-0 space-y-1">
                     <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
                       Zones
                     </div>
@@ -210,6 +243,14 @@ export default function WarehouseMapPage() {
                         key={z.id}
                         type="button"
                         onClick={() => {
+                          setSearchParams(
+                            (params) => {
+                              params.set('zone_id', z.id);
+                              params.delete('location_id');
+                              return params;
+                            },
+                            { replace: true },
+                          );
                           setActiveZone(z.id);
                           setSelectedBin(null);
                           setBinQuery('');
@@ -230,7 +271,7 @@ export default function WarehouseMapPage() {
                   </div>
 
                   {/* Bin grid */}
-                  <div className="col-span-6">
+                  <div className="md:col-span-6 min-w-0">
                     {zone && (
                       <div className="mb-2">
                         <Input
@@ -277,7 +318,9 @@ export default function WarehouseMapPage() {
                             </div>
                             <div className="text-xs font-mono tabular-nums">
                               {loc.stock_status !== 'empty'
-                                ? `${Number(loc.current_quantity).toFixed(1)}`
+                                ? loc.current_item
+                                  ? `${Number(loc.current_quantity).toFixed(1)} ${loc.current_item.unit_of_measure ?? ''}`
+                                  : 'Multiple items'
                                 : ''}
                             </div>
                             {loc.is_blocked && (
@@ -288,7 +331,11 @@ export default function WarehouseMapPage() {
                                 {/* Was the ⛔ emoji. Emoji render per-platform,
                                     ignore the semantic colour tokens, and are
                                     read aloud as "no entry sign". */}
-                                <LuBan size={11} className="inline-block shrink-0 mr-1 align-[-1px]" aria-hidden="true" />
+                                <LuBan
+                                  size={11}
+                                  className="inline-block shrink-0 mr-1 align-[-1px]"
+                                  aria-hidden="true"
+                                />
                                 {loc.stock_status_label ?? loc.stock_status}
                               </div>
                             )}
@@ -304,7 +351,7 @@ export default function WarehouseMapPage() {
                   </div>
 
                   {/* Bin detail panel */}
-                  <div className="col-span-3 space-y-3">
+                  <div className="md:col-span-3 min-w-0 space-y-3">
                     {selectedBin && (
                       <Panel title={`Bin: ${selectedBin.detail.full_code}`}>
                         <div className="text-xs space-y-2">
@@ -345,7 +392,8 @@ export default function WarehouseMapPage() {
                                 {selectedBin.detail.current_item.name}
                               </StatusRow>
                               <StatusRow label="Quantity">
-                                {Number(selectedBin.detail.current_quantity).toFixed(3)}
+                                {Number(selectedBin.detail.current_quantity).toFixed(3)}{' '}
+                                {selectedBin.detail.current_item.unit_of_measure ?? ''}
                               </StatusRow>
                               {selectedBin.detail.current_lot_number && (
                                 <StatusRow label="Lot">
@@ -360,6 +408,22 @@ export default function WarehouseMapPage() {
                             </StatusRow>
                           )}
 
+                          {binDetail.isError && (
+                            <div role="alert" className="text-sm text-danger-fg">
+                              Bin stock details could not be loaded.{' '}
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => void binDetail.refetch()}
+                              >
+                                Retry bin details
+                              </Button>
+                            </div>
+                          )}
+                          {binDetail.isFetching && !binDetail.data && (
+                            <SkeletonBlock className="h-20" />
+                          )}
                           {binDetail.data && (
                             <div className="border-t border-subtle pt-2 mt-2 space-y-1">
                               <div className="text-2xs uppercase tracking-wider text-muted font-medium">
@@ -375,7 +439,9 @@ export default function WarehouseMapPage() {
                                       {Number(sl.quantity).toFixed(3)}
                                     </span>
                                     <span className="text-muted ml-1">
-                                      avail: {Number(sl.available).toFixed(3)}
+                                      usable:{' '}
+                                      {Number(sl.usable_quantity ?? sl.available).toFixed(3)}{' '}
+                                      {sl.unit_of_measure}
                                     </span>
                                   </div>
                                 ))

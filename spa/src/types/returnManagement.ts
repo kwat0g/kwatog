@@ -17,6 +17,8 @@ export interface ReturnRequestItem {
   received_total?: string;
   remaining_quantity?: string;
   receipt_recorded?: boolean;
+  reused_incoming_inspection_id?: string | null;
+  split_parent_item_id?: string | null;
   source_invoice_item_id?: string | null;
   source_sales_order_item_id?: string | null;
   source_delivery_item_id?: string | null;
@@ -32,12 +34,19 @@ export interface ReturnRequestItem {
   disposition?: DispositionType;
   disposition_label?: string;
   disposition_notes?: string;
-  // 2026-08-08 — units actually moved in/out of stock at dispose time
-  // (restocked for customer returns, shipped back for supplier returns).
+  quarantine_status?: string | null;
+  mrb?: {
+    id: string;
+    mrb_number: string;
+    status: 'held' | 'released' | 'scrapped' | 'returned';
+    status_label: string;
+    release_movement_id: string | null;
+  } | null;
+  // Units actually moved in/out of stock after disposition or MRB release.
   moved_quantity?: string | null;
   ncr?: { id: string; ncr_number: string };
   product?: { id: string; part_number: string; name: string };
-  item?: { id: string; code: string; name: string };
+  item?: { id: string; code: string; name: string; unit_of_measure?: string };
 }
 
 export interface ReturnRequest {
@@ -50,6 +59,7 @@ export interface ReturnRequest {
   status: string;
   status_label: string;
   is_editable: boolean;
+  reversal_already_applied?: boolean;
   pending_approval_step?: number | null;
   has_overdue_approval?: boolean;
   approval_records?: ApprovalRecordPayload[];
@@ -63,11 +73,14 @@ export interface ReturnRequest {
   };
   reason_code?: string;
   reason_description?: string;
+  requires_defect_evidence?: boolean;
+  defect_photo_name?: string | null;
   customer_notes?: string;
   internal_notes?: string;
   resolution?: string;
   refund_amount?: string;
   return_date?: string;
+  replacement_due_date?: string | null;
   source_label?: string;
   source_case?: { id: string; case_number: string } | null;
   sales_order?: { id: string; so_number: string };
@@ -100,6 +113,8 @@ export interface ReturnRequest {
   finance_only?: boolean;
   finance_only_reason?: string | null;
   inspections?: Array<{
+    return_request_item_id?: string | null;
+    item?: { id: string; code: string; name: string; unit_of_measure?: string } | null;
     id: string;
     inspection_number: string;
     status: string;

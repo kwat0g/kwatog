@@ -286,6 +286,7 @@ class Sprint8DemoSeeder extends Seeder
 
         foreach ($schedules as $i => $schedule) {
             $isCompleted = $i === 0;
+            $startedAt = $now->copy()->subDays($i + 1);
             $wo = MaintenanceWorkOrder::create([
                 'mwo_number'        => $sequences->generate('maintenance_wo'),
                 'maintainable_type' => $schedule->maintainable_type instanceof \BackedEnum ? $schedule->maintainable_type->value : $schedule->maintainable_type,
@@ -296,8 +297,9 @@ class Sprint8DemoSeeder extends Seeder
                 'description'       => $schedule->description,
                 'assigned_to'       => $tech?->id,
                 'status'            => $isCompleted ? MaintenanceWorkOrderStatus::Completed->value : MaintenanceWorkOrderStatus::InProgress->value,
-                'started_at'        => $now->copy()->subDays($i + 1),
-                'completed_at'      => $isCompleted ? $now->copy()->subDays($i)->addHours(3) : null,
+                'started_at'        => $startedAt,
+                'completed_at'      => $isCompleted ? $startedAt->copy()->addHours(3) : null,
+                'created_at'        => $startedAt->copy()->subMinutes(30),
                 'downtime_minutes'  => $isCompleted ? 180 : 0,
                 'cost'              => 0,
                 'created_by'        => $admin->id,

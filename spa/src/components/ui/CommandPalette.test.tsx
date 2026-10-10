@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,13 +80,13 @@ describe('CommandPalette search', () => {
 
     fireEvent.change(input, { target: { value: 'ab' } });
     // Let the debounce fire for "ab" so its slow request is genuinely in flight.
-    await wait(250);
+    await act(async () => wait(250));
     fireEvent.change(input, { target: { value: 'abcd' } });
 
     expect(await screen.findByText('FRESH-abcd')).toBeInTheDocument();
 
     // Past the slow response's arrival: it must not overwrite the fresh rows.
-    await wait(600);
+    await act(async () => wait(600));
     expect(screen.queryByText('STALE-ab')).not.toBeInTheDocument();
     expect(screen.getByText('FRESH-abcd')).toBeInTheDocument();
   });
@@ -98,7 +98,7 @@ describe('CommandPalette search', () => {
 
     const input = renderPalette();
     fireEvent.change(input, { target: { value: '  a  ' } });
-    await wait(300);
+    await act(async () => wait(300));
 
     expect(get).not.toHaveBeenCalled();
   });
@@ -171,7 +171,7 @@ describe('CommandPalette failure states', () => {
     await screen.findByText(/too many searches/i);
 
     // The client-wide default is `retry: 1`; this query overrides it to false.
-    await wait(400);
+    await act(async () => wait(400));
     expect(get).toHaveBeenCalledTimes(1);
   });
 

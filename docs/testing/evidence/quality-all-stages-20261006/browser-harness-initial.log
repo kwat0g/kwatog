@@ -1,0 +1,18 @@
+in_process pass: PASS
+outgoing pass: PASS
+customer_return pass: PASS
+supplier_return pass: PASS
+incoming pass: PASS
+in_process size_fail: PASS
+AssertionError [ERR_ASSERTION]: {"message":"Remarks are required for a failed disposition or override.","errors":{"remarks":["Remarks are required for a failed disposition or override."]}}
+
+422 !== 403
+
+    at /home/ec2-user/kwatog/docs/testing/evidence/quality-all-stages-20261006/browser.cjs:114:18 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 422,
+  expected: 403,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

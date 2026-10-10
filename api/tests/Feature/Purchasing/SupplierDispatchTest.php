@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Modules\Accounting\Models\Vendor;
-use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\SupplierDispatchStatus;
@@ -28,7 +29,7 @@ class SupplierDispatchTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_approved_po_is_published_to_the_supplier_portal_once(): void
+    public function test_approved_po_is_sent_to_the_supplier_portal_once(): void
     {
         $vendor = Vendor::factory()->create();
         SupplierPortalUser::create([
@@ -46,11 +47,14 @@ class SupplierDispatchTest extends TestCase
             ->handle(new PurchaseOrderApproved($po->fresh()));
 
         $dispatch = SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->firstOrFail();
-        $this->assertSame(SupplierDispatchStatus::PortalAvailable, $dispatch->status);
+        $this->assertSame(SupplierDispatchStatus::Confirmed, $dispatch->status);
         $this->assertSame('supplier_portal', $dispatch->channel);
         $this->assertSame(1, $dispatch->recipient_count);
         $this->assertSame(1, $dispatch->attempts);
         $this->assertSame(1, SupplierOrderDispatch::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
+        $this->assertNotNull($po->fresh()->sent_to_supplier_at);
+        $this->assertSame($po->id, app(SupplierPortalService::class)->purchaseOrders($vendor->id, [])->first()?->id);
     }
 
     public function test_missing_portal_user_creates_an_actionable_manual_dispatch(): void
@@ -64,6 +68,8 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame('manual', $dispatch->channel);
         $this->assertStringContainsString('No active supplier portal user', (string) $dispatch->last_error);
         $this->assertSame('send_pdf_and_confirm', $dispatch->metadata['next_action']);
+        $this->assertSame(PurchaseOrderStatus::Approved, $po->fresh()->status);
+        $this->assertNull($po->fresh()->sent_to_supplier_at);
     }
 
     public function test_missing_supplier_portal_recipient_creates_a_purchasing_in_app_alert(): void
@@ -105,6 +111,40 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(0, $calls);
     }
 
+    public function test_replayed_approval_finishes_a_published_portal_dispatch_without_republishing(): void
+    {
+        $po = $this->approvedPo();
+        SupplierOrderDispatch::create([
+            'purchase_order_id' => $po->id,
+            'idempotency_key' => "purchase-order:{$po->id}:approved:v1",
+            'status' => SupplierDispatchStatus::PortalAvailable,
+            'channel' => 'supplier_portal',
+            'recipient_count' => 1,
+            'attempts' => 1,
+            'published_at' => now(),
+        ]);
+        $calls = 0;
+
+        app()->instance(SupplierDispatchGateway::class, new class($calls) implements SupplierDispatchGateway
+        {
+            public function __construct(private int &$calls) {}
+
+            public function publish(PurchaseOrder $purchaseOrder, string $idempotencyKey): SupplierDispatchResult
+            {
+                $this->calls++;
+
+                return SupplierDispatchResult::portalAvailable(1);
+            }
+        });
+
+        $dispatch = app(SupplierDispatchService::class)->prepareForApproved($po);
+
+        $this->assertSame(SupplierDispatchStatus::Confirmed, $dispatch?->status);
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
+        $this->assertSame(1, $dispatch?->attempts);
+        $this->assertSame(0, $calls);
+    }
+
     public function test_provider_failure_is_persisted_and_a_later_retry_can_recover(): void
     {
         $po = $this->approvedPo();
@@ -137,8 +177,9 @@ class SupplierDispatchTest extends TestCase
 
         $recovered = app(SupplierDispatchService::class)->prepareForApproved($po->fresh());
         $this->assertNotNull($recovered);
-        $this->assertSame(SupplierDispatchStatus::PortalAvailable, $recovered->status);
+        $this->assertSame(SupplierDispatchStatus::Confirmed, $recovered->status);
         $this->assertSame(2, $recovered->attempts);
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
     }
 
     public function test_provider_acceptance_before_local_crash_reuses_the_same_idempotency_key_on_retry(): void
@@ -183,10 +224,11 @@ class SupplierDispatchTest extends TestCase
 
         $recovered = app(SupplierDispatchService::class)->prepareForApproved($po->fresh());
 
-        $this->assertSame(SupplierDispatchStatus::PortalAvailable, $recovered?->status);
+        $this->assertSame(SupplierDispatchStatus::Confirmed, $recovered?->status);
         $this->assertCount(2, $keys);
         $this->assertSame($keys[0], $keys[1]);
         $this->assertSame(2, $recovered?->attempts);
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
     }
 
     public function test_confirming_sent_is_idempotent_and_closes_the_dispatch_boundary(): void

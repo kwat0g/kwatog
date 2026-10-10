@@ -67,6 +67,7 @@ class ClearanceDepartmentGateTest extends TestCase
         ], SeparationService::defaultChecklist());
 
         return Clearance::factory()->create([
+            'employee_id' => Employee::factory()->create(['department_id' => Department::where('code', 'PROD')->value('id')])->id,
             'clearance_items' => $items,
             'status'          => ClearanceStatus::InProgress->value,
         ]);
@@ -187,7 +188,7 @@ class ClearanceDepartmentGateTest extends TestCase
             'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
         ]);
 
-        $this->sign($rolelessHead, $clearance, 'tools_returned')->assertStatus(422);
+        $this->sign($rolelessHead, $clearance, 'tools_returned')->assertNotFound();
 
         $this->assertSame('pending', $this->itemStatus($clearance, 'tools_returned'));
     }

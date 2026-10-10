@@ -1,5 +1,7 @@
 # Maintenance — Work Orders, Preventive Schedules & Breakdowns
 
+For role-based, end-to-end manual testing, use the [Maintenance test runbook](../docs/MAINTENANCE-E2E-MANUAL-TEST-RUNBOOK.md).
+
 **Demo login:** `maintenance@ogami.test` (Maintenance Technician) ·
 password: `password`
 
@@ -13,9 +15,9 @@ auto-raise work orders when due, so maintenance happens before breakdowns.
 
 ## 2. Tour the maintenance home
 
-1. Open `/maintenance`.
-2. From here you reach **Maintenance Work Orders** (`/maintenance/work-orders`)
-   and **Maintenance Schedules** (`/maintenance/schedules`).
+1. Open `/maintenance`; it redirects to **Maintenance Work Orders**
+   (`/maintenance/work-orders`). Phones show cards; desktops show a table.
+2. Open **Maintenance Schedules** at `/maintenance/schedules`.
 
 ## 3. The breakdown flow (the main demo)
 
@@ -23,30 +25,30 @@ auto-raise work orders when due, so maintenance happens before breakdowns.
 2. Page **New maintenance work order**: pick the machine, describe the
    fault, submit with **Create work order** (shows **Creating…**).
 3. Open the work order (`/maintenance/work-orders/:id`).
-4. Click **Start** → dialog **Start work order?** → confirm **Start**.
-5. Do the (pretend) repair. Click **Complete** → dialog **Complete work order**
-   → fill remarks → confirm.
+4. On desktop, click **Start** and confirm **Start**. On a phone, click
+   **Start work** and confirm **Start work**.
+5. Do the (pretend) repair. Record a spare part under **Spare parts** on desktop
+   or **Parts used** on a phone if stock is available. On desktop, click
+   **Complete**, fill **Remarks (optional)**, and confirm. On a phone, fill
+   **Work performed**, click **Complete work order**, and confirm.
 6. Statuses move open → in progress → completed.
 
-## 4. Assignment note (important for the demo)
+## 4. Assignment note
 
-- The detail page has an **Assignment** panel with an **Assign work order**
-  button, but assigning needs `maintenance.wo.assign`, which
-  `maintenance@ogami.test` does **not** hold. If it 403s, that is expected —
-  ask an admin account to assign.
+- `maintenance@ogami.test` does not hold `maintenance.wo.assign`, so the
+  **Assignment** panel does not appear. Assignment is optional for this test:
+  continue directly from **Open** to **In progress**.
 
 ## 5. Preventive schedules
 
 1. Open `/maintenance/schedules` — the page explains: "the system
    materialises a WO when due."
-2. Click **New schedule** → page **New maintenance schedule**: pick a machine
-   or mold, set the interval, submit with **Create schedule**.
-3. Open a schedule (`/maintenance/schedules/:id`) to review; edits live at
-   `/maintenance/schedules/:id/edit`.
+2. Open an existing schedule (`/maintenance/schedules/:id`) to review its
+   target, interval, last performed date, and next due date.
 
-> Permission note: creating/managing schedules may be admin-gated. If
-> **New schedule** 403s as `maintenance@ogami.test`, say so openly and
-> continue the demo as `admin@ogami.test`.
+> `maintenance@ogami.test` can view schedules but cannot create, edit, archive,
+> or restore them. No seeded non-admin account holds the schedule-management
+> permission.
 
 ## 6. What this login can and cannot do
 
@@ -59,6 +61,6 @@ auto-raise work orders when due, so maintenance happens before breakdowns.
 
 - Machine list empty on the create form? Machines are created under MRP by
   `production@ogami.test` (see MRP guide §5) — create one first.
-- 403 on assign/schedule create? Expected for this role — use admin.
+- Assignment and schedule-management controls missing? Expected for this role.
 - Mold shot-limit alerts (see MRP guide §6) can raise preventive maintenance
   work orders automatically — mention the link.

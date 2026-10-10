@@ -22,6 +22,7 @@ const { chromium, expect } = spaRequire('@playwright/test');
 const BOOTSTRAP = process.env.DISPATCH_TEST_BOOTSTRAP === '1';
 const RUN_KEY = (process.env.DISPATCH_RUN_ID || `DSP${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_dispatch_browser_${RUN_KEY.toLowerCase()}`;
+const TEST_STORAGE = `/tmp/ogami-audit-storage/delivery-dispatch-${RUN_KEY.toLowerCase()}`;
 const API_PORT = Number(process.env.DISPATCH_TEST_API_PORT || 8210);
 const SPA_PORT = Number(process.env.DISPATCH_TEST_SPA_PORT || 5210);
 const BASE = process.env.DISPATCH_TEST_URL || (BOOTSTRAP ? `http://127.0.0.1:${SPA_PORT}` : 'http://127.0.0.1:5210');
@@ -30,12 +31,13 @@ const FIXTURE_IN_CONTAINER = `/tmp/dispatch-${RUN_KEY.toLowerCase()}-fixture.jso
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
   DISPATCH_BROWSER_DB: DB, DISPATCH_RUN_ID: RUN_KEY, DISPATCH_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
 const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 const envFlags = () => Object.entries(ENV).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
-const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', 'artisan', ...args]);
 const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
 const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
 const sleep = (ms) => { try { execFileSync('sleep', [String(ms / 1000)]); } catch { /* ignored */ } };
@@ -55,6 +57,9 @@ function prepare() {
   fs.mkdirSync(OUT_ROOT, { recursive: true });
   stopApiServer();
   psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  compose(['exec', '-T', 'api', 'mkdir', '-p', `${TEST_STORAGE}/app`, `${TEST_STORAGE}/app/public`, `${TEST_STORAGE}/framework/cache/data`, `${TEST_STORAGE}/framework/sessions`, `${TEST_STORAGE}/framework/views`, `${TEST_STORAGE}/logs`]);
+  const actualStorage = artisan('tinker', '--execute', 'echo storage_path();').trim();
+  if (actualStorage !== TEST_STORAGE) throw new Error(`Expected isolated Laravel storage ${TEST_STORAGE}; got ${actualStorage}.`);
   artisan('migrate', '--force');
   compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
   artisan('tinker', '--execute', "require 'tests/Browser/delivery_dispatch_fixture.php';");
@@ -79,7 +84,6 @@ async function startVite() {
   const target = `http://${apiIp()}:${API_PORT}`;
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -102,6 +106,7 @@ async function tearDown(server) {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
     psql(`DROP DATABASE IF EXISTS ${DB};`);
   } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+  try { compose(['exec', '-T', 'api', 'rm', '-rf', TEST_STORAGE]); } catch (e) { console.log(`Could not remove ${TEST_STORAGE}: ${e.message}`); }
 }
 
 if (BOOTSTRAP) prepare();
@@ -270,16 +275,21 @@ async function fit(page) {
 async function createDelivery(page, batchIndex, lostResponse = false) {
   const batch = fixture.batches[batchIndex];
   await page.goto('/supply-chain/deliveries/create');
-  await page.getByLabel('Find sales order', { exact: true }).fill(fixture.so_number);
-  const orderSelect = page.getByLabel(/^Sales order\s*\*?$/);
-  await expect(orderSelect.locator(`option[value="${fixture.sales_order}"]`)).toHaveCount(1);
-  await orderSelect.selectOption(fixture.sales_order);
-  const lineSelect = page.getByLabel(/^Sales order line/);
-  await expect(lineSelect.locator(`option[value="${fixture.line}"]`)).toHaveCount(1);
-  await lineSelect.selectOption(fixture.line);
-  const inspection = page.getByLabel(/^Passed outgoing inspection/);
-  await expect(inspection.locator(`option[value="${batch.inspection}"]`)).toHaveCount(1);
-  await inspection.selectOption(batch.inspection);
+  const orderSelect = page.getByRole('combobox', { name: 'Sales order', exact: true });
+  await orderSelect.fill(fixture.so_number);
+  const orderOption = page.getByRole('option', { name: new RegExp(fixture.so_number) });
+  await expect(orderOption).toBeVisible();
+  await orderOption.click();
+  const lineSelect = page.getByRole('combobox', { name: 'Sales order line', exact: true });
+  await lineSelect.click();
+  const lineOption = page.getByRole('option', { name: new RegExp(fixture.product_code) });
+  await expect(lineOption).toBeVisible();
+  await lineOption.click();
+  const inspection = page.getByRole('combobox', { name: 'Passed outgoing inspection', exact: true });
+  await inspection.click();
+  const inspectionOption = page.getByRole('option', { name: new RegExp(`QC-${fixture.run_id}-${batchIndex}`) });
+  await expect(inspectionOption).toBeVisible();
+  await inspectionOption.click();
   await page.getByLabel(/^Qty/).fill(String(batch.quantity));
   let savedId;
   const matchCreate = (url) => new URL(url).pathname === '/api/v1/supply-chain/deliveries';

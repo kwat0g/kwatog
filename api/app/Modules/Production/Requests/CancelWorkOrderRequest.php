@@ -10,13 +10,17 @@ class CancelWorkOrderRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('production.work_orders.lifecycle') ?? false;
+        $wo = $this->route('workOrder');
+
+        return ($this->user()?->hasPermission('production.work_orders.lifecycle') ?? false)
+            || ($wo?->production_purpose === 'stock' && $wo->parent_wo_id === null
+                && ($this->user()?->hasPermission('production.wo.cancel_stock') ?? false));
     }
 
     public function rules(): array
     {
         return [
-            'reason' => ['nullable', 'string', 'max:500'],
+            'reason' => [$this->route('workOrder')?->production_purpose === 'stock' ? 'required' : 'nullable', 'string', 'max:500'],
         ];
     }
 }

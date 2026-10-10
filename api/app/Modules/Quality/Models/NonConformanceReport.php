@@ -9,10 +9,12 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Quality\Enums\EffectivenessStatus;
 use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
+use Database\Factories\NonConformanceReportFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,13 +26,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class NonConformanceReport extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $table = 'non_conformance_reports';
 
-    protected static function newFactory(): \Database\Factories\NonConformanceReportFactory
+    protected static function newFactory(): NonConformanceReportFactory
     {
-        return \Database\Factories\NonConformanceReportFactory::new();
+        return NonConformanceReportFactory::new();
     }
 
     protected $fillable = [
@@ -40,7 +42,7 @@ class NonConformanceReport extends Model
         'root_cause', 'corrective_action',
         'created_by', 'assigned_to', 'closed_by', 'closed_at',
         'replacement_work_order_id',
-        'is_auto_generated',
+        'is_auto_generated', 'is_late_incoming', 'late_hold_quantity',
         'escalation_level', 'last_escalated_at', 'recurrence_of_ncr_id',
         'rework_work_order_id',
         // CAPA effectiveness loop.
@@ -50,20 +52,27 @@ class NonConformanceReport extends Model
     ];
 
     protected $casts = [
-        'source'            => NcrSource::class,
-        'severity'          => NcrSeverity::class,
-        'status'            => NcrStatus::class,
-        'disposition'       => NcrDisposition::class,
+        'source' => NcrSource::class,
+        'severity' => NcrSeverity::class,
+        'status' => NcrStatus::class,
+        'disposition' => NcrDisposition::class,
         'affected_quantity' => 'integer',
-        'closed_at'         => 'datetime',
+        'closed_at' => 'datetime',
         'is_auto_generated' => 'boolean',
+        'is_late_incoming' => 'boolean',
+        'late_hold_quantity' => 'decimal:3',
         'last_escalated_at' => 'datetime',
         // CAPA effectiveness loop.
-        'effectiveness_status'    => \App\Modules\Quality\Enums\EffectivenessStatus::class,
+        'effectiveness_status' => EffectivenessStatus::class,
         'effectiveness_closed_at' => 'datetime',
         // MRB incoming failure disposition.
         'mrb_accepted_quantity' => 'string',
-        'mrb_decided_at'        => 'datetime',
+        'mrb_decided_at' => 'datetime',
+        'sorting_approved_at' => 'datetime',
+        'sorting_inspected_quantity' => 'decimal:3',
+        'sorting_uses_reviewed_qc' => 'boolean',
+        'rework_started_at' => 'datetime',
+        'rework_finished_at' => 'datetime',
     ];
 
     public function product(): BelongsTo
@@ -94,6 +103,16 @@ class NonConformanceReport extends Model
     public function mrbDecider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'mrb_decided_by');
+    }
+
+    public function reworkStartedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rework_started_by');
+    }
+
+    public function reworkFinishedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rework_finished_by');
     }
 
     public function actions(): HasMany

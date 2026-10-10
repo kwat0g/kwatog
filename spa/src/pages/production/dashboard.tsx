@@ -1,3 +1,4 @@
+import { formatTime } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
 /**
  * Sprint 6 — Task 58. Production dashboard.
@@ -95,7 +96,7 @@ export default function ProductionDashboardPage() {
     <div>
       <PageHeader
         title="Production"
-        subtitle={`Updated ${data.generated_at?.slice(11, 16)} UTC · cached 30s`}
+        subtitle={`Updated ${formatTime(data.generated_at)} · cached 30s`}
         actions={
           <Button variant="secondary" size="sm" onClick={() => navigate('/production/oee')}>
             OEE Report

@@ -36,6 +36,9 @@ const resolveTheme = (mode: ThemeMode): 'light' | 'dark' => {
 const applyToDocument = (theme: AppliedTheme) => {
  if (typeof document !== 'undefined') {
  document.documentElement.setAttribute('data-theme', theme);
+ const meta = document.querySelector('meta[name="theme-color"]');
+ const canvas = getComputedStyle(document.documentElement).getPropertyValue('--bg-canvas').trim();
+ if (canvas) meta?.setAttribute('content', canvas);
  }
 };
 

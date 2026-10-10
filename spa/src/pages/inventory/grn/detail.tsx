@@ -14,6 +14,7 @@ import {
 } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
+import { supplierActivityApi } from '@/api/b2b/supplier-activity';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -33,27 +34,20 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import type { GrnItem } from '@/types/inventory';
+import type { SupplierActivityShipment } from '@/types/supplierActivity';
 
 interface FinalizeLine {
-  location_id: string;
+  location_id?: string;
   quantity_received: string;
-  received_uom_code: string;
-  lot_number: string;
   supplier_lot_reference: string;
   expiry_date: string;
-  moisture_percentage: string;
-  coa_document_path: string;
 }
 
 const emptyFinalizeLine: FinalizeLine = {
-  location_id: '',
   quantity_received: '0',
-  received_uom_code: '',
-  lot_number: '',
   supplier_lot_reference: '',
   expiry_date: '',
-  moisture_percentage: '',
-  coa_document_path: '',
 };
 
 export default function GrnDetailPage() {
@@ -69,6 +63,7 @@ export default function GrnDetailPage() {
   const [rejectRemainderOpen, setRejectRemainderOpen] = useState(false);
   const [acceptMap, setAcceptMap] = useState<Record<string, string>>({});
   const [finalizeInput, setFinalizeInput] = useState<Record<string, FinalizeLine>>({});
+  const [selectedSupplierShipment, setSelectedSupplierShipment] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'grn', id],
@@ -81,7 +76,38 @@ export default function GrnDetailPage() {
     queryFn: grnApi.options,
     staleTime: 300_000,
   });
-  const { data: warehouses } = useQuery({
+  const {
+    data: supplierEvidence,
+    isLoading: supplierEvidenceLoading,
+    isError: supplierEvidenceError,
+    refetch: refetchSupplierEvidence,
+  } = useQuery({
+    queryKey: ['inventory', 'grn', id, 'supplier-documents'],
+    queryFn: () => supplierActivityApi.forGoodsReceipt(id),
+    enabled: !!id && data?.status === 'draft',
+  });
+  const supplierShipments = supplierEvidence?.shipments.filter((shipment) => shipment.can_edit !== false) ?? [];
+  const shipmentSummary = (shipment: SupplierActivityShipment) =>
+    shipment.items
+      ?.map((item) => {
+        const line = data?.items?.find(
+          (entry) => entry.purchase_order_item_id === item.purchase_order_item_id,
+        );
+        return `${line?.item?.code ?? 'Item'}: ${formatQuantity(item.quantity_shipped)} ${line?.purchase_order_unit ?? line?.item?.unit_of_measure ?? ''}`;
+      })
+      .join(' · ') || 'Quantity not recorded';
+  const supplierShipmentId =
+    supplierShipments.length === 1
+      ? supplierShipments[0].id
+      : supplierShipments.some((shipment) => shipment.id === selectedSupplierShipment)
+        ? selectedSupplierShipment
+        : '';
+  const {
+    data: warehouses,
+    isLoading: warehousesLoading,
+    isError: warehousesError,
+    refetch: refetchWarehouses,
+  } = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
   });
@@ -106,6 +132,16 @@ export default function GrnDetailPage() {
       ),
     [warehouses],
   );
+  const storedBinsFor = (line: GrnItem) =>
+    (line.item?.stored_bins ?? []).filter((bin) =>
+      locations.some((location) => location.id === bin.id),
+    );
+  const receivingBinId = (line: GrnItem) => {
+    const selected = finalizeInput[line.id]?.location_id;
+    if (selected !== undefined) return selected;
+    const storedBins = storedBinsFor(line);
+    return storedBins.length === 1 ? storedBins[0].id : '';
+  };
 
   const accept = useMutation({
     mutationFn: (map?: Record<string, string>) => grnApi.accept(id, map),
@@ -142,20 +178,19 @@ export default function GrnDetailPage() {
   const finalize = useMutation({
     mutationFn: () =>
       grnApi.finalize(id, {
+        supplier_shipment_id: supplierShipmentId || null,
         items: (data?.items ?? []).flatMap((l) => {
           const v = finalizeInput[l.id];
-          if (!v?.location_id || !(Number(v.quantity_received) > 0)) return [];
+          const locationId = receivingBinId(l);
+          if (!v || !locationId || !(Number(v.quantity_received) > 0)) return [];
           return [
             {
               purchase_order_item_id: l.purchase_order_item_id,
-              location_id: v.location_id,
+              location_id: locationId,
               quantity_received: v.quantity_received,
-              received_uom_code: v.received_uom_code.trim() || undefined,
-              lot_number: v.lot_number.trim() || undefined,
+              received_uom_code: l.item?.unit_of_measure,
               supplier_lot_reference: v.supplier_lot_reference.trim() || undefined,
               expiry_date: v.expiry_date || undefined,
-              moisture_percentage: v.moisture_percentage.trim() || undefined,
-              coa_document_path: v.coa_document_path.trim() || undefined,
             },
           ];
         }),
@@ -174,13 +209,20 @@ export default function GrnDetailPage() {
         const current = await grnApi.show(id);
         qc.setQueryData(['inventory', 'grn', id], current);
         if (current.status === 'draft') {
-          toast.error(e.response?.data?.message ?? 'GRN remains in Draft. Review the entered quantities and try again.');
+          toast.error(
+            e.response?.data?.message ??
+              'GRN remains in Draft. Review the entered quantities and try again.',
+          );
         } else {
-          toast.success(`${current.grn_number} is now ${current.status_label ?? current.status}. Current handoff details are shown.`);
+          toast.success(
+            `${current.grn_number} is now ${current.status_label ?? current.status}. Current handoff details are shown.`,
+          );
         }
       } catch {
         void qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-        toast.error('Could not confirm the GRN status. Use Retry to check the current handoff before submitting again.');
+        toast.error(
+          'Could not confirm the GRN status. Use Retry to check the current handoff before submitting again.',
+        );
       }
     },
   });
@@ -279,12 +321,28 @@ export default function GrnDetailPage() {
     data.items?.every(
       (l) => Number(acceptMap[l.id] ?? l.quantity_accepted) >= Number(l.quantity_received),
     );
+  const enteredReceiptLines = (data.items ?? []).filter(
+    (line) => Number(finalizeInput[line.id]?.quantity_received) > 0,
+  );
+  const hasInvalidReceiptQuantity = (data.items ?? []).some((line) => {
+    const quantity = finalizeInput[line.id]?.quantity_received;
+    return (
+      quantity !== undefined &&
+      quantity !== '' &&
+      (!/^\d+(\.\d{1,3})?$/.test(quantity) ||
+        (line.quantity_outstanding != null && Number(quantity) > Number(line.quantity_outstanding)))
+    );
+  });
   const finalizeReady =
     isDraft &&
-    (data.items ?? []).some((l) => {
-      const v = finalizeInput[l.id];
-      return !!v?.location_id && Number(v.quantity_received) > 0;
-    });
+    supplierShipmentId !== '' &&
+    !supplierEvidenceLoading &&
+    !supplierEvidenceError &&
+    !warehousesLoading &&
+    !warehousesError &&
+    enteredReceiptLines.length > 0 &&
+    !hasInvalidReceiptQuantity &&
+    enteredReceiptLines.every((line) => !!receivingBinId(line));
   const incomingQcNeedsAttention =
     data.status === 'pending_qc' &&
     data.incoming_qc_handoff &&
@@ -299,7 +357,7 @@ export default function GrnDetailPage() {
       (!!data.qc_inspection && data.qc_inspection.status !== 'passed') ||
       (data.items ?? []).some((l) => l.inspection && l.inspection.status !== 'passed'));
   const canAcceptHere = isEditable && !awaitingIncomingQc;
-  const columnCount = 6 + (isDraft ? 2 : 0) + (canAcceptHere ? 1 : 0);
+  const columnCount = isDraft ? 4 : 8 + (canAcceptHere ? 1 : 0);
   const glNeedsAttention =
     (data.status === 'accepted' || data.status === 'partial_accepted') &&
     !data.journal_entry &&
@@ -319,6 +377,7 @@ export default function GrnDetailPage() {
     <div>
       <PageHeader
         title={<span className="font-mono">{data.grn_number}</span>}
+        subtitle={[data.purchase_order?.po_number, data.vendor?.name].filter(Boolean).join(' · ')}
         backTo="/inventory/grn"
         backLabel="GRNs"
         actions={
@@ -327,12 +386,20 @@ export default function GrnDetailPage() {
               {grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
                 data.status}
             </Chip>
-            {data.status !== 'draft' && can('return_management.manage') && <Button
-              variant="secondary"
-              size="sm"
-              icon={<LuMessageSquare size={14} />}
-              onClick={() => navigate(`/return-management/cases/new?source_kind=grn&source_id=${encodeURIComponent(id)}`)}
-            >Report a problem</Button>}
+            {data.status !== 'draft' && can('return_management.manage') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuMessageSquare size={14} />}
+                onClick={() =>
+                  navigate(
+                    `/return-management/cases/new?source_kind=grn&source_id=${encodeURIComponent(id)}`,
+                  )
+                }
+              >
+                Report a problem
+              </Button>
+            )}
             {incomingQcNeedsAttention && can('quality.inspections.manage') && (
               <Button
                 variant="secondary"
@@ -353,18 +420,6 @@ export default function GrnDetailPage() {
                 loading={retryGl.isPending}
               >
                 Retry GL posting
-              </Button>
-            )}
-            {isDraft && can('inventory.grn.create') && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<LuPackageCheck size={14} />}
-                onClick={() => setConfirmFinalize(true)}
-                loading={finalize.isPending}
-                disabled={!finalizeReady}
-              >
-                Finalize receiving
               </Button>
             )}
             {isEditable && can('inventory.grn.create') && (
@@ -423,15 +478,145 @@ export default function GrnDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
+        <Panel title="Procure-to-pay chain" bodyClassName="px-4 py-3">
+          <ChainHeader
+            stretch
+            showStatusMessages={false}
+            steps={buildP2pChain({
+              pr: data.purchase_order?.purchase_request
+                ? {
+                    id: data.purchase_order.purchase_request.id,
+                    number: data.purchase_order.purchase_request.pr_number,
+                  }
+                : null,
+              po: data.purchase_order
+                ? { id: data.purchase_order.id, number: data.purchase_order.po_number }
+                : null,
+              grns: [
+                {
+                  id: data.id,
+                  grn_number: data.grn_number,
+                  status: data.status,
+                  received_date: data.received_date,
+                },
+              ],
+              bills: data.bill
+                ? [
+                    {
+                      id: data.bill.id,
+                      bill_number: data.bill.bill_number,
+                      status: data.bill.status,
+                    },
+                  ]
+                : [],
+            })}
+          />
+        </Panel>
+        <Panel title="Receipt details">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">PO</dt>
+              <dd className="font-mono">
+                {data.purchase_order ? (
+                  <Link
+                    to={`/purchasing/purchase-orders/${data.purchase_order.id}`}
+                    className="text-accent hover:underline"
+                  >
+                    {data.purchase_order.po_number}
+                  </Link>
+                ) : (
+                  '—'
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt>
+              <dd>{data.vendor?.name ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">Received</dt>
+              <dd className={isDraft ? 'text-muted' : 'font-mono'}>
+                {isDraft ? 'Awaiting goods' : formatDate(data.received_date)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
+              {/* A draft is only an expectation; its creator did not receive anything. */}
+              <dd>{isDraft ? '—' : (data.receiver?.name ?? '—')}</dd>
+            </div>
+            {data.accepted_at && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt>
+                <dd className="font-mono">
+                  {formatDate(data.accepted_at)} · {data.acceptor?.name}
+                </dd>
+              </div>
+            )}
+            {data.rejected_reason && (
+              <div className="col-span-4">
+                <dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt>
+                <dd className="text-danger-fg">{data.rejected_reason}</dd>
+              </div>
+            )}
+            {data.remainder_rejected_at && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Remainder rejected</dt>
+                <dd className="font-mono">
+                  {formatDate(data.remainder_rejected_at)} · {data.remainder_rejected_by?.name}
+                </dd>
+              </div>
+            )}
+            {data.remainder_rejected_reason && (
+              <div className="col-span-4">
+                <dt className="text-2xs uppercase tracking-wider text-muted">
+                  Remainder rejection reason
+                </dt>
+                <dd>{data.remainder_rejected_reason}</dd>
+              </div>
+            )}
+            {/* Incoming QC runs per line; each line shows its own inspection below. */}
+            {data.qc_inspection && !(data.items ?? []).some((l) => l.inspection) && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Incoming QC</dt>
+                <dd>
+                  {can('quality.inspections.view') ? (
+                    <Link
+                      to={`/quality/inspections/${data.qc_inspection.id}`}
+                      className="font-mono text-accent hover:underline"
+                    >
+                      {data.qc_inspection.inspection_number}
+                    </Link>
+                  ) : (
+                    <span className="font-mono">{data.qc_inspection.inspection_number}</span>
+                  )}{' '}
+                  · {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}
+                </dd>
+              </div>
+            )}
+            {data.journal_entry && can('accounting.journal.view') && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Inventory GL</dt>
+                <dd>
+                  <Link
+                    to={`/accounting/journal-entries/${data.journal_entry.id}`}
+                    className="font-mono text-accent hover:underline"
+                  >
+                    {data.journal_entry.entry_number}
+                  </Link>{' '}
+                  · {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </Panel>
         {isDraft && (
           <div className="flex items-center gap-3 rounded-md border border-info/40 bg-info-bg/10 px-4 py-3 text-sm">
             <LuPackageCheck size={16} className="shrink-0 text-info-fg" />
             <div>
-              <div className="font-medium">Expected receipt — awaiting goods</div>
+              <div className="font-medium">Awaiting delivery</div>
               <div className="text-muted">
-                This GRN was auto-created when the PO was sent to the supplier. When the goods
-                arrive, assign a bin and the received quantity per line, then finalize — the GRN
-                moves to incoming QC.
+                When goods arrive, match their shipment, enter actual received quantities and bins,
+                then finalize for incoming QC.
               </div>
             </div>
           </div>
@@ -512,354 +697,461 @@ export default function GrnDetailPage() {
             )}
           </div>
         )}
-        <Panel title="Procure-to-pay chain">
-          {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
-    This receipt is the GRN step; upstream (PR/PO) and downstream (Bill/Paid)
-    stay visible and clickable from here. */}
-          <ChainHeader
-            steps={buildP2pChain({
-              pr: data.purchase_order?.purchase_request
-                ? {
-                    id: data.purchase_order.purchase_request.id,
-                    number: data.purchase_order.purchase_request.pr_number,
-                  }
-                : null,
-              po: data.purchase_order
-                ? { id: data.purchase_order.id, number: data.purchase_order.po_number }
-                : null,
-              grns: [
-                {
-                  id: data.id,
-                  grn_number: data.grn_number,
-                  status: data.status,
-                  received_date: data.received_date,
-                },
-              ],
-              bills: data.bill
-                ? [
-                    {
-                      id: data.bill.id,
-                      bill_number: data.bill.bill_number,
-                      status: data.bill.status,
-                    },
-                  ]
-                : [],
-            })}
-          />
-        </Panel>
-        {data.purchase_order && <GrnSupplierDocumentsPanel grnId={data.id} />}
-        <Panel title="Header">
-          <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">PO</dt>
-              <dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt>
-              <dd>{data.vendor?.name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Received</dt>
-              <dd className="font-mono">{formatDate(data.received_date)}</dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
-              {/* A draft is only an expectation; its creator did not receive anything. */}
-              <dd>{isDraft ? '—' : (data.receiver?.name ?? '—')}</dd>
-            </div>
-            {data.accepted_at && (
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt>
-                <dd className="font-mono">
-                  {formatDate(data.accepted_at)} · {data.acceptor?.name}
-                </dd>
-              </div>
-            )}
-            {data.rejected_reason && (
-              <div className="col-span-4">
-                <dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt>
-                <dd className="text-danger-fg">{data.rejected_reason}</dd>
-              </div>
-            )}
-            {data.remainder_rejected_at && (
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Remainder rejected</dt>
-                <dd className="font-mono">
-                  {formatDate(data.remainder_rejected_at)} · {data.remainder_rejected_by?.name}
-                </dd>
-              </div>
-            )}
-            {data.remainder_rejected_reason && (
-              <div className="col-span-4">
-                <dt className="text-2xs uppercase tracking-wider text-muted">
-                  Remainder rejection reason
-                </dt>
-                <dd>{data.remainder_rejected_reason}</dd>
-              </div>
-            )}
-            {/* Incoming QC runs per line; each line shows its own inspection below. */}
-            {data.qc_inspection && !(data.items ?? []).some((l) => l.inspection) && (
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Incoming QC</dt>
-                <dd>
-                  {can('quality.inspections.view') ? (
-                    <Link
-                      to={`/quality/inspections/${data.qc_inspection.id}`}
-                      className="font-mono text-accent hover:underline"
-                    >
-                      {data.qc_inspection.inspection_number}
-                    </Link>
-                  ) : (
-                    <span className="font-mono">{data.qc_inspection.inspection_number}</span>
-                  )}{' '}
-                  · {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}
-                </dd>
-              </div>
-            )}
-            {data.journal_entry && can('accounting.journal.view') && (
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Inventory GL</dt>
-                <dd>
-                  <Link
-                    to={`/accounting/journal-entries/${data.journal_entry.id}`}
-                    className="font-mono text-accent hover:underline"
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <Panel title={isDraft ? 'Record received goods' : 'Line items'}>
+            {isDraft && can('inventory.grn.create') && (
+              <div className="mb-4 border-b border-default pb-4">
+                <p className="mb-2 text-xs font-medium text-secondary">Supplier shipment</p>
+                {supplierEvidenceLoading ? (
+                  <p className="text-sm text-muted">Loading supplier shipments…</p>
+                ) : supplierEvidenceError ? (
+                  <div
+                    role="alert"
+                    className="flex flex-wrap items-center gap-2 text-sm text-danger-fg"
                   >
-                    {data.journal_entry.entry_number}
-                  </Link>{' '}
-                  · {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}
-                </dd>
+                    Could not load supplier shipments.
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void refetchSupplierEvidence()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                ) : supplierShipments.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    No supplier shipment reported yet. Ask the supplier to record dispatch before
+                    receiving.
+                  </p>
+                ) : supplierShipments.length === 1 ? (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <Chip variant="success">Matched</Chip>
+                    <span className="font-medium">
+                      {supplierShipments[0].tracking_number ?? 'Dispatch reported'}
+                    </span>
+                    <span className="text-muted">
+                      Shipped {formatDate(supplierShipments[0].shipped_date)}
+                    </span>
+                    <span className="text-muted">
+                      {shipmentSummary(supplierShipments[0])} dispatched
+                    </span>
+                  </div>
+                ) : (
+                  <Select
+                    label="Supplier shipment"
+                    value={selectedSupplierShipment}
+                    onChange={(event) => setSelectedSupplierShipment(event.target.value)}
+                    required
+                    containerClassName="max-w-lg"
+                  >
+                    <option value="">Select the shipment that arrived…</option>
+                    {supplierShipments.map((shipment, index) => (
+                      <option key={shipment.id} value={shipment.id}>
+                        {shipment.tracking_number ?? `Shipment ${index + 1}`}
+                        {shipment.shipped_date
+                          ? ` · ${formatDate(shipment.shipped_date)}`
+                          : ''} · {shipmentSummary(shipment)} dispatched
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                <p className="mt-2 text-xs text-muted">
+                  Record only what physically arrived. If this is less than the supplier reported,
+                  the GRN shows the difference and the unreceived PO quantity stays open.
+                </p>
               </div>
             )}
-          </dl>
-        </Panel>
-        <Panel title="Line items">
-          <div className="overflow-x-auto">
-            <table className={`${tableCls} min-w-[760px]`}>
-              <thead>
-                <tr className={theadTrCls}>
-                  <Th>Item</Th>
-                  <Th>Location</Th>
-                  {isDraft && <Th>Bin (assign)</Th>}
-                  <Th align="right">Received</Th>
-                  {isDraft && <Th align="right">Qty received</Th>}
-                  {canAcceptHere && <Th align="right">Accept qty</Th>}
-                  <Th align="right">Accepted</Th>
-                  <Th align="right">Unit cost</Th>
-                  <Th align="right">Total</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items?.map((l) => (
-                  <Fragment key={l.id}>
-                    <tr key={l.id} className={trCls}>
-                      <Td>
-                        <span className="font-mono">{l.item?.code}</span>
-                        <div className="text-2xs text-muted">{l.item?.name}</div>
-                        <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>
-                          {l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}
-                        </Chip>
-                      </Td>
-                      <Td mono>{l.location?.full_code ?? '—'}</Td>
-                      {isDraft && (
+            {isDraft && warehousesError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 text-sm text-danger-fg">
+                Could not load storage bins.
+                <Button variant="secondary" size="sm" onClick={() => void refetchWarehouses()}>
+                  Retry
+                </Button>
+              </div>
+            )}
+            <div className="overflow-x-auto" role="region" aria-label="GRN line items" tabIndex={0}>
+              <table className={`${tableCls} ${isDraft ? 'min-w-[640px]' : 'min-w-[760px]'}`}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Item</Th>
+                    {isDraft ? (
+                      <>
+                        <Th align="right">Still due</Th>
+                        <Th>Storage bin</Th>
+                        <Th align="right">Received now</Th>
+                      </>
+                    ) : (
+                      <>
+                        <Th>Location</Th>
+                        <Th align="right">Original received (base)</Th>
+                        <Th align="right">Returned (base)</Th>
+                        <Th align="right">Net received (base)</Th>
+                        {canAcceptHere && <Th align="right">Accept (base)</Th>}
+                        <Th align="right">Accepted (base)</Th>
+                        <Th align="right">Unit cost</Th>
+                        <Th align="right">Total</Th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items?.map((l) => (
+                    <Fragment key={l.id}>
+                      <tr key={l.id} className={trCls}>
                         <Td>
-                          <Select
-                            fieldSize="sm"
-                            containerClassName="w-44"
-                            aria-label={`Bin ${l.item?.code ?? l.id}`}
-                            value={finalizeInput[l.id]?.location_id ?? ''}
-                            onChange={(e) =>
-                              updateFinalizeLine(l.id, { location_id: e.target.value })
-                            }
-                          >
-                            <option value="">Select bin…</option>
-                            {locations.map((loc) => (
-                              <option key={loc.id} value={loc.id}>
-                                {loc.label}
-                              </option>
-                            ))}
-                          </Select>
+                          <span className="font-mono">{l.item?.code}</span>
+                          <div className="text-2xs text-muted">{l.item?.name}</div>
+                          <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>
+                            {l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}
+                          </Chip>
                         </Td>
-                      )}
-                      <Td align="right" mono>
-                        {formatQuantity(l.quantity_received)}
-                      </Td>
-                      {isDraft && (
-                        <Td align="right">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.001"
-                            aria-label={`Qty ${l.item?.code ?? l.id}`}
-                            value={finalizeInput[l.id]?.quantity_received ?? '0'}
-                            onChange={(e) =>
-                              updateFinalizeLine(l.id, { quantity_received: e.target.value })
-                            }
-                            className="w-24 h-7 text-right font-mono"
-                          />
-                          {l.quantity_outstanding != null && (
-                            <div className="mt-0.5 text-2xs text-muted font-mono tabular-nums">
-                              Due {l.quantity_outstanding}
+                        {isDraft && (
+                          <Td align="right" mono>
+                            {l.quantity_outstanding != null
+                              ? `${formatQuantity(l.quantity_outstanding)} ${l.item?.unit_of_measure ?? ''}`
+                              : '—'}
+                          </Td>
+                        )}
+                        {isDraft ? (
+                          <Td>
+                            <Select
+                              fieldSize="sm"
+                              containerClassName="w-44"
+                              aria-label={`Bin ${l.item?.code ?? l.id}`}
+                              value={receivingBinId(l)}
+                              disabled={warehousesLoading || warehousesError}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { location_id: e.target.value })
+                              }
+                            >
+                              <option value="">
+                                {warehousesLoading ? 'Loading bins…' : 'Select bin…'}
+                              </option>
+                              {storedBinsFor(l).length > 0 && (
+                                <optgroup label="Bins holding this item">
+                                  {storedBinsFor(l).map((bin) => (
+                                    <option key={bin.id} value={bin.id}>
+                                      {bin.full_code} · {formatQuantity(bin.quantity)} in stock
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="Other active bins">
+                                {locations
+                                  .filter(
+                                    (loc) => !storedBinsFor(l).some((bin) => bin.id === loc.id),
+                                  )
+                                  .map((loc) => (
+                                    <option key={loc.id} value={loc.id}>
+                                      {loc.label}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            </Select>
+                            <div className="mt-1 text-2xs text-muted">
+                              {storedBinsFor(l).length === 1
+                                ? 'Suggested from current stock'
+                                : storedBinsFor(l).length > 1
+                                  ? 'Choose a bin holding this item'
+                                  : 'No stocked bin yet; choose a location'}
+                            </div>
+                          </Td>
+                        ) : (
+                          <Td mono>{l.location?.full_code ?? '—'}</Td>
+                        )}
+                        {isDraft && (
+                          <Td align="right">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              max={l.quantity_outstanding ?? undefined}
+                              aria-label={`Entered quantity ${l.item?.code ?? l.id}`}
+                              value={finalizeInput[l.id]?.quantity_received ?? '0'}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { quantity_received: e.target.value })
+                              }
+                              error={
+                                finalizeInput[l.id]?.quantity_received &&
+                                l.quantity_outstanding != null &&
+                                Number(finalizeInput[l.id].quantity_received) >
+                                  Number(l.quantity_outstanding)
+                                  ? `Maximum ${formatQuantity(l.quantity_outstanding)} ${l.item?.unit_of_measure ?? ''}`
+                                  : undefined
+                              }
+                              className="w-32 h-7 text-right font-mono"
+                            />
+                            <div className="mt-0.5 text-2xs text-muted">
+                              {l.item?.unit_of_measure ?? 'Base units'}
+                            </div>
+                          </Td>
+                        )}
+                        {!isDraft && (
+                          <>
+                            <Td align="right" mono>
+                              {formatQuantity(l.original_received_quantity ?? l.quantity_received)}{' '}
+                              {l.item?.unit_of_measure}
+                            </Td>
+                            <Td align="right" mono>
+                              {formatQuantity(l.returned_quantity ?? 0)} {l.item?.unit_of_measure}
+                            </Td>
+                            <Td align="right" mono>
+                              {formatQuantity(l.net_received_quantity ?? l.quantity_received)}{' '}
+                              {l.item?.unit_of_measure}
+                            </Td>
+                          </>
+                        )}
+                        {canAcceptHere && (
+                          <Td align="right">
+                            <Input
+                              type="number"
+                              min={data.status === 'partial_accepted' ? l.quantity_accepted : '0'}
+                              step="0.001"
+                              max={l.quantity_received}
+                              value={
+                                acceptMap[l.id] ??
+                                (data.status === 'partial_accepted'
+                                  ? l.quantity_accepted
+                                  : l.quantity_received)
+                              }
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setAcceptMap((m) => ({ ...m, [l.id]: v }));
+                              }}
+                              className="w-24 h-7 text-right font-mono"
+                            />
+                          </Td>
+                        )}
+                        {!isDraft && (
+                          <>
+                            <Td align="right" mono>
+                              {formatQuantity(l.quantity_accepted)} {l.item?.unit_of_measure}
+                            </Td>
+                            <Td align="right" mono>
+                              {Number(l.unit_cost).toFixed(4)}
+                            </Td>
+                            <Td align="right" mono>
+                              {formatPeso(Number(l.quantity_received) * Number(l.unit_cost))}
+                            </Td>
+                          </>
+                        )}
+                      </tr>
+                      <tr className="border-b border-subtle bg-subtle/40">
+                        <Td colSpan={columnCount}>
+                          {isDraft ? (
+                            <details className="text-sm">
+                              <summary className="cursor-pointer text-accent hover:underline">
+                                Add supplier lot or expiry (optional)
+                              </summary>
+                              <p className="mt-2 text-xs text-muted">
+                                Copy these from the item label when present. OGAMI creates its own
+                                lot number automatically.
+                              </p>
+                              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <Input
+                                  fieldSize="sm"
+                                  label="Supplier lot / batch"
+                                  maxLength={100}
+                                  value={finalizeInput[l.id]?.supplier_lot_reference ?? ''}
+                                  onChange={(e) =>
+                                    updateFinalizeLine(l.id, {
+                                      supplier_lot_reference: e.target.value,
+                                    })
+                                  }
+                                />
+                                <Input
+                                  fieldSize="sm"
+                                  label="Expiry date"
+                                  type="date"
+                                  value={finalizeInput[l.id]?.expiry_date ?? ''}
+                                  onChange={(e) =>
+                                    updateFinalizeLine(l.id, { expiry_date: e.target.value })
+                                  }
+                                />
+                              </div>
+                            </details>
+                          ) : (
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-2xs text-muted">
+                              {l.quantity_received_in_uom !== null &&
+                              l.received_uom_conversion_factor !== null ? (
+                                <span>
+                                  Entered{' '}
+                                  <span className="font-mono text-primary">
+                                    {formatQuantity(l.quantity_received_in_uom)}{' '}
+                                    {l.received_uom_code || l.item?.unit_of_measure}
+                                  </span>
+                                  {' · 1 '}
+                                  {l.received_uom_code || l.item?.unit_of_measure}
+                                  {' = '}
+                                  {Number(l.received_uom_conversion_factor).toFixed(6)}{' '}
+                                  {l.item?.unit_of_measure}
+                                </span>
+                              ) : (
+                                <span>
+                                  Stored in base units: {formatQuantity(l.quantity_received)}{' '}
+                                  {l.item?.unit_of_measure}.
+                                  {l.received_uom_code &&
+                                    ` Original unit ${l.received_uom_code}; entered quantity was not recorded.`}
+                                </span>
+                              )}
+                              <span>
+                                Lot:{' '}
+                                <span className="font-mono text-primary">
+                                  {l.lot_number ?? '—'}
+                                </span>
+                              </span>
+                              <span>
+                                Supplier lot:{' '}
+                                <span className="font-mono text-primary">
+                                  {l.supplier_lot_reference ?? '—'}
+                                </span>
+                              </span>
+                              <span>
+                                Expiry:{' '}
+                                <span className="font-mono text-primary">
+                                  {l.expiry_date ?? '—'}
+                                </span>
+                              </span>
+                              <span>
+                                Moisture:{' '}
+                                <span className="font-mono text-primary">
+                                  {l.moisture_percentage ?? '—'}
+                                  {l.moisture_percentage ? '%' : ''}
+                                </span>
+                              </span>
+                              <span>
+                                COA:{' '}
+                                <span className="font-mono text-primary">
+                                  {l.coa_document_path ?? '—'}
+                                </span>{' '}
+                                ·{' '}
+                                {l.coa_verified
+                                  ? 'Verified by Quality'
+                                  : 'Pending Quality verification'}
+                              </span>
+                              {l.inspection && (
+                                <span>
+                                  QC:{' '}
+                                  {can('quality.inspections.view') ? (
+                                    <Link
+                                      to={`/quality/inspections/${l.inspection.id}`}
+                                      className="font-mono text-accent hover:underline"
+                                    >
+                                      {l.inspection.inspection_number}
+                                    </Link>
+                                  ) : (
+                                    <span className="font-mono text-primary">
+                                      {l.inspection.inspection_number}
+                                    </span>
+                                  )}{' '}
+                                  · {l.inspection.status_label ?? l.inspection.status ?? '—'}
+                                </span>
+                              )}
                             </div>
                           )}
                         </Td>
-                      )}
-                      {canAcceptHere && (
-                        <Td align="right">
-                          <Input
-                            type="number"
-                            min={data.status === 'partial_accepted' ? l.quantity_accepted : '0'}
-                            step="0.001"
-                            max={l.quantity_received}
-                            value={
-                              acceptMap[l.id] ??
-                              (data.status === 'partial_accepted'
-                                ? l.quantity_accepted
-                                : l.quantity_received)
-                            }
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setAcceptMap((m) => ({ ...m, [l.id]: v }));
-                            }}
-                            className="w-24 h-7 text-right font-mono"
-                          />
-                        </Td>
-                      )}
-                      <Td align="right" mono>
-                        {formatQuantity(l.quantity_accepted)}
-                      </Td>
-                      <Td align="right" mono>
-                        {Number(l.unit_cost).toFixed(4)}
-                      </Td>
-                      <Td align="right" mono>
-                        {formatPeso(Number(l.quantity_received) * Number(l.unit_cost))}
-                      </Td>
-                    </tr>
-                    <tr className="border-b border-subtle bg-subtle/40">
-                      <Td colSpan={columnCount}>
-                        {isDraft ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
-                            <Input
-                              fieldSize="sm"
-                              label="Received UOM"
-                              placeholder="Base / BAG"
-                              value={finalizeInput[l.id]?.received_uom_code ?? ''}
-                              onChange={(e) =>
-                                updateFinalizeLine(l.id, { received_uom_code: e.target.value })
-                              }
-                            />
-                            <Input
-                              fieldSize="sm"
-                              label="Lot number"
-                              maxLength={50}
-                              value={finalizeInput[l.id]?.lot_number ?? ''}
-                              onChange={(e) =>
-                                updateFinalizeLine(l.id, { lot_number: e.target.value })
-                              }
-                            />
-                            <Input
-                              fieldSize="sm"
-                              label="Supplier lot"
-                              maxLength={100}
-                              value={finalizeInput[l.id]?.supplier_lot_reference ?? ''}
-                              onChange={(e) =>
-                                updateFinalizeLine(l.id, { supplier_lot_reference: e.target.value })
-                              }
-                            />
-                            <Input
-                              fieldSize="sm"
-                              label="Expiry"
-                              type="date"
-                              value={finalizeInput[l.id]?.expiry_date ?? ''}
-                              onChange={(e) =>
-                                updateFinalizeLine(l.id, { expiry_date: e.target.value })
-                              }
-                            />
-                            <Input
-                              fieldSize="sm"
-                              label="Moisture %"
-                              inputMode="decimal"
-                              value={finalizeInput[l.id]?.moisture_percentage ?? ''}
-                              onChange={(e) =>
-                                updateFinalizeLine(l.id, { moisture_percentage: e.target.value })
-                              }
-                            />
-                            <Input
-                              fieldSize="sm"
-                              label="COA path"
-                              maxLength={500}
-                              value={finalizeInput[l.id]?.coa_document_path ?? ''}
-                              onChange={(e) =>
-                                updateFinalizeLine(l.id, { coa_document_path: e.target.value })
-                              }
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-2xs text-muted">
-                            <span>
-                              UOM:{' '}
-                              <span className="font-mono text-primary">
-                                {l.received_uom_code ?? 'base'}
-                              </span>
-                            </span>
-                            <span>
-                              Lot:{' '}
-                              <span className="font-mono text-primary">{l.lot_number ?? '—'}</span>
-                            </span>
-                            <span>
-                              Supplier lot:{' '}
-                              <span className="font-mono text-primary">
-                                {l.supplier_lot_reference ?? '—'}
-                              </span>
-                            </span>
-                            <span>
-                              Expiry:{' '}
-                              <span className="font-mono text-primary">{l.expiry_date ?? '—'}</span>
-                            </span>
-                            <span>
-                              Moisture:{' '}
-                              <span className="font-mono text-primary">
-                                {l.moisture_percentage ?? '—'}
-                                {l.moisture_percentage ? '%' : ''}
-                              </span>
-                            </span>
-                            <span>
-                              COA:{' '}
-                              <span className="font-mono text-primary">
-                                {l.coa_document_path ?? '—'}
-                              </span>{' '}
-                              ·{' '}
-                              {l.coa_verified
-                                ? 'Verified by Quality'
-                                : 'Pending Quality verification'}
-                            </span>
-                            {l.inspection && (
-                              <span>
-                                QC:{' '}
-                                {can('quality.inspections.view') ? (
-                                  <Link
-                                    to={`/quality/inspections/${l.inspection.id}`}
-                                    className="font-mono text-accent hover:underline"
-                                  >
-                                    {l.inspection.inspection_number}
-                                  </Link>
-                                ) : (
-                                  <span className="font-mono text-primary">
-                                    {l.inspection.inspection_number}
-                                  </span>
-                                )}{' '}
-                                · {l.inspection.status_label ?? l.inspection.status ?? '—'}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </Td>
-                    </tr>
-                  </Fragment>
+                      </tr>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {isDraft && can('inventory.grn.create') && (
+              <div className="mt-4 flex flex-col gap-3 border-t border-default pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-secondary" role="status">
+                  {!supplierShipmentId
+                    ? 'Wait for a supplier shipment, or select the shipment that arrived.'
+                    : enteredReceiptLines.length === 0
+                      ? 'Enter the quantity that physically arrived.'
+                      : hasInvalidReceiptQuantity
+                        ? 'Correct the received quantity before finalizing.'
+                        : !finalizeReady
+                          ? 'Assign a storage bin to every line with received quantity.'
+                          : 'Ready to finalize. Incoming QC follows this step.'}
+                </p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<LuPackageCheck size={14} />}
+                  onClick={() => setConfirmFinalize(true)}
+                  loading={finalize.isPending}
+                  disabled={!finalizeReady}
+                >
+                  Finalize receiving
+                </Button>
+              </div>
+            )}
+          </Panel>
+          <div className="space-y-4">
+            {data.supplier_shipment && (
+              <Panel
+                title="Dispatch versus receipt"
+                actions={
+                  data.status !== 'draft' &&
+                  data.supplier_shipment.items.some((item) => Number(item.difference) < 0) &&
+                  can('inventory.grn.create') &&
+                  !can('return_management.manage') ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<LuMessageSquare size={14} />}
+                      onClick={() =>
+                        navigate(
+                          `/return-management/cases/new?source_kind=grn&source_id=${encodeURIComponent(id)}`,
+                        )
+                      }
+                    >
+                      Report shortage
+                    </Button>
+                  ) : undefined
+                }
+              >
+                <p className="mb-2 text-xs text-muted">
+                  Supplier quantities are declarations. Warehouse receipt records the actual
+                  arrival.
+                </p>
+                {data.supplier_shipment.items.map((item) => (
+                  <div
+                    key={item.purchase_order_item_id}
+                    className="flex flex-wrap gap-x-3 gap-y-1 py-1 text-sm"
+                  >
+                    <span>
+                      Shipped {formatQuantity(item.quantity_shipped)} {item.unit}
+                    </span>
+                    <span>
+                      Received {formatQuantity(item.quantity_received)} {item.unit}
+                    </span>
+                    {Number(item.difference) !== 0 && (
+                      <span className="text-warning-fg">
+                        {Number(item.difference) < 0 ? 'Short by' : 'Over by'}{' '}
+                        {formatQuantity(Math.abs(Number(item.difference)))} {item.unit}
+                      </span>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </Panel>
+            )}
+            {data.purchase_order && <GrnSupplierDocumentsPanel grnId={data.id} />}
           </div>
-        </Panel>
+        </div>
+        {data.items?.some((line) => (line.active_quality_holds?.length ?? 0) > 0) && (
+          <Panel title="Quality follow-up">
+            {data.items.flatMap((line) =>
+              (line.active_quality_holds ?? []).map((hold) => (
+                <p key={hold.id} className="text-sm text-warning-fg">
+                  {line.item?.code}: {formatQuantity(hold.quantity ?? 0)} held ·{' '}
+                  {can('quality.ncr.view') ? (
+                    <Link className="text-accent hover:underline" to={`/quality/ncrs/${hold.id}`}>
+                      {hold.ncr_number}
+                    </Link>
+                  ) : (
+                    hold.ncr_number
+                  )}
+                </p>
+              )),
+            )}
+          </Panel>
+        )}
       </div>
 
       <ConfirmDialog

@@ -9,10 +9,12 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemUomConversion;
+use App\Modules\Inventory\Models\MaterialIssueSlipItem;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Uom;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
+use App\Modules\Inventory\Services\MaterialIssueService;
 use App\Modules\Inventory\Services\UomConversionService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -159,6 +161,8 @@ class UomConversionTest extends TestCase
         // GRN line is stored in base (kg).
         $grnItem = $grn->items->first();
         $this->assertSame('50.000', number_format((float) $grnItem->quantity_received, 3, '.', ''));
+        $this->assertSame('2.000000', (string) $grnItem->quantity_received_in_uom);
+        $this->assertSame('25.000000', (string) $grnItem->received_uom_conversion_factor);
 
         // PO running total advanced by base qty (kg).
         $poItem->refresh();
@@ -180,5 +184,35 @@ class UomConversionTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame('50.000', $level->quantity, 'Receiving 2 BAG must add 50 KG of base stock');
+    }
+
+    public function test_issue_in_bags_preserves_the_entered_quantity_and_conversion_factor(): void
+    {
+        $item = $this->bagToKgItem();
+        $location = WarehouseLocation::factory()->create();
+        $role = Role::firstOrCreate(['slug' => 'warehouse_staff'], ['name' => 'Warehouse Staff']);
+        $user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        StockLevel::query()->create([
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity' => '100.000',
+            'reserved_quantity' => '0.000',
+            'weighted_avg_cost' => '10.0000',
+        ]);
+
+        $slip = app(MaterialIssueService::class)->create([
+            'issued_date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $item->id,
+                'location_id' => $location->id,
+                'quantity_issued' => '2',
+                'issued_uom_code' => 'BAG',
+            ]],
+        ], $user);
+
+        $line = MaterialIssueSlipItem::query()->where('material_issue_slip_id', $slip->id)->firstOrFail();
+        $this->assertSame('50.000', (string) $line->quantity_issued);
+        $this->assertSame('2.000000', (string) $line->quantity_issued_in_uom);
+        $this->assertSame('25.000000', (string) $line->issued_uom_conversion_factor);
     }
 }

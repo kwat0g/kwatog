@@ -46,6 +46,7 @@ class InvoiceCollectionTest extends TestCase
             'email'    => 'fin_' . uniqid() . '@x.test',
             'password' => bcrypt('Password1!'),
             'role_id'  => $roleId,
+            'is_active' => true,
         ]);
     }
 
@@ -68,6 +69,9 @@ class InvoiceCollectionTest extends TestCase
         ?string $dueDate = null,
         ?SalesOrder $salesOrder = null,
     ): \App\Modules\Accounting\Models\Invoice {
+        if (! $customer->email) {
+            $customer->forceFill(['email' => 'collection-'.uniqid().'@example.test'])->save();
+        }
         $revenueId = $this->accountHashId('4010');
         $invoiceDate = $date ?? '2026-04-01';
         $data = [
@@ -91,8 +95,9 @@ class InvoiceCollectionTest extends TestCase
         }
 
         $invoice = $svc->create($data, $user);
+        $svc->approvePrebill($invoice, $this->newUser());
 
-        return $svc->finalize($invoice, $user);
+        return $svc->finalize($invoice, $this->newUser());
     }
 
     // ─── Test 1: Full collection ─────────────────────────────────────────────
@@ -110,7 +115,8 @@ class InvoiceCollectionTest extends TestCase
         $this->assertSame(InvoiceStatus::Finalized, $invoice->status);
 
         $coll = $svc->recordCollection($invoice->fresh(), [
-            'cash_account_id'  => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id'  => $cashId,
             'collection_date'  => '2026-04-15',
             'amount'           => '10000.00',
             'payment_method'   => PaymentMethod::Cash->value,
@@ -162,7 +168,8 @@ class InvoiceCollectionTest extends TestCase
         $invoice = $this->makeFinalizedInvoice($svc, $user, $customer, salesOrder: $so);
 
         $svc->recordCollection($invoice->fresh(), [
-            'cash_account_id' => $this->accountHashId('1010'),
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $this->accountHashId('1010'),
             'collection_date' => '2026-04-15',
             'amount' => (string) $invoice->total_amount,
             'payment_method' => PaymentMethod::Cash->value,
@@ -184,7 +191,8 @@ class InvoiceCollectionTest extends TestCase
         // total = 10000.00
 
         $svc->recordCollection($invoice->fresh(), [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-04-10',
             'amount'          => '4000.00',
             'payment_method'  => PaymentMethod::BankTransfer->value,
@@ -205,7 +213,8 @@ class InvoiceCollectionTest extends TestCase
         $cashId   = $this->accountHashId('1010');
         $invoice  = $this->makeFinalizedInvoice($svc, $user, $customer, '1000.00', false);
         $payload  = [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-04-15',
             'amount'          => '10000.00',
             'payment_method'  => PaymentMethod::Cash->value,
@@ -234,7 +243,8 @@ class InvoiceCollectionTest extends TestCase
         $this->expectExceptionMessage('must be of type asset');
 
         $svc->recordCollection($invoice, [
-            'cash_account_id' => $this->accountHashId('4010'),
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $this->accountHashId('4010'),
             'collection_date' => '2026-04-15',
             'amount'          => '100.00',
             'payment_method'  => PaymentMethod::Cash->value,
@@ -257,7 +267,8 @@ class InvoiceCollectionTest extends TestCase
         $this->expectExceptionMessageMatches('/exceeds outstanding balance/i');
 
         $svc->recordCollection($invoice->fresh(), [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-04-10',
             'amount'          => '5001.00',  // 1 peso over
             'payment_method'  => PaymentMethod::Cash->value,
@@ -278,7 +289,8 @@ class InvoiceCollectionTest extends TestCase
 
         // First: fully settle
         $svc->recordCollection($invoice->fresh(), [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-04-10',
             'amount'          => '2000.00',
             'payment_method'  => PaymentMethod::Cash->value,
@@ -292,11 +304,47 @@ class InvoiceCollectionTest extends TestCase
         $this->expectExceptionMessageMatches('/status is paid/i');
 
         $svc->recordCollection($invoice->fresh(), [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-04-11',
             'amount'          => '100.00',
             'payment_method'  => PaymentMethod::Cash->value,
         ], $user);
+    }
+
+    public function test_invoice_cannot_be_cancelled_after_partial_or_full_collection(): void
+    {
+        $user = $this->newUser();
+        $invoice = $this->makeFinalizedInvoice(
+            app(InvoiceService::class),
+            $user,
+            Customer::create(['name' => 'Cancellation guard customer', 'payment_terms_days' => 30]),
+        );
+        $collectionUrl = '/api/v1/invoices/'.$invoice->hash_id.'/collections';
+        $cancelUrl = '/api/v1/invoices/'.$invoice->hash_id.'/cancel';
+        $cash = $this->accountHashId('1010');
+        $expectedJournalCount = 1;
+
+        foreach ([['4000.00', 'partial'], ['6000.00', 'paid']] as [$amount, $status]) {
+            $this->actingAs($user)->postJson($collectionUrl, [
+                'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cash,
+                'collection_date' => '2026-04-15',
+                'amount' => $amount,
+                'payment_method' => PaymentMethod::Cash->value,
+                'idempotency_key' => 'cancel-collection-'.$status,
+            ])->assertCreated();
+
+            $invoice->refresh();
+            $this->assertSame($status, $invoice->status->value);
+            $this->actingAs($user)->patchJson($cancelUrl)
+                ->assertStatus(422)
+                ->assertJsonPath('message', 'Cannot cancel an invoice that has collections.');
+            $this->assertSame($status, $invoice->fresh()->status->value);
+            $expectedJournalCount++;
+            $this->assertSame($expectedJournalCount, JournalEntry::query()->count());
+            $this->assertSame(0, JournalEntry::query()->where('reference_type', 'journal_entry_reversal')->count());
+        }
     }
 
     public function test_record_collection_rejects_a_stale_open_invoice_after_it_is_paid(): void
@@ -318,6 +366,7 @@ class InvoiceCollectionTest extends TestCase
         $exception = null;
         try {
             $svc->recordCollection($invoice, [
+                'manual_reason' => 'Verified collection test exception',
                 'cash_account_id' => $cashId,
                 'collection_date' => '2026-04-15',
                 'amount'          => '1000.00',
@@ -354,7 +403,8 @@ class InvoiceCollectionTest extends TestCase
         ]);
 
         $collection = $svc->recordCollection($invoice, [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-04-15',
             'amount'          => '6000.00',
             'payment_method'  => PaymentMethod::Cash->value,
@@ -374,7 +424,11 @@ class InvoiceCollectionTest extends TestCase
     public function test_aging_buckets_open_invoices_by_days_past_due(): void
     {
         $user     = $this->newUser();
-        $customer = Customer::create(['name' => 'Yamaha PH', 'payment_terms_days' => 30]);
+        $customer = Customer::create([
+            'name' => 'Yamaha PH',
+            'email' => 'aging-'.uniqid().'@example.test',
+            'payment_terms_days' => 30,
+        ]);
         $svc      = app(InvoiceService::class);
         $revenueId = $this->accountHashId('4010');
 
@@ -396,7 +450,8 @@ class InvoiceCollectionTest extends TestCase
                     ],
                 ],
             ], $user);
-            return $svc->finalize($invoice, $user);
+            $svc->approvePrebill($invoice, $this->newUser());
+            return $svc->finalize($invoice, $this->newUser());
         };
 
         // asOf = 2026-06-01 (today in the test context per CLAUDE.md)
@@ -446,7 +501,8 @@ class InvoiceCollectionTest extends TestCase
         $cashId = $this->accountHashId('1010');
         $inv    = $makeInvoice('2026-05-01'); // would be d1_30 range
         $svc->recordCollection($inv->fresh(), [
-            'cash_account_id' => $cashId,
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashId,
             'collection_date' => '2026-06-01',
             'amount'          => '1000.00',
             'payment_method'  => PaymentMethod::Cash->value,

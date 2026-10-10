@@ -563,8 +563,9 @@ multiple draft POs remain valid when one RFQ awards lines to multiple suppliers.
 
 **Where in the app:** `/purchasing/rfqs` and supplier portal `/portal/supplier/rfqs`
 
-An approved PR with `sourcing_method: Competitive RFQ` or any approved PR whose
-Direct PO conversion fell to `manual_required` can start an RFQ.
+Only an approved PR with `sourcing_method: Competitive RFQ` can start an RFQ.
+An approved Direct PO PR whose conversion fell to `manual_required` stays on
+the direct path and requires manual supplier assignment.
 
 1. Open an approved PR and choose **Start RFQ**.
 2. On the one-page form, enter title, invitation deadline, and select suppliers.
@@ -647,16 +648,15 @@ draft → pending_approval → approved → sent → partially_received → rece
 2. Submit → `pending_approval`
 3. Approve → `approved`
 4. Approve → the queued supplier-dispatch step records one of:
-   - `portal_available` — the approved PO is visible to an active supplier portal user; this does **not** claim an email was sent
+   - `confirmed` — an active supplier portal recipient was notified; the PO automatically becomes `sent` and appears in their portal
    - `manual_required` — download the PDF, transmit it through an approved channel, then use “Mark as sent”
    - `failed` — inspect the provider error; stale pending work is reclaimed automatically, while failed retries require the reviewed `supplier:dispatch-recover --retry-failed` command
-5. Send to vendor → `sent` only after the operator or supplier confirms the external transmission
-6. Now waiting for goods to arrive
+5. With no portal recipient, manually transmit the PDF and mark the PO sent.
+6. Supplier accepts or proposes changes before fulfilment.
 
-Supplier-portal acknowledgement uses the same locked `PurchaseOrderService`
-sent transition as the internal action. A stale or cancelled acknowledgement
-returns a business-state error and cannot resurrect the PO or publish a second
-`PurchaseOrderSent` handoff.
+Automatic portal sending uses the same locked `PurchaseOrderService` sent
+transition as the internal action. A stale or cancelled approval replay cannot
+resurrect the PO or publish a second `PurchaseOrderSent` handoff.
 
 Supplier shipment updates use the authoritative locked PO row as well. Carrier,
 tracking number, shipped date, ETA, and supplier notes are stored as **structured

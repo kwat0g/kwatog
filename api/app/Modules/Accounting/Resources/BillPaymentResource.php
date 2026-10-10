@@ -31,6 +31,7 @@ class BillPaymentResource extends JsonResource
             'payment_method'   => $this->payment_method?->value,
             'payment_method_label' => $this->payment_method?->label(),
             'reference_number' => $this->reference_number,
+            'proof_file_name'  => $this->proof_file_name,
             'status'           => $this->status?->value,
             'status_label'     => $this->status?->label(),
             'cash_account'     => $this->whenLoaded('cashAccount', fn () => $this->cashAccount ? [
@@ -49,7 +50,7 @@ class BillPaymentResource extends JsonResource
                 'status' => $this->voidReversalJournalEntry->status?->value,
             ] : null),
             'replacement_payment_id' => $this->whenLoaded('replacementPayment', fn () => $this->replacementPayment?->hash_id),
-            'approval_records' => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($record) => [
+            'approval_records' => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->where('is_current', true)->map(fn ($record) => [
                 'step_order' => (int) $record->step_order,
                 'role_slug' => $record->role_slug,
                 'action' => $record->action,
@@ -62,13 +63,15 @@ class BillPaymentResource extends JsonResource
             ])->values()),
             'created_at'       => optional($this->created_at)->toIso8601String(),
             'can_decide'       => $this->canDecide($request->user()),
+            'can_void'         => $this->canVoid($request->user()),
+            'void_block_reason' => $this->voidBlockReason($request->user()),
         ];
     }
 
     /**
      * Mirrors ApprovalService::approve()'s guards (current step role, not the
-     * submitter) so the SPA stops offering Approve/Reject on a step the API
-     * will refuse — e.g. to finance once the payment has moved on to the VP.
+     * submitter) so the SPA offers Approve/Reject only to the VP on payments
+     * whose bill total reaches the approval threshold.
      */
     private function canDecide(?User $user): bool
     {
@@ -83,5 +86,28 @@ class BillPaymentResource extends JsonResource
         $next = $approvals->nextStep($this->resource);
 
         return $next !== null && $approvals->canUserActFor($user, $next->role_slug);
+    }
+
+    private function canVoid(?User $user): bool
+    {
+        return $this->status === BillPaymentStatus::Posted
+            && $user !== null
+            && (int) $this->created_by !== (int) $user->id
+            && $user->hasPermission('accounting.bills.void_payment');
+    }
+
+    private function voidBlockReason(?User $user): ?string
+    {
+        if ($this->status !== BillPaymentStatus::Posted) {
+            return null;
+        }
+        if ($user === null || ! $user->hasPermission('accounting.bills.void_payment')) {
+            return 'You do not have permission to void bill payments.';
+        }
+        if ((int) $this->created_by === (int) $user->id) {
+            return 'A different authorized user must void this payment.';
+        }
+
+        return null;
     }
 }

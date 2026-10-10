@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+(node:2981929) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+  ✓  1 [real-chromium] › e2e-real/quality-quarantine-recovery.spec.ts:16:1 › late receipt quarantine retries once; concession requires independent approval evidence (10.6s)
+
+  1 passed (12.1s)

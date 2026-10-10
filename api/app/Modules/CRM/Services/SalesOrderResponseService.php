@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Mail\UserNotificationMail;
+use Carbon\Carbon;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\NotificationService;
@@ -15,6 +17,7 @@ use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderResponseStatus;
 use App\Modules\CRM\Enums\SalesOrderResponseType;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Mail\CustomerSalesOrderDecisionMail;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -53,6 +56,104 @@ class SalesOrderResponseService
         private readonly NotificationService $notifications,
     ) {}
 
+    public function proposeDeliveryDate(SalesOrder $so, User $by, array $data): SalesOrderResponse
+    {
+        abort_unless($by->hasPermission('crm.sales_orders.confirm'), 403);
+        return DB::transaction(function () use ($so, $by, $data): SalesOrderResponse {
+            $row = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+            $this->assertDeliveryNegotiable($row);
+            $date = (string) $data['proposed_delivery_date'];
+            $notes = trim((string) ($data['notes'] ?? ''));
+            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
+                || ! Carbon::hasFormat($date, 'Y-m-d') || $date < today()->toDateString()
+                || $date < $row->date->toDateString() || $notes === '' || mb_strlen($notes) > 1000) {
+                throw new BusinessRuleException('Provide a valid delivery date on or after today and a reason of up to 1000 characters.');
+            }
+            $lines = $row->items()->lockForUpdate()->get();
+            if ($lines->isEmpty() || $lines->every(fn ($line) => optional($line->delivery_date)->toDateString() === $date)) {
+                throw new BusinessRuleException('Propose a delivery date different from the current schedule.');
+            }
+            $row->supersedeDeliveryProposals();
+            $response = $row->responses()->create([
+                'customer_id' => $row->customer_id, 'proposed_by' => $by->id,
+                'response_type' => SalesOrderResponseType::DeliveryDate,
+                'status' => SalesOrderResponseStatus::Pending,
+                'proposed_delivery_date' => $date, 'notes' => $notes, 'responded_at' => now(),
+            ]);
+            $row->update(['status' => SalesOrderStatus::DeliveryNegotiation]);
+            $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'sales_order.delivery_proposed', [
+                'title' => "Review delivery date for {$row->so_number}",
+                'message' => "Sales proposes {$date}. {$notes} Accept or decline this date in your order.",
+                'link_to' => '/portal/customer/orders/'.$row->hash_id,
+                'entity_type' => 'sales_order', 'entity_id' => $row->hash_id,
+            ], 'so:delivery:'.$response->id.':proposed');
+            $emails = CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->pluck('email')->unique()->all();
+            if ($emails !== []) {
+                $mail = new UserNotificationMail('sales_order.delivery_proposed', [
+                    'title' => "Delivery date proposal for {$row->so_number}",
+                    'message' => "Sales proposes delivery on {$date}. {$notes} Review and accept or decline in your customer portal.",
+                    'link_to' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/customer/orders/'.$row->hash_id,
+                ]);
+                DB::afterCommit(static function () use ($emails, $mail): void {
+                    try {
+                        Mail::to($emails)->queue($mail);
+                    } catch (\Throwable $e) {
+                        Log::warning('Delivery proposal email failed', ['error' => $e->getMessage()]);
+                    }
+                });
+            }
+            return $response->load('items');
+        });
+    }
+
+    public function respondToDeliveryProposal(SalesOrder $so, SalesOrderResponse $response, CustomerPortalUser $by, string $decision): SalesOrderResponse
+    {
+        return DB::transaction(function () use ($so, $response, $by, $decision): SalesOrderResponse {
+            $row = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+            abort_unless((int) $row->customer_id === (int) $by->customer_id, 404);
+            $this->assertDeliveryNegotiable($row);
+            $locked = $row->responses()->lockForUpdate()->findOrFail($response->id);
+            abort_unless((int) $locked->customer_id === (int) $by->customer_id, 404);
+            if ($locked->response_type !== SalesOrderResponseType::DeliveryDate || ! in_array($decision, ['accept', 'reject'], true)) {
+                throw new BusinessRuleException('Invalid delivery proposal decision.');
+            }
+            $status = $decision === 'accept' ? SalesOrderResponseStatus::Accepted : SalesOrderResponseStatus::Rejected;
+            if ($locked->status === $status) {
+                return $locked->load('items');
+            }
+            if ($locked->status !== SalesOrderResponseStatus::Pending) {
+                throw new BusinessRuleException('This delivery proposal is no longer awaiting your response. Refresh the order.');
+            }
+            if ($decision === 'accept') {
+                if ($locked->proposed_delivery_date->lt(today())) {
+                    throw new BusinessRuleException('This proposed date has passed. Ask sales for a new date.');
+                }
+                foreach ($row->items()->lockForUpdate()->get() as $line) {
+                    $line->requested_delivery_date ??= $line->delivery_date;
+                    $line->delivery_date = $locked->proposed_delivery_date;
+                    $line->save();
+                }
+            }
+            $row->update(['status' => $decision === 'accept' ? SalesOrderStatus::AwaitingConfirmation : SalesOrderStatus::DeliveryNegotiation]);
+            $locked->update(['status' => $status, 'portal_user_id' => $by->id, 'resolved_at' => now()]);
+            $this->notifySalesAudience($row, $locked);
+            $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'sales_order.delivery_decided', [
+                'title' => "Delivery date ".($decision === 'accept' ? 'accepted' : 'declined')." for {$row->so_number}",
+                'message' => $decision === 'accept' ? 'Your agreed delivery date is saved. Sales will review and confirm the order.' : 'Your current schedule is unchanged. Sales has been notified and can propose another date.',
+                'link_to' => '/portal/customer/orders/'.$row->hash_id,
+                'entity_type' => 'sales_order', 'entity_id' => $row->hash_id,
+            ], 'so:delivery:'.$locked->id.':'.$decision);
+            return $locked->fresh()->load('items');
+        });
+    }
+
+    private function assertDeliveryNegotiable(SalesOrder $so): void
+    {
+        if (! $so->status->isBeforeConfirmation() || $so->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+            throw new BusinessRuleException('Delivery dates can be negotiated only for unconfirmed customer-submitted orders.');
+        }
+    }
+
     /**
      * Record a customer's reply to a sales order released for review.
      *
@@ -74,8 +175,12 @@ class SalesOrderResponseService
                 throw new BusinessRuleException('This sales order is not open to customer response.');
             }
 
+            if ($row->submission_source === SalesOrderSubmissionSource::CustomerPortal) {
+                throw new BusinessRuleException('Edit or cancel your unconfirmed order directly in the customer portal.');
+            }
+
             $type = SalesOrderResponseType::tryFrom((string) $data['type']);
-            if ($type === null) {
+            if ($type === null || $type === SalesOrderResponseType::DeliveryDate) {
                 throw new BusinessRuleException('Invalid customer response type.');
             }
 
@@ -143,6 +248,9 @@ class SalesOrderResponseService
                 ->lockForUpdate()
                 ->with('items')
                 ->findOrFail($response->id);
+            if ($locked->response_type === SalesOrderResponseType::DeliveryDate) {
+                throw new BusinessRuleException('Only the customer can accept or decline a sales delivery-date proposal.');
+            }
             if ($locked->status === SalesOrderResponseStatus::Accepted && $decision === 'accept') {
                 if ($locked->resolved_at === null) {
                     $locked->resolved_by = $by->id;
@@ -242,7 +350,10 @@ class SalesOrderResponseService
      */
     private function applyProposal(SalesOrderResponse $response, SalesOrder $so): void
     {
-        $lines = $so->items()->lockForUpdate()->get()->keyBy('id');
+        if ($so->submission_source === SalesOrderSubmissionSource::CustomerPortal) {
+            throw new BusinessRuleException('Sales cannot apply commercial changes to a customer-submitted order.');
+        }
+        $lines = $so->items()->with('product')->lockForUpdate()->get()->keyBy('id');
         $proposals = $response->items->keyBy('sales_order_item_id');
         $subtotal = Money::zero();
 
@@ -265,6 +376,7 @@ class SalesOrderResponseService
                 if (Money::lte((string) $proposal->proposed_unit_price, '0')) {
                     throw new BusinessRuleException('Proposed unit price must be greater than zero.');
                 }
+                app(PriceAgreementService::class)->assertPriceFloor($line->product, (string) $proposal->proposed_unit_price, 'proposed_unit_price');
                 $line->unit_price = $proposal->proposed_unit_price;
             }
 
@@ -308,6 +420,7 @@ class SalesOrderResponseService
             SalesOrderResponseType::Accept  => 'The customer accepted the sales order as ordered.',
             SalesOrderResponseType::Propose => 'The customer proposed changes to the order — review and accept or reject.',
             SalesOrderResponseType::Decline => 'The customer declined the sales order — decide whether to cancel or renegotiate.',
+            SalesOrderResponseType::DeliveryDate => 'The customer '.($response->status === SalesOrderResponseStatus::Accepted ? 'accepted' : 'declined').' the proposed delivery date '.optional($response->proposed_delivery_date)->toDateString().'.',
         };
     }
 
@@ -315,6 +428,10 @@ class SalesOrderResponseService
     {
         try {
             $so = $response->salesOrder;
+            $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $response->customer_id)->where('is_active', true)->get(), 'sales_order.response_decided', [
+                'title' => "Sales reviewed {$so->so_number}", 'message' => 'Sales '.($decision === 'accept' ? 'accepted' : 'rejected').' your response. Open the order to review the decision and next steps.',
+                'link_to' => '/portal/customer/orders/'.$so->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $so->hash_id,
+            ], 'so:response:'.$response->id.':'.$decision);
             $recipients = CustomerPortalUser::query()
                 ->where('customer_id', $response->customer_id)
                 ->where('is_active', true)

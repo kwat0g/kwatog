@@ -14,8 +14,9 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import { formatDateTime } from '@/lib/formatDate';
-import type { PayrollAnomalyFlag, PayrollAnomalyType } from '@/types/payroll';
+import type { PayrollAnomalyFlag, PayrollAnomalyType, PayrollPeriodStatus } from '@/types/payroll';
 
 const TYPE_VARIANT: Record<PayrollAnomalyType, 'danger' | 'warning' | 'info'> = {
  large_change: 'warning',
@@ -28,11 +29,14 @@ const TYPE_VARIANT: Record<PayrollAnomalyType, 'danger' | 'warning' | 'info'> = 
 
 interface Props {
  periodId: string;
+ periodStatus: PayrollPeriodStatus;
+ makerIds: Array<string | null | undefined>;
 }
 
-export function AnomalyReviewPanel({ periodId }: Props) {
+export function AnomalyReviewPanel({ periodId, periodStatus, makerIds }: Props) {
  const queryClient = useQueryClient();
  const { can } = usePermission();
+ const actorId = useAuthStore((state) => state.user?.id);
  const [showResolved, setShowResolved] = useState(false);
  const [resolveTarget, setResolveTarget] = useState<PayrollAnomalyFlag | null>(null);
  const [remarks, setRemarks] = useState('');
@@ -62,6 +66,12 @@ export function AnomalyReviewPanel({ periodId }: Props) {
 
  const total = data?.meta.total ?? 0;
  const flags = data?.data ?? [];
+ const hasUnresolved = flags.some((flag) => !flag.is_resolved);
+ const blockedReason = makerIds.includes(actorId)
+  ? 'You created or computed this payroll. A different authorized reviewer must resolve its anomaly flags.'
+  : !['computed', 'approved'].includes(periodStatus)
+   ? 'Anomalies can only be reviewed while the period is computed or approved.'
+   : null;
 
  return (
  <Panel
@@ -85,6 +95,10 @@ export function AnomalyReviewPanel({ periodId }: Props) {
  <div className="px-3 pb-3">
  <EmptyState icon="alert-circle" title="Failed to load anomalies" />
  </div>
+ )}
+
+ {!showResolved && hasUnresolved && blockedReason && (
+ <p role="note" className="px-3 pb-2 text-xs text-warning-fg">{blockedReason}</p>
  )}
 
  {data && flags.length === 0 && (
@@ -145,7 +159,7 @@ export function AnomalyReviewPanel({ periodId }: Props) {
  </p>
  )}
  </div>
- {!f.is_resolved && (
+ {!f.is_resolved && !blockedReason && (
  <Button
  variant="secondary"
  size="sm"

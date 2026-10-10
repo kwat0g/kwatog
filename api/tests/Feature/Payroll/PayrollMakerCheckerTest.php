@@ -130,6 +130,36 @@ class PayrollMakerCheckerTest extends TestCase
         $this->assertNull($fresh->approved_at);
     }
 
+    public function test_creator_who_becomes_a_finance_checker_cannot_approve_their_period(): void
+    {
+        $creator = $this->userWithRole('hr_officer');
+        $computer = $this->userWithRole('hr_officer');
+        $period = $this->draftPeriod($computer);
+        $period->forceFill(['created_by' => $creator->id])->save();
+
+        // A role change during an in-flight period must not turn its requester
+        // into an eligible checker.
+        $creator->role_id = Role::where('slug', 'finance_officer')->value('id');
+        $creator->save();
+
+        $this->actingAs($creator)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/approve")
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Maker-checker: the person who created this payroll period cannot approve it. A different approver is required.',
+            );
+
+        $period->refresh();
+        $this->assertSame(PayrollPeriodStatus::Computed, $period->status);
+        $this->assertNull($period->approved_by);
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'payroll.period.approve',
+            'model_type' => PayrollPeriod::class,
+            'model_id' => $period->id,
+        ]);
+    }
+
     public function test_holder_of_self_approve_override_can_self_approve(): void
     {
         // system_admin has the wildcard → holds self_approve_override.
@@ -142,31 +172,119 @@ class PayrollMakerCheckerTest extends TestCase
             ->assertJsonPath('data.status', PayrollPeriodStatus::Approved->value);
 
         $this->assertSame($admin->id, $period->fresh()->approved_by);
+        $audit = AuditLog::query()
+            ->where('action', 'payroll.period.approve')
+            ->where('model_id', $period->id)
+            ->firstOrFail();
+        $this->assertSame((int) $admin->id, (int) $audit->user_id);
+        $this->assertTrue($audit->new_values['maker_checker_override']);
     }
 
     public function test_finalize_stamps_finalizer_and_timestamp(): void
     {
+        $maker = $this->userWithRole('hr_officer');
         $checker = $this->userWithRole('finance_officer');
-        $period  = PayrollPeriod::factory()->create([
-            'status' => PayrollPeriodStatus::Approved->value,
-        ]);
+        $finalizer = $this->userWithRole('finance_officer');
+        $period = $this->draftPeriod($maker);
 
         $this->actingAs($checker)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', PayrollPeriodStatus::Approved->value);
+
+        $this->actingAs($finalizer)
             ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/finalize")
             ->assertStatus(200)
             ->assertJsonPath('data.status', PayrollPeriodStatus::Finalized->value);
 
         $fresh = $period->fresh();
         $this->assertSame(PayrollPeriodStatus::Finalized, $fresh->status);
-        $this->assertSame($checker->id, $fresh->finalized_by);
+        $this->assertSame($finalizer->id, $fresh->finalized_by);
         $this->assertNotNull($fresh->finalized_at);
+        $this->assertSame($checker->id, $fresh->approved_by);
 
         $this->assertDatabaseHas('audit_logs', [
             'action'     => 'payroll.period.finalize',
             'model_type' => PayrollPeriod::class,
             'model_id'   => $period->id,
-            'user_id'    => $checker->id,
+            'user_id'    => $finalizer->id,
         ]);
+    }
+
+    public function test_approver_cannot_finalize_the_same_period(): void
+    {
+        $maker = $this->userWithRole('hr_officer');
+        $approver = $this->userWithRole('finance_officer');
+        $period = $this->draftPeriod($maker);
+
+        $this->actingAs($approver)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/approve")
+            ->assertOk();
+
+        $this->actingAs($approver)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/finalize")
+            ->assertForbidden()
+            ->assertJsonPath(
+                'message',
+                'The approver cannot finalize the same payroll period. A different finance user must finalize it.',
+            );
+
+        $period->refresh();
+        $this->assertSame(PayrollPeriodStatus::Approved, $period->status);
+        $this->assertNull($period->finalized_by);
+        $this->assertNull($period->finalized_at);
+        $this->assertSame(0, $period->bankFileRecords()->count());
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'payroll.period.finalize',
+            'model_type' => PayrollPeriod::class,
+            'model_id' => $period->id,
+        ]);
+
+        $finalizer = $this->userWithRole('finance_officer');
+        $this->actingAs($finalizer)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/finalize")
+            ->assertOk()
+            ->assertJsonPath('data.status', PayrollPeriodStatus::Finalized->value);
+
+        $this->assertSame($finalizer->id, $period->fresh()->finalized_by);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'payroll.period.finalize',
+            'model_type' => PayrollPeriod::class,
+            'model_id' => $period->id,
+            'user_id' => $finalizer->id,
+        ]);
+    }
+
+    public function test_finalize_requires_a_recorded_approval_actor(): void
+    {
+        $period = PayrollPeriod::factory()->create([
+            'status' => PayrollPeriodStatus::Approved->value,
+        ]);
+        $finance = $this->userWithRole('finance_officer');
+
+        $this->actingAs($finance)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/finalize")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Cannot finalize: this period has no recorded approver. Return it for correction before continuing.');
+
+        $period->refresh();
+        $this->assertSame(PayrollPeriodStatus::Approved, $period->status);
+        $this->assertNull($period->finalized_by);
+        $this->assertSame(0, $period->bankFileRecords()->count());
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'payroll.period.finalize',
+            'model_type' => PayrollPeriod::class,
+            'model_id' => $period->id,
+        ]);
+
+        $this->actingAs($finance)
+            ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/request-correction", [
+                'reason' => 'The approval actor is missing from this historical record.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', PayrollPeriodStatus::Draft->value);
+
+        $this->assertSame(PayrollPeriodStatus::Draft, $period->fresh()->status);
     }
 
     /**

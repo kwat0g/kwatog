@@ -232,12 +232,7 @@ class ReturnCaseSettlementService
     public function assertComplete(ReturnCase $case, User $by): void
     {
         $case->load('lines', 'returnRequest.creditNote', 'creditNote', 'replacementSalesOrder.items', 'replacementDelivery.items.salesOrderItem', 'resolutionGoodsReceiptNote.items');
-        if ($case->returnRequest && $case->returnRequest->status->value !== 'completed') {
-            throw new BusinessRuleException('Complete the linked physical return before resolving this case.');
-        }
-        if ($case->returnRequest) {
-            $this->assertReturnCoverage($case);
-        }
+        $this->assertPhysicalReturnComplete($case);
         $resolution = $case->resolution?->value;
         if ($resolution === 'no_action') {
             abort_unless($by->hasPermission('return_management.approve'), 403);
@@ -482,6 +477,17 @@ class ReturnCaseSettlementService
             if (! $actual->has($key) || bccomp((string) $actual->get($key), $quantity, 3) !== 0) {
                 throw new BusinessRuleException('An existing return for this receipt does not exactly match this case quantity. Create a separate reviewed return.');
             }
+        }
+    }
+
+    public function assertPhysicalReturnComplete(ReturnCase $case): void
+    {
+        $case->loadMissing('returnRequest.items', 'lines');
+        if ($case->returnRequest && $case->returnRequest->status->value !== 'completed') {
+            throw new BusinessRuleException('Complete the linked physical return before resolving this case.');
+        }
+        if ($case->returnRequest) {
+            $this->assertReturnCoverage($case);
         }
     }
 

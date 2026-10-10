@@ -77,6 +77,10 @@ class ComplaintNcrHandoffTest extends TestCase
             ->where('event_type', ComplaintNcrRequested::class)
             ->where('dedupe_key', 'complaint-ncr-request:' . $complaint->id)
             ->firstOrFail();
+
+        $this->travel(2)->seconds();
+        app(ComplaintService::class)->markNcrHandoffManual($complaint->id, 'Replay after state change.');
+
         $event = app(OutboxEventCodec::class)->decode(
             (string) $outbox->event_type,
             json_decode((string) $outbox->payload, true, 512, JSON_THROW_ON_ERROR),

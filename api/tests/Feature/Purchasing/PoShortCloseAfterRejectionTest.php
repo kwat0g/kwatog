@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
-use App\Modules\Auth\Models\Permission;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
-use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
@@ -20,7 +20,6 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
-use App\Common\Exceptions\BusinessRuleException;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -32,10 +31,14 @@ class PoShortCloseAfterRejectionTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     // Maker-checker: an incoming inspection counts only when a different user checks it.
     private User $checker;
+
     private GrnService $grnSvc;
+
     private PurchaseOrderService $poSvc;
+
     private ReturnRequestService $rmaSvc;
 
     protected function setUp(): void
@@ -45,7 +48,7 @@ class PoShortCloseAfterRejectionTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
         $this->seed(WorkflowSeeder::class);
-        app(\App\Common\Services\SettingsService::class)->set('budgeting.enforcement_mode', 'off');
+        app(SettingsService::class)->set('budgeting.enforcement_mode', 'off');
 
         $role = Role::firstOrCreate(['slug' => 'purchasing_officer'], ['name' => 'Purchasing Officer']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -152,25 +155,26 @@ class PoShortCloseAfterRejectionTest extends TestCase
 
         // Create a supplier return for the rejected goods via system RMA
         $rma = ReturnRequest::create([
-            'rma_number'         => 'RMA-TEST-' . substr(uniqid(), -5),
-            'type'               => 'supplier_return',
-            'status'             => ReturnRequestStatus::Draft,
-            'vendor_id'          => $ctx['po']->vendor_id,
-            'purchase_order_id'  => $ctx['po']->id,
+            'rma_number' => 'RMA-TEST-'.substr(uniqid(), -5),
+            'type' => 'supplier_return',
+            'status' => ReturnRequestStatus::Draft,
+            'vendor_id' => $ctx['po']->vendor_id,
+            'purchase_order_id' => $ctx['po']->id,
             'goods_receipt_note_id' => $ctx['grn']->id,
-            'return_date'        => now()->toDateString(),
-            'created_by'         => $this->user->id,
+            'return_date' => now()->toDateString(),
+            'created_by' => $this->user->id,
         ]);
 
         // Add an item to the RMA
         // For rejected goods that never entered stock, set stock_movement_quantity
         // to avoid requiring a physical warehouse location for movement
         $rma->items()->create([
-            'item_id'             => $ctx['item']->id,
-            'quantity'            => '100.000',
-            'disposition'         => 'return_to_supplier',
-            'source_grn_item_id'  => $ctx['grn']->items->first()->id,
-            'source_po_item_id'   => $ctx['poItem']->id,
+            'item_id' => $ctx['item']->id,
+            'quantity' => '100.000',
+            'disposition' => 'return_to_supplier',
+            'source_grn_item_id' => $ctx['grn']->items->first()->id,
+            'lot_number' => $ctx['grn']->items->first()->material_lot_number,
+            'source_po_item_id' => $ctx['poItem']->id,
             'reversal_already_applied' => true, // Flag that reversal was already applied
             'stock_movement_quantity' => '100.000', // No physical movement needed (never in stock)
         ]);
@@ -181,10 +185,10 @@ class PoShortCloseAfterRejectionTest extends TestCase
         // Dispose the RMA with createReplacementPo = true
         $this->rmaSvc->dispose($rma, [
             [
-                'item_id'     => $rma->items->first()->hash_id,
+                'item_id' => $rma->items->first()->hash_id,
                 'disposition' => 'return_to_supplier',
             ],
-        ], $this->user, true, $ctx['location']->id); // createReplacementPo = true, locationId
+        ], $this->user, true, $ctx['location']->id, now()->addDays(4)->toDateString()); // createReplacementPo = true, locationId
 
         // Original PO should now be Closed with short_closed_at set
         $ctx['po']->refresh();
@@ -197,7 +201,7 @@ class PoShortCloseAfterRejectionTest extends TestCase
         $this->assertNotNull($rma->replacement_purchase_order_id, 'Replacement PO should be created');
         $replacement = PurchaseOrder::find($rma->replacement_purchase_order_id);
         $this->assertNotNull($replacement, 'Replacement PO should be found by ID');
-        $this->assertSame(PurchaseOrderStatus::Draft->value, $replacement->status->value);
+        $this->assertSame(PurchaseOrderStatus::Approved->value, $replacement->status->value);
     }
 
     public function test_replacement_po_refused_when_original_still_owes_other_quantity(): void
@@ -258,22 +262,23 @@ class PoShortCloseAfterRejectionTest extends TestCase
 
         // Create supplier RMA for line 1 only
         $rma = ReturnRequest::create([
-            'rma_number'         => 'RMA-TEST-' . substr(uniqid(), -5),
-            'type'               => 'supplier_return',
-            'status'             => ReturnRequestStatus::Draft,
-            'vendor_id'          => $po->vendor_id,
-            'purchase_order_id'  => $po->id,
+            'rma_number' => 'RMA-TEST-'.substr(uniqid(), -5),
+            'type' => 'supplier_return',
+            'status' => ReturnRequestStatus::Draft,
+            'vendor_id' => $po->vendor_id,
+            'purchase_order_id' => $po->id,
             'goods_receipt_note_id' => $grn->id,
-            'return_date'        => now()->toDateString(),
-            'created_by'         => $this->user->id,
+            'return_date' => now()->toDateString(),
+            'created_by' => $this->user->id,
         ]);
 
         $rma->items()->create([
-            'item_id'             => $item1->id,
-            'quantity'            => '100.000',
-            'disposition'         => 'return_to_supplier',
-            'source_grn_item_id'  => $grn->items->first()->id,
-            'source_po_item_id'   => $poItem1->id,
+            'item_id' => $item1->id,
+            'quantity' => '100.000',
+            'disposition' => 'return_to_supplier',
+            'source_grn_item_id' => $grn->items->first()->id,
+            'lot_number' => $grn->items->first()->material_lot_number,
+            'source_po_item_id' => $poItem1->id,
             'reversal_already_applied' => true,
             'stock_movement_quantity' => '100.000', // No physical movement needed (never in stock)
         ]);
@@ -288,10 +293,10 @@ class PoShortCloseAfterRejectionTest extends TestCase
 
         $this->rmaSvc->dispose($rma, [
             [
-                'item_id'     => $rma->items->first()->hash_id,
+                'item_id' => $rma->items->first()->hash_id,
                 'disposition' => 'return_to_supplier',
             ],
-        ], $this->user, true, $location->id);
+        ], $this->user, true, $location->id, now()->addDays(4)->toDateString());
     }
 
     public function test_return_does_not_reopen_a_short_closed_po(): void
@@ -305,22 +310,23 @@ class PoShortCloseAfterRejectionTest extends TestCase
 
         // Now create a supplier return and dispose it
         $rma = ReturnRequest::create([
-            'rma_number'         => 'RMA-TEST-' . substr(uniqid(), -5),
-            'type'               => 'supplier_return',
-            'status'             => ReturnRequestStatus::Draft,
-            'vendor_id'          => $ctx['po']->vendor_id,
-            'purchase_order_id'  => $ctx['po']->id,
+            'rma_number' => 'RMA-TEST-'.substr(uniqid(), -5),
+            'type' => 'supplier_return',
+            'status' => ReturnRequestStatus::Draft,
+            'vendor_id' => $ctx['po']->vendor_id,
+            'purchase_order_id' => $ctx['po']->id,
             'goods_receipt_note_id' => $ctx['grn']->id,
-            'return_date'        => now()->toDateString(),
-            'created_by'         => $this->user->id,
+            'return_date' => now()->toDateString(),
+            'created_by' => $this->user->id,
         ]);
 
         $rma->items()->create([
-            'item_id'             => $ctx['item']->id,
-            'quantity'            => '50.000',
-            'disposition'         => 'return_to_supplier',
-            'source_grn_item_id'  => $ctx['grn']->items->first()->id,
-            'source_po_item_id'   => $ctx['poItem']->id,
+            'item_id' => $ctx['item']->id,
+            'quantity' => '50.000',
+            'disposition' => 'return_to_supplier',
+            'source_grn_item_id' => $ctx['grn']->items->first()->id,
+            'lot_number' => $ctx['grn']->items->first()->material_lot_number,
+            'source_po_item_id' => $ctx['poItem']->id,
             'reversal_already_applied' => true,
             'stock_movement_quantity' => '50.000', // No physical movement needed (never in stock)
         ]);
@@ -331,7 +337,7 @@ class PoShortCloseAfterRejectionTest extends TestCase
         // Dispose WITHOUT creating replacement PO
         $this->rmaSvc->dispose($rma, [
             [
-                'item_id'     => $rma->items->first()->hash_id,
+                'item_id' => $rma->items->first()->hash_id,
                 'disposition' => 'return_to_supplier',
             ],
         ], $this->user, false, $ctx['location']->id); // Do not create replacement

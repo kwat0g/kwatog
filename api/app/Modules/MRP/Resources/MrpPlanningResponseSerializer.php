@@ -16,6 +16,9 @@ final class MrpPlanningResponseSerializer
     /** @param mixed $summary @return array<string, mixed> */
     public static function summary(mixed $summary): array
     {
+        if (is_array($summary) && isset($summary['sales_order_ids'])) {
+            $summary['sales_order_ids'] = array_map(self::hashId(...), (array) $summary['sales_order_ids']);
+        }
         $sanitized = self::sanitize($summary);
 
         if (is_array($sanitized) && isset($sanitized['per_sales_order']) && is_array($sanitized['per_sales_order'])) {

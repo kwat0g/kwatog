@@ -346,6 +346,7 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
  label="Last price"
  {...register('last_price')}
  {...numberInputProps()}
+ step="0.01"
  className="font-mono tabular-nums text-right"
  error={errors.last_price?.message}
  placeholder="optional"

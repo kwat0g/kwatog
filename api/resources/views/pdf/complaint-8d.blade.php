@@ -63,7 +63,7 @@ $sections = [
 
 @if ($report->finalized_at)
   <p style="text-align:right; font-size:9px; color:#777; margin-top:12px;">
-    Finalised on {{ $report->finalized_at->format('M d, Y H:i') }}
+    Finalised on {{ $report->finalized_at->format('M d, Y g:i A') }}
   </p>
 @endif
 

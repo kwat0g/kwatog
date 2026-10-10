@@ -36,6 +36,10 @@ class StatementServicesTest extends TestCase
             'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
             'role_id' => $roleId,
         ]);
+        $checker = User::create([
+            'name' => 'Checker', 'email' => 'checker_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => $roleId,
+        ]);
         $svc = app(JournalEntryService::class);
 
         $cashId    = (int) Account::query()->where('code','1020')->value('id');
@@ -51,7 +55,7 @@ class StatementServicesTest extends TestCase
                 ['account_id' => Account::find($capitalId)->hash_id, 'debit' => '0',         'credit' => '100000.00'],
             ],
         ], $u);
-        $svc->post($je, $u);
+        $svc->post($je, $checker);
 
         // 2) Sale: DR Cash 5,000 / CR Sales Revenue 5,000
         $je2 = $svc->create([
@@ -62,7 +66,7 @@ class StatementServicesTest extends TestCase
                 ['account_id' => Account::find($salesId)->hash_id, 'debit' => '0',       'credit' => '5000.00'],
             ],
         ], $u);
-        $svc->post($je2, $u);
+        $svc->post($je2, $checker);
 
         $tb = app(TrialBalanceService::class)->generate(
             Carbon::parse('2026-04-01'), Carbon::parse('2026-04-30'),
@@ -92,6 +96,7 @@ class StatementServicesTest extends TestCase
     {
         $roleId = Role::query()->where('slug', 'system_admin')->value('id');
         $user = User::factory()->create(['role_id' => $roleId]);
+        $checker = User::factory()->create(['role_id' => $roleId]);
         $journals = app(JournalEntryService::class);
         $cash = Account::query()->where('code', '1020')->firstOrFail();
         $sales = Account::query()->where('code', '4010')->firstOrFail();
@@ -104,8 +109,8 @@ class StatementServicesTest extends TestCase
                 ['account_id' => $sales->hash_id, 'debit' => '0', 'credit' => '100.00'],
             ],
         ], $user);
-        $journals->post($sale, $user);
-        $journals->reverse($sale, $user, Carbon::parse('2026-08-10'), 'Test reversal');
+        $journals->post($sale, $checker);
+        $journals->reverse($sale, $checker, Carbon::parse('2026-08-10'), 'Test reversal');
 
         $income = app(IncomeStatementService::class);
         $trial = app(TrialBalanceService::class);

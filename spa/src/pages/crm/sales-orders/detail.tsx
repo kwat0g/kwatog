@@ -1,3 +1,4 @@
+import { DeliveryNegotiationHistory } from '@/components/crm/DeliveryNegotiationHistory';
 import { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,14 +11,15 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ActivityStream } from '@/components/chain/ActivityStream';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { FulfillmentDialog } from './FulfillmentDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
-import { buildO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
@@ -25,13 +27,15 @@ import { ChainResultModal, ChainErrorPanel } from './chain-result';
 import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
-import { formatDateTime } from '@/lib/formatDate';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 
 const statusVariant: Record<
   SalesOrderStatus,
   'success' | 'info' | 'warning' | 'neutral' | 'danger'
 > = {
   draft: 'neutral',
+  awaiting_confirmation: 'info',
+  delivery_negotiation: 'warning',
   confirmed: 'info',
   in_production: 'info',
   partially_delivered: 'warning',
@@ -47,6 +51,10 @@ export default function SalesOrderDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const [fulfillmentOpen, setFulfillmentOpen] = useState(false);
+  const [deliveryProposalOpen, setDeliveryProposalOpen] = useState(false);
+  const [deliveryProposalDate, setDeliveryProposalDate] = useState('');
+  const [deliveryProposalReason, setDeliveryProposalReason] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -54,6 +62,7 @@ export default function SalesOrderDetailPage() {
   const [confirmError, setConfirmError] = useState<{
     message: string;
     errors?: Record<string, string[]>;
+    code?: string;
   } | null>(null);
   const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
 
@@ -61,11 +70,16 @@ export default function SalesOrderDetailPage() {
     queryKey: ['crm', 'sales-orders', 'detail', id],
     queryFn: () => salesOrdersApi.show(id!),
     enabled: !!id,
+    refetchInterval: (query) =>
+      query.state.data && !['closed', 'cancelled'].includes(query.state.data.status)
+        ? 10_000
+        : false,
   });
   const chain = useQuery({
     queryKey: ['crm', 'sales-orders', 'chain', id],
     queryFn: () => salesOrdersApi.chain(id!),
     enabled: !!id,
+    refetchInterval: data && !['closed', 'cancelled'].includes(data.status) ? 10_000 : false,
   });
 
   // Series C — Task C4. Real-time chain progress.
@@ -76,6 +90,23 @@ export default function SalesOrderDetailPage() {
     [['crm', 'sales-orders', 'chain', id]],
   );
 
+  const deliveryProposal = useMutation({
+    mutationFn: () =>
+      salesOrdersApi.proposeDeliveryDate(id!, {
+        proposed_delivery_date: deliveryProposalDate,
+        notes: deliveryProposalReason.trim(),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
+      setDeliveryProposalOpen(false);
+      setDeliveryProposalDate('');
+      setDeliveryProposalReason('');
+      toast.success('Delivery date proposed. Waiting for customer acceptance.');
+    },
+    onError: (error: AxiosError<{ message?: string }>) =>
+      toast.error(error.response?.data?.message ?? 'Could not propose delivery date.'),
+  });
+
   const confirm = useMutation({
     mutationFn: () => salesOrdersApi.confirm(id!),
     onSuccess: (result) => {
@@ -85,12 +116,20 @@ export default function SalesOrderDetailPage() {
       setConfirmOpen(false);
       setConfirmError(null);
       setChainResult(result.chain_result);
-      toast.success(`Sales order ${result.data.so_number} confirmed.`);
+      if (result.chain_result.planning_status === 'failed') {
+        toast.error(`Sales order confirmed; MRP planning needs attention.`);
+      } else {
+        toast.success(
+          `Sales order ${result.data.so_number} confirmed. ${result.chain_result.planning_status === 'queued' ? 'MRP planning is pending.' : 'MRP planning completed.'}`,
+        );
+      }
     },
-    onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+    onError: (
+      e: AxiosError<{ message?: string; errors?: Record<string, string[]>; code?: string }>,
+    ) => {
       const msg = e.response?.data?.message ?? 'Failed to confirm sales order.';
       const errors = e.response?.data?.errors;
-      setConfirmError({ message: msg, errors });
+      setConfirmError({ message: msg, errors, code: e.response?.data?.code });
       toast.error(msg);
     },
   });
@@ -147,11 +186,37 @@ export default function SalesOrderDetailPage() {
     );
   }
 
+  const productionDone = chain.data?.some(
+    (step) => step.key === 'in_production' && step.state === 'done',
+  );
+  const qualityDone = chain.data?.some(
+    (step) => step.key === 'qc_outgoing' && step.state === 'done',
+  );
+  const qualityHeld = chain.data?.some(
+    (step) => step.key === 'qc_outgoing' && step.state === 'rejected',
+  );
+  const progressLabel =
+    ['confirmed', 'in_production'].includes(data.status) && productionDone
+      ? qualityDone
+        ? 'Ready for delivery'
+        : qualityHeld
+          ? 'Quality hold'
+          : 'Awaiting QC'
+      : data.status_label;
+
   const canEdit = data.is_editable && can('crm.sales_orders.update');
-  const canConfirm = data.is_editable && can('crm.sales_orders.confirm');
+  const canConfirm =
+    ['draft', 'awaiting_confirmation', 'delivery_negotiation'].includes(data.status) &&
+    !data.capabilities?.awaiting_delivery_response &&
+    can('crm.sales_orders.confirm');
   const canCancel = data.is_cancellable && can('crm.sales_orders.cancel');
   const activityItems = (data.status_history ?? []).map((event) => ({
-    dot: event.status === 'cancelled' ? ('danger' as const) : event.event_type === 'created' ? ('success' as const) : ('info' as const),
+    dot:
+      event.status === 'cancelled'
+        ? ('danger' as const)
+        : event.event_type === 'created'
+          ? ('success' as const)
+          : ('info' as const),
     text: (
       <div className="space-y-0.5">
         <div>
@@ -162,8 +227,8 @@ export default function SalesOrderDetailPage() {
             </>
           ) : event.previous_status_label ? (
             <>
-              Status changed from <span className="font-medium">{event.previous_status_label}</span> to{' '}
-              <span className="font-medium">{event.status_label}</span>.
+              Status changed from <span className="font-medium">{event.previous_status_label}</span>{' '}
+              to <span className="font-medium">{event.status_label}</span>.
             </>
           ) : (
             <>
@@ -180,11 +245,16 @@ export default function SalesOrderDetailPage() {
 
   return (
     <div>
+      {fulfillmentOpen && <FulfillmentDialog orderId={data.id} onClose={() => setFulfillmentOpen(false)} />}
       <PageHeader
         title={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <span className="font-mono">{data.so_number}</span>
-            <Chip variant={statusVariant[data.status]}>{data.status_label}</Chip>
+            <Chip
+              variant={progressLabel === 'Quality hold' ? 'danger' : statusVariant[data.status]}
+            >
+              {progressLabel}
+            </Chip>
           </div>
         }
         subtitle={data.customer?.name}
@@ -192,6 +262,7 @@ export default function SalesOrderDetailPage() {
         backLabel="Sales orders"
         actions={
           <div className="flex gap-1.5">
+            {data.status === 'confirmed' && (can('production.wo.confirm') || can('production.schedule.confirm')) && <Button size="sm" variant="secondary" onClick={() => setFulfillmentOpen(true)}>Review fulfillment</Button>}
             {canEdit && (
               <Button
                 size="sm"
@@ -224,35 +295,48 @@ export default function SalesOrderDetailPage() {
             )}
           </div>
         }
-        bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
+        bottom={
+          <div className="mt-2 space-y-2">
+            {chain.data && (
+              <ChainHeader
+                steps={chain.data.map((step) => ({
+                  ...step,
+                  href:
+                    step.href &&
+                    can(
+                      step.key === 'mrp_planned'
+                        ? 'mrp.plans.view'
+                        : step.key === 'in_production'
+                          ? 'production.work_orders.view'
+                          : 'quality.inspections.view',
+                    )
+                      ? step.href
+                      : undefined,
+                }))}
+              />
+            )}
+            {chain.isError && (
+              <p role="alert" className="text-sm text-danger-fg">
+                Process status could not load. Refresh to check what happened after confirmation.
+              </p>
+            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={chain.isFetching || isLoading}
+              onClick={() => {
+                void chain.refetch();
+                void refetch();
+              }}
+            >
+              {chain.isFetching ? 'Checking process…' : 'Refresh process'}
+            </Button>
+          </div>
+        }
       />
 
       <div className="px-5 py-4 space-y-4">
         <ChainErrorPanel error={confirmError} onDismiss={() => setConfirmError(null)} />
-
-        {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
- The MRP chain above stays; this shows the downstream O2C completion. */}
-        <Panel title="Order-to-cash chain">
-          <ChainHeader
-            steps={buildO2cChain({
-              so: { id: data.id, number: data.so_number },
-              soStatus: data.status,
-              delivery: data.deliveries?.[0]
-                ? { id: data.deliveries[0].id, number: data.deliveries[0].delivery_number }
-                : null,
-              deliveryStatus: data.deliveries?.some(
-                (d) => d.status === 'delivered' || d.status === 'confirmed',
-              )
-                ? 'confirmed'
-                : (data.deliveries?.[0]?.status ?? null),
-              invoices: (data.invoices ?? []).map((inv) => ({
-                id: inv.id,
-                invoice_number: inv.invoice_number,
-                status: inv.status,
-              })),
-            })}
-          />
-        </Panel>
 
         {/* 2026-08-08 — auto-invoice chain: confirmed deliveries stage draft AR
   invoices; review and finalize them here (mirrors the P2P auto-bill banner). */}
@@ -292,7 +376,124 @@ export default function SalesOrderDetailPage() {
         )}
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-4">
+          <div className="min-w-0 lg:col-span-2 space-y-4">
+            {data.submission_source === 'customer_portal' && (
+              <Panel
+                title="Delivery schedule"
+                actions={
+                  data.capabilities?.can_propose_delivery ? (
+                    <Button onClick={() => setDeliveryProposalOpen(!deliveryProposalOpen)}>
+                      Propose delivery date
+                    </Button>
+                  ) : undefined
+                }
+              >
+                <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div>
+                    <p className="text-muted">Required delivery date</p>
+                    <p className="mt-1 font-medium">
+                      {(
+                        data.requested_delivery_dates ?? [
+                          ...new Set(data.items?.map((item) => item.delivery_date)),
+                        ]
+                      )
+                        .map((date) => formatDate(date))
+                        .join(', ') || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted">Current delivery schedule</p>
+                    <p className="mt-1 font-medium">
+                      {(
+                        data.delivery_dates ?? [
+                          ...new Set(data.items?.map((item) => item.delivery_date)),
+                        ]
+                      )
+                        .map((date) => formatDate(date))
+                        .join(', ') || '—'}
+                    </p>
+                  </div>
+                </div>
+                {data.latest_response?.type === 'delivery_date' && (
+                  <div className="mt-4 border-t border-default pt-3 text-sm">
+                    <p>
+                      Proposed date:{' '}
+                      <strong>
+                        {data.latest_response.proposed_delivery_date
+                          ? formatDate(data.latest_response.proposed_delivery_date)
+                          : '—'}
+                      </strong>{' '}
+                      · {data.latest_response.status}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-muted">
+                      {data.latest_response.notes}
+                    </p>
+                    {data.latest_response.status === 'rejected' && (
+                      <p className="mt-2 text-muted">
+                        Customer declined. Propose another date, or confirm only if you can meet the
+                        current schedule.
+                      </p>
+                    )}
+                    {data.capabilities?.awaiting_delivery_response && (
+                      <p role="status" className="mt-2 text-warning-fg">
+                        Waiting for customer acceptance. Confirmation is blocked.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <DeliveryNegotiationHistory proposals={data.delivery_negotiations} />
+                {deliveryProposalOpen && (
+                  <form
+                    className="mt-4 space-y-3 border-t border-default pt-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      deliveryProposal.mutate();
+                    }}
+                  >
+                    <Input
+                      label="Proposed delivery date"
+                      type="date"
+                      required
+                      value={deliveryProposalDate}
+                      min={data.date}
+                      onChange={(event) => setDeliveryProposalDate(event.target.value)}
+                    />
+                    <Textarea
+                      label="Reason for changing delivery date"
+                      required
+                      rows={2}
+                      maxLength={1000}
+                      value={deliveryProposalReason}
+                      onChange={(event) => setDeliveryProposalReason(event.target.value)}
+                    />
+                    <p className="text-xs text-muted">
+                      Applies to the whole order after customer acceptance. Products, quantities and
+                      prices stay unchanged.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        loading={deliveryProposal.isPending}
+                        disabled={
+                          deliveryProposal.isPending ||
+                          !deliveryProposalDate ||
+                          !deliveryProposalReason.trim()
+                        }
+                      >
+                        Send date proposal
+                      </Button>
+                      <Button
+                        disabled={deliveryProposal.isPending}
+                        onClick={() => setDeliveryProposalOpen(false)}
+                      >
+                        Keep current schedule
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </Panel>
+            )}
             <Panel title="Overview">
               <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
                 <dt className="text-muted">SO number</dt>
@@ -301,6 +502,20 @@ export default function SalesOrderDetailPage() {
                 <dd className="col-span-2 font-medium">{data.customer?.name ?? '—'}</dd>
                 <dt className="text-muted">Date</dt>
                 <dd className="col-span-2 font-mono">{data.date}</dd>
+                {data.submission_source !== 'customer_portal' && (
+                  <>
+                    <dt className="text-muted">Required delivery date</dt>
+                    <dd className="col-span-2">
+                      {(
+                        data.requested_delivery_dates ?? [
+                          ...new Set(data.items?.map((item) => item.delivery_date)),
+                        ]
+                      )
+                        .map((date) => formatDate(date))
+                        .join(', ') || '—'}
+                    </dd>
+                  </>
+                )}
                 <dt className="text-muted">Payment terms</dt>
                 <dd className="col-span-2 font-mono">Net {data.payment_terms_days}</dd>
                 <dt className="text-muted">Delivery terms</dt>
@@ -321,81 +536,93 @@ export default function SalesOrderDetailPage() {
               meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`}
               noPadding
             >
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th className="w-12">#</Th>
-                    <Th>Product</Th>
-                    <Th align="right">Qty</Th>
-                    <Th align="right">Unit price</Th>
-                    <Th align="right">Total</Th>
-                    <Th align="right">Delivered</Th>
-                    <Th align="right">Delivery</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items?.map((item, i) => (
-                    <tr key={item.id} className={trCls}>
-                      <Td mono className="text-muted">
-                        {(i + 1).toString().padStart(2, '0')}
-                      </Td>
-                      <Td>
-                        <div className="font-mono">{item.product?.part_number}</div>
-                        <div className="text-xs text-muted">{item.product?.name}</div>
-                      </Td>
-                      <Td align="right" mono>
-                        {formatDecimal(item.quantity)}
-                      </Td>
-                      <Td align="right" mono>
-                        {formatPeso(item.unit_price)}
-                      </Td>
-                      <Td align="right" mono className="font-medium">
-                        {formatPeso(item.total)}
-                      </Td>
-                      <Td align="right" mono>
-                        {formatDecimal(item.quantity_delivered)}
-                      </Td>
-                      <Td align="right" mono>
-                        {item.delivery_date}
-                      </Td>
+              <div className="overflow-x-auto">
+                <table className={tableCls}>
+                  <thead>
+                    <tr className={theadTrCls}>
+                      <Th className="w-12">#</Th>
+                      <Th>Product</Th>
+                      <Th align="right">Qty</Th>
+                      <Th align="right">Unit price</Th>
+                      <Th align="right">Total</Th>
+                      <Th align="right">Delivered</Th>
+                      <Th align="right">Delivery</Th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className={cn(trCls, 'bg-subtle')}>
-                    <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>
-                      Subtotal
-                    </Td>
-                    <Td align="right" mono>
-                      {formatPeso(data.subtotal)}
-                    </Td>
-                    <Td colSpan={2} />
-                  </tr>
-                  <tr className={cn(trCls, 'bg-subtle')}>
-                    <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>
-                      VAT
-                    </Td>
-                    <Td align="right" mono>
-                      {formatPeso(data.vat_amount)}
-                    </Td>
-                    <Td colSpan={2} />
-                  </tr>
-                  <tr className={cn(trCls, 'bg-subtle')}>
-                    <Td
-                      align="right"
-                      mono
-                      className="text-muted text-2xs uppercase font-medium"
-                      colSpan={4}
-                    >
-                      Total
-                    </Td>
-                    <Td align="right" mono className="font-medium text-primary">
-                      {formatPeso(data.total_amount)}
-                    </Td>
-                    <Td colSpan={2} />
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.items?.map((item, i) => (
+                      <tr key={item.id} className={trCls}>
+                        <Td mono className="text-muted">
+                          {(i + 1).toString().padStart(2, '0')}
+                        </Td>
+                        <Td>
+                          <div className="font-mono">{item.product?.part_number}</div>
+                          <div className="text-xs text-muted">{item.product?.name}</div>
+                        </Td>
+                        <Td align="right" mono>
+                          {formatDecimal(item.quantity)}
+                        </Td>
+                        <Td align="right" mono>
+                          {formatPeso(item.unit_price)}
+                          {item.price_source && (
+                            <p className="mt-1 font-sans text-xs text-muted">
+                              {item.price_source === 'agreement'
+                                ? 'Agreed price'
+                                : 'Standard price'}
+                              {item.price_tier_min_qty
+                                ? ` · ${item.price_tier_min_qty}+ units`
+                                : ''}
+                            </p>
+                          )}
+                        </Td>
+                        <Td align="right" mono className="font-medium">
+                          {formatPeso(item.total)}
+                        </Td>
+                        <Td align="right" mono>
+                          {formatDecimal(item.quantity_delivered)}
+                        </Td>
+                        <Td align="right" mono>
+                          {item.delivery_date}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className={cn(trCls, 'bg-subtle')}>
+                      <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>
+                        Subtotal
+                      </Td>
+                      <Td align="right" mono>
+                        {formatPeso(data.subtotal)}
+                      </Td>
+                      <Td colSpan={2} />
+                    </tr>
+                    <tr className={cn(trCls, 'bg-subtle')}>
+                      <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>
+                        VAT
+                      </Td>
+                      <Td align="right" mono>
+                        {formatPeso(data.vat_amount)}
+                      </Td>
+                      <Td colSpan={2} />
+                    </tr>
+                    <tr className={cn(trCls, 'bg-subtle')}>
+                      <Td
+                        align="right"
+                        mono
+                        className="text-muted text-2xs uppercase font-medium"
+                        colSpan={4}
+                      >
+                        Total
+                      </Td>
+                      <Td align="right" mono className="font-medium text-primary">
+                        {formatPeso(data.total_amount)}
+                      </Td>
+                      <Td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </Panel>
           </div>
 

@@ -16,32 +16,35 @@ import type { DeliveryAttemptFields, DeliveryAttemptSourceLine, ReportDeliveryAt
 
 // Quantities remain decimal strings in the payload. Integer arithmetic keeps
 // the displayed residual exact even when two entered quantities are fractional.
-const quantity = z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, 'Enter a quantity with up to 2 decimal places.');
-function hundredths(value: string): bigint {
+const customerQuantity = z.string().regex(/^\d{1,9}(\.\d{1,2})?$/, 'Enter a quantity with up to 2 decimal places.');
+const physicalQuantity = z.string().regex(/^\d{1,9}(\.\d{1,3})?$/, 'Enter a quantity with up to 3 decimal places.');
+function thousandths(value: string): bigint {
   if (!/^\d+(\.\d{1,3})?$/.test(value)) return 0n;
   const [whole, fraction = ''] = value.split('.');
-  return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0').slice(0, 2));
+  return BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, '0'));
 }
-function decimal(value: bigint): string {
-  return `${value / 100n}.${(value % 100n).toString().padStart(2, '0')}`;
+function decimal(value: bigint, places: 2 | 3 = 3): string {
+  const units = places === 2 ? value / 10n : value;
+  const scale = places === 2 ? 100n : 1000n;
+  return `${units / scale}.${(units % scale).toString().padStart(places, '0')}`;
 }
 const lineSchema = z.object({
   delivery_item_id: z.string().min(1),
   dispatched_quantity: z.string(),
-  customer_received_quantity: quantity,
-  customer_received_damaged_quantity: quantity,
-  truck_return_quantity: quantity,
-  truck_return_damaged_quantity: quantity,
+  customer_received_quantity: customerQuantity,
+  customer_received_damaged_quantity: physicalQuantity,
+  truck_return_quantity: physicalQuantity,
+  truck_return_damaged_quantity: physicalQuantity,
 }).superRefine((line, ctx) => {
-  const received = hundredths(line.customer_received_quantity);
-  const truck = hundredths(line.truck_return_quantity);
-  if (received + truck > hundredths(line.dispatched_quantity)) {
+  const received = thousandths(line.customer_received_quantity);
+  const truck = thousandths(line.truck_return_quantity);
+  if (received + truck > thousandths(line.dispatched_quantity)) {
     ctx.addIssue({ code: 'custom', path: ['truck_return_quantity'], message: 'Received plus returning cannot exceed the dispatched quantity.' });
   }
-  if (hundredths(line.customer_received_damaged_quantity) > received) {
+  if (thousandths(line.customer_received_damaged_quantity) > received) {
     ctx.addIssue({ code: 'custom', path: ['customer_received_damaged_quantity'], message: 'Cannot exceed the quantity received by the customer.' });
   }
-  if (hundredths(line.truck_return_damaged_quantity) > truck) {
+  if (thousandths(line.truck_return_damaged_quantity) > truck) {
     ctx.addIssue({ code: 'custom', path: ['truck_return_damaged_quantity'], message: 'Cannot exceed the quantity returning on the truck.' });
   }
 });
@@ -91,7 +94,7 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
       lines: lines.map((line) => ({
         delivery_item_id: line.id, dispatched_quantity: String(line.quantity),
         customer_received_quantity: '0', customer_received_damaged_quantity: '0',
-        truck_return_quantity: decimal(hundredths(String(line.quantity))), truck_return_damaged_quantity: '0',
+        truck_return_quantity: decimal(thousandths(String(line.quantity))), truck_return_damaged_quantity: '0',
         ...pending?.lines.find((saved) => saved.delivery_item_id === line.id),
       })),
     },
@@ -141,10 +144,10 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
       lines: lines.map((line) => {
         const saved = outcome?.lines.find((row) => row.delivery_item_id === line.id);
         return { delivery_item_id: line.id, dispatched_quantity: String(line.quantity),
-          customer_received_quantity: decimal(hundredths(saved?.customer_received_quantity ?? '0')),
-          customer_received_damaged_quantity: decimal(hundredths(saved?.customer_received_damaged_quantity ?? '0')),
-          truck_return_quantity: decimal(hundredths(saved?.truck_return_quantity ?? '0')),
-          truck_return_damaged_quantity: decimal(hundredths(saved?.truck_return_damaged_quantity ?? '0')) };
+          customer_received_quantity: decimal(thousandths(saved?.customer_received_quantity ?? '0'), 2),
+          customer_received_damaged_quantity: decimal(thousandths(saved?.customer_received_damaged_quantity ?? '0')),
+          truck_return_quantity: decimal(thousandths(saved?.truck_return_quantity ?? '0')),
+          truck_return_damaged_quantity: decimal(thousandths(saved?.truck_return_damaged_quantity ?? '0')) };
       }) });
     setOpen(true);
   }
@@ -157,7 +160,7 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
       ...(canAmend ? { expected_version: outcome?.version, correction_reason: values.correction_reason } : {}),
       request_key: crypto.randomUUID(), reason_code: values.reason_code, notes: values.notes,
       lines: values.lines.map(({ dispatched_quantity, ...line }) => ({
-        ...line, unaccounted_quantity: decimal(hundredths(dispatched_quantity) - hundredths(line.customer_received_quantity) - hundredths(line.truck_return_quantity)),
+        ...line, unaccounted_quantity: decimal(thousandths(dispatched_quantity) - thousandths(line.customer_received_quantity) - thousandths(line.truck_return_quantity)),
       })),
     };
     remember(payload);
@@ -205,19 +208,19 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
         </Select>
         {lines.map((line, index) => {
           const errors = form.formState.errors.lines?.[index];
-          const residual = hundredths(String(line.quantity)) - hundredths(watched?.[index]?.customer_received_quantity ?? '0') - hundredths(watched?.[index]?.truck_return_quantity ?? '0');
+          const residual = thousandths(String(line.quantity)) - thousandths(watched?.[index]?.customer_received_quantity ?? '0') - thousandths(watched?.[index]?.truck_return_quantity ?? '0');
           return <fieldset key={line.id} className="border-t border-default pt-4 space-y-3">
             <legend className="text-sm font-medium">{line.product?.part_number ?? `Item ${index + 1}`} · Dispatched <span className="font-mono tabular-nums">{line.quantity}</span> {line.unit_of_measure ?? ''}</legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input label="Received by customer" className={driver ? 'text-base min-h-hit' : undefined} required type="number" min="0" step="0.01" max={line.quantity} {...form.register(`lines.${index}.customer_received_quantity`)} error={errors?.customer_received_quantity?.message} />
-              <Input label="Returning on truck" className={driver ? 'text-base min-h-hit' : undefined} required type="number" min="0" step="0.01" max={line.quantity} {...form.register(`lines.${index}.truck_return_quantity`)} error={errors?.truck_return_quantity?.message} />
+              <Input label="Returning on truck" className={driver ? 'text-base min-h-hit' : undefined} required type="number" min="0" step="0.001" max={line.quantity} {...form.register(`lines.${index}.truck_return_quantity`)} error={errors?.truck_return_quantity?.message} />
             </div>
             <p className={residual > 0n ? 'text-sm text-warning-fg' : 'text-sm text-muted'} aria-live="polite">{residual < 0n ? 'The entered quantities exceed the dispatched quantity.' : `Unaccounted quantity: ${decimal(residual)}${residual > 0n ? '. Explain the difference in your notes.' : ''}`}</p>
             <details>
               <summary className="cursor-pointer text-sm text-link min-h-hit py-1">Record damaged quantities (if any)</summary>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <Input label="Damaged among customer receipt" className={driver ? 'text-base min-h-hit' : undefined} type="number" min="0" step="0.01" {...form.register(`lines.${index}.customer_received_damaged_quantity`)} error={errors?.customer_received_damaged_quantity?.message} />
-                <Input label="Damaged among truck returns" className={driver ? 'text-base min-h-hit' : undefined} type="number" min="0" step="0.01" {...form.register(`lines.${index}.truck_return_damaged_quantity`)} error={errors?.truck_return_damaged_quantity?.message} />
+                <Input label="Damaged among customer receipt" className={driver ? 'text-base min-h-hit' : undefined} type="number" min="0" step="0.001" {...form.register(`lines.${index}.customer_received_damaged_quantity`)} error={errors?.customer_received_damaged_quantity?.message} />
+                <Input label="Damaged among truck returns" className={driver ? 'text-base min-h-hit' : undefined} type="number" min="0" step="0.001" {...form.register(`lines.${index}.truck_return_damaged_quantity`)} error={errors?.truck_return_damaged_quantity?.message} />
               </div>
             </details>
           </fieldset>;

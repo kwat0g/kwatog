@@ -2,16 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Modules\Production\Models\DefectType;
 use App\Modules\Quality\Controllers\AnalyticsController;
 use App\Modules\Quality\Controllers\CalibrationController;
+use App\Modules\Quality\Controllers\CapabilityController;
+use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\InspectionController;
+use App\Modules\Quality\Controllers\WorkOrderFinalInspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
-use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\NcrTemplateController;
 use App\Modules\Quality\Controllers\PpapController;
 use App\Modules\Quality\Controllers\ShipmentLotController;
-use App\Modules\Quality\Controllers\CapabilityController;
 use App\Modules\Quality\Controllers\TraceabilityController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,24 +24,29 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group(function () {
 
+    Route::get('/defect-types', function () {
+        return response()->json(['data' => DefectType::active()->orderBy('code')->get()
+            ->map(fn ($type) => ['id' => $type->hash_id, 'code' => $type->code, 'name' => $type->name])]);
+    })->middleware('permission:quality.ncr.manage');
+
     /* ─── OGAMI-016 — IATF calibration register ─── */
-    Route::get('/calibration',                          [CalibrationController::class, 'index'])
+    Route::get('/calibration', [CalibrationController::class, 'index'])
         ->middleware('permission:quality.calibration.view');
-    Route::post('/calibration',                         [CalibrationController::class, 'store'])
+    Route::post('/calibration', [CalibrationController::class, 'store'])
         ->middleware('permission:quality.calibration.manage');
-    Route::get('/calibration/{calibrationRecord}',      [CalibrationController::class, 'show'])
+    Route::get('/calibration/{calibrationRecord}', [CalibrationController::class, 'show'])
         ->middleware('permission:quality.calibration.view');
-    Route::patch('/calibration/{calibrationRecord}',    [CalibrationController::class, 'update'])
+    Route::patch('/calibration/{calibrationRecord}', [CalibrationController::class, 'update'])
         ->middleware('permission:quality.calibration.manage');
     Route::post('/calibration/{calibrationRecord}/record', [CalibrationController::class, 'recordCalibration'])
         ->middleware('permission:quality.calibration.manage');
 
     /* ─── Inspection specs (Task 59) ─── */
-    Route::get('/inspection-specs/options',                 [InspectionSpecController::class, 'options'])
+    Route::get('/inspection-specs/options', [InspectionSpecController::class, 'options'])
         ->middleware('permission:quality.specs.view');
-    Route::get('/inspection-specs',                       [InspectionSpecController::class, 'index'])
+    Route::get('/inspection-specs', [InspectionSpecController::class, 'index'])
         ->middleware('permission:quality.specs.view');
-    Route::get('/inspection-specs/{inspectionSpec}',      [InspectionSpecController::class, 'show'])
+    Route::get('/inspection-specs/{inspectionSpec}', [InspectionSpecController::class, 'show'])
         ->middleware('permission:quality.specs.view')
         ->withTrashed();
     Route::get('/inspection-specs/{inspectionSpec}/revisions', [InspectionSpecController::class, 'revisions'])
@@ -48,9 +55,9 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/inspection-specs/{inspectionSpec}/revisions/{revision}', [InspectionSpecController::class, 'revision'])
         ->middleware('permission:quality.specs.view')
         ->withTrashed();
-    Route::post('/inspection-specs',                      [InspectionSpecController::class, 'upsert'])
+    Route::post('/inspection-specs', [InspectionSpecController::class, 'upsert'])
         ->middleware('permission:quality.specs.manage');
-    Route::delete('/inspection-specs/{inspectionSpec}',   [InspectionSpecController::class, 'destroy'])
+    Route::delete('/inspection-specs/{inspectionSpec}', [InspectionSpecController::class, 'destroy'])
         ->middleware('permission:quality.specs.manage');
     Route::patch('/inspection-specs/{inspectionSpec}/restore', [InspectionSpecController::class, 'restore'])
         ->middleware('permission:quality.specs.manage')
@@ -59,55 +66,69 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.specs.view')
         ->withTrashed();
 
-    Route::get('/products/{product}/inspection-spec',     [InspectionSpecController::class, 'forProduct'])
+    Route::get('/products/{product}/inspection-spec', [InspectionSpecController::class, 'forProduct'])
         ->middleware('permission:quality.specs.view');
 
     /* ─── Inspections (Task 60) ─── */
-    Route::get('/inspections/options',                       [InspectionController::class, 'options'])
-        ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections',                                  [InspectionController::class, 'index'])
-        ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections/aql-preview',                      [InspectionController::class, 'aqlPreview'])
-        ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections/work-order-outputs',               [InspectionController::class, 'workOrderOutputs'])
-        ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections/{inspection}',                     [InspectionController::class, 'show'])
-        ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections/{inspection}/chain',                [InspectionController::class, 'chain'])
-        ->middleware('permission:quality.inspections.view');
-    Route::post('/inspections',                                 [InspectionController::class, 'store'])
+    Route::post('/work-orders/{workOrder}/final-inspection/replace-method', [WorkOrderFinalInspectionController::class, 'replaceMethod'])
         ->middleware('permission:quality.inspections.manage');
-    Route::patch('/inspections/{inspection}/measurements',      [InspectionController::class, 'recordMeasurements'])
+    Route::get('/work-orders/{workOrder}/final-inspection', [WorkOrderFinalInspectionController::class, 'show'])
+        ->middleware('permission:quality.inspections.view');
+    Route::patch('/work-orders/{workOrder}/final-inspection/evidence', [WorkOrderFinalInspectionController::class, 'saveEvidence'])
         ->middleware('permission:quality.inspections.manage');
-    Route::post('/inspections/{inspection}/lot-result',         [InspectionController::class, 'recordLotResult'])
+    Route::post('/work-orders/{workOrder}/final-inspection/submit', [WorkOrderFinalInspectionController::class, 'submit'])
         ->middleware('permission:quality.inspections.manage');
-    Route::post('/inspections/{inspection}/complete',           [InspectionController::class, 'complete'])
-        ->middleware('permission:quality.inspections.manage');
-    Route::patch('/inspections/{inspection}/review',            [InspectionController::class, 'review'])
+    Route::post('/work-orders/{workOrder}/final-inspection/review', [WorkOrderFinalInspectionController::class, 'review'])
         ->middleware('permission:quality.inspections.review');
-    Route::post('/inspections/{inspection}/cancel',             [InspectionController::class, 'cancel'])
+    Route::get('/inspections/options', [InspectionController::class, 'options'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections', [InspectionController::class, 'index'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/aql-preview', [InspectionController::class, 'aqlPreview'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/work-order-outputs', [InspectionController::class, 'workOrderOutputs'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/{inspection}', [InspectionController::class, 'show'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/{inspection}/chain', [InspectionController::class, 'chain'])
+        ->middleware('permission:quality.inspections.view');
+    Route::post('/inspections', [InspectionController::class, 'store'])
         ->middleware('permission:quality.inspections.manage');
-    Route::get('/inspections/{inspection}/coc',                 [InspectionController::class, 'coc'])
+    Route::patch('/inspections/{inspection}/measurements', [InspectionController::class, 'recordMeasurements'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/lot-result', [InspectionController::class, 'recordLotResult'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/batch-result', [InspectionController::class, 'recordBatchResult'])->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/replace-checklist', [InspectionController::class, 'replaceChecklist'])->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/item-results', [InspectionController::class, 'recordItemResults'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/complete', [InspectionController::class, 'complete'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::patch('/inspections/{inspection}/review', [InspectionController::class, 'review'])
+        ->middleware('permission:quality.inspections.review');
+    Route::post('/inspections/{inspection}/cancel', [InspectionController::class, 'cancel'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::get('/inspections/{inspection}/coc', [InspectionController::class, 'coc'])
         ->middleware('permission:quality.inspections.view');
 
     /* ─── ADV7 — NCR templates ─── */
-    Route::get('/ncr-templates/options',                      [NcrTemplateController::class, 'options'])
+    Route::get('/ncr-templates/options', [NcrTemplateController::class, 'options'])
         ->middleware('permission:quality.ncr.view');
-    Route::get('/ncrs/options',                               [NcrController::class, 'options'])
+    Route::get('/ncrs/options', [NcrController::class, 'options'])
         ->middleware('permission:quality.ncr.view');
-    Route::get('/ncr-templates/active',                        [NcrTemplateController::class, 'active'])
+    Route::get('/ncr-templates/active', [NcrTemplateController::class, 'active'])
         ->middleware('permission:quality.ncr.view');
-    Route::get('/ncr-templates',                                [NcrTemplateController::class, 'index'])
+    Route::get('/ncr-templates', [NcrTemplateController::class, 'index'])
         ->middleware('permission:quality.ncr.view');
-    Route::get('/ncr-templates/{ncrTemplate}',                  [NcrTemplateController::class, 'show'])
+    Route::get('/ncr-templates/{ncrTemplate}', [NcrTemplateController::class, 'show'])
         ->middleware('permission:quality.ncr.view');
-    Route::post('/ncr-templates',                               [NcrTemplateController::class, 'store'])
+    Route::post('/ncr-templates', [NcrTemplateController::class, 'store'])
         ->middleware('permission:quality.ncr.manage');
-    Route::patch('/ncr-templates/{ncrTemplate}',                 [NcrTemplateController::class, 'update'])
+    Route::patch('/ncr-templates/{ncrTemplate}', [NcrTemplateController::class, 'update'])
         ->middleware('permission:quality.ncr.manage');
-    Route::delete('/ncr-templates/{ncrTemplate}',               [NcrTemplateController::class, 'destroy'])
+    Route::delete('/ncr-templates/{ncrTemplate}', [NcrTemplateController::class, 'destroy'])
         ->middleware('permission:quality.ncr.manage');
-    Route::patch('/ncr-templates/{ncrTemplate}/restore',        [NcrTemplateController::class, 'restore'])
+    Route::patch('/ncr-templates/{ncrTemplate}/restore', [NcrTemplateController::class, 'restore'])
         ->middleware('permission:quality.ncr.manage')
         // NcrTemplate uses SoftDeletes, so without this the binding resolves
         // only live rows and every restore of an archived template 404s — the
@@ -116,42 +137,44 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->withTrashed();
 
     /* ─── NCRs (Task 61) ─── */
-    Route::get('/ncrs',                                         [NcrController::class, 'index'])
+    Route::get('/ncrs', [NcrController::class, 'index'])
         ->middleware('permission:quality.ncr.view');
 
-    Route::get('/ncrs/assignees',                              [NcrController::class, 'assignees'])
-        ->middleware('permission:quality.ncr.manage');
+    Route::get('/ncrs/assignees', [NcrController::class, 'assignees'])
+        ->middleware('permission_any:quality.ncr.manage,quality.inspections.review');
 
     // Series F / Task F6 — Bulk close NCRs (must precede /ncrs/{ncr}).
-    Route::post('/ncrs/bulk-close',                             [NcrController::class, 'bulkClose'])
+    Route::post('/ncrs/bulk-close', [NcrController::class, 'bulkClose'])
         ->middleware('permission:quality.ncr.manage');
 
     // CAPA effectiveness — literal segment, must precede /ncrs/{ncr}.
-    Route::get('/ncrs/effectiveness/due',                       [EffectivenessController::class, 'dueIndex'])
+    Route::get('/ncrs/effectiveness/due', [EffectivenessController::class, 'dueIndex'])
         ->middleware('permission:quality.ncr.view');
 
-    Route::get('/ncrs/{ncr}',                                   [NcrController::class, 'show'])
+    Route::get('/ncrs/{ncr}', [NcrController::class, 'show'])
         ->middleware('permission:quality.ncr.view');
-    Route::post('/ncrs',                                        [NcrController::class, 'store'])
+    Route::post('/ncrs', [NcrController::class, 'store'])
         ->middleware('permission:quality.ncr.manage');
-    Route::post('/ncrs/{ncr}/actions',                          [NcrController::class, 'addAction'])
+    Route::post('/ncrs/{ncr}/actions', [NcrController::class, 'addAction'])
         ->middleware('permission:quality.ncr.manage');
     // CAPA — record an effectiveness verdict on a corrective/preventive action.
-    Route::patch('/ncrs/{ncr}/actions/{action}/verify',        [EffectivenessController::class, 'verify'])
+    Route::patch('/ncrs/{ncr}/actions/{action}/verify', [EffectivenessController::class, 'verify'])
         ->middleware('permission:quality.ncr.manage');
-    Route::patch('/ncrs/{ncr}/disposition',                     [NcrController::class, 'setDisposition'])
+    Route::patch('/ncrs/{ncr}/disposition', [NcrController::class, 'setDisposition'])
+        ->middleware('permission_any:quality.ncr.manage,quality.inspections.review');
+    Route::post('/ncrs/{ncr}/retry-quarantine', [NcrController::class, 'retryQuarantine'])
+        ->middleware(['permission:quality.ncr.view', 'permission:inventory.mrb.manage']);
+    Route::post('/ncrs/{ncr}/close', [NcrController::class, 'close'])
         ->middleware('permission:quality.ncr.manage');
-    Route::post('/ncrs/{ncr}/close',                            [NcrController::class, 'close'])
-        ->middleware('permission:quality.ncr.manage');
-    Route::post('/ncrs/{ncr}/cancel',                           [NcrController::class, 'cancel'])
+    Route::post('/ncrs/{ncr}/cancel', [NcrController::class, 'cancel'])
         ->middleware('permission:quality.ncr.manage');
 
     /* ─── Analytics (Task 63) ─── */
-    Route::get('/analytics/defect-pareto',                      [AnalyticsController::class, 'defectPareto'])
+    Route::get('/analytics/defect-pareto', [AnalyticsController::class, 'defectPareto'])
         ->middleware('permission:quality.view');
-    Route::get('/analytics/inspection-summary',                 [AnalyticsController::class, 'inspectionSummary'])
+    Route::get('/analytics/inspection-summary', [AnalyticsController::class, 'inspectionSummary'])
         ->middleware('permission:quality.view');
-    Route::get('/analytics/defect-pareto/drill',                [AnalyticsController::class, 'paretoDrillDown'])
+    Route::get('/analytics/defect-pareto/drill', [AnalyticsController::class, 'paretoDrillDown'])
         ->middleware('permission:quality.view');
 
     /* ─── ADV3 — IATF 16949 traceability (batch + lot search, shipment lots) ─── */
@@ -171,17 +194,17 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.view');
 
     /* ─── PPAP & APQP tracking (IATF 16949) ─── */
-    Route::get('/ppap',                       [PpapController::class, 'index'])  ->middleware('permission:quality.ppap.view');
-    Route::post('/ppap',                      [PpapController::class, 'store'])  ->middleware('permission:quality.ppap.manage');
-    Route::get('/ppap/{ppap}',                [PpapController::class, 'show'])   ->middleware('permission:quality.ppap.view');
-    Route::put('/ppap/{ppap}',                [PpapController::class, 'update']) ->middleware('permission:quality.ppap.manage');
-    Route::patch('/ppap/{ppap}/submit',       [PpapController::class, 'submit']) ->middleware('permission:quality.ppap.manage');
-    Route::patch('/ppap/{ppap}/review',       [PpapController::class, 'review']) ->middleware('permission:quality.ppap.manage');
-    Route::patch('/ppap/{ppap}/approve',      [PpapController::class, 'approve'])->middleware('permission:quality.ppap.manage');
-    Route::patch('/ppap/{ppap}/reject',       [PpapController::class, 'reject']) ->middleware('permission:quality.ppap.manage');
+    Route::get('/ppap', [PpapController::class, 'index'])->middleware('permission:quality.ppap.view');
+    Route::post('/ppap', [PpapController::class, 'store'])->middleware('permission:quality.ppap.manage');
+    Route::get('/ppap/{ppap}', [PpapController::class, 'show'])->middleware('permission:quality.ppap.view');
+    Route::put('/ppap/{ppap}', [PpapController::class, 'update'])->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/submit', [PpapController::class, 'submit'])->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/review', [PpapController::class, 'review'])->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/approve', [PpapController::class, 'approve'])->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/reject', [PpapController::class, 'reject'])->middleware('permission:quality.ppap.manage');
     Route::patch('/ppap/{ppap}/elements/{element}', [PpapController::class, 'updateElement'])->middleware('permission:quality.ppap.manage');
 
     /* ─── Process capability (Cp / Cpk) ─── */
-    Route::get('/spc/charts/options', [CapabilityController::class, 'options'])   ->middleware('permission:quality.inspections.view');
-    Route::post('/spc/capability',    [CapabilityController::class, 'capability'])->middleware('permission:quality.inspections.view');
+    Route::get('/spc/charts/options', [CapabilityController::class, 'options'])->middleware('permission:quality.inspections.view');
+    Route::post('/spc/capability', [CapabilityController::class, 'capability'])->middleware('permission:quality.inspections.view');
 });

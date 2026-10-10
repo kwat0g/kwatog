@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -18,6 +21,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -42,13 +46,23 @@ class IncomingQcLineSettleTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     // Maker-checker: an incoming inspection counts only when a different user checks it.
     private User $checker;
+
     private GrnService $grnSvc;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(ChartOfAccountsSeeder::class);
+
+        $systemAdminRole = Role::query()->firstOrCreate(
+            ['slug' => 'system_admin'],
+            ['name' => 'System Admin'],
+        );
+        User::factory()->create(['role_id' => $systemAdminRole->id, 'is_active' => true]);
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
 
         // Legacy tests: disable MRB review to test the old auto-reject behavior
         app(SettingsService::class)->set('quality.incoming_failure.mrb_review', false);
@@ -123,9 +137,13 @@ class IncomingQcLineSettleTest extends TestCase
     public function test_mixed_pass_fail_line_a_fails_line_b_passes(): void
     {
         $grn = $this->createMultiLineGrn('100.000', '50.000');
-        $lineAId = $grn->items->get(0)->id;
-        $lineBId = $grn->items->get(1)->id;
-        $poItemAId = $grn->purchaseOrder->items->get(0)->id;
+        $poItemA = $grn->purchaseOrder->items->firstWhere('description', 'Material A');
+        $poItemB = $grn->purchaseOrder->items->firstWhere('description', 'Material B');
+        $this->assertNotNull($poItemA);
+        $this->assertNotNull($poItemB);
+        $poItemAId = (int) $poItemA->id;
+        $lineAId = (int) $grn->items->firstWhere('purchase_order_item_id', $poItemAId)->id;
+        $lineBId = (int) $grn->items->firstWhere('purchase_order_item_id', $poItemB->id)->id;
 
         $inspections = Inspection::query()
             ->where('entity_type', 'grn')
@@ -158,7 +176,7 @@ class IncomingQcLineSettleTest extends TestCase
         $this->assertSame('0.00', (string) $poItemA->quantity_received, 'PO line A received should drop to 0');
 
         // Exactly one RMA with source_key grn-rejection:{grn id}
-        $rma = ReturnRequest::where('source_key', 'grn-rejection:' . $grn->id)->first();
+        $rma = ReturnRequest::where('source_key', 'grn-rejection:'.$grn->id)->first();
         $this->assertNotNull($rma, 'An RMA should be opened for the rejected remainder');
         $this->assertCount(1, $rma->items, 'RMA should contain only the failed line A');
         $this->assertSame('100.000', (string) $rma->items->first()->quantity, 'RMA should be for line A full quantity');
@@ -196,7 +214,7 @@ class IncomingQcLineSettleTest extends TestCase
         $this->assertSame('0.000', (string) $lineB->quantity_accepted, 'Failed line B should have 0 accepted');
 
         // RMA should contain only the failed line B
-        $rma = ReturnRequest::where('source_key', 'grn-rejection:' . $grn->id)->first();
+        $rma = ReturnRequest::where('source_key', 'grn-rejection:'.$grn->id)->first();
         $this->assertNotNull($rma);
         $this->assertCount(1, $rma->items);
         $this->assertSame('50.000', (string) $rma->items->first()->quantity, 'RMA should be for line B full quantity');
@@ -226,7 +244,7 @@ class IncomingQcLineSettleTest extends TestCase
         $this->assertSame(GrnStatus::Rejected, $grn->status);
 
         // RMA should be created for the entire GRN (both lines)
-        $rma = ReturnRequest::where('source_key', 'grn-rejection:' . $grn->id)->first();
+        $rma = ReturnRequest::where('source_key', 'grn-rejection:'.$grn->id)->first();
         $this->assertNotNull($rma);
         $this->assertCount(2, $rma->items, 'RMA should contain both lines');
     }
@@ -259,8 +277,9 @@ class IncomingQcLineSettleTest extends TestCase
         $this->assertSame('50.000', (string) $grn->items->firstWhere('id', $lineBId)->quantity_accepted);
 
         // No RMA should be created
-        $rma = ReturnRequest::where('source_key', 'grn-rejection:' . $grn->id)->first();
+        $rma = ReturnRequest::where('source_key', 'grn-rejection:'.$grn->id)->first();
         $this->assertNull($rma, 'No RMA should be created when all lines pass');
+        $this->assertDraftSupplierBillExists($grn);
     }
 
     public function test_line_a_fails_line_b_in_progress_awaits_qc(): void
@@ -292,7 +311,7 @@ class IncomingQcLineSettleTest extends TestCase
         $this->assertSame('0.000', (string) $grn->items->firstWhere('id', $lineBId)->quantity_accepted);
     }
 
-    public function test_cancelled_inspection_counts_as_not_failed(): void
+    public function test_cancelled_inspection_cannot_release_an_uninspected_receipt_line(): void
     {
         $grn = $this->createMultiLineGrn('100.000', '50.000');
         $lineAId = $grn->items->get(0)->id;
@@ -309,13 +328,14 @@ class IncomingQcLineSettleTest extends TestCase
         // Line B passes
         $inspections[$lineBId]->forceFill(['status' => 'passed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()])->save();
 
-        $outcome = $this->grnSvc->settleIncomingQc($grn->fresh(), $this->user);
-
-        // Should accept because no lines FAILED (cancelled doesn't count as failed)
-        $this->assertSame('grn_accepted', $outcome);
-
-        $grn = $grn->fresh()->load('items');
-        $this->assertSame(GrnStatus::Accepted, $grn->status);
+        try {
+            $this->grnSvc->settleIncomingQc($grn->fresh(), $this->user);
+            $this->fail('Cancelled QC must not authorize stock release.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('incoming QC must be completed', $error->getMessage());
+        }
+        $this->assertSame(GrnStatus::PendingQc, $grn->fresh()->status);
+        $this->assertSame('0.000', (string) $grn->items()->findOrFail($lineAId)->quantity_accepted);
     }
 
     public function test_partial_accept_with_failed_line_throws(): void
@@ -336,7 +356,7 @@ class IncomingQcLineSettleTest extends TestCase
         $inspections[$lineBId]->forceFill(['status' => 'passed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()])->save();
 
         // Try to manually partialAccept accepting >0 on the failed line A
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('failed incoming QC');
 
         $this->grnSvc->partialAccept($grn, [
@@ -387,7 +407,7 @@ class IncomingQcLineSettleTest extends TestCase
             ->each(fn ($insp) => $insp->forceFill(['status' => 'failed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()])->save());
 
         // Zeroing the first failed line must not unlock the second one.
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage("Line {$lineBId} failed incoming QC");
 
         $this->grnSvc->partialAccept($grn, [
@@ -412,7 +432,7 @@ class IncomingQcLineSettleTest extends TestCase
 
         // An unfinished verdict is not a failure; accepting around it would
         // close the GRN before line A's result lands.
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('until every incoming inspection is complete');
 
         $this->grnSvc->partialAccept($grn, [
@@ -439,5 +459,15 @@ class IncomingQcLineSettleTest extends TestCase
         // Second settle on the same GRN (now Accepted) should return already_terminal
         $outcome2 = $this->grnSvc->settleIncomingQc($grn->fresh(), $this->user);
         $this->assertSame('grn_already_terminal', $outcome2);
+        $this->assertSame(1, Bill::query()->where('goods_receipt_note_id', $grn->id)->count());
+    }
+
+    private function assertDraftSupplierBillExists(GoodsReceiptNote $grn): Bill
+    {
+        $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->sole();
+        $this->assertSame(BillStatus::Draft, $bill->status);
+        $this->assertNull($bill->journal_entry_id);
+
+        return $bill;
     }
 }

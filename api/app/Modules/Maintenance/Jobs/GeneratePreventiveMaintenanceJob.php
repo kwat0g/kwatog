@@ -16,6 +16,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -25,7 +27,7 @@ use Throwable;
  * thresholds for all machines.
  *
  * Runs:
- *   - All active hours/days schedules whose next_due_at <= now without an open WO.
+ *   - Active day schedules whose next_due_at <= now without an open WO.
  *   - All active machine-hour schedules whose runtime since the persisted
  *     baseline reaches interval_value.
  *   - All active mold-shot schedules at >= 100% of threshold without an open WO.
@@ -55,12 +57,18 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         PredictiveMaintenanceService $predictive,
         SettingsService $settings,
     ): void {
-        $roles = array_values(array_filter((array) $settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-        $systemUser = $roles === [] ? null : User::query()
-            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
-            ->where('is_active', true)
-            ->orderBy('id')
-            ->first();
+        if (! $settings->requiredBool('modules.maintenance')) {
+            return;
+        }
+        $roles = array_values(array_filter((array) $settings->get('maintenance.automation.actor_roles', ['maintenance_supervisor']), static fn ($role): bool => is_string($role) && $role !== ''));
+        $systemUser = null;
+        foreach ($roles as $role) {
+            $systemUser = User::query()->whereHas('role', fn ($query) => $query->where('slug', $role))
+                ->where('is_active', true)->orderBy('id')->first();
+            if ($systemUser !== null) {
+                break;
+            }
+        }
         if (! $systemUser) {
             throw new \RuntimeException('GeneratePreventiveMaintenanceJob: no configured automation actor found.');
         }
@@ -70,19 +78,22 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         $machineHours->recompute();
 
         // 1. Time-based (calendar hours / days)
-        foreach ($schedules->dueNow() as $schedule) {
-            $workOrders->create([], $systemUser, $schedule);
-        }
-
-        // 2. Machine running-hours based
-        foreach ($schedules->machineHourSchedulesAtOrAboveThreshold() as $schedule) {
-            $workOrders->create([], $systemUser, $schedule);
-        }
-
-        // 3. Mold-shot 100% threshold
+        // 2. Machine running-hours based; 3. Mold-shot threshold
         $threshold = $settings->requiredFloat('maintenance.mold_schedule.trigger_threshold_pct', 0, 100);
-        foreach ($schedules->moldShotSchedulesAtOrAboveThreshold($threshold) as $schedule) {
-            $workOrders->create([], $systemUser, $schedule);
+        foreach ([$schedules->dueNow(), $schedules->machineHourSchedulesAtOrAboveThreshold(), $schedules->moldShotSchedulesAtOrAboveThreshold($threshold)] as $group) {
+            foreach ($group as $schedule) {
+                try {
+                    $workOrders->create([], $systemUser, $schedule);
+                } catch (ValidationException $exception) {
+                    if (! isset($exception->errors()['schedule_id'])) {
+                        throw $exception;
+                    }
+                } catch (ModelNotFoundException $exception) {
+                    if ($exception->getModel() !== \App\Modules\Maintenance\Models\MaintenanceSchedule::class) {
+                        throw $exception;
+                    }
+                }
+            }
         }
 
         // 4. Predictive maintenance — condition-based corrective WOs

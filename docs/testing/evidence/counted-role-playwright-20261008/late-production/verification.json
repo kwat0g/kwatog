@@ -1,0 +1,88 @@
+{
+  "priorBrowserSteps": [
+    {
+      "step": "Worker submits historical batch with actual interval",
+      "id": "DqpX79YWv2",
+      "status": "pending",
+      "evidence": {
+        "crew": {
+          "state": "verified",
+          "assigned_at": "2026-10-07T07:15:00+08:00",
+          "ended_at": "2026-10-07T17:45:00+08:00"
+        },
+        "attendance": {
+          "state": "verified",
+          "members": [
+            {
+              "name": "Late Report Worker Two",
+              "state": "verified",
+              "shift": {
+                "starts_at": "2026-10-07T07:00:00+08:00",
+                "ends_at": "2026-10-07T17:00:00+08:00"
+              }
+            }
+          ]
+        },
+        "execution": {
+          "state": "verified",
+          "source": "work_order_run_history"
+        },
+        "resources": {
+          "state": "verified",
+          "source": "production_schedule_history",
+          "machine_id": "jnVYkWYkvp",
+          "mold_id": "jnVYkWYkvp",
+          "machine_code": "LATE-REP-MACHINE-2",
+          "mold_code": "LATE-REPORT-MOLD-2"
+        }
+      }
+    },
+    {
+      "step": "Manager independently approves batch in browser",
+      "status": 200,
+      "response": "approved"
+    },
+    {
+      "step": "Worker submits second historical batch",
+      "id": "9vbYpvXQ34",
+      "status": "pending"
+    },
+    {
+      "step": "Manager rejects unreconciled batch in browser",
+      "status": 200,
+      "response": "rejected"
+    },
+    {
+      "step": "Worker submits concurrency-check batch",
+      "id": "okwXmbg5q3",
+      "status": "pending"
+    },
+    {
+      "step": "Two simultaneous PHP processes approve same report idempotently",
+      "approvalResults": [
+        {
+          "slot": "A",
+          "report": "okwXmbg5q3",
+          "output": "9vbYpvXQ34",
+          "work_order_quantity": "15"
+        },
+        {
+          "slot": "B",
+          "report": "okwXmbg5q3",
+          "output": "9vbYpvXQ34",
+          "work_order_quantity": "15"
+        }
+      ]
+    }
+  ],
+  "ledger": {
+    "summary": "3|2|15|15|40",
+    "timestamps": "2",
+    "reportStatuses": "LATE-APPROVED-BATCH:approved,LATE-REJECTED-BATCH:rejected,LATE-CONCURRENT-BATCH:approved",
+    "stock": "0|0",
+    "movements": "0",
+    "machine": "idle|",
+    "mold": "available||40",
+    "duplicateApprovalsReturnedSameOutput": "9vbYpvXQ34"
+  }
+}

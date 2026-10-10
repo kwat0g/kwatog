@@ -15,6 +15,39 @@ final class Money
     public const SCALE = 2;
     public const INNER = 4;
 
+    /** Allocate a nonnegative amount proportionally without losing or inventing cents. */
+    public static function allocate(string $total, array $weights): array
+    {
+        $sum = '0';
+        foreach ($weights as $weight) {
+            if (bccomp((string) $weight, '0', 12) < 0) throw new \InvalidArgumentException('Allocation weights must be nonnegative.');
+            $sum = bcadd($sum, (string) $weight, 12);
+        }
+        if ($weights === []) return [];
+        if (bccomp($sum, '0', 12) === 0) {
+            $weights = array_fill_keys(array_keys($weights), '1');
+            $sum = (string) count($weights);
+        }
+        $cents = bcmul(self::round2($total), '100', 0);
+        if (bccomp($cents, '0', 0) < 0) throw new \InvalidArgumentException('Allocation amount must be nonnegative.');
+        $values = $fractions = [];
+        $assigned = '0';
+        foreach ($weights as $index => $weight) {
+            $exact = bcdiv(bcmul($cents, (string) $weight, 12), $sum, 12);
+            $values[$index] = bcadd($exact, '0', 0);
+            $fractions[$index] = bcsub($exact, $values[$index], 12);
+            $assigned = bcadd($assigned, $values[$index], 0);
+        }
+        uasort($fractions, fn ($left, $right) => bccomp($right, $left, 12));
+        $remaining = bcsub($cents, $assigned, 0);
+        foreach (array_keys($fractions) as $index) {
+            if (bccomp($remaining, '0', 0) <= 0) break;
+            $values[$index] = bcadd($values[$index], '1', 0);
+            $remaining = bcsub($remaining, '1', 0);
+        }
+        return array_map(fn ($value) => bcdiv($value, '100', 2), $values);
+    }
+
     public static function zero(): string
     {
         return '0.00';

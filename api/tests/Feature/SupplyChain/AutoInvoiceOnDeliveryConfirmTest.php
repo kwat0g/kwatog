@@ -225,7 +225,7 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         $this->assertSame($invoiceCount, Invoice::count());
     }
 
-    public function test_finalize_rejects_an_invoice_that_reuses_an_already_invoiced_delivery(): void
+    public function test_create_rejects_a_second_invoice_for_an_already_invoiced_delivery(): void
     {
         $user = $this->makeUser();
         $revenueId = Account::query()->where('code', '4010')->firstOrFail()->hash_id;
@@ -238,27 +238,31 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         );
         $this->addProof($delivery, $user);
         $this->svc->confirm($delivery, $user);
+        $invoiceCount = Invoice::count();
+        $invoiceId = $delivery->fresh()->invoice_id;
 
-        // The auto-drafted invoice already names this delivery's only line.
-        $second = app(InvoiceService::class)->create([
-            'customer_id' => $customer->hash_id,
-            'sales_order_id' => $so->hash_id,
-            'delivery_id' => $delivery->hash_id,
-            'date' => now()->toDateString(),
-            'vat_classification' => 'vat_exempt',
-            'items' => [[
-                'revenue_account_id' => $revenueId,
-                'source_delivery_item_id' => $deliveryItem->hash_id,
-                'description' => 'Second billing attempt',
-                'quantity' => '5',
-                'unit_price' => '100.00',
-            ]],
-        ], $user);
+        try {
+            app(InvoiceService::class)->create([
+                'customer_id' => $customer->hash_id,
+                'sales_order_id' => $so->hash_id,
+                'delivery_id' => $delivery->hash_id,
+                'date' => now()->toDateString(),
+                'vat_classification' => 'vat_exempt',
+                'items' => [[
+                    'revenue_account_id' => $revenueId,
+                    'source_delivery_item_id' => $deliveryItem->hash_id,
+                    'description' => 'Second billing attempt',
+                    'quantity' => '5',
+                    'unit_price' => '100.00',
+                ]],
+            ], $user);
+            $this->fail('A delivery already billed by the auto-invoice handoff must not get another invoice draft.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('already has an invoice', $error->getMessage());
+        }
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('invoiced once');
-
-        app(InvoiceService::class)->finalize($second, $user);
+        $this->assertSame($invoiceCount, Invoice::count());
+        $this->assertSame($invoiceId, $delivery->fresh()->invoice_id);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

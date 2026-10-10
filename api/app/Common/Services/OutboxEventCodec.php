@@ -55,6 +55,7 @@ use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Events\OutgoingQuantityReleased;
 use App\Modules\Quality\Events\NcrRecurrenceLinked;
 use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
@@ -84,6 +85,7 @@ class OutboxEventCodec
         SalesOrderConfirmed::class,
         ComplaintNcrRequested::class,
         WorkOrderCompleted::class,
+        \App\Modules\Production\Events\WorkOrderQualityResolved::class,
         WorkOrderStatusChanged::class,
         WorkOrderOutputRecorded::class,
         ProductionReceiptRequested::class,
@@ -102,6 +104,7 @@ class OutboxEventCodec
         StockMovementGlPostingRequested::class,
         ReturnInspectionRequested::class,
         InspectionPassed::class,
+        OutgoingQuantityReleased::class,
         InspectionFailed::class,
         NcrRecurrenceLinked::class,
         DeliveryConfirmed::class,
@@ -132,6 +135,7 @@ class OutboxEventCodec
         MoldShotLimitReached::class,
         MrpPlanGenerated::class,
         MrpReplanRequested::class,
+        \App\Modules\MRP\Events\BomPricingReviewRequested::class,
     ];
 
     /** @return array{event_type: class-string, payload: array<string, mixed>} */

@@ -32,8 +32,13 @@ export interface ReceiveGoodsData {
   }>;
   qc: {
     result: 'passed' | 'failed' | 'passed_with_remarks' | 'pending';
+    coverage_confirmed?: boolean;
+    inspected_quantity?: number;
+    sample_defect_count?: number;
+    critical_defect?: boolean;
+    defects_removed_confirmed?: boolean;
     inspector_id?: string;
-    checks?: Array<{ label: string; passed: boolean }>;
+    checks?: Array<{ label: string; passed: boolean; problem_description?: string }>;
     remarks?: string;
     failure_reason?: string;
     disposition?: string;

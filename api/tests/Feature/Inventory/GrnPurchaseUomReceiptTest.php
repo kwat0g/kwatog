@@ -153,6 +153,7 @@ class GrnPurchaseUomReceiptTest extends TestCase
             'received_uom_code' => 'BAG',
         ]], $this->receiver);
 
+        $this->assertStringStartsWith('RCV-', $grn->items()->firstOrFail()->material_lot_number);
         $this->assertSame('5.000', (string) $grn->items()->firstOrFail()->quantity_received);
         $this->assertOneBagValue($grn);
     }

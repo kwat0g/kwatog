@@ -75,7 +75,7 @@ class DashboardWidgetSeeder extends Seeder
         'approvals.pending'         => '/approvals',
         'purchasing.open_prs'       => '/purchasing/purchase-requests',
         'purchasing.open_pos'       => '/purchasing/purchase-orders',
-        'purchasing.supplier_perf'  => '/purchasing/approved-suppliers',
+        'purchasing.supplier_perf'  => '/purchasing/suppliers/performance',
         'supply.overdue_deliveries' => '/supply-chain/deliveries',
         'supply.delivery_schedule'  => '/supply-chain/deliveries',
         'inventory.low_stock'       => '/inventory/stock-levels',
@@ -223,7 +223,7 @@ class DashboardWidgetSeeder extends Seeder
             // ─── Purchasing / Supply Chain ─────────────────────────
             ['key' => 'purchasing.open_prs',           'name' => 'Open Purchase Requests',    'module' => 'purchasing',  'permission' => 'purchasing.view'],
             ['key' => 'purchasing.open_pos',           'name' => 'Open Purchase Orders',      'module' => 'purchasing',  'permission' => 'purchasing.view', 'render_kind' => 'breakdown'],
-            ['key' => 'purchasing.supplier_perf',      'name' => 'Supplier Performance',      'module' => 'purchasing',  'permission' => 'purchasing.view'],
+            ['key' => 'purchasing.supplier_perf',      'name' => 'Supplier Performance',      'module' => 'purchasing',  'permission' => 'purchasing.suppliers.performance.view'],
             // The narrow delivery read, not the whole module: this is what lets
             // the warehouse see what ships today without also being handed
             // shipments, fleet and customs documents. Everyone who held

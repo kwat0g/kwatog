@@ -180,10 +180,11 @@ class ThirteenthMonthTest extends TestCase
         $this->seedAccrual($emp, 2025, '12000000.00');
         $periods = app(\App\Modules\Payroll\Services\PayrollPeriodService::class);
         $checker = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $finalizer = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
         $period = $this->svc->computeAndPay(2025, $this->adminUser);
         $periods->approve($period->fresh(), $checker);
-        $periods->finalize($period->fresh(), $checker);
-        $periods->void($period->fresh(), $checker, 'Correction run');
+        $periods->finalize($period->fresh(), $finalizer);
+        $periods->void($period->fresh(), $this->adminUser, 'Correction run');
 
         $replacement = $this->svc->computeAndPay(2025, $this->adminUser);
         $payroll = Payroll::where('payroll_period_id', $replacement->id)->where('employee_id', $emp->id)->firstOrFail();
@@ -304,8 +305,11 @@ class ThirteenthMonthTest extends TestCase
         $checker = User::factory()->create([
             'role_id' => Role::where('slug', 'finance_officer')->value('id'),
         ]);
+        $finalizer = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
         $periods->approve($period->fresh(), $checker);
-        $periods->finalize($period->fresh(), $checker);
+        $periods->finalize($period->fresh(), $finalizer);
 
         $accrual->refresh();
         $this->assertTrue((bool) $accrual->is_paid, 'finalize must recognise payment');
@@ -374,15 +378,18 @@ class ThirteenthMonthTest extends TestCase
         $checker = User::factory()->create([
             'role_id' => Role::where('slug', 'finance_officer')->value('id'),
         ]);
+        $finalizer = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
 
         $period = $this->svc->computeAndPay(2025, $this->adminUser);
         $periods->approve($period->fresh(), $checker);
-        $periods->finalize($period->fresh(), $checker);
+        $periods->finalize($period->fresh(), $finalizer);
 
         $accrual = ThirteenthMonthAccrual::where('employee_id', $emp->id)->where('year', 2025)->firstOrFail();
         $this->assertTrue((bool) $accrual->is_paid);
 
-        $periods->void($period->fresh(), $checker, 'Wrong accrual base');
+        $periods->void($period->fresh(), $this->adminUser, 'Wrong accrual base');
 
         $accrual->refresh();
         $this->assertFalse((bool) $accrual->is_paid, 'a voided run must reopen the accrual');

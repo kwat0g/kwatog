@@ -5,8 +5,8 @@ import type {
   PortalPoSummary,
   PortalPoDetail,
   PortalShipment,
-  SupplierBillSummary,
-  SupplierBillDetail,
+  SupplierInvoiceSummary,
+  SupplierInvoiceDetail,
   SupplierDeliverySummary,
   PortalShippingDocument,
   SubmittedBill,
@@ -17,7 +17,6 @@ import type {
   PortalSupplierListingInput,
   PortalBulkListingResult,
   RespondToPurchaseOrderPayload,
-  SchedulablePoOption,
 } from '@/types/b2b';
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
@@ -145,13 +144,7 @@ export const supplierPortalApi = {
   // ── Shipments ──────────────────────────────────────
   createShipment: async (
     poId: string,
-    form: {
-      shipped_date?: string;
-      carrier?: string;
-      tracking_number?: string;
-      estimated_arrival?: string;
-      notes?: string;
-    },
+    form: FormData,
   ) => {
     const { data } = await portalClient.post<{ data: PortalShipment; message: string }>(
       `/b2b/supplier/purchase-orders/${poId}/shipments`,
@@ -169,6 +162,7 @@ export const supplierPortalApi = {
       tracking_number?: string;
       estimated_arrival?: string;
       notes?: string;
+      items?: Array<{ purchase_order_item_id: string; quantity_shipped: string }>;
     },
   ) => {
     const { data } = await portalClient.put<{ data: PortalShipment; message: string }>(
@@ -180,16 +174,16 @@ export const supplierPortalApi = {
 
   // ── Invoices ───────────────────────────────────────
   listInvoices: async (params?: { status?: string; page?: number; per_page?: number }) => {
-    const { data } = await portalClient.get<PaginatedResponse<SupplierBillSummary>>(
-      '/b2b/supplier/invoices',
+    const { data } = await portalClient.get<PaginatedResponse<SupplierInvoiceSummary>>(
+      '/b2b/supplier/supplier-invoices',
       { params },
     );
     return data;
   },
 
   getInvoice: async (id: string) => {
-    const { data } = await portalClient.get<{ data: SupplierBillDetail }>(
-      `/b2b/supplier/invoices/${id}`,
+    const { data } = await portalClient.get<{ data: SupplierInvoiceDetail }>(
+      `/b2b/supplier/supplier-invoices/${id}`,
     );
     return data.data;
   },
@@ -225,38 +219,6 @@ export const supplierPortalApi = {
     return data;
   },
 
-  getEligiblePurchaseOrders: async () => {
-    const { data } = await portalClient.get<{ data: SchedulablePoOption[] }>(
-      '/b2b/supplier/delivery-schedules/purchase-orders',
-    );
-    return data.data;
-  },
-
-  createDeliverySchedule: async (form: {
-    purchase_order_id: string;
-    month: string;
-    lines: Array<{
-      purchase_order_item_id: string;
-      product_name?: string;
-      quantity: string;
-      notes?: string;
-    }>;
-  }) => {
-    const { data } = await portalClient.post<{ data: DeliverySchedule; message: string }>(
-      '/b2b/supplier/delivery-schedules',
-      form,
-    );
-    return data;
-  },
-
-  cancelDeliverySchedule: async (id: string, reason: string) => {
-    const { data } = await portalClient.post<{ data: DeliverySchedule; message: string }>(
-      `/b2b/supplier/delivery-schedules/${id}/cancel`,
-      { reason },
-    );
-    return data;
-  },
-
   // ── PDF Downloads ───────────────────────────────────
   downloadPoPdf: async (id: string) => {
     const { data } = await portalClient.get<Blob>(`/b2b/supplier/purchase-orders/${id}/pdf`, {
@@ -273,12 +235,6 @@ export const supplierPortalApi = {
   },
 
   // ── Shipping Documents ──────────────────────────────
-  shippingDocumentOptions: async () => {
-    const { data } = await portalClient.get<{
-      data: { document_types: Array<{ value: string; label: string }> };
-    }>('/b2b/supplier/purchase-orders/shipping-documents/options');
-    return data.data;
-  },
   listShippingDocuments: async (poId: string) => {
     const { data } = await portalClient.get<{ data: PortalShippingDocument[] }>(
       `/b2b/supplier/purchase-orders/${poId}/shipping-documents`,
@@ -297,6 +253,14 @@ export const supplierPortalApi = {
   downloadShippingDocument: async (id: string) => {
     const { data } = await portalClient.get<Blob>(
       `/b2b/supplier/shipping-documents/${id}/download`,
+      { responseType: 'blob' },
+    );
+    return data;
+  },
+
+  downloadReturnDefectPhoto: async (poId: string, returnId: string) => {
+    const { data } = await portalClient.get<Blob>(
+      `/b2b/supplier/purchase-orders/${poId}/returns/${returnId}/defect-photo`,
       { responseType: 'blob' },
     );
     return data;

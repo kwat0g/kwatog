@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { LuArchiveRestore, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
-import { itemCategoriesApi } from '@/api/inventory/items';
+import { itemCategoriesApi, itemsApi } from '@/api/inventory/items';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { Button } from '@/components/ui/Button';
@@ -22,7 +22,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { onFormInvalid } from '@/lib/formErrors';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
-import type { ItemCategory } from '@/types/inventory';
+import type { ItemCategory, ItemType } from '@/types/inventory';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Validation schema
@@ -35,6 +35,9 @@ const schema = z.object({
  .min(2, 'Name must be at least 2 characters.')
  .max(100, 'Name must be at most 100 characters.'),
  parent_id: z.string().optional().or(z.literal('')),
+ item_type: z.string().optional(),
+}).superRefine((data, context) => {
+ if (!data.parent_id && !data.item_type) context.addIssue({ code: z.ZodIssueCode.custom, path: ['item_type'], message: 'Select the inventory type for this category.' });
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -44,6 +47,7 @@ interface FlatRow {
  parent_name: string | null;
  depth: number;
  hasChildren: boolean;
+ item_type_label: string | null;
  parent_id: string | null;
 }
 
@@ -56,6 +60,7 @@ function flatten(nodes: ItemCategory[], depth = 0, parentName: string | null = n
    name: n.name,
    parent_name: parentName,
    depth,
+   item_type_label: n.item_type_label ?? null,
    hasChildren: !!n.children?.length,
    parent_id: n.parent_id,
   });
@@ -134,6 +139,7 @@ export function ItemCategoriesManager() {
   mutationFn: (id: string) => itemCategoriesApi.delete(id),
   onSuccess: () => {
    qc.invalidateQueries({ queryKey: ['inventory', 'categories'] });
+      qc.invalidateQueries({ queryKey: ['inventory', 'items'] });
    toast.success('Category archived.');
    setConfirmDelete(null);
   },
@@ -146,6 +152,7 @@ export function ItemCategoriesManager() {
   mutationFn: (id: string) => itemCategoriesApi.restoreCategory(id),
   onSuccess: () => {
    qc.invalidateQueries({ queryKey: ['inventory', 'categories'] });
+      qc.invalidateQueries({ queryKey: ['inventory', 'items'] });
    toast.success('Category restored.');
    setConfirmRestore(null);
   },
@@ -169,6 +176,11 @@ export function ItemCategoriesManager() {
    key: 'parent',
    header: 'Parent',
    cell: (r) => r.parent_name ?? <span className="text-muted">—</span>,
+  },
+  {
+   key: 'classification',
+   header: 'Inventory type',
+   cell: (r) => r.item_type_label ?? <span className="text-warning-fg">Needs setup</span>,
   },
   {
    key: 'actions',
@@ -286,6 +298,7 @@ export function ItemCategoriesManager() {
      onClose={() => setFormOpen(false)}
      onSaved={() => {
       qc.invalidateQueries({ queryKey: ['inventory', 'categories'] });
+      qc.invalidateQueries({ queryKey: ['inventory', 'items'] });
       setFormOpen(false);
      }}
     />
@@ -353,24 +366,30 @@ interface CategoryFormProps {
 }
 
 function CategoryForm({ mode, category, options, onClose, onSaved }: CategoryFormProps) {
+ const itemOptions = useQuery({ queryKey: ['inventory', 'items', 'options'], queryFn: itemsApi.options });
  const {
   register,
   handleSubmit,
   setError,
+  watch,
   formState: { errors, isSubmitting },
  } = useForm<FormValues>({
   resolver: zodResolver(schema),
   defaultValues: {
    name: category?.name ?? '',
    parent_id: category?.parent_id ?? '',
+   item_type: category?.item_type ?? '',
   },
  });
 
+ const parentId = watch('parent_id');
+ const parent = options.find((option) => option.id === parentId);
  const mutation = useMutation({
   mutationFn: (d: FormValues) => {
    const payload = {
     name: d.name.trim(),
     parent_id: d.parent_id ? d.parent_id : null,
+    item_type: d.parent_id ? undefined : d.item_type as ItemType,
    };
    return mode === 'create'
     ? itemCategoriesApi.create(payload)
@@ -410,7 +429,7 @@ function CategoryForm({ mode, category, options, onClose, onSaved }: CategoryFor
      error={errors.name?.message}
      placeholder="Category name"
     />
-    <Select label="Parent (optional)" {...register('parent_id')} error={errors.parent_id?.message}>
+    <Select searchable label="Parent (optional)" value={parentId} {...register('parent_id')} error={errors.parent_id?.message}>
      <option value="">— Top level —</option>
      {options.map((c) => (
       <option key={c.id} value={c.id}>
@@ -418,6 +437,19 @@ function CategoryForm({ mode, category, options, onClose, onSaved }: CategoryFor
       </option>
      ))}
     </Select>
+    {parentId ? (
+     <p className="text-sm text-muted">
+      Inherits {parent?.item_type_label ?? 'an unconfigured type'} from {parent?.name ?? 'parent category'}.
+     </p>
+    ) : (
+     <Select label="Inventory type" required {...register('item_type')} error={errors.item_type?.message}
+      disabled={itemOptions.isPending || itemOptions.isError}
+      helper="Items inherit this type. Child categories inherit it too.">
+      <option value="">Select inventory type</option>
+      {itemOptions.data?.item_types.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+     </Select>
+    )}
+    {itemOptions.isError && <Button type="button" variant="secondary" onClick={() => itemOptions.refetch()}>Retry types</Button>}
    </div>
    <ModalFooter>
     <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>
@@ -427,7 +459,7 @@ function CategoryForm({ mode, category, options, onClose, onSaved }: CategoryFor
      type="submit"
      variant="primary"
      loading={mutation.isPending}
-     disabled={mutation.isPending || isSubmitting}
+     disabled={mutation.isPending || isSubmitting || itemOptions.isPending || itemOptions.isError || (!!parentId && !parent?.item_type)}
     >
      {mode === 'create' ? 'Create' : 'Save changes'}
     </Button>

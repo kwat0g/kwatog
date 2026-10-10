@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Dashboard\Exceptions\DashboardLayoutConflictException;
+use App\Modules\Production\Exceptions\RoutingVersionConflictException;
 use App\Common\Middleware\CheckFeature;
 use App\Common\Middleware\CheckPasswordExpiry;
 use App\Common\Middleware\CheckPermission;
@@ -175,7 +178,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // contains HttpException — and retyping must not start writing an error
         // log line every time a department head opens their own request.
         $exceptions->dontReport([
+            // Domain-state refusals are also expected 422 responses. Reporting
+            // each one as ERROR made valid gate checks look like server faults.
+            BusinessRuleException::class,
+            ClosedPeriodException::class,
             ForbiddenActionException::class,
+            DashboardLayoutConflictException::class,
+            RoutingVersionConflictException::class,
         ]);
     })
     ->booted(function () {

@@ -15,17 +15,21 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 class FleetDriverHardeningTest extends TestCase
 {
     use ReceivesProductionOutput;
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         $this->seed(RolePermissionSeeder::class);
     }
 
@@ -141,6 +145,158 @@ class FleetDriverHardeningTest extends TestCase
         $this->assertNull($delivery->fresh()->deleted_at);
     }
 
+    public function test_driver_options_omit_a_driver_with_an_active_delivery(): void
+    {
+        $operator = $this->operator();
+        $busyDriver = $this->driver();
+        $freeDriver = $this->driver();
+        $delivery = $this->delivery($operator);
+
+        $this->actingAs($operator)
+            ->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/assignment", [
+                'driver_id' => $busyDriver->hash_id,
+                'vehicle_id' => $this->vehicle()->hash_id,
+                'reason' => 'Assigned to the current route.',
+            ])
+            ->assertOk();
+
+        $this->actingAs($busyDriver)
+            ->patchJson("/api/v1/driver/deliveries/{$delivery->hash_id}/status", ['status' => 'loading'])
+            ->assertOk();
+
+        $response = $this->actingAs($operator)
+            ->getJson('/api/v1/supply-chain/deliveries/driver-options')
+            ->assertOk();
+        $driverIds = array_column($response->json('data'), 'id');
+
+        $this->assertNotContains($busyDriver->hash_id, $driverIds);
+        $this->assertContains($freeDriver->hash_id, $driverIds);
+    }
+
+    public function test_assignment_api_rejects_a_driver_with_an_active_delivery_without_writing(): void
+    {
+        $operator = $this->operator();
+        $driver = $this->driver();
+        $current = $this->delivery($operator);
+        $next = $this->delivery($operator);
+
+        $this->actingAs($operator)
+            ->patchJson("/api/v1/supply-chain/deliveries/{$current->hash_id}/assignment", [
+                'driver_id' => $driver->hash_id,
+                'vehicle_id' => $this->vehicle()->hash_id,
+                'reason' => 'Assigned to the current route.',
+            ])
+            ->assertOk();
+        $this->actingAs($driver)
+            ->patchJson("/api/v1/driver/deliveries/{$current->hash_id}/status", ['status' => 'loading'])
+            ->assertOk();
+
+        $this->actingAs($operator)
+            ->patchJson("/api/v1/supply-chain/deliveries/{$next->hash_id}/assignment", [
+                'driver_id' => $driver->hash_id,
+                'vehicle_id' => $this->vehicle()->hash_id,
+                'reason' => 'Attempted overlapping assignment.',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Driver is already assigned to another active delivery.');
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $next->id,
+            'status' => 'scheduled',
+            'driver_id' => null,
+            'vehicle_id' => null,
+        ]);
+    }
+
+    public function test_vehicle_capacity_rejects_more_than_two_decimal_places(): void
+    {
+        $response = $this->actingAs($this->systemAdmin())
+            ->postJson('/api/v1/supply-chain/vehicles', [
+                'plate_number' => 'PREC-'.substr(uniqid(), -8),
+                'name' => 'Precision vehicle',
+                'vehicle_type' => 'van',
+                'capacity_kg' => '1.999',
+            ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('capacity_kg');
+        $this->assertDatabaseCount('vehicles', 0);
+    }
+
+    public function test_vehicle_capacity_overflow_is_validation_error_without_writing(): void
+    {
+        $response = $this->actingAs($this->systemAdmin())
+            ->postJson('/api/v1/supply-chain/vehicles', [
+                'plate_number' => 'LIMIT-'.substr(uniqid(), -8),
+                'name' => 'Limit vehicle',
+                'vehicle_type' => 'van',
+                'capacity_kg' => '100000000',
+            ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('capacity_kg');
+        $this->assertDatabaseCount('vehicles', 0);
+    }
+
+    public function test_vehicle_capacity_accepts_the_database_maximum(): void
+    {
+        $plate = 'MAX-'.substr(uniqid(), -8);
+
+        $this->actingAs($this->systemAdmin())
+            ->postJson('/api/v1/supply-chain/vehicles', [
+                'plate_number' => $plate,
+                'name' => 'Maximum capacity vehicle',
+                'vehicle_type' => 'van',
+                'capacity_kg' => '99999999.99',
+            ])
+            ->assertCreated();
+
+        $this->assertSame('99999999.99', (string) \Illuminate\Support\Facades\DB::table('vehicles')
+            ->where('plate_number', $plate)
+            ->value('capacity_kg'));
+    }
+
+    public function test_vehicle_capacity_update_rejects_extra_precision_without_mutating(): void
+    {
+        $admin = $this->systemAdmin();
+        $vehicle = $this->vehicle();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/supply-chain/vehicles/{$vehicle->hash_id}", ['capacity_kg' => '1.999'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('capacity_kg');
+
+        $this->assertSame('1000.00', $vehicle->fresh()->capacity_kg);
+    }
+
+    public function test_vehicle_capacity_update_rejects_overflow_without_mutating(): void
+    {
+        $admin = $this->systemAdmin();
+        $vehicle = $this->vehicle();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/supply-chain/vehicles/{$vehicle->hash_id}", ['capacity_kg' => '100000000'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('capacity_kg');
+
+        $this->assertSame('1000.00', $vehicle->fresh()->capacity_kg);
+    }
+
+    public function test_vehicle_list_rejects_non_positive_page_size_and_keeps_upper_cap(): void
+    {
+        $admin = $this->systemAdmin();
+
+        foreach (['-1', '0', ['2']] as $perPage) {
+            $this->actingAs($admin)
+                ->getJson('/api/v1/supply-chain/vehicles?'.http_build_query(['per_page' => $perPage]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('per_page');
+        }
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/supply-chain/vehicles?per_page=99999')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
     public function test_archived_vehicle_can_be_listed_with_trashed_and_restored(): void
     {
         $admin = $this->systemAdmin();
@@ -160,6 +316,54 @@ class FleetDriverHardeningTest extends TestCase
             ->assertOk();
 
         $this->assertNull($vehicle->fresh()->deleted_at);
+    }
+
+    public function test_archived_vehicle_stays_visible_in_delivery_history(): void
+    {
+        $operator = $this->operator();
+        $driver = $this->driver();
+        $admin = $this->systemAdmin();
+        $vehicle = $this->vehicle();
+        [$delivery] = $this->dispatchableDelivery($operator, '3.00');
+        $delivery->forceFill(['scheduled_date' => now()->toDateString()])->save();
+        $warehouse = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        $this->reserveDeliveryStock($delivery, $warehouse);
+
+        $this->actingAs($operator)
+            ->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/assignment", [
+                'driver_id' => $driver->hash_id,
+                'vehicle_id' => $vehicle->hash_id,
+                'reason' => 'Assigned for the recorded route.',
+            ])
+            ->assertOk();
+        $this->actingAs($driver)
+            ->patchJson("/api/v1/driver/deliveries/{$delivery->hash_id}/status", ['status' => 'loading'])
+            ->assertOk();
+        $this->prepareShipmentForDispatch($delivery->fresh());
+        $this->actingAs($driver)
+            ->patchJson("/api/v1/driver/deliveries/{$delivery->hash_id}/status", ['status' => 'in_transit'])
+            ->assertOk();
+        $this->attachDeliveryEvidence($delivery);
+        $this->actingAs($driver)
+            ->patchJson("/api/v1/driver/deliveries/{$delivery->hash_id}/status", ['status' => 'delivered'])
+            ->assertOk();
+
+        $this->assertSame('delivered', $delivery->fresh()->status->value);
+        $this->assertSame('available', $vehicle->fresh()->status);
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/supply-chain/vehicles/{$vehicle->hash_id}")
+            ->assertNoContent();
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $delivery->id,
+            'vehicle_id' => $vehicle->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.vehicle.id', $vehicle->hash_id)
+            ->assertJsonPath('data.vehicle.plate_number', $vehicle->plate_number);
     }
 
     public function test_driver_api_is_blocked_when_supply_chain_is_disabled(): void

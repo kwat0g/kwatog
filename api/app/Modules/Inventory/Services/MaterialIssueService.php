@@ -18,11 +18,13 @@ use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\MaterialIssueSlipItem;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderMaterialUsageService;
-use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Quality\Services\QualityStockHoldService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -40,12 +42,19 @@ class MaterialIssueService
     {
         $q = MaterialIssueSlip::query()
             ->with(['issuer:id,name,role_id', 'creator:id,name,role_id', 'workOrder:id,wo_number']);
-        if (! empty($filters['status'])) $q->where('status', $filters['status']);
-        if (! empty($filters['from'])) $q->whereDate('issued_date', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('issued_date', '<=', $filters['to']);
+        if (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
+        }
+        if (! empty($filters['from'])) {
+            $q->whereDate('issued_date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('issued_date', '<=', $filters['to']);
+        }
         if (! empty($filters['search'])) {
             $q->where('slip_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
+
         return $q->orderByDesc('issued_date')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
@@ -170,8 +179,8 @@ class MaterialIssueService
     }
 
     /**
-     * @param array{work_order_id?:int|null, issued_date:string, items:array<int,array>, reference_text?:string|null, remarks?:string|null, idempotency_key?:string|null} $data
-     * Each item: { item_id, location_id, quantity_issued, material_reservation_id?, remarks? }
+     * @param  array{work_order_id?:int|null, issued_date:string, items:array<int,array>, reference_text?:string|null, remarks?:string|null, idempotency_key?:string|null}  $data
+     *                                                                                                                                                                             Each item: { item_id, location_id, quantity_issued, material_reservation_id?, remarks? }
      */
     public function create(array $data, User $by): MaterialIssueSlip
     {
@@ -189,167 +198,185 @@ class MaterialIssueService
 
         try {
             return DB::transaction(function () use ($data, $by, $idempotencyKey, $fingerprint) {
-            if ($idempotencyKey !== null) {
-                $existing = MaterialIssueSlip::query()
-                    ->where('idempotency_key', $idempotencyKey)
-                    ->lockForUpdate()
-                    ->first();
-                if ($existing) {
-                    return $this->replayIdempotentSlip($existing, (string) $fingerprint);
-                }
-            }
-
-            if (! empty($data['work_order_id'])) {
-                $workOrderId = HashIdFilter::decode($data['work_order_id'], WorkOrder::class) ?? (int) $data['work_order_id'];
-                $workOrder = WorkOrder::query()->lockForUpdate()->find($workOrderId);
-                if (! $workOrder || ! in_array($workOrder->status, [WorkOrderStatus::Confirmed, WorkOrderStatus::InProgress, WorkOrderStatus::Paused], true)) {
-                    throw new BusinessRuleException('Materials can only be issued to confirmed, in-progress, or paused work orders.');
-                }
-                $data['work_order_id'] = $workOrder->id;
-            }
-
-            $slip = MaterialIssueSlip::create([
-                'slip_number'   => $this->sequences->generate('material_issue'),
-                'work_order_id' => $data['work_order_id'] ?? null,
-                'issued_date'   => $data['issued_date'],
-                'issued_by'     => $by->id,
-                'created_by'    => $by->id,
-                'status'        => MaterialIssueStatus::Issued,
-                'total_value'   => '0.00',
-                'reference_text'=> $data['reference_text'] ?? null,
-                'remarks'       => $data['remarks'] ?? null,
-                'idempotency_key' => $idempotencyKey,
-                'idempotency_fingerprint' => $fingerprint,
-            ]);
-
-            $totalValue = '0';
-            foreach ($data['items'] as $row) {
-                $itemId  = HashIdFilter::decode($row['item_id'], Item::class) ?? (int) $row['item_id'];
-                $locId   = HashIdFilter::decode($row['location_id'], WarehouseLocation::class) ?? (int) $row['location_id'];
-                $qty     = (string) $row['quantity_issued'];
-
-                // OGAMI-004 — multi-UOM issuing. If the caller supplies an
-                // `issued_uom_code` different from the item base uom, convert
-                // the issued quantity to BASE before it touches stock — keeping
-                // the base-uom storage invariant. Identity when null/equal.
-                if (! empty($row['issued_uom_code'])) {
-                    $item = Item::query()->findOrFail($itemId);
-                    $qty  = $item->convertToBase($qty, (string) $row['issued_uom_code']);
-                }
-
-                // REC-08 — nonconforming stock held under MRB physically sits in
-                // a Quarantine (or Scrap) zone location. Never issuable.
-                $loc = WarehouseLocation::query()->with('zone')->find($locId);
-                $zoneType = $loc?->zone?->zone_type;
-                $zoneValue = $zoneType instanceof \App\Modules\Inventory\Enums\WarehouseZoneType
-                    ? $zoneType->value
-                    : (string) $zoneType;
-                if (in_array($zoneValue, [
-                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
-                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
-                ], true)) {
-                    throw new BusinessRuleException("Cannot issue stock from a {$zoneValue} location (item held under MRB).");
-                }
-
-                $level = StockLevel::query()
-                    ->where('item_id', $itemId)->where('location_id', $locId)
-                    ->lockForUpdate()->first();
-                if (! $level) {
-                    throw new BusinessRuleException("No stock at item={$itemId} location={$locId}.");
-                }
-
-                // IN-01 — validate the linked reservation and release it
-                // BEFORE the stock movement: move() gates on
-                // available = quantity − reserved_quantity, so reserved stock
-                // is only issuable after its reservation is released (same
-                // ordering as WorkOrderService::issueReservedMaterials()).
-                $reservation = null;
-                $reservationId = $row['material_reservation_id'] ?? null;
-                if ($reservationId) {
-                    $actualId = HashIdFilter::decode($reservationId, MaterialReservation::class) ?? (int) $reservationId;
-                    $reservation = MaterialReservation::query()->lockForUpdate()->find($actualId);
-                    if (! $reservation) {
-                        throw new BusinessRuleException("Reservation {$reservationId} does not exist.");
-                    }
-                    if ($reservation->status !== ReservationStatus::Reserved) {
-                        throw new BusinessRuleException(
-                            "Reservation {$reservationId} is {$reservation->status->value}, not reserved."
-                        );
-                    }
-                    if (
-                        (int) $reservation->item_id !== $itemId
-                        || (int) $reservation->location_id !== $locId
-                        || (int) $reservation->work_order_id !== (int) ($data['work_order_id'] ?? 0)
-                    ) {
-                        throw new BusinessRuleException(
-                            "Reservation {$reservationId} does not belong to this slip line (item/location/work-order mismatch)."
-                        );
-                    }
-                    if (bccomp($qty, (string) $reservation->quantity, 3) > 0) {
-                        throw new BusinessRuleException(
-                            "Cannot issue {$qty} against reservation {$reservationId} of quantity {$reservation->quantity}."
-                        );
-                    }
-
-                    $this->movements->release($itemId, $locId, $qty);
-                }
-
-                $mvmt = $this->movements->move(new StockMovementInput(
-                    type: StockMovementType::MaterialIssue,
-                    itemId: $itemId,
-                    fromLocationId: $locId,
-                    toLocationId: null,
-                    quantity: $qty,
-                    unitCost: null,
-                    referenceType: 'material_issue_slip',
-                    referenceId: $slip->id,
-                    remarks: "MIS {$slip->slip_number}",
-                    createdBy: $by->id,
-                    lotNumber: isset($row['lot_number']) ? (string) $row['lot_number'] : null,
-                ));
-
-                $unitCost = (string) $mvmt->unit_cost;
-                $lineTotal = (string) $mvmt->total_cost;
-
-                if ($reservation) {
-                    if (bccomp($qty, (string) $reservation->quantity, 3) === 0) {
-                        $reservation->update(['status' => ReservationStatus::Issued, 'released_at' => now()]);
-                    } else {
-                        // Partial issue: only the issued quantity was released
-                        // above, so decrementing the row keeps the sum of
-                        // Reserved reservations equal to reserved_quantity and
-                        // the remainder stays bookable instead of leaking.
-                        $reservation->update(['quantity' => bcsub((string) $reservation->quantity, $qty, 3)]);
+                if ($idempotencyKey !== null) {
+                    $existing = MaterialIssueSlip::query()
+                        ->where('idempotency_key', $idempotencyKey)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($existing) {
+                        return $this->replayIdempotentSlip($existing, (string) $fingerprint);
                     }
                 }
 
-                MaterialIssueSlipItem::create([
-                    'material_issue_slip_id'  => $slip->id,
-                    'item_id'                 => $itemId,
-                    'location_id'             => $locId,
-                    'stock_movement_id'       => $mvmt->id,
-                    'quantity_issued'         => $qty,
-                    'unit_cost'               => $unitCost,
-                    'total_cost'              => bcadd($lineTotal, '0', 2),
-                    'issued_uom_code'         => $row['issued_uom_code'] ?? null,
-                    // Persist the ledger-resolved FEFO lot as well as explicit
-                    // operator selection; the stock movement is authoritative.
-                    'lot_number'              => $mvmt->lot_number,
-                    'material_reservation_id' => $row['material_reservation_id'] ?? null,
-                    'remarks'                 => $row['remarks'] ?? null,
+                if (! empty($data['work_order_id'])) {
+                    $workOrderId = HashIdFilter::decode($data['work_order_id'], WorkOrder::class) ?? (int) $data['work_order_id'];
+                    $workOrder = WorkOrder::query()->lockForUpdate()->find($workOrderId);
+                    if (! $workOrder || ! in_array($workOrder->status, [WorkOrderStatus::Confirmed, WorkOrderStatus::InProgress, WorkOrderStatus::Paused], true)) {
+                        throw new BusinessRuleException('Materials can only be issued to confirmed, in-progress, or paused work orders.');
+                    }
+                    $data['work_order_id'] = $workOrder->id;
+                }
+
+                $slip = MaterialIssueSlip::create([
+                    'slip_number' => $this->sequences->generate('material_issue'),
+                    'work_order_id' => $data['work_order_id'] ?? null,
+                    'issued_date' => $data['issued_date'],
+                    'issued_by' => $by->id,
+                    'created_by' => $by->id,
+                    'status' => MaterialIssueStatus::Issued,
+                    'total_value' => '0.00',
+                    'reference_text' => $data['reference_text'] ?? null,
+                    'remarks' => $data['remarks'] ?? null,
+                    'idempotency_key' => $idempotencyKey,
+                    'idempotency_fingerprint' => $fingerprint,
                 ]);
-                $totalValue = bcadd($totalValue, $lineTotal, 4);
-            }
 
-            $slip->total_value = bcadd($totalValue, '0', 2);
-            $slip->save();
+                $totalValue = '0';
+                foreach ($data['items'] as $row) {
+                    $itemId = HashIdFilter::decode($row['item_id'], Item::class) ?? (int) $row['item_id'];
+                    $locId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class) ?? (int) $row['location_id'];
+                    $qty = (string) $row['quantity_issued'];
+                    $quantityInUom = bcadd($qty, '0', 6);
+                    $uomFactor = '1.000000';
+                    $issuedUomCode = $row['issued_uom_code'] ?? null;
 
-            if ($slip->work_order_id !== null) {
-                $workOrder = WorkOrder::query()->findOrFail($slip->work_order_id);
-                $this->materialUsage->refreshLotReferences($workOrder);
-            }
+                    // OGAMI-004 — multi-UOM issuing. If the caller supplies an
+                    // `issued_uom_code` different from the item base uom, convert
+                    // the issued quantity to BASE before it touches stock — keeping
+                    // the base-uom storage invariant. Identity when null/equal.
+                    if (! empty($issuedUomCode)) {
+                        $item = Item::query()->findOrFail($itemId);
+                        $conversion = app(UomConversionService::class)->toBaseWithFactor(
+                            $item,
+                            $quantityInUom,
+                            (string) $issuedUomCode,
+                        );
+                        $qty = $conversion['quantity'];
+                        $uomFactor = $conversion['factor'];
+                    }
 
-            return $this->show($slip);
+                    // REC-08 — nonconforming stock held under MRB physically sits in
+                    // a Quarantine (or Scrap) zone location. Never issuable.
+                    $loc = WarehouseLocation::query()->with('zone')->find($locId);
+                    $zoneType = $loc?->zone?->zone_type;
+                    $zoneValue = $zoneType instanceof WarehouseZoneType
+                        ? $zoneType->value
+                        : (string) $zoneType;
+                    if (in_array($zoneValue, [
+                        WarehouseZoneType::Quarantine->value,
+                        WarehouseZoneType::Scrap->value,
+                    ], true)) {
+                        throw new BusinessRuleException("Cannot issue stock from a {$zoneValue} location (item held under MRB).");
+                    }
+
+                    app(QualityStockHoldService::class)->heldQuantity($itemId, $locId, isset($row['lot_number']) ? (string) $row['lot_number'] : null);
+                    $level = StockLevel::query()
+                        ->where('item_id', $itemId)->where('location_id', $locId)
+                        ->lockForUpdate()->first();
+                    if (! $level) {
+                        throw new BusinessRuleException("No stock at item={$itemId} location={$locId}.");
+                    }
+
+                    // IN-01 — validate the linked reservation and release it
+                    // BEFORE the stock movement: move() gates on
+                    // available = quantity − reserved_quantity, so reserved stock
+                    // is only issuable after its reservation is released (same
+                    // ordering as WorkOrderService::issueReservedMaterials()).
+                    $reservation = null;
+                    $reservationId = $row['material_reservation_id'] ?? null;
+                    if ($reservationId) {
+                        $actualId = HashIdFilter::decode($reservationId, MaterialReservation::class) ?? (int) $reservationId;
+                        $reservation = MaterialReservation::query()->lockForUpdate()->find($actualId);
+                        if (! $reservation) {
+                            throw new BusinessRuleException("Reservation {$reservationId} does not exist.");
+                        }
+                        if ($reservation->status !== ReservationStatus::Reserved) {
+                            throw new BusinessRuleException(
+                                "Reservation {$reservationId} is {$reservation->status->value}, not reserved."
+                            );
+                        }
+                        if (
+                            (int) $reservation->item_id !== $itemId
+                            || (int) $reservation->location_id !== $locId
+                            || (int) $reservation->work_order_id !== (int) ($data['work_order_id'] ?? 0)
+                        ) {
+                            throw new BusinessRuleException(
+                                "Reservation {$reservationId} does not belong to this slip line (item/location/work-order mismatch)."
+                            );
+                        }
+                        if (bccomp($qty, (string) $reservation->quantity, 3) > 0) {
+                            throw new BusinessRuleException(
+                                "Cannot issue {$qty} against reservation {$reservationId} of quantity {$reservation->quantity}."
+                            );
+                        }
+
+                        $this->movements->release($itemId, $locId, $qty);
+                    }
+
+                    $issueMovements = $this->movements->issueAcrossLots(new StockMovementInput(
+                        type: StockMovementType::MaterialIssue,
+                        itemId: $itemId,
+                        fromLocationId: $locId,
+                        toLocationId: null,
+                        quantity: $qty,
+                        unitCost: null,
+                        referenceType: 'material_issue_slip',
+                        referenceId: $slip->id,
+                        remarks: "MIS {$slip->slip_number}",
+                        createdBy: $by->id,
+                        lotNumber: isset($row['lot_number']) ? (string) $row['lot_number'] : null,
+                    ));
+
+                    if ($reservation) {
+                        if (bccomp($qty, (string) $reservation->quantity, 3) === 0) {
+                            $reservation->update(['status' => ReservationStatus::Issued, 'released_at' => now()]);
+                        } else {
+                            // Partial issue: only the issued quantity was released
+                            // above, so decrementing the row keeps the sum of
+                            // Reserved reservations equal to reserved_quantity and
+                            // the remainder stays bookable instead of leaking.
+                            $reservation->update(['quantity' => bcsub((string) $reservation->quantity, $qty, 3)]);
+                        }
+                    }
+
+                    $remainingUom = $quantityInUom;
+                    foreach ($issueMovements as $index => $mvmt) {
+                        $unitCost = (string) $mvmt->unit_cost;
+                        $lineTotal = (string) $mvmt->total_cost;
+                        $splitUomQuantity = $index === $issueMovements->count() - 1 ? $remainingUom
+                            : bcdiv((string) $mvmt->quantity, $uomFactor, 6);
+                        $remainingUom = bcsub($remainingUom, $splitUomQuantity, 6);
+                        MaterialIssueSlipItem::create([
+                            'material_issue_slip_id' => $slip->id,
+                            'item_id' => $itemId,
+                            'location_id' => $locId,
+                            'stock_movement_id' => $mvmt->id,
+                            'quantity_issued' => (string) $mvmt->quantity,
+                            'quantity_issued_in_uom' => $splitUomQuantity,
+                            'issued_uom_conversion_factor' => $uomFactor,
+                            'unit_cost' => $unitCost,
+                            'total_cost' => bcadd($lineTotal, '0', 2),
+                            'issued_uom_code' => $issuedUomCode,
+                            // Persist the ledger-resolved FEFO lot as well as explicit
+                            // operator selection; the stock movement is authoritative.
+                            'lot_number' => $mvmt->lot_number,
+                            'material_reservation_id' => $row['material_reservation_id'] ?? null,
+                            'remarks' => $row['remarks'] ?? null,
+                        ]);
+                        $totalValue = bcadd($totalValue, $lineTotal, 4);
+                    }
+
+                }
+
+                $slip->total_value = bcadd($totalValue, '0', 2);
+                $slip->save();
+
+                if ($slip->work_order_id !== null) {
+                    $workOrder = WorkOrder::query()->findOrFail($slip->work_order_id);
+                    $this->materialUsage->refreshLotReferences($workOrder);
+                }
+
+                return $this->show($slip);
             });
         } catch (QueryException $e) {
             if ($idempotencyKey === null
@@ -426,11 +453,16 @@ class MaterialIssueService
                             "MIS {$lockedSlip->slip_number} line {$item->id} has no uniquely linked source movement. Ask Warehouse to reconcile the issue history before cancelling."
                         );
                     }
-                    $source = \App\Modules\Inventory\Models\StockMovement::query()->findOrFail($item->stock_movement_id);
+                    $source = StockMovement::query()->lockForUpdate()->findOrFail($item->stock_movement_id);
                     $summary = $this->materialReturns->options($source);
                     $remaining = bcsub((string) $item->quantity_issued, (string) ($summary['returned_quantity'] ?? '0.000'), 3);
                     if (bccomp($remaining, '0', 3) <= 0) {
                         continue;
+                    }
+                    if ($source->handover()->exists()) {
+                        throw new BusinessRuleException(
+                            "Material was handed over to Production. Record the actual unused return of {$remaining} before cancelling this slip."
+                        );
                     }
                     if (($summary['message'] ?? null) !== null && ($summary['eligible'] ?? false) !== true) {
                         throw new BusinessRuleException((string) $summary['message']);

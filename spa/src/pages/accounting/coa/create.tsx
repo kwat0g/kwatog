@@ -84,7 +84,7 @@ export default function CreateAccountPage() {
  />
       <FormDraftBanner safety={safety} />
  <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
- className="max-w-2xl mx-auto px-5 py-4 space-y-4">
+ className="min-w-0 w-full px-5 py-4 space-y-4">
 
  <div className="grid grid-cols-2 gap-3">
  <Input label="Account code" {...register('code')} error={errors.code?.message} required
@@ -105,7 +105,7 @@ export default function CreateAccountPage() {
  <option value="">Select balance</option>
  {(options?.normal_balances ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
- <Select label="Parent account (optional)" {...register('parent_id')} error={errors.parent_id?.message}>
+ <Select searchable label="Parent account (optional)" {...register('parent_id')} error={errors.parent_id?.message}>
  <option value="">— None (top-level) —</option>
  {accounts?.data
  .filter((a) => !a.is_leaf)

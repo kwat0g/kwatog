@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { SessionRetry } from './SessionRetry';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { FullPageLoader } from '@/components/ui/Spinner';
@@ -9,11 +10,13 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
- const { isAuthenticated, isLoading, user, bootstrap } = useAuthStore();
+ const { isAuthenticated, isLoading, user, bootstrap, bootstrapError } = useAuthStore();
  const location = useLocation();
+ const attemptedBootstrap = useRef(false);
 
  useEffect(() => {
- if (!isAuthenticated && !user && isLoading) {
+ if (!attemptedBootstrap.current && !isAuthenticated && !user && isLoading && !bootstrapError) {
+ attemptedBootstrap.current = true;
  void bootstrap().then(() => {
  const authedUser = useAuthStore.getState().user;
  if (authedUser) {
@@ -21,9 +24,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
  }
  });
  }
- }, [isAuthenticated, user, isLoading, bootstrap]);
+ }, [isAuthenticated, user, isLoading, bootstrap, bootstrapError]);
 
  if (isLoading) return <FullPageLoader />;
+
+ if (bootstrapError) return <SessionRetry />;
 
  if (!isAuthenticated) {
   return <Navigate to="/sign-in" state={{ from: location.pathname }} replace />;

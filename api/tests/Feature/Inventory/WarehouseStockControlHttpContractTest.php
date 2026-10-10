@@ -126,6 +126,8 @@ class WarehouseStockControlHttpContractTest extends TestCase
     public function test_an_ordinary_count_does_not_overflow_variance_percent(): void
     {
         [$warehouse, $zone, $location, , $item] = $this->fixture();
+        $item->unit_of_measure = 'kg';
+        $item->save();
         $this->receipt($item, $location, '0.500');
         [, $countItemId] = $this->startedSession($warehouse, $zone);
 
@@ -169,6 +171,7 @@ class WarehouseStockControlHttpContractTest extends TestCase
     public function test_counted_quantity_rejects_scientific_notation_and_overflow(): void
     {
         [$warehouse, $zone, $location, , $item] = $this->fixture();
+        $item->update(['unit_of_measure' => 'kg']);
         $this->receipt($item, $location, '100');
         [, $countItemId] = $this->startedSession($warehouse, $zone);
 
@@ -188,6 +191,37 @@ class WarehouseStockControlHttpContractTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.counted_quantity', '1.999');
+    }
+
+    public function test_stock_count_rejects_fractional_piece_counts_and_lot_allocations_without_writes(): void
+    {
+        [$warehouse, $zone, $location, , $item] = $this->fixture();
+        $item->unit_of_measure = 'pcs';
+        $item->save();
+        $this->receipt($item, $location, '100');
+        [$sessionId, $countItemId] = $this->startedSession($warehouse, $zone);
+        $readCount = fn () => $this->actingAs($this->user)
+            ->getJson("/api/v1/inventory/stock-counts/{$sessionId}")
+            ->assertOk()
+            ->json('data.items.0');
+        $before = $readCount();
+        $auditCount = DB::table('audit_logs')->count();
+
+        foreach ([
+            ['counted_quantity' => '100.125'],
+            [
+                'counted_quantity' => '101',
+                'variance_allocations' => [['lot_number' => 'LOT-A', 'quantity' => '0.125']],
+            ],
+        ] as $payload) {
+            $this->actingAs($this->user)
+                ->postJson("/api/v1/inventory/stock-counts/items/{$countItemId}/count", $payload)
+                ->assertStatus(422)
+                ->assertJsonPath('message', 'Piece quantities must be whole numbers.');
+
+            $this->assertSame($before, $readCount());
+            $this->assertSame($auditCount, DB::table('audit_logs')->count());
+        }
     }
 
     // ── N3 ──────────────────────────────────────────────────────────────────

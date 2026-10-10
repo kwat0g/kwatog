@@ -53,7 +53,7 @@ test.describe('Procure-to-Pay chain — PR lifecycle', () => {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list([makePurchaseRequest('pending')])) });
       } else if (route.request().method() === 'POST') {
         await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(detail(makePurchaseRequest('pending'))) });
-      } else { await route.continue(); }
+      } else { await route.fallback(); }
     });
 
     await loginAs(page, 'purchasing', '/purchasing/purchase-requests');
@@ -88,12 +88,12 @@ test.describe('Procure-to-Pay chain — PO lifecycle', () => {
       } else if (route.request().method() === 'POST') {
         po = makePurchaseOrder('pending_approval');
         await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(detail(po)) });
-      } else { await route.continue(); }
+      } else { await route.fallback(); }
     });
 
     // Detail GET
     await page.route(`**/api/v1/purchasing/purchase-orders/${PO_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detail(po)) });
     });
 
@@ -113,6 +113,9 @@ test.describe('Procure-to-Pay chain — PO lifecycle', () => {
     await loginAs(page, 'purchasing', '/purchasing/purchase-orders');
     const listPage = new PurchaseOrderListPage(page);
     await expect(listPage.heading).toBeVisible();
+    await expect(page.getByText('PO-202607-0001')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(async () => { await document.fonts.ready; });
 
     // Navigate to detail (mock the PO as approved for detail)
     po = makePurchaseOrder('approved');
@@ -132,7 +135,7 @@ test.describe('Procure-to-Pay chain — PO lifecycle', () => {
     await page.route('**/api/v1/purchasing/purchase-orders*', async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list([makePurchaseOrder('approved')])) });
-      } else { await route.continue(); }
+      } else { await route.fallback(); }
     });
 
     await loginAs(page, 'purchasing', '/purchasing/purchase-orders');

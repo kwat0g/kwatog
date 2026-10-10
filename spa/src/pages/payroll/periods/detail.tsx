@@ -1,6 +1,6 @@
 import { reportMutationError } from '@/lib/formErrors';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LuPlay,
@@ -8,7 +8,6 @@ import {
   LuLock,
   LuDownload,
   LuCircleAlert,
-  LuUpload,
   LuEye,
   LuArchiveRestore,
   LuTrash2,
@@ -39,6 +38,8 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
+import { useFeature } from '@/hooks/useFeature';
 import { useEcho } from '@/hooks/useEcho';
 import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
@@ -106,6 +107,14 @@ export default function PayrollPeriodDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const actorId = useAuthStore((state) => state.user?.id);
+  const accountingEnabled = useFeature('accounting');
+  const journalEntryReference = (entryId: string, entryNumber: string): ReactNode => {
+    const label = <span className="font-mono">{entryNumber}</span>;
+    return can('accounting.journal.view') && accountingEnabled
+      ? <Link className="underline underline-offset-2" to={`/accounting/journal-entries/${entryId}`}>{label}</Link>
+      : label;
+  };
   const [activeTab, setActiveTab] = useState<
     'employees' | 'failures' | 'anomalies' | 'summary' | 'variance'
   >('employees');
@@ -113,6 +122,7 @@ export default function PayrollPeriodDetailPage() {
   const [payrollSearch, setPayrollSearch] = useState('');
   const [compareToId, setCompareToId] = useState<string>('');
   const [bankFormat, setBankFormat] = useState<string>('');
+  const [showBankFormatModal, setShowBankFormatModal] = useState(false);
 
   useEffect(() => {
     setPayrollPage(1);
@@ -163,7 +173,7 @@ export default function PayrollPeriodDetailPage() {
     }
   });
 
-  const { data: bankFileOptions } = useQuery({
+  const { data: bankFileOptions, isError: bankOptionsFailed, isFetching: bankOptionsPending, refetch: refetchBankOptions } = useQuery({
     queryKey: ['payroll-bank-file-options'],
     queryFn: periodsApi.bankFileOptions,
     enabled: can('payroll.periods.view'),
@@ -181,7 +191,7 @@ export default function PayrollPeriodDetailPage() {
   // for want of bank details (that money would otherwise be recognised as paid
   // in the GL but never actually sent), so without this the only feedback is an
   // error toast after the attempt.
-  const { data: bankPreview } = useQuery({
+  const { data: bankPreview, isError: bankPreviewFailed, isFetching: bankPreviewPending, refetch: refetchBankPreview } = useQuery({
     queryKey: ['payroll-bank-file-preview', period?.id, bankFormat],
     queryFn: () => periodsApi.bankFilePreview(period!.id, bankFormat),
     // canBankFile is declared further down (it needs `period` to be loaded), so
@@ -190,14 +200,16 @@ export default function PayrollPeriodDetailPage() {
     enabled:
       Boolean(period?.id) &&
       Boolean(bankFormat) &&
-      can('payroll.periods.finalize') &&
+      can('payroll.periods.bank_file') &&
       (period?.status === 'finalized' || period?.status === 'disbursed'),
     staleTime: 30_000,
   });
   const bankBlocked = (bankPreview?.unbankable_count ?? 0) > 0;
+  const bankReviewUnavailable = bankOptionsFailed || bankOptionsPending || bankPreviewFailed || bankPreviewPending || !bankPreview;
   const bankFileMutation = useMutation({
     mutationFn: () => periodsApi.bankFileGenerate(period!.id, bankFormat),
     onSuccess: () => {
+      setShowBankFormatModal(false);
       toast.success('Bank file generated. Downloading the reviewed artifact.');
       qc.invalidateQueries({ queryKey: ['payroll-period', id] });
       void downloadAuthenticatedFile(periodsApi.bankFileUrl(period!.id, bankFormat), {
@@ -218,7 +230,7 @@ export default function PayrollPeriodDetailPage() {
     search: payrollSearch || undefined,
     failed_only: activeTab === 'failures',
   };
-  const { data: payrolls, isLoading: payrollsLoading } = useQuery({
+  const { data: payrolls, isLoading: payrollsLoading, isError: payrollsFailed, refetch: refetchPayrolls } = useQuery({
     queryKey: ['payrolls', id, payrollFilters],
     queryFn: () => periodsApi.payrolls(id!, payrollFilters),
     enabled: !!id && (activeTab === 'employees' || activeTab === 'failures'),
@@ -387,6 +399,7 @@ export default function PayrollPeriodDetailPage() {
   }
 
   const summary = period.summary;
+  const hasUnclassifiedDeductions = Number(summary?.uncategorized_deductions ?? 0) !== 0;
   const chainSteps = period.lifecycle_steps ?? [];
   // Shared by every high-stakes confirmation below. Null until the summary
   // lands, which those dialogs treat as "not safe to confirm yet".
@@ -403,9 +416,15 @@ export default function PayrollPeriodDetailPage() {
     can('payroll.periods.compute') && period.status === 'computed' && !period.is_thirteenth_month;
   // Approve requires a completed run with rows. Previously this was gated on
   // 'draft', so an uncomputed period could be approved into an empty ₱0 payroll.
-  const canApprove = can('payroll.periods.approve') && period.status === 'computed' && hasRows;
-  const canRequestCorrection = can('payroll.periods.request_correction') && period.status === 'computed';
-  const canFinalize = can('payroll.periods.finalize') && period.status === 'approved';
+  const canApprove =
+    can('payroll.periods.approve') && period.status === 'computed' && hasRows && !hasUnclassifiedDeductions;
+  const isApprovedWithoutApprover = period.status === 'approved' && !period.approver;
+  const canRequestCorrection =
+    can('payroll.periods.request_correction') &&
+    (period.status === 'computed' || isApprovedWithoutApprover);
+  const isApprover = period.approver?.id === actorId;
+  const canFinalize =
+    can('payroll.periods.finalize') && period.status === 'approved' && !!period.approver && !isApprover && !hasUnclassifiedDeductions;
   const canBankFile =
     can('payroll.periods.bank_file') &&
     (period.status === 'finalized' || period.status === 'disbursed');
@@ -414,9 +433,7 @@ export default function PayrollPeriodDetailPage() {
     can('accounting.journal.post') &&
     (period.status === 'finalized' || period.status === 'disbursed') &&
     (period.gl_handoff_status === 'manual_required' || period.gl_handoff_status === 'not_required');
-  const canUploadProof =
-    can('payroll.periods.disburse') &&
-    period.status === 'finalized';
+  const hasLiveProof = (period.disbursement_proofs ?? []).some((proof) => !proof.deleted_at);
   // H-8 — Force-unlock only surfaces when the period is stuck at Processing.
   const canForceUnlock = can('payroll.periods.force_unlock') && period.status === 'processing';
   // REC-01 — Void only a finalized (not yet disbursed) period.
@@ -610,6 +627,21 @@ export default function PayrollPeriodDetailPage() {
                 Finalize
               </Button>
             )}
+            {can('payroll.periods.finalize') && period.status === 'approved' && isApprover && (
+              <span role="note" className="text-xs text-warning-fg">
+                A different finance user must finalize this payroll.
+              </span>
+            )}
+            {can('payroll.periods.finalize') && isApprovedWithoutApprover && (
+              <span role="note" className="text-xs text-warning-fg">
+                No approver is recorded. Request correction before finalizing.
+              </span>
+            )}
+            {hasUnclassifiedDeductions && (
+              <span role="note" className="text-xs text-warning-fg">
+                Approval and finalization are blocked by unclassified other deductions pending a Finance decision.
+              </span>
+            )}
             {canRetryGl && (
               <Button
                 variant="secondary"
@@ -623,39 +655,22 @@ export default function PayrollPeriodDetailPage() {
               </Button>
             )}
             {canBankFile && (
-              <span className="inline-flex items-end gap-2">
-                <Select
-                  label="Bank format"
-                  value={bankFormat}
-                  onChange={(e) => setBankFormat(e.target.value)}
-                  className="min-w-[9rem]"
-                >
-                  <option value="" disabled>
-                    Select format
-                  </option>
-                  {(bankFileOptions?.formats ?? []).map((format) => (
-                    <option key={format.value} value={format.value}>
-                      {format.label}
-                    </option>
-                  ))}
-                </Select>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<LuDownload size={14} />}
-                  onClick={() => bankFileMutation.mutate()}
-                  disabled={!bankFormat || bankBlocked || bankFileMutation.isPending}
-                  loading={bankFileMutation.isPending}
-                  title={
-                    bankBlocked
-                      ? `${bankPreview?.unbankable_count} employee(s) have no bank account on file`
-                      : undefined
-                  }
-                >
-                  Generate & download
-                </Button>
-              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuDownload size={14} />}
+                onClick={() => setShowBankFormatModal(true)}
+                disabled={bankFileMutation.isPending}
+              >
+                Generate & download
+              </Button>
             )}
+            {canBankFile && (bankOptionsFailed || bankPreviewFailed) && <div role="alert" className="w-full text-sm text-danger-fg">
+              Bank file review could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+                if (bankOptionsFailed) void refetchBankOptions();
+                if (bankPreviewFailed) void refetchBankPreview();
+              }}>Retry bank review</Button>
+            </div>}
             {canBankFile && bankBlocked && (
               <div className="w-full mt-2 rounded border border-danger/40 bg-danger-bg/5 p-3">
                 <p className="text-xs text-danger-fg font-medium">
@@ -676,22 +691,12 @@ export default function PayrollPeriodDetailPage() {
                 </p>
               </div>
             )}
-            {canUploadProof && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<LuUpload size={14} />}
-                onClick={() => setShowUploadModal(true)}
-              >
-                Upload Proof
-              </Button>
-            )}
             {canDisburse && (
               <Button
                 variant="primary"
                 size="sm"
                 icon={<LuBanknote size={14} />}
-                onClick={() => setShowDisbursedDialog(true)}
+                onClick={() => (hasLiveProof ? setShowDisbursedDialog(true) : setShowUploadModal(true))}
                 disabled={markDisbursedMutation.isPending}
                 loading={markDisbursedMutation.isPending}
               >
@@ -829,7 +834,15 @@ export default function PayrollPeriodDetailPage() {
                   </>
                 )}
                 {period.voider?.name && <> by {period.voider.name}</>}
-                {period.gl_entry_number ? ' — its GL posting was reversed.' : '.'}
+                {period.gl_reversal ? (
+                  <>
+                    {' — Entry '}
+                    {journalEntryReference(period.gl_reversal.original_entry_id, period.gl_reversal.original_entry_number)}
+                    {' was reversed by Entry '}
+                    {journalEntryReference(period.gl_reversal.reversal_entry_id, period.gl_reversal.reversal_entry_number)}
+                    {'.'}
+                  </>
+                ) : period.gl_entry_number ? ' — its GL posting was reversed.' : '.'}
                 {period.void_reason && (
                   <div className="mt-0.5 text-primary/80">Reason: {period.void_reason}</div>
                 )}
@@ -874,7 +887,10 @@ export default function PayrollPeriodDetailPage() {
                 />
               </div>
               {payrollsLoading && !payrolls && <SkeletonTable columns={8} rows={8} />}
-              {payrolls && payrolls.data.length === 0 && (
+              {payrollsFailed && <div role="alert" className="mb-3 text-sm text-danger-fg">
+                Employee payroll could not be loaded. <Button variant="secondary" size="sm" onClick={() => void refetchPayrolls()}>Retry employee payroll</Button>
+              </div>}
+              {!payrollsFailed && payrolls && payrolls.data.length === 0 && (
                 <EmptyState
                   icon="users"
                   title={activeTab === 'failures' ? 'No failures' : 'No payroll rows yet'}
@@ -899,14 +915,54 @@ export default function PayrollPeriodDetailPage() {
             </>
           )}
 
-          {activeTab === 'anomalies' && <AnomalyReviewPanel periodId={period.id} />}
+          {activeTab === 'anomalies' && (
+            <AnomalyReviewPanel
+              periodId={period.id}
+              periodStatus={period.status}
+              makerIds={[period.creator?.id, period.computer?.id]}
+            />
+          )}
 
           {activeTab === 'summary' && (
             <Panel title="Deduction summary">
-              <div className="text-xs text-muted">
-                Aggregated deduction breakdown is available per-employee in their detail view.
-                Future enhancement: show period totals by deduction type here.
-              </div>
+              {!summary || summary.employee_count === 0 ? (
+                <p className="text-xs text-muted">No payroll totals are available for this period.</p>
+              ) : (
+                <div className="space-y-2">
+                  {[
+                    ['SSS employee share', summary.deduction_breakdown.sss_employee_share],
+                    ['PhilHealth employee share', summary.deduction_breakdown.philhealth_employee_share],
+                    ['Pag-IBIG employee share', summary.deduction_breakdown.pagibig_employee_share],
+                    ['Withholding tax', summary.deduction_breakdown.withholding_tax],
+                    ['Loans and cash advances', summary.deduction_breakdown.loan_deductions],
+                  ].map(([label, amount]) => (
+                    <div key={label} className="flex justify-between gap-4 text-xs">
+                      <span className="text-muted">{label}</span>
+                      <span className="font-mono tabular-nums text-primary">{formatPeso(amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-4 border-t border-subtle pt-2 text-xs font-medium">
+                    <span>Total deductions</span>
+                    <span className="font-mono tabular-nums">{formatPeso(summary.total_deductions)}</span>
+                  </div>
+                  {Number(summary.net_adjustments) !== 0 && (
+                    <div className="flex justify-between gap-4 text-xs">
+                      <span className="text-muted">Net-pay adjustments (separate from deductions)</span>
+                      <span className="font-mono tabular-nums text-primary">{formatPeso(summary.net_adjustments)}</span>
+                    </div>
+                  )}
+                  {summary.failed_count > 0 && (
+                    <p role="note" className="pt-1 text-xs text-warning-fg">
+                      {summary.failed_count} failed employee row(s) remain. Resolve them before approval.
+                    </p>
+                  )}
+                  {hasUnclassifiedDeductions && (
+                    <p role="note" className="pt-1 text-xs text-warning-fg">
+                      {formatPeso(summary.uncategorized_deductions)} in other deductions has no calculation rule and is excluded from total deductions. Finance decision required.
+                    </p>
+                  )}
+                </div>
+              )}
             </Panel>
           )}
 
@@ -934,19 +990,9 @@ export default function PayrollPeriodDetailPage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted">
-                  No proof uploaded yet. After transferring salaries, upload the bank deposit slip
-                  or transaction confirmation here.
+                  No proof uploaded yet. Click Mark as Disbursed to upload the bank deposit slip
+                  or transaction confirmation.
                 </p>
-                {canUploadProof && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<LuUpload size={14} />}
-                    onClick={() => setShowUploadModal(true)}
-                  >
-                    Upload Deposit Slip / Bank Confirmation
-                  </Button>
-                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -964,16 +1010,6 @@ export default function PayrollPeriodDetailPage() {
                   <DisbursementProofCard key={proof.id} proof={proof} periodId={period.id} />
                 ))}
 
-                {canUploadProof && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<LuUpload size={14} />}
-                    onClick={() => setShowUploadModal(true)}
-                  >
-                    Upload Another
-                  </Button>
-                )}
               </div>
             )}
           </Panel>
@@ -985,11 +1021,54 @@ export default function PayrollPeriodDetailPage() {
         open={showUploadModal}
         onClose={() => setShowUploadModal(false)}
         periodId={period.id}
+        amount={summary?.total_net ?? ''}
+        title="Upload proof & mark as disbursed"
+        submitLabel="Upload & mark disbursed"
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ['payroll-period', id] });
           setShowUploadModal(false);
+          markDisbursedMutation.mutate();
         }}
       />
+
+      <Modal isOpen={showBankFormatModal} onClose={() => setShowBankFormatModal(false)} size="sm" title="Generate bank file">
+        <div className="space-y-3 py-3">
+          <Select
+            label="Bank format"
+            value={bankFormat}
+            disabled={bankOptionsFailed || bankOptionsPending}
+            onChange={(e) => setBankFormat(e.target.value)}
+          >
+            <option value="" disabled>
+              Select format
+            </option>
+            {(bankFileOptions?.formats ?? []).map((format) => (
+              <option key={format.value} value={format.value}>
+                {format.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setShowBankFormatModal(false)} disabled={bankFileMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            icon={<LuDownload size={14} />}
+            onClick={() => bankFileMutation.mutate()}
+            disabled={!bankFormat || bankBlocked || bankReviewUnavailable || bankFileMutation.isPending}
+            loading={bankFileMutation.isPending}
+            title={
+              bankBlocked
+                ? `${bankPreview?.unbankable_count} employee(s) have no bank account on file`
+                : undefined
+            }
+          >
+            {bankFileMutation.isPending ? 'Generating…' : 'Generate & download'}
+          </Button>
+        </ModalFooter>
+      </Modal>
 
       {/* Recompute rewrites every payroll row in the period, reverses the loan
  deductions and adjustments the previous run applied, then re-applies
@@ -1380,34 +1459,33 @@ function UploadProofModal({
   open,
   onClose,
   periodId,
+  amount,
   onSuccess,
+  title = 'Upload Disbursement Proof',
+  submitLabel = 'Upload',
 }: {
   open: boolean;
   onClose: () => void;
   periodId: string;
+  /** Period net total — the proof must cover exactly this, so it is not editable. */
+  amount: string;
   onSuccess: () => void;
+  title?: string;
+  submitLabel?: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [proofType, setProofType] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [bankName, setBankName] = useState('');
   const [transactionReference, setTransactionReference] = useState('');
-  const [disbursedAmount, setDisbursedAmount] = useState('');
   const [disbursementDate, setDisbursementDate] = useState(() =>
     localIsoDate(),
   );
   const [notes, setNotes] = useState('');
-  const { data: proofOptions } = useQuery({
+  const { data: proofOptions, isError: proofOptionsFailed, isFetching: proofOptionsPending, refetch: refetchProofOptions } = useQuery({
     queryKey: ['payroll', 'disbursement-proof-options', periodId],
     queryFn: () => periodsApi.proofOptions(periodId),
   });
-  const disbursedError =
-    disbursedAmount === ''
-      ? 'Enter the amount covered by this proof.'
-      : !/^\d+(\.\d{1,2})?$/.test(disbursedAmount) || Number(disbursedAmount) <= 0
-        ? 'Enter a positive amount, up to 2 decimals.'
-        : undefined;
-
   useEffect(() => {
     if (!proofType && proofOptions?.proof_types?.length) {
       setProofType(proofOptions.proof_types[0].value);
@@ -1419,9 +1497,9 @@ function UploadProofModal({
       const fd = new FormData();
       fd.append('proof_type', proofType);
       if (file) fd.append('file', file);
-      if (bankName) fd.append('bank_name', bankName);
-      if (transactionReference) fd.append('transaction_reference', transactionReference);
-      fd.append('disbursed_amount', disbursedAmount);
+      fd.append('bank_name', bankName.trim());
+      fd.append('transaction_reference', transactionReference.trim());
+      fd.append('disbursed_amount', amount);
       fd.append('disbursement_date', disbursementDate);
       if (notes) fd.append('notes', notes);
       return periodsApi.uploadProof(periodId, fd);
@@ -1435,9 +1513,12 @@ function UploadProofModal({
   });
 
   return (
-    <Modal isOpen={open} onClose={onClose} size="md" title="Upload Disbursement Proof">
+    <Modal isOpen={open} onClose={onClose} size="md" title={title}>
       <div className="space-y-3 py-3">
-        <Select label="Proof type" value={proofType} onChange={(e) => setProofType(e.target.value)}>
+        {proofOptionsFailed && <div role="alert" className="text-sm text-danger-fg">
+          Proof types could not be loaded. <Button variant="secondary" size="sm" onClick={() => void refetchProofOptions()}>Retry proof types</Button>
+        </div>}
+        <Select label="Proof type" value={proofType} disabled={proofOptionsFailed || proofOptionsPending} onChange={(e) => setProofType(e.target.value)}>
           {(proofOptions?.proof_types ?? []).map((type) => (
             <option key={type.value} value={type.value}>
               {type.label}
@@ -1448,6 +1529,7 @@ function UploadProofModal({
         <FileInput
           ref={fileInputRef}
           label="File"
+          required
           helper="PDF, JPG, or PNG — max 10MB"
           accept=".pdf,.jpg,.jpeg,.png"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -1456,12 +1538,14 @@ function UploadProofModal({
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Bank name"
+            required
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Enter bank name"
           />
           <Input
             label="Transaction ref."
+            required
             value={transactionReference}
             onChange={(e) => setTransactionReference(e.target.value)}
             placeholder="Enter transaction reference"
@@ -1471,11 +1555,9 @@ function UploadProofModal({
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Disbursed amount"
-            value={disbursedAmount}
-            onChange={(e) => setDisbursedAmount(e.target.value)}
-          placeholder="Enter amount covered"
+            value={amount}
+            readOnly
             prefix="₱"
-            error={disbursedError}
           />
           <Input
             label="Disbursement date"
@@ -1501,10 +1583,10 @@ function UploadProofModal({
         <Button
           variant="primary"
           onClick={() => mutation.mutate()}
-          disabled={!file || !!disbursedError || mutation.isPending}
+          disabled={!file || !proofType || !bankName.trim() || !transactionReference.trim() || !amount || proofOptionsFailed || proofOptionsPending || mutation.isPending}
           loading={mutation.isPending}
         >
-          {mutation.isPending ? 'Uploading…' : 'Upload'}
+          {mutation.isPending ? 'Uploading…' : submitLabel}
         </Button>
       </ModalFooter>
     </Modal>

@@ -139,7 +139,7 @@ export default function CalibrationFormPage() {
           backTo="/quality/calibration"
           backLabel="Calibration register"
         />
-        <div className="max-w-3xl mx-auto px-5 py-4">
+        <div className="min-w-0 w-full px-5 py-4">
           <SkeletonBlock className="h-72" />
         </div>
       </div>
@@ -153,7 +153,7 @@ export default function CalibrationFormPage() {
           backTo="/quality/calibration"
           backLabel="Calibration register"
         />
-        <div className="max-w-3xl mx-auto px-5 py-4">
+        <div className="min-w-0 w-full px-5 py-4">
           <QueryErrorState
             subject="this calibration instrument"
             onRetry={() => void detail.refetch()}
@@ -173,7 +173,7 @@ export default function CalibrationFormPage() {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((values) => mutation.mutate(values), onFormInvalid<FormValues>())}
-        className="max-w-3xl mx-auto px-5 py-4"
+        className="min-w-0 w-full px-5 py-4"
       >
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">

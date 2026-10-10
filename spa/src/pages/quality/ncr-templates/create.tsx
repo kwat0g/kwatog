@@ -123,7 +123,7 @@ export default function NcrTemplateFormPage() {
         onSubmit={handleSubmit((d) => createMut.mutate(d), onFormInvalid<FormValues>())}
         className="px-5 py-4"
       >
-        <div className="space-y-4 max-w-3xl">
+        <div className="min-w-0 w-full space-y-4">
           <Panel title="Template details">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Input
@@ -162,7 +162,7 @@ export default function NcrTemplateFormPage() {
               </Select>
             </div>
             <div className="mt-3">
-              <Select
+              <Select searchable
                 label="Product (optional)"
                 {...register('product_id')}
                 error={errors.product_id?.message}

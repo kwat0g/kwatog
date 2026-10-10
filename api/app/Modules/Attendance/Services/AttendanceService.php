@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Support\TrashedFilter;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -34,34 +37,40 @@ class AttendanceService
 
         TrashedFilter::apply($q, $filters);
 
-        if (!empty($filters['employee_id'])) {
-            $empId = \App\Common\Support\HashIdFilter::decode(
-                $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
+        if (! empty($filters['employee_id'])) {
+            $empId = HashIdFilter::decode(
+                $filters['employee_id'], Employee::class,
             );
-            if ($empId) $q->where('employee_id', $empId);
+            if ($empId) {
+                $q->where('employee_id', $empId);
+            }
         }
-        if (!empty($filters['department_id'])) {
-            $deptId = \App\Common\Support\HashIdFilter::decode(
-                $filters['department_id'], \App\Modules\HR\Models\Department::class,
+        if (! empty($filters['department_id'])) {
+            $deptId = HashIdFilter::decode(
+                $filters['department_id'], Department::class,
             );
             if ($deptId) {
                 $q->whereHas('employee', fn ($e) => $e->where('department_id', $deptId));
             }
         }
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['missing_time_out'])) {
             $q->whereNotNull('time_in')->whereNull('time_out')->where('date', '<', now()->toDateString());
         }
-        if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
-        if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
-        if (!empty($filters['search'])) {
+        if (! empty($filters['from'])) {
+            $q->where('date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->where('date', '<=', $filters['to']);
+        }
+        if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->whereHas('employee', function ($e) use ($term) {
                 $e->where('employee_no', SearchOperator::like(), SearchOperator::contains($term))
-                  ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
-                  ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term));
+                    ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 
@@ -74,10 +83,12 @@ class AttendanceService
             if (! $isAdmin && ! $isHrFull) {
                 $employeeId = $user->employee_id;
                 if ($user->hasPermission('attendance.ot.approve')) {
-                    $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
+                    $deptId = Employee::query()->whereKey($employeeId)->value('department_id');
                     $q->where(function ($qq) use ($employeeId, $deptId) {
                         $qq->where('employee_id', $employeeId);
-                        if ($deptId) $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+                        if ($deptId) {
+                            $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+                        }
                     });
                 } else {
                     $q->where('employee_id', $employeeId);
@@ -104,12 +115,14 @@ class AttendanceService
     public function create(array $data): Attendance
     {
         return DB::transaction(function () use ($data) {
+            Employee::whereKey($data['employee_id'])->lockForUpdate()->firstOrFail();
             $this->mutability->assertMutable((int) $data['employee_id'], (string) $data['date']);
             $this->assertDayNotArchived((int) $data['employee_id'], (string) $data['date']);
             $a = Attendance::create($data + ['is_manual_entry' => true]);
             $a = $this->dtr->computeForRecord($a);
             $a->save();
             $this->overtime()->autoDetectFromAttendance($a);
+
             return $a->load(['employee', 'employee.department', 'shift']);
         });
     }
@@ -148,6 +161,7 @@ class AttendanceService
     public function update(Attendance $a, array $data): Attendance
     {
         return DB::transaction(function () use ($a, $data) {
+            Employee::whereKey($a->employee_id)->lockForUpdate()->firstOrFail();
             $this->mutability->assertMutable((int) $a->employee_id, (string) $a->date);
             $authoritative = Attendance::query()
                 ->lockForUpdate()
@@ -159,6 +173,7 @@ class AttendanceService
             $authoritative = $this->dtr->computeForRecord($authoritative);
             $authoritative->save();
             $this->overtime()->autoDetectFromAttendance($authoritative);
+
             return $authoritative->fresh(['employee', 'employee.department', 'shift']);
         });
     }
@@ -166,6 +181,7 @@ class AttendanceService
     public function delete(Attendance $a): void
     {
         DB::transaction(function () use ($a): void {
+            Employee::whereKey($a->employee_id)->lockForUpdate()->firstOrFail();
             $this->mutability->assertMutable((int) $a->employee_id, (string) $a->date);
             $authoritative = Attendance::query()
                 ->lockForUpdate()
@@ -177,6 +193,7 @@ class AttendanceService
     public function restore(Attendance $a): void
     {
         DB::transaction(function () use ($a): void {
+            Employee::whereKey($a->employee_id)->lockForUpdate()->firstOrFail();
             $this->mutability->assertMutable((int) $a->employee_id, (string) $a->date);
             $authoritative = Attendance::withTrashed()
                 ->lockForUpdate()
@@ -188,6 +205,7 @@ class AttendanceService
     public function recomputeForEmployeeOnDate(int $employeeId, string $date): ?Attendance
     {
         return DB::transaction(function () use ($employeeId, $date): ?Attendance {
+            Employee::whereKey($employeeId)->lockForUpdate()->firstOrFail();
             $this->mutability->assertMutable($employeeId, $date);
             $a = Attendance::query()
                 ->with(['employee', 'shift'])
@@ -195,10 +213,13 @@ class AttendanceService
                 ->where('date', $date)
                 ->lockForUpdate()
                 ->first();
-            if (! $a) return null;
+            if (! $a) {
+                return null;
+            }
             $a = $this->dtr->computeForRecord($a);
             $a->save();
             $this->overtime()->autoDetectFromAttendance($a);
+
             return $a;
         });
     }

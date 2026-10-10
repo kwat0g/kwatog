@@ -106,7 +106,7 @@ export default function QualityDashboardPage() {
           helper={openNcrs.isError ? 'Retry below' : 'awaiting disposition'}
         />
         <StatCard
-          label="Total defects"
+          label="Failed checks"
           value={
             pareto.isLoading
               ? '—'
@@ -116,7 +116,7 @@ export default function QualityDashboardPage() {
                   ? String(pareto.data.total_defects)
                   : '—'
           }
-          helper={pareto.isError ? 'Retry below' : 'failed measurements in the window'}
+          helper={pareto.isError ? 'Retry below' : 'failed check occurrences in the window'}
         />
       </div>
 
@@ -140,7 +140,7 @@ export default function QualityDashboardPage() {
       )}
 
       <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Panel title="Defect Pareto" meta="Top 10 parameters" className="col-span-2">
+        <Panel title="Defect Pareto" meta="Top 10 failed requirements" className="col-span-2">
           {pareto.isLoading && <SkeletonBlock className="h-64" />}
           {pareto.isError && (
             <EmptyState
@@ -156,17 +156,17 @@ export default function QualityDashboardPage() {
           {pareto.data && pareto.data.rows.length === 0 && (
             <EmptyState
               icon="check-circle"
-              title="No defects in the period"
+              title="No failed checks recorded"
               description={
                 pareto.data
-                  ? `All inspections passed from ${pareto.data.from} to ${pareto.data.to}.`
-                  : 'All inspections passed in the configured quality window.'
+                  ? `No failed check occurrences from ${pareto.data.from} to ${pareto.data.to}. Inspection failures outside the checklist may still exist.`
+                  : 'No failed check occurrences in the configured quality window.'
               }
             />
           )}
           {pareto.data && pareto.data.rows.length > 0 && (
             <div>
-              <DowntimeParetoChart data={paretoChartData} height={240} valueLabel="Defects" />
+              <DowntimeParetoChart data={paretoChartData} height={240} valueLabel="Failed checks" />
               <div className="mt-3 space-y-1">
                 {pareto.data.rows.map((row) => (
                   <button

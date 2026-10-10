@@ -9,6 +9,7 @@ use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -155,6 +156,27 @@ class BillPriceVarianceTest extends TestCase
         }
     }
 
+    private function attachSupplierInvoice(Bill $bill): void
+    {
+        $invoice = SupplierInvoice::create([
+            'vendor_id' => $bill->vendor_id,
+            'purchase_order_id' => $bill->purchase_order_id,
+            'number' => 'SUP-'.$bill->id,
+            'date' => now()->toDateString(),
+            'gross_total' => (string) $bill->total_amount,
+            'submitted_at' => now(),
+        ]);
+        $bill->update(['supplier_invoice_id' => $invoice->id]);
+    }
+
+    private function createPostedStockBill(array $data): Bill
+    {
+        $draft = $this->billSvc->createDraft($data, $this->user);
+        $this->attachSupplierInvoice($draft);
+
+        return $this->billSvc->postDraft($draft->fresh(), $this->user);
+    }
+
     public function test_bill_price_higher_than_po_posts_ppv_debit(): void
     {
         // GRN: 100 kg @ 12.50 = 1250.00
@@ -168,7 +190,7 @@ class BillPriceVarianceTest extends TestCase
         // Bill for 100 kg @ 12.63 (higher price, within 3-way tolerance) = 1263.00
         // Variance = 1263.00 - 1250.00 = 13.00 (debit PPV)
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->id;
-        $bill = $this->billSvc->create([
+        $bill = $this->createPostedStockBill([
             'bill_number' => 'TEST-PPV-001',
             'vendor_id'   => $vendor->hash_id,
             'purchase_order_id' => $po->hash_id,
@@ -186,7 +208,7 @@ class BillPriceVarianceTest extends TestCase
                     'expense_account_id' => $expenseId,
                 ],
             ],
-        ], $this->user);
+        ]);
 
         // Bill total should be 1263.00
         $this->assertSame('1263.00', (string) $bill->subtotal);
@@ -237,7 +259,7 @@ class BillPriceVarianceTest extends TestCase
         // Bill for 100 kg @ 12.38 (lower price, within 3-way tolerance) = 1238.00
         // Variance = 1238.00 - 1250.00 = -12.00 (credit PPV)
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->id;
-        $bill = $this->billSvc->create([
+        $bill = $this->createPostedStockBill([
             'bill_number' => 'TEST-PPV-002',
             'vendor_id'   => $vendor->hash_id,
             'purchase_order_id' => $po->hash_id,
@@ -255,7 +277,7 @@ class BillPriceVarianceTest extends TestCase
                     'expense_account_id' => $expenseId,
                 ],
             ],
-        ], $this->user);
+        ]);
 
         // Bill total should be 1238.00
         $this->assertSame('1238.00', (string) $bill->subtotal);
@@ -301,7 +323,7 @@ class BillPriceVarianceTest extends TestCase
 
         // Bill for 100 kg @ 12.50 (same price) = 1250.00
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->id;
-        $bill = $this->billSvc->create([
+        $bill = $this->createPostedStockBill([
             'bill_number' => 'TEST-PPV-003',
             'vendor_id'   => $vendor->hash_id,
             'purchase_order_id' => $po->hash_id,
@@ -319,7 +341,7 @@ class BillPriceVarianceTest extends TestCase
                     'expense_account_id' => $expenseId,
                 ],
             ],
-        ], $this->user);
+        ]);
 
         $je = $bill->journalEntry;
         $this->assertNotNull($je);
@@ -554,6 +576,7 @@ class BillPriceVarianceTest extends TestCase
             ->where('goods_receipt_note_id', $grn->id)
             ->where('status', 'draft')
             ->firstOrFail();
+        $this->attachSupplierInvoice($draftA);
         $billA = $this->billSvc->postDraft($draftA, $this->user);
         $grn->refresh(); // Reload to reflect posted bill
 
@@ -565,6 +588,7 @@ class BillPriceVarianceTest extends TestCase
         // Manually trigger draft creation for the second bill (the listener created one for the first partial accept)
         $draftB = $this->billSvc->createDraftForGrn($grn, $this->user);
         $this->assertNotNull($draftB, 'Second draft bill should be created for remaining goods');
+        $this->attachSupplierInvoice($draftB);
         $billB = $this->billSvc->postDraft($draftB, $this->user);
 
         // Verify both bills posted
@@ -619,6 +643,7 @@ class BillPriceVarianceTest extends TestCase
             ->where('goods_receipt_note_id', $grn->id)
             ->where('status', BillStatus::Draft->value)
             ->firstOrFail();
+        $this->attachSupplierInvoice($draftBill);
         $postedBill = $this->billSvc->postDraft($draftBill, $this->user);
 
         // Now try to create a manual bill — should be refused
@@ -663,7 +688,7 @@ class BillPriceVarianceTest extends TestCase
 
         // Now create a manual bill with a higher price — should succeed and post PPV
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->id;
-        $bill = $this->billSvc->create([
+        $bill = $this->createPostedStockBill([
             'bill_number' => 'TEST-MANUAL-ALLOWED',
             'vendor_id' => $vendor->hash_id,
             'purchase_order_id' => $po->hash_id,
@@ -681,7 +706,7 @@ class BillPriceVarianceTest extends TestCase
                     'expense_account_id' => $expenseId,
                 ],
             ],
-        ], $this->user);
+        ]);
 
         // Bill total should be 1263.00
         $this->assertSame('1263.00', (string) $bill->subtotal);
@@ -698,5 +723,53 @@ class BillPriceVarianceTest extends TestCase
         $this->assertCount(1, $ppvLines);
         $this->assertSame('13.00', (string) $ppvLines[0]->debit);
         $this->assertSame('0.00', (string) $ppvLines[0]->credit);
+    }
+
+    public function test_direct_stock_bill_cannot_bypass_supplier_invoice_gate(): void
+    {
+        $grn = $this->makeAcceptedGrn('12.50');
+        $this->cancelAutoDraftBill($grn);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('Supplier invoice required before this bill can be posted or paid.');
+        $this->billSvc->create([
+            'bill_number' => 'TEST-DIRECT-STOCK',
+            'vendor_id' => $grn->vendor->hash_id,
+            'purchase_order_id' => $grn->purchaseOrder->hash_id,
+            'goods_receipt_note_id' => $grn->hash_id,
+            'provenance_type' => 'stock',
+            'date' => now()->toDateString(),
+            'is_vatable' => false,
+            'items' => [[
+                'item_id' => $grn->items[0]->item_id,
+                'description' => 'Resin batch',
+                'quantity' => '100',
+                'unit_price' => '12.50',
+                'expense_account_id' => Account::query()->where('code', '5010')->firstOrFail()->hash_id,
+            ]],
+        ], $this->user);
+    }
+
+    public function test_manual_stock_bill_endpoint_stages_a_draft_until_supplier_invoice_arrives(): void
+    {
+        $grn = $this->makeAcceptedGrn('12.50');
+        $this->cancelAutoDraftBill($grn);
+
+        $this->actingAs($this->user, 'sanctum')->postJson('/api/v1/bills', [
+            'bill_number' => 'TEST-MANUAL-DRAFT',
+            'vendor_id' => $grn->vendor->hash_id,
+            'purchase_order_id' => $grn->purchaseOrder->hash_id,
+            'goods_receipt_note_id' => $grn->hash_id,
+            'provenance_type' => 'stock',
+            'date' => now()->toDateString(),
+            'is_vatable' => false,
+            'items' => [[
+                'item_id' => $grn->items[0]->item->hash_id,
+                'description' => 'Resin batch',
+                'quantity' => '100',
+                'unit_price' => '12.50',
+                'expense_account_id' => Account::query()->where('code', '5010')->firstOrFail()->hash_id,
+            ]],
+        ])->assertCreated()->assertJsonPath('data.status', 'draft');
     }
 }

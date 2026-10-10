@@ -31,6 +31,7 @@ class BudgetResource extends JsonResource
             'utilization_pct'  => $this->utilization_percent,
             'status'           => $this->status,
             'status_label'     => BudgetStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
+            'can_approve'      => (bool) $this->can_approve,
             'submitted_by'     => $this->whenLoaded('submittedBy', fn () => [
                 'id'   => $this->submittedBy?->hash_id,
                 'name' => $this->submittedBy?->name,

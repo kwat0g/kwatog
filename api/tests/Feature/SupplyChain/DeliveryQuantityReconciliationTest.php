@@ -23,12 +23,17 @@ use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\HasPassedInProcessQc;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 class DeliveryQuantityReconciliationTest extends TestCase
 {
+    use HasPassedInProcessQc;
     use ReceivesProductionOutput;
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
 
     private DeliveryService $service;
@@ -36,6 +41,7 @@ class DeliveryQuantityReconciliationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         $this->seed(RolePermissionSeeder::class);
         $this->service = app(DeliveryService::class);
     }
@@ -268,6 +274,7 @@ class DeliveryQuantityReconciliationTest extends TestCase
             'unit_price' => '50.00',
         ]);
 
+        $this->attachDeliveryEvidence($delivery);
         $this->service->updateStatus($delivery, DeliveryStatus::Delivered);
 
         $this->assertSame('4.00', (string) $soItem->fresh()->quantity_delivered);
@@ -357,6 +364,7 @@ class DeliveryQuantityReconciliationTest extends TestCase
             'status' => 'completed',
             'created_by' => $user->id,
         ]);
+        $this->passInProcessQc($wo);
         $output = WorkOrderOutput::create([
             'work_order_id' => $wo->id,
             'recorded_by' => $user->id,

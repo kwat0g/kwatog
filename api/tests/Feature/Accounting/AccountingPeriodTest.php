@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Modules\Accounting\Enums\AccountingPeriodStatus;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
+use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\Role;
@@ -33,10 +35,10 @@ class AccountingPeriodTest extends TestCase
         $roleId = Role::query()->where('slug', 'system_admin')->value('id');
 
         return User::create([
-            'name'     => 'Test',
-            'email'    => 't_'.uniqid().'@x.test',
+            'name' => 'Test',
+            'email' => 't_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
-            'role_id'  => $roleId,
+            'role_id' => $roleId,
         ]);
     }
 
@@ -46,18 +48,18 @@ class AccountingPeriodTest extends TestCase
     }
 
     /** Build a balanced JE on a given date via the service. */
-    private function postJe(JournalEntryService $svc, User $user, string $date): void
+    private function postJe(JournalEntryService $svc, User $user, string $date): JournalEntry
     {
         $je = $svc->create([
-            'date'        => $date,
+            'date' => $date,
             'description' => 'Test entry',
-            'lines'       => [
+            'lines' => [
                 ['account_id' => $this->id('1010'), 'debit' => '100.00', 'credit' => '0'],
                 ['account_id' => $this->id('3010'), 'debit' => '0',      'credit' => '100.00'],
             ],
         ], $user);
 
-        $svc->post($je, $user);
+        return $svc->post($je, $this->user());
     }
 
     public function test_closed_period_blocks_je_dated_in_that_month(): void
@@ -74,13 +76,15 @@ class AccountingPeriodTest extends TestCase
     public function test_open_month_with_no_row_allows_posting(): void
     {
         $user = $this->user();
-        $svc  = app(JournalEntryService::class);
+        $svc = app(JournalEntryService::class);
 
         // No accounting_periods row for 2026-05 → treated as OPEN.
-        $this->postJe($svc, $user, '2026-05-10');
+        $posted = $this->postJe($svc, $user, '2026-05-10');
 
+        $this->assertSame(JournalEntryStatus::Posted, $posted->fresh()->status);
+        $this->assertSame(0, bccomp((string) $posted->fresh()->total_debit, '100.00', 2));
+        $this->assertNotSame($posted->fresh()->created_by, $posted->fresh()->posted_by);
         $this->assertSame(0, AccountingPeriod::query()->where('year', 2026)->where('month', 5)->count());
-        $this->assertTrue(true); // reached here without exception
     }
 
     public function test_reopened_period_allows_posting(): void
@@ -97,8 +101,9 @@ class AccountingPeriodTest extends TestCase
 
         $svc = app(JournalEntryService::class);
         // Should NOT throw.
-        $this->postJe($svc, $user, '2026-04-20');
-        $this->assertTrue(true);
+        $posted = $this->postJe($svc, $user, '2026-04-20');
+        $this->assertSame(JournalEntryStatus::Posted, $posted->fresh()->status);
+        $this->assertNotSame($posted->fresh()->created_by, $posted->fresh()->posted_by);
     }
 
     public function test_closing_one_month_does_not_block_a_different_open_month(): void
@@ -109,8 +114,10 @@ class AccountingPeriodTest extends TestCase
         $svc = app(JournalEntryService::class);
 
         // April is closed, but May is open → allowed.
-        $this->postJe($svc, $user, '2026-05-01');
-        $this->assertTrue(true);
+        $posted = $this->postJe($svc, $user, '2026-05-01');
+        $this->assertSame('2026-05-01', $posted->fresh()->date->toDateString());
+        $this->assertSame(JournalEntryStatus::Posted, $posted->fresh()->status);
+        $this->assertNotSame($posted->fresh()->created_by, $posted->fresh()->posted_by);
     }
 
     public function test_assert_posting_allowed_throws_on_closed_period(): void
@@ -138,7 +145,7 @@ class AccountingPeriodTest extends TestCase
         $user = $this->user();
         $periods = app(AccountingPeriodService::class);
 
-        $first  = $periods->close(2026, 4, $user);
+        $first = $periods->close(2026, 4, $user);
         $second = $periods->close(2026, 4, $user);
 
         $this->assertSame($first->id, $second->id);

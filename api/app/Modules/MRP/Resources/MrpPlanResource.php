@@ -22,6 +22,7 @@ class MrpPlanResource extends JsonResource
             'sales_order' => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id' => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
+                'status' => $this->salesOrder->status->value,
                 'customer' => $this->salesOrder->relationLoaded('customer') && $this->salesOrder->customer
                     ? ['id' => $this->salesOrder->customer->hash_id, 'name' => $this->salesOrder->customer->name]
                     : null,
@@ -42,17 +43,23 @@ class MrpPlanResource extends JsonResource
             'work_orders' => $this->whenLoaded('workOrders', fn () => $this->workOrders
                 ->concat($this->relationLoaded('priorProgressedWorkOrders') ? $this->priorProgressedWorkOrders : [])
                 ->map(fn ($w) => [
-                'id' => $w->hash_id, 'wo_number' => $w->wo_number,
-                'product_id' => $w->product_id === null ? null : app('hashids')->encode((int) $w->product_id),
-                'parent' => $w->relationLoaded('parent') && $w->parent ? [
-                    'id' => $w->parent->hash_id,
-                    'wo_number' => $w->parent->wo_number,
-                ] : null,
-                'quantity_target' => (int) $w->quantity_target,
-                'status' => (string) $w->status?->value,
-                'status_label' => WorkOrderStatus::tryFrom((string) $w->status?->value)?->label() ?? (string) $w->status?->value,
-                'planned_start' => optional($w->planned_start)->toIso8601String(),
-            ])
+                    'id' => $w->hash_id, 'wo_number' => $w->wo_number,
+                    'product_id' => $w->product_id === null ? null : app('hashids')->encode((int) $w->product_id),
+                    'parent' => $w->relationLoaded('parent') && $w->parent ? [
+                        'id' => $w->parent->hash_id,
+                        'wo_number' => $w->parent->wo_number,
+                    ] : null,
+                    'quantity_target' => (int) $w->quantity_target,
+                    'status' => (string) $w->status?->value,
+                    'status_label' => WorkOrderStatus::tryFrom((string) $w->status?->value)?->label() ?? (string) $w->status?->value,
+                    'planned_start' => optional($w->planned_start)->toIso8601String(),
+                    'planned_end' => $w->planned_end?->toIso8601String(),
+                    'preferred_production_date' => $w->preferred_production_date?->toDateString(),
+                    'schedule' => $w->relationLoaded('currentProductionSchedule') && $w->currentProductionSchedule ? [
+                        'scheduled_start' => $w->currentProductionSchedule->scheduled_start->toIso8601String(),
+                        'scheduled_end' => $w->currentProductionSchedule->scheduled_end->toIso8601String(),
+                    ] : null,
+                ])
             ),
             'purchase_requests' => $this->whenLoaded('purchaseRequests', fn () => $this->purchaseRequests
                 ->concat($this->relationLoaded('priorProgressedPurchaseRequests') ? $this->priorProgressedPurchaseRequests : [])

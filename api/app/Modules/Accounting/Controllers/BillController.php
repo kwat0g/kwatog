@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Requests\DecideBillPaymentRequest;
@@ -51,7 +52,10 @@ class BillController
     public function store(StoreBillRequest $request): JsonResponse
     {
         try {
-            $bill = $this->service->create($request->validated(), $request->user());
+            $data = $request->validated();
+            $bill = ($data['provenance_type'] ?? 'stock') === 'stock'
+                ? $this->service->createDraft($data, $request->user())
+                : $this->service->create($data, $request->user());
         } catch (\App\Modules\Purchasing\Exceptions\ThreeWayMatchException $e) {
             return response()->json([
                 'message'           => $e->getMessage(),
@@ -116,14 +120,53 @@ class BillController
         return new BillResource($bill);
     }
 
-    public function recordPayment(StoreBillPaymentRequest $request, Bill $bill): JsonResponse
+    public function voidSupplierInvoice(Request $request, SupplierInvoice $supplierInvoice): JsonResponse
     {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
         try {
-            $payment = $this->service->recordPayment($bill, $request->validated(), $request->user());
-        } catch (BusinessRuleException|ClosedPeriodException $e) {
+            $invoice = $this->service->voidSupplierInvoice($supplierInvoice, $request->user(), $data['reason']);
+        } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
+        return response()->json(['data' => ['id' => $invoice->hash_id, 'voided_at' => $invoice->voided_at]]);
+    }
+
+    public function recordPayment(StoreBillPaymentRequest $request, Bill $bill): JsonResponse
+    {
+        $data = $request->validated();
+        $proof = $request->file('proof_file');
+        $proofPath = $proof?->store('bill-payment-proofs', 'local');
+        if ($proof && ! $proofPath) {
+            return response()->json(['message' => 'Unable to store payment proof.'], 422);
+        }
+        if ($proof) {
+            $data['proof_path'] = $proofPath;
+            $data['proof_file_name'] = $proof->getClientOriginalName();
+            $data['proof_sha256'] = hash_file('sha256', $proof->getRealPath());
+        }
+
+        try {
+            $payment = $this->service->recordPayment($bill, $data, $request->user());
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
+            if ($proofPath) Storage::disk('local')->delete($proofPath);
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            if ($proofPath) Storage::disk('local')->delete($proofPath);
+            throw $e;
+        }
+        if ($proofPath && $payment->proof_path !== $proofPath) {
+            Storage::disk('local')->delete($proofPath);
+        }
         return (new BillPaymentResource($payment))->response()->setStatusCode(201);
+    }
+
+    public function downloadPaymentProof(Bill $bill, BillPayment $payment): mixed
+    {
+        abort_unless((int) $payment->bill_id === (int) $bill->id && $payment->proof_path, 404);
+        abort_unless(Storage::disk('local')->exists($payment->proof_path), 404);
+
+        return Storage::disk('local')->download($payment->proof_path, $payment->proof_file_name);
     }
 
     public function approvePayment(DecideBillPaymentRequest $request, Bill $bill, BillPayment $payment): JsonResponse
@@ -171,7 +214,10 @@ class BillController
     {
         // Only the supplier's invoice attached to THIS bill; shipping documents
         // have their own PO-scoped download.
-        abort_if((int) $document->bill_id !== (int) $bill->id || $document->document_type !== 'supplier_invoice', 404);
+        $linked = (int) $document->bill_id === (int) $bill->id
+            || ($bill->supplier_invoice_id !== null
+                && (int) $document->supplier_invoice_id === (int) $bill->supplier_invoice_id);
+        abort_if(! $linked || $document->document_type !== 'supplier_invoice', 404);
 
         if (! Storage::disk('local')->exists($document->file_path)) {
             abort(404, 'Document file not found.');

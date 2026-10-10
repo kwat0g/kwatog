@@ -18,9 +18,12 @@ class UploadShippingDocumentsRequest extends FormRequest
 
     public function rules(): array
     {
+        $isDispatchPhoto = $this->input('document_type') === SupplierShippingDocumentType::DispatchPhoto->value;
+
         return [
             'document_type' => ['required', Rule::enum(SupplierShippingDocumentType::class)],
-            'file'          => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png'],
+            'supplier_shipment_id' => [$isDispatchPhoto ? 'required' : 'nullable', 'string'],
+            'file'          => ['required', 'file', 'max:10240', $isDispatchPhoto ? 'mimes:jpg,jpeg,png,webp' : 'mimes:pdf,jpg,jpeg,png'],
             'notes'         => ['nullable', 'string', 'max:500'],
         ];
     }

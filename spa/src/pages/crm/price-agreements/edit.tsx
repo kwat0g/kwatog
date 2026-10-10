@@ -18,7 +18,7 @@ export default function EditPriceAgreementPage() {
  return (
  <div>
  <PageHeader
- title="Edit price agreement"
+ title="Propose replacement agreement"
  backTo="/crm/price-agreements"
  backLabel="Price agreements"
  />

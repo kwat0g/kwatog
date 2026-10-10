@@ -230,7 +230,7 @@ export default function CreateSalesOrderPage() {
  {customers.isError && <QueryErrorState size="compact" subject="active customers" onRetry={() => void customers.refetch()} />}
  {products.isError && <QueryErrorState size="compact" subject="active products" onRetry={() => void products.refetch()} />}
  {createdDraft && (
- <div className="max-w-4xl mx-auto px-5 pt-4">
+ <div className="min-w-0 w-full px-5 pt-4">
  <div className="flex flex-wrap items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/20 px-4 py-3 text-sm">
  <div className="flex-1 min-w-[220px]">
  <div className="font-medium">Draft saved: <span className="font-mono">{createdDraft.so_number}</span></div>
@@ -247,12 +247,12 @@ export default function CreateSalesOrderPage() {
  )}
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
- className="max-w-4xl mx-auto px-5 py-4"
+ className="min-w-0 w-full px-5 py-4"
  >
- <fieldset className="mb-8">
+ <fieldset className="min-w-0 mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
- <div className="grid grid-cols-2 gap-3">
- <Select
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <Select searchable
  label="Customer"
  required
  disabled={customerLookupDisabled}
@@ -288,10 +288,10 @@ export default function CreateSalesOrderPage() {
  </div>
  </fieldset>
 
- <fieldset className="mb-8">
+ <fieldset className="min-w-0 mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Line items</legend>
 
- <div className="border border-default rounded-md overflow-hidden">
+ <div className="border border-default rounded-md overflow-x-auto">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
@@ -305,7 +305,7 @@ export default function CreateSalesOrderPage() {
  {fields.map((field, i) => (
  <tr key={field.id} className={trCls}>
  <Td>
- <Select
+ <Select aria-label={`Product for line ${i + 1}`} searchable
  {...register(`items.${i}.product_id` as const)}
  disabled={productLookupDisabled}
  helper={productLookupHelper}
@@ -353,7 +353,7 @@ export default function CreateSalesOrderPage() {
  </table>
  </div>
 
- <div className="mt-3 flex items-center justify-between">
+ <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
  <Button
  type="button"
  variant="secondary"
@@ -377,7 +377,7 @@ export default function CreateSalesOrderPage() {
  )}
  </fieldset>
 
- <fieldset className="mb-8">
+ <fieldset className="min-w-0 mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Notes</legend>
  <Textarea
  rows={3}

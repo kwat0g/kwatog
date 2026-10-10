@@ -56,7 +56,7 @@ class DeliveryStockReservationService
                 throw new BusinessRuleException('This delivery has already issued stock and cannot create a new reservation.');
             }
 
-            $locked->loadMissing(['items.salesOrderItem.product', 'items.inspection.workOrderOutput.workOrder', 'items.inspection.workOrderOutput.productionReceiptMovement']);
+            $locked->loadMissing(['items.salesOrderItem.product', 'items.inspection.ncr', 'items.inspection.resultAuthors', 'items.inspection.workOrderOutput.workOrder', 'items.inspection.workOrderOutput.productionReceiptMovement']);
             if ($locked->items->isEmpty()) {
                 throw new BusinessRuleException('A delivery needs at least one line before stock can be reserved.');
             }
@@ -89,25 +89,51 @@ class DeliveryStockReservationService
                 'reserved_at' => now(),
             ]);
 
-            foreach ($plan as $allocation) {
-                $this->movements->reserve($allocation['item_id'], $allocation['location_id'], $allocation['quantity']);
-                DeliveryStockReservation::create([
-                    'reservation_batch_id' => $batch->id,
-                    'delivery_id' => $locked->id,
-                    'delivery_item_id' => $allocation['delivery_item_id'],
-                    'item_id' => $allocation['item_id'],
-                    'location_id' => $allocation['location_id'],
-                    'lot_number' => $allocation['lot_number'],
-                    'expiry_date' => $allocation['expiry_date'],
-                    'quantity' => $allocation['quantity'],
-                    'consumed_quantity' => '0.000',
-                    'released_quantity' => '0.000',
-                    'status' => DeliveryStockReservationStatus::Reserved,
-                ]);
-            }
+            $this->holdAllocations($batch, $plan);
 
             return $batch->fresh(['reservations']);
         }, 3);
+    }
+
+    /** Fill missing holds during automatic drafting or assignment; existing holds remain unchanged. */
+    public function ensureForDelivery(Delivery $delivery, User $by): void
+    {
+        DB::transaction(function () use ($delivery, $by): void {
+            \App\Modules\CRM\Models\SalesOrder::query()->lockForUpdate()->find($delivery->sales_order_id);
+            $locked = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            if ($locked->status !== DeliveryStatus::Scheduled || $locked->items()->whereNotNull('stock_movement_id')->exists()) {
+                throw new BusinessRuleException('Only scheduled, undispatched shipments can reserve additional stock.');
+            }
+            $batch = DeliveryStockReservationBatch::query()->where('delivery_id', $locked->id)->lockForUpdate()->first();
+            if (! $batch) {
+                $this->reserveForDelivery($locked, $by, Str::uuid()->toString(), $locked->cost_recognition_mode !== DeliveryCostingMode::Transit);
+                return;
+            }
+            if ($batch->status !== DeliveryStockReservationStatus::Reserved) {
+                throw new BusinessRuleException('This shipment stock hold is no longer active. Reload the delivery.');
+            }
+            $locked->load(['items.salesOrderItem.product', 'items.inspection.ncr', 'items.inspection.resultAuthors', 'items.inspection.workOrderOutput.workOrder', 'items.inspection.workOrderOutput.productionReceiptMovement']);
+            $this->holdAllocations($batch, $this->allocationPlan($locked));
+        }, 3);
+    }
+
+    private function holdAllocations(DeliveryStockReservationBatch $batch, array $plan): void
+    {
+        foreach ($plan as $allocation) {
+            if (! empty($allocation['order_allocation_id'])) {
+                $owner = \App\Modules\CRM\Models\SalesOrderStockAllocation::query()->lockForUpdate()->findOrFail($allocation['order_allocation_id']);
+                $line = DeliveryItem::findOrFail($allocation['delivery_item_id']);
+                app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->transferToDelivery($owner, $line, User::findOrFail($batch->reserved_by));
+            } else {
+                $this->movements->reserve($allocation['item_id'], $allocation['location_id'], $allocation['quantity']);
+            }
+            unset($allocation['order_allocation_id']);
+            DeliveryStockReservation::create($allocation + [
+                'reservation_batch_id' => $batch->id, 'delivery_id' => $batch->delivery_id,
+                'consumed_quantity' => '0.000', 'released_quantity' => '0.000',
+                'status' => DeliveryStockReservationStatus::Reserved,
+            ]);
+        }
     }
 
     public function assertReadyForDeparture(Delivery $delivery): void
@@ -124,6 +150,10 @@ class DeliveryStockReservationService
         $heldByLine = [];
         foreach ($batch->reservations as $reservation) {
             if ($reservation->status !== DeliveryStockReservationStatus::Reserved) continue;
+            \App\Modules\Inventory\Models\WarehouseLocation::whereKey($reservation->location_id)->lockForUpdate()->firstOrFail();
+            if (! $this->dispatchStock->eligibleLevels($reservation->item_id)->where('location_id', $reservation->location_id)->exists()) {
+                throw new BusinessRuleException('Reserved delivery stock must remain in an active, unblocked finished-goods bin.');
+            }
             $heldByLine[$reservation->delivery_item_id] = bcadd(
                 $heldByLine[$reservation->delivery_item_id] ?? '0.000',
                 $reservation->remainingQuantity(),
@@ -159,6 +189,10 @@ class DeliveryStockReservationService
             $remaining = $row->remainingQuantity();
             if (bccomp($remaining, '0', 3) > 0) {
                 $this->movements->release((int) $row->item_id, (int) $row->location_id, $remaining);
+                if ($owner = $row->deliveryItem?->stockAllocation) {
+                    $owner->forceFill(['transferred_quantity' => bcsub((string) $owner->transferred_quantity, $remaining, 3),
+                        'released_quantity' => bcadd((string) $owner->released_quantity, $remaining, 3), 'status' => 'released'])->save();
+                }
                 $row->forceFill([
                     'released_quantity' => bcadd((string) $row->released_quantity, $remaining, 3),
                     'status' => DeliveryStockReservationStatus::Released,
@@ -180,10 +214,25 @@ class DeliveryStockReservationService
         $plan = [];
 
         foreach ($lines as $line) {
+            if ($line->sales_order_stock_allocation_id) {
+                if (DeliveryStockReservation::where('delivery_item_id', $line->id)->where('status', 'reserved')->exists()) continue;
+                $allocation = $line->stockAllocation()->lockForUpdate()->firstOrFail();
+                app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->assertAllocationForDelivery($allocation, $line->salesOrderItem, $line->inspection, (string) $line->quantity);
+                $plan[] = ['delivery_item_id' => $line->id, 'item_id' => $allocation->item_id, 'location_id' => $allocation->location_id,
+                    'lot_number' => $allocation->lot_number, 'expiry_date' => $allocation->expiry_date?->toDateString(),
+                    'quantity' => (string) $line->quantity, 'order_allocation_id' => $allocation->id];
+                continue;
+            }
             [$item, $receipt] = $this->dispatchStock->reservationSource($delivery, $line);
             $levels = $this->dispatchStock->eligibleLevels((int) $item->id)
                 ->orderBy('location_id')->lockForUpdate()->get();
-            $remaining = (string) $line->quantity;
+            $held = DeliveryStockReservation::query()->where('delivery_item_id', $line->id)
+                ->where('status', DeliveryStockReservationStatus::Reserved)->get()
+                ->reduce(fn (string $sum, DeliveryStockReservation $row): string => bcadd($sum, $row->remainingQuantity(), 3), '0.000');
+            $remaining = bcsub((string) $line->quantity, $held, 3);
+            if (bccomp($remaining, '0', 3) < 0) {
+                throw new BusinessRuleException('Shipment quantity is smaller than its reserved stock. Reload the delivery.');
+            }
             foreach ($levels as $level) {
                 $levelKey = $item->id.':'.$level->location_id;
                 $lotKey = $levelKey.':'.$receipt->lot_number;
@@ -219,15 +268,7 @@ class DeliveryStockReservationService
 
     private function activeLotHold(int $itemId, int $locationId, string $lotNumber): string
     {
-        return DeliveryStockReservation::query()
-            ->where('item_id', $itemId)->where('location_id', $locationId)
-            ->where('lot_number', $lotNumber)->where('status', DeliveryStockReservationStatus::Reserved)
-            ->get(['quantity', 'consumed_quantity', 'released_quantity'])
-            ->reduce(fn (string $sum, DeliveryStockReservation $reservation): string => bcadd(
-                $sum,
-                $reservation->remainingQuantity(),
-                3,
-            ), '0.000');
+        return \App\Modules\CRM\Services\SalesOrderSupplyService::lotHold($itemId, $locationId, $lotNumber);
     }
 
     private function fingerprint(Delivery $delivery, User $by, bool $recovery): string

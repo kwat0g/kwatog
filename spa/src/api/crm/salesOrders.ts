@@ -17,6 +17,8 @@ export interface SalesOrderListParams extends ListParams {
 }
 
 export const salesOrdersApi = {
+ fulfillment: (id: string) => client.get<{ data: import('@/pages/crm/sales-orders/FulfillmentDialog').FulfillmentPreview }>(`/crm/sales-orders/${id}/fulfillment`).then((r) => r.data.data),
+ updateFulfillment: (id: string, data: { revision: string; request_key: string; reason: string; lines: Array<{ id: string; policy: string }> }) => client.put(`/crm/sales-orders/${id}/fulfillment`, data).then((r) => r.data.data),
  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string; next_statuses: Array<{ value: string; label: string }> }> } }>('/crm/sales-orders/options').then((r) => r.data.data),
  list: (params?: SalesOrderListParams, signal?: AbortSignal) =>
  client.get<PaginatedResponse<SalesOrder>>('/crm/sales-orders', { params, signal }).then((r) => r.data),
@@ -30,6 +32,8 @@ export const salesOrdersApi = {
   client.delete(`/crm/sales-orders/${id}`),
  restore: (id: string) =>
   client.patch(`/crm/sales-orders/${id}/restore`),
+ proposeDeliveryDate: (id: string, form: { proposed_delivery_date: string; notes: string }) =>
+ client.post(`/crm/sales-orders/${id}/propose-delivery-date`, form).then((r) => r.data),
  confirm: (id: string) =>
  client.post<{ data: SalesOrder; chain_result: SoChainResult }>(`/crm/sales-orders/${id}/confirm`).then((r) => r.data),
  cancel: (id: string, reason?: string) =>

@@ -8,6 +8,8 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\Role;
+use Database\Seeders\RolePermissionSeeder;
 use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Events\ClearanceFullySigned;
@@ -30,6 +32,12 @@ use Tests\TestCase;
 class SeparationLifecycleConcurrencyTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
+    }
 
     public function test_replayed_initiation_does_not_create_a_second_clearance(): void
     {
@@ -117,7 +125,7 @@ class SeparationLifecycleConcurrencyTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('Clearance is closed.');
 
-        app(SeparationService::class)->signItem($stale, 'hr_signoff', User::factory()->create());
+        app(SeparationService::class)->signItem($stale, 'hr_signoff', User::factory()->create(['role_id' => Role::where('slug', 'hr_officer')->value('id')]));
     }
 
     public function test_replayed_finalization_cannot_post_a_second_final_pay_or_history_row(): void
@@ -184,6 +192,7 @@ class SeparationLifecycleConcurrencyTest extends TestCase
         ]);
 
         return User::factory()->create([
+            'role_id' => Role::where('slug', $departmentCode === 'HR' ? 'hr_officer' : 'finance_officer')->value('id'),
             'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
         ]);
     }

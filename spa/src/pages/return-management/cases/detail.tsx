@@ -1,14 +1,15 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import { LuArrowLeft, LuCalendarClock, LuCheck, LuDownload, LuFileText, LuMessageSquare, LuRefreshCw, LuSend, LuX } from '@/lib/icons';
+import { LuCalendarClock, LuCheck, LuDownload, LuFileText, LuMessageSquare, LuRefreshCw, LuSend, LuX } from '@/lib/icons';
 import { returnCasesApi } from '@/api/returnCases';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -16,9 +17,38 @@ import { Textarea } from '@/components/ui/Textarea';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { usePermission } from '@/hooks/usePermission';
 import type { ReturnCaseActionPayload, ReturnCasePreferredResolution, ReturnCaseRecord, ReturnCaseResolution, ReturnCaseResolutionOptions } from '@/types/returnCases';
-import { apiMessage, casePath, caseStatusVariant, evidenceFileError, realmFromPath } from './shared';
+import { apiMessage, casePath, caseStatusVariant, evidenceFileError, realmFromPath, toMilli } from './shared';
 
 type ActionPanel = 'resolve_trace' | 'request_info' | 'agree' | 'reject' | 'withdraw' | 'reopen' | 'link_resolution' | 'create_return' | 'create_credit' | 'create_replacement' | null;
+type VerifiedQuantities = Record<string, { missing: string; defective: string }>;
+
+function agreementValidation(record: ReturnCaseRecord, verified: VerifiedQuantities, resolution: ReturnCaseResolution) {
+  const rows = (record.lines ?? []).map(line => {
+    const showMissing = (toMilli(line.missing_quantity) ?? 0n) > 0n;
+    const showDamaged = (toMilli(line.defective_quantity) ?? 0n) > 0n;
+    const missing = showMissing ? verified[line.id]?.missing ?? line.verified_missing_quantity ?? line.missing_quantity : '0';
+    const defective = showDamaged ? verified[line.id]?.defective ?? line.verified_defective_quantity ?? line.defective_quantity : '0';
+    const fieldError = (raw: string, maximum: string): string | undefined => {
+      if (!raw.trim()) return 'Enter the verified quantity.';
+      if (!/^\d{1,9}(?:\.\d{1,3})?$/.test(raw)) return 'Enter a non-negative number with up to 3 decimal places.';
+      if (toMilli(raw)! > toMilli(maximum)!) return `Maximum ${maximum.replace(/\.0+$/, '')} ${line.unit ?? ''} reported.`.trim();
+      return undefined;
+    };
+    const missingError = fieldError(missing, line.missing_quantity);
+    const defectiveError = fieldError(defective, line.defective_quantity);
+    return { line, showMissing, showDamaged, missing, defective, missingError, defectiveError,
+      total: missingError || defectiveError ? null : toMilli(missing)! + toMilli(defective)! };
+  });
+  let resolutionError: string | undefined;
+  if (resolution === 'return_goods' && rows.some(row => !row.missingError && toMilli(row.missing)! > 0n)) {
+    resolutionError = 'Choose redelivery or credit for verified missing goods.';
+  } else if (resolution === 'redelivery' && record.type === 'customer' && rows.some(row => row.total !== null && row.total % 10n !== 0n)) {
+    resolutionError = 'Replacement quantities support up to 2 decimal places. Choose another resolution without rounding.';
+  } else if (resolution !== 'no_action' && rows.every(row => row.total !== null) && rows.every(row => row.total === 0n)) {
+    resolutionError = 'Verify an affected quantity or choose No action.';
+  }
+  return { rows, resolutionError, valid: !resolutionError && rows.every(row => !row.missingError && !row.defectiveError) };
+}
 
 const RESOLUTIONS: Array<{ value: ReturnCaseResolution; label: string }> = [
   { value: 'return_goods', label: 'Return goods' },
@@ -97,11 +127,16 @@ function ActionEditor({
     resolve_trace: 'Close shipment tracking', request_info: 'Request information', agree: 'Agree an action', reject: 'Reject this report',
     withdraw: 'Withdraw this report', reopen: 'Ask for another review',
     link_resolution: 'Link completed work', create_return: 'Create return request', create_credit: 'Create credit note',
-    create_replacement: 'Approve no-charge replacement',
+    create_replacement: record.replacement_order?.status === 'draft' ? 'Start replacement planning' : 'Approve no-charge replacement',
   };
 
-  return <Panel title={title[panel]} actions={<Button size="xs" variant="ghost" icon={<LuX size={14} />} onClick={onClose}>Close</Button>}>
-    <form onSubmit={onSubmit} className="space-y-3">
+  const close = () => { if (!busy) onClose(); };
+  const agreement = agreementValidation(record, verified, resolution);
+  const isModal = ['agree', 'create_return', 'create_replacement'].includes(panel);
+  const Footer = isModal ? ModalFooter : 'div';
+  const form = <form onSubmit={onSubmit} className="space-y-3">
+    {isModal && <p className="text-sm font-medium text-primary">{record.case_number}{record.source && ` · ${record.source.label}`}</p>}
+    <fieldset disabled={busy} className="min-w-0 space-y-3">
       {['resolve_trace', 'request_info', 'reject', 'agree', 'withdraw', 'reopen'].includes(panel) && <Textarea
         label={panel === 'request_info' ? 'What information is needed?' : panel === 'reject' ? 'Reason for rejection' : panel === 'withdraw' ? 'Why is this report no longer needed?' : panel === 'reopen' ? 'What should the team reconsider?' : 'Agreed action and next step'}
         required maxLength={2000} value={message} onChange={(event) => setMessage(event.target.value)} rows={3}
@@ -113,17 +148,16 @@ function ActionEditor({
           </select>
         </label>
         {resolution === 'return_goods' && <p className="text-xs text-muted">Return goods applies to defective items only. If quantities are missing, choose redelivery or credit for the case; a physical return can still be arranged for its defective goods.</p>}
-        {resolution === 'redelivery' && record.type === 'customer' && <p className="text-xs text-muted">Replacement quantities must fit two decimal places per line. Keep the reported quantity exact and choose another resolution if it cannot be represented.</p>}
+        {agreement.resolutionError && <p role="alert" className="text-xs text-danger-fg">{agreement.resolutionError}</p>}
         <Input label="Expected completion date (optional)" type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} />
-        <div className="overflow-x-auto rounded-md border border-default">
-          <table className="w-full min-w-[560px] text-left text-xs">
-            <thead className="bg-subtle text-muted"><tr><th className="px-3 py-2 font-medium">Line</th><th className="px-3 py-2 text-right font-medium">Verified missing</th><th className="px-3 py-2 text-right font-medium">Verified damaged</th></tr></thead>
-            <tbody className="divide-y divide-subtle">{(record.lines ?? []).map((line) => <tr key={line.id}>
-              <td className="px-3 py-2 text-primary">{line.product_label ?? line.item_label ?? line.description}</td>
-              <td className="px-3 py-2"><Input aria-label={`Verified missing for ${line.description}`} type="number" min="0" step="0.001" value={verified[line.id]?.missing ?? line.missing_quantity} onChange={(event) => setVerified((current) => ({ ...current, [line.id]: { missing: event.target.value, defective: current[line.id]?.defective ?? line.defective_quantity } }))} /></td>
-              <td className="px-3 py-2"><Input aria-label={`Verified damaged for ${line.description}`} type="number" min="0" step="0.001" value={verified[line.id]?.defective ?? line.defective_quantity} onChange={(event) => setVerified((current) => ({ ...current, [line.id]: { missing: current[line.id]?.missing ?? line.missing_quantity, defective: event.target.value } }))} /></td>
-            </tr>)}</tbody>
-          </table>
+        <div className="divide-y divide-default border-y border-default">
+          {agreement.rows.map(({ line, showMissing, showDamaged, missing, defective, missingError, defectiveError }) => <div key={line.id} className="grid min-w-0 gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,340px)] sm:items-start">
+            <p className="min-w-0 break-words text-sm text-primary">{line.product_label ?? line.item_label ?? line.description}</p>
+            <div className={`grid min-w-0 gap-3 ${showMissing && showDamaged ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {showMissing && <Input label="Verified missing" aria-label={`Verified missing for ${line.description}`} type="text" inputMode="decimal" maxLength={13} required value={missing} error={missingError} helper={`Reported missing: ${line.missing_quantity} ${line.unit ?? ''}`} onChange={(event) => setVerified((current) => ({ ...current, [line.id]: { missing: event.target.value, defective } }))} />}
+              {showDamaged && <Input label="Verified damaged" aria-label={`Verified damaged for ${line.description}`} type="text" inputMode="decimal" maxLength={13} required value={defective} error={defectiveError} helper={`Reported damaged: ${line.defective_quantity} ${line.unit ?? ''}`} onChange={(event) => setVerified((current) => ({ ...current, [line.id]: { missing, defective: event.target.value } }))} />}
+            </div>
+          </div>)}
         </div>
         <p className="text-xs text-muted">Verified quantities record the investigation. They do not create stock or financial movements.</p>
       </>}
@@ -133,16 +167,19 @@ function ActionEditor({
       />}
       {panel === 'create_return' && <p className="text-sm text-secondary">Create the physical return workflow for the agreed goods. The return request remains the authority for receipt and disposition.</p>}
       {panel === 'create_credit' && <p className="text-sm text-secondary">Create a credit note through Accounting. Posting and application remain subject to Finance controls.</p>}
-      {panel === 'create_replacement' && <p className="text-sm text-secondary">Approve a zero-price replacement sales order for the verified quantities. It follows the normal confirmation, quality, and dispatch controls and cannot be edited commercially.</p>}
+      {panel === 'create_replacement' && <p className="text-sm text-secondary">Approve and confirm the zero-price replacement order for the verified quantities. Production planning starts automatically. Production, Quality, dispatch and customer receipt are still required; the case closes automatically once all agreed work is complete.</p>}
       {error && <p role="alert" className="text-xs text-danger-fg">{error}</p>}
-      <div className="flex justify-end gap-2 border-t border-subtle pt-3">
-        <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button type="submit" variant={panel === 'reject' ? 'danger' : 'primary'} loading={busy}>
-          {panel === 'resolve_trace' ? 'Close shipment tracking' : panel === 'request_info' ? 'Request information' : panel === 'agree' ? 'Record agreement' : panel === 'reject' ? 'Reject report' : panel === 'withdraw' ? 'Withdraw report' : panel === 'reopen' ? 'Request review' : panel === 'link_resolution' ? 'Save links' : panel === 'create_return' ? 'Create return request' : panel === 'create_replacement' ? 'Approve no-charge replacement' : 'Create credit note'}
+    </fieldset>
+      <Footer className={isModal ? undefined : 'flex justify-end gap-2 border-t border-subtle pt-3'}>
+        <Button type="button" variant="secondary" disabled={busy} onClick={close}>Cancel</Button>
+        <Button type="submit" variant={panel === 'reject' ? 'danger' : 'primary'} loading={busy} disabled={panel === 'agree' && (!agreement.valid || !message.trim())}>
+          {panel === 'resolve_trace' ? 'Close shipment tracking' : panel === 'request_info' ? 'Request information' : panel === 'agree' ? 'Record agreement' : panel === 'reject' ? 'Reject report' : panel === 'withdraw' ? 'Withdraw report' : panel === 'reopen' ? 'Request review' : panel === 'link_resolution' ? 'Save links' : panel === 'create_return' ? 'Create return request' : panel === 'create_replacement' ? title[panel] : 'Create credit note'}
         </Button>
-      </div>
-    </form>
-  </Panel>;
+      </Footer>
+    </form>;
+  return isModal
+    ? <Modal isOpen onClose={close} title={title[panel]} size={panel === 'agree' ? 'xl' : 'lg'} closeOnOverlayClick={!busy}>{form}</Modal>
+    : <Panel title={title[panel]} actions={<Button size="xs" variant="ghost" icon={<LuX size={14} />} disabled={busy} onClick={close}>Close</Button>}>{form}</Panel>;
 }
 
 function ResolutionLinkFields({
@@ -206,7 +243,6 @@ function actionSuccess(action: string): string {
 export default function ReturnCaseDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const location = useLocation();
-  const navigate = useNavigate();
   const realm = realmFromPath(location.pathname);
   const { can } = usePermission();
   const qc = useQueryClient();
@@ -223,6 +259,7 @@ export default function ReturnCaseDetailPage() {
 
   const { data: record, isLoading, isError, refetch } = useQuery({
     queryKey: ['return-cases', realm, id], queryFn: () => returnCasesApi.show(realm, id), enabled: !!id,
+    refetchInterval: query => query.state.data?.status === 'in_progress' && query.state.data.type === 'customer' && query.state.data.resolution === 'redelivery' ? 15000 : false,
   });
   const optionsQuery = useQuery({
     queryKey: ['return-cases', realm, id, 'resolution-options'],
@@ -295,12 +332,15 @@ export default function ReturnCaseDetailPage() {
         return;
       }
       if (panel === 'agree') {
+        if (!record || act.isPending) return;
+        const agreement = agreementValidation(record, verified, resolution);
+        if (!agreement.valid) return;
         sendAction('agree', {
           resolution, message: message.trim(), expected_date: expectedDate || undefined,
-          lines: (record?.lines ?? []).map((line) => ({
+          lines: agreement.rows.map(({ line, missing, defective }) => ({
             id: line.id,
-            verified_missing_quantity: verified[line.id]?.missing ?? line.missing_quantity,
-            verified_defective_quantity: verified[line.id]?.defective ?? line.defective_quantity,
+            verified_missing_quantity: missing,
+            verified_defective_quantity: defective,
           })),
         });
       } else sendAction(panel, { message: message.trim() });
@@ -345,7 +385,19 @@ export default function ReturnCaseDetailPage() {
   const isTrace = record.intake_kind === 'delivery_trace';
   const hasLinkedWork = !!(record.return_request || record.credit_note || record.replacement_order || record.replacement_delivery || record.resolution_goods_receipt_note || (record.resolution_receipts?.length ?? 0) > 0);
   const canReviseAgreement = !isTrace && (record.can_revise_agreement ?? !hasLinkedWork);
+  const reviewing = record.status === 'under_review';
   const workAgreed = ['action_agreed', 'in_progress'].includes(record.status);
+  const customerReplacement = record.type === 'customer' && record.resolution === 'redelivery';
+  const replacementDraft = record.replacement_order?.status === 'draft';
+  const replacementNextStep = customerReplacement && workAgreed
+    ? !record.replacement_order ? 'Finance approves the no-charge replacement once. Approval confirms the order and starts production planning automatically.'
+      : replacementDraft ? 'This replacement was created as a draft. Finance can start replacement planning here, or CRM can confirm the linked order. No new order is needed.'
+      : record.return_request && record.return_request.status !== 'completed' && record.replacement_delivery?.status === 'confirmed' ? 'Complete the linked physical return. Replacement receipt is already confirmed; the case will close automatically when the return is complete.'
+      : record.replacement_delivery?.status === 'delivered' ? 'Customer confirms receipt of the replacement shipment. The case closes automatically when every agreed quantity is received and any linked return is complete.'
+      : record.replacement_delivery ? 'ImpEx prepares the replacement shipment. The assigned driver dispatches and records delivery proof; customer confirms receipt.'
+      : record.replacement_order.status === 'in_production' ? 'Production completes the replacement pieces, then QC inspects them. Approved output creates the shipment automatically.'
+      : 'PPC reviews automatic planning and resource suggestions. Production completes the replacement pieces, then QC inspects them. Shipment and case links update automatically.'
+    : undefined;
   const hasPortalActions = realm !== 'internal' && ((realm === 'supplier' && workAgreed) || record.status === 'rejected' || (realm === 'customer' && activeCase(record.status) && (isTrace || (record.can_revise_agreement ?? !hasLinkedWork))));
   const hasDefects = record.lines?.some((line) => Number(line.verified_defective_quantity ?? '0') > 0);
   const canPrepareReturn = workAgreed && hasDefects && !record.credit_note
@@ -353,20 +405,19 @@ export default function ReturnCaseDetailPage() {
     && ['return_goods', 'redelivery', 'credit'].includes(record.resolution ?? '');
   const internalActions = (canReview || canCredit) ? (
     <>
-      {canReview && isTrace && activeCase(record.status) && <Button size="sm" variant="ghost" onClick={() => openPanel('reject')}>Reject report</Button>}
       {canReview && record.status === 'submitted' && <Button size="sm" variant="primary" icon={<LuCheck size={14} />} onClick={() => sendAction('start_review')}>Start review</Button>}
-      {canReview && activeCase(record.status) && <Button size="sm" variant="secondary" onClick={() => openPanel('request_info')}>Request information</Button>}
-      {canReview && canReviseAgreement && ['submitted', 'under_review', 'information_needed', 'action_agreed', 'in_progress'].includes(record.status) && <>
+      {canReview && record.status === 'information_needed' && <Button size="sm" variant="primary" icon={<LuRefreshCw size={14} />} onClick={() => sendAction('start_review')}>Resume review</Button>}
+      {canReview && canReviseAgreement && reviewing && <>
         <Button size="sm" variant="primary" onClick={() => openPanel('agree')}>Agree action</Button>
-        <Button size="sm" variant="ghost" onClick={() => openPanel('reject')}>Reject</Button>
       </>}
-      {canReview && canPrepareReturn && <Button size="sm" variant="primary" onClick={() => openPanel('create_return')}>Create return request</Button>}
+      {canReview && reviewing && <>
+        <Button size="sm" variant="secondary" onClick={() => openPanel('request_info')}>Request information</Button>
+        {(isTrace || canReviseAgreement) && <Button size="sm" variant="ghost" onClick={() => openPanel('reject')}>Reject</Button>}
+      </>}
+      {canReview && canPrepareReturn && record.resolution === 'return_goods' && <Button size="sm" variant="primary" onClick={() => openPanel('create_return')}>Create return request</Button>}
       {workAgreed && record.resolution === 'credit' && canCredit && (!record.credit_note || record.credit_note.status === 'void') && <Button size="sm" variant="primary" onClick={() => openPanel('create_credit')}>Create credit note</Button>}
-      {workAgreed && record.type === 'customer' && record.resolution === 'redelivery' && canApprove && !record.replacement_order && <Button size="sm" variant="primary" onClick={() => openPanel('create_replacement')}>Approve no-charge replacement</Button>}
-      {canReview && workAgreed && <>
-        <Button size="sm" variant="secondary" onClick={() => openPanel('link_resolution')}>Link completed work</Button>
-        <Button size="sm" variant="primary" icon={<LuCheck size={14} />} onClick={() => sendAction('resolve')}>Resolve case</Button>
-      </>}
+      {workAgreed && customerReplacement && canApprove && (!record.replacement_order || replacementDraft) && <Button size="sm" variant="primary" onClick={() => openPanel('create_replacement')}>{replacementDraft ? 'Start replacement planning' : 'Approve no-charge replacement'}</Button>}
+      {canReview && !isTrace && !customerReplacement && (record.status === 'in_progress' || (workAgreed && record.resolution === 'no_action')) && <Button size="sm" variant="primary" icon={<LuCheck size={14} />} onClick={() => sendAction('resolve')}>Resolve case</Button>}
       {canReview && record.status === 'rejected' && <Button size="sm" variant="secondary" icon={<LuRefreshCw size={14} />} onClick={() => openPanel('reopen')}>Reopen review</Button>}
     </>
   ) : null;
@@ -377,19 +428,19 @@ export default function ReturnCaseDetailPage() {
         title={<span className="flex flex-wrap items-center gap-2">{record.case_number}<Chip variant={caseStatusVariant(record.status)}>{record.status_label}</Chip></span>}
         subtitle={record.source ? `${record.source.label} · ${record.party?.name ?? 'Party'}` : record.party?.name}
         backTo={casePath(realm)} backLabel="Problem reports"
-        actions={<div className="flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" icon={<LuArrowLeft size={14} />} onClick={() => navigate(casePath(realm))}>Back</Button>
-          {realm === 'internal' && <Button variant="secondary" size="sm" onClick={() => navigate('/return-management')}>Open RMAs</Button>}
-          {record.can_resolve_trace && (realm === 'customer' || canReview) && <Button size="sm" variant="primary" onClick={() => openPanel('resolve_trace')}>{realm === 'customer' ? 'Shipment has arrived' : 'Close shipment tracking'}</Button>}
+        actions={<fieldset disabled={act.isPending} aria-label="Case actions" className="flex flex-wrap items-center gap-2">
+          {record.can_resolve_trace && (realm === 'customer' || (canReview && reviewing)) && <Button size="sm" variant="primary" onClick={() => openPanel('resolve_trace')}>{realm === 'customer' ? 'Shipment has arrived' : 'Close shipment tracking'}</Button>}
           {internalActions}
-        </div>}
+        </fieldset>}
       />
 
       <div className="px-5 py-4">
-        {actionError && !panel && <p role="alert" className="mx-auto mb-4 max-w-7xl rounded-md border border-danger-fg/30 bg-danger-bg px-4 py-3 text-sm text-danger-fg">{actionError}</p>}
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        {actionError && !panel && <p role="alert" className="min-w-0 w-full mb-4 rounded-md border border-danger-fg/30 bg-danger-bg px-4 py-3 text-sm text-danger-fg">{actionError}</p>}
+        {replacementNextStep && <p className="mb-4 rounded-md border border-default bg-surface px-4 py-3 text-sm text-primary"><strong className="font-medium">Next: </strong>{replacementNextStep}</p>}
+        <div className="min-w-0 w-full grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <main className="space-y-4">
-            <Panel title="Reported problem" meta={record.created_at ? `Submitted ${formatDateTime(record.created_at)}` : undefined}>
+            <Panel title="Reported problem" meta={record.created_at ? `Submitted ${formatDateTime(record.created_at)}` : undefined}
+              actions={canReview && workAgreed && canReviseAgreement ? <Button size="xs" variant="secondary" disabled={act.isPending} onClick={() => openPanel('agree')}>Revise agreement</Button> : undefined}>
               <p className="max-w-[72ch] whitespace-pre-wrap text-sm leading-6 text-primary">{record.description}</p>
               {!isTrace && <div className="mt-4 grid grid-cols-2 gap-3 border-t border-subtle pt-3 text-sm sm:grid-cols-3">
                 <Fact label="Preferred outcome" value={PREFERENCE_LABEL[record.preferred_resolution]} />
@@ -473,10 +524,10 @@ export default function ReturnCaseDetailPage() {
           </main>
 
           <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-            <Panel title="Next step">
-              <p className="text-sm text-primary">{isTrace && activeCase(record.status) ? 'Customer Service is checking the shipment with Dispatch. Follow updates here. Once it arrives, confirm arrival and report any item problem from the delivery.' : NEXT_ACTION[record.status] ?? 'The assigned team will update this case.'}</p>
+            <Panel title={replacementNextStep ? 'Case responsibility' : 'Next step'}>
+              {!replacementNextStep && <p className="text-sm text-primary">{isTrace && activeCase(record.status) ? 'Customer Service is checking the shipment with Dispatch. Follow updates here. Once it arrives, confirm arrival and report any item problem from the delivery.' : NEXT_ACTION[record.status] ?? 'The assigned team will update this case.'}</p>}
               {isTrace && record.source?.kind === 'delivery' && (realm === 'customer' || can('supply_chain.view') || can('supply_chain.deliveries.view')) && <Link className="mt-3 inline-block text-sm text-link underline" to={realm === 'customer' ? `/portal/customer/deliveries/${record.source.id}` : `/supply-chain/deliveries/${record.source.id}`}>Open delivery {record.source.label}</Link>}
-              <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-subtle pt-3 text-sm">
+              <dl className={`${replacementNextStep ? '' : 'mt-4 border-t border-subtle pt-3 '}grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm`}>
                 <FactRow label="Owner" value={record.owner?.name ?? (realm === 'internal' ? 'Unassigned' : 'Ogami team')} />
                 <FactRow label="Source" value={record.source?.label ?? '—'} />
                 <FactRow label="Party" value={record.party?.name ?? '—'} />
@@ -494,7 +545,12 @@ export default function ReturnCaseDetailPage() {
                 {record.resolution_goods_receipt_note && !(record.resolution_receipts?.length) && <LinkedRow label="Replacement receipt" number={record.resolution_goods_receipt_note.grn_number ?? 'Goods receipt'} status={record.resolution_goods_receipt_note.status ?? '—'} href={internalLink(`/inventory/grn/${record.resolution_goods_receipt_note.id}`)} />}
                 {record.resolution_receipts?.map((receipt) => <LinkedRow key={receipt.id} label="Redelivery receipt" number={receipt.grn_number} status={receipt.status} href={internalLink(`/inventory/grn/${receipt.id}`)} />)}
                 {!record.return_request && !record.credit_note && !record.replacement_order && !record.replacement_delivery && !record.resolution_goods_receipt_note && !(record.resolution_receipts?.length) && <p className="text-sm text-muted">No operational work is linked yet.</p>}
-                {canReview && workAgreed && <Button variant="secondary" size="sm" className="w-full" onClick={() => openPanel('link_resolution')}>Link completed work</Button>}
+                {canReview && workAgreed && !customerReplacement && <Button variant="secondary" size="sm" className="w-full" onClick={() => openPanel('link_resolution')}>Link completed work</Button>}
+                {canReview && canPrepareReturn && record.resolution !== 'return_goods' && <details className="border-t border-subtle pt-3">
+                  <summary className="cursor-pointer text-xs text-secondary">Physical collection (optional)</summary>
+                  <p className="mt-2 text-xs text-muted">Only create a return if the agreed plan includes collecting the damaged goods. Replacement alone does not require collection. Once linked, the return must be completed before this case closes.</p>
+                  <Button variant="secondary" size="sm" className="mt-3" onClick={() => openPanel('create_return')}>Create return request</Button>
+                </details>}
               </div>
             </Panel>}
             <Panel title="Evidence" meta="Shared with everyone on this case">

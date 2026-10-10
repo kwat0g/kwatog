@@ -1,18 +1,7 @@
-/**
- * One delivery, from the driver's seat.
- *
- * Same shell as every other page (PageHeader + panels), but the content is the
- * run-sheet view: where this stop is in the route, what is on the truck, and
- * the single next action the server allows. The action is named after the
- * transition and confirmed in a thumb-reachable sheet — it sits under the same
- * pixel whether it means "loading" or "delivered", and a mis-tap here records a
- * delivery that did not happen.
- */
-import { useState, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+/** Driver run sheet. The office dispatches; the driver records delivery with a photo. */
+import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import { isAxiosError } from 'axios';
 import { LuCamera, LuCheck } from '@/lib/icons';
 import { driverApi } from '@/api/driver';
 import type { DriverDelivery, DriverDeliveryStatus } from '@/types/driver';
@@ -22,31 +11,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonPanel } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import {
- TouchConfirmSheet,
- useTouchSubmitLabel,
-} from '@/components/layout/TouchShell';
 import { DeliveryAttemptPanel } from '@/pages/supply-chain/deliveries/DeliveryAttemptPanel';
 import { deliveryStatusVariant } from '@/lib/statusVariants';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
-
-/** Extract a useful message from an axios error, preferring 422 field errors. */
-function describeAxiosError(err: unknown, fallback: string): string {
- if (isAxiosError(err) && err.response) {
- if (err.response.status === 422) {
- const errors = err.response.data?.errors as Record<string, string[]> | undefined;
- if (errors) {
- const first = Object.values(errors)[0]?.[0];
- if (first) return first;
- }
- const msg = err.response.data?.message;
- if (typeof msg === 'string' && msg.length > 0) return msg;
- }
- if (err.response.status === 404) return 'Delivery not found or no longer assigned to you.';
- }
- return fallback;
-}
 
 function statusLabel(data: DriverDelivery): string {
  return data.status_label ?? data.status.replace(/_/g, ' ');
@@ -72,7 +40,7 @@ const SHOW_STEPS: DriverDeliveryStatus[] = ['scheduled', 'loading', 'in_transit'
 
 function ProgressSteps({ data }: { data: DriverDelivery }) {
  const steps = [
- { label: 'Loading', at: null as string | null },
+ { label: 'Shipment plan', at: null as string | null },
  { label: 'In transit', at: data.departed_at },
  { label: 'Delivered', at: data.delivered_at },
  { label: 'Received by customer', at: data.confirmed_at },
@@ -133,33 +101,12 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 export default function DriverDeliveryDetail() {
  const { id = '' } = useParams();
  const navigate = useNavigate();
- const qc = useQueryClient();
 
  const { data, isLoading, error, refetch, isFetching } = useQuery({
  queryKey: ['driver', 'delivery', id],
  queryFn: () => driverApi.showDelivery(id),
  enabled: Boolean(id),
  });
-
- // Which transition is waiting on its confirmation sheet, if any.
- const [confirming, setConfirming] = useState<DriverDeliveryStatus | null>(null);
-
- const transition = useMutation({
- mutationFn: (next: DriverDeliveryStatus) => driverApi.updateStatus(id, next),
- onSuccess: (fresh) => {
- qc.invalidateQueries({ queryKey: ['driver'] });
- toast.success(`Status: ${fresh.status_label ?? fresh.status.replace(/_/g, ' ')}`);
- setConfirming(null);
- },
- onError: (err) => {
- toast.error(describeAxiosError(err, 'Could not update status.'));
- setConfirming(null);
- },
- });
-
- // A driver on a delivery route is the likeliest user of all to be out of
- // signal, so the button says the commit is queued rather than looking stalled.
- const advanceLabel = useTouchSubmitLabel(transition.isPending, '', 'Updating…');
 
  if (isLoading) {
  return (
@@ -191,17 +138,12 @@ export default function DriverDeliveryDetail() {
  );
  }
 
- const next = data.next_status ?? undefined;
- const label = data.next_status_label ? `Mark ${data.next_status_label}` : undefined;
  const state = statusLabel(data);
- const proofCount = data.proofs?.length ?? 0;
+ const proofCount = data.proof_count ?? data.proofs?.filter((proof) => ['photo', 'signed_dr', 'customer_po_confirmation'].includes(proof.proof_type)).length ?? 0;
  const items = data.items ?? [];
+ const canRecordDelivery = data.status === 'in_transit';
  const canUploadReceipt = data.status === 'delivered' || data.status === 'confirmed';
- // The button sits in a fixed position but its meaning is server-derived, so the
- // same pixel is "Mark in transit" on one load and "Mark delivered" on the next.
- // Naming the transition in a sheet is the only thing standing between a
- // mis-tap and a delivery confirmed at the wrong gate.
- const isDeliveryCompletion = next === 'delivered';
+ const awaitingDispatch = data.status === 'scheduled' || data.status === 'loading';
 
  return (
  <div>
@@ -219,15 +161,15 @@ export default function DriverDeliveryDetail() {
  backLabel="My deliveries"
  crumbLabel={data.delivery_number}
  actions={
- next && label ? (
+ canRecordDelivery ? (
  <Button
  variant="primary"
  size="touch"
  className="w-full sm:w-auto"
- loading={transition.isPending}
- onClick={() => setConfirming(next)}
+ icon={<LuCamera size={14} />}
+ onClick={() => navigate(`/driver/${id}/photo`)}
  >
- {advanceLabel || label}
+ Record delivery
  </Button>
  ) : undefined
  }
@@ -253,7 +195,9 @@ export default function DriverDeliveryDetail() {
  '—'
  )}
  </DetailRow>
- <DetailRow label="Scheduled">{data.scheduled_date ? formatDate(data.scheduled_date) : 'Unscheduled'}</DetailRow>
+ <DetailRow label="Planned dispatch">{data.scheduled_date ? formatDate(data.scheduled_date) : 'Unscheduled'}</DetailRow>
+ <DetailRow label="Expected delivery">{data.expected_delivery_date ? formatDate(data.expected_delivery_date) : 'Not set'}</DetailRow>
+ <DetailRow label="Carrier">{data.carrier ?? 'Not assigned'}</DetailRow>
  <DetailRow label="Status">
  <strong className="font-medium">{state}</strong>
  </DetailRow>
@@ -279,6 +223,13 @@ export default function DriverDeliveryDetail() {
  </div>
 
  <div className="space-y-4 lg:order-1 lg:col-span-2">
+ {awaitingDispatch && (
+ <Panel title="Awaiting dispatch">
+ <p className="text-sm text-secondary">
+ The office records the loading photo and dispatches this delivery. Check your load and wait for dispatch before leaving.
+ </p>
+ </Panel>
+ )}
  {/* What is actually on the truck. The attempt form asks for these
  quantities one by one, so the driver should be able to check the load
  against the manifest before the stop, not only while reporting a
@@ -305,17 +256,20 @@ export default function DriverDeliveryDetail() {
  </Panel>
  )}
 
- {canUploadReceipt && (
+ {(canRecordDelivery || canUploadReceipt) && (
  <Panel
  title="Proof of delivery"
  meta={proofCount > 0 ? `${proofCount} on file` : 'Required'}
  >
  <p className="text-sm text-secondary">
- {proofCount > 0
+ {canRecordDelivery
+ ? 'After handing over the goods, choose Record delivery and upload the signed receipt or delivery photo. Saving the photo records delivery for customer confirmation.'
+ : proofCount > 0
  ? 'The signed receipt is on file. Replace it if you photographed the wrong document.'
- : 'Upload the signed receipt or delivery photo so the office can confirm the delivery and bill the customer.'}
+ : 'Upload the signed receipt or delivery photo for this recorded delivery.'}
  </p>
- <Button
+ {data.status === 'delivered' && <p className="mt-2 text-sm text-secondary">Waiting for the customer to confirm receipt.</p>}
+ {canUploadReceipt && <Button
  variant={proofCount > 0 ? 'secondary' : 'primary'}
  size="touch"
  className="mt-3 w-full sm:w-auto"
@@ -323,7 +277,7 @@ export default function DriverDeliveryDetail() {
  onClick={() => navigate(`/driver/${id}/photo`)}
  >
  {proofCount > 0 ? 'Replace receipt photo' : 'Capture receipt photo'}
- </Button>
+ </Button>}
  </Panel>
  )}
 
@@ -334,35 +288,6 @@ export default function DriverDeliveryDetail() {
  </div>
  </div>
 
- <TouchConfirmSheet
- isOpen={confirming !== null}
- onClose={() => setConfirming(null)}
- onConfirm={() => confirming && transition.mutate(confirming)}
- title={label ? `${label}?` : 'Advance this delivery?'}
- confirmLabel={advanceLabel || (label ?? 'Confirm')}
- variant="primary"
- pending={transition.isPending}
- className="sm:max-w-lg sm:rounded-lg sm:border sm:border-default"
- >
- <p>
- <span className="font-mono tabular-nums font-medium text-primary">
- {data.delivery_number ?? data.sales_order?.so_number ?? 'This delivery'}
- </span>
- {data.sales_order?.customer?.name ? ` · ${data.sales_order.customer.name}` : ''}
- </p>
- <p>
- Status moves from{' '}
- <span className="font-medium text-primary">{state}</span>{' '}
- to{' '}
- <span className="font-medium text-primary">
- {data.next_status_label ?? confirming?.replace(/_/g, ' ') ?? ''}
- </span>
- .
- </p>
- {isDeliveryCompletion && (
- <p>Marking delivered records arrival at the customer site. Afterward, upload the signed receipt photo as delivery evidence.</p>
- )}
- </TouchConfirmSheet>
  </div>
  );
 }

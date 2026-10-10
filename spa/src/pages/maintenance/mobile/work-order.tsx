@@ -1,38 +1,38 @@
 import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
-import { itemsApi } from '@/api/inventory/items';
 import toast from 'react-hot-toast';
-import { LuArrowLeft, LuPlus, LuTrash2, LuPlay, LuCircleCheck, LuTriangleAlert } from '@/lib/icons';
-import { useDebounce } from '@/hooks/useDebounce';
-import { BottomSheet } from '@/components/ui/BottomSheet';
+import { LuArrowLeft, LuPlus, LuPlay, LuTriangleAlert } from '@/lib/icons';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { StickyActionBar } from '@/components/ui/StickyActionBar';
+import { RecoveryPanel, WorkLogControl, WorkLogContent } from '@/pages/maintenance/work-orders/RecoveryPanel';
+import { SparePartSheet } from '@/pages/maintenance/work-orders/SparePartSheet';
+import { AssignmentPanel } from '@/pages/maintenance/work-orders/AssignmentPanel';
+import { PartReconciliationPanel } from '@/pages/maintenance/work-orders/PartReconciliationPanel';
 import {
   TouchCardSkeleton,
   TouchConfirmSheet,
   useTouchSubmitLabel,
 } from '@/components/layout/TouchShell';
-import { maintenancePriorityVariant } from '@/lib/statusVariants';
+import { maintenancePriorityVariant, maintenanceStatusVariant } from '@/lib/statusVariants';
 import type { SparePartUsage } from '@/types/maintenance';
-import type { Item } from '@/types/inventory';
-import { client } from '@/api/client';
-import type { ApiSuccess, PaginatedResponse } from '@/types';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import { focusRingInset } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
+import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function MobileWorkOrderDetail() {
-  const { mwoId } = useParams<{ mwoId: string }>();
+  const { id: mwoId } = useParams<{ id: string }>();
+  const { can, canAny } = usePermission();
+  const selfService = useLocation().pathname.startsWith('/self-service/');
+  const isSupervisor = useAuthStore((state) => state.user?.role.slug === 'maintenance_supervisor');
   const queryClient = useQueryClient();
 
   // ── Fetch MWO details ──────────────────────────────────
@@ -42,24 +42,28 @@ export default function MobileWorkOrderDetail() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['maintenance', 'mwo', mwoId],
+    queryKey: ['maintenance', 'work-order', mwoId],
     queryFn: () => workOrdersApi.show(mwoId!),
     enabled: !!mwoId,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   // ── Form state ─────────────────────────────────────────
   const [remarks, setRemarks] = useState('');
-  const [downtimeMinutes, setDowntimeMinutes] = useState('');
   const [showPartSheet, setShowPartSheet] = useState(false);
+  const [confirmingStart, setConfirmingStart] = useState(false);
   const [confirmingComplete, setConfirmingComplete] = useState(false);
-
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [inspectionReason, setInspectionReason] = useState('');
   // ── Start mutation ─────────────────────────────────────
   const startMutation = useMutation({
     mutationFn: () => workOrdersApi.start(mwoId!),
     onSuccess: () => {
+      setConfirmingStart(false);
       toast.success('Work order started');
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'mwo', mwoId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'mobile-mwos'] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
     },
     onError: (error) => reportMutationError(error, 'Failed to start work order.'),
   });
@@ -69,13 +73,12 @@ export default function MobileWorkOrderDetail() {
     mutationFn: () =>
       workOrdersApi.complete(mwoId!, {
         remarks: remarks.trim() || undefined,
-        downtime_minutes: parseInt(downtimeMinutes, 10) || 0,
       }),
     onSuccess: () => {
       toast.success('Work order completed');
       setConfirmingComplete(false);
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'mwo', mwoId] });
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'mobile-mwos'] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
     },
     onError: () => {
       toast.error('Failed to complete work order.');
@@ -87,65 +90,36 @@ export default function MobileWorkOrderDetail() {
   // queued rather than letting the button spin indefinitely.
   const completeLabel = useTouchSubmitLabel(completeMutation.isPending, '', 'Completing…');
 
-  // ── Spare part recording ───────────────────────────────
-  const [partSearch, setPartSearch] = useState('');
-  // Shop-floor tablets on wifi: debounce the spare-part lookup so typing
-  // doesn't fire a request per character.
-  const debouncedPartSearch = useDebounce(partSearch, 300);
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
-  const [partQty, setPartQty] = useState('');
-  const [partLocationId, setPartLocationId] = useState('');
-
-  const { data: itemsData } = useQuery({
-    queryKey: ['inventory', 'items', 'spare_parts', debouncedPartSearch],
-    queryFn: () => itemsApi.list({ item_type: 'spare_part', search: debouncedPartSearch, per_page: 20 }),
-    enabled: showPartSheet && debouncedPartSearch.length >= 2,
-  });
-
-  // Fetch stock levels for selected item to pick location
-  const { data: stockData } = useQuery({
-    queryKey: ['inventory', 'stock-levels', selectedItem?.id],
-    queryFn: () =>
-      client
-        .get<
-          PaginatedResponse<{
-            id: string;
-            location: { id: string; code: string };
-            quantity_on_hand: string;
-          }>
-        >('/inventory/stock-levels', {
-          params: { item_id: selectedItem?.id, per_page: 50 },
-        })
-        .then((r) => r.data),
-    enabled: !!selectedItem,
-  });
-
-  const sparePartMutation = useMutation({
-    mutationFn: (data: { item_id: string; location_id: string; quantity: string }) =>
-      client
-        .post<ApiSuccess<SparePartUsage>>(`/maintenance/work-orders/${mwoId}/spare-parts`, data)
-        .then((r) => r.data.data),
-    onSuccess: () => {
-      toast.success('Spare part recorded');
-      setSelectedItem(null);
-      setPartQty('');
-      setPartLocationId('');
-      setPartSearch('');
-      setShowPartSheet(false);
-      queryClient.invalidateQueries({ queryKey: ['maintenance', 'mwo', mwoId] });
+  const cancelMutation = useMutation({
+    mutationFn: async (reason: string) => {
+      if (isSupervisor) {
+        const updated = await workOrdersApi.reconcileParts(mwoId!, {
+          ...(wo?.parts_readiness?.outstanding.length ? { confirm_consumed: true } : {}),
+          inspection_reason: inspectionReason.trim(),
+        });
+        queryClient.setQueryData(['maintenance', 'work-order', mwoId], updated);
+        void queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
+      }
+      return workOrdersApi.cancel(mwoId!, reason);
     },
-    onError: (error) => reportMutationError(error, 'Failed to record spare part.'),
+    onSuccess: () => {
+      toast.success('Work order cancelled');
+      setCancelOpen(false);
+      setInspectionReason('');
+      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', mwoId] });
+      queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+    },
+    onError: (error) => reportMutationError(error, 'Failed to cancel work order.'),
   });
-
-  const canAddPart = selectedItem && partLocationId && parseFloat(partQty) > 0;
 
   // ── Loading / Error states ─────────────────────────────
   if (isLoading) {
-    return <TouchCardSkeleton count={2} label="Loading work order" cardClassName="h-48" />;
+    return <div className="mx-auto max-w-3xl p-4"><TouchCardSkeleton count={2} label="Loading work order" cardClassName="h-48" /></div>;
   }
 
   if (error || !wo) {
     return (
+      <div className="mx-auto max-w-3xl p-4">
       <EmptyState
         icon="alert-circle"
         title="Could not load work order"
@@ -162,19 +136,24 @@ export default function MobileWorkOrderDetail() {
           </Button>
         }
       />
+      </div>
     );
   }
 
   const actions = wo.available_actions ?? [];
-  const isTerminal = actions.length === 0;
-  const canStart = actions.includes('start');
-  const canComplete = actions.includes('complete');
+  const isTerminal = wo.status === 'completed' || wo.status === 'cancelled';
+  const canStart = actions.includes('start') && canAny('maintenance.wo.complete', 'maintenance.wo.assign');
+  const canEditParts = wo.can_record_work ?? ((actions.includes('complete') || actions.includes('submit_repair')) && can('maintenance.wo.complete'));
+  const canRecordWork = canEditParts && !wo.repair_submitted_at;
+  const canCloseWork = wo.closure_readiness?.can_close_work ?? false;
+  const canCloseParts = wo.parts_readiness?.can_close_parts ?? wo.spare_parts?.length === 0;
+  const canComplete = !wo.verification_required && actions.includes('complete') && canCloseWork && canCloseParts && canAny('maintenance.wo.complete', 'maintenance.wo.assign');
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
       {/* Back link */}
       <Link
-        to="/maintenance/mobile"
+        to={selfService ? "/self-service/maintenance-work-orders" : "/maintenance/work-orders"}
         className={cn(
           'inline-flex items-center gap-1.5 text-sm text-secondary min-h-hit rounded',
           focusRing,
@@ -184,25 +163,56 @@ export default function MobileWorkOrderDetail() {
         Back to list
       </Link>
 
-      {/* MWO Summary card */}
+      {/* MWO summary and current actions */}
       <div className="rounded-md border border-default bg-canvas p-4">
-        <div className="flex items-center justify-between">
-          <span className="font-mono tabular-nums text-sm font-medium">{wo.mwo_number}</span>
-          <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
-            {wo.priority === 'critical' && <LuTriangleAlert className="w-3 h-3" aria-hidden />}
-            {wo.priority_label ?? wo.priority}
-          </Chip>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h1 className="font-mono tabular-nums text-lg font-medium md:text-2xl">{wo.mwo_number}</h1>
+          <div className="flex items-center gap-1.5">
+            <Chip variant={maintenanceStatusVariant[wo.status]}>{wo.status_label ?? wo.status.replace('_', ' ')}</Chip>
+            <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
+              {wo.priority === 'critical' && <LuTriangleAlert className="w-3 h-3" aria-hidden />}
+              {wo.priority_label ?? wo.priority}
+            </Chip>
+          </div>
         </div>
 
         <div className="mt-2 text-sm font-medium">{wo.maintainable?.name ?? '—'}</div>
         <div className="text-xs text-muted mt-0.5">
           {wo.maintainable?.code ? `(${wo.maintainable.code})` : ''} &middot;{' '}
-          <span>{wo.type_label ?? wo.type}</span> &middot;{' '}
-          <span>{wo.status_label ?? wo.status}</span>
+          <span>{wo.type_label ?? wo.type}</span>
         </div>
+
+        {(canStart || canRecordWork || canComplete) && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-subtle pt-4">
+            {canStart && !isTerminal && (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                className="min-h-11"
+                icon={<LuPlay className="h-4 w-4" />}
+                onClick={() => setConfirmingStart(true)}
+                loading={startMutation.isPending}
+              >
+                Start work
+              </Button>
+            )}
+            {canRecordWork && <WorkLogControl order={wo} />}
+            {canComplete && (
+              <Button type="button" variant="primary" size="sm" className="min-h-11" onClick={() => setConfirmingComplete(true)}>
+                Complete work order
+              </Button>
+            )}
+          </div>
+        )}
 
         {wo.description && (
           <p className="mt-3 text-sm text-secondary whitespace-pre-wrap">{wo.description}</p>
+        )}
+        {wo.remarks && (
+          <p className="mt-3 border-t border-subtle pt-3 text-sm text-secondary whitespace-pre-wrap">
+            <span className="block text-xs text-muted">{wo.status === 'cancelled' ? 'Cancellation reason' : 'Work performed'}</span>{wo.remarks}
+          </p>
         )}
 
         {wo.assignee && (
@@ -210,25 +220,64 @@ export default function MobileWorkOrderDetail() {
             Assigned to: <span className="font-medium text-secondary">{wo.assignee.name}</span>
           </div>
         )}
+        <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-subtle pt-3 text-xs text-secondary sm:grid-cols-4">
+          <div><dt className="text-muted">Started</dt><dd>{wo.started_at ? formatDateTime(wo.started_at) : '—'}</dd></div>
+          <div><dt className="text-muted">Completed</dt><dd>{wo.completed_at ? formatDateTime(wo.completed_at) : '—'}</dd></div>
+        </dl>
       </div>
 
-      {/* Start button */}
-      {canStart && !isTerminal && (
-        <Button
-          type="button"
-          variant="primary"
-          size="lg"
-          className="w-full"
-          icon={<LuPlay className="w-5 h-5" />}
-          onClick={() => startMutation.mutate()}
-          loading={startMutation.isPending}
-        >
-          {startMutation.isPending ? 'Starting…' : 'Start work'}
-        </Button>
+      <RecoveryPanel order={wo} />
+
+      <PartReconciliationPanel
+        order={wo}
+        isSupervisor={isSupervisor}
+        inspectionReason={inspectionReason}
+        onInspectionReasonChange={setInspectionReason}
+        touch
+      />
+
+      {actions.includes('assign') && can('maintenance.wo.assign') && (
+        <AssignmentPanel order={wo} touch />
       )}
 
+      <TouchConfirmSheet
+        isOpen={confirmingStart}
+        onClose={() => setConfirmingStart(false)}
+        onConfirm={() => startMutation.mutate()}
+        title="Start this work order?"
+        confirmLabel="Start work"
+        variant="primary"
+        pending={startMutation.isPending}
+        className="sm:max-w-xl"
+      >
+        <p>Work starts on <span className="font-mono">{wo.mwo_number}</span>. Downtime uses the recorded equipment downtime start.</p>
+      </TouchConfirmSheet>
+
+      {(wo.logs?.length || canEditParts) ? (
+        <section className="rounded-md border border-default bg-canvas p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-base font-medium">Work history</h2>
+            <span className="text-xs text-muted">{wo.logs?.length ?? 0} {(wo.logs?.length ?? 0) === 1 ? 'entry' : 'entries'}</span>
+          </div>
+          {!canCloseWork && (actions.includes('complete') || actions.includes('submit_repair')) && <p className="mb-3 text-xs text-muted">{wo.closure_readiness?.blocker}</p>}
+          {wo.logs?.length ? (
+            <div className="divide-y divide-subtle">
+              {wo.logs.map((log) => (
+                <div key={log.id} className="py-3 first:pt-0 last:pb-0 text-sm">
+                  <WorkLogContent log={log} />
+                  <div className="mt-1 text-xs text-muted font-mono tabular-nums">
+                    {log.logger?.name ?? 'System'}
+                    {log.created_at && ` · ${formatDateTime(log.created_at)}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-sm text-muted">No work recorded yet.</p>}
+        </section>
+      ) : null}
+
       {/* Parts Used section */}
-      {!isTerminal && canComplete && (
+      {!isTerminal && canEditParts && (
         <div className="rounded-md border border-default bg-canvas p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">Parts used</h2>
@@ -240,7 +289,7 @@ export default function MobileWorkOrderDetail() {
               onClick={() => setShowPartSheet(true)}
               className="text-accent"
             >
-              Add
+              Request spare parts
             </Button>
           </div>
 
@@ -254,17 +303,24 @@ export default function MobileWorkOrderDetail() {
                   <div>
                     <div className="font-medium">{sp.item?.name ?? '—'}</div>
                     <div className="text-xs text-muted">
-                      {sp.item?.code} &middot; Qty:{' '}
-                      <span className="font-mono tabular-nums">{sp.quantity}</span>
+                      {sp.item?.code ?? '—'}{sp.stock_movement_id && can('inventory.view') && <Link className="inline-flex min-h-hit items-center text-accent ml-2" to={`/inventory/stock-levels?view=movements&movement_id=${sp.stock_movement_id}`}>Stock movement</Link>}{sp.lot_number ? ` · Lot ${sp.lot_number}` : ''}
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      {sp.work_record ? <>Work record: {sp.work_record.finding} · {sp.work_record.action_taken}</> : 'Work record not captured.'} · Issued by {sp.issuer?.name ?? '—'}
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      Gross: <span className="font-mono tabular-nums">{sp.quantity}</span> · Returned: <span className="font-mono tabular-nums">{sp.returned_quantity}</span> · Net: <span className="font-mono tabular-nums">{(Number(sp.quantity) - Number(sp.returned_quantity)).toFixed(3)}</span>
                     </div>
                   </div>
                   <div className="font-mono tabular-nums text-xs text-muted">
-                    {formatPeso(sp.total_cost)}
+                    <div>Gross {formatPeso(sp.total_cost)}</div>
+                    <div>Returned {formatPeso(sp.returned_cost)}</div>
+                    <div>Net {formatPeso((Number(sp.total_cost) - Number(sp.returned_cost)).toFixed(2))}</div>
                   </div>
                 </div>
               ))}
               <div className="text-right text-xs text-muted pt-1 border-t border-subtle">
-                Total cost:{' '}
+                Parts cost:{' '}
                 <span className="font-mono tabular-nums font-medium text-primary">
                   {formatPeso(wo.cost)}
                 </span>
@@ -277,7 +333,7 @@ export default function MobileWorkOrderDetail() {
       )}
 
       {/* Read-only parts for terminal states */}
-      {isTerminal && wo.spare_parts && wo.spare_parts.length > 0 && (
+      {!canEditParts && wo.spare_parts && wo.spare_parts.length > 0 && (
         <div className="rounded-md border border-default bg-canvas p-4">
           <h2 className="text-base font-medium mb-3">Parts used</h2>
           <div className="space-y-2">
@@ -289,68 +345,29 @@ export default function MobileWorkOrderDetail() {
                 <div>
                   <div className="font-medium">{sp.item?.name ?? '—'}</div>
                   <div className="text-xs text-muted">
-                    Qty: <span className="font-mono tabular-nums">{sp.quantity}</span>
+                    {sp.stock_movement_id && can('inventory.view') && (
+                      <Link className="inline-flex min-h-hit items-center text-accent mr-2" to={`/inventory/stock-levels?view=movements&movement_id=${sp.stock_movement_id}`}>
+                        Stock movement
+                      </Link>
+                    )}
+                    {sp.item?.code ?? '—'}{sp.lot_number && <> · Lot {sp.lot_number}</>}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {sp.work_record ? <>Work record: {sp.work_record.finding} · {sp.work_record.action_taken}</> : 'Work record not captured.'} · Issued by {sp.issuer?.name ?? '—'}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Gross: <span className="font-mono tabular-nums">{sp.quantity}</span> · Returned: <span className="font-mono tabular-nums">{sp.returned_quantity}</span> · Net: <span className="font-mono tabular-nums">{(Number(sp.quantity) - Number(sp.returned_quantity)).toFixed(3)}</span>
                   </div>
                 </div>
                 <div className="font-mono tabular-nums text-xs text-muted">
-                  {formatPeso(sp.total_cost)}
+                  <div>Gross {formatPeso(sp.total_cost)}</div>
+                  <div>Returned {formatPeso(sp.returned_cost)}</div>
+                  <div>Net {formatPeso((Number(sp.total_cost) - Number(sp.returned_cost)).toFixed(2))}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Completion form */}
-      {canComplete && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            // Completion writes downtime minutes that feed OEE and closes the WO.
-            // A tech taps this with the machine in front of him and one glove on;
-            // it was a single tap with no way back.
-            setConfirmingComplete(true);
-          }}
-          className="rounded-md border border-default bg-canvas p-4 space-y-4"
-        >
-          <h2 className="text-base font-medium">Complete work order</h2>
-
-          <Textarea
-            id="remarks"
-            label="Work performed"
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            rows={3}
-            placeholder="Describe what was done…"
-            className="resize-none"
-          />
-
-          <Input
-            id="downtime"
-            label="Downtime (minutes)"
-            fieldSize="xl"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            value={downtimeMinutes}
-            onChange={(e) => setDowntimeMinutes(e.target.value)}
-            placeholder="0"
-            className="text-center font-mono tabular-nums"
-          />
-
-          <StickyActionBar>
-            <Button
-              type="submit"
-              variant="primary"
-              size="touch"
-              className="w-full"
-              icon={<LuCircleCheck className="w-5 h-5" />}
-              loading={completeMutation.isPending}
-            >
-              {completeLabel || 'Complete work order'}
-            </Button>
-          </StickyActionBar>
-        </form>
       )}
 
       <TouchConfirmSheet
@@ -361,178 +378,49 @@ export default function MobileWorkOrderDetail() {
         confirmLabel={completeLabel || 'Yes, complete it'}
         variant="primary"
         pending={completeMutation.isPending}
+        className="sm:max-w-xl"
       >
         <p>
           Closes{' '}
           <span className="font-mono tabular-nums font-medium text-primary">{wo.mwo_number}</span>
           {wo.maintainable?.name ? ` on ${wo.maintainable.name}` : ''}.
         </p>
-        <p>
-          Booking{' '}
-          <span className="font-mono tabular-nums font-medium text-primary">
-            {downtimeMinutes || '0'}
-          </span>{' '}
-          minutes of downtime against OEE.
-        </p>
-        {remarks.trim().length === 0 && (
-          <p className="text-muted">No work performed was recorded.</p>
-        )}
+        <p>Machine downtime is calculated from the recorded start and completion times.</p>
+        <Textarea
+          label="Remarks (optional)"
+          value={remarks}
+          onChange={(event) => setRemarks(event.target.value)}
+          rows={3}
+          placeholder="Add any final handover note"
+        />
       </TouchConfirmSheet>
 
-      {/* Activity log */}
-      {wo.logs && wo.logs.length > 0 && (
-        <div className="rounded-md border border-default bg-canvas p-4">
-          <h2 className="text-base font-medium mb-3">Activity log</h2>
-          <div className="space-y-2">
-            {wo.logs.map((log) => (
-              <div key={log.id} className="text-sm">
-                <div className="text-secondary">{log.description}</div>
-                <div className="text-xs text-muted mt-0.5 font-mono tabular-nums">
-                  {log.logger?.name ?? 'System'}
-                  {log.created_at && ` — ${formatDateTime(log.created_at)}`}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {actions.includes('cancel') && canCloseParts && canAny('maintenance.wo.complete', 'maintenance.wo.assign') && (!isSupervisor || inspectionReason.trim().length >= 5) && (
+        <Button type="button" variant="danger" size="touch" className="w-full" onClick={() => setCancelOpen(true)}>
+          Cancel work order
+        </Button>
       )}
+      <ReasonDialog
+        isOpen={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={(reason) => cancelMutation.mutate(reason)}
+        title={`Cancel ${wo.mwo_number}?`}
+        description={<>Cancelling closes this work order without the maintenance being done. It cannot be reopened. Your reason is kept on the record.{isSupervisor && <p className="mt-2">Supervisor inspection reason is recorded with the parts reconciliation before cancellation.</p>}</>}
+        reasonLabel="Cancellation reason"
+        minLength={5}
+        confirmLabel="Cancel work order"
+        cancelLabel="Keep it open"
+        variant="danger"
+        pending={cancelMutation.isPending}
+      />
 
-      {/* ── Add Spare Part Bottom Sheet ─────────────────── */}
-      <BottomSheet
-        isOpen={showPartSheet}
-        onClose={() => {
-          setShowPartSheet(false);
-          setSelectedItem(null);
-          setPartSearch('');
-          setPartQty('');
-          setPartLocationId('');
-        }}
-        title="Add spare part"
-      >
-        <div className="space-y-4">
-          {/* Item search */}
-          {!selectedItem ? (
-            <>
-              <Input
-                id="part_search"
-                label="Search spare parts"
-                fieldSize="lg"
-                type="text"
-                value={partSearch}
-                onChange={(e) => setPartSearch(e.target.value)}
-                placeholder="Search items…"
-                autoFocus
-              />
-
-              {itemsData?.data && itemsData.data.length > 0 && (
-                <div className="space-y-1 max-h-[40vh] overflow-y-auto">
-                  {itemsData.data.map((item: Item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedItem(item)}
-                      className={cn(
-                        'w-full text-left p-3 rounded-md hover:bg-surface active:bg-elevated min-h-hit cursor-pointer',
-                        focusRingInset,
-                      )}
-                    >
-                      <div className="text-sm font-medium">{item.name}</div>
-                      <div className="text-xs text-muted">
-                        {item.code} &middot; {item.unit_of_measure}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {partSearch.length >= 2 && itemsData?.data?.length === 0 && (
-                <p className="text-sm text-muted text-center py-4">No spare parts found.</p>
-              )}
-            </>
-          ) : (
-            <>
-              {/* Selected item summary */}
-              <div className="flex items-center justify-between p-3 rounded-md bg-surface">
-                <div>
-                  <div className="text-sm font-medium">{selectedItem.name}</div>
-                  <div className="text-xs text-muted">{selectedItem.code}</div>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="lg"
-                  iconOnly
-                  icon={<LuTrash2 className="w-4 h-4" />}
-                  aria-label="Clear selected part"
-                  onClick={() => {
-                    setSelectedItem(null);
-                    setPartLocationId('');
-                    setPartQty('');
-                  }}
-                  className="text-muted hover:text-danger-fg"
-                />
-              </div>
-
-              {/* Location picker */}
-              <Select
-                id="part_location"
-                label="Source location"
-                fieldSize="lg"
-                value={partLocationId}
-                onChange={(e) => setPartLocationId(e.target.value)}
-              >
-                <option value="">Select location…</option>
-                {stockData?.data?.map(
-                  (sl: {
-                    id: string;
-                    location: { id: string; code: string };
-                    quantity_on_hand: string;
-                  }) => (
-                    <option key={sl.location.id} value={sl.location.id}>
-                      {sl.location.code} (Qty: {sl.quantity_on_hand})
-                    </option>
-                  ),
-                )}
-              </Select>
-
-              {/* Quantity */}
-              <Input
-                id="part_qty"
-                label={`Quantity (${selectedItem.unit_of_measure})`}
-                fieldSize="xl"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                value={partQty}
-                onChange={(e) => setPartQty(e.target.value)}
-                placeholder="0"
-                className="text-center font-mono tabular-nums"
-              />
-
-              {/* Submit */}
-              <Button
-                type="button"
-                variant="primary"
-                size="lg"
-                className="w-full"
-                disabled={!canAddPart}
-                loading={sparePartMutation.isPending}
-                onClick={() => {
-                  if (!canAddPart) return;
-                  sparePartMutation.mutate({
-                    item_id: selectedItem.id,
-                    location_id: partLocationId,
-                    quantity: partQty,
-                  });
-                }}
-              >
-                {sparePartMutation.isPending ? 'Recording…' : 'Add part'}
-              </Button>
-            </>
-          )}
-        </div>
-      </BottomSheet>
+      <SparePartSheet
+        workOrderId={mwoId!}
+        logs={wo.logs ?? []}
+        isOpen={showPartSheet && canEditParts}
+        onClose={() => setShowPartSheet(false)}
+        desktop={false}
+      />
     </div>
   );
 }

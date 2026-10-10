@@ -1,14 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { NotArrivedPanel } from './NotArrivedPanel';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuCheck, LuFileText, LuInfo, LuMessageSquare, LuX } from '@/lib/icons';
+import { LuCheck, LuFileText, LuInfo, LuMessageSquare } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmReceiptDialog } from './ConfirmReceiptDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
@@ -37,39 +36,23 @@ export default function CustomerDeliveryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const queryClient = useQueryClient();
   const { data: delivery, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'delivery', id],
     queryFn: () => customerPortalApi.getDelivery(id!),
     enabled: !!id,
+    refetchInterval: (query) => query.state.data?.status === 'confirmed' ? false : 30_000,
   });
 
   const [showTrace, setShowTrace] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [receiverName, setReceiverName] = useState('');
-  const [receiverPosition, setReceiverPosition] = useState('');
-  const [deliveryRemarks, setDeliveryRemarks] = useState('');
-
-  const confirmMut = useMutation({
-    mutationFn: () =>
-      customerPortalApi.confirmDelivery(id!, {
-        receiver_name: receiverName.trim() || undefined,
-        receiver_position: receiverPosition.trim() || undefined,
-        delivery_remarks: deliveryRemarks.trim() || undefined,
-      }),
-    onSuccess: (res) => {
-      toast.success(res.message ?? 'Delivery confirmed.');
-      setShowConfirm(false);
-      setReceiverName('');
-      setReceiverPosition('');
-      setDeliveryRemarks('');
-      queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'delivery', id] });
-      queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'deliveries'] });
-    },
-    onError: (e: Error & { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? 'Failed to confirm delivery.'),
+  const receiptGroup = useQuery({
+    queryKey: ['portal', 'customer', 'receipt-group', id],
+    queryFn: () => customerPortalApi.getReceiptGroup(id!),
+    enabled: !!delivery && ['delivered', 'confirmed'].includes(delivery.status),
+    refetchInterval: (query) => query.state.data?.shipments.every((shipment) => shipment.already_confirmed) ? false : 30_000,
   });
-
+  const group = receiptGroup.data;
+  const canConfirmGroup = group?.can_confirm === true;
   // The server decides: a delivered shipment is confirmable only once our
   // driver has uploaded a proof of delivery.
   const canConfirm = delivery?.can_confirm === true;
@@ -102,13 +85,13 @@ export default function CustomerDeliveryDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             {delivery.can_report_not_arrived && !delivery.billing_hold && <Button variant="secondary" size="sm" onClick={() => setShowTrace((open) => !open)}>Shipment not arrived</Button>}
             {canReportProblem && <Button variant="secondary" size="sm" icon={<LuMessageSquare size={14} />} onClick={() => navigate(`/portal/customer/problems/new?source_kind=delivery&source_id=${encodeURIComponent(id ?? '')}`)}>Report a problem</Button>}
-            {canConfirm && <Button
-              variant={showConfirm ? 'secondary' : 'primary'}
+            {(canConfirm || canConfirmGroup) && <Button
+              variant="primary"
               size="sm"
-              icon={showConfirm ? <LuX size={14} /> : <LuCheck size={14} />}
-              onClick={() => setShowConfirm(!showConfirm)}
+              icon={<LuCheck size={14} />}
+              onClick={() => setShowConfirm(true)}
             >
-              {showConfirm ? 'Cancel' : 'Confirm Receipt'}
+              {canConfirmGroup ? 'Confirm received shipments' : 'Confirm Receipt'}
             </Button>}
           </div>
         )}
@@ -141,9 +124,14 @@ export default function CustomerDeliveryDetailPage() {
               <p className="text-sm">No goods were recorded as received for this delivery. It will not generate an invoice. Your order remains open for the remaining quantity.</p>
             </Panel>}
             {delivery.billing_hold && <Panel title="Problem report in progress">
-              <p className="text-sm mb-2">We’ll confirm receipt after this report is resolved. You can follow its progress and add details here.</p>
+              <p className="text-sm mb-2">{canConfirmGroup ? 'Your replacement has arrived. Review both shipment receipts together to complete this report.' : 'We’ll confirm receipt after this report is resolved. You can follow its progress and add details here.'}</p>
               <Link className="text-accent hover:underline font-mono" to={`/portal/customer/problems/${delivery.billing_hold.case_id}`}>{delivery.billing_hold.case_number}</Link>
             </Panel>}
+            {group?.blocked_reason && <p role="status" className="text-sm text-warning-fg">Combined receipt: {group.blocked_reason}</p>}
+            {receiptGroup.isError && <div className="text-sm text-warning-fg flex items-center gap-2">
+              <span>Could not check related shipments.</span>
+              <Button size="sm" variant="secondary" onClick={() => receiptGroup.refetch()}>Retry shipment check</Button>
+            </div>}
             {awaitingProof && (
               <div className="text-sm text-muted px-4 py-3 bg-subtle rounded-md border border-default flex items-start gap-2">
                 <LuInfo size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -153,54 +141,7 @@ export default function CustomerDeliveryDetailPage() {
                 </span>
               </div>
             )}
-            {showConfirm && (
-              <Panel title="Confirm receipt">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (receiverName.trim()) confirmMut.mutate();
-                  }}
-                  className="flex flex-col gap-3"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input
-                      label="Received by"
-                      required
-                      value={receiverName}
-                      onChange={(e) => setReceiverName(e.target.value)}
-                      maxLength={200}
-                    />
-                    <Input
-                      label="Position"
-                      value={receiverPosition}
-                      onChange={(e) => setReceiverPosition(e.target.value)}
-                      maxLength={200}
-                    />
-                  </div>
-                  <Textarea
-                    label="Remarks"
-                    value={deliveryRemarks}
-                    onChange={(e) => setDeliveryRemarks(e.target.value)}
-                    rows={3}
-                    placeholder="Optional notes about the delivery…"
-                  />
-                  <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowConfirm(false)}>
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={!receiverName.trim()}
-                      loading={confirmMut.isPending}
-                    >
-                      Confirm receipt
-                    </Button>
-                  </div>
-                </form>
-              </Panel>
-            )}
+            {showConfirm && <ConfirmReceiptDialog key={delivery.id} delivery={delivery} group={canConfirmGroup ? group : undefined} onClose={() => setShowConfirm(false)} />}
 
             <KpiGrid count={4}>
               <StatCard label="Order" value={delivery.sales_order?.so_number ?? '—'} />

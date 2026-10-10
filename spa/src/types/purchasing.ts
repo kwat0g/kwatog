@@ -468,6 +468,8 @@ export interface PurchaseOrderItem {
   quantity_accepted: string;
   quantity_remaining: string;
   quantity_open?: string;
+  base_quantity_ordered?: string;
+  base_quantity_remaining?: string;
   /** Receipt valuation (4dp): unit price plus capitalized RFQ charges. */
   delivered_unit_cost?: string | null;
   /** Supplier-quoted charges carried from an RFQ award; null on non-RFQ lines. */

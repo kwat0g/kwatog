@@ -11,6 +11,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Clearance, ClearanceStatus } from '@/types/separations';
+import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 
 const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neutral'> = {
@@ -22,6 +23,7 @@ const DEFAULT_FILTERS: SeparationListParams = {
 
 export default function SeparationsListPage() {
  const navigate = useNavigate();
+ const { can } = usePermission();
  // Bound to the URL so dashboard drill-downs (?status=in_progress) arrive
  // pre-filtered and the browser back button restores the previous view.
  const [filters, setFilters] = useUrlFilters<SeparationListParams>(DEFAULT_FILTERS);
@@ -100,7 +102,7 @@ export default function SeparationsListPage() {
  <div className="px-5 py-4">
   <DataTable
   tableKey="separations"
-  onRowClick={(r) => navigate(`/hr/separations/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
+  onRowClick={(r) => navigate(`/hr/separations/${r.id}`)} columns={columns.filter((column) => column.key !== 'final_pay' || can('hr.separation.view_all'))} data={data.data} meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
  </div>

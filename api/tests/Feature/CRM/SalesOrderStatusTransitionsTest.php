@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\CRM;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
@@ -26,6 +27,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -211,6 +213,8 @@ class SalesOrderStatusTransitionsTest extends TestCase
         return [
             'cancelled is terminal'          => [SalesOrderStatus::Cancelled, 'markDelivered'],
             'draft must be confirmed first'  => [SalesOrderStatus::Draft, 'markDelivered'],
+            'negotiation cannot enter production' => [SalesOrderStatus::DeliveryNegotiation, 'markInProduction'],
+            'awaiting confirmation cannot deliver' => [SalesOrderStatus::AwaitingConfirmation, 'markDelivered'],
             'delivered cannot go back'       => [SalesOrderStatus::Delivered, 'markPartiallyDelivered'],
             // CR-01 — `invoiced` is no longer terminal for the physical
             // fulfilment side, but it still cannot go back to production.
@@ -305,9 +309,50 @@ class SalesOrderStatusTransitionsTest extends TestCase
         $this->assertSame((int) $so->id, (int) $invoice->fresh()->sales_order_id,
             'InvoiceService::create must persist sales_order_id when passed.');
 
-        $svc->finalize($invoice->fresh(), $user);
+        $auditCount = DB::table('audit_logs')
+            ->where('model_type', $invoice->getMorphClass())
+            ->where('model_id', $invoice->id)
+            ->count();
+        $this->actingAs($user);
+        try {
+            $svc->finalize($invoice->fresh(), $user);
+            $this->fail('An invoice creator finalized their own invoice.');
+        } catch (ForbiddenActionException $exception) {
+            $this->assertStringContainsString('segregation of duties', $exception->getMessage());
+        }
 
+        $this->assertSame('draft', $invoice->fresh()->status->value);
+        $this->assertNull($invoice->fresh()->invoice_number);
+        $this->assertNull($invoice->fresh()->journal_entry_id);
+        $this->assertSame(SalesOrderStatus::Delivered->value, $so->fresh()->status->value);
+        $this->assertDatabaseMissing('journal_entries', [
+            'reference_type' => 'invoice',
+            'reference_id' => $invoice->id,
+        ]);
+        $this->assertSame($auditCount, DB::table('audit_logs')
+            ->where('model_type', $invoice->getMorphClass())
+            ->where('model_id', $invoice->id)
+            ->count());
+
+        $checker = $this->makeArClerk();
+        $this->actingAs($checker);
+        $finalized = $svc->finalize($invoice->fresh(), $checker);
+
+        $this->assertSame('finalized', $finalized->fresh()->status->value);
+        $this->assertNotNull($finalized->fresh()->invoice_number);
+        $this->assertNotNull($finalized->fresh()->journal_entry_id);
+        $this->assertDatabaseHas('journal_entries', [
+            'id' => $finalized->fresh()->journal_entry_id,
+            'status' => 'posted',
+            'posted_by' => $checker->id,
+        ]);
         $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => $invoice->getMorphClass(),
+            'model_id' => $invoice->id,
+            'action' => 'updated',
+            'user_id' => $checker->id,
+        ]);
     }
 
     public function test_fully_paid_invoiced_so_promotes_to_paid(): void
@@ -463,7 +508,11 @@ class SalesOrderStatusTransitionsTest extends TestCase
 
         $firstInvoiceId = $first->fresh()->invoice_id;
         $this->assertNotNull($firstInvoiceId, 'Confirming the first delivery must auto-create its draft invoice.');
-        app(InvoiceService::class)->finalize(Invoice::query()->find($firstInvoiceId), $user);
+        $firstInvoice = Invoice::query()->findOrFail($firstInvoiceId);
+        $this->assertSame((int) $user->id, (int) $firstInvoice->created_by);
+        $checker = $this->makeArClerk();
+        $this->actingAs($checker);
+        app(InvoiceService::class)->finalize($firstInvoice, $checker);
 
         $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value,
             'Finalizing the first delivery invoice must promote the SO to invoiced.');
@@ -498,7 +547,11 @@ class SalesOrderStatusTransitionsTest extends TestCase
         $this->addProof($first, $user);
         app(DeliveryService::class)->confirm($first->fresh(), $user);
 
-        app(InvoiceService::class)->finalize(Invoice::query()->find($first->fresh()->invoice_id), $user);
+        $firstInvoice = Invoice::query()->findOrFail($first->fresh()->invoice_id);
+        $this->assertSame((int) $user->id, (int) $firstInvoice->created_by);
+        $checker = $this->makeArClerk();
+        $this->actingAs($checker);
+        app(InvoiceService::class)->finalize($firstInvoice, $checker);
         $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value);
 
         [$second] = $this->makeDelivery($so, $soItem, qty: '3', user: $user);

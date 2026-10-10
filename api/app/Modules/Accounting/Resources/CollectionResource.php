@@ -18,6 +18,7 @@ class CollectionResource extends JsonResource
             'payment_method'   => $this->payment_method?->value,
             'payment_method_label' => $this->payment_method?->label(),
             'reference_number' => $this->reference_number,
+            'manual_reason' => $this->manual_reason,
             'cash_account'     => $this->whenLoaded('cashAccount', fn () => $this->cashAccount ? [
                 'id' => $this->cashAccount->hash_id, 'code' => $this->cashAccount->code, 'name' => $this->cashAccount->name,
             ] : null),

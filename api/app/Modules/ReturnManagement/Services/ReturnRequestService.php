@@ -6,22 +6,34 @@ namespace App\Modules\ReturnManagement\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
-use App\Modules\Auth\Models\User;
+use App\Common\Models\ApprovalRecord;
+use App\Common\Services\ApprovalService;
+use App\Common\Services\ChainBroadcaster;
+use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxService;
+use App\Common\Services\SystemUserResolver;
+use App\Common\Services\TaxPolicyService;
+use App\Common\Support\HashId;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
-use App\Modules\CRM\Models\Product;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
+use App\Modules\Accounting\Services\CreditNoteService;
+use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Models\Delivery;
-use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -29,7 +41,10 @@ use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Services\QuarantineService;
+use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -47,41 +62,41 @@ use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
-use App\Modules\ReturnManagement\Models\ReturnRequest;
-use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnReceipt;
 use App\Modules\ReturnManagement\Models\ReturnReceiptItem;
-use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\ReturnManagement\Models\ReturnRequestSourceAllocation;
 use App\Modules\ReturnManagement\Support\ReturnRequestStateMachine;
-use App\Common\Services\ApprovalService;
-use App\Common\Services\ChainBroadcaster;
-use App\Common\Services\DocumentSequenceService;
-use App\Common\Services\NotificationService;
-use App\Common\Services\OutboxService;
-use App\Common\Services\TaxPolicyService;
-use App\Common\Services\SystemUserResolver;
-use App\Common\Support\HashId;
-use App\Common\Support\Money;
-use App\Common\Models\ApprovalRecord;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryAttemptOutcome;
+use App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeMovement;
+use App\Modules\SupplyChain\Models\DeliveryItem;
+use App\Modules\SupplyChain\Services\DeliveryCostRecognitionService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ReturnRequestService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
-        private readonly \App\Modules\Inventory\Services\StockMovementService $stockMovements,
+        private readonly StockMovementService $stockMovements,
         private readonly ApprovalService $approvals,
         private readonly InspectionService $inspections,
-        private readonly \App\Modules\Accounting\Services\CreditNoteService $creditNotes,
+        private readonly CreditNoteService $creditNotes,
         private readonly PurchaseOrderService $purchaseOrders,
-        private readonly \App\Modules\Accounting\Services\AccountingAccountPolicyService $accountPolicies,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly TaxPolicyService $taxPolicy,
         private readonly NotificationService $notifications,
         private readonly ReturnRequestStateMachine $states,
+        private readonly QuarantineService $quarantine,
     ) {}
 
     /**
@@ -102,7 +117,7 @@ class ReturnRequestService
         return $this->remainingSourceQuantity($kind, $sourceId);
     }
 
-    public function create(array $data, User $by, ?\App\Modules\ReturnManagement\Models\ReturnCase $case = null): ReturnRequest
+    public function create(array $data, User $by, ?ReturnCase $case = null): ReturnRequest
     {
         if ($case !== null) {
             if ($case->resolution?->value === 'no_action') {
@@ -115,12 +130,14 @@ class ReturnRequestService
                 try {
                     $rma = $this->create($data, $by);
                     $case->forceFill(['return_request_id' => $rma->id])->save();
+
                     return $rma;
                 } finally {
                     $this->creatingForCase = $previous;
                 }
             });
         }
+
         return DB::transaction(function () use ($data, $by) {
             if (($data['type'] ?? null) === ReturnRequestType::SupplierReturn->value
                 && (bool) ($data['finance_only'] ?? false)) {
@@ -128,29 +145,30 @@ class ReturnRequestService
             }
 
             $rma = ReturnRequest::create([
-                'rma_number'         => $this->nextRmaNumber(),
-                'type'               => $data['type'],
-                'status'             => ReturnRequestStatus::Draft,
-                'finance_only'       => (bool) ($data['finance_only'] ?? false),
-                'finance_only_reason'=> $data['finance_only_reason'] ?? null,
-                'sales_order_id'     => $data['sales_order_id'] ?? null,
-                'invoice_id'         => $data['invoice_id'] ?? null,
-                'purchase_order_id'  => $data['purchase_order_id'] ?? null,
-                'bill_id'            => $data['bill_id'] ?? null,
-                'customer_id'        => $data['customer_id'] ?? null,
-                'vendor_id'          => $data['vendor_id'] ?? null,
-                'reason_code'        => $data['reason_code'] ?? null,
+                'rma_number' => $this->nextRmaNumber(),
+                'type' => $data['type'],
+                'status' => ReturnRequestStatus::Draft,
+                'finance_only' => (bool) ($data['finance_only'] ?? false),
+                'finance_only_reason' => $data['finance_only_reason'] ?? null,
+                'sales_order_id' => $data['sales_order_id'] ?? null,
+                'invoice_id' => $data['invoice_id'] ?? null,
+                'purchase_order_id' => $data['purchase_order_id'] ?? null,
+                'bill_id' => $data['bill_id'] ?? null,
+                'customer_id' => $data['customer_id'] ?? null,
+                'vendor_id' => $data['vendor_id'] ?? null,
+                'reason_code' => $data['reason_code'] ?? null,
                 'reason_description' => $data['reason_description'] ?? null,
-                'customer_notes'     => $data['customer_notes'] ?? null,
-                'internal_notes'     => $data['internal_notes'] ?? null,
-                'resolution'         => $data['resolution'] ?? null,
-                'return_date'        => $data['return_date'] ?? now(),
-                'created_by'         => $by->id,
+                'customer_notes' => $data['customer_notes'] ?? null,
+                'internal_notes' => $data['internal_notes'] ?? null,
+                'resolution' => $data['resolution'] ?? null,
+                'return_date' => $data['return_date'] ?? now(),
+                'created_by' => $by->id,
             ]);
 
             $this->persistItems($rma, (array) ($data['items'] ?? []), true);
 
             $rma->load('items');
+
             return $rma;
         });
     }
@@ -161,10 +179,9 @@ class ReturnRequestService
      * accepted, so no customer credit is created and no ordinary source
      * allocation is reserved. Every line and inventory receipt remains bound
      * to the exact immutable dispatch movement it recovers.
-     *
      */
     public function createTruckReturnFromAttemptOutcome(
-        \App\Modules\SupplyChain\Models\DeliveryAttemptOutcome $outcome,
+        DeliveryAttemptOutcome $outcome,
         User $by,
         int $quarantineLocationId,
         string $receiptRequestKey,
@@ -172,7 +189,7 @@ class ReturnRequestService
         string $varianceReason = '',
     ): ReturnRequest {
         return DB::transaction(function () use ($outcome, $by, $quarantineLocationId, $receiptRequestKey, $receiptFingerprint, $varianceReason): ReturnRequest {
-            $lockedOutcome = \App\Modules\SupplyChain\Models\DeliveryAttemptOutcome::query()
+            $lockedOutcome = DeliveryAttemptOutcome::query()
                 ->with(['delivery.salesOrder', 'items.deliveryItem.salesOrderItem.product', 'items.movements.stockMovement'])
                 ->lockForUpdate()
                 ->findOrFail($outcome->id);
@@ -183,6 +200,7 @@ class ReturnRequestService
                     || ! hash_equals((string) $replay->payload_fingerprint, $receiptFingerprint)) {
                     throw new BusinessRuleException('This recovery request was already used for a different receipt.');
                 }
+
                 return $existing;
             }
             $delivery = $lockedOutcome->delivery;
@@ -270,7 +288,7 @@ class ReturnRequestService
                     ]);
 
                     $unitCost = (string) $issue->unit_cost;
-                    $totalCost = app(\App\Modules\SupplyChain\Services\DeliveryCostRecognitionService::class)->deliveryReturnCost($item, $quantity);
+                    $totalCost = app(DeliveryCostRecognitionService::class)->deliveryReturnCost($item, $quantity);
                     $movement = $this->stockMovements->move(new StockMovementInput(
                         type: StockMovementType::DeliveryReturn,
                         itemId: (int) $issue->item_id,
@@ -452,7 +470,7 @@ class ReturnRequestService
      *
      * @param  array{items: array<int, array{quantity?: string, reason?: string|null, condition?: string|null, source_invoice_item_id?: int|string|null, source_sales_order_item_id?: int|string|null, source_delivery_item_id?: int|string|null}>, reason_code?: string|null, reason_description?: string|null, customer_notes?: string|null, return_date?: string|null}  $data
      */
-    public function createCustomerReturnFromPortal(int $customerId, array $data, ?User $by = null, ?\App\Modules\ReturnManagement\Models\ReturnCase $case = null): ReturnRequest
+    public function createCustomerReturnFromPortal(int $customerId, array $data, ?User $by = null, ?ReturnCase $case = null): ReturnRequest
     {
         $by ??= app(SystemUserResolver::class)->user();
 
@@ -475,24 +493,24 @@ class ReturnRequestService
         }
 
         $rma = $this->create([
-            'type'                => ReturnRequestType::CustomerReturn->value,
-            'customer_id'         => $customerId,
-            'finance_only'        => false,
-            'sales_order_id'      => $salesOrderIds->first(),
-            'invoice_id'          => $invoiceIds->first(),
-            'reason_code'         => $data['reason_code'] ?? null,
-            'reason_description'  => $data['reason_description'] ?? null,
-            'customer_notes'      => $data['customer_notes'] ?? null,
-            'return_date'         => $data['return_date'] ?? now(),
-            'items'               => array_map(static fn (array $line): array => [
-                'product_id'                  => $line['product_id'],
-                'item_id'                     => $line['item_id'],
-                'quantity'                    => $line['quantity'],
-                'reason'                      => $line['reason'],
-                'condition'                   => $line['condition'],
-                'source_invoice_item_id'      => $line['source_invoice_item_id'],
-                'source_sales_order_item_id'  => $line['source_sales_order_item_id'],
-                'source_delivery_item_id'     => $line['source_delivery_item_id'],
+            'type' => ReturnRequestType::CustomerReturn->value,
+            'customer_id' => $customerId,
+            'finance_only' => false,
+            'sales_order_id' => $salesOrderIds->first(),
+            'invoice_id' => $invoiceIds->first(),
+            'reason_code' => $data['reason_code'] ?? null,
+            'reason_description' => $data['reason_description'] ?? null,
+            'customer_notes' => $data['customer_notes'] ?? null,
+            'return_date' => $data['return_date'] ?? now(),
+            'items' => array_map(static fn (array $line): array => [
+                'product_id' => $line['product_id'],
+                'item_id' => $line['item_id'],
+                'quantity' => $line['quantity'],
+                'reason' => $line['reason'],
+                'condition' => $line['condition'],
+                'source_invoice_item_id' => $line['source_invoice_item_id'],
+                'source_sales_order_item_id' => $line['source_sales_order_item_id'],
+                'source_delivery_item_id' => $line['source_delivery_item_id'],
             ], $resolved),
         ], $by, $case);
 
@@ -527,16 +545,16 @@ class ReturnRequestService
         $id = (int) $sources[$kind];
 
         $line = [
-            'product_id'                 => null,
-            'item_id'                    => null,
-            'quantity'                   => $quantity,
-            'reason'                     => $item['reason'] ?? null,
-            'condition'                  => $item['condition'] ?? null,
-            'source_invoice_item_id'     => null,
+            'product_id' => null,
+            'item_id' => null,
+            'quantity' => $quantity,
+            'reason' => $item['reason'] ?? null,
+            'condition' => $item['condition'] ?? null,
+            'source_invoice_item_id' => null,
             'source_sales_order_item_id' => null,
-            'source_delivery_item_id'    => null,
-            'sales_order_id'             => null,
-            'invoice_id'                 => null,
+            'source_delivery_item_id' => null,
+            'sales_order_id' => null,
+            'invoice_id' => null,
         ];
 
         if ($kind === 'invoice_item') {
@@ -640,17 +658,17 @@ class ReturnRequestService
             }
 
             $this->notifications->send($audience, 'customer.rma_created', [
-                'title'       => "RMA {$rma->rma_number} submitted by a customer",
-                'message'     => 'A customer return was submitted through the customer portal and is awaiting review.',
-                'link_to'     => '/return-management/'.$rma->hash_id,
+                'title' => "RMA {$rma->rma_number} submitted by a customer",
+                'message' => 'A customer return was submitted through the customer portal and is awaiting review.',
+                'link_to' => '/return-management/'.$rma->hash_id,
                 'entity_type' => 'return_request',
-                'entity_id'   => $rma->hash_id,
-                'rma_number'  => $rma->rma_number,
+                'entity_id' => $rma->hash_id,
+                'rma_number' => $rma->rma_number,
             ]);
         } catch (\Throwable $e) {
             Log::warning('ReturnRequestService::notifyCustomerReturnCreated failed', [
                 'rma_id' => $rma->id,
-                'error'  => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -721,16 +739,16 @@ class ReturnRequestService
                 : true;
             $allReversed = $allReversed && $reversed;
             $items[] = [
-                'item_id'                    => (int) $line['item_id'],
-                'quantity'                   => (string) $line['quantity'],
-                'unit_price'                 => (string) $line['unit_price'],
-                'reason'                     => $line['reason'] ?? $reason,
-                'lot_number'                 => $line['lot_number'] ?? null,
-                'source_grn_item_id'         => $line['grn_item_id'] ?? null,
-                'source_po_item_id'          => $line['purchase_order_item_id'] ?? null,
-                'source_bill_item_id'        => $line['source_bill_item_id'] ?? null,
-                'stock_movement_id'          => $line['stock_movement_id'] ?? null,
-                'reversal_already_applied'   => $reversed,
+                'item_id' => (int) $line['item_id'],
+                'quantity' => (string) $line['quantity'],
+                'unit_price' => (string) $line['unit_price'],
+                'reason' => $line['reason'] ?? $reason,
+                'lot_number' => $line['lot_number'] ?? null,
+                'source_grn_item_id' => $line['grn_item_id'] ?? null,
+                'source_po_item_id' => $line['purchase_order_item_id'] ?? null,
+                'source_bill_item_id' => $line['source_bill_item_id'] ?? null,
+                'stock_movement_id' => $line['stock_movement_id'] ?? null,
+                'reversal_already_applied' => $reversed,
             ];
         }
 
@@ -777,21 +795,21 @@ class ReturnRequestService
                 }
 
                 $rma = ReturnRequest::create([
-                    'rma_number'             => $this->nextRmaNumber(),
-                    'source_key'             => $dedupeKey,
-                    'type'                   => ReturnRequestType::SupplierReturn,
-                    'status'                 => ReturnRequestStatus::Draft,
-                    'finance_only'           => false,
-                    'vendor_id'              => $vendorId,
-                    'purchase_order_id'      => $purchaseOrderId,
-                    'goods_receipt_note_id'  => $goodsReceiptNoteId,
-                    'bill_id'                => $billId,
+                    'rma_number' => $this->nextRmaNumber(),
+                    'source_key' => $dedupeKey,
+                    'type' => ReturnRequestType::SupplierReturn,
+                    'status' => ReturnRequestStatus::Draft,
+                    'finance_only' => false,
+                    'vendor_id' => $vendorId,
+                    'purchase_order_id' => $purchaseOrderId,
+                    'goods_receipt_note_id' => $goodsReceiptNoteId,
+                    'bill_id' => $billId,
                     'reversal_already_applied' => $allReversed,
-                    'reason_code'            => 'quality_issue',
-                    'reason_description'     => $reason,
-                    'internal_notes'         => $reason,
-                    'return_date'            => now(),
-                    'created_by'             => $by?->id,
+                    'reason_code' => 'quality_issue',
+                    'reason_description' => $reason,
+                    'internal_notes' => $reason,
+                    'return_date' => now(),
+                    'created_by' => $by?->id,
                 ]);
 
                 // Reuse the authoritative line contract (source validation +
@@ -821,6 +839,19 @@ class ReturnRequestService
             $rma = $existing->load('items');
         }
 
+        if (str_starts_with($dedupeKey, 'grn-rejection:')) {
+            $audience = User::query()->where('is_active', true)
+                ->whereHas('role', fn ($query) => $query->where('slug', 'purchasing_officer'))
+                ->get()->filter(fn (User $user): bool => $user->hasPermission('return_management.manage'));
+            $this->notifications->sendInApp($audience, 'return.supplier_defect', [
+                'title' => "Supplier return {$rma->rma_number} needs review",
+                'message' => "Incoming QC separated defective goods. Review {$rma->rma_number}, arrange the supplier return, and decide replacement instructions.",
+                'link_to' => "/return-management/{$rma->hash_id}",
+                'entity_type' => 'return_request',
+                'entity_id' => $rma->hash_id,
+            ], 'supplier-defect-rma:'.$rma->id);
+        }
+
         return $rma;
     }
 
@@ -835,16 +866,16 @@ class ReturnRequestService
      * so stamping the quantity is what stops disposal from issuing a
      * ReturnToVendor movement the ledger cannot back.
      *
-     * @param array<string, mixed> $source
+     * @param  array<string, mixed>  $source
      */
     private function stampReversedLine(ReturnRequestItem $line, array $source): void
     {
         $line->update([
             'reversal_already_applied' => (bool) ($source['reversal_already_applied'] ?? true),
-            'stock_movement_quantity'  => $line->quantity,
-            'receipt_recorded'         => true,
-            'stock_movement_id'        => $source['stock_movement_id'] ?? null,
-            'returned_quantity'        => (string) $line->returned_quantity === '0.000'
+            'stock_movement_quantity' => $line->quantity,
+            'receipt_recorded' => true,
+            'stock_movement_id' => $source['stock_movement_id'] ?? null,
+            'returned_quantity' => (string) $line->returned_quantity === '0.000'
                 ? $line->quantity
                 : $line->returned_quantity,
         ]);
@@ -910,6 +941,9 @@ class ReturnRequestService
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $this->assertNotTruckReturn($locked, 'edit');
             $this->ensureStatus($locked, ReturnRequestStatus::Draft);
+            if (! $locked->is_editable) {
+                throw new BusinessRuleException('This GRN supplier return is generated from the receipt and cannot be edited. Add the problem and photo when submitting it.');
+            }
             $creatorId = $locked->created_by !== null ? (int) $locked->created_by : null;
             $systemUserId = $creatorId !== null && $creatorId !== (int) $by->id
                 ? app(SystemUserResolver::class)->id()
@@ -924,21 +958,21 @@ class ReturnRequestService
                 throw new BusinessRuleException('Only the draft creator, a return manager for case or system-created drafts, or a system administrator can edit this return request.');
             }
             $effective = array_merge([
-                'type'                => $locked->type instanceof ReturnRequestType ? $locked->type->value : (string) $locked->type,
-                'finance_only'        => (bool) $locked->finance_only,
+                'type' => $locked->type instanceof ReturnRequestType ? $locked->type->value : (string) $locked->type,
+                'finance_only' => (bool) $locked->finance_only,
                 'finance_only_reason' => $locked->finance_only_reason,
-                'sales_order_id'      => $locked->sales_order_id,
-                'invoice_id'          => $locked->invoice_id,
-                'purchase_order_id'   => $locked->purchase_order_id,
-                'bill_id'             => $locked->bill_id,
-                'customer_id'         => $locked->customer_id,
-                'vendor_id'           => $locked->vendor_id,
-                'reason_code'         => $locked->reason_code,
-                'reason_description'  => $locked->reason_description,
-                'customer_notes'      => $locked->customer_notes,
-                'internal_notes'      => $locked->internal_notes,
-                'resolution'          => $locked->resolution,
-                'return_date'         => $locked->return_date,
+                'sales_order_id' => $locked->sales_order_id,
+                'invoice_id' => $locked->invoice_id,
+                'purchase_order_id' => $locked->purchase_order_id,
+                'bill_id' => $locked->bill_id,
+                'customer_id' => $locked->customer_id,
+                'vendor_id' => $locked->vendor_id,
+                'reason_code' => $locked->reason_code,
+                'reason_description' => $locked->reason_description,
+                'customer_notes' => $locked->customer_notes,
+                'internal_notes' => $locked->internal_notes,
+                'resolution' => $locked->resolution,
+                'return_date' => $locked->return_date,
             ], $data);
 
             if ($effective['type'] === ReturnRequestType::SupplierReturn->value
@@ -947,21 +981,21 @@ class ReturnRequestService
             }
 
             $locked->update([
-                'type'                => $effective['type'],
-                'finance_only'        => (bool) $effective['finance_only'],
+                'type' => $effective['type'],
+                'finance_only' => (bool) $effective['finance_only'],
                 'finance_only_reason' => $effective['finance_only_reason'],
-                'sales_order_id'      => $effective['sales_order_id'],
-                'invoice_id'          => $effective['invoice_id'],
-                'purchase_order_id'   => $effective['purchase_order_id'],
-                'bill_id'             => $effective['bill_id'],
-                'customer_id'         => $effective['customer_id'],
-                'vendor_id'           => $effective['vendor_id'],
-                'reason_code'         => $effective['reason_code'],
-                'reason_description'  => $effective['reason_description'],
-                'customer_notes'      => $effective['customer_notes'],
-                'internal_notes'      => $effective['internal_notes'],
-                'resolution'          => $effective['resolution'],
-                'return_date'         => $effective['return_date'],
+                'sales_order_id' => $effective['sales_order_id'],
+                'invoice_id' => $effective['invoice_id'],
+                'purchase_order_id' => $effective['purchase_order_id'],
+                'bill_id' => $effective['bill_id'],
+                'customer_id' => $effective['customer_id'],
+                'vendor_id' => $effective['vendor_id'],
+                'reason_code' => $effective['reason_code'],
+                'reason_description' => $effective['reason_description'],
+                'customer_notes' => $effective['customer_notes'],
+                'internal_notes' => $effective['internal_notes'],
+                'resolution' => $effective['resolution'],
+                'return_date' => $effective['return_date'],
             ]);
 
             if (array_key_exists('items', $data)) {
@@ -979,7 +1013,7 @@ class ReturnRequestService
      * Supplier drafts may be created before their PO/GRN selectors are filled;
      * submit() calls this again with strict source requirements.
      *
-     * @param array<int, array<string, mixed>> $items
+     * @param  array<int, array<string, mixed>>  $items
      */
     private function persistItems(ReturnRequest $rma, array $items, bool $allowIncompleteSupplier): void
     {
@@ -1028,24 +1062,24 @@ class ReturnRequestService
         }
 
         return [
-            'return_request_id'           => $rma->id,
-            'product_id'                  => $item['product_id'] ?? null,
-            'item_id'                     => $item['item_id'] ?? null,
-            'quantity'                    => $quantity,
-            'unit_price'                  => Money::round2($unitPrice),
-            'original_unit_price'         => Money::round2($unitPrice),
-            'total'                       => Money::mul($quantity, $unitPrice),
-            'reason'                      => $item['reason'] ?? null,
-            'condition'                   => $item['condition'] ?? null,
+            'return_request_id' => $rma->id,
+            'product_id' => $item['product_id'] ?? null,
+            'item_id' => $item['item_id'] ?? null,
+            'quantity' => $quantity,
+            'unit_price' => Money::round2($unitPrice),
+            'original_unit_price' => Money::round2($unitPrice),
+            'total' => Money::mul($quantity, $unitPrice),
+            'reason' => $item['reason'] ?? null,
+            'condition' => $item['condition'] ?? null,
             'source_sales_order_item_id' => $item['source_sales_order_item_id'] ?? null,
-            'source_invoice_item_id'      => $item['source_invoice_item_id'] ?? null,
-            'source_delivery_item_id'    => $item['source_delivery_item_id'] ?? null,
-            'source_po_item_id'          => $item['source_po_item_id'] ?? null,
-            'source_grn_item_id'         => $item['source_grn_item_id'] ?? null,
-            'source_bill_item_id'        => $item['source_bill_item_id'] ?? null,
-            'lot_number'                 => $item['lot_number'] ?? null,
-            'serial_number'              => $item['serial_number'] ?? null,
-            'source'                     => $source,
+            'source_invoice_item_id' => $item['source_invoice_item_id'] ?? null,
+            'source_delivery_item_id' => $item['source_delivery_item_id'] ?? null,
+            'source_po_item_id' => $item['source_po_item_id'] ?? null,
+            'source_grn_item_id' => $item['source_grn_item_id'] ?? null,
+            'source_bill_item_id' => $item['source_bill_item_id'] ?? null,
+            'lot_number' => $item['lot_number'] ?? null,
+            'serial_number' => $item['serial_number'] ?? null,
+            'source' => $source,
         ];
     }
 
@@ -1074,7 +1108,7 @@ class ReturnRequestService
             $item = $line->getAttributes();
             $this->assertCustomerProductItemMapping($rma, $item);
             if ($line->delivery_attempt_outcome_movement_id !== null) {
-                $outcomeMovement = \App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeMovement::query()
+                $outcomeMovement = DeliveryAttemptOutcomeMovement::query()
                     ->with('outcomeItem.outcome')
                     ->find((int) $line->delivery_attempt_outcome_movement_id);
                 $outcome = $outcomeMovement?->outcomeItem?->outcome;
@@ -1084,6 +1118,7 @@ class ReturnRequestService
                     || bccomp((string) $line->quantity, (string) $outcomeMovement->received_quantity, 3) > 0) {
                     throw new BusinessRuleException('A truck-return RMA line must match its reconciled delivery issue movement and depot receipt.');
                 }
+
                 continue;
             }
             if ($rma->type === ReturnRequestType::CustomerReturn
@@ -1106,6 +1141,7 @@ class ReturnRequestService
                     || $rma->type === ReturnRequestType::SupplierReturn) {
                     throw new BusinessRuleException('Every stockable return line requires complete source lineage before disposition.');
                 }
+
                 continue;
             }
 
@@ -1177,11 +1213,11 @@ class ReturnRequestService
                     throw new BusinessRuleException('Customer returns cannot use an archived sales order.');
                 }
                 if (! in_array($salesOrder->status, [
-                    \App\Modules\CRM\Enums\SalesOrderStatus::PartiallyDelivered,
-                    \App\Modules\CRM\Enums\SalesOrderStatus::Delivered,
-                    \App\Modules\CRM\Enums\SalesOrderStatus::Invoiced,
-                    \App\Modules\CRM\Enums\SalesOrderStatus::Paid,
-                    \App\Modules\CRM\Enums\SalesOrderStatus::Closed,
+                    SalesOrderStatus::PartiallyDelivered,
+                    SalesOrderStatus::Delivered,
+                    SalesOrderStatus::Invoiced,
+                    SalesOrderStatus::Paid,
+                    SalesOrderStatus::Closed,
                 ], true)) {
                     throw new BusinessRuleException('Customer returns can only use a partially delivered or completed sales order.');
                 }
@@ -1358,7 +1394,7 @@ class ReturnRequestService
      * list show the actually-reservable amount. One query per kind, never per
      * line.
      *
-     * @param  list<int> $sourceIds
+     * @param  list<int>  $sourceIds
      * @return array<int, string> source id => reserved quantity (3 dp string)
      */
     public function activeAllocationsBySource(string $kind, array $sourceIds): array
@@ -1390,7 +1426,7 @@ class ReturnRequestService
      * `$excludeAllocationIds` lets a caller re-check an allocation that already
      * exists without counting itself as competition.
      *
-     * @param list<int> $excludeAllocationIds
+     * @param  list<int>  $excludeAllocationIds
      */
     private function remainingSourceQuantity(string $kind, int $sourceId, array $excludeAllocationIds = []): string
     {
@@ -1534,6 +1570,7 @@ class ReturnRequestService
             ->sum('return_request_source_allocations.quantity');
 
         $claims = app(ReturnCaseQuantityService::class)->reserved($deliveryLineIds, [], $this->creatingForCase);
+
         return bcsub(bcsub($limit, $allocated, 3), $claims, 3);
     }
 
@@ -1551,10 +1588,10 @@ class ReturnRequestService
 
         ReturnRequestSourceAllocation::create([
             'return_request_item_id' => $line->id,
-            'source_kind'             => $kind,
-            'source_id'               => $sourceId,
-            'quantity'                => $quantity,
-            'unit_price'              => Money::round2($unitPrice),
+            'source_kind' => $kind,
+            'source_id' => $sourceId,
+            'quantity' => $quantity,
+            'unit_price' => Money::round2($unitPrice),
         ]);
     }
 
@@ -1579,6 +1616,7 @@ class ReturnRequestService
             || (int) $allocation->source_id !== (int) $source['id']) {
             $allocation->update(['released_at' => now()]);
             $this->reserveSource($line, $source['kind'], (int) $source['id'], (string) $line->quantity, $source['unit_price']);
+
             return;
         }
 
@@ -1618,6 +1656,7 @@ class ReturnRequestService
         }
         if (bccomp($quantity, '0', 3) <= 0) {
             $allocation->update(['quantity' => '0.000', 'released_at' => now()]);
+
             return;
         }
         $allocation->update(['quantity' => $quantity]);
@@ -1674,49 +1713,105 @@ class ReturnRequestService
         }
     }
 
-    /**
-     * Submit for approval (draft → pending_approval).
-     *
-     * L-37 — Also opens an approval-records chain via ApprovalService so
-     * the Admin / approval-board UIs can show the same review structure
-     * used by PR / Leave / OT.
-     */
-    public function submit(ReturnRequest $rma): ReturnRequest
+    /** Submit a return; QC-generated supplier returns are authorized by Purchasing. */
+    public function submit(ReturnRequest $rma, User $by, ?string $problem = null, ?UploadedFile $defectPhoto = null, ?string $requiredDeliveryDate = null): ReturnRequest
     {
-        $updated = DB::transaction(function () use ($rma) {
-            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
-            $this->assertNotTruckReturn($locked, 'submit for approval');
-            $this->ensureStatus($locked, ReturnRequestStatus::Draft);
-            $locked->load('items');
-            $this->refreshAuthoritativeLineContract($locked);
-            $this->states->transition($locked, ReturnRequestStatus::PendingApproval);
+        $storedPhoto = null;
+        try {
+            $updated = DB::transaction(function () use ($rma, $by, $problem, $defectPhoto, $requiredDeliveryDate, &$storedPhoto) {
+                $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+                $this->assertNotTruckReturn($locked, 'submit for approval');
+                $this->ensureStatus($locked, ReturnRequestStatus::Draft);
+                $qcSupplierReturn = $locked->type === ReturnRequestType::SupplierReturn
+                    && str_starts_with((string) $locked->source_key, 'grn-rejection:');
+                if ($qcSupplierReturn) {
+                    if (! in_array($by->role?->slug, ['purchasing_officer', 'system_admin'], true)) {
+                        throw new ForbiddenActionException('Only Purchasing can submit a QC-generated supplier return.');
+                    }
+                    $date = $requiredDeliveryDate ? \DateTimeImmutable::createFromFormat('!Y-m-d', $requiredDeliveryDate) : false;
+                    if (! $date || $date->format('Y-m-d') !== $requiredDeliveryDate || $requiredDeliveryDate < now()->toDateString()) {
+                        throw ValidationException::withMessages(['required_delivery_date' => 'Enter a current or future required delivery date.']);
+                    }
+                    if (! $locked->purchase_order_id || ! $locked->vendor_id) {
+                        throw new BusinessRuleException('This supplier return needs a linked purchase order and vendor before it can be sent.');
+                    }
+                    $original = PurchaseOrder::query()->lockForUpdate()->findOrFail($locked->purchase_order_id);
+                    if ($original->short_closed_at !== null || in_array($original->status, [PurchaseOrderStatus::Closed, PurchaseOrderStatus::Cancelled], true)) {
+                        throw new BusinessRuleException('Original purchase order is closed; contact Purchasing before sending this supplier return.');
+                    }
+                    $recordedQcProblem = trim((string) $locked->reason_description);
+                    $submittedProblem = str_starts_with($recordedQcProblem, 'QC-')
+                        ? $recordedQcProblem
+                        : trim((string) $problem);
+                    if (mb_strlen($submittedProblem) < 10 || ! $defectPhoto) {
+                        throw ValidationException::withMessages([
+                            'problem' => 'Describe the defect in at least 10 characters and attach a photo before submitting this supplier return.',
+                        ]);
+                    }
+                    $storedPhoto = $defectPhoto->store('return-requests/defect-photos', 'local');
+                    if (! $storedPhoto) {
+                        throw new BusinessRuleException('The defect photo could not be stored. Try again.');
+                    }
+                    $locked->update([
+                        'reason_description' => $submittedProblem,
+                        'defect_photo_path' => $storedPhoto,
+                        'defect_photo_name' => $defectPhoto->getClientOriginalName(),
+                    ]);
+                }
+                $locked->load('items');
+                $this->refreshAuthoritativeLineContract($locked);
+                if ($qcSupplierReturn) {
+                    $this->states->transition($locked, ReturnRequestStatus::Approved);
+                    $locked->update([
+                        'status' => ReturnRequestStatus::Approved,
+                        'approved_by' => $by->id,
+                        'approved_at' => now(),
+                        'replacement_due_date' => $requiredDeliveryDate,
+                    ]);
+                    $disposed = $this->dispose($locked, $locked->items->map(static fn (ReturnRequestItem $line): array => [
+                        'item_id' => $line->hash_id,
+                        'disposition' => DispositionType::ReturnToSupplier->value,
+                    ])->all(), $by);
+                    $completed = $this->complete($disposed, $by);
+                    $this->notifySupplierOfQcReturn($completed);
 
-            $locked->update(['status' => ReturnRequestStatus::PendingApproval]);
-            try {
-                $workflowType = $locked->finance_only
-                    ? 'finance_only_return_request'
-                    : 'return_request';
-                $this->approvals->submit($locked, $workflowType);
-            } catch (\Throwable $e) {
-                // A swallowed failure here used to strand the RMA: the status
-                // flipped to pending_approval while no approval records existed,
-                // and isFullyApproved() is false for an empty chain — so it could
-                // never be approved again, only rejected. Fail the submission
-                // instead and leave the RMA editable in draft.
-                Log::warning('return_request approval submit failed', [
-                    'rma_id' => $rma->id,
-                    'error'  => $e->getMessage(),
-                ]);
+                    return $completed->fresh();
+                }
+                $this->states->transition($locked, ReturnRequestStatus::PendingApproval);
 
-                throw new BusinessRuleException(
-                    'The return approval workflow is not configured, so this RMA cannot be submitted. '
-                    . 'Ask an administrator to set up the "Return Request Approval" workflow.'
-                );
+                $locked->update(['status' => ReturnRequestStatus::PendingApproval]);
+                try {
+                    $workflowType = $locked->finance_only
+                        ? 'finance_only_return_request'
+                        : 'return_request';
+                    $this->approvals->submit($locked, $workflowType);
+                } catch (\Throwable $e) {
+                    // A swallowed failure here used to strand the RMA: the status
+                    // flipped to pending_approval while no approval records existed,
+                    // and isFullyApproved() is false for an empty chain — so it could
+                    // never be approved again, only rejected. Fail the submission
+                    // instead and leave the RMA editable in draft.
+                    Log::warning('return_request approval submit failed', [
+                        'rma_id' => $rma->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    throw new BusinessRuleException(
+                        'The return approval workflow is not configured, so this RMA cannot be submitted. '
+                        .'Ask an administrator to set up the "Return Request Approval" workflow.'
+                    );
+                }
+
+                return $locked->fresh();
+            });
+        } catch (\Throwable $e) {
+            if ($storedPhoto) {
+                Storage::disk('local')->delete($storedPhoto);
             }
-            return $locked->fresh();
-        });
+            throw $e;
+        }
 
-        event(new ReturnRequestUpdated($updated, 'submitted for approval'));
+        event(new ReturnRequestUpdated($updated, $updated->status === ReturnRequestStatus::Completed ? 'supplier return sent' : 'submitted for approval'));
 
         return $updated;
     }
@@ -1746,7 +1841,7 @@ class ReturnRequestService
                 // showed "RMA approved." for an approval that never happened.
                 Log::warning('return_request approval approve failed', [
                     'rma_id' => $locked->id,
-                    'error'  => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
 
                 throw $e instanceof BusinessRuleException
@@ -1757,11 +1852,15 @@ class ReturnRequestService
             if ($this->approvals->isFullyApproved($locked)) {
                 $this->states->transition($locked, ReturnRequestStatus::Approved);
                 $locked->update([
-                    'status'      => ReturnRequestStatus::Approved,
+                    'status' => ReturnRequestStatus::Approved,
                     'approved_by' => $by->id,
                     'finance_only_approved_by' => $locked->finance_only ? $by->id : null,
                     'approved_at' => now(),
                 ]);
+                if ($locked->type === ReturnRequestType::SupplierReturn
+                    && str_starts_with((string) $locked->source_key, 'grn-rejection:')) {
+                    $this->notifySupplierOfQcReturn($locked);
+                }
             }
 
             return $locked->fresh();
@@ -1772,11 +1871,28 @@ class ReturnRequestService
         return $updated;
     }
 
+    private function notifySupplierOfQcReturn(ReturnRequest $rma): void
+    {
+        $po = PurchaseOrder::query()->findOrFail($rma->purchase_order_id);
+        $this->notifications->sendPortalInApp(
+            SupplierPortalUser::query()->where('vendor_id', $rma->vendor_id)->where('is_active', true)->get(),
+            'return.supplier_defect_approved',
+            [
+                'title' => "Quality return {$rma->rma_number} sent",
+                'message' => "OGAMI confirmed defective goods on PO {$po->po_number}. Ship the replacement against this PO by {$rma->replacement_due_date?->toDateString()}.",
+                'link_to' => "/portal/supplier/purchase-orders/{$po->hash_id}",
+                'entity_type' => 'purchase_order',
+                'entity_id' => $po->hash_id,
+            ],
+            'supplier-defect-approved:'.$rma->id,
+        );
+    }
+
     /**
      * Record one physical return installment. Partial receipts remain approved
      * until the caller marks the last installment final.
      *
-     * @param array<int, numeric-string> $receivedQtys keyed by return_request_items.id
+     * @param  array<int, numeric-string>  $receivedQtys  keyed by return_request_items.id
      */
     public function receive(
         ReturnRequest $rma,
@@ -1800,6 +1916,9 @@ class ReturnRequestService
         ): array {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $locked->load('items');
+            if (str_starts_with((string) $locked->source_key, 'grn-rejection:')) {
+                throw new BusinessRuleException('Supplier QC returns already have a warehouse receipt. Arrange the supplier return; the replacement needs a new shipment and GRN.');
+            }
 
             if ($requestKey !== null) {
                 $existing = ReturnReceipt::query()
@@ -1963,7 +2082,7 @@ class ReturnRequestService
                     if (! $location) {
                         throw new BusinessRuleException('A quarantine location is required for physically received customer goods.');
                     }
-                    $movement = app(\App\Modules\SupplyChain\Services\DeliveryCostRecognitionService::class)->receiveCustomerReturn(
+                    $movement = app(DeliveryCostRecognitionService::class)->receiveCustomerReturn(
                         $item, $installment, (int) $location->id, $by ?? User::query()->findOrFail($locked->created_by),
                     ) ?? $this->stockMovements->move(new StockMovementInput(
                         type: StockMovementType::AdjustmentIn,
@@ -2179,6 +2298,25 @@ class ReturnRequestService
         $inspectionIds = [];
         $failures = [];
 
+        if (config('inspection.checklist_capture_enabled') && ! $rma->finance_only) {
+            foreach ($rma->items->filter(fn ($line) => ($line->product_id || $line->item_id)
+                && bccomp($this->settledQuantity($line), '0', 3) > 0) as $line) {
+                try {
+                    if ($line->reusedIncomingInspection()) {
+                        continue;
+                    }
+                    $existing = $line->qualityInspections()->latest('id')->first();
+                    $inspectionIds[] = (int) ($existing ?? $this->inspections->createForReturnItem($line, $rma, $by))->id;
+                } catch (BusinessRuleException|ModelNotFoundException|ValidationException $e) {
+                    $failures[] = ($line->item?->code ?? 'Return item').': '.$e->getMessage();
+                }
+            }
+        }
+
+        if (config('inspection.checklist_capture_enabled')) {
+            return ['inspection_ids' => array_values(array_unique($inspectionIds)), 'failures' => $failures];
+        }
+
         foreach ($rma->items->groupBy(fn (ReturnRequestItem $item) => $item->product_id) as $productId => $productItems) {
             if (! $productId) {
                 // Item-only/free-text lines have no Product inspection spec.
@@ -2196,6 +2334,7 @@ class ReturnRequestService
 
             if ($existing) {
                 $inspectionIds[] = (int) $existing->id;
+
                 continue;
             }
 
@@ -2217,7 +2356,7 @@ class ReturnRequestService
                     'batch_quantity' => max(1, $batchQty),
                     'entity_type' => InspectionEntityType::ReturnRequest->value,
                     'entity_id' => $rma->id,
-                    'notes' => $internalNotes ?: 'Auto-created from RMA ' . $rma->rma_number,
+                    'notes' => $internalNotes ?: 'Auto-created from RMA '.$rma->rma_number,
                 ], $by);
                 $inspectionIds[] = (int) $inspection->id;
             } catch (BusinessRuleException|ModelNotFoundException $e) {
@@ -2240,7 +2379,7 @@ class ReturnRequestService
     /** @param list<string> $failures */
     private function inspectionHandoffFailureMessage(array $failures): string
     {
-        return 'Quality inspection staging requires manual action: ' . implode(' | ', $failures);
+        return 'Quality inspection staging requires manual action: '.implode(' | ', $failures);
     }
 
     private function recordReturnInspectionRequest(ReturnRequest $rma): void
@@ -2251,8 +2390,89 @@ class ReturnRequestService
             'returns',
             'return_request',
             'inspection_handoff',
-            'return-inspection-request:' . $rma->id,
+            'return-inspection-request:'.$rma->id.($rma->items()->whereNotNull('split_parent_item_id')->exists() ? ':split' : ''),
         );
+    }
+
+    /** Split one fully received line before either quantity acquires a disposition. */
+    public function splitItem(ReturnRequest $rma, int $lineId, string $splitQuantity, User $by): ReturnRequest
+    {
+        $updated = DB::transaction(function () use ($rma, $lineId, $splitQuantity): ReturnRequest {
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            if (! in_array($locked->status, [ReturnRequestStatus::Received, ReturnRequestStatus::Inspected], true)
+                || $locked->disposition_status === 'disposed' || $locked->finance_only
+                || $locked->delivery_attempt_outcome_id || $locked->credit_note_id || $locked->credit_memo_id) {
+                throw new BusinessRuleException('Split physical return lines after final receipt and before disposition or credit issuance. Truck and finance-only returns cannot be split.');
+            }
+            $line = $locked->items()->with(['item', 'product'])->lockForUpdate()->findOrFail($lineId);
+            if ($line->split_parent_item_id || $locked->items()->where('split_parent_item_id', $line->id)->exists()) {
+                throw new BusinessRuleException('This line has already been split. Refresh the return and use the two existing quantity owners.');
+            }
+            if ($line->disposition || $line->ncr_id || $line->quarantine_release_movement_id
+                || $line->stock_movement_id || bccomp((string) ($line->stock_movement_quantity ?? '0'), '0', 3) > 0
+                || $line->materialReviewRecord()->exists() || $line->serial_number) {
+                throw new BusinessRuleException('This line already has disposition, movement, defect or serial ownership. Split before these actions.');
+            }
+            if (! preg_match('/^\d+(?:\.\d{1,3})?$/D', $splitQuantity)
+                || bccomp($splitQuantity, '0', 3) <= 0 || bccomp($splitQuantity, (string) $line->returned_quantity, 3) >= 0
+                || bccomp((string) $line->quantity, (string) $line->returned_quantity, 3) !== 0) {
+                throw new BusinessRuleException('Split quantity must be positive and smaller than a fully received line. Partially received lines cannot be split.');
+            }
+            $unit = strtoupper(trim((string) ($line->item?->unit_of_measure ?? ($line->product_id ? 'PCS' : ''))));
+            if (($unit === 'PCS' || $line->product_id) && bccomp($splitQuantity, bcadd($splitQuantity, '0', 0), 3) !== 0) {
+                throw new BusinessRuleException('Piece-based return splits require whole quantities.');
+            }
+            $receipts = ReturnReceiptItem::query()->where('return_request_item_id', $line->id)->lockForUpdate()->get();
+            if ($receipts->count() !== 1 || bccomp((string) $receipts->first()->quantity, (string) $line->returned_quantity, 3) !== 0) {
+                throw new BusinessRuleException('Only a line with one exact final receipt can be split. Consolidate receipt history through the approved recovery workflow.');
+            }
+            $allocations = $line->sourceAllocations()->lockForUpdate()->get();
+            if ($allocations->count() > 1 || ($allocations->isNotEmpty()
+                && ($allocations->first()->released_at || bccomp((string) $allocations->first()->quantity, (string) $line->quantity, 3) !== 0))) {
+                throw new BusinessRuleException('Split requires one current source allocation matching the full received quantity.');
+            }
+            if ($locked->inspections()->whereNull('return_request_item_id')->where('status', '<>', InspectionStatus::Cancelled->value)->exists()) {
+                throw new BusinessRuleException('Legacy shared Quality evidence cannot be split. Create line-specific Quality coverage through the approved recovery workflow first.');
+            }
+            $inspections = $locked->inspections()->where('return_request_item_id', $line->id)
+                ->where('status', '<>', InspectionStatus::Cancelled->value)->lockForUpdate()->get();
+            if ($inspections->contains(fn (Inspection $inspection): bool => $inspection->status === InspectionStatus::AwaitingReview || $inspection->ncr()->exists())) {
+                throw new BusinessRuleException('Finish or withdraw pending Quality review and resolve linked defects before splitting this line.');
+            }
+            $remaining = bcsub((string) $line->quantity, $splitQuantity, 3);
+            $totals = Money::allocate((string) $line->total, [$remaining, $splitQuantity]);
+            $newLine = $line->replicate();
+            $newLine->forceFill([
+                'quantity' => $splitQuantity, 'returned_quantity' => $splitQuantity, 'total' => $totals[1],
+                'split_parent_item_id' => $line->split_parent_item_id ?? $line->id,
+            ])->save();
+            $line->update(['quantity' => $remaining, 'returned_quantity' => $remaining, 'total' => $totals[0]]);
+            $receipt = $receipts->first();
+            $newReceipt = $receipt->replicate();
+            $newReceipt->forceFill(['return_request_item_id' => $newLine->id, 'quantity' => $splitQuantity])->save();
+            $receipt->update(['quantity' => $remaining]);
+            if ($allocations->isNotEmpty()) {
+                $allocation = $allocations->first();
+                $newAllocation = $allocation->replicate();
+                $newAllocation->forceFill(['return_request_item_id' => $newLine->id, 'quantity' => $splitQuantity])->save();
+                $allocation->update(['quantity' => $remaining]);
+            }
+            foreach ($inspections as $inspection) {
+                // Preserve original final evidence; it no longer owns either split quantity.
+                $inspection->forceFill(['status' => InspectionStatus::Cancelled, 'accepted_quantity' => 0,
+                    'notes' => trim(($inspection->notes ?? '')."\nSuperseded by controlled return quantity split."),
+                    'result_version' => (int) $inspection->result_version + 1])->save();
+            }
+            $locked->forceFill(['status' => ReturnRequestStatus::Received, 'inspection_id' => null,
+                'inspection_handoff_status' => ReturnInspectionHandoffStatus::NotStarted,
+                'inspection_handoff_message' => 'Return quantities split. Stage fresh line-specific Quality coverage before disposition.',
+                'inspection_handoff_at' => null, 'inspected_at' => null])->save();
+
+            return $locked->fresh()->load(['items', 'receipts.items']);
+        });
+        event(new ReturnRequestUpdated($updated, 'return line split'));
+
+        return $updated;
     }
 
     /**
@@ -2260,9 +2480,9 @@ class ReturnRequestService
      *
      * For each item, sets a disposition (scrap/rework/restock/return_to_supplier).
      * Auto-creates NCRs for scrap/rework items with a product. Auto-creates
-     * a credit memo for customer returns with positive item totals. When a
-     * location is supplied, restock/rework (customer) and return_to_supplier
-     * (supplier) lines move in/out of stock immediately (moveAtDispose).
+     * a credit memo for customer returns with positive item totals. Customer
+     * restock/rework lines open an MRB; supplier return lines still move at
+     * disposition time.
      */
     public function dispose(
         ReturnRequest $rma,
@@ -2270,9 +2490,30 @@ class ReturnRequestService
         User $by,
         bool $createReplacementPo = false,
         ?int $locationId = null,
+        ?string $requiredDeliveryDate = null,
     ): ReturnRequest {
-        $updated = DB::transaction(function () use ($rma, $dispositions, $by, $createReplacementPo, $locationId) {
+        $updated = DB::transaction(function () use ($rma, $dispositions, $by, $createReplacementPo, $locationId, $requiredDeliveryDate) {
             $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            if (str_starts_with((string) $rma->source_key, 'grn-rejection:')) {
+                if (! in_array($by->role?->slug, ['purchasing_officer', 'system_admin'], true)) {
+                    throw new ForbiddenActionException('Only Purchasing can arrange a QC-generated supplier return.');
+                }
+                $rma->load('items');
+                $inspections = $rma->items->map(fn (ReturnRequestItem $line) => $line->reusedIncomingInspection());
+                if ($inspections->isEmpty() || ! $inspections->every(fn (?Inspection $inspection) => $inspection !== null)) {
+                    throw new BusinessRuleException('The linked incoming QC review must be complete before arranging this supplier return.');
+                }
+                if ($rma->status === ReturnRequestStatus::Approved) {
+                    $this->states->transition($rma, ReturnRequestStatus::Inspected);
+                    $rma->update([
+                        'status' => ReturnRequestStatus::Inspected,
+                        'inspection_id' => $inspections->first()->id,
+                        'inspected_at' => now(),
+                        'inspection_handoff_status' => ReturnInspectionHandoffStatus::NotRequired,
+                        'inspection_handoff_at' => now(),
+                    ]);
+                }
+            }
             $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
             $this->ensureInspectionHandoffReady($rma);
             if ($rma->disposition_status === 'disposed') {
@@ -2284,11 +2525,8 @@ class ReturnRequestService
             $this->ensureReturnInspectionsReady($rma, $dispositions);
             $this->assertDispositionMatrix($rma, $dispositions);
 
-            // Fail fast: movement lines (restock/rework for customer,
-            // return_to_supplier for supplier) need a warehouse location BEFORE
-            // the credit-note / replacement-PO work runs — never spend the
-            // effort and roll it all back over a missing location. Evaluated
-            // against the REQUESTED dispositions (stored ones are still null).
+            // Customer restock/rework locations are chosen by the independent
+            // MRB reviewer. Supplier return lines still need a source location.
             // A system-opened RMA carries lines whose goods the caller already
             // dealt with (a rejected receipt never entered stock; an MRB
             // release already shipped them). Those lines are stamped with
@@ -2302,19 +2540,12 @@ class ReturnRequestService
                     }
 
                     return $rma->type === ReturnRequestType::SupplierReturn
-                        ? ($row['disposition'] ?? null) === DispositionType::ReturnToSupplier->value
-                        : in_array(
-                            $row['disposition'] ?? null,
-                            [DispositionType::Restock->value, DispositionType::Rework->value],
-                            true,
-                        );
+                        && ($row['disposition'] ?? null) === DispositionType::ReturnToSupplier->value;
                 }
             );
             if ($requestsMovement && ! $locationId) {
                 throw new BusinessRuleException(
-                    $rma->type === ReturnRequestType::CustomerReturn
-                        ? 'Select the warehouse location returned restock lines are received back into.'
-                        : 'Select the warehouse location the returned goods ship out from.'
+                    'Select the warehouse location the returned goods ship out from.'
                 );
             }
 
@@ -2325,7 +2556,7 @@ class ReturnRequestService
                 }
 
                 $item->update([
-                    'disposition'       => $disp['disposition'],
+                    'disposition' => $disp['disposition'],
                     'disposition_notes' => $disp['notes'] ?? null,
                 ]);
 
@@ -2350,25 +2581,42 @@ class ReturnRequestService
             }
 
             if ($rma->type === ReturnRequestType::SupplierReturn) {
-                $this->processSupplierDisposition($rma, $by, $createReplacementPo);
+                $date = $requiredDeliveryDate ? \DateTimeImmutable::createFromFormat('!Y-m-d', $requiredDeliveryDate) : false;
+                if ($createReplacementPo && (! $date || $date->format('Y-m-d') !== $requiredDeliveryDate || $requiredDeliveryDate < now()->toDateString())) {
+                    throw new BusinessRuleException('Enter a current or future required delivery date for the replacement PO.');
+                }
+                $this->processSupplierDisposition(
+                    $rma,
+                    $by,
+                    $createReplacementPo,
+                    $requiredDeliveryDate,
+                );
             }
-
-            // 2026-08-08 — dispose-time stock movement on BOTH sides. Customer
-            // restock/rework lines are received back into inventory immediately
-            // (AdjustmentIn — the O2C twin of GRN acceptance); supplier
-            // return_to_supplier lines ship out right away (ReturnToVendor).
-            // complete() skips every line already stamped with
-            // stock_movement_quantity (idempotent).
-            $this->moveAtDispose($rma, $locationId, $by);
 
             $rma->update(['disposition_status' => 'disposed']);
 
+            // Customer restock/rework creates a held MRB without changing stock.
+            // Scrap and supplier-return movements retain their disposition-time behavior.
+            $this->moveAtDispose($rma, $locationId, $by);
+
             return $rma->fresh()->load([
-                'items', 'creditNote', 'replacementPurchaseOrder', 'inspections.product',
+                'items.materialReviewRecord', 'items', 'creditNote', 'replacementPurchaseOrder', 'inspections.product',
                 'stockMovement.toLocation', 'stockMovement.fromLocation',
             ]);
         });
 
+        if ($updated->replacement_purchase_order_id !== null) {
+            try {
+                $this->purchaseOrders->sendSupplierReturnReplacement($updated);
+            } catch (\Throwable $e) {
+                Log::error('Supplier-return replacement PO dispatch failed.', [
+                    'return_request_id' => $updated->id,
+                    'purchase_order_id' => $updated->replacement_purchase_order_id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            $updated->load('replacementPurchaseOrder');
+        }
         event(new ReturnRequestUpdated($updated, 'disposition recorded'));
 
         return $updated;
@@ -2388,17 +2636,11 @@ class ReturnRequestService
         $affected = $rma->items
             ->filter(static fn (ReturnRequestItem $item): bool => $item->product_id !== null
                 && in_array($item->disposition, [DispositionType::Scrap->value, DispositionType::Rework->value], true))
-            ->groupBy('product_id');
+            ->groupBy(fn ($line) => config('inspection.checklist_capture_enabled') ? 'line-'.$line->id : (string) $line->product_id);
 
-        foreach ($affected as $productId => $lines) {
-            $inspection = Inspection::query()
-                ->where('entity_type', InspectionEntityType::ReturnRequest->value)
-                ->where('entity_id', $rma->id)
-                ->where('stage', InspectionStage::CustomerReturn->value)
-                ->where('product_id', (int) $productId)
-                ->whereIn('status', [InspectionStatus::Passed->value, InspectionStatus::Failed->value])
-                ->orderByDesc('id')
-                ->first();
+        foreach ($affected as $lines) {
+            $productId = (int) $lines->first()->product_id;
+            $inspection = $lines->first()->qualityInspections()->whereIn('status', ['passed', 'failed'])->latest('id')->first();
 
             $linkedNcrId = $lines->first(static fn (ReturnRequestItem $item): bool => $item->ncr_id !== null)?->ncr_id;
             $ncr = $linkedNcrId !== null
@@ -2512,7 +2754,7 @@ class ReturnRequestService
      * strand those lines. An invariant this destructive belongs on the service,
      * not only on one of its callers.
      *
-     * @param array<int, array<string, mixed>> $dispositions
+     * @param  array<int, array<string, mixed>>  $dispositions
      */
     private function assertDispositionMatrix(ReturnRequest $rma, array $dispositions): void
     {
@@ -2521,14 +2763,18 @@ class ReturnRequestService
             DispositionType::allowedFor($rma->type, (bool) $rma->finance_only),
         );
         $lines = $rma->items->keyBy(fn (ReturnRequestItem $line): string => $line->hash_id);
-        $seen  = [];
+        $seen = [];
 
         foreach ($dispositions as $row) {
             $disposition = (string) ($row['disposition'] ?? '');
+            if (str_starts_with((string) $rma->source_key, 'grn-rejection:')
+                && $disposition !== DispositionType::ReturnToSupplier->value) {
+                throw new BusinessRuleException('Defective supplier receipt pieces must be returned to the supplier.');
+            }
             if (! in_array($disposition, $allowed, true)) {
                 throw new BusinessRuleException("The {$disposition} disposition is not valid for this RMA type.");
             }
-            $key  = (string) ($row['item_id'] ?? '');
+            $key = (string) ($row['item_id'] ?? '');
             $line = $lines->get($key);
             if (! $line) {
                 throw new BusinessRuleException('Every disposition must reference a line on this RMA.');
@@ -2545,6 +2791,10 @@ class ReturnRequestService
             if ($rma->finance_only && $disposition !== DispositionType::NoReturn->value) {
                 throw new BusinessRuleException('Finance-only RMAs cannot create stock dispositions.');
             }
+            if (! $rma->finance_only && bccomp($this->settledQuantity($line), '0', 3) === 0
+                && $disposition !== DispositionType::NoReturn->value) {
+                throw new BusinessRuleException('A zero receipt must use No goods returned, without a stock disposition.');
+            }
         }
 
         $undecided = $lines->keys()->diff($seen);
@@ -2555,7 +2805,7 @@ class ReturnRequestService
         }
     }
 
-    private function processSupplierDisposition(ReturnRequest $rma, User $by, bool $createReplacementPo): void
+    private function processSupplierDisposition(ReturnRequest $rma, User $by, bool $createReplacementPo, ?string $requiredDeliveryDate): void
     {
         $returnedItems = $rma->items->where('disposition', 'return_to_supplier');
         if ($returnedItems->isEmpty()) {
@@ -2642,10 +2892,10 @@ class ReturnRequestService
                 trim((string) $poItem->unit) ?: null,
             );
             $replacementLines[] = [
-                'item_id'    => $item->item_id,
+                'item_id' => $item->item_id,
                 'description' => $poItem->description,
-                'quantity'   => $purchaseUnitQuantity,
-                'unit'       => $poItem->unit,
+                'quantity' => $purchaseUnitQuantity,
+                'unit' => $poItem->unit,
                 'unit_price' => (string) $poItem->unit_price,
             ];
 
@@ -2689,18 +2939,18 @@ class ReturnRequestService
 
         if ($creditLines !== []) {
             $creditNote = $this->creditNotes->create([
-                'type'              => 'supplier',
-                'vendor_id'         => $rma->vendor_id,
-                'bill_id'           => $rma->bill_id,
+                'type' => 'supplier',
+                'vendor_id' => $rma->vendor_id,
+                'bill_id' => $rma->bill_id,
                 'return_request_id' => $rma->id,
-                'date'              => now()->toDateString(),
-                'is_vatable'        => (bool) ($rma->bill?->is_vatable ?? $this->taxPolicy->isVatRegistered()),
-                'reason'            => "Supplier return — RMA {$rma->rma_number}",
-                'lines'             => collect($creditLines)->map(
+                'date' => now()->toDateString(),
+                'is_vatable' => (bool) ($rma->bill?->is_vatable ?? $this->taxPolicy->isVatRegistered()),
+                'reason' => "Supplier return — RMA {$rma->rma_number}",
+                'lines' => collect($creditLines)->map(
                     fn ($amount, $accountId) => [
-                        'account_id'  => (int) $accountId,
+                        'account_id' => (int) $accountId,
                         'description' => "Returned goods — RMA {$rma->rma_number}",
-                        'amount'      => $amount,
+                        'amount' => $amount,
                     ]
                 )->values()->all(),
             ], $by);
@@ -2712,7 +2962,7 @@ class ReturnRequestService
                     : Money::round2((string) $rma->bill->balance);
                 $this->creditNotes->apply($creditNote, [
                     'bill_id' => $rma->bill_id,
-                    'amount'  => $applyAmount,
+                    'amount' => $applyAmount,
                 ], $by);
             }
             $rma->update(['credit_note_id' => $creditNote->id]);
@@ -2746,13 +2996,14 @@ class ReturnRequestService
             }
 
             $replacement = $this->purchaseOrders->create([
-                'vendor_id'           => $rma->vendor_id,
-                'date'                => now()->toDateString(),
-                'is_vatable'          => (bool) ($rma->bill?->is_vatable
+                'vendor_id' => $rma->vendor_id,
+                'date' => now()->toDateString(),
+                'expected_delivery_date' => $requiredDeliveryDate,
+                'is_vatable' => (bool) ($rma->bill?->is_vatable
                     ?? $rma->purchaseOrder?->is_vatable
                     ?? $this->taxPolicy->isVatRegistered()),
-                'remarks'             => "Replacement for supplier RMA {$rma->rma_number}",
-                'items'               => $replacementLines,
+                'remarks' => "Replacement for supplier RMA {$rma->rma_number}",
+                'items' => $replacementLines,
             ], $by, true);
             $rma->update(['replacement_purchase_order_id' => $replacement->id]);
 
@@ -2792,9 +3043,9 @@ class ReturnRequestService
             $ordered = bcadd($ordered, $orderedBase, 3);
             $accepted = bcadd($accepted, (string) $line->quantity_accepted, 3);
         }
-        $zeroStatus = $po->sent_to_supplier_at
-            ? PurchaseOrderStatus::Sent
-            : PurchaseOrderStatus::Approved;
+        $zeroStatus = $po->latestResponse?->status === PurchaseOrderResponseStatus::Accepted
+            ? PurchaseOrderStatus::Acknowledged
+            : ($po->sent_to_supplier_at ? PurchaseOrderStatus::Sent : PurchaseOrderStatus::Approved);
         $status = bccomp($accepted, '0', 3) <= 0
             ? $zeroStatus
             : (bccomp($accepted, $ordered, 3) < 0
@@ -2820,7 +3071,7 @@ class ReturnRequestService
      * Returns null when nothing is creditable (all lines scrapped or routed
      * onward to the supplier).
      */
-    private function createCreditNote(ReturnRequest $rma, User $by): ?\App\Modules\Accounting\Models\CreditNote
+    private function createCreditNote(ReturnRequest $rma, User $by): ?CreditNote
     {
         if ($rma->delivery_attempt_outcome_id !== null) {
             // Truck-retained goods were never accepted by the customer. Their
@@ -2882,10 +3133,10 @@ class ReturnRequestService
                 throw new \RuntimeException('Default revenue account not configured.');
             }
             $lines[] = [
-                'account_id'  => $hashids->encode((int) $revenueId),
+                'account_id' => $hashids->encode((int) $revenueId),
                 'description' => ($item->product?->name ?? 'Returned goods')
                     ." — RMA {$rma->rma_number}",
-                'amount'      => Money::round2($amount),
+                'amount' => Money::round2($amount),
             ];
         }
 
@@ -2894,14 +3145,14 @@ class ReturnRequestService
         }
 
         return $this->creditNotes->create([
-            'type'              => 'customer',
-            'customer_id'       => $rma->customer_id,
-            'invoice_id'        => $rma->invoice_id,
+            'type' => 'customer',
+            'customer_id' => $rma->customer_id,
+            'invoice_id' => $rma->invoice_id,
             'return_request_id' => $rma->id,
-            'date'              => now()->toDateString(),
-            'is_vatable'        => $this->taxPolicy->isVatRegistered(),
-            'reason'            => "Customer return — RMA {$rma->rma_number}",
-            'lines'             => $lines,
+            'date' => now()->toDateString(),
+            'is_vatable' => $this->taxPolicy->isVatRegistered(),
+            'reason' => "Customer return — RMA {$rma->rma_number}",
+            'lines' => $lines,
         ], $by);
     }
 
@@ -2918,25 +3169,29 @@ class ReturnRequestService
         if (! $location) {
             throw new BusinessRuleException('No active quarantine location is configured for returned stock.');
         }
+
         return $location;
     }
 
-    /**
-     * Move every line whose disposition triggers inventory movement the moment
-     * the disposition is recorded — no waiting for a separate completion step.
-     * Customer restock/rework lines come back into stock (AdjustmentIn);
-     * supplier return_to_supplier lines ship out (ReturnToVendor). The caller
-     * must name the warehouse location; lines already stamped with
-     * stock_movement_quantity are skipped, so a later complete() can never
-     * move them twice.
-     */
+    /** Create held MRBs for customer good-stock lines and move other dispositions. */
     private function moveAtDispose(ReturnRequest $rma, ?int $locationId, User $by): void
     {
+        if ($rma->type === ReturnRequestType::CustomerReturn) {
+            foreach ($rma->items as $line) {
+                if (in_array($line->disposition, [DispositionType::Restock->value, DispositionType::Rework->value], true)
+                    && bccomp((string) $line->stock_movement_quantity, '0', 3) <= 0) {
+                    $this->quarantine->holdCustomerReturn($line, $by);
+                }
+            }
+        }
+
         // A line already stamped with stock_movement_quantity was handled by the
         // caller (system-opened RMA) and needs no movement, so it must not force
         // the operator to name a warehouse location for goods that are gone.
         $movable = $rma->items->filter(fn (ReturnRequestItem $line) => $this->shouldMove($line, $rma)
-            && bccomp((string) $line->stock_movement_quantity, '0', 3) <= 0);
+            && bccomp((string) $line->stock_movement_quantity, '0', 3) <= 0
+            && ! ($rma->type === ReturnRequestType::CustomerReturn
+                && in_array($line->disposition, [DispositionType::Restock->value, DispositionType::Rework->value], true)));
         if ($movable->isEmpty()) {
             return;
         }
@@ -2992,11 +3247,11 @@ class ReturnRequestService
     }
 
     /**
-     * Best-effort alert to everyone with inventory access that returned goods
-     * are back in sellable stock. Never fails the dispose — a notification
-     * problem must not roll back a stock movement.
+     * Best-effort alert to everyone with inventory access after returned goods
+     * clear MRB and enter sellable stock. Notification failure never rolls back
+     * the stock movement.
      */
-    private function notifyRestock(ReturnRequest $rma, string $quantity): void
+    public function notifyRestock(ReturnRequest $rma, string $quantity): void
     {
         $this->sendMovementAlert(
             $rma,
@@ -3037,8 +3292,7 @@ class ReturnRequestService
         string $title,
         string $messageSuffix,
         string $permissionSlug,
-    ): void
-    {
+    ): void {
         try {
             // {permissionSlug} holders (inventory.view for restock,
             // purchasing.po.view for ship-out), plus wildcard admins —
@@ -3066,18 +3320,18 @@ class ReturnRequestService
             $label = rtrim(rtrim($quantity, '0'), '.');
 
             $this->notifications->send($recipients, $type, [
-                'title'       => $title,
-                'message'     => "RMA {$rma->rma_number}: {$label} unit(s) {$messageSuffix}",
-                'link_to'     => '/return-management/'.$rma->hash_id,
+                'title' => $title,
+                'message' => "RMA {$rma->rma_number}: {$label} unit(s) {$messageSuffix}",
+                'link_to' => '/return-management/'.$rma->hash_id,
                 'entity_type' => 'return_request',
-                'entity_id'   => $rma->hash_id,
-                'rma_number'  => $rma->rma_number,
+                'entity_id' => $rma->hash_id,
+                'rma_number' => $rma->rma_number,
             ]);
         } catch (\Throwable $e) {
             Log::warning('ReturnRequestService: movement notification failed', [
                 'rma_id' => $rma->id,
-                'type'   => $type,
-                'error'  => $e->getMessage(),
+                'type' => $type,
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -3100,7 +3354,32 @@ class ReturnRequestService
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $this->ensureStatus($locked, ReturnRequestStatus::Inspected);
             $this->ensureInspectionHandoffReady($locked);
-            $locked->load('items.product');
+            $locked->load(['items.product', 'items.materialReviewRecord']);
+
+            if ($locked->type === ReturnRequestType::CustomerReturn) {
+                foreach ($locked->items as $line) {
+                    if (! in_array($line->disposition, [DispositionType::Restock->value, DispositionType::Rework->value], true)) {
+                        continue;
+                    }
+
+                    $mrb = $line->materialReviewRecord;
+                    // Preserve completed pre-MRB returns, but never let a stale or
+                    // imported movement stamp bypass an MRB that still exists.
+                    if (! $mrb && bccomp((string) $line->stock_movement_quantity, '0', 3) > 0) {
+                        continue;
+                    }
+                    $released = $mrb
+                        && in_array($mrb->status, [MrbStatus::Released, MrbStatus::Scrapped], true)
+                        && $mrb->release_movement_id !== null
+                        && (int) $line->quarantine_release_movement_id === (int) $mrb->release_movement_id
+                        && bccomp((string) $line->stock_movement_quantity, $this->settledQuantity($line), 3) === 0;
+                    if (! $released) {
+                        throw new BusinessRuleException(
+                            'Every customer-return restock or rework line needs a completed MRB disposition before the RMA can complete.'
+                        );
+                    }
+                }
+            }
 
             if (! $locationId && $this->hasPendingMovement($locked)) {
                 throw new BusinessRuleException('A warehouse location is required to complete a return.');
@@ -3118,7 +3397,7 @@ class ReturnRequestService
 
             $this->states->transition($locked, ReturnRequestStatus::Completed);
             $locked->update([
-                'status'       => ReturnRequestStatus::Completed,
+                'status' => ReturnRequestStatus::Completed,
                 'completed_by' => $by->id,
                 'completed_at' => now(),
             ]);
@@ -3139,7 +3418,7 @@ class ReturnRequestService
                 }
             }
 
-            return $locked->fresh()->load(['items', 'stockMovement.toLocation', 'stockMovement.fromLocation']);
+            return $locked->fresh()->load(['items.materialReviewRecord', 'items', 'stockMovement.toLocation', 'stockMovement.fromLocation']);
         });
 
         event(new ReturnRequestUpdated($updated, 'completed'));
@@ -3148,10 +3427,9 @@ class ReturnRequestService
     }
 
     /**
-     * Move one disposed line's goods, unless they already moved (restocked at
-     * dispose time). Customer returns: restock/rework → AdjustmentIn into the
-     * destination. Supplier returns: return_to_supplier → ReturnToVendor out of
-     * the source. Stamps the moved quantity on the line for idempotency.
+     * Move one disposed line not handled by another workflow. Customer
+     * restock/rework uses MRB release; this path moves customer scrap and
+     * supplier returns only.
      */
     private function moveLine(ReturnRequestItem $line, ReturnRequest $rma, ?int $locationId, User $by): ?StockMovement
     {
@@ -3165,11 +3443,12 @@ class ReturnRequestService
         $itemId = $this->resolvableItemId($line);
         if (! $itemId) {
             Log::warning('ReturnRequestService: kept line has no inventory item to move', [
-                'rma_id'        => $rma->id,
-                'line_id'       => $line->id,
-                'disposition'   => $line->disposition,
-                'product_id'    => $line->product_id,
+                'rma_id' => $rma->id,
+                'line_id' => $line->id,
+                'disposition' => $line->disposition,
+                'product_id' => $line->product_id,
             ]);
+
             return null;
         }
 
@@ -3204,7 +3483,7 @@ class ReturnRequestService
                 : StockMovementType::Transfer;
             $truckSourceMovement = null;
             if ($line->delivery_attempt_outcome_movement_id !== null) {
-                $truckSourceMovement = \App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeMovement::query()
+                $truckSourceMovement = DeliveryAttemptOutcomeMovement::query()
                     ->with('stockMovement')
                     ->findOrFail((int) $line->delivery_attempt_outcome_movement_id)
                     ->stockMovement;
@@ -3354,13 +3633,14 @@ class ReturnRequestService
             $this->approvals->reject($locked, $by, $reason);
             $this->states->transition($locked, ReturnRequestStatus::Rejected);
             $update = [
-                'status'      => ReturnRequestStatus::Rejected,
+                'status' => ReturnRequestStatus::Rejected,
                 'rejected_at' => now(),
                 'rejected_by' => $by->id,
             ];
             $update['internal_notes'] = $this->appendNote($locked, "Rejected: {$reason}");
             $this->releaseSourceAllocations($locked);
             $locked->update($update);
+
             return $locked->fresh();
         });
 
@@ -3419,13 +3699,14 @@ class ReturnRequestService
             $this->states->transition($locked, ReturnRequestStatus::Cancelled);
             $this->releaseSourceAllocations($locked);
             $update = [
-                'status'        => ReturnRequestStatus::Cancelled,
-                'cancelled_at'  => now(),
+                'status' => ReturnRequestStatus::Cancelled,
+                'cancelled_at' => now(),
             ];
             if ($reason) {
                 $update['internal_notes'] = $this->appendNote($locked, "Cancelled: {$reason}");
             }
             $locked->update($update);
+
             return $locked->fresh();
         });
 
@@ -3495,15 +3776,37 @@ class ReturnRequestService
      * otherwise the failure itself dead-ends the RMA. For those dispositions
      * either terminal verdict is acceptable.
      *
-     * Item-only lines have no product inspection specification and retain the
-     * existing item-only lifecycle. Cancelled inspection rows are not active
+     * New physical return lines require exact line-bound checklist evidence.
+     * Historical product-linked inspections retain their existing policy.
+     * Cancelled inspection rows are not active
      * evidence; if no replacement active row exists, the product is treated as
      * missing and remains blocked.
      *
-     * @param array<int, array<string, mixed>> $dispositions
+     * @param  array<int, array<string, mixed>>  $dispositions
      */
     private function ensureReturnInspectionsReady(ReturnRequest $rma, array $dispositions): void
     {
+        if ($rma->finance_only) {
+            return;
+        }
+        if (config('inspection.checklist_capture_enabled')) {
+            foreach ($rma->items->filter(fn ($line) => ($line->product_id || $line->item_id)
+                && bccomp($this->settledQuantity($line), '0', 3) > 0) as $line) {
+                if ($line->reusedIncomingInspection()) {
+                    continue;
+                }
+                $inspection = $line->qualityInspections()->latest('id')->first();
+                $disposition = collect($dispositions)->firstWhere('item_id', $line->hash_id)['disposition'] ?? null;
+                if (! $inspection || ! in_array($inspection->status->value, ['passed', 'failed'], true)
+                    || ($inspection->requiresMakerChecker() && ! $inspection->isMakerChecked()) || ($disposition === 'restock' && $inspection->status->value !== 'passed')) {
+                    throw new BusinessRuleException('Every stock-item return requires independently checked QC before disposition; restock requires PASS.');
+                }
+            }
+        }
+
+        if (config('inspection.checklist_capture_enabled')) {
+            return;
+        }
         $requiredProductIds = $rma->items
             ->pluck('product_id')
             ->filter()
@@ -3548,6 +3851,7 @@ class ReturnRequestService
 
             if ($productInspections->isEmpty()) {
                 $missingProductIds[] = $productId;
+
                 continue;
             }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Uom extends Model
 {
-    use HasFactory, HasHashId, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $table = 'uoms';
 

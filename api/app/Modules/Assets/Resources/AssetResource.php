@@ -108,13 +108,13 @@ class AssetResource extends JsonResource
     private function association(): ?array
     {
         if ($this->relationLoaded('machine') && $this->machine) {
-            return ['type' => 'machine', 'id' => $this->machine->hash_id, 'code' => $this->machine->machine_code, 'name' => $this->machine->name];
+            return ['type' => 'machine', 'id' => $this->machine->hash_id, 'code' => $this->machine->machine_code, 'name' => $this->machine->name, 'archived' => $this->machine->trashed()];
         }
         if ($this->relationLoaded('mold') && $this->mold) {
-            return ['type' => 'mold', 'id' => $this->mold->hash_id, 'code' => $this->mold->mold_code, 'name' => $this->mold->name];
+            return ['type' => 'mold', 'id' => $this->mold->hash_id, 'code' => $this->mold->mold_code, 'name' => $this->mold->name, 'archived' => $this->mold->trashed()];
         }
         if ($this->relationLoaded('vehicle') && $this->vehicle) {
-            return ['type' => 'vehicle', 'id' => $this->vehicle->hash_id, 'code' => $this->vehicle->plate_number, 'name' => $this->vehicle->name];
+            return ['type' => 'vehicle', 'id' => $this->vehicle->hash_id, 'code' => $this->vehicle->plate_number, 'name' => $this->vehicle->name, 'archived' => $this->vehicle->trashed()];
         }
 
         return null;

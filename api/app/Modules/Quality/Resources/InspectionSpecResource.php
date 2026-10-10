@@ -13,48 +13,51 @@ class InspectionSpecResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'         => $this->hash_id,
-            'version'    => (int) $this->version,
-            'is_active'  => (bool) $this->is_active,
-            'notes'      => $this->notes,
+            'id' => $this->hash_id,
+            'version' => (int) $this->version,
+            'is_active' => (bool) $this->is_active,
+            'notes' => $this->notes,
+            'capture_method' => $this->whenLoaded('currentRevision', fn () =>
+                $this->currentRevision?->capture_method ?? 'measurement'
+            ),
             'item_count' => (int) ($this->items_count ?? $this->items?->count() ?? 0),
-            'product'    => $this->whenLoaded('product', fn () => $this->product ? [
-                'id'          => $this->product->hash_id,
+            'product' => $this->whenLoaded('product', fn () => $this->product ? [
+                'id' => $this->product->hash_id,
                 'part_number' => $this->product->part_number,
-                'name'        => $this->product->name,
-                'is_active'   => (bool) $this->product->is_active,
-                'deleted_at'  => optional($this->product->deleted_at)?->toIso8601String(),
+                'name' => $this->product->name,
+                'is_active' => (bool) $this->product->is_active,
+                'deleted_at' => optional($this->product->deleted_at)?->toIso8601String(),
             ] : null),
-            'creator'    => $this->whenLoaded('creator', fn () => $this->creator ? [
-                'id'   => $this->creator->hash_id,
+            'creator' => $this->whenLoaded('creator', fn () => $this->creator ? [
+                'id' => $this->creator->hash_id,
                 'name' => $this->creator->name,
             ] : null),
             'current_revision' => $this->whenLoaded('currentRevision', fn () => $this->currentRevision ? [
-                'id'         => $this->currentRevision->hash_id,
-                'version'    => (int) $this->currentRevision->version,
-                'notes'      => $this->currentRevision->notes,
+                'id' => $this->currentRevision->hash_id,
+                'version' => (int) $this->currentRevision->version,
+                'notes' => $this->currentRevision->notes,
                 'created_at' => optional($this->currentRevision->created_at)?->toIso8601String(),
-                'creator'    => $this->currentRevision->relationLoaded('creator') && $this->currentRevision->creator
+                'creator' => $this->currentRevision->relationLoaded('creator') && $this->currentRevision->creator
                     ? [
-                        'id'   => $this->currentRevision->creator->hash_id,
+                        'id' => $this->currentRevision->creator->hash_id,
                         'name' => $this->currentRevision->creator->name,
                     ]
                     : null,
             ] : null),
-            'items'      => $this->whenLoaded('items', fn () =>
-                $this->items->map(fn ($it) => [
-                    'id'              => $it->hash_id,
-                    'parameter_name'  => $it->parameter_name,
-                    'parameter_type'  => (string) ($it->parameter_type?->value ?? $it->parameter_type),
-                    'parameter_type_label' => InspectionParameterType::tryFrom((string) ($it->parameter_type?->value ?? $it->parameter_type))?->label(),
-                    'unit_of_measure' => $it->unit_of_measure,
-                    'nominal_value'   => $it->nominal_value !== null ? (string) $it->nominal_value : null,
-                    'tolerance_min'   => $it->tolerance_min  !== null ? (string) $it->tolerance_min  : null,
-                    'tolerance_max'   => $it->tolerance_max  !== null ? (string) $it->tolerance_max  : null,
-                    'is_critical'     => (bool) $it->is_critical,
-                    'sort_order'      => (int) $it->sort_order,
-                    'notes'           => $it->notes,
-                ])->values()
+            'items' => $this->whenLoaded('items', fn () => $this->items->map(fn ($it) => [
+                'id' => $it->hash_id,
+                'acceptance_criterion' => $it->acceptance_criterion,
+                'parameter_name' => $it->parameter_name,
+                'parameter_type' => ($it->parameter_type?->value ?? $it->parameter_type),
+                'parameter_type_label' => InspectionParameterType::tryFrom((string) ($it->parameter_type?->value ?? $it->parameter_type))?->label(),
+                'unit_of_measure' => $it->unit_of_measure,
+                'nominal_value' => $it->nominal_value !== null ? (string) $it->nominal_value : null,
+                'tolerance_min' => $it->tolerance_min !== null ? (string) $it->tolerance_min : null,
+                'tolerance_max' => $it->tolerance_max !== null ? (string) $it->tolerance_max : null,
+                'is_critical' => (bool) $it->is_critical,
+                'sort_order' => (int) $it->sort_order,
+                'notes' => $it->notes,
+            ])->values()
             ),
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),

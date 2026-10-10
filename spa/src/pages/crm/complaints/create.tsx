@@ -23,7 +23,6 @@ import type { CreateComplaintData, ComplaintSeverity } from '@/types/crm';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
-import { useDebounce } from '@/hooks/useDebounce';
 import { localIsoDate } from '@/lib/formatDate';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
@@ -43,31 +42,28 @@ export default function CreateComplaintPage() {
  const [customerSearch, setCustomerSearch] = useState('');
  const [productSearch, setProductSearch] = useState('');
  const [salesOrderSearch, setSalesOrderSearch] = useState('');
- const debouncedCustomerSearch = useDebounce(customerSearch, 300);
- const debouncedProductSearch = useDebounce(productSearch, 300);
- const debouncedSalesOrderSearch = useDebounce(salesOrderSearch, 300);
 
  const customers = useQuery({
- queryKey: ['accounting', 'customers', 'complaint-lookup', debouncedCustomerSearch],
+ queryKey: ['accounting', 'customers', 'complaint-lookup', customerSearch],
  queryFn: ({ signal }) => customersApi.list({
  per_page: 100,
  is_active: true,
- search: debouncedCustomerSearch || undefined,
+ search: customerSearch || undefined,
  }, signal),
  });
  const products = useQuery({
- queryKey: ['crm', 'products', 'complaint-lookup', debouncedProductSearch],
+ queryKey: ['crm', 'products', 'complaint-lookup', productSearch],
  queryFn: ({ signal }) => productsApi.list({
  is_active: true,
  per_page: 100,
- search: debouncedProductSearch || undefined,
+ search: productSearch || undefined,
  }, signal),
  });
  const salesOrders = useQuery({
-  queryKey: ['crm', 'sales-orders', 'complaint-lookup', selectedCustomerId, debouncedSalesOrderSearch],
+  queryKey: ['crm', 'sales-orders', 'complaint-lookup', selectedCustomerId, salesOrderSearch],
   queryFn: ({ signal }) => salesOrdersApi.list({
    customer_id: selectedCustomerId,
-   search: debouncedSalesOrderSearch || undefined,
+   search: salesOrderSearch || undefined,
    per_page: 100,
   }, signal),
  enabled: Boolean(selectedCustomerId),
@@ -127,19 +123,14 @@ export default function CreateComplaintPage() {
  affected_quantity: Number(v.affected_quantity),
  })
  , onFormInvalid<FormValues>())}
- className="px-5 py-4 max-w-3xl"
+ className="min-w-0 w-full px-5 py-4"
  >
  <div className="space-y-4">
  <Panel title="Subject">
  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
  <div className="space-y-2">
- <Input
- label="Find customer"
- value={customerSearch}
- onChange={(e) => setCustomerSearch(e.target.value)}
- placeholder="Name or contact…"
- />
- <Select
+
+ <Select searchable onSearch={(value) => setCustomerSearch(value)} title="Name or contact…"
  label="Customer"
  required
  {...register('customer_id', {
@@ -158,13 +149,8 @@ export default function CreateComplaintPage() {
  </Select>
  </div>
  <div className="space-y-2">
- <Input
- label="Find product"
- value={productSearch}
- onChange={(e) => setProductSearch(e.target.value)}
- placeholder="Part number or name…"
- />
- <Select label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
+
+ <Select searchable onSearch={(value) => setProductSearch(value)} title="Part number or name…" label="Product (optional)" {...register('product_id')} error={errors.product_id?.message}>
  <option value="">— None —</option>
  {products.data?.data?.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
@@ -172,14 +158,8 @@ export default function CreateComplaintPage() {
  </Select>
  </div>
  <div className="space-y-2">
- <Input
-  label="Find sales order"
-  value={salesOrderSearch}
-  onChange={(e) => setSalesOrderSearch(e.target.value)}
-  placeholder="SO number…"
-  disabled={!selectedCustomerId}
- />
- <Select label="Sales order (optional)" {...register('sales_order_id')} error={errors.sales_order_id?.message}>
+
+ <Select searchable onSearch={(value) => setSalesOrderSearch(value)} title="SO number…" label="Sales order (optional)" {...register('sales_order_id')} error={errors.sales_order_id?.message}>
  <option value="">— None —</option>
  {(salesOrders.data?.data ?? [])
   .filter((order) => order.status !== 'cancelled')

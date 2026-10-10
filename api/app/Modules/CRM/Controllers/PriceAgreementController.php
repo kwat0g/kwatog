@@ -68,7 +68,7 @@ class PriceAgreementController
     public function forCustomer(Customer $customer): AnonymousResourceCollection
     {
         return PriceAgreementResource::collection(
-            $this->service->listForCustomer($customer->id)->load('product', 'customer'),
+            $this->service->listForCustomer($customer->id),
         );
     }
 }

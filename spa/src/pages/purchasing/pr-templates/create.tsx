@@ -160,7 +160,7 @@ export default function PrTemplateFormPage() {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => save.mutate(d), onFormInvalid<FormValues>())}
-        className="px-5 py-4 max-w-3xl space-y-4"
+        className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Template details">
           <div className="space-y-3">
@@ -173,7 +173,7 @@ export default function PrTemplateFormPage() {
               maxLength={200}
             />
             <div className="grid grid-cols-2 gap-3">
-              <Select
+              <Select searchable
                 label="Department"
                 {...register('department_id')}
                 error={errors.department_id?.message}
@@ -227,7 +227,7 @@ export default function PrTemplateFormPage() {
             {fields.map((field, i) => (
               <div key={field.id} className="p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
                 <div className="col-span-3">
-                  <Select
+                  <Select aria-label={`Item for line ${i + 1}`} searchable
                     value={watched[i]?.item_id ?? ''}
                     onChange={(e) => onLineItemChange(i, e.target.value)}
                     error={errors.items?.[i]?.item_id?.message}

@@ -14,10 +14,10 @@ class InspectionSpecRevisionResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'capture_method' => $this->capture_method ?? 'measurement',
             'id' => $this->hash_id,
             'version' => (int) $this->version,
-            'is_current' => $this->whenLoaded('spec', fn (): bool =>
-                (int) $this->spec->version === (int) $this->version
+            'is_current' => $this->whenLoaded('spec', fn (): bool => (int) $this->spec->version === (int) $this->version
             ),
             'notes' => $this->notes,
             'creator' => $this->whenLoaded('creator', fn () => $this->creator ? [
@@ -26,8 +26,9 @@ class InspectionSpecRevisionResource extends JsonResource
             ] : null),
             'items' => $this->whenLoaded('items', fn () => $this->items->map(fn ($item): array => [
                 'id' => $item->hash_id,
+                'acceptance_criterion' => $item->acceptance_criterion,
                 'parameter_name' => $item->parameter_name,
-                'parameter_type' => (string) ($item->parameter_type?->value ?? $item->parameter_type),
+                'parameter_type' => ($item->parameter_type?->value ?? $item->parameter_type),
                 'parameter_type_label' => InspectionParameterType::tryFrom(
                     (string) ($item->parameter_type?->value ?? $item->parameter_type)
                 )?->label(),

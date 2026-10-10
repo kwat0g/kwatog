@@ -215,7 +215,7 @@ export default function EmployeeDetailPage() {
                     Current shift
                   </dt>
                   <dd className="font-mono tabular-nums">
-                    {currentShift.name} ({currentShift.start_time}–{currentShift.end_time})
+                    {currentShift.name} ({formatTime(currentShift.start_time)}–{formatTime(currentShift.end_time)})
                   </dd>
                 </div>
               )}

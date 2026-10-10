@@ -4,7 +4,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { formatDate } from '@/lib/formatDate';
+import { formatDate, formatTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { WidgetBreakdown } from './WidgetBreakdown';
 import { WidgetTable } from './WidgetTable';
@@ -162,7 +162,7 @@ export function LiveDashboardWidget({
           </div>
           {summary.helper && <p className="text-xs text-muted">{summary.helper}</p>}
           <p className="text-2xs text-subtle">
-            Updated {new Date(summary.updated_at).toLocaleTimeString()}
+            Updated {formatTime(summary.updated_at)}
           </p>
         </div>
       )}

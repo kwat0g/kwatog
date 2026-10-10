@@ -19,13 +19,14 @@ import { useQuery } from '@tanstack/react-query';
 import { landingApi } from '@/api/landing';
 
 interface TopbarProps {
- user?: { name: string; email: string } | null;
+ user?: { name: string; email: string; avatarUrl?: string | null } | null;
  onLogout?: () => void;
+ onOpenShortcuts?: () => void;
  /** Extra controls injected just before the avatar (e.g. shortcut help, X1). */
  rightExtras?: ReactNode;
 }
 
-export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
+export function Topbar({ user, onLogout, onOpenShortcuts, rightExtras }: TopbarProps) {
  const toggleSidebar = useSidebarStore((s) => s.toggle);
  const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
  const mobileOpen = useSidebarStore((s) => s.mobileOpen);
@@ -63,72 +64,87 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  // visible while still containing the horizontal overflow the mobile shell
  // hardening needed.
  return (
-  <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-4 gap-2 sm:gap-5 overflow-x-clip">
- <Button
- variant="ghost"
- size="sm"
- iconOnly
- icon={<LuMenu size={14} />}
- aria-label="Toggle sidebar"
- onClick={handleMenuClick}
- className="text-muted hover:text-primary"
- />
+  <header className="sticky top-0 z-40 flex h-12 items-center gap-2 bg-canvas border-b border-default px-4 sm:gap-5 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] overflow-x-clip">
+    <div className="flex min-w-0 flex-1 items-center gap-2 md:col-start-1 md:flex-none">
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon={<LuMenu size={14} />}
+        aria-label="Toggle sidebar"
+        onClick={handleMenuClick}
+        className="min-h-[44px] min-w-[44px] text-muted hover:text-primary sm:min-h-0 sm:min-w-0"
+      />
 
-  <Link to="/dashboard" className="flex min-w-0 items-center gap-2 shrink-0">
-  <BrandLogo invertOnDark alt="Ogami ERP" className="h-7 max-w-[7rem] sm:max-w-none" />
- <span className="text-sm font-medium text-primary hidden sm:inline">{contact?.legal_name ?? '—'}</span>
- </Link>
+      <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
+        <BrandLogo invertOnDark alt="Ogami ERP" className="h-7 max-w-[7rem] sm:max-w-none" />
+        <span
+          title={contact?.legal_name ?? '—'}
+          className="hidden min-w-0 max-w-40 truncate text-sm font-medium text-primary sm:inline"
+        >
+          {contact?.legal_name ?? '—'}
+        </span>
+      </Link>
 
- {/* The trail was `hidden md:flex`, so below 768px the only wayfinding left
- was PageHeader's optional back link. Breadcrumbs now shed ancestors
- instead of disappearing — see Breadcrumbs' per-crumb classes. */}
- <div className="flex h-full min-w-0 flex-1 items-center pl-3 ml-1 border-l border-default">
- <Breadcrumbs />
- </div>
+      {/* Breadcrumbs stay in the left group; their last segment truncates when space is tight. */}
+      <div className="ml-1 flex h-full min-w-0 flex-1 items-center border-l border-default pl-3">
+        <Breadcrumbs />
+      </div>
+    </div>
 
- {/* Search trigger — opens the global command palette (Sprint 8 — Task 75). */}
- <button
- type="button"
- onClick={() => setPaletteOpen(true)}
- className={cn('hidden sm:flex items-center gap-2 h-7 w-44 px-2 rounded-md border border-default text-xs text-muted hover:bg-elevated cursor-pointer', focusRing)}
- >
- <LuSearch size={12} />
- <span className="flex-1 text-left">Search…</span>
- <kbd className="font-mono text-2xs text-subtle">⌘K</kbd>
- </button>
+    <div className="flex shrink-0 items-center justify-center md:col-start-2">
+      {/* Search trigger — opens the global command palette (Sprint 8 — Task 75). */}
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        className={cn('hidden sm:flex h-7 w-44 items-center gap-2 rounded-md border border-default px-2 text-xs text-muted hover:bg-elevated cursor-pointer lg:w-48', focusRing)}
+      >
+        <LuSearch size={12} />
+        <span className="flex-1 text-left">Search…</span>
+        <kbd className="font-mono text-2xs text-subtle">⌘K</kbd>
+      </button>
 
- {/* M009-F07 — the trigger above is `hidden sm:flex` and the only other way
- in is a ⌘K/Ctrl+K key listener, which is not a gesture a phone or a floor
- tablet has. Below 640px global search was therefore unreachable, despite
- the user manual describing it as a general feature. Same handler,
- icon-only so it fits the narrow bar. */}
- <Button
- variant="ghost"
- size="sm"
- iconOnly
- icon={<LuSearch size={14} />}
- aria-label="Search"
- onClick={() => setPaletteOpen(true)}
- className="sm:hidden text-muted hover:text-primary"
- />
+      {/* M009-F07 — keep a direct search control on phones without a keyboard. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon={<LuSearch size={14} />}
+        aria-label="Search"
+        onClick={() => setPaletteOpen(true)}
+        className="min-h-[44px] min-w-[44px] text-muted hover:text-primary sm:hidden sm:min-h-0 sm:min-w-0"
+      />
+    </div>
 
- <Tooltip content={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}>
- <Button
- variant="ghost"
- size="sm"
- iconOnly
- icon={resolvedTheme === 'dark' ? <LuSun size={14} /> : <LuMoon size={14} />}
- aria-label="Toggle theme"
- onClick={toggle}
- className="text-muted hover:text-primary"
- />
- </Tooltip>
+    <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2 md:col-start-3 md:gap-1 md:ml-0 md:justify-self-end lg:gap-2">
+      <span className="hidden lg:inline-flex">
+        <Tooltip content={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}>
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={resolvedTheme === 'dark' ? <LuSun size={14} /> : <LuMoon size={14} />}
+            aria-label="Toggle theme"
+            onClick={toggle}
+            className="min-h-[44px] min-w-[44px] text-muted hover:text-primary sm:min-h-0 sm:min-w-0"
+          />
+        </Tooltip>
+      </span>
 
- <NotificationBell />
+      <NotificationBell />
 
- {rightExtras}
+      {rightExtras}
 
- {user && <ProfileDropdown user={user} onLogout={onLogout} />}
+      {user && (
+        <ProfileDropdown
+          user={user}
+          onLogout={onLogout}
+          theme={resolvedTheme}
+          onToggleTheme={toggle}
+          onOpenShortcuts={onOpenShortcuts}
+        />
+      )}
+    </div>
 
  <Suspense fallback={null}>
  <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

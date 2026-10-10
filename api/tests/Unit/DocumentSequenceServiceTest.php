@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Modules\Production\Models\WorkOrder;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,6 +43,13 @@ class DocumentSequenceServiceTest extends TestCase
     {
         $code = app(DocumentSequenceService::class)->generate('stock_count');
         $this->assertMatchesRegularExpression('/^SC-\d{6}-\d{4}$/', $code);
+    }
+
+    public function test_work_order_sequence_advances_past_existing_imported_numbers(): void
+    {
+        $prefix = 'WO-'.now()->format('Ym').'-';
+        WorkOrder::factory()->create(['wo_number' => $prefix.'0001']);
+        $this->assertSame($prefix.'0002', app(DocumentSequenceService::class)->generate('work_order'));
     }
 
     public function test_unknown_type_throws(): void

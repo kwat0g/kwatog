@@ -107,7 +107,7 @@ class LoanApprovalChainWalkTest extends TestCase
         $this->assertSame(LoanStatus::Active, $loan->fresh()->status);
     }
 
-    public function test_company_loan_chain_advances_through_manager_to_vp(): void
+    public function test_small_company_loan_chain_advances_through_hr_and_finance_without_vp(): void
     {
         $requester = Employee::factory()->create();
         $loan = $this->pendingLoanFor($requester, 'company_loan');
@@ -117,18 +117,15 @@ class LoanApprovalChainWalkTest extends TestCase
         $deptHeadUser->employee->update(['department_id' => $requester->department_id]);
         $this->actingAs($deptHeadUser)->patchJson("/api/v1/loans/{$loan->hash_id}/approve")->assertOk();
 
-        // Step 2: production manager — previously invisible AND unauthorized.
-        $manager = $this->userWithRole('production_manager');
-        $this->actingAs($manager)->patchJson("/api/v1/loans/{$loan->hash_id}/approve")->assertOk();
+        // Step 2: HR confirms employee eligibility.
+        $hr = $this->userWithRole('hr_officer');
+        $this->actingAs($hr)->patchJson("/api/v1/loans/{$loan->hash_id}/approve")->assertOk();
 
         // Step 3: finance.
         $finance = $this->userWithRole('finance_officer');
         $this->actingAs($finance)->patchJson("/api/v1/loans/{$loan->hash_id}/approve")->assertOk();
 
-        // Step 4: VP — previously dead.
-        $vp = $this->userWithRole('vice_president');
-        $this->actingAs($vp)->patchJson("/api/v1/loans/{$loan->hash_id}/approve")->assertOk();
-
+        $this->assertSame('skipped', $loan->approvalRecords()->where('step_order', 4)->firstOrFail()->action);
         $this->assertTrue(app(ApprovalService::class)->isFullyApproved($loan->fresh()));
         $this->assertSame(LoanStatus::Active, $loan->fresh()->status);
     }

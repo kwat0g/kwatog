@@ -1,0 +1,14 @@
+{
+  "results": [
+    {
+      "name": "Recorder mobile uses Manila capture time and one QC step",
+      "status": "passed"
+    },
+    {
+      "name": "Recovery mobile details fit viewport",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "responses": []
+}

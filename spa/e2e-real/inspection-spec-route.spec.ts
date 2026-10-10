@@ -11,7 +11,8 @@ test('QC can start an inspection spec from the New spec route', async ({ page })
   await newSpec.click();
   await expect(page).toHaveURL(/\/quality\/inspection-specs\/new$/);
 
-  const product = page.getByLabel('Product');
+  const product = page.getByRole('combobox', { name: 'Product' });
   await expect(product).toBeVisible();
-  await expect.poll(() => product.locator('option').count()).toBeGreaterThan(1);
+  await product.click();
+  await expect(page.getByRole('listbox', { name: 'Product' }).getByRole('option').first()).toBeVisible();
 });

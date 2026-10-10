@@ -12,6 +12,7 @@ class ItemQualityPlanResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'capture_method' => $this->capture_method ?? 'measurement',
             'id' => $this->hash_id,
             'version' => (int) $this->version,
             'stage' => $this->stage,

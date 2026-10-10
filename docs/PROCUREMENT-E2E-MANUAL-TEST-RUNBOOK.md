@@ -564,7 +564,7 @@ After approval, inspect the supplier dispatch status.
 Possible dispatch outcomes:
 
 ```text
-portal_available
+confirmed (portal recipient notified; PO automatically sent)
 manual_required
 failed
 ```

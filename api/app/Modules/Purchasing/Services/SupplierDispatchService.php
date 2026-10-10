@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Services\NotificationService;
-use App\Modules\Auth\Models\User;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\SupplierDispatchStatus;
@@ -31,11 +31,12 @@ class SupplierDispatchService
             return null;
         }
 
-        // `claim()` also reconciles a PO that was already marked sent. That
-        // path returns a terminal confirmation row; it must never fall
-        // through to the provider boundary on a replayed approval event.
+        // A replay after portal publication must finish the send transition
+        // without publishing or emailing the PO again.
         if ($claimed->status !== SupplierDispatchStatus::Pending) {
-            return $claimed;
+            return $claimed->status === SupplierDispatchStatus::PortalAvailable
+                ? $this->confirmPortalDelivery($purchaseOrder, $claimed)
+                : $claimed;
         }
 
         try {
@@ -45,14 +46,21 @@ class SupplierDispatchService
             throw $e;
         }
 
-        return $this->complete($claimed->id, $result, $purchaseOrder);
+        $dispatch = $this->complete($claimed->id, $result, $purchaseOrder);
+
+        return $dispatch->status === SupplierDispatchStatus::PortalAvailable
+            ? $this->confirmPortalDelivery($purchaseOrder, $dispatch)
+            : $dispatch;
     }
 
-    /**
-     * Confirm the external transmission boundary. This is deliberately
-     * separate from portal publication: a PO becomes `sent` only after a
-     * user or supplier acknowledgement proves that the document was sent.
-     */
+    private function confirmPortalDelivery(PurchaseOrder $purchaseOrder, SupplierOrderDispatch $dispatch): SupplierOrderDispatch
+    {
+        app(PurchaseOrderService::class)->markAsSent($purchaseOrder, 'supplier_portal');
+
+        return $dispatch->fresh();
+    }
+
+    /** Record a completed portal send or a confirmed manual transmission. */
     public function confirmSent(PurchaseOrder $purchaseOrder, ?string $channel = null): SupplierOrderDispatch
     {
         $key = $this->idempotencyKey($purchaseOrder);
@@ -184,8 +192,11 @@ class SupplierDispatchService
                 ->lockForUpdate()
                 ->first();
 
+            if ($dispatch?->status === SupplierDispatchStatus::PortalAvailable) {
+                return $dispatch;
+            }
+
             if ($dispatch && in_array($dispatch->status, [
-                SupplierDispatchStatus::PortalAvailable,
                 SupplierDispatchStatus::ManualRequired,
                 SupplierDispatchStatus::Confirmed,
                 SupplierDispatchStatus::Cancelled,
@@ -248,13 +259,10 @@ class SupplierDispatchService
             return $dispatch->fresh();
         });
 
-        if (in_array($dispatch->status, [
-            SupplierDispatchStatus::PortalAvailable,
-            SupplierDispatchStatus::ManualRequired,
-        ], true)) {
+        if ($dispatch->status === SupplierDispatchStatus::ManualRequired) {
             try {
-                $this->notifyPurchasing($purchaseOrder, $dispatch->status);
-            } catch (\Throwable $e) {
+                $this->notifyPurchasing($purchaseOrder);
+            } catch (Throwable $e) {
                 Log::warning('Supplier dispatch action alert failed; dispatch state remains durable.', [
                     'purchase_order_id' => $purchaseOrder->id,
                     'dispatch_id' => $dispatch->id,
@@ -266,21 +274,16 @@ class SupplierDispatchService
         return $dispatch;
     }
 
-    private function notifyPurchasing(PurchaseOrder $purchaseOrder, SupplierDispatchStatus $status): void
+    private function notifyPurchasing(PurchaseOrder $purchaseOrder): void
     {
         $recipients = User::query()
             ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'purchasing.view'))
             ->where('is_active', true)
             ->get();
 
-        $isPortal = $status === SupplierDispatchStatus::PortalAvailable;
         app(NotificationService::class)->sendInApp($recipients, 'supplier.dispatch_action_required', [
-            'title' => $isPortal
-                ? 'Supplier PO is available in the portal'
-                : 'Supplier PO needs manual transmission',
-            'message' => $isPortal
-                ? "PO {$purchaseOrder->po_number} is available to the supplier portal. Confirm transmission after the supplier is actually notified."
-                : "PO {$purchaseOrder->po_number} has no active supplier portal recipient. Send the approved PO through an approved channel and confirm transmission.",
+            'title' => 'Supplier PO needs manual transmission',
+            'message' => "PO {$purchaseOrder->po_number} has no active supplier portal recipient. Send the approved PO through an approved channel and confirm transmission.",
             'link_to' => "/purchasing/purchase-orders/{$purchaseOrder->hash_id}",
             'entity_type' => 'purchase_order',
             'entity_id' => $purchaseOrder->hash_id,

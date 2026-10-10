@@ -149,6 +149,9 @@ class Item extends Model
 
     public function getAvailableAttribute(): string
     {
+        if (array_key_exists('usable_quantity', $this->attributes)) {
+            return (string) $this->attributes['usable_quantity'];
+        }
         $available = bcsub($this->on_hand, $this->reserved, 3);
 
         return bccomp($available, '0', 3) < 0 ? '0.000' : $available;

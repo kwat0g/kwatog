@@ -1,202 +1,231 @@
-/**
- * Sprint 6 audit §3.1 — Create Work Order page.
- *
- * Most WOs are created automatically by MrpEngineService::runForSalesOrder.
- * This page lets PPC manually queue a one-off planned WO (e.g. for a
- * sample run, internal R&D, or rework). Status starts as 'planned'; the
- * full lifecycle (confirm/start/pause/etc.) lives on the detail page.
- */
-import { useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { AxiosError } from 'axios';
-import toast from 'react-hot-toast';
-import { onFormInvalid } from '@/lib/formErrors';
-import { localIsoDateTime } from '@/lib/formatDate';
-import { Button } from '@/components/ui/Button';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
 import { workOrdersApi } from '@/api/production/workOrders';
-import { businessPoliciesApi } from '@/api/businessPolicies';
-import type { CreateWorkOrderData } from '@/types/production';
-
-import { useFormSafety } from '@/hooks/useFormSafety';
-import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
-import { FormActions } from '@/components/ui/FormActions';
 import { FormOptionsStatus } from './FormOptionsStatus';
-const schema = z.object({
- product_id: z.string().min(1, 'Product is required'),
- quantity_target: z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be greater than 0'),
- planned_start: z.string().min(1, 'Planned start is required'),
- planned_end: z.string().min(1, 'Planned end is required'),
- machine_id: z.string().optional().or(z.literal('')),
- mold_id: z.string().optional().or(z.literal('')),
- priority: z.string().regex(/^\d+$/, 'Use a non-negative integer').optional().or(z.literal('')),
-}).refine(
- (v) => !v.planned_start || !v.planned_end || v.planned_end >= v.planned_start,
- { message: 'Planned end must be on or after planned start', path: ['planned_end'] },
-);
-
-type FormValues = z.infer<typeof schema>;
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
+import {
+  offsetScheduleDate,
+  scheduleDate,
+  scheduleDateKey,
+} from '@/components/production/scheduleDates';
 
 export default function CreateWorkOrderPage() {
- const navigate = useNavigate();
- const qc = useQueryClient();
-
- const formOptions = useQuery({
- queryKey: ['production', 'work-orders', 'form-options'],
- queryFn: workOrdersApi.formOptions,
- staleTime: 5 * 60 * 1000,
- });
- const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
-
- const today = localIsoDateTime();
-
-  const form = useForm<FormValues>({
- resolver: zodResolver(schema),
- defaultValues: {
- product_id: '',
- quantity_target: '',
- planned_start: today,
- planned_end: today,
- machine_id: '',
- mold_id: '',
- priority: '',
- },
- });
- const {
- register, handleSubmit, setError, setValue,
- formState: { errors, isSubmitting },
- } = form;
- useEffect(() => {
- if (policies) setValue('priority', String(policies.mrp_work_order_normal_priority));
- }, [policies, setValue]);
-
- const create = useMutation({
- mutationFn: (values: FormValues) => {
- const payload: CreateWorkOrderData = {
- product_id: values.product_id,
- quantity_target: Number(values.quantity_target),
- planned_start: values.planned_start,
- planned_end: values.planned_end,
- machine_id: values.machine_id || undefined,
- mold_id: values.mold_id || undefined,
- priority: values.priority ? Number(values.priority) : undefined,
- };
- return workOrdersApi.create(payload);
- },
- onSuccess: (wo) => {
- qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
- toast.success(`Work order ${wo.wo_number} created.`);
- navigate(`/production/work-orders/${wo.id}`);
- },
- onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
- if (e.response?.status === 422 && e.response.data.errors) {
- Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
- setError(field as never, { type: 'server', message: msgs[0] });
- });
- toast.error(e.response?.data?.message || 'Validation failed.');
- } else {
- toast.error(e.response?.data?.message ?? 'Failed to create work order.');
- }
- },
- });
- const safety = useFormSafety({ form, saved: create.isSuccess });
-
- return (
- <div>
- <PageHeader title="New work order" backTo="/production/work-orders" backLabel="Work orders"
- />
-      <FormDraftBanner safety={safety} />
-      <div className="max-w-2xl mx-auto px-5 pt-4">
-       <FormOptionsStatus
-        isLoading={formOptions.isLoading}
-        isError={formOptions.isError}
-        isFetching={formOptions.isFetching}
-        onRetry={() => { void formOptions.refetch(); }}
-       />
-      </div>
- <form
- onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
- className="max-w-2xl mx-auto px-5 py-4"
- >
- <fieldset className="mb-8">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product & quantity</legend>
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
- <option value="">Select product…</option>
- {formOptions.data?.products.map((p) => (
- <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
- ))}
- </Select>
- <Input
- label="Quantity target" type="number" min={1} required
- {...register('quantity_target')} error={errors.quantity_target?.message}
- placeholder="Target quantity"
- className="font-mono text-right"
- />
- </div>
- </fieldset>
-
- <fieldset className="mb-8">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <Input
- label="Planned start" type="datetime-local" required
- {...register('planned_start')} error={errors.planned_start?.message}
- className="font-mono"
- />
- <Input
- label="Planned end" type="datetime-local" required
- {...register('planned_end')} error={errors.planned_end?.message}
- className="font-mono"
- />
- <Input
- label="Priority (0–255)" type="number" min={0} max={255}
- {...register('priority')} error={errors.priority?.message}
- className="font-mono text-right"
- />
- </div>
- </fieldset>
-
- <fieldset className="mb-8">
- <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
- Resources <span className="text-2xs lowercase tracking-normal text-text-subtle">— optional, can be assigned at confirm time</span>
- </legend>
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <Select label="Machine" {...register('machine_id')} error={errors.machine_id?.message}>
- <option value="">Pick later</option>
- {formOptions.data?.machines.map((m) => (
- <option key={m.id} value={m.id}>{m.machine_code} — {m.name}{m.tonnage ? ` · ${m.tonnage}T` : ''}</option>
- ))}
- </Select>
- <Select label="Mold" {...register('mold_id')} error={errors.mold_id?.message}>
- <option value="">Pick later</option>
- {formOptions.data?.molds.map((m) => (
- <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
- ))}
- </Select>
- </div>
- </fieldset>
-
- <FormActions>
- <Button type="button" variant="secondary" onClick={() => navigate('/production/work-orders')}>
- Cancel
- </Button>
- <Button
- type="submit"
- variant="primary"
- disabled={isSubmitting || create.isPending}
- loading={create.isPending}
- >
- {create.isPending ? 'Creating…' : 'Create work order'}
- </Button>
- </FormActions>
- </form>
- </div>
- );
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const key = useRef(crypto.randomUUID());
+  const submitted = useRef<Parameters<typeof workOrdersApi.create>[0] | null>(null);
+  const [product, setProduct] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [automaticTarget] = useState(() =>
+    offsetScheduleDate(scheduleDateKey(new Date().toISOString(), 'Asia/Manila'), 14),
+  );
+  const [saved, setSaved] = useState<string | null>(null);
+  const options = useQuery({
+    queryKey: ['production', 'work-orders', 'form-options'],
+    queryFn: workOrdersApi.formOptions,
+  });
+  const quantityError =
+    quantity &&
+    (!/^[1-9]\d*$/.test(quantity) ||
+      !Number.isSafeInteger(Number(quantity)) ||
+      Number(quantity) > 2147483647)
+      ? 'Enter a positive whole-piece quantity.'
+      : undefined;
+  const target = deadline || automaticTarget;
+  const targetEnd = `${target}T23:59:59+08:00`;
+  const deadlineError =
+    !/^\d{4}-\d{2}-\d{2}$/.test(target) ||
+    !Number.isFinite(new Date(targetEnd).getTime()) ||
+    new Date(targetEnd).getTime() <= Date.now()
+      ? 'Choose today or a future date in Manila.'
+      : undefined;
+  useUnsavedChangesGuard(!!(product || quantity || deadline) && !saved);
+  const selectedProduct = options.data?.products.find((item) => item.id === product);
+  const setupBlocked = selectedProduct?.stock_production?.eligible === false;
+  const unavailable =
+    options.data?.products.filter((item) => item.stock_production?.eligible === false) ?? [];
+  const valid =
+    !!selectedProduct && !setupBlocked && !!quantity && !quantityError && !deadlineError;
+  const create = useMutation({
+    mutationFn: () => {
+      submitted.current ??= {
+        production_purpose: 'stock',
+        request_key: key.current,
+        product_id: product,
+        quantity_target: Number(quantity),
+        planned_start: new Date().toISOString(),
+        planned_end: targetEnd,
+        minimum_workers: 1,
+        maximum_workers: 1,
+      };
+      return workOrdersApi.create(submitted.current);
+    },
+    onError: (failure) => {
+      if (failure instanceof AxiosError && failure.response?.status === 422) {
+        submitted.current = null;
+        key.current = crypto.randomUUID();
+        void queryClient.invalidateQueries({
+          queryKey: ['production', 'work-orders', 'form-options'],
+        });
+      }
+    },
+    onSuccess: (workOrder) => {
+      setSaved(workOrder.id);
+      void queryClient.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+      navigate(`/production/work-orders/${workOrder.id}`);
+    },
+  });
+  const error =
+    create.error instanceof AxiosError
+      ? create.error.response?.data?.message
+      : create.error?.message;
+  return (
+    <div>
+      <PageHeader
+        title="Produce for stock"
+        backTo="/production/work-orders"
+        backLabel="Work orders"
+        subtitle="Plan new pieces for inventory. Production and QC approval remain required."
+      />
+      <form
+        className="mx-auto max-w-3xl space-y-6 px-5 py-8"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid && !create.isPending && !saved) create.mutate();
+        }}
+      >
+        <FormOptionsStatus
+          isLoading={options.isLoading}
+          isError={options.isError}
+          isFetching={options.isFetching}
+          onRetry={() => {
+            void options.refetch();
+          }}
+        />
+        <fieldset
+          disabled={create.isPending || !!saved || !!submitted.current}
+          className="space-y-6"
+        >
+          <legend className="mb-3 font-medium text-primary">What to produce</legend>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Select
+              label="Product"
+              fieldSize="lg"
+              containerClassName="sm:col-span-2"
+              required
+              value={product}
+              onChange={(event) => setProduct(event.target.value)}
+            >
+              <option value="">Select product…</option>
+              {options.data?.products.map((item) => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                  disabled={item.stock_production?.eligible === false}
+                >
+                  {item.part_number} · {item.name}
+                  {item.stock_production?.eligible === false
+                    ? ` · ${item.stock_production.blockers[0]}`
+                    : ''}
+                </option>
+              ))}
+            </Select>
+            <Input
+              label="Quantity"
+              fieldSize="lg"
+              required
+              type="number"
+              min="1"
+              max="2147483647"
+              step="1"
+              suffix="pcs"
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              error={quantityError}
+              helper="Whole pieces only."
+            />
+          </div>
+          <div className="space-y-3 border-y border-default py-4">
+            {!deadlineError && (
+              <p className="text-sm text-muted">
+                {deadline ? 'Target completion' : '14-day planning window · Target completion'}:{' '}
+                <span className="font-medium text-primary">
+                  {scheduleDate(targetEnd, 'Asia/Manila')}
+                </span>{' '}
+                (Manila).
+              </p>
+            )}
+            <details>
+              <summary className="w-fit cursor-pointer rounded text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                Planning options
+              </summary>
+              <div className="mt-4 max-w-sm">
+                <Input
+                  label="Target completion date (optional)"
+                  fieldSize="lg"
+                  type="date"
+                  min={scheduleDateKey(new Date().toISOString(), 'Asia/Manila')}
+                  value={deadline}
+                  onChange={(event) => setDeadline(event.target.value)}
+                  error={deadlineError}
+                  helper="Leave blank to use the 14-day planning window. Times use Manila."
+                />
+              </div>
+            </details>
+          </div>
+        </fieldset>
+        {unavailable.length > 0 && (
+          <details className="text-sm text-danger-fg">
+            <summary>Products needing setup ({unavailable.length})</summary>
+            <ul className="mt-2 space-y-1">
+              {unavailable.map((item) => (
+                <li key={item.id}>
+                  {item.part_number}: {item.stock_production?.blockers.join(' ')}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {setupBlocked && (
+          <p role="alert" className="text-danger-fg">
+            {selectedProduct.stock_production?.blockers.join(' ')}
+          </p>
+        )}
+        <p className="text-sm text-muted">
+          Plan production saves your work order. On its record page, use Confirm to review the
+          machine, mold, workers and schedule.
+        </p>
+        {error && (
+          <p role="alert" className="text-danger-fg">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={create.isPending}
+            onClick={() => navigate('/production/work-orders')}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={!valid || create.isPending || !!saved}
+            loading={create.isPending}
+          >
+            Plan production
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
 }

@@ -46,7 +46,7 @@ class ReturnCaseWorkflowTest extends TestCase
         $delivery = Delivery::create([
             'delivery_number' => 'DEL-CASE-'.Str::upper(Str::random(8)),
             'sales_order_id' => $order->id,
-            'status' => 'delivered',
+            'status' => 'confirmed',
             'scheduled_date' => now()->toDateString(),
             'delivered_at' => now(),
             'created_by' => $user->id,
@@ -111,6 +111,64 @@ class ReturnCaseWorkflowTest extends TestCase
         $this->assertCount(2, $first->json('data.lines'));
     }
 
+    public function test_customer_intake_rejects_quantity_and_source_manipulation_without_creating_records(): void
+    {
+        $customer = Customer::factory()->create();
+        [$delivery, $items] = $this->source($customer, 1);
+        $delivery->update(['status' => 'delivered']);
+        $this->actingAs($this->portal($customer), 'customer_portal');
+        $base = $this->payload($delivery, $items, (string) Str::uuid());
+        foreach ([
+            ['received_quantity', '11', 'received_quantity'],
+            ['received_quantity', '-1', 'received_quantity'],
+            ['received_quantity', '1e2', 'received_quantity'],
+            ['received_quantity', '9.5', 'received_quantity'],
+            ['defective_quantity', '10', 'defective_quantity'],
+            ['defective_quantity', '0.5', 'defective_quantity'],
+            ['expected_quantity', '20', 'expected_quantity'],
+        ] as [$field, $quantity, $error]) {
+            $payload = $base;
+            $payload['request_key'] = (string) Str::uuid();
+            $payload['lines'][0][$field] = $quantity;
+            $this->postJson('/api/v1/b2b/customer/problems', $payload)->assertUnprocessable()
+                ->assertJsonValidationErrors('lines.0.'.$error);
+        }
+        $payload = $base;
+        $payload['lines'][0]['source_unit_price'] = '999999';
+        $this->postJson('/api/v1/b2b/customer/problems', $payload)->assertUnprocessable()->assertJsonValidationErrors('lines.0');
+        $payload = $base;
+        $payload['lines'][] = $payload['lines'][0];
+        $this->postJson('/api/v1/b2b/customer/problems', $payload)->assertUnprocessable()->assertJsonValidationErrors('lines.0.source_line_id');
+        [$otherDelivery, $otherItems] = $this->source(Customer::factory()->create(), 1);
+        $payload = $base;
+        $payload['lines'][0]['source_line_id'] = $otherItems->first()->hash_id;
+        $this->postJson('/api/v1/b2b/customer/problems', $payload)->assertUnprocessable()->assertJsonValidationErrors('lines.0.source_line_id');
+        $this->assertDatabaseCount('return_cases', 0);
+        $this->assertDatabaseCount('return_case_lines', 0);
+        $this->assertDatabaseCount('return_requests', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertSame('delivered', $delivery->fresh()->status->value);
+        $this->assertNull($delivery->fresh()->invoice_id);
+    }
+
+    public function test_report_cannot_change_known_lot_provenance(): void
+    {
+        [$delivery, $items] = $this->source(Customer::factory()->create(), 1);
+        $service = \Mockery::mock(\App\Modules\ReturnManagement\Services\ReturnCaseSourceService::class)->makePartial();
+        $options = app(\App\Modules\ReturnManagement\Services\ReturnCaseSourceService::class)->options($delivery);
+        $options['lines'][0]['lot_number'] = 'REAL-DISPATCH-LOT';
+        $service->shouldReceive('options')->andReturn($options);
+        $payload = $this->payload($delivery, $items, (string) Str::uuid());
+        $payload['lines'][0]['lot_number'] = 'FAKE-LOT';
+        try {
+            $service->prepareLines($delivery, $payload['lines'], false, true);
+            $this->fail('Changed source lot was accepted.');
+        } catch (\Illuminate\Validation\ValidationException $error) {
+            $this->assertArrayHasKey('lines.0.lot_number', $error->errors());
+        }
+        $this->assertDatabaseCount('return_cases', 0);
+    }
+
     public function test_mixed_shortage_cannot_agree_to_physical_return_only(): void
     {
         [$delivery, $items] = $this->source(Customer::factory()->create(), 1);
@@ -142,6 +200,33 @@ class ReturnCaseWorkflowTest extends TestCase
         $this->getJson('/api/v1/return-management/cases/'.$case)->assertOk()
             ->assertJsonPath('data.status', 'submitted')->assertJsonPath('data.lines.0.missing_quantity', '0.001')
             ->assertJsonPath('data.lines.0.verified_missing_quantity', null);
+    }
+
+    public function test_verification_cannot_add_an_unreported_category_or_exceed_its_reported_limit(): void
+    {
+        [$delivery, $items] = $this->source(Customer::factory()->create(), 1);
+        $manager = User::factory()->create(['role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id')]);
+        foreach ([['10', '2'], ['8', '0']] as [$received, $damaged]) {
+            $payload = $this->payload($delivery, $items, (string) Str::uuid());
+            $payload['lines'][0]['received_quantity'] = $received;
+            $payload['lines'][0]['defective_quantity'] = $damaged;
+            $case = $this->actingAs($manager)->postJson('/api/v1/return-management/cases', $payload)->assertCreated()->json('data');
+            $path = '/api/v1/return-management/cases/'.$case['id'].'/actions';
+            $this->postJson($path, ['action' => 'start_review'])->assertOk();
+            foreach ([['1', '3'], ['4242.000', '323232'], ['-1', '0'], ['1e2', '0'], ['0', '0.0001']] as [$missing, $defective]) {
+                $this->postJson($path, [
+                    'action' => 'agree', 'resolution' => 'redelivery', 'message' => 'Verify the reported goods.',
+                    'lines' => [['id' => $case['lines'][0]['id'], 'verified_missing_quantity' => $missing, 'verified_defective_quantity' => $defective]],
+                ])->assertUnprocessable();
+            }
+            $this->getJson('/api/v1/return-management/cases/'.$case['id'])->assertOk()
+                ->assertJsonPath('data.status', 'under_review')
+                ->assertJsonPath('data.lines.0.verified_missing_quantity', null)
+                ->assertJsonPath('data.lines.0.verified_defective_quantity', null);
+        }
+        $this->assertDatabaseCount('return_requests', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertDatabaseCount('invoices', 0);
     }
 
     public function test_customer_cannot_read_or_attach_evidence_to_another_customer_case(): void
@@ -237,6 +322,7 @@ class ReturnCaseWorkflowTest extends TestCase
         $checker = User::factory()->create(['role_id' => Role::query()->where('slug', 'finance_officer')->value('id')]);
         $response = $this->actingAs($checker)->postJson($path, ['action' => 'create_replacement'])->assertOk();
         $orderId = $response->json('data.replacement_order.id');
+        $response->assertJsonPath('data.replacement_order.status', 'confirmed');
         $this->postJson($path, ['action' => 'link_resolution', 'replacement_sales_order_id' => $orderId])->assertOk();
         $this->postJson($path, ['action' => 'create_replacement'])->assertOk()->assertJsonPath('data.replacement_order.id', $orderId);
         $replacement = SalesOrder::query()->whereNotNull('return_case_id')->firstOrFail();
@@ -254,9 +340,15 @@ class ReturnCaseWorkflowTest extends TestCase
                 'quantity' => '5', 'unit_price' => '0']);
             $result = app(\App\Modules\SupplyChain\Services\DeliveryService::class)->retryInvoiceHandoff($shipment, $checker);
             $this->assertSame('not_required', $result->invoice_handoff_status->value);
+            event(new \App\Modules\SupplyChain\Events\DeliveryConfirmed($shipment));
+            $this->getJson('/api/v1/return-management/cases/'.$case['id'])
+                ->assertOk()->assertJsonPath('data.status', $installment === 1 ? 'in_progress' : 'resolved')
+                ->assertJsonPath('data.lines.0.redelivered_quantity', $installment === 1 ? '5.000' : '10.000')
+                ->assertJsonPath('data.lines.0.remaining_redelivery_quantity', $installment === 1 ? '5.000' : '0.000');
+            event(new \App\Modules\SupplyChain\Events\DeliveryConfirmed($shipment));
         }
         $this->assertDatabaseCount('invoices', 0);
-        $this->postJson($path, ['action' => 'resolve'])->assertOk()->assertJsonPath('data.status', 'resolved');
+        $this->assertSame(1, \App\Modules\ReturnManagement\Models\ReturnCaseEvent::query()->where('return_case_id', $replacement->return_case_id)->where('action', 'resolve')->count());
         $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
         $this->expectExceptionMessage('no-charge replacement order');
         app(\App\Modules\Accounting\Services\InvoiceService::class)->create([
@@ -265,6 +357,74 @@ class ReturnCaseWorkflowTest extends TestCase
             'items' => [['revenue_account_id' => \App\Modules\Accounting\Models\Account::query()->where('code', '4010')->value('id'),
                 'description' => 'Replacement', 'quantity' => '10', 'unit_price' => '25']],
         ], $checker);
+    }
+
+    public function test_automatic_replacement_closure_waits_for_receipt_and_complete_physical_return(): void
+    {
+        $customer = Customer::factory()->create();
+        [$delivery, $items] = $this->source($customer, 2);
+        $items[1]->salesOrderItem->update(['product_id' => $items[0]->salesOrderItem->product_id]);
+        $manager = User::factory()->create(['role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id')]);
+        $payload = $this->payload($delivery, $items, (string) Str::uuid());
+        $payload['lines'][0]['received_quantity'] = '10';
+        $payload['lines'][0]['defective_quantity'] = '1';
+        $payload['lines'][1]['received_quantity'] = '10';
+        $payload['lines'][1]['defective_quantity'] = '2';
+        $case = $this->actingAs($manager)->postJson('/api/v1/return-management/cases', $payload)->assertCreated()->json('data');
+        $path = '/api/v1/return-management/cases/'.$case['id'];
+        $this->postJson($path.'/actions', ['action' => 'agree', 'resolution' => 'redelivery', 'message' => 'Replace and collect all three damaged pieces.'])->assertOk();
+        $checker = User::factory()->create(['role_id' => Role::query()->where('slug', 'finance_officer')->value('id')]);
+        $this->actingAs($checker)->postJson($path.'/actions', ['action' => 'create_replacement'])->assertOk();
+        $replacement = SalesOrder::query()->where('return_case_id', ReturnCase::tryDecodeHash($case['id']))->firstOrFail();
+        $this->postJson($path.'/actions', ['action' => 'create_return'])->assertOk();
+        $stored = ReturnCase::findOrFail($replacement->return_case_id);
+        $return = $stored->returnRequest;
+        $shipment = Delivery::create([
+            'delivery_number' => 'DR-COLLECT-'.Str::random(6), 'sales_order_id' => $replacement->id,
+            'status' => 'delivered', 'scheduled_date' => now()->toDateString(), 'created_by' => $checker->id,
+        ]);
+        $shipment->items()->create(['sales_order_item_id' => $replacement->items()->firstOrFail()->id, 'quantity' => '3', 'unit_price' => '0']);
+        event(new \App\Modules\SupplyChain\Events\DeliveryConfirmed($delivery));
+        event(new \App\Modules\SupplyChain\Events\DeliveryConfirmed($shipment));
+        $this->getJson($path)->assertOk()->assertJsonPath('data.status', 'in_progress')->assertJsonPath('data.lines.0.redelivered_quantity', '0.000');
+        $shipment->update(['status' => 'confirmed']);
+        event(new \App\Modules\SupplyChain\Events\DeliveryConfirmed($shipment));
+        $this->getJson($path)->assertOk()->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.lines.0.redelivered_quantity', '1.000')->assertJsonPath('data.lines.1.redelivered_quantity', '2.000');
+        $return->update(['status' => 'completed']);
+        event(new \App\Modules\ReturnManagement\Events\ReturnRequestUpdated($return));
+        $this->getJson($path)->assertOk()->assertJsonPath('data.status', 'in_progress');
+        foreach ($return->items as $item) {
+            $item->update(['returned_quantity' => $item->quantity]);
+        }
+        event(new \App\Modules\ReturnManagement\Events\ReturnRequestUpdated($return));
+        $this->getJson($path)->assertOk()->assertJsonPath('data.status', 'resolved');
+        event(new \App\Modules\ReturnManagement\Events\ReturnRequestUpdated($return));
+        $this->assertSame(1, $stored->events()->where('action', 'resolve')->count());
+    }
+
+    public function test_replacement_approval_rolls_back_when_normal_confirmation_rejects_inactive_product(): void
+    {
+        $customer = Customer::factory()->create();
+        [$delivery, $items] = $this->source($customer, 1);
+        $manager = User::factory()->create(['role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id')]);
+        $payload = $this->payload($delivery, $items, (string) Str::uuid());
+        $payload['lines'][0]['received_quantity'] = '0';
+        $payload['lines'][0]['defective_quantity'] = '0';
+        $case = $this->actingAs($manager)->postJson('/api/v1/return-management/cases', $payload)->assertCreated()->json('data');
+        $path = '/api/v1/return-management/cases/'.$case['id'];
+        $this->postJson($path.'/actions', ['action' => 'agree', 'resolution' => 'redelivery', 'message' => 'Replace verified missing pieces.'])->assertOk();
+        $items[0]->salesOrderItem->product->update(['is_active' => false]);
+        $checker = User::factory()->create(['role_id' => Role::query()->where('slug', 'finance_officer')->value('id')]);
+        $this->actingAs($checker)->postJson($path.'/actions', ['action' => 'create_replacement'])->assertUnprocessable();
+        $this->getJson($path)->assertOk()->assertJsonPath('data.status', 'action_agreed')->assertJsonPath('data.replacement_order', null);
+        $this->assertFalse(SalesOrder::query()->where('return_case_id', ReturnCase::tryDecodeHash($case['id']))->exists());
+        $items[0]->salesOrderItem->product->update(['is_active' => true]);
+        $draft = app(\App\Modules\CRM\Services\SalesOrderService::class)->createNoChargeReplacement(ReturnCase::findOrFail(ReturnCase::tryDecodeHash($case['id'])), $checker->id);
+        $this->assertSame(SalesOrderStatus::Draft, $draft->status);
+        $this->postJson($path.'/actions', ['action' => 'create_replacement'])->assertOk()
+            ->assertJsonPath('data.replacement_order.id', $draft->hash_id)->assertJsonPath('data.replacement_order.status', 'confirmed');
+        $this->assertSame(1, SalesOrder::query()->where('return_case_id', ReturnCase::tryDecodeHash($case['id']))->count());
     }
 
     public function test_report_holds_draft_invoice_posting_without_changing_original_quantities(): void

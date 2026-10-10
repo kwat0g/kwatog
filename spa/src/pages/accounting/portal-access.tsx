@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -181,7 +182,7 @@ function SuppliersSection() {
   { key: 'name', header: 'Contact', cell: (row) => <div><div className="font-medium text-primary">{row.name}</div><div className="text-xs text-muted">{row.email}</div></div>, pinned: 'left' },
   { key: 'vendor', header: 'Vendor', cell: (row) => row.vendor?.name ?? '—' },
   { key: 'status', header: 'Status', cell: (row) => <Chip variant={chipVariantForStatus(row.status)}>{statusLabels[row.status]}</Chip> },
-  { key: 'last_login', header: 'Last sign-in', cell: (row) => row.last_login_at ? new Date(row.last_login_at).toLocaleString() : 'Never' },
+  { key: 'last_login', header: 'Last sign-in', cell: (row) => row.last_login_at ? formatDateTime(row.last_login_at) : 'Never' },
   {
    key: 'actions',
    header: 'Actions',
@@ -327,7 +328,7 @@ function CustomersSection() {
   { key: 'name', header: 'Contact', cell: (row) => <div><div className="font-medium text-primary">{row.name}</div><div className="text-xs text-muted">{row.email}</div></div>, pinned: 'left' },
   { key: 'customer', header: 'Customer', cell: (row) => row.customer?.name ?? '—' },
   { key: 'status', header: 'Status', cell: (row) => <Chip variant={chipVariantForStatus(row.status)}>{statusLabels[row.status]}</Chip> },
-  { key: 'last_login', header: 'Last sign-in', cell: (row) => row.last_login_at ? new Date(row.last_login_at).toLocaleString() : 'Never' },
+  { key: 'last_login', header: 'Last sign-in', cell: (row) => row.last_login_at ? formatDateTime(row.last_login_at) : 'Never' },
   {
    key: 'actions',
    header: 'Actions',
@@ -467,6 +468,7 @@ function DeliverySchedulesSection() {
 
  return (
   <>
+   <p className="px-5 pt-3 text-xs text-muted">Supplier delivery plans are archived and read-only. Customer schedules can still be reviewed.</p>
    <FilterBar
     filters={[...scheduleStatusFilter, ...scheduleSourceFilter]}
     values={filters}
@@ -522,7 +524,7 @@ function DeliverySchedulesSection() {
        </table>
       </div>
 
-      {canManage && selected.status === 'submitted' && (
+      {canManage && selected.source !== 'supplier' && selected.status === 'submitted' && (
        rejecting ? (
         <div className="space-y-2 border-t border-default pt-3">
          <Input

@@ -1,7 +1,7 @@
 import { client } from '../client';
 import type { ReportDeliveryAttempt, ReceiveTruckReturn } from '@/types/deliveryAttempt';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Shipment, ShipmentDocument, ShipmentDocumentType, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, DeliveryStatus, Incoterm } from '@/types/supplyChain';
+import type { ContainerSize, ContainerType, Shipment, ShipmentContainer, ShipmentContainerData, ShipmentDocument, ShipmentDocumentType, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, ShipmentPurchaseOrderOption, ShipmentPurchaseOrderOptionParams, DeliveryStatus, Incoterm, LandedCostAllocationMethod } from '@/types/supplyChain';
 
 export interface ShipmentListParams extends ListParams {
  status?: ShipmentStatus;
@@ -15,6 +15,15 @@ export interface ShipmentStatusOption {
  is_terminal: boolean;
 }
 
+export interface ShipmentOptions {
+ statuses: ShipmentStatusOption[];
+ document_types: Array<{ value: ShipmentDocumentType; label: string }>;
+ incoterms: Array<{ value: Incoterm; label: string }>;
+ allocation_methods: Array<{ value: LandedCostAllocationMethod; label: string }>;
+ container_sizes: Array<{ value: ContainerSize; label: string }>;
+ container_types: Array<{ value: ContainerType; label: string }>;
+}
+
 export interface CreateShipmentData {
  purchase_order_id: string;
  carrier?: string;
@@ -25,6 +34,11 @@ export interface CreateShipmentData {
  eta?: string;
  notes?: string;
  incoterm?: Incoterm;
+ freight_cost?: string;
+ insurance_cost?: string;
+ duties_amount?: string;
+ brokerage_fee?: string;
+ other_charges?: string;
 }
 
 export interface UpdateShipmentMetaData {
@@ -35,15 +49,17 @@ export interface UpdateShipmentMetaData {
  etd?: string;
  eta?: string;
  notes?: string;
+ freight_cost?: string;
+ insurance_cost?: string;
+ duties_amount?: string;
+ brokerage_fee?: string;
+ other_charges?: string;
 }
 
 export const shipmentsApi = {
- options: () => client.get<{ data: {
- statuses: ShipmentStatusOption[];
- document_types: Array<{ value: ShipmentDocumentType; label: string }>;
- incoterms: Array<{ value: Incoterm; label: string }>;
- allocation_methods: Array<{ value: string; label: string }>;
- } }>('/supply-chain/shipments/options').then((r) => r.data.data),
+ options: () => client.get<{ data: ShipmentOptions }>('/supply-chain/shipments/options').then((r) => r.data.data),
+ purchaseOrderOptions: (params?: ShipmentPurchaseOrderOptionParams, signal?: AbortSignal) =>
+ client.get<PaginatedResponse<ShipmentPurchaseOrderOption>>('/supply-chain/shipments/purchase-order-options', { params, signal }).then((r) => r.data),
  list: (params?: ShipmentListParams) =>
  client.get<PaginatedResponse<Shipment>>('/supply-chain/shipments', { params }).then((r) => r.data),
  show: (id: string) =>
@@ -54,6 +70,8 @@ export const shipmentsApi = {
  client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}/status`, { status, note }).then((r) => r.data.data),
  updateMeta: (id: string, data: UpdateShipmentMetaData) =>
  client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}`, data).then((r) => r.data.data),
+ calculateLandedCost: (id: string, allocation_method: LandedCostAllocationMethod) =>
+ client.post<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}/calculate-landed-cost`, { allocation_method }).then((r) => r.data.data),
  uploadDocument: (id: string, file: File, document_type: ShipmentDocumentType, notes?: string) => {
  const fd = new FormData();
  fd.append('file', file);
@@ -66,6 +84,17 @@ export const shipmentsApi = {
   client.delete(`/supply-chain/shipment-documents/${documentId}`),
  restoreDocument: (documentId: string) =>
   client.patch(`/supply-chain/shipment-documents/${documentId}/restore`),
+};
+
+export const shipmentContainersApi = {
+ list: (shipmentId: string, params?: { page?: number; per_page?: number; search?: string; trashed?: 'with' | 'only' }) =>
+  client.get<PaginatedResponse<ShipmentContainer>>(`/supply-chain/shipments/${shipmentId}/containers`, { params }).then((r) => r.data),
+ create: (shipmentId: string, data: ShipmentContainerData) =>
+  client.post<ApiSuccess<ShipmentContainer>>(`/supply-chain/shipments/${shipmentId}/containers`, data).then((r) => r.data.data),
+ update: (containerId: string, data: Partial<ShipmentContainerData>) =>
+  client.put<ApiSuccess<ShipmentContainer>>(`/supply-chain/containers/${containerId}`, data).then((r) => r.data.data),
+ archive: (containerId: string) => client.delete(`/supply-chain/containers/${containerId}`),
+ restore: (containerId: string) => client.patch(`/supply-chain/containers/${containerId}/restore`),
 };
 
 export interface DeliveryListParams extends ListParams {
@@ -128,6 +157,14 @@ export interface DeliveryAssignmentData {
  reason: string;
 }
 
+export interface DeliveryShipmentPlanData extends DeliveryAssignmentData {
+ scheduled_date: string;
+ expected_delivery_date: string;
+ carrier: string;
+ dispatch: boolean;
+ loading_photo?: File;
+}
+
 export const deliveriesApi = {
  reserveStock: (id: string, requestKey: string) => client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/reserve-stock`, { request_key: requestKey }).then(r => r.data.data),
  retryCost: (id: string, kind: 'customer_cogs' | 'unaccounted_loss', requestKey: string) => client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/retry-cost-handoff`, { kind, request_key: requestKey }).then(r => r.data.data),
@@ -156,6 +193,18 @@ export const deliveriesApi = {
   client.get<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}`).then((r) => r.data.data),
  assign: (id: string, data: DeliveryAssignmentData) =>
   client.patch<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/assignment`, data).then((r) => r.data.data),
+ shipmentPlan: (id: string, data: DeliveryShipmentPlanData) => {
+  const form = new FormData();
+  form.append('scheduled_date', data.scheduled_date);
+  form.append('expected_delivery_date', data.expected_delivery_date);
+  form.append('carrier', data.carrier);
+  form.append('vehicle_id', data.vehicle_id);
+  form.append('driver_id', data.driver_id);
+  form.append('reason', data.reason);
+  form.append('dispatch', data.dispatch ? '1' : '0');
+  if (data.loading_photo) form.append('loading_photo', data.loading_photo);
+  return client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/shipment-plan`, form).then((r) => r.data.data);
+ },
  updateStatus: (id: string, status: DeliveryStatus, note?: string) =>
  client.patch<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/status`, { status, note }).then((r) => r.data.data),
  uploadReceipt: (id: string, file: File) => {

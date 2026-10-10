@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /home/ec2-user/kwatog/spa
+
+
+ Test Files  3 passed (3)
+      Tests  5 passed (5)
+   Start at  21:14:45
+   Duration  5.89s (transform 873ms, setup 364ms, import 7.64s, tests 1.90s, environment 4.04s)
+

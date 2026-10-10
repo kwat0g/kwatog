@@ -14,6 +14,7 @@ use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\Production\Models\MachineDowntime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** Sprint 8 — Task 69. */
 class MaintenanceWorkOrder extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $table = 'maintenance_work_orders';
 
@@ -38,22 +39,37 @@ class MaintenanceWorkOrder extends Model
         'assigned_to',
         'status',
         'started_at',
+        'pre_maintenance_status',
         'completed_at',
         'downtime_minutes',
         'cost',
+        'verification_required',
+        'diagnosis',
+        'repair_action',
+        'functional_test_result',
+        'repair_submitted_by',
+        'repair_submitted_at',
+        'parts_reconciled_by',
+        'parts_reconciled_at',
+        'verified_by',
+        'verified_at',
         'remarks',
         'created_by',
     ];
 
     protected $casts = [
         'maintainable_type' => MaintainableType::class,
-        'type'              => MaintenanceWorkOrderType::class,
-        'priority'          => MaintenancePriority::class,
-        'status'            => MaintenanceWorkOrderStatus::class,
-        'started_at'        => 'datetime',
-        'completed_at'      => 'datetime',
-        'downtime_minutes'  => 'integer',
-        'cost'              => 'decimal:2',
+        'type' => MaintenanceWorkOrderType::class,
+        'priority' => MaintenancePriority::class,
+        'status' => MaintenanceWorkOrderStatus::class,
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'downtime_minutes' => 'integer',
+        'cost' => 'decimal:2',
+        'verification_required' => 'boolean',
+        'repair_submitted_at' => 'datetime',
+        'parts_reconciled_at' => 'datetime',
+        'verified_at' => 'datetime',
     ];
 
     public function schedule(): BelongsTo
@@ -71,6 +87,21 @@ class MaintenanceWorkOrder extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function submittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'repair_submitted_by');
+    }
+
+    public function verifier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function partsReconciledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'parts_reconciled_by');
+    }
+
     public function machineTarget(): BelongsTo
     {
         return $this->belongsTo(Machine::class, 'maintainable_id')->withTrashed();
@@ -83,7 +114,12 @@ class MaintenanceWorkOrder extends Model
 
     public function logs(): HasMany
     {
-        return $this->hasMany(MaintenanceLog::class, 'work_order_id')->orderBy('created_at');
+        return $this->hasMany(MaintenanceLog::class, 'work_order_id')->orderBy('created_at')->orderBy('id');
+    }
+
+    public function partRequests(): HasMany
+    {
+        return $this->hasMany(MaintenancePartRequest::class, 'work_order_id');
     }
 
     public function spareParts(): HasMany
@@ -91,12 +127,17 @@ class MaintenanceWorkOrder extends Model
         return $this->hasMany(SparePartUsage::class, 'work_order_id');
     }
 
+    public function machineDowntimes(): HasMany
+    {
+        return $this->hasMany(MachineDowntime::class, 'maintenance_order_id');
+    }
+
     public function maintainable(): Machine|Mold|null
     {
         return match ($this->maintainable_type) {
             MaintainableType::Machine => $this->machineTarget()->first(),
-            MaintainableType::Mold    => $this->moldTarget()->first(),
-            default                   => null,
+            MaintainableType::Mold => $this->moldTarget()->first(),
+            default => null,
         };
     }
 

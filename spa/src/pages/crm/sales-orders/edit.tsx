@@ -227,11 +227,11 @@ export default function EditSalesOrderPage() {
  />
  {customers.isError && <QueryErrorState size="compact" subject="active customers" onRetry={() => void customers.refetch()} />}
  {products.isError && <QueryErrorState size="compact" subject="active products" onRetry={() => void products.refetch()} />}
- <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-4">
- <fieldset className="mb-8">
+ <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
+ <fieldset className="min-w-0 mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
- <div className="grid grid-cols-2 gap-3">
- <Select
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <Select searchable
  label="Customer"
  required
  disabled={customerLookupDisabled}
@@ -260,9 +260,9 @@ export default function EditSalesOrderPage() {
  </div>
  </fieldset>
 
- <fieldset className="mb-8">
+ <fieldset className="min-w-0 mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Line items</legend>
- <div className="border border-default rounded-md overflow-hidden">
+ <div className="border border-default rounded-md overflow-x-auto">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
@@ -276,7 +276,7 @@ export default function EditSalesOrderPage() {
  {fields.map((field, i) => (
  <tr key={field.id} className={trCls}>
  <Td>
- <Select
+ <Select aria-label={`Product for line ${i + 1}`} searchable
  {...register(`items.${i}.product_id` as const)}
  disabled={productLookupDisabled}
  helper={productLookupHelper}
@@ -339,7 +339,7 @@ export default function EditSalesOrderPage() {
  {errors.items?.message && <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>}
  </fieldset>
 
- <fieldset className="mb-8">
+ <fieldset className="min-w-0 mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Notes</legend>
  <Textarea rows={3} {...register('notes')} error={errors.notes?.message} placeholder="Optional internal notes." />
  </fieldset>

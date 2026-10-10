@@ -11,9 +11,10 @@
  * first; once picked, the page swaps to editor mode with that product
  * locked in.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -32,18 +33,28 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
 import { capabilityApi } from '@/api/quality/capability';
-import { uomsApi } from '@/api/inventory/uoms';
 import type { InspectionSpecRevision, UpsertInspectionSpecData } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateIso } from '@/lib/formatDate';
+import { inspectionMethods } from '@/lib/inspectionMethods';
+import { uomsApi } from '@/api/inventory/uoms';
+
+const checkOptions = [
+  { name: 'Product identity', method: '', criterion: 'Product matches the ordered part and its approved identification.' },
+  { name: 'Appearance', method: 'visual', criterion: 'No cracks, damage, contamination, flash or short shots.' },
+  { name: 'Size', method: 'dimensional', criterion: 'Dimensions are within the limits on the approved product drawing.' },
+  { name: 'Fit / function', method: 'functional', criterion: 'Fits the approved inspection gauge or mating part and performs the required function.' },
+  { name: 'Packaging', method: 'visual', criterion: 'Packaging protects the product, and labels match the product and batch.' },
+];
+const measurementUnits = ['mm', 'cm', 'm', 'µm', 'g', 'kg', '°C', 'N', '%'];
 
 const signedDecimalPattern = /^-?\d{1,8}(?:\.\d{1,4})?$/;
 const itemSchema = z
   .object({
-    parameter_name: z.string().min(1, 'Parameter name is required').max(150),
-    parameter_type: z.string().min(1, 'Parameter type is required'),
+    parameter_name: z.string().trim().min(1, 'Choose what to check or enter a custom name.').max(150),
+    parameter_type: z.string().nullable().optional(),
+    acceptance_criterion: z.string().trim().max(500).optional(),
     unit_of_measure: z.string().max(20).optional().or(z.literal('')),
     nominal_value: z
       .string()
@@ -77,72 +88,87 @@ const itemSchema = z
     const minimum = row.tolerance_min || null;
     const maximum = row.tolerance_max || null;
     const hasNumeric = Boolean(nominal || minimum || maximum);
+    if (!minimum && !maximum && !row.acceptance_criterion?.trim() && !row.notes?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['acceptance_criterion'], message: 'Enter the PASS requirement or approved reference.' });
+    }
     if (row.parameter_type === 'visual' && hasNumeric) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['parameter_type'],
-        message: 'Visual parameters use manual pass/fail only',
+        message: 'Visual checks cannot have numeric limits.',
       });
     }
     if (row.parameter_type === 'dimensional') {
+      if (!row.unit_of_measure?.trim())
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['unit_of_measure'],
+          message: 'Choose a measurement unit.',
+        });
       if (!nominal)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['nominal_value'],
-          message: 'Nominal is required for dimensional parameters',
+          message: 'Enter the measurement target.',
         });
       if (!minimum)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['tolerance_min'],
-          message: 'Minimum tolerance is required',
+          message: 'Enter the lowest allowed value.',
         });
       if (!maximum)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['tolerance_max'],
-          message: 'Maximum tolerance is required',
+          message: 'Enter the highest allowed value.',
         });
     }
     if (row.parameter_type === 'functional' && nominal && !minimum && !maximum) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['nominal_value'],
-        message: 'A functional nominal needs a tolerance bound',
+        message: 'A target needs at least one allowed limit.',
       });
     }
     if (minimum && maximum && Number(minimum) > Number(maximum)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['tolerance_min'],
-        message: 'Minimum must not exceed maximum',
+        message: 'Lowest allowed must not exceed highest allowed.',
       });
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['tolerance_max'],
-        message: 'Maximum must not be below minimum',
+        message: 'Highest allowed must not be below lowest allowed.',
       });
     }
     if (nominal && minimum && Number(nominal) < Number(minimum)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['nominal_value'],
-        message: 'Nominal must be within the tolerance window',
+        message: 'Target must be within the allowed limits.',
       });
     }
     if (nominal && maximum && Number(nominal) > Number(maximum)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['nominal_value'],
-        message: 'Nominal must be within the tolerance window',
+        message: 'Target must be within the allowed limits.',
       });
     }
   });
-
 const schema = z.object({
   product_id: z.string().min(1, 'Product is required'),
   notes: z.string().max(2000).optional().or(z.literal('')),
-  items: z.array(itemSchema).min(1, 'Add at least one parameter'),
+  items: z.array(itemSchema).min(1, 'Add at least one check').max(100),
+}).superRefine((values, context) => {
+  const seen = new Set<string>();
+  values.items.forEach((row, index) => {
+    const name = row.parameter_name.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+    if (seen.has(name)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'parameter_name'], message: 'Check names must be unique.' });
+    seen.add(name);
+  });
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -178,8 +204,16 @@ export default function InspectionSpecEditorPage() {
     queryKey: ['quality', 'inspection-specs', 'options'],
     queryFn: () => inspectionSpecsApi.options(),
   });
-  const parameterTypes = parameterOptions.data?.parameter_types ?? [];
-  const defaultParameterType = parameterTypes[0]?.value ?? '';
+  const captureEnabled = parameterOptions.data?.checklist_capture_enabled === true;
+  const units = useQuery({
+    queryKey: ['inventory', 'uoms'],
+    queryFn: uomsApi.list,
+    enabled: can('quality.specs.view') || can('quality.specs.manage'),
+    staleTime: 300_000,
+  });
+  const [customChecks, setCustomChecks] = useState<Set<string>>(new Set());
+  const [numericChecks, setNumericChecks] = useState<Set<string>>(new Set());
+  const [editingChecks, setEditingChecks] = useState<Set<string>>(new Set());
   const existing = useQuery({
     queryKey: ['quality', 'inspection-specs', 'for-product', productId],
     queryFn: () => inspectionSpecsApi.forProduct(productId),
@@ -221,11 +255,6 @@ export default function InspectionSpecEditorPage() {
     queryFn: capabilityApi.options,
     staleTime: 300_000,
   });
-  const { data: uoms = [] } = useQuery({
-    queryKey: ['inventory', 'uoms'],
-    queryFn: uomsApi.list,
-    staleTime: 300_000,
-  });
   const cpkThresholds = spcOptions?.capability_thresholds;
 
   const {
@@ -233,10 +262,11 @@ export default function InspectionSpecEditorPage() {
     control,
     handleSubmit,
     getValues,
+    watch,
     reset,
-    setError,
     setValue,
-    formState: { errors, isSubmitting },
+    setError,
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -245,80 +275,86 @@ export default function InspectionSpecEditorPage() {
       items: [
         {
           parameter_name: '',
+          acceptance_criterion: '',
           parameter_type: '',
-          unit_of_measure: '',
-          nominal_value: '',
-          tolerance_min: '',
-          tolerance_max: '',
           is_critical: false,
-          notes: '',
+
         },
       ],
     },
   });
+  useUnsavedChangesGuard(isDirty && !readOnly);
+
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const selectedNames = new Set(watch('items').map(row => row.parameter_name.trim().replace(/\s+/g, ' ').toLocaleLowerCase()));
+  const hasRemainingChecks = checkOptions.some(option => !selectedNames.has(option.name.toLocaleLowerCase()));
+  const initializedProduct = useRef('');
+
+  useEffect(() => {
+    if (!errors.items) return;
+    setEditingChecks(previous => {
+      const next = new Set(previous);
+      fields.forEach((field, index) => {
+        if (errors.items?.[index]) next.add(field.id);
+      });
+      return next;
+    });
+  }, [errors.items, fields]);
 
   // Pre-fill once the existing spec query resolves (or once user picks a product in new mode).
   useEffect(() => {
     if (!productId) return;
     if (isSpecDetailMode && specDetail.data === undefined) return;
     if (!isSpecDetailMode && existing.data === undefined) return;
+    if (!loadedSpec && products.isPending) return;
+    if (initializedProduct.current === productId) return;
+    initializedProduct.current = productId;
     if (loadedSpec) {
       reset({
         product_id: productId,
         notes: loadedSpec.notes ?? '',
         items: (loadedSpec.items ?? []).map((it) => ({
           parameter_name: it.parameter_name,
+          acceptance_criterion: it.acceptance_criterion ?? '',
           parameter_type: it.parameter_type,
           unit_of_measure: it.unit_of_measure ?? '',
-          nominal_value: it.nominal_value ?? '',
-          tolerance_min: it.tolerance_min ?? '',
-          tolerance_max: it.tolerance_max ?? '',
-          is_critical: it.is_critical,
+          nominal_value: it.nominal_value == null ? '' : String(it.nominal_value),
+          tolerance_min: it.tolerance_min == null ? '' : String(it.tolerance_min),
+          tolerance_max: it.tolerance_max == null ? '' : String(it.tolerance_max),
           notes: it.notes ?? '',
+          is_critical: it.is_critical,
+
         })),
       });
     } else {
+      const product = products.data?.data.find(candidate => candidate.id === productId);
       reset({
         product_id: productId,
         notes: '',
-        items: [
-          {
-            parameter_name: '',
-            parameter_type: '',
-            unit_of_measure: '',
-            nominal_value: '',
-            tolerance_min: '',
-            tolerance_max: '',
-            is_critical: false,
-            notes: '',
-          },
-        ],
+        items: checkOptions.map(option => ({
+          parameter_name: option.name,
+          parameter_type: option.method,
+          acceptance_criterion: option.name === 'Product identity' && product
+            ? `Product matches ${product.part_number} — ${product.name} and its approved identification.`
+            : option.criterion,
+          is_critical: false,
+          unit_of_measure: '',
+          nominal_value: '',
+          tolerance_min: '',
+          tolerance_max: '',
+          notes: '',
+        })),
       });
     }
   }, [
     productId,
     loadedSpec,
+    products.data,
+    products.isPending,
     isSpecDetailMode,
     specDetail.data,
     existing.data,
     reset,
-  ]);
-
-  useEffect(() => {
-    if (!productId || loadedSpec || !defaultParameterType) return;
-    if (isSpecDetailMode ? specDetail.data === undefined : existing.data === undefined) return;
-    if (getValues('items.0.parameter_type')) return;
-    setValue('items.0.parameter_type', defaultParameterType);
-  }, [
-    productId,
-    loadedSpec,
-    isSpecDetailMode,
-    specDetail.data,
-    existing.data,
-    defaultParameterType,
-    getValues,
-    setValue,
   ]);
 
   const upsert = useMutation({
@@ -326,22 +362,24 @@ export default function InspectionSpecEditorPage() {
       const payload: UpsertInspectionSpecData = {
         product_id: values.product_id,
         notes: values.notes || undefined,
+        capture_method: 'checklist',
         items: values.items.map((row, i) => ({
           parameter_name: row.parameter_name,
-          parameter_type:
-            row.parameter_type as UpsertInspectionSpecData['items'][number]['parameter_type'],
+          acceptance_criterion: row.acceptance_criterion || undefined,
           unit_of_measure: row.unit_of_measure || undefined,
           nominal_value: row.nominal_value || undefined,
           tolerance_min: row.tolerance_min || undefined,
           tolerance_max: row.tolerance_max || undefined,
+          notes: row.notes || undefined,
+          parameter_type: (row.parameter_type || null) as UpsertInspectionSpecData['items'][number]['parameter_type'],
           is_critical: row.is_critical ?? false,
           sort_order: i,
-          notes: row.notes || undefined,
         })),
       };
       return inspectionSpecsApi.upsert(payload);
     },
     onSuccess: (spec) => {
+      reset(getValues());
       qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
       qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs', 'for-product', productId] });
       qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs', 'spc'] });
@@ -392,7 +430,7 @@ export default function InspectionSpecEditorPage() {
           backTo="/quality/inspection-specs"
           backLabel="Inspection specs"
         />
-        <div className="max-w-2xl mx-auto px-5 py-4">
+        <div className="min-w-0 w-full px-5 py-4">
           <EmptyState
             icon="lock"
             title="Authoring permission required"
@@ -411,8 +449,11 @@ export default function InspectionSpecEditorPage() {
           backTo="/quality/inspection-specs"
           backLabel="Inspection specs"
         />
-        <div className="max-w-2xl mx-auto px-5 py-4 space-y-4">
-          <Select
+        <div className="min-w-0 w-full px-5 py-4 space-y-4">
+          <h2 className="text-base font-semibold">Choose a product</h2>
+          <p className="text-sm text-muted">Start with suggested checks, then adjust them to the approved product requirements.</p>
+          <Select searchable
+            containerClassName="max-w-xl"
             label="Product"
             required
             value={pickedProductId}
@@ -477,7 +518,7 @@ export default function InspectionSpecEditorPage() {
     <div>
       <PageHeader
         title={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span>{productLabel || 'Inspection spec'}</span>
             {loadedSpec && (
               <Chip variant={loadedSpec.is_active ? 'success' : 'neutral'}>
@@ -491,188 +532,117 @@ export default function InspectionSpecEditorPage() {
         backLabel="Inspection specs"
       />
       <form
+        noValidate
         onSubmit={
           readOnly
             ? (e) => e.preventDefault()
             : handleSubmit((v) => upsert.mutate(v), onFormInvalid<FormValues>())
         }
-        className="max-w-5xl mx-auto px-5 py-4"
+        className="min-w-0 w-full px-5 py-4"
       >
         <input type="hidden" {...register('product_id')} value={productId} />
 
-        <fieldset className="mb-8">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
-            Notes
-          </legend>
-          <Textarea
-            rows={2}
-            {...register('notes')}
-            readOnly={readOnly}
-            error={errors.notes?.message}
-            placeholder="Optional context for this revision."
-          />
-        </fieldset>
-
-        <fieldset className="mb-8">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
-            Parameters
-          </legend>
-          <div className="overflow-x-auto rounded-md border border-default">
-            <table className={tableCls + ' min-w-[960px]'}>
-              <thead>
-                <tr className={theadTrCls}>
-                  <Th className="w-1/4">Parameter</Th>
-                  <Th>Type</Th>
-                  <Th>UOM</Th>
-                  <Th align="right">Nominal</Th>
-                  <Th align="right">Min</Th>
-                  <Th align="right">Max</Th>
-                  <Th>Notes</Th>
-                  <Th align="center">Critical?</Th>
-                  <Th />
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((field, i) => (
-                  <tr key={field.id} className={trCls}>
-                    <Td>
-                      <Input
-                        {...register(`items.${i}.parameter_name` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' name'}
-                        error={errors.items?.[i]?.parameter_name?.message}
-                        placeholder="Measurement name"
-                        readOnly={readOnly}
-                      />
-                    </Td>
-                    <Td>
-                      <Select
-                        {...register(`items.${i}.parameter_type` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' type'}
-                        error={errors.items?.[i]?.parameter_type?.message}
-                        disabled={readOnly}
-                      >
-                        {parameterTypes.map((type) => (
-                          <option key={type.value} value={type.value}>
-                            {type.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td>
-                      <Select
-                        {...register(`items.${i}.unit_of_measure` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' unit of measure'}
-                        error={errors.items?.[i]?.unit_of_measure?.message}
-                        className="font-mono"
-                        disabled={readOnly}
-                      >
-                        <option value="">—</option>
-                        {uoms.map((u) => (
-                          <option key={u.id} value={u.code}>
-                            {u.code}
-                          </option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td align="right" mono>
-                      <Input
-                        {...register(`items.${i}.nominal_value` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' nominal value'}
-                        error={errors.items?.[i]?.nominal_value?.message}
-                        placeholder="0.0000"
-                        className="font-mono text-right"
-                        readOnly={readOnly}
-                      />
-                    </Td>
-                    <Td align="right" mono>
-                      <Input
-                        {...register(`items.${i}.tolerance_min` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' minimum tolerance'}
-                        error={errors.items?.[i]?.tolerance_min?.message}
-                        placeholder="0.0000"
-                        className="font-mono text-right"
-                        readOnly={readOnly}
-                      />
-                    </Td>
-                    <Td align="right" mono>
-                      <Input
-                        {...register(`items.${i}.tolerance_max` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' maximum tolerance'}
-                        error={errors.items?.[i]?.tolerance_max?.message}
-                        placeholder="0.0000"
-                        className="font-mono text-right"
-                        readOnly={readOnly}
-                      />
-                    </Td>
-                    <Td>
-                      <Input
-                        {...register(`items.${i}.notes` as const)}
-                        aria-label={'Parameter ' + (i + 1) + ' notes'}
-                        error={errors.items?.[i]?.notes?.message}
-                        placeholder="Optional note"
-                        readOnly={readOnly}
-                      />
-                    </Td>
-                    <Td align="center">
-                      <Checkbox
-                        aria-label={'Parameter ' + (i + 1) + ' critical characteristic'}
-                        {...register(`items.${i}.is_critical` as const)}
-                        disabled={readOnly}
-                      />
-                    </Td>
-                    <Td align="right" mono>
-                      {!readOnly && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          iconOnly
-                          icon={<LuTrash2 size={14} />}
-                          aria-label="Remove parameter"
-                          onClick={() => remove(i)}
-                          disabled={fields.length === 1}
-                          className="text-muted hover:text-danger-fg"
-                        />
-                      )}
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <fieldset className="mb-8 min-w-0">
+          <legend className="mb-2 text-base font-semibold">Inspection checks · {fields.length}</legend>
+          <p className="mb-4 text-sm text-muted">Review each PASS requirement. Use Edit to change a check; add measurement limits when needed.</p>
+          {!loadedSpec && <p className="mb-4 text-sm text-warning-fg">Suggested checks need review against approved requirements. Remove checks that do not apply.</p>}
+          {!captureEnabled && !readOnly && <p role="alert" className="mb-3 text-warning-fg">PASS/FAIL publication is paused until the compatible inspection workflow is enabled.</p>}
+          {loadedSpec?.capture_method !== 'checklist' && loadedSpec && <p className="mb-3 text-warning-fg">Existing limits and historical measurements stay preserved. Saving publishes a new specification revision for PASS/FAIL inspection.</p>}
+          {errors.items?.root?.message && <p role="alert" className="mb-3 text-sm text-danger-fg">{errors.items.root.message}</p>}
+          <div className="divide-y divide-default border-y border-default">
+            {fields.map((field, i) => {
+              const row = watch(`items.${i}`);
+              const custom = customChecks.has(field.id) || Boolean(row?.parameter_name && !checkOptions.some(option => option.name === row.parameter_name));
+              const hasLimits = Boolean(row?.nominal_value || row?.tolerance_min || row?.tolerance_max);
+              const showLimits = row?.parameter_type === 'dimensional' || hasLimits || numericChecks.has(field.id);
+              const editing = editingChecks.has(field.id) || !row?.parameter_name;
+              const name = row?.parameter_name || `New check ${i + 1}`;
+              const unitCodes = [...new Set([...measurementUnits, ...(units.data ?? []).map(unit => unit.code), ...(row?.unit_of_measure ? [row.unit_of_measure] : [])])];
+              return <section key={field.id} aria-label={`Check ${i + 1}: ${name}`} className="min-w-0 space-y-3 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold break-words">{name}</h3>
+                  <p className="mt-1 text-xs text-muted">{inspectionMethods.find(method => method.value === (row?.parameter_type ?? ''))?.label ?? row?.parameter_type}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                  {row?.is_critical && <Chip variant="warning">Critical</Chip>}
+                  <Button type="button" size="sm" variant="secondary" aria-label={`${editing ? 'Done editing' : readOnly ? 'View' : 'Edit'} ${name}`} aria-expanded={editing} aria-controls={`check-editor-${field.id}`}
+                    onClick={() => setEditingChecks(previous => { const next = new Set(previous); if (next.has(field.id)) next.delete(field.id); else next.add(field.id); return next; })}>
+                    {editing ? 'Done' : readOnly ? 'View' : 'Edit'}
+                  </Button>
+                  {!readOnly && <Button type="button" size="sm" variant="ghost" iconOnly className="text-danger-fg" aria-label={`Remove check ${i + 1}`} title={fields.length === 1 ? 'Keep at least one check' : `Remove ${name}`} disabled={fields.length === 1} onClick={() => remove(i)}><LuTrash2 size={16} /></Button>}
+                </div>
+              </div>
+              {!editing && <div className="text-sm text-secondary">
+                <p className="mb-1 text-xs font-medium text-muted">PASS requirement</p>
+                <p className="max-w-prose whitespace-pre-wrap break-words">{row?.acceptance_criterion || row?.notes || (hasLimits ? 'Within the measurement limits below.' : 'Add the PASS requirement using Edit.')}</p>
+              </div>}
+              <div id={`check-editor-${field.id}`} hidden={!editing} className="space-y-3">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)]">
+                <Select label={`What to check ${i + 1}`} required disabled={readOnly} value={custom ? '__custom__' : row?.parameter_name ?? ''}
+                  error={custom ? undefined : errors.items?.[i]?.parameter_name?.message}
+                  onChange={event => {
+                    const choice = event.target.value;
+                    const suggestMethod = !row?.parameter_name && !hasLimits;
+                    const suggestCriterion = !row?.acceptance_criterion?.trim() && !row?.notes?.trim();
+                    const option = checkOptions.find(candidate => candidate.name === choice);
+                    if (!row?.parameter_name) setEditingChecks(previous => new Set(previous).add(field.id));
+                    setCustomChecks(old => { const next = new Set(old); if (choice === '__custom__') next.add(field.id); else next.delete(field.id); return next; });
+                    if (choice === '__custom__') return;
+                    setValue(`items.${i}.parameter_name`, choice, { shouldDirty: true });
+                    // Never replace an established method or limits when changing a check name.
+                    if (suggestMethod) setValue(`items.${i}.parameter_type`, option?.method ?? '', { shouldDirty: true });
+                    if (suggestCriterion && option) setValue(`items.${i}.acceptance_criterion`, option.criterion, { shouldDirty: true });
+                  }}>
+                  <option value="">Choose a check…</option>
+                  {checkOptions.map(option => <option key={option.name} value={option.name} disabled={option.name !== row?.parameter_name && selectedNames.has(option.name.toLocaleLowerCase())}>{option.name}</option>)}
+                  <option value="__custom__">Custom check</option>
+                </Select>
+                <Select label={`How to check ${i + 1}`} {...register(`items.${i}.parameter_type`)} value={row?.parameter_type ?? ''} disabled={readOnly} error={errors.items?.[i]?.parameter_type?.message}>
+                  {inspectionMethods.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </Select>
+                <Select label={`Importance ${i + 1}`} value={row?.is_critical ? 'critical' : 'normal'} disabled={readOnly}
+                  onChange={event => setValue(`items.${i}.is_critical`, event.target.value === 'critical', { shouldDirty: true })}>
+                  <option value="normal">Normal</option>
+                  <option value="critical">Critical</option>
+                </Select>
+              </div>
+              {custom ? <Input label={`Custom check name ${i + 1}`} {...register(`items.${i}.parameter_name`)} maxLength={150} required readOnly={readOnly} error={errors.items?.[i]?.parameter_name?.message} placeholder="For example: Outer diameter" />
+                : <input type="hidden" {...register(`items.${i}.parameter_name`)} />}
+              <Textarea label={`PASS requirement ${i + 1}`} {...register(`items.${i}.acceptance_criterion`)} maxLength={500} rows={2} showCounter={false} readOnly={readOnly} error={errors.items?.[i]?.acceptance_criterion?.message} placeholder="For example: No cracks or damage. Use the approved product requirements." />
+              <details open={Boolean(row?.notes || errors.items?.[i]?.notes)} className="text-sm">
+                <summary className="cursor-pointer text-muted focus-visible:outline-accent">Additional instructions (optional)</summary>
+                <Textarea containerClassName="mt-2" label={`Additional instructions ${i + 1}`} {...register(`items.${i}.notes`)} maxLength={500} rows={2} showCounter={false} readOnly={readOnly} error={errors.items?.[i]?.notes?.message} placeholder="Inspection method or supporting instructions" />
+              </details>
+              </div>
+              {row?.is_critical && <p className="text-xs text-muted">Critical: any failure prevents acceptance.</p>}
+              {row?.parameter_type === 'functional' && !showLimits && !readOnly && <Button type="button" variant="ghost" size="sm" onClick={() => setNumericChecks(old => new Set(old).add(field.id))}>Add measurement limits</Button>}
+              {showLimits && <div className="space-y-2">
+                <h4 className="text-sm font-medium">Measurement limits <span className="font-normal text-muted">({row?.parameter_type === 'dimensional' ? 'required' : 'optional'})</span></h4>
+                <p className="text-xs text-muted">{row?.parameter_type === 'dimensional' ? 'Enter the unit, target and both limits from the approved drawing. Actual size is required during inspection.' : 'Use approved values when numeric limits apply; gauge checks can use a written reference.'}</p>
+                <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+                  <Select label={`Unit ${i + 1}`} required={row?.parameter_type === 'dimensional'} {...register(`items.${i}.unit_of_measure`)} value={row?.unit_of_measure ?? ''} disabled={readOnly} error={errors.items?.[i]?.unit_of_measure?.message}>
+                    <option value="">Choose unit…</option>
+                    {unitCodes.map(code => <option key={code} value={code}>{code}{units.data?.find(unit => unit.code === code)?.name ? ` — ${units.data.find(unit => unit.code === code)!.name}` : ''}</option>)}
+                  </Select>
+                  <Input label={`Target ${i + 1}`} required={row?.parameter_type === 'dimensional'} inputMode="decimal" {...register(`items.${i}.nominal_value`)} readOnly={readOnly} error={errors.items?.[i]?.nominal_value?.message} placeholder="Expected value" />
+                  <Input label={`Lowest allowed ${i + 1}`} required={row?.parameter_type === 'dimensional'} inputMode="decimal" {...register(`items.${i}.tolerance_min`)} readOnly={readOnly} error={errors.items?.[i]?.tolerance_min?.message} placeholder="Lower limit" />
+                  <Input label={`Highest allowed ${i + 1}`} required={row?.parameter_type === 'dimensional'} inputMode="decimal" {...register(`items.${i}.tolerance_max`)} readOnly={readOnly} error={errors.items?.[i]?.tolerance_max?.message} placeholder="Upper limit" />
+                </div>
+                {units.isError && <div role="alert" className="text-sm text-warning-fg">Unit catalog could not be loaded. Common measurement units and the saved unit remain available. <Button type="button" size="sm" variant="ghost" onClick={() => units.refetch()}>Retry units</Button></div>}
+              </div>}
+            </section>})}
           </div>
-
-          {!readOnly && (
-            <div className="mt-3">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                icon={<LuPlus size={14} />}
-                onClick={() =>
-                  append({
-                    parameter_name: '',
-                    parameter_type: defaultParameterType,
-                    unit_of_measure: '',
-                    nominal_value: '',
-                    tolerance_min: '',
-                    tolerance_max: '',
-                    is_critical: false,
-                    notes: '',
-                  })
-                }
-              >
-                Add parameter
-              </Button>
-            </div>
-          )}
-
-          {errors.items?.message && (
-            <p className="mt-2 text-xs text-danger-fg">{errors.items.message as string}</p>
-          )}
+          {!readOnly && hasRemainingChecks && fields.length < 100 && <Button type="button" className="mt-3" variant="secondary" onClick={() => append({ parameter_name: '', acceptance_criterion: '', parameter_type: null, is_critical: false })}><LuPlus size={14} /> Add check</Button>}
         </fieldset>
+
+        <details open={Boolean(watch('notes') || errors.notes)} className="mb-8 text-sm">
+          <summary className="cursor-pointer font-medium focus-visible:outline-accent">Revision notes (optional)</summary>
+          <Textarea label="Revision notes" containerClassName="mt-3" rows={2} maxLength={2000} {...register('notes')} readOnly={readOnly} error={errors.notes?.message} placeholder="Reason for creating or updating these requirements." />
+        </details>
 
         {isSpecDetailMode && loadedSpec && (
-          <fieldset className="mb-8">
+          <fieldset className="mb-8 min-w-0">
             <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
               Revision history
             </legend>
@@ -709,7 +679,7 @@ export default function InspectionSpecEditorPage() {
               revisions.data &&
               revisions.data.length > 0 && (
                 <>
-                  <Select
+                  <Select searchable
                     label="Revision to inspect"
                     value={selectedRevision?.id ?? ''}
                     onChange={(event) => setSelectedRevisionId(event.target.value)}
@@ -723,7 +693,7 @@ export default function InspectionSpecEditorPage() {
                   </Select>
                   {selectedRevision && (
                     <section
-                      className="mt-3 space-y-3"
+                      className="mt-3 min-w-0 space-y-3"
                       aria-label={`Inspection spec revision ${selectedRevision.version}`}
                     >
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
@@ -736,7 +706,12 @@ export default function InspectionSpecEditorPage() {
                       {selectedRevision.notes && (
                         <p className="text-sm text-muted">{selectedRevision.notes}</p>
                       )}
-                      <div className="overflow-x-auto rounded-md border border-default">
+                      {selectedRevision.capture_method === 'checklist' && !selectedRevision.items.some(item => item.nominal_value != null || item.tolerance_min != null || item.tolerance_max != null) ? <ul className="divide-y divide-default rounded-md border border-default">
+                        {selectedRevision.items.map(item => <li key={item.id} className="p-3">
+                          <div className="flex flex-wrap gap-2 font-medium">{item.parameter_name}{item.is_critical && <Chip variant="danger">Critical</Chip>}</div>
+                          <p className="mt-1 whitespace-pre-line break-words text-sm text-muted">{item.acceptance_criterion}</p>
+                        </li>)}
+                      </ul> : <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-default">
                         <table className={tableCls + ' min-w-[760px]'}>
                           <thead>
                             <tr className={theadTrCls}>
@@ -746,7 +721,7 @@ export default function InspectionSpecEditorPage() {
                               <Th align="right">Nominal</Th>
                               <Th align="right">Min</Th>
                               <Th align="right">Max</Th>
-                              <Th>Notes</Th>
+                              <Th>Criterion / notes</Th>
                             </tr>
                           </thead>
                           <tbody>
@@ -764,12 +739,12 @@ export default function InspectionSpecEditorPage() {
                                 <Td align="right" mono>
                                   {item.tolerance_max ?? '—'}
                                 </Td>
-                                <Td>{item.notes ?? '—'}</Td>
+                                <Td>{item.acceptance_criterion ?? item.notes ?? '—'}</Td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </div>}
                     </section>
                   )}
                 </>
@@ -777,7 +752,7 @@ export default function InspectionSpecEditorPage() {
           </fieldset>
         )}
 
-        {specId && (
+        {specId && loadedSpec?.capture_method !== 'checklist' && (
           <div className="mb-8">
             <h3 className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
               Process Capability (SPC)
@@ -824,7 +799,7 @@ export default function InspectionSpecEditorPage() {
               spcData.data &&
               cpkThresholds &&
               Object.keys(spcData.data.data).length > 0 && (
-                <div className="overflow-x-auto rounded-md border border-default">
+                <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-default">
                   <table className={tableCls}>
                     <thead>
                       <tr className={theadTrCls}>
@@ -913,7 +888,7 @@ export default function InspectionSpecEditorPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+        <div className="sticky bottom-0 z-10 -mx-5 -mb-4 flex flex-wrap items-center justify-end gap-2 border-t border-default bg-canvas px-5 py-3">
           <Button
             type="button"
             variant="secondary"
@@ -936,7 +911,7 @@ export default function InspectionSpecEditorPage() {
             <Button
               type="submit"
               variant="primary"
-              disabled={isSubmitting || upsert.isPending}
+              disabled={isSubmitting || upsert.isPending || !captureEnabled || parameterOptions.isError}
               loading={upsert.isPending}
             >
               {upsert.isPending ? 'Saving…' : loadedSpec ? 'Save new version' : 'Create spec'}

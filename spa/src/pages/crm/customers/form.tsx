@@ -24,7 +24,7 @@ export function CustomerForm() {
  const { register, formState: { errors } } = useFormContext<CustomerFormValues>();
 
  return (
- <div className="max-w-3xl mx-auto px-5 py-4 space-y-4">
+ <div className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Identity">
  <div className="grid grid-cols-2 gap-3">
  <div className="col-span-2">
@@ -76,11 +76,11 @@ export function CustomerForm() {
  <Input
  label="Credit limit"
  
- step="0.01"
  min="0"
  prefix="₱"
  className="font-mono tabular-nums text-right"
  {...numberInputProps()}
+ step="0.01"
  {...register('credit_limit')}
  error={errors.credit_limit?.message as string}
  />

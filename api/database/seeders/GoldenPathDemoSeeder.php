@@ -247,7 +247,8 @@ class GoldenPathDemoSeeder extends Seeder
         $requester = User::where('email', 'purchasing@ogami.test')->first() ?? $this->admin();
         $departmentId = DB::table('departments')->where('code', 'MAINT')->value('id')
             ?? DB::table('departments')->orderBy('id')->value('id');
-        $itemId = DB::table('items')->where('is_active', true)->orderBy('id')->value('id');
+        $item = DB::table('items')->where('is_active', true)->whereNull('deleted_at')->orderBy('id')->first();
+        $itemId = $item?->id;
         $vendorId = DB::table('vendors')->where('is_active', true)->orderBy('id')->value('id')
             ?? DB::table('vendors')->orderBy('id')->value('id');
         if (! $requester || ! $departmentId || ! $itemId || ! $vendorId) {
@@ -271,7 +272,7 @@ class GoldenPathDemoSeeder extends Seeder
                 'item_id' => $itemId,
                 'description' => 'Defense demo replenishment line',
                 'quantity' => '25.00',
-                'unit' => 'pcs',
+                'unit' => $item->unit_of_measure,
                 'estimated_unit_price' => '250.00',
                 'purpose' => 'PR-to-PO conversion demonstration',
                 'suggested_vendor_id' => $vendorId,
@@ -297,7 +298,7 @@ class GoldenPathDemoSeeder extends Seeder
                 'item_id' => $itemId,
                 'description' => 'Emergency maintenance procurement',
                 'quantity' => '10.00',
-                'unit' => 'pcs',
+                'unit' => $item->unit_of_measure,
                 'estimated_unit_price' => '50000.00',
                 'purpose' => 'Budget acknowledgment demonstration',
                 'suggested_vendor_id' => $vendorId,

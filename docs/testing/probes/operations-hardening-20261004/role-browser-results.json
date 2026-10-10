@@ -1,0 +1,15 @@
+{
+  "roles": [
+    "maintenance_tech",
+    "warehouse_staff",
+    "impex_officer"
+  ],
+  "narrow_lookup_access": true,
+  "general_inventory_access": false,
+  "fractional_spare_quantity": "0.001",
+  "remaining_stock": "1.999",
+  "purchase_bags": 2,
+  "receiving_base_kg": 10,
+  "browser_errors": [],
+  "maintenance_order": "Jr0VdeN743"
+}

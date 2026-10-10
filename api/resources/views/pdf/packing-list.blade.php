@@ -28,6 +28,13 @@
 </style>
 </head>
 <body>
+@if($isDraft ?? false)
+<div style="border: 1px solid #999; padding: 8px; margin-bottom: 12px; font-weight: bold;">
+    DRAFT — INTERNAL RECONCILIATION ONLY<br>
+    <span style="font-weight: normal;">Recorded receipt quantities are used where available; otherwise quantities represent PO intent.
+    This draft does not replace the supplier's official invoice or packing list and is not customs clearance evidence.</span>
+</div>
+@endif
 
 <div class="header">
     <div>
@@ -157,7 +164,7 @@
 </table>
 
 <div class="footer">
-    Generated on {{ $now->format('M d, Y · H:i') }} ·
+    Generated on {{ $now->format('M d, Y · g:i A') }} ·
     {{ $company['name'] }}
 </div>
 

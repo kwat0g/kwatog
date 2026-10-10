@@ -82,6 +82,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             ->middleware('permission:accounting.vendors.manage')
             ->withTrashed();
     });
+    Route::post('supplier-invoices/{supplierInvoice}/void', [BillController::class, 'voidSupplierInvoice'])
+        ->middleware('permission:accounting.bills.update');
     Route::prefix('bills')->group(function () {
         Route::get('/options', [BillController::class, 'options'])->middleware('permission:accounting.bills.view');
         Route::get('/', [BillController::class, 'index'])->middleware('permission:accounting.bills.view');
@@ -91,6 +93,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         // 2026-08-08 — post an auto-created draft bill (AP + GL).
         Route::post('/{bill}/post', [BillController::class, 'postDraft'])->middleware('permission:accounting.bills.create');
         Route::post('/{bill}/payments', [BillController::class, 'recordPayment'])->middleware('permission:accounting.bills.pay');
+        Route::get('/{bill}/payments/{payment}/proof', [BillController::class, 'downloadPaymentProof'])
+            ->middleware('permission:accounting.bills.view');
         Route::post('/{bill}/payments/{payment}/approve', [BillController::class, 'approvePayment'])->middleware('permission:accounting.bills.payment_approve');
         Route::post('/{bill}/payments/{payment}/reject', [BillController::class, 'rejectPayment'])->middleware('permission:accounting.bills.payment_approve');
         Route::post('/{bill}/payments/{payment}/void', [BillController::class, 'voidPayment'])
@@ -119,9 +123,13 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::get('/{invoice}', [InvoiceController::class, 'show'])->middleware('permission:accounting.invoices.view');
         Route::post('/', [InvoiceController::class, 'store'])->middleware('permission:accounting.invoices.create');
         Route::put('/{invoice}', [InvoiceController::class, 'update'])->middleware('permission:accounting.invoices.update');
+        Route::post('/{invoice}/approve-prebill', [InvoiceController::class, 'approvePrebill'])->middleware('permission:accounting.invoices.prebill_approve');
         Route::patch('/{invoice}/finalize', [InvoiceController::class, 'finalize'])->middleware('permission:accounting.invoices.create');
         Route::patch('/{invoice}/cancel', [InvoiceController::class, 'cancel'])->middleware('permission:accounting.invoices.update');
-        Route::post('/{invoice}/collections', [InvoiceController::class, 'recordCollection'])->middleware('permission:accounting.invoices.collect');
+        Route::post('/{invoice}/collections', [InvoiceController::class, 'recordCollection'])->middleware('permission:accounting.invoices.collect_manual');
+        Route::post('/{invoice}/payment-submissions/{paymentSubmission}/verify', [\App\Modules\Accounting\Controllers\InvoicePaymentSubmissionController::class, 'verify'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
+        Route::post('/{invoice}/payment-submissions/{paymentSubmission}/reject', [\App\Modules\Accounting\Controllers\InvoicePaymentSubmissionController::class, 'reject'])->middleware(['permission:accounting.invoices.collect', 'throttle:sensitive']);
+        Route::get('/{invoice}/payment-submissions/{paymentSubmission}/proof', [\App\Modules\Accounting\Controllers\InvoicePaymentSubmissionController::class, 'proof'])->middleware('permission:accounting.invoices.view');
         Route::get('/{invoice}/pdf', [PdfController::class, 'invoice'])->middleware('permission:accounting.invoices.view');
     });
 

@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Enums\AlertSeverity;
+use App\Common\Enums\AlertType;
+use App\Common\Models\Alert;
+use App\Common\Services\AlertEngineService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\LowStockPrCreated;
@@ -20,6 +26,7 @@ use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Services\AutoPurchaseOrderService;
 use App\Modules\Purchasing\Services\OpenSupplyService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Watches stock movements and auto-creates a draft PR for any item that crosses
@@ -33,6 +40,8 @@ class AutoReplenishmentService
         private readonly SystemActorService $actors,
         private readonly OpenSupplyService $openSupply,
         private readonly AutoPurchaseOrderService $autoPo,
+        private readonly StockLocationSummaryService $locations,
+        private readonly AlertEngineService $alerts,
     ) {}
 
     public function checkAndReplenish(int $itemId): ?PurchaseRequest
@@ -43,11 +52,18 @@ class AutoReplenishmentService
                 ->lockForUpdate()
                 ->with('stockLevels')
                 ->find($itemId);
-            if (! $item || ! $item->is_active) return null;
+            if (! $item) {
+                return null;
+            }
+            if (! $item->is_active) {
+                $this->clearBlocked($item);
 
-            $available = (string) $item->available;
-            $reorder   = (string) $item->reorder_point;
-            $safety    = (string) $item->safety_stock;
+                return null;
+            }
+
+            $available = $this->locations->availability($item->stockLevels)['usable_quantity'];
+            $reorder = (string) $item->reorder_point;
+            $safety = (string) $item->safety_stock;
 
             // QC-held receipts have left PO transit but have not entered stock.
             $inTransit = $this->openSupply->inTransitBaseQuantity($item->id);
@@ -61,6 +77,8 @@ class AutoReplenishmentService
             if (bccomp($position, $reorder, 3) > 0
                 || ((bccomp($committed, '0', 3) > 0 || bccomp($heldQc, '0', 3) > 0)
                     && bccomp($coveredPosition, $reorder, 3) >= 0)) {
+                $this->clearBlocked($item);
+
                 return null;
             }
 
@@ -70,11 +88,13 @@ class AutoReplenishmentService
                 try {
                     $auto = $this->autoPo->createForCriticalShortage($item);
                     if ($auto !== null) {
+                        $this->clearBlocked($item);
+
                         return null; // PR workflow short-circuited
                     }
                 } catch (\Throwable $e) {
                     // Fall through to PR workflow on any auto-PO failure, but record why.
-                    \Illuminate\Support\Facades\Log::warning(
+                    Log::warning(
                         "AutoReplenishment: auto-PO failed for item {$item->code}, falling back to PR: {$e->getMessage()}",
                         ['item_id' => $item->id, 'exception' => $e::class]
                     );
@@ -85,13 +105,25 @@ class AutoReplenishmentService
             // automation actor. If no eligible user exists, skip rather than hit the
             // non-null requested_by FK with a bogus id.
             $systemUser = $this->actors->resolve();
-            if ($systemUser === null) return null;
+            if ($systemUser === null) {
+                $this->raiseBlocked($item, 'missing_system_actor', 'No active system actor is configured for automatic replenishment.');
+
+                return null;
+            }
             $systemUserId = $systemUser->id;
 
             $orderQty = $this->computeOrderQuantity($item, $coveredPosition);
             if ($orderQty === null || bccomp((string) $item->standard_cost, '0', 2) <= 0) {
                 // Do not create a replenishment request with a fabricated quantity
                 // or a zero-valued estimate; master data must be completed first.
+                $this->raiseBlocked(
+                    $item,
+                    $orderQty === null ? 'invalid_order_quantity' : 'invalid_standard_cost',
+                    $orderQty === null
+                        ? 'Automatic replenishment could not calculate a positive order quantity.'
+                        : 'Automatic replenishment requires a positive standard cost.',
+                );
+
                 return null;
             }
             $priority = bccomp($coveredPosition, $safety, 3) <= 0
@@ -105,32 +137,64 @@ class AutoReplenishmentService
             $requiredDeliveryDate = $leadTime > 0 ? now()->addDays($leadTime)->toDateString() : null;
 
             $pr = PurchaseRequest::create([
-                'pr_number'         => $this->sequences->generate('pr'),
-                'requested_by'      => $systemUserId,
-                'department_id'     => null,
-                'date'              => now()->toDateString(),
+                'pr_number' => $this->sequences->generate('pr'),
+                'requested_by' => $systemUserId,
+                'department_id' => null,
+                'date' => now()->toDateString(),
                 'required_delivery_date' => $requiredDeliveryDate,
-                'reason'            => "Auto-generated: {$item->code} below reorder point.",
-                'priority'          => $priority,
+                'reason' => "Auto-generated: {$item->code} below reorder point.",
+                'priority' => $priority,
                 'is_auto_generated' => true,
             ]);
             // status non-fillable; service-only.
             $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
             PurchaseRequestItem::create([
-                'purchase_request_id'  => $pr->id,
-                'item_id'              => $item->id,
-                'description'          => $item->name,
-                'quantity'             => $orderQty,
-                'unit'                 => $item->unit_of_measure,
+                'purchase_request_id' => $pr->id,
+                'item_id' => $item->id,
+                'description' => $item->name,
+                'quantity' => $orderQty,
+                'unit' => $item->unit_of_measure,
                 'estimated_unit_price' => (string) $item->standard_cost,
-                'purpose'              => 'Replenish below reorder point',
+                'purpose' => 'Replenish below reorder point',
             ]);
             app(OutboxService::class)->record(
                 new LowStockPrCreated($item->fresh(), $pr->fresh()),
             );
+            $this->clearBlocked($item);
 
             return $pr;
         });
+    }
+
+    private function raiseBlocked(Item $item, string $reason, string $message): void
+    {
+        $alert = $this->alerts->raise(
+            AlertType::ReplenishmentBlocked,
+            AlertSeverity::Warning,
+            'Automatic replenishment blocked',
+            $message,
+            $item,
+            ['reason' => $reason, 'owner' => 'Inventory master data / Purchasing'],
+        );
+        $audience = User::query()->with('role.permissions')->where('is_active', true)
+            ->whereHas('role', fn ($query) => $query->where('slug', 'system_admin')
+                ->orWhereHas('permissions', fn ($permissions) => $permissions->whereIn('slug', ['inventory.items.manage', 'purchasing.pr.create'])))
+            ->get()->filter(fn ($user) => $user->hasPermission('inventory.view')
+                && ($user->hasPermission('inventory.items.manage') || $user->hasPermission('purchasing.pr.create')));
+        app(NotificationService::class)->sendInApp($audience, 'inventory.replenishment_blocked', [
+            'title' => "Replenishment blocked — {$item->code}",
+            'message' => $message.' Inventory master data or Purchasing must review this item.',
+            'link_to' => '/inventory/items/'.$item->hash_id,
+            'entity_type' => 'item', 'entity_id' => $item->hash_id,
+        ], 'replenishment-blocked:'.$alert->id.':'.$reason);
+    }
+
+    private function clearBlocked(Item $item): void
+    {
+        Alert::query()
+            ->where('condition_key', Alert::conditionKeyFor(AlertType::ReplenishmentBlocked, $item->getMorphClass(), $item->getKey()))
+            ->whereNull('resolved_at')
+            ->update(['resolved_at' => now()]);
     }
 
     private function computeOrderQuantity(Item $item, string $position): ?string
@@ -156,13 +220,16 @@ class AutoReplenishmentService
                 ->where('item_id', $item->id)
                 ->whereIn('movement_type', [
                     StockMovementType::MaterialIssue->value,
+                    StockMovementType::Delivery->value,
                     StockMovementType::Scrap->value,
                 ])
                 ->where('created_at', '>=', $historyStart)
                 ->sum('quantity');
             $avgDaily = bcdiv($totalIssued, (string) $historyDays, 6);
             $demand = bcmul(
-                bcmul($avgDaily, (string) (int) $item->lead_time_days, 6),
+                bcmul($avgDaily, (string) ((int) $item->lead_time_days > 0
+                    ? (int) $item->lead_time_days
+                    : $this->settings->requiredInt('mrp.default_lead_time_days', 0, 365)), 6),
                 $coverageBuffer,
                 6,
             );
@@ -178,6 +245,7 @@ class AutoReplenishmentService
             }
             $qty = bcmul($whole, $moq, 3);
         }
+
         return bccomp($qty, '0', 3) > 0 ? bcadd($qty, '0', 3) : null;
     }
 }

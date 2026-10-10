@@ -113,7 +113,7 @@ export default function ApprovalDelegationsPage() {
         subtitle="Choose an active colleague to cover your approval role for a date range."
       />
 
-      <div className="mx-auto max-w-5xl space-y-6 p-5">
+      <div className="min-w-0 w-full space-y-6 p-5">
         <div className="rounded-md border border-info/30 bg-info-bg px-4 py-3 text-sm text-info-fg">
           Cover applies only to approvals in your current role. You still cannot approve a record you submitted.
           If a delegate account is deactivated, their cover stops immediately.

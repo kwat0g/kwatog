@@ -86,16 +86,16 @@ class AbcClassificationService
             $cIds = [];
 
             foreach ($itemValues as $id => $value) {
-                $runningCumulative += $value;
                 $cumPct = $runningCumulative / $totalValue;
 
-                if ($cumPct <= $aRatio) {
+                if ($value > 0 && $cumPct < $aRatio) {
                     $aIds[] = $id;
-                } elseif ($cumPct <= $bRatio) {
+                } elseif ($value > 0 && $cumPct < $bRatio) {
                     $bIds[] = $id;
                 } else {
                     $cIds[] = $id;
                 }
+                $runningCumulative += $value;
             }
 
             $this->bulkUpdate($aIds, 'A');

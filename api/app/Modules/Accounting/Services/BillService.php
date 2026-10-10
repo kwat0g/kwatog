@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\TaxPolicyService;
@@ -21,6 +22,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -30,6 +32,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Services\ThreeWayMatchService;
 use App\Modules\SupplyChain\Models\Shipment;
 use Carbon\Carbon;
@@ -59,7 +62,9 @@ class BillService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = Bill::query()->with(['vendor:id,name']);
+        $q = Bill::query()
+            ->with(['vendor:id,name', 'supplierInvoice:id,number,date,submitted_at'])
+            ->withExists(['payments as payment_approval_pending' => fn ($query) => $query->where('status', BillPaymentStatus::PendingApproval)]);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -98,6 +103,7 @@ class BillService
             'vendor',
             // The supplier's own invoice file, when they submitted one through the portal.
             'portalShippingDocuments' => static fn ($q) => $q->where('document_type', 'supplier_invoice'),
+            'supplierInvoice.documents',
             'items.expenseAccount:id,code,name',
             'payments.cashAccount:id,code,name',
             'payments.journalEntry:id,entry_number,status',
@@ -143,6 +149,10 @@ class BillService
             );
             $provenance = (string) ($data['provenance_type'] ?? 'stock');
             $this->assertBillProvenance($provenance, $data, $by);
+            if ($postToLedger && $provenance === 'stock'
+                && ! empty($data['purchase_order_id']) && ! empty($data['goods_receipt_note_id'])) {
+                throw new BusinessRuleException('Supplier invoice required before this bill can be posted or paid.');
+            }
             $landedCostShipmentId = $provenance === 'landed_cost'
                 ? $this->resolveLandedCostShipment($data, (int) $vendor->id)
                 : null;
@@ -348,14 +358,16 @@ class BillService
             $existingDraftBill = Bill::query()
                 ->where('goods_receipt_note_id', $lockedGrn->id)
                 ->where('status', BillStatus::Draft->value)
+                ->whereNull('supplier_invoice_id')
+                ->whereNull('supplier_invoice_number')
                 ->orderByDesc('id')
                 ->first();
 
             $alreadyBilledByItemId = BillItem::query()
                 ->join('bills', 'bills.id', '=', 'bill_items.bill_id')
                 ->where('bills.goods_receipt_note_id', $lockedGrn->id)
-                ->where('bills.status', '!=', BillStatus::Draft->value)
                 ->where('bills.status', '!=', BillStatus::Cancelled->value)
+                ->when($existingDraftBill, fn ($query) => $query->where('bills.id', '<>', $existingDraftBill->id))
                 ->groupBy('bill_items.item_id')
                 ->selectRaw('bill_items.item_id, SUM(bill_items.quantity) as billed_qty')
                 ->pluck('billed_qty', 'item_id')
@@ -370,6 +382,9 @@ class BillService
             if ((int) $vendor->id !== (int) $po->vendor_id) {
                 throw new BusinessRuleException('The accepted GRN vendor does not match its purchase order vendor.');
             }
+            // Serialize monetary allocation across receipts belonging to the same order.
+            $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
+            $po->loadMissing('items.item');
             $billDate = $lockedGrn->accepted_at?->toDateString() ?? now()->toDateString();
 
             $expenseAccountId = $this->defaultExpenseAccountId();
@@ -403,11 +418,13 @@ class BillService
                 // to indicate the bill includes landed cost.
                 $poItem = $line->purchaseOrderItem;
                 if ($poItem && (
-                    ($poItem->rfq_line_freight_amount && (string) $poItem->rfq_line_freight_amount !== '0')
-                    || ($poItem->rfq_line_other_charges && (string) $poItem->rfq_line_other_charges !== '0')
-                    || ($po->rfq_freight_amount && (string) $po->rfq_freight_amount !== '0')
-                    || ($po->rfq_other_charges && (string) $po->rfq_other_charges !== '0')
+                    ! Money::isZero((string) ($poItem->rfq_line_freight_amount ?? '0'))
+                    || ! Money::isZero((string) ($poItem->rfq_line_other_charges ?? '0'))
+                    || ! Money::isZero((string) ($po->rfq_freight_amount ?? '0'))
+                    || ! Money::isZero((string) ($po->rfq_other_charges ?? '0'))
                 )) {
+                    $poItem->setRelation('purchaseOrder', $po);
+                    $total = $this->rfqReceiptLineTotal($poItem, $qty, $existingDraftBill?->id);
                     $description .= ' (incl. agreed freight/charges)';
                 }
 
@@ -433,6 +450,8 @@ class BillService
                     'description' => $row['description'],
                     'quantity' => $row['quantity'],
                     'unit_price' => $row['unit_price'],
+                    'unit' => $row['unit'],
+                    'total' => $row['total'],
                 ],
                 $rows,
             ), $lockedGrn->id, null);
@@ -447,7 +466,7 @@ class BillService
                 // RFQ POs carry the supplier's quoted VAT as a fixed amount and
                 // are stored is_vatable=false so nothing recomputes it. Reading
                 // only the flag billed those receipts with no VAT at all.
-                $vat = $this->rfqVatShare($po, $subtotal);
+                $vat = $this->rfqVatShare($po, $subtotal, $existingDraftBill?->id);
                 $isVatable = ! Money::isZero($vat);
             }
             $total = Money::add($subtotal, $vat);
@@ -514,6 +533,7 @@ class BillService
             if ($lockedBill->status !== BillStatus::Draft) {
                 throw new BusinessRuleException('Only draft bills can be posted.');
             }
+            $this->assertSupplierInvoiceReady($lockedBill);
             $this->assertPersistedBillProvenance($lockedBill);
 
             // Recompute at the point of posting. A GRN, PO, or draft line can
@@ -633,13 +653,19 @@ class BillService
             if ($lockedBill->status === BillStatus::Cancelled) {
                 return $lockedBill;
             }
+            if ($lockedBill->supplier_invoice_id && $lockedBill->status === BillStatus::Draft) {
+                throw new BusinessRuleException('Void the supplier invoice before cancelling a claimed draft bill.');
+            }
+            if ($lockedBill->supplier_invoice_id && trim((string) $reason) === '') {
+                throw new BusinessRuleException('A reason is required to cancel a bill linked to a supplier invoice.');
+            }
 
             // Reverse the original JE if posted.
             if ($lockedBill->journal_entry_id) {
                 $lockedBill->loadMissing('journalEntry');
                 $je = $lockedBill->journalEntry;
                 if ($je && $je->status === JournalEntryStatus::Posted) {
-                    $this->journals->reverse($je, $by, $reverseDate, $reason ?? "Cancellation of bill {$lockedBill->bill_number}.");
+                    $this->journals->reverseSource($je, $by, $reverseDate, $reason ?? "Cancellation of bill {$lockedBill->bill_number}.");
                 }
             }
             $lockedBill->update([
@@ -653,14 +679,53 @@ class BillService
         });
     }
 
+    public function voidSupplierInvoice(SupplierInvoice $invoice, User $by, string $reason): SupplierInvoice
+    {
+        if (trim($reason) === '') {
+            throw new BusinessRuleException('A reason is required to void a supplier invoice.');
+        }
+
+        return DB::transaction(function () use ($invoice, $by, $reason): SupplierInvoice {
+            $locked = SupplierInvoice::query()->lockForUpdate()->findOrFail($invoice->id);
+            if ($locked->voided_at !== null) {
+                return $locked;
+            }
+
+            $bills = $locked->bills()->orderBy('id')->lockForUpdate()->get();
+            if ($bills->isEmpty() || $bills->contains(static fn (Bill $bill): bool =>
+                $bill->status !== BillStatus::Draft
+                || ! Money::isZero((string) $bill->amount_paid)
+                || $bill->payments()->exists())) {
+                throw new BusinessRuleException('Only an invoice whose bills are all unpaid drafts can be voided.');
+            }
+
+            foreach ($bills as $bill) {
+                $bill->supplier_invoice_id = null;
+                $bill->supplier_invoice_number = null;
+                $bill->supplier_invoice_date = null;
+                $bill->supplier_invoice_submitted_at = null;
+                $bill->supplier_invoice_portal_user_id = null;
+                $bill->save();
+            }
+            $locked->update([
+                'voided_at' => now(),
+                'voided_by' => $by->id,
+                'void_reason' => trim($reason),
+            ]);
+
+            return $locked->fresh();
+        });
+    }
+
     /**
      * Record a payment against an open bill.
      */
     public function recordPayment(Bill $bill, array $data, User $by): BillPayment
     {
         $amount = Money::round2((string) $data['amount']);
+        $proofHash = $data['proof_sha256'] ?? null;
 
-        return DB::transaction(function () use ($bill, $data, $amount, $by) {
+        return DB::transaction(function () use ($bill, $data, $amount, $by, $proofHash) {
             // Lock and reload before checking the bill state or balance so a
             // stale caller cannot create a second payment against settled AP.
             $lockedBill = Bill::query()
@@ -688,13 +753,15 @@ class BillService
                         || (int) $existing->cash_account_id !== $cashAccountId
                         || $existing->payment_date->toDateString() !== (string) $data['payment_date']
                         || $existing->payment_method?->value !== (string) $data['payment_method']
-                        || (string) ($existing->reference_number ?? '') !== (string) ($data['reference_number'] ?? '')) {
+                        || (string) ($existing->reference_number ?? '') !== (string) ($data['reference_number'] ?? '')
+                        || $existing->proof_sha256 !== $proofHash) {
                         throw new BusinessRuleException('The idempotency key was already used with a different payment payload.');
                     }
 
                     return $existing->fresh(['cashAccount', 'journalEntry', 'approvalRecords.approver:id,name']);
                 }
             }
+            $this->assertSupplierInvoiceReady($lockedBill);
             if ($lockedBill->status === BillStatus::Cancelled) {
                 throw new BusinessRuleException('Cannot record payment on a cancelled bill.');
             }
@@ -706,6 +773,9 @@ class BillService
             }
             if (! $lockedBill->journal_entry_id) {
                 throw new BusinessRuleException('The bill must have a posted source journal before it can be paid.');
+            }
+            if ((string) $data['payment_date'] < $lockedBill->date->toDateString()) {
+                throw new BusinessRuleException('Payment date cannot be before the bill date.');
             }
             $sourceJournal = JournalEntry::query()
                 ->lockForUpdate()
@@ -737,6 +807,11 @@ class BillService
                 throw new BusinessRuleException("Payment {$amount} exceeds outstanding balance ".$lockedBill->balance.'.');
             }
 
+            $minimumPartial = Money::round2(Money::div((string) $lockedBill->total_amount, '2'));
+            if (Money::lt($amount, $minimumPartial) && Money::cmp($amount, (string) $lockedBill->balance) !== 0) {
+                throw new BusinessRuleException("Partial payment must be at least 50% of the bill total ({$minimumPartial}); a smaller final payment must clear the outstanding balance {$lockedBill->balance}.");
+            }
+
             $cashAccount = Account::query()->lockForUpdate()->find($cashAccountId);
             if (! $cashAccount || ! $cashAccount->is_active) {
                 throw new BusinessRuleException('The selected cash account is inactive or no longer exists.');
@@ -744,8 +819,7 @@ class BillService
             if ($cashAccount->type !== AccountType::Asset || ! str_starts_with($cashAccount->code, '10')) {
                 throw new BusinessRuleException('Payments must use an active cash or bank asset account.');
             }
-            // A header account passes the checks above but the approver's GL
-            // posting refuses it, so the request would strand in pending_approval.
+            // A header account passes the checks above but GL posting refuses it.
             if (Account::query()->where('parent_id', $cashAccount->id)->exists()) {
                 throw new BusinessRuleException("Account {$cashAccount->code} is a header account and cannot receive new postings.");
             }
@@ -758,10 +832,17 @@ class BillService
                 'payment_method' => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
                 'idempotency_key' => $data['idempotency_key'] ?? null,
+                'proof_path' => $data['proof_path'] ?? null,
+                'proof_file_name' => $data['proof_file_name'] ?? null,
+                'proof_sha256' => $proofHash,
                 'created_by' => $by->id,
                 'status' => BillPaymentStatus::PendingApproval,
             ]);
-            $this->approvals->submit($payment, 'bill_payment', $amount);
+            $this->approvals->submit($payment, 'bill_payment', (string) $lockedBill->total_amount);
+
+            if ($this->approvals->isFullyApproved($payment)) {
+                return $this->postApprovedPayment($lockedBill, $payment, $by);
+            }
 
             return $payment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
         });
@@ -786,7 +867,11 @@ class BillService
                 throw new BusinessRuleException('Only pending payment requests can be approved.');
             }
 
-            $this->approvals->approve($lockedPayment, $by);
+            $this->assertSupplierInvoiceReady($lockedBill);
+
+            if (! $this->approvals->isFullyApproved($lockedPayment)) {
+                $this->approvals->approve($lockedPayment, $by);
+            }
             $lockedPayment->refresh();
             if (! $this->approvals->isFullyApproved($lockedPayment)) {
                 return $lockedPayment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
@@ -928,7 +1013,7 @@ class BillService
             'reference_id' => $payment->id,
             'lines' => $lines,
         ], $by);
-        $je = $this->journals->post($je, $by);
+        $je = $this->journals->postSystem($je, (int) $by->id);
         $payment->forceFill([
             'ewt_amount' => $ewtAmount,
             'cash_amount' => $cashAmount,
@@ -976,6 +1061,9 @@ class BillService
             if ($lockedPayment->status !== BillPaymentStatus::Posted) {
                 throw new BusinessRuleException('Only posted payments can be voided.');
             }
+            if ((int) $lockedPayment->created_by === (int) $by->id) {
+                throw new ForbiddenActionException('A different authorized user must void this payment.');
+            }
             if (! $lockedPayment->journal_entry_id) {
                 throw new BusinessRuleException('The payment has no posted source journal and cannot be voided safely.');
             }
@@ -1009,7 +1097,7 @@ class BillService
                 }
             }
 
-            $reversal = $this->journals->reverse($sourceJournal, $by, $voidDate, $reason);
+            $reversal = $this->journals->reverseSource($sourceJournal, $by, $voidDate, $reason);
 
             $lockedPayment->update([
                 'status' => BillPaymentStatus::Voided,
@@ -1199,6 +1287,18 @@ class BillService
             ->where('status', '!=', BillStatus::Cancelled->value)
             ->exists()) {
             throw new BusinessRuleException('An AP bill already exists for this accepted goods receipt.');
+        }
+    }
+
+    private function assertSupplierInvoiceReady(Bill $bill): void
+    {
+        if ($bill->provenance_type !== 'stock' || ! $bill->purchase_order_id || ! $bill->goods_receipt_note_id) {
+            return;
+        }
+
+        $invoice = $bill->supplierInvoice;
+        if (! $invoice || $invoice->voided_at || ! $invoice->matchesLinkedBills()) {
+            throw new BusinessRuleException('Supplier invoice required before this bill can be posted or paid.');
         }
     }
 
@@ -1429,9 +1529,58 @@ class BillService
             'reference_id' => $bill->id,
             'lines' => $lines,
         ], $by);
-        $je = $this->journals->post($je, $by);
+        $je = $this->journals->postSystem($je, (int) $by->id);
 
         $bill->update(['journal_entry_id' => $je->id]);
+    }
+
+    /** Allocate freight by cumulative billed base quantity, keeping draft replays stable. */
+    private function rfqReceiptLineTotal(PurchaseOrderItem $poItem, string $quantity, ?int $excludeBillId): string
+    {
+        $ordered = $poItem->baseOrderedQuantity();
+        if (bccomp($ordered, '0', 6) <= 0) {
+            throw new BusinessRuleException('The purchase-order quantity must be positive to allocate freight.');
+        }
+        $billedQuantity = '0';
+        $billedLines = BillItem::query()->where('item_id', $poItem->item_id)
+            ->whereHas('bill', fn ($query) => $query->where('purchase_order_id', $poItem->purchase_order_id)
+                ->where('status', '<>', BillStatus::Cancelled->value)
+                ->when($excludeBillId !== null, fn ($query) => $query->where('id', '<', $excludeBillId)))
+            ->get();
+        foreach ($billedLines as $line) {
+            $billedQuantity = bcadd($billedQuantity, $poItem->item->convertToBase((string) $line->quantity, $line->unit), 6);
+        }
+        $lineTotal = $poItem->deliveredLineTotal();
+        // Difference of cumulative rounded amounts carries fractional cents into later receipts.
+        $before = Money::round2(bcdiv(bcmul($lineTotal, $billedQuantity, 12), $ordered, 12));
+        $after = Money::round2(bcdiv(bcmul($lineTotal, bcadd($billedQuantity, $quantity, 6), 12), $ordered, 12));
+
+        return Money::sub($after, $before);
+    }
+
+    /** Allocate quoted VAT cumulatively so partial receipts retain all quoted cents. */
+    private function rfqVatShare(PurchaseOrder $po, string $subtotal, ?int $excludeBillId = null): string
+    {
+        $quoted = (string) $po->rfq_vat_amount;
+        if (Money::isZero($quoted) || Money::isZero((string) $po->subtotal)) {
+            return Money::zero();
+        }
+
+        $billed = Bill::query()
+            ->where('purchase_order_id', $po->id)
+            ->where('status', '<>', BillStatus::Cancelled->value)
+            ->when($excludeBillId !== null, fn ($query) => $query->where('id', '<', $excludeBillId))
+            ->selectRaw('COALESCE(SUM(subtotal), 0) as subtotal, COALESCE(SUM(vat_amount), 0) as vat')
+            ->first();
+        $before = Money::round2(bcdiv(bcmul($quoted, (string) $billed->subtotal, 12), (string) $po->subtotal, 12));
+        $after = Money::round2(bcdiv(bcmul($quoted, Money::add((string) $billed->subtotal, $subtotal), 12), (string) $po->subtotal, 12));
+        $share = Money::sub($after, $before);
+        $remaining = Money::sub($quoted, (string) $billed->vat);
+        if (Money::lte($remaining, '0')) {
+            return Money::zero();
+        }
+
+        return Money::lte($share, $remaining) ? $share : $remaining;
     }
 
     /**
@@ -1447,31 +1596,6 @@ class BillService
      * a second bill against the same receipt. A receipt that never posted GRNI
      * (legacy rows) falls back to clearing the bill subtotal, as before.
      */
-    /**
-     * This receipt's share of an RFQ PO's quoted VAT, by value. Clamped to what
-     * earlier posted bills left unbilled so partial receipts never over-claim
-     * input VAT through rounding.
-     */
-    private function rfqVatShare(PurchaseOrder $po, string $subtotal): string
-    {
-        $quoted = (string) $po->rfq_vat_amount;
-        if (Money::isZero($quoted) || Money::isZero((string) $po->subtotal)) {
-            return Money::zero();
-        }
-
-        $share = Money::round2(Money::div(bcmul($quoted, $subtotal, 8), (string) $po->subtotal, 8));
-        $billed = (string) Bill::query()
-            ->where('purchase_order_id', $po->id)
-            ->whereNotIn('status', [BillStatus::Draft->value, BillStatus::Cancelled->value])
-            ->sum('vat_amount');
-        $remaining = Money::sub($quoted, $billed);
-        if (Money::lte($remaining, '0')) {
-            return Money::zero();
-        }
-
-        return Money::lte($share, $remaining) ? $share : $remaining;
-    }
-
     private function remainingGrniForGrn(Bill $bill, string $grniCode): string
     {
         if (! $bill->goods_receipt_note_id) {

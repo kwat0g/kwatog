@@ -32,6 +32,7 @@ export default function LeaveDetailPage() {
  queryKey: ['leaves', 'request', id],
  queryFn: () => leaveRequestsApi.show(id),
  });
+ const isOwner = user?.employee?.id === req?.employee?.id;
  const { data: leaveOptions } = useQuery({
  queryKey: ['leaves', 'options'],
   queryFn: () => leaveRequestsApi.options(),
@@ -42,8 +43,8 @@ export default function LeaveDetailPage() {
 
  // Balance for this employee/type/year so approvers see the impact at a glance.
  const { data: balances = [] } = useQuery({
- queryKey: ['leaves', 'balances', req?.employee?.id],
- queryFn: () => leaveBalancesApi.forEmployee(req!.employee!.id),
+ queryKey: ['leaves', 'balances', isOwner ? 'me' : req?.employee?.id],
+ queryFn: () => isOwner ? leaveBalancesApi.me() : leaveBalancesApi.forEmployee(req!.employee!.id),
  enabled: Boolean(req?.employee?.id),
  });
 
@@ -82,7 +83,6 @@ export default function LeaveDetailPage() {
  return <EmptyState icon="alert-circle" title="Leave request not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  }
 
- const isOwner = user?.employee?.id === req.employee?.id;
  const canCancel = isOwner && ['pending_dept', 'pending_hr', 'approved'].includes(req.status);
  const statusLabel = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));
  const halfDayLabels = new Map((leaveOptions?.half_day_periods ?? []).map((option) => [option.value, option.label]));
@@ -97,8 +97,8 @@ export default function LeaveDetailPage() {
  </span>
  }
  subtitle={`${req.employee?.full_name} · ${req.leave_type?.code}`}
- backTo="/hr/leaves"
- backLabel="Leaves"
+ backTo={isOwner ? '/self-service/leaves' : '/hr/leaves'}
+ backLabel={isOwner ? 'My leaves' : 'Leaves'}
  actions={
  <>
  {/* Series R/R3 — declarative permission gating via <CanDo>. */}

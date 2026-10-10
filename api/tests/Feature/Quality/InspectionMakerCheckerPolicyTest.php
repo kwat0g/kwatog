@@ -26,6 +26,7 @@ use App\Modules\Quality\Resources\InspectionResource;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class InspectionMakerCheckerPolicyTest extends TestCase
@@ -145,23 +146,32 @@ class InspectionMakerCheckerPolicyTest extends TestCase
         ]);
     }
 
-    public function test_passing_a_failed_proposal_requires_an_override_reason(): void
+    public function test_checker_cannot_override_a_failed_proposal_to_pass(): void
     {
         $inspection = $this->makeInspection(InspectionStage::Outgoing, false);
         $inspection = $this->service->complete($inspection, $this->maker);
+        $auditCount = DB::table('audit_logs')
+            ->where('model_type', Inspection::class)
+            ->where('model_id', $inspection->id)
+            ->count();
 
         try {
             $this->service->review($inspection, 'passed', null, $this->checker);
-            $this->fail('An override from failed to passed must require remarks.');
+            $this->fail('A failed proposal must not be passed without recorded NCR sorting or rework evidence.');
         } catch (BusinessRuleException $exception) {
-            $this->assertStringContainsString('remarks', strtolower($exception->getMessage()));
+            $this->assertStringContainsString('cannot be overridden to PASS', $exception->getMessage());
         }
 
-        $reviewed = $this->service->review($inspection, 'passed', 'Override approved after documented recheck.', $this->checker);
-
-        $this->assertSame(InspectionStatus::Passed, $reviewed->status);
-        $this->assertSame(InspectionOutcome::Failed, $reviewed->proposed_result);
-        $this->assertSame($this->checker->id, $reviewed->reviewed_by);
+        $unchanged = $inspection->fresh();
+        $this->assertSame(InspectionStatus::AwaitingReview, $unchanged->status);
+        $this->assertSame(InspectionOutcome::Failed, $unchanged->proposed_result);
+        $this->assertNull($unchanged->reviewed_by);
+        $this->assertNull($unchanged->reviewed_at);
+        $this->assertNull($unchanged->completed_at);
+        $this->assertSame($auditCount, DB::table('audit_logs')
+            ->where('model_type', Inspection::class)
+            ->where('model_id', $inspection->id)
+            ->count());
     }
 
     public function test_grn_acceptance_rejects_a_passed_incoming_inspection_without_checker_evidence(): void

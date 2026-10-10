@@ -201,13 +201,13 @@ class ThreeWayMatchService
                 'description' => $poi->description,
                 'po_quantity' => bcadd($poQty, '0', 2),
                 'po_unit_price' => Money::round2($poPrice),
-                'po_total' => Money::round2(bcmul((string) $poi->quantity, $poUnitPrice, 12)),
+                'po_total' => $poi->deliveredLineTotal(),
                 'grn_quantity_accepted' => bcadd($grnQty, '0', 3),
                 'grn_unit_cost' => bcadd($grnCost, '0', 4),
                 'grn_status' => $grnOk ? 'ok' : 'short',
                 'bill_quantity' => bcadd($billQty, '0', 2),
                 'bill_unit_price' => Money::round2($billPrice),
-                'bill_total' => Money::round2(bcmul((string) ($bl['quantity'] ?? '0'), $billUnitPrice, 12)),
+                'bill_total' => Money::round2($bl['total'] ?? bcmul((string) ($bl['quantity'] ?? '0'), $billUnitPrice, 12)),
                 'quantity_variance_pct' => round($qtyVar, 2),
                 'price_variance_pct' => round($priceVar, 2),
                 'po_price_variance_pct' => round($poPriceVar, 2),
@@ -242,7 +242,7 @@ class ThreeWayMatchService
                 'grn_status' => 'short',
                 'bill_quantity' => bcadd($billQty, '0', 2),
                 'bill_unit_price' => Money::round2($billPrice),
-                'bill_total' => Money::round2(bcmul($billQty, $billPrice, 12)),
+                'bill_total' => Money::round2($bl['total'] ?? bcmul($billQty, $billPrice, 12)),
                 'quantity_variance_pct' => 100.0,
                 'price_variance_pct' => 100.0,
                 'po_price_variance_pct' => 100.0,
@@ -333,6 +333,7 @@ class ThreeWayMatchService
                 'quantity' => $bi->quantity,
                 'unit' => $bi->unit,
                 'unit_price' => $bi->unit_price,
+                'total' => $bi->total,
             ];
         }
 
@@ -354,6 +355,7 @@ class ThreeWayMatchService
             'quantity' => $i->quantity,
             'unit' => $i->unit,
             'unit_price' => $i->unit_price,
+            'total' => $i->total,
         ])->all();
 
         $aligned = [];

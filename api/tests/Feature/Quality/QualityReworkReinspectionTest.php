@@ -35,7 +35,9 @@ class QualityReworkReinspectionTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Product $product;
+
     private TriggerOutgoingQC $listener;
 
     protected function setUp(): void
@@ -75,23 +77,23 @@ class QualityReworkReinspectionTest extends TestCase
         // A rework WO as NcrService::close() builds it: parent_ncr_id set,
         // sales_order_id null (it re-verifies existing affected units).
         $ncr = NonConformanceReport::factory()->create([
-            'product_id'        => $this->product->id,
+            'product_id' => $this->product->id,
             'affected_quantity' => 50,
         ]);
 
         $reworkWo = WorkOrder::create([
-            'wo_number'         => 'WO-T-'.substr(uniqid(), -8),
-            'product_id'        => $this->product->id,
-            'sales_order_id'    => null,
-            'parent_ncr_id'     => $ncr->id,
-            'quantity_target'   => 50,
+            'wo_number' => 'WO-T-'.substr(uniqid(), -8),
+            'product_id' => $this->product->id,
+            'sales_order_id' => null,
+            'parent_ncr_id' => $ncr->id,
+            'quantity_target' => 50,
             'quantity_produced' => 50,
-            'quantity_good'     => 50,
+            'quantity_good' => 50,
             'quantity_rejected' => 0,
-            'planned_start'     => now()->subDay(),
-            'planned_end'       => now(),
-            'status'            => 'completed',
-            'created_by'        => $this->user->id,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $this->user->id,
         ]);
 
         WorkOrderOutput::create([
@@ -116,29 +118,30 @@ class QualityReworkReinspectionTest extends TestCase
         $this->assertSame(1, $this->outgoingInspectionCount($reworkWo));
     }
 
-    public function test_internal_wo_without_so_or_ncr_is_still_skipped(): void
+    public function test_internal_stock_output_also_requires_outgoing_qc(): void
     {
         // A genuinely internal WO — no customer order and not born from an NCR.
         // The guard must still skip it so we don't over-trigger outgoing QC.
         $internalWo = WorkOrder::create([
-            'wo_number'         => 'WO-T-'.substr(uniqid(), -8),
-            'product_id'        => $this->product->id,
-            'sales_order_id'    => null,
-            'parent_ncr_id'     => null,
-            'quantity_target'   => 20,
+            'wo_number' => 'WO-T-'.substr(uniqid(), -8),
+            'product_id' => $this->product->id,
+            'sales_order_id' => null,
+            'parent_ncr_id' => null,
+            'quantity_target' => 20,
             'quantity_produced' => 20,
-            'quantity_good'     => 20,
+            'quantity_good' => 20,
             'quantity_rejected' => 0,
-            'planned_start'     => now()->subDay(),
-            'planned_end'       => now(),
-            'status'            => 'completed',
-            'created_by'        => $this->user->id,
+            'planned_start' => now()->subDay(),
+            'planned_end' => now(),
+            'status' => 'completed',
+            'created_by' => $this->user->id,
         ]);
 
+        WorkOrderOutput::create(['work_order_id' => $internalWo->id, 'recorded_by' => $this->user->id, 'recorded_at' => now(), 'good_count' => 20, 'reject_count' => 0, 'batch_code' => 'INTERNAL-QC-20']);
         $this->listener->handle(new WorkOrderCompleted($internalWo));
 
         $this->assertSame(
-            0,
+            1,
             $this->outgoingInspectionCount($internalWo),
             'A WO with neither sales_order_id nor parent_ncr_id must not be inspected.'
         );

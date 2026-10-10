@@ -13,15 +13,15 @@ class InventoryItemSeeder extends Seeder
     public function run(): void
     {
         // Root categories.
-        $rawMaterials  = ItemCategory::firstOrCreate(['name' => 'Raw Materials']);
-        $packaging     = ItemCategory::firstOrCreate(['name' => 'Packaging']);
-        $finishedGoods = ItemCategory::firstOrCreate(['name' => 'Finished Goods']);
-        $spareParts    = ItemCategory::firstOrCreate(['name' => 'Spare Parts']);
+        $rawMaterials  = ItemCategory::firstOrCreate(['name' => 'Raw Materials'], ['item_type' => 'raw_material']);
+        $packaging     = ItemCategory::firstOrCreate(['name' => 'Packaging'], ['item_type' => 'packaging']);
+        $finishedGoods = ItemCategory::firstOrCreate(['name' => 'Finished Goods'], ['item_type' => 'finished_good']);
+        $spareParts    = ItemCategory::firstOrCreate(['name' => 'Spare Parts'], ['item_type' => 'spare_part']);
 
         // Sub-categories under Raw Materials.
-        $resins    = ItemCategory::firstOrCreate(['name' => 'Resins',    'parent_id' => $rawMaterials->id]);
-        $colorants = ItemCategory::firstOrCreate(['name' => 'Colorants', 'parent_id' => $rawMaterials->id]);
-        $inserts   = ItemCategory::firstOrCreate(['name' => 'Metal Inserts', 'parent_id' => $rawMaterials->id]);
+        $resins    = ItemCategory::firstOrCreate(['name' => 'Resins',    'parent_id' => $rawMaterials->id], ['item_type' => 'raw_material']);
+        $colorants = ItemCategory::firstOrCreate(['name' => 'Colorants', 'parent_id' => $rawMaterials->id], ['item_type' => 'raw_material']);
+        $inserts   = ItemCategory::firstOrCreate(['name' => 'Metal Inserts', 'parent_id' => $rawMaterials->id], ['item_type' => 'raw_material']);
 
         // Items per docs/SEEDS.md DEMO RAW MATERIALS (12).
         $items = [

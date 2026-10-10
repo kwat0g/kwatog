@@ -3,63 +3,95 @@
 import type { Incoterm } from '@/types/supplyChain';
 
 export interface Product {
- id: string;
- part_number: string;
- name: string;
- description: string | null;
- unit_of_measure: string;
- standard_cost: string;
- revenue_account_id: string | null;
- is_active: boolean;
- include_forecast_in_mrp: boolean;
- has_bom: boolean;
- active_bom?: { id: string; version: number } | null;
- inspection_spec?: { id: string; version: number; updated_at: string | null } | null;
- created_at: string;
- updated_at: string;
+  financial_change_request?: {
+    id: string;
+    notes: string;
+    proposed_by: string;
+    values: {
+      standard_cost: string;
+      minimum_selling_price: string | null;
+      base_selling_price: string | null;
+    };
+  } | null;
+  finished_good_readiness?: {
+    ready: boolean;
+    reason: string | null;
+    item_id: string | null;
+    item_code: string | null;
+  };
+  portal_customers?: Array<{ id: string; name: string }>;
+  id: string;
+  part_number: string;
+  name: string;
+  description: string | null;
+  unit_of_measure: string;
+  standard_cost: string;
+  base_selling_price?: string | null;
+  minimum_selling_price?: string | null;
+  portal_visibility?: 'standard' | 'restricted';
+  revenue_account_id: string | null;
+  is_active: boolean;
+  include_forecast_in_mrp: boolean;
+  has_bom: boolean;
+  active_bom?: { id: string; version: number } | null;
+  inspection_spec?: { id: string; version: number; updated_at: string | null } | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PriceAgreement {
- id: string;
- product?: { id: string; part_number: string; name: string; unit_of_measure: string };
- customer?: { id: string; name: string };
- price: string;
- effective_from: string;
- effective_to: string;
- pricing_method: 'flat' | 'tiered';
- pricing_method_label: string;
- tiers: PriceTier[] | null;
- is_currently_active: boolean;
- deleted_at?: string | null;
- created_at: string;
- updated_at: string;
+  id: string;
+  product?: {
+    id: string;
+    part_number: string;
+    name: string;
+    unit_of_measure: string;
+    base_selling_price?: string | null;
+    minimum_selling_price?: string | null;
+  };
+  pricing_warnings?: string[];
+  customer?: { id: string; name: string };
+  price: string;
+  effective_from: string;
+  effective_to: string;
+  pricing_method: 'flat' | 'tiered';
+  pricing_method_label: string;
+  tiers: PriceTier[] | null;
+  is_currently_active: boolean;
+  deleted_at?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PriceTier {
- min_qty: number;
- unit_price: string;
+  min_qty: number;
+  unit_price: string;
 }
 
 export interface CreateProductData {
- part_number: string;
- name: string;
- description?: string | null;
- unit_of_measure: string;
- standard_cost: string;
- revenue_account_id?: string | null;
- is_active?: boolean;
+  portal_customer_ids?: string[];
+  part_number: string;
+  name: string;
+  description?: string | null;
+  unit_of_measure: string;
+  standard_cost: string;
+  base_selling_price?: string | null;
+  minimum_selling_price?: string | null;
+  portal_visibility?: 'standard' | 'restricted';
+  revenue_account_id?: string | null;
+  is_active?: boolean;
 }
 
 export type UpdateProductData = Partial<CreateProductData>;
 
 export interface CreatePriceAgreementData {
- product_id: string;
- customer_id: string;
- price: string;
- effective_from: string;
- effective_to: string;
- pricing_method: 'flat' | 'tiered';
- tiers?: PriceTier[] | null;
+  product_id: string;
+  customer_id: string;
+  price: string;
+  effective_from: string;
+  effective_to: string;
+  pricing_method: 'flat' | 'tiered';
+  tiers?: PriceTier[] | null;
 }
 
 export type UpdatePriceAgreementData = Partial<CreatePriceAgreementData>;
@@ -67,110 +99,161 @@ export type UpdatePriceAgreementData = Partial<CreatePriceAgreementData>;
 // ─── Sales orders (Task 48) ─────────────────────────────────────────────
 
 export type SalesOrderStatus =
-  | 'draft' | 'confirmed' | 'in_production' | 'partially_delivered'
-  | 'delivered' | 'invoiced' | 'paid' | 'closed' | 'cancelled';
+  | 'draft'
+  | 'awaiting_confirmation'
+  | 'delivery_negotiation'
+  | 'confirmed'
+  | 'in_production'
+  | 'partially_delivered'
+  | 'delivered'
+  | 'invoiced'
+  | 'paid'
+  | 'closed'
+  | 'cancelled';
 
 export interface SalesOrderItem {
- id: string;
- product?: { id: string; part_number: string; name: string; unit_of_measure: string };
- quantity: string;
- unit_price: string;
- total: string;
- quantity_delivered: string;
- remaining_quantity: string;
- delivery_date: string;
+  price_source?: 'base' | 'agreement' | null;
+  pricing_date?: string | null;
+  price_tier_min_qty?: number | null;
+  id: string;
+  product?: {
+    id: string;
+    part_number: string;
+    name: string;
+    unit_of_measure: string;
+    base_selling_price?: string | null;
+    minimum_selling_price?: string | null;
+  };
+  pricing_warnings?: string[];
+  quantity: string;
+  unit_price: string;
+  total: string;
+  quantity_delivered: string;
+  remaining_quantity: string;
+  delivery_date: string;
 }
 
 export interface SalesOrderStatusHistoryEvent {
- event_type: 'created' | 'status_changed';
- status: SalesOrderStatus;
- status_label: string;
- previous_status: SalesOrderStatus | null;
- previous_status_label: string | null;
- actor_name: string | null;
- occurred_at: string | null;
- comment: string | null;
+  event_type: 'created' | 'status_changed';
+  status: SalesOrderStatus;
+  status_label: string;
+  previous_status: SalesOrderStatus | null;
+  previous_status_label: string | null;
+  actor_name: string | null;
+  occurred_at: string | null;
+  comment: string | null;
 }
 
 export interface SalesOrder {
- id: string;
- so_number: string;
- date: string;
- subtotal: string;
- vat_amount: string;
- total_amount: string;
- status: SalesOrderStatus;
- status_label: string;
- next_statuses?: Array<{ value: string; label: string }>;
- payment_terms_days: number;
- // Sprint 6 audit §3.2: linked chain context populated on the detail
- // payload only (whenLoaded on the resource).
- mrp_plan?: {
- id: string;
- mrp_plan_no: string;
- version: number;
- status: string;
- status_label?: string;
- shortages_found: number;
- auto_pr_count: number;
- draft_wo_count: number;
- } | null;
- work_orders?: Array<{
- id: string;
- wo_number: string;
- status: string;
- status_label?: string;
- quantity_target: number;
- quantity_produced: number;
- planned_start: string | null;
- product: { id: string; part_number: string; name: string } | null;
- }>;
- inspections?: Array<{
- id: string; inspection_number: string; stage: string; stage_label?: string; status: string; status_label?: string; completed_at: string | null;
- }>;
- deliveries?: Array<{
- id: string; delivery_number: string; status: string; status_label?: string; scheduled_date: string | null;
- }>;
- invoices?: Array<{
- id: string; invoice_number: string; status: string; status_label?: string; total_amount: string; balance: string;
- }>;
- delivery_terms: string | null;
- incoterm: Incoterm | null;
- notes: string | null;
- is_editable: boolean;
- is_cancellable: boolean;
- item_count: number;
- customer?: { id: string; name: string };
- creator?: { id: string; name: string };
- items?: SalesOrderItem[];
- status_history?: SalesOrderStatusHistoryEvent[];
- created_at: string;
- updated_at: string;
+  id: string;
+  so_number: string;
+  date: string;
+  subtotal: string;
+  vat_amount: string;
+  total_amount: string;
+  status: SalesOrderStatus;
+  status_label: string;
+  next_statuses?: Array<{ value: string; label: string }>;
+  payment_terms_days: number;
+  // Sprint 6 audit §3.2: linked chain context populated on the detail
+  // payload only (whenLoaded on the resource).
+  mrp_plan?: {
+    id: string;
+    mrp_plan_no: string;
+    version: number;
+    status: string;
+    status_label?: string;
+    shortages_found: number;
+    auto_pr_count: number;
+    draft_wo_count: number;
+  } | null;
+  work_orders?: Array<{
+    id: string;
+    wo_number: string;
+    status: string;
+    status_label?: string;
+    quantity_target: number;
+    quantity_produced: number;
+    planned_start: string | null;
+    product: { id: string; part_number: string; name: string } | null;
+  }>;
+  inspections?: Array<{
+    id: string;
+    inspection_number: string;
+    stage: string;
+    stage_label?: string;
+    status: string;
+    status_label?: string;
+    completed_at: string | null;
+  }>;
+  deliveries?: Array<{
+    id: string;
+    delivery_number: string;
+    status: string;
+    status_label?: string;
+    scheduled_date: string | null;
+  }>;
+  invoices?: Array<{
+    id: string;
+    invoice_number: string;
+    status: string;
+    status_label?: string;
+    total_amount: string;
+    balance: string;
+  }>;
+  submission_source?: string;
+  requested_delivery_dates?: string[];
+  delivery_dates?: string[];
+  capabilities?: { can_propose_delivery?: boolean; awaiting_delivery_response?: boolean };
+  delivery_negotiations?: DeliveryNegotiation[];
+  latest_response?: {
+    id: string;
+    type: string;
+    status: string;
+    proposed_delivery_date: string | null;
+    notes: string | null;
+  } | null;
+  delivery_terms: string | null;
+  incoterm: Incoterm | null;
+  notes: string | null;
+  is_editable: boolean;
+  is_cancellable: boolean;
+  item_count: number;
+  customer?: { id: string; name: string };
+  creator?: { id: string; name: string };
+  items?: SalesOrderItem[];
+  status_history?: SalesOrderStatusHistoryEvent[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreateSalesOrderItem {
- product_id: string; // hash_id, decoded by ResolvesHashIds before validation
- quantity: string;
- delivery_date: string;
+  product_id: string; // hash_id, decoded by ResolvesHashIds before validation
+  quantity: string;
+  delivery_date: string;
 }
 
 export interface CreateSalesOrderData {
- customer_id: string;
- date: string;
- payment_terms_days?: number;
- delivery_terms?: string | null;
- incoterm?: Incoterm | null;
- notes?: string | null;
- items: CreateSalesOrderItem[];
+  customer_id: string;
+  date: string;
+  payment_terms_days?: number;
+  delivery_terms?: string | null;
+  incoterm?: Incoterm | null;
+  notes?: string | null;
+  items: CreateSalesOrderItem[];
 }
 
-export type UpdateSalesOrderData = Partial<CreateSalesOrderData> & { items: CreateSalesOrderItem[] };
+export type UpdateSalesOrderData = Partial<CreateSalesOrderData> & {
+  items: CreateSalesOrderItem[];
+};
 
 export interface SalesOrderChainStep {
- key: string;
- label: string;
- date: string | null;
- state: 'done' | 'active' | 'pending' | 'rejected' | 'skipped';
+  key: string;
+  label: string;
+  date: string | null;
+  state: 'done' | 'active' | 'pending' | 'rejected' | 'skipped';
+  description?: string | null;
+  href?: string;
 }
 
 // ─── Sprint 7 Task 68 — Customer Complaints + 8D ────────────────────
@@ -179,83 +262,91 @@ export type ComplaintStatus = 'open' | 'investigating' | 'resolved' | 'closed' |
 export type ComplaintSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export interface EightDReport {
- id: string;
- d1_team: string | null;
- d2_problem: string | null;
- d3_containment: string | null;
- d4_root_cause: string | null;
- d5_corrective_action: string | null;
- d6_verification: string | null;
- d7_prevention: string | null;
- d8_recognition: string | null;
- finalized_at: string | null;
+  id: string;
+  d1_team: string | null;
+  d2_problem: string | null;
+  d3_containment: string | null;
+  d4_root_cause: string | null;
+  d5_corrective_action: string | null;
+  d6_verification: string | null;
+  d7_prevention: string | null;
+  d8_recognition: string | null;
+  finalized_at: string | null;
 }
 
 export interface CustomerComplaint {
- id: string;
- complaint_number: string;
- severity: ComplaintSeverity;
- severity_label?: string;
- status: ComplaintStatus;
- status_label?: string;
- description: string;
- affected_quantity: number;
- ncr_handoff?: {
-  status: 'not_started' | 'generated' | 'manual_required' | string;
-  status_label?: string | null;
-  message?: string | null;
-  at?: string | null;
- };
- received_date: string | null;
- resolved_at: string | null;
- closed_at: string | null;
- customer?: { id: string; name: string } | null;
- product?: { id: string; part_number: string; name: string } | null;
- sales_order?: { id: string; so_number: string } | null;
- ncr?: { id: string; ncr_number: string; status: string; status_label?: string; severity: string; severity_label?: string; disposition?: string | null } | null;
- creator?: { id: string; name: string } | null;
- assignee?: { id: string; name: string } | null;
- eight_d_report?: EightDReport | null;
- created_at: string;
- updated_at: string;
+  id: string;
+  complaint_number: string;
+  severity: ComplaintSeverity;
+  severity_label?: string;
+  status: ComplaintStatus;
+  status_label?: string;
+  description: string;
+  affected_quantity: number;
+  ncr_handoff?: {
+    status: 'not_started' | 'generated' | 'manual_required' | string;
+    status_label?: string | null;
+    message?: string | null;
+    at?: string | null;
+  };
+  received_date: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  customer?: { id: string; name: string } | null;
+  product?: { id: string; part_number: string; name: string } | null;
+  sales_order?: { id: string; so_number: string } | null;
+  ncr?: {
+    id: string;
+    ncr_number: string;
+    status: string;
+    status_label?: string;
+    severity: string;
+    severity_label?: string;
+    disposition?: string | null;
+  } | null;
+  creator?: { id: string; name: string } | null;
+  assignee?: { id: string; name: string } | null;
+  eight_d_report?: EightDReport | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreateComplaintData {
- customer_id: string;
- product_id?: string | null;
- sales_order_id?: string | null;
- received_date: string;
- severity: ComplaintSeverity;
- description: string;
- affected_quantity?: number;
- assigned_to?: string | null;
+  customer_id: string;
+  product_id?: string | null;
+  sales_order_id?: string | null;
+  received_date: string;
+  severity: ComplaintSeverity;
+  description: string;
+  affected_quantity?: number;
+  assigned_to?: string | null;
 }
 
 // ─── CA1 — Chain result returned from SO confirm ────────────────────
 
 export interface SoChainResultWo {
- id: string;
- wo_number: string;
- product: { part_number: string; name: string } | null;
- status: string;
- quantity_target: number;
- machine: string | null;
- scheduled_start: string | null;
- scheduled_end: string | null;
- needs_manual_scheduling: boolean;
+  id: string;
+  wo_number: string;
+  product: { part_number: string; name: string } | null;
+  status: string;
+  quantity_target: number;
+  machine: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  needs_manual_scheduling: boolean;
 }
 
 export interface SoChainResult {
- so_number: string;
- planning_status: 'queued' | 'completed' | 'failed';
- planning_error?: { message: string; recovery_action: string | null } | null;
- work_orders_created: number;
- auto_scheduled: number;
- needs_manual: number;
- shortages: number;
- prs_created: number;
- work_orders: SoChainResultWo[];
- scheduling_conflicts: Array<{ work_order_id: string; wo_number: string; reasons: string[] }>;
+  so_number: string;
+  planning_status: 'queued' | 'completed' | 'failed';
+  planning_error?: { message: string; recovery_action: string | null } | null;
+  work_orders_created: number;
+  auto_scheduled: number;
+  needs_manual: number;
+  shortages: number;
+  prs_created: number;
+  work_orders: SoChainResultWo[];
+  scheduling_conflicts: Array<{ work_order_id: string; wo_number: string; reasons: string[] }>;
 }
 
 /**
@@ -267,17 +358,26 @@ export interface SoChainResult {
 export type ContactInquiryStatus = 'new' | 'in_progress' | 'closed';
 
 export interface ContactInquiry {
- id: string;
- inquiry_no: string;
- full_name: string;
- company: string | null;
- email: string;
- phone: string | null;
- message: string;
- status: ContactInquiryStatus;
- status_label: string;
- ip_address: string | null;
- user_agent: string | null;
- created_at: string;
- updated_at: string;
+  id: string;
+  inquiry_no: string;
+  full_name: string;
+  company: string | null;
+  email: string;
+  phone: string | null;
+  message: string;
+  status: ContactInquiryStatus;
+  status_label: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliveryNegotiation {
+  id: string;
+  status: string;
+  proposed_delivery_date: string | null;
+  notes: string | null;
+  responded_at: string | null;
+  resolved_at: string | null;
 }

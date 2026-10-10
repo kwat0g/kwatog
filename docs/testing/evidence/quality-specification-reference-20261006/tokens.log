@@ -1,0 +1,5 @@
+
+> ogami-erp-spa@0.1.0 audit:tokens
+> node scripts/check-token-discipline.mjs
+
+✓ token discipline clean — 913 files checked

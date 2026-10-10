@@ -1,0 +1,242 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+............................................................
+[M043 landed-cost 7-line] header total=100.00 sum(lines)=100.00 delta=0.00
+.[M043 landed-cost 3-line] total=100.00 sum=100.00
+.[M043 landed-cost components] {"allocated_freight":"100.00","allocated_insurance":"100.00","allocated_duties":"100.00","allocated_brokerage":"100.00","allocated_other":"100.00","total_allocated":"500.00"} header=500.00
+.  63 / 150 ( 42%)
+[M043 zero-basis by_value] sum=90.00 (no DivisionByZeroError)
+[M043 zero-basis by_quantity] sum=90.00 (no DivisionByZeroError)
+.[M043 by_weight] items weight columns=[]
+[M043 by_weight] App\Common\Exceptions\BusinessRuleException: Landed cost cannot be allocated by weight: purchase-order items carry no weight, so every line would weigh zero and the charge would be split equally instead. Choose by value, by quantity, or manual.
+[M043 by_weight] http=422
+.[M043 manual method] allocations=["50.00","50.00"]
+.[M043 calculate endpoint] {"lines=1":200,"lines=2":200,"lines=3":200,"lines=2,freight=100":200}
+.[landed-cost input] freight=5000.00 duties=1200.00 landed_total="6207.00"
+.[M043 fx] shipment currency/fx columns=[]
+[M043 fx] purchase_order currency/fx columns=[]
+.[M043 downstream] modules referencing landed cost=["Inventory\/GrnItem.php","Inventory\/GrnItemResource.php","Inventory\/GrnGlPostingService.php","Inventory\/GrnService.php","Inventory\/ItemCostReviewService.php","Accounting\/Bill.php","Accounting\/StoreBillRequest.php","Accounting\/BillResource.php","Accounting\/AccountingAccountPolicyService.php","Accounting\/BillService.php"]
+.[M043 lazy load] queries to serialise 4 allocation rows=0
+.[M043 evidence gate] transition codes={"shipped":200,"in_transit":200,"customs":200,"cleared":422,"received":422} documents=0 containers=0 final=customs clearance_date=
+.[M043 doc swap after receipt] second_upload=422 delete_original=422 bl_rows_now=1
+.[M043 handoff] shipment handoff columns=[] delivery handoff columns=["coc_handoff_status","coc_handoff_message","coc_handoff_at","invoice_handoff_status","invoice_handoff_message","invoice_handoff_at"]
+.[M043 matrix] cells=49 accepted=10 refused=39 accepted=["ordered->shipped","ordered->cancelled","shipped->in_transit","shipped->cancelled","in_transit->customs","in_transit->cancelled","customs->cleared","customs->cancelled","cleared->received","cleared->cancelled"]
+.[M043 clear twice] first=200 second=422
+.[M043 receive uncleared] ordered->received = 422
+[M043 receive uncleared] shipped->received = 422
+[M043 receive uncleared] in_transit->received = 422
+[M043 receive uncleared] customs->received = 422
+.[M043 cancel received] = 422
+.[M043 post-receipt edit] meta=422 container=422 bl=BL38cee031
+[M043 post-receipt edit] eta<etd both submitted = 422
+[M043 post-receipt edit] eta-only against stored etd = 422
+.[M043 immutability] pg_trigger count on shipment tables=11
+.[M043 archive received] = 422
+[M043 archive cleared] = 422
+.[M043 mime] php-bytes-as-pdf=422 pdf-bytes-as-png=201 real-pdf=201
+.[M043 storage] path=shipments/84/jdwv8IKhJTf01fjhuyvioo4tVkgnBUSdTVt80KZ5.pdf original=passwd.pdf
+[M043 storage] local disk root=/var/www/storage/app/private
+.[M043 long filename] len=304 status=422
+.[M043 orphan] shipment trashed=yes document row trashed=no file deleted=no
+.[M043 restore binding] {"shipment":200,"document":200,"container":200}
+.[M043 content-disposition] stored_name=bl".pdf header=attachment; filename="bl.pdf"; filename*=UTF-8''bl.pdf
+[M043 content-disposition] crlf header=attachment; filename="aX-Injected__1.pdf"; filename*=UTF-8''aX-Injected%3A%201.pdf
+.[M043 soft-deleted] {"create_on_trashed_po":404,"show":404,"packing_list":404,"commercial_invoice":404,"landed_cost":404,"status":404,"documents":404} in_list=no
+[M043 soft-deleted vendor/item] packing_list=200 commercial_invoice=200
+.......[M043 numeric edge] gross_weight_kg=-1 => 422 expectation=422
+.[M043 numeric edge] gross_weight_kg=0 => 201 stored=0.00 expectation=201:0.00
+.[M043 numeric edge] gross_weight_kg=25400.55 => 201 stored=25400.55 expectation=201:25400.55
+.[M043 numeric edge] volume_cbm=-1 => 422 expectation=422
+.[M043 numeric edge] volume_cbm=67.500 => 201 stored=67.500 expectation=201:67.500
+.[M043 numeric edge] gross_weight_kg=1.999 => 422 expectation=422
+.[M043 numeric edge] gross_weight_kg=10.00005 => 422 expectation=422
+.[M043 numeric edge] volume_cbm=1.9999 => 422 expectation=422
+.[M043 numeric edge] gross_weight_kg=1e3 => 422 expectation=422
+.[M043 numeric edge] gross_weight_kg=1e17 => 422 expectation=422
+.[M043 numeric edge] gross_weight_kg=1e20 => 422 expectation=422
+.[M043 numeric edge] volume_cbm=1e17 => 422 expectation=422
+.[M043 numeric edge] volume_cbm=1e20 => 422 expectation=422
+.[M043 numeric edge] gross_weight_kg=100000000000.00 => 422 expectation=422
+.[M043 numeric edge] volume_cbm=999999.999 => 422 expectation=422
+.[M043 permission gate] endpoints=21 not-403=[]
+.[M043 auth gate] not-401=[]
+.[M043 impex e2e] {"options":200,"create":201,"upload_bill_of_lading":201,"upload_commercial_invoice":201,"upload_packing_list":201,"upload_import_entry":201,"upload_boc_release":201,"add_container":201,"list_containers":200,"landed_cost":200,"status_shipped":200,"status_in_transit":200,"status_customs":200,"status_cleared":200,"status_received":200,"packing_list_pdf":200,"commercial_invoice_pdf":200}
+.[M043 guard separation] internal shipment middleware=["api|auth:sanctum|feature:supply_chain|permission_any:supply_chain.view,supply_chain.shipments.view","api|auth:sanctum|feature:supply_chain|permission:supply_chain.shipments.manage"]
+.[M043 error body] illegal_transition: {"message":"Cannot transition shipment SHP-T-296bb from received to shipped.","errors":{"error":["Cannot transition shipment SHP-T-296bb from received to shipped."]}}
+[M043 error body] archive_received: {"message":"Cannot archive a customs or received shipment; preserve the customs record instead.","errors":{"error":["Cannot archive a customs or received shipment; preserve the customs record instead.
+[M043 error body] bad_container: {"message":"The container number field is required. (and 2 more errors)","errors":{"container_number":["The container number field is required."],"gross_weight_kg":["The gross weight kg field must be 
+[M043 error body] not_found: {"message":"The requested resource was not found."}
+.[M043 sequence] number=SHP-202610-0001 row={"id":66,"document_type":"shipment","prefix":"SHP","year":2026,"month":10,"last_number":1}
+............ 126 / 150 ( 84%)
+.
+[M044 transitions] {
+    "loading_without_vehicle": "BusinessRuleException: Cannot transition delivery DR-202610-0001 from delivered to loading.",
+    "scheduled_to_in_transit": "BusinessRuleException: Cannot transition delivery DR-202610-0002 from scheduled to in_transit.",
+    "scheduled_to_delivered": "BusinessRuleException: Cannot transition delivery DR-202610-0003 from scheduled to delivered.",
+    "confirm_scheduled": "BusinessRuleException: Only delivered deliveries can be confirmed.",
+    "confirm_without_proof": "BusinessRuleException: At least one proof of delivery (signed DR or photo) must be uploaded before confirming.",
+    "status_route_to_confirmed": "BusinessRuleException: Use the delivery confirmation action so proof, invoicing, and SO reconciliation are applied together.",
+    "cancel_delivered": "BusinessRuleException: A delivered shipment cannot be cancelled; process a customer return instead.",
+    "reopen_cancelled": "BusinessRuleException: Cannot transition delivery DR-202610-0008 from cancelled to loading.",
+    "cancel_confirmed": "BusinessRuleException: Cannot transition delivery DR-202610-0009 from confirmed to cancelled.",
+    "confirm_twice": "OK",
+    "delete_confirmed": "BusinessRuleException: Cannot delete a delivery with a linked invoice. Cancel the invoice first.",
+    "assign_confirmed": "BusinessRuleException: Only scheduled deliveries can be assigned or reassigned."
+}
+.
+[M044 cancelled-SO create] BusinessRuleException: Sales order SO-P4-2d3f89fc7e is cancelled; no further deliveries can be scheduled against it.
+..
+[M044 upload] file_path=deliveries/58/proofs/dZY93tXOv38Gt7UsyTWAlwEpWcPetoOWcsb4688A.jpg file_name=passwd.jpg
+.
+[M044 disposition] 'inline; filename="a.jpg"; filename*=UTF-8\'\'a.jpg'
+...........
+[M044 quantity validation] {"1.999":422,"1e3":422,"1e17":422,"1e20":422,"10.00005":422,"-1":422,"0":422}
+.
+[M044 archived rows] {
+    "archived_delivery_in_list": 0,
+    "archived_delivery_show": 404,
+    "archived_customer_list_status": 200,
+    "archived_customer_show_status": 200,
+    "archived_so_list_status": 200,
+    "archived_so_show_status": 200,
+    "archived_inspection_options": 0
+}
+.
+[M044 permission matrix] {
+    "system_admin": {
+        "GET  deliveries": 200,
+        "GET  deliveries\/options": 200,
+        "GET  delivery detail": 200,
+        "GET  inspection-options": 200,
+        "GET  driver-options": 200,
+        "GET  proofs\/options": 200,
+        "GET  proofs index": 200,
+        "GET  proof view": 404,
+        "GET  receipt-photo": 404,
+        "POST confirm": 200,
+        "PATCH status": 422,
+        "PATCH assignment": 422,
+        "GET  vehicles": 200,
+        "POST vehicles": 422
+    },
+    "purchasing_officer": {
+        "GET  deliveries": 200,
+        "GET  deliveries\/options": 200,
+        "GET  delivery detail": 200,
+        "GET  inspection-options": 403,
+        "GET  driver-options": 403,
+        "GET  proofs\/options": 200,
+        "GET  proofs index": 200,
+        "GET  proof view": 404,
+        "GET  receipt-photo": 404,
+        "POST confirm": 403,
+        "PATCH status": 403,
+        "PATCH assignment": 403,
+        "GET  vehicles": 403,
+        "POST vehicles": 403
+    },
+    "warehouse_staff": {
+        "GET  deliveries": 200,
+        "GET  deliveries\/options": 200,
+        "GET  delivery detail": 200,
+        "GET  inspection-options": 403,
+        "GET  driver-options": 403,
+        "GET  proofs\/options": 200,
+        "GET  proofs index": 200,
+        "GET  proof view": 404,
+        "GET  receipt-photo": 404,
+        "POST confirm": 403,
+        "PATCH status": 403,
+        "PATCH assignment": 403,
+        "GET  vehicles": 403,
+        "POST vehicles": 403
+    },
+    "impex_officer": {
+        "GET  deliveries": 200,
+        "GET  deliveries\/options": 200,
+        "GET  delivery detail": 200,
+        "GET  inspection-options": 200,
+        "GET  driver-options": 200,
+        "GET  proofs\/options": 200,
+        "GET  proofs index": 200,
+        "GET  proof view": 404,
+        "GET  receipt-photo": 404,
+        "POST confirm": 200,
+        "PATCH status": 422,
+        "PATCH assignment": 422,
+        "GET  vehicles": 200,
+        "POST vehicles": 422
+    },
+    "driver": {
+        "GET  deliveries": 403,
+        "GET  deliveries\/options": 403,
+        "GET  delivery detail": 403,
+        "GET  inspection-options": 403,
+        "GET  driver-options": 403,
+        "GET  proofs\/options": 403,
+        "GET  proofs index": 403,
+        "GET  proof view": 403,
+        "GET  receipt-photo": 403,
+        "POST confirm": 403,
+        "PATCH status": 403,
+        "PATCH assignment": 403,
+        "GET  vehicles": 403,
+        "POST vehicles": 403
+    },
+    "driver_own": {
+        "GET \/driver\/deliveries\/{id}": 200
+    },
+    "driver_other": {
+        "GET \/driver\/deliveries\/{id}": 404,
+        "body": "{\"message\":\"The requested resource was not found.\"}",
+        "PATCH status": 422
+    }
+}
+.
+[M044 stock] movements before=1 after=1
+.
+[M044 AR invoice vs delivery status] {
+    "scheduled": {
+        "status": 422,
+        "message": "A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.",
+        "linked_invoice_count_before": 0,
+        "linked_invoice_count_after": 0
+    },
+    "in_transit": {
+        "status": 422,
+        "message": "A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.",
+        "linked_invoice_count_before": 0,
+        "linked_invoice_count_after": 0
+    },
+    "cancelled": {
+        "status": 422,
+        "message": "A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.",
+        "linked_invoice_count_before": 0,
+        "linked_invoice_count_after": 0
+    }
+}
+...
+[M044 portal cross-tenant] {
+    "detail": {
+        "status": 403,
+        "body": "You do not have permission to perform this action.",
+        "leaks_dr": false,
+        "leaks_so": false
+    },
+    "proof": {
+        "status": 403,
+        "body": "You do not have permission to perform this action.",
+        "leaks_dr": false,
+        "leaks_so": false
+    },
+    "list_count": 0,
+    "confirm_route": 403
+}
+.                                        150 / 150 (100%)
+
+Time: 06:18.280, Memory: 189.00 MB
+
+OK (150 tests, 801 assertions)

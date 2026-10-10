@@ -54,6 +54,7 @@ class StoreMaintenanceScheduleRequest extends FormRequest
             'description'       => ['required', 'string', 'max:200'],
             'interval_type'     => ['required', Rule::in(MaintenanceScheduleInterval::values())],
             'interval_value'    => ['required', 'integer', 'min:1'],
+            'estimated_duration_minutes' => ['sometimes', 'required', 'integer', 'between:15,480'],
             'last_performed_at' => ['nullable', 'date'],
             'is_active'         => ['nullable', 'boolean'],
         ];

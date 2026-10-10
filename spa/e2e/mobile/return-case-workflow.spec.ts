@@ -1,6 +1,7 @@
 import { expect, test } from '../fixtures';
 
 test('customer mobile intake preserves failed evidence and reaches a usable case', async ({ page }) => {
+  test.info().annotations.push({ type: 'expected-http-response', description: '503 POST /api/v1/b2b/customer/problems/case_mobile/attachments' });
   await page.route('**/api/v1/auth/user', (route) => route.fulfill({ status: 401, json: { message: 'Unauthenticated.' } }));
   await page.route('**/api/v1/b2b/customer/me', (route) => route.fulfill({ status: 200, json: { data: {
     id: 'portal_customer', name: 'Acme Contact', email: 'mobile@acme.test', customer_id: 'customer', customer_name: 'Acme', must_change_password: false,

@@ -105,7 +105,7 @@ export default function IncomeStatementPage() {
       )}
       {data && (
         <div className="px-5 py-4">
-          <div className="border border-default rounded-md overflow-hidden max-w-3xl">
+          <div className="min-w-0 w-full border border-default rounded-md overflow-hidden">
             <div className="overflow-x-auto">
               <table className={`${tableCls} min-w-[520px]`}>
                 <thead>

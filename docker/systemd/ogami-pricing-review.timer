@@ -1,0 +1,9 @@
+[Unit]
+Description=OGAMI daily pricing review at 07:00 Asia/Manila
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 Asia/Manila
+Persistent=true
+
+[Install]
+WantedBy=timers.target

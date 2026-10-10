@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPeso } from '@/lib/formatNumber';
-import { formatDate, localIsoDate } from '@/lib/formatDate';
+import { formatDate, manilaIsoDate, formatTime } from '@/lib/formatDate';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 import type { ApiValidationError } from '@/types';
@@ -38,10 +38,6 @@ const STATUS_CHIP: Record<OvertimeStatus, 'success' | 'warning' | 'danger'> = {
   approved: 'success',
   rejected: 'danger',
 };
-
-function todayIso(): string {
-  return localIsoDate();
-}
 
 function requestColumns(
   onCancel?: (id: string) => void,
@@ -291,7 +287,8 @@ function ApplyOvertimeModal({
   premiumMultiplier: number;
   onApplied: () => void;
 }) {
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useState(manilaIsoDate());
+  const [dateError, setDateError] = useState<string | null>(null);
   const [hours, setHours] = useState<number>(minimumHours);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -308,7 +305,7 @@ function ApplyOvertimeModal({
       toast.success('Overtime request submitted for approval.');
       setReason('');
       setHours(minimumHours);
-      setDate(todayIso());
+      setDate(manilaIsoDate());
       onApplied();
     },
     onError: (err: AxiosError<ApiValidationError>) => {
@@ -323,6 +320,11 @@ function ApplyOvertimeModal({
 
   const handleSubmit = () => {
     setError(null);
+    setDateError(null);
+    if (!date || date < manilaIsoDate()) {
+      setDateError('Choose today or a later date.');
+      return;
+    }
     if (reason.trim().length < 5) {
       setError('Please provide a reason (at least 5 characters).');
       return;
@@ -334,7 +336,7 @@ function ApplyOvertimeModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Apply for Overtime">
       <div className="space-y-4 py-4">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input label="Date" type="date" required min={manilaIsoDate()} value={date} error={dateError ?? undefined} onChange={(e) => { setDate(e.target.value); setDateError(null); }} />
           <div>
             <label className="text-xs text-muted font-medium">Hours</label>
             <div className="flex flex-wrap gap-1.5 mt-1">
@@ -378,7 +380,7 @@ function ApplyOvertimeModal({
             <div className="flex justify-between">
               <span className="text-muted">Your shift</span>
               <span className="font-mono tabular-nums">
-                {shift.name} · {shift.time_in?.slice(0, 5)}–{shift.time_out?.slice(0, 5)}
+                {shift.name} · {formatTime(shift.time_in)}–{formatTime(shift.time_out)}
               </span>
             </div>
           ) : (

@@ -9,14 +9,22 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\QuarantineService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
@@ -28,11 +36,8 @@ use Tests\TestCase;
 /**
  * F-03 — customer-return restock must inherit the destination location's WAC.
  *
- * ReturnRequestService::complete() restocks a customer return without a unit
- * cost. StockMovementService used to reject that with "A unit cost is
- * required", so the whole restock path threw at runtime. A pure receipt with
- * a null cost now inherits the destination level's weighted-average cost
- * (value-neutral blend); a fresh, empty location costs 0.00.
+ * Customer stock returns enter good stock only through the separate MRB
+ * release. These checks keep transfer cost and destination WAC consistent.
  */
 class CustomerReturnRestockCostTest extends TestCase
 {
@@ -95,6 +100,10 @@ class CustomerReturnRestockCostTest extends TestCase
 
         $invoiceLine = InvoiceItem::create([
             'invoice_id' => $invoice->id,
+            'product_id' => Product::create([
+                'part_number' => Item::query()->findOrFail($itemId)->code,
+                'name' => 'Returned stock',
+            ])->id,
             'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
             'description' => 'Returned stock',
             'quantity' => '10.00',
@@ -112,10 +121,13 @@ class CustomerReturnRestockCostTest extends TestCase
             'reason'            => 'defective',
             'condition'         => 'damaged',
             'source_invoice_item_id' => $invoiceLine->id,
-            // complete() now restocks only lines dispose() marked as kept, and
-            // refuses to run at all until every line has been dispositioned.
-            'disposition'       => 'restock',
         ]);
+        $product = Product::query()->findOrFail($invoiceLine->product_id);
+        Item::query()->whereKey($itemId)->update([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood->value,
+        ]);
+        $line->update(['product_id' => $product->id]);
 
         $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
@@ -135,9 +147,60 @@ class CustomerReturnRestockCostTest extends TestCase
             'quarantine_status' => 'held',
         ]);
 
-        $rma->forceFill(['disposition_status' => 'disposed'])->save();
+        Inspection::create([
+            'inspection_number' => 'QC-RC-'.substr(uniqid(), -8),
+            'stage' => InspectionStage::CustomerReturn->value,
+            'status' => InspectionStatus::Passed->value,
+            'product_id' => $product->id,
+            'entity_type' => InspectionEntityType::ReturnRequest->value,
+            'entity_id' => $rma->id,
+            'batch_quantity' => $returnedQuantity,
+            'sample_size' => $returnedQuantity,
+            'accept_count' => $returnedQuantity,
+            'reject_count' => 0,
+            'defect_count' => 0,
+            'inspector_id' => $by->id,
+        ]);
 
         return $rma->load('items');
+    }
+
+    private function goodLocation(ReturnRequestItem $line): WarehouseLocation
+    {
+        $quarantine = WarehouseLocation::query()->with('zone')->findOrFail($line->quarantine_location_id);
+        $zone = WarehouseZone::factory()->create([
+            'warehouse_id' => $quarantine->zone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+
+        return WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+    }
+
+    private function releaseCustomerReturn(ReturnRequest $rma, User $by, int $targetLocationId): MaterialReviewRecord
+    {
+        $line = $rma->items->firstOrFail();
+        app(ReturnRequestService::class)->dispose($rma, [[
+            'item_id' => $line->hash_id,
+            'disposition' => 'restock',
+        ]], $by);
+
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $line->id)->firstOrFail();
+        $this->assertSame('held', $mrb->status->value);
+        $this->assertNull($mrb->release_movement_id);
+
+        $reviewer = User::factory()->create();
+        return app(QuarantineService::class)->release(
+            $mrb,
+            'use_as_is',
+            $reviewer,
+            $targetLocationId,
+            null,
+            [
+                'inspected_quantity' => (string) $mrb->quantity,
+                'evidence_reference' => 'INDEPENDENT-REINSPECTION-'.$rma->rma_number,
+                'recovery_passed' => true,
+            ],
+        );
     }
 
     public function test_customer_return_restock_inherits_destination_wac(): void
@@ -146,7 +209,8 @@ class CustomerReturnRestockCostTest extends TestCase
         $customer = $this->makeCustomer();
         $invoice = $this->makeInvoice($customer, $by);
         $item = Item::factory()->create();
-        $location = WarehouseLocation::factory()->create();
+        $rma = $this->makeInspectedRma($by, $customer, $invoice, $item->id, 8, '100.00');
+        $location = $this->goodLocation($rma->items->firstOrFail());
 
         // Seed 5 units @ 100.00 into the destination location.
         app(StockMovementService::class)->move(new StockMovementInput(
@@ -159,15 +223,16 @@ class CustomerReturnRestockCostTest extends TestCase
             createdBy: $by->id,
         ));
 
-        $rma = $this->makeInspectedRma($by, $customer, $invoice, $item->id, 8, '100.00');
-
+        $mrb = $this->releaseCustomerReturn($rma, $by, $location->id);
+        $movementCount = StockMovement::query()->count();
         $completed = app(ReturnRequestService::class)->complete($rma, $by, $location->id);
 
         $this->assertSame(ReturnRequestStatus::Completed, $completed->status);
+        $this->assertSame($movementCount, StockMovement::query()->count(), 'Completion must not move MRB-released stock again.');
 
         $movement = StockMovement::query()
-            ->where('reference_type', 'return_request')
-            ->where('reference_id', $rma->id)
+            ->where('reference_type', 'material_review_record')
+            ->where('reference_id', $mrb->id)
             ->where('to_location_id', $location->id)
             ->firstOrFail();
 
@@ -186,21 +251,24 @@ class CustomerReturnRestockCostTest extends TestCase
         $customer = $this->makeCustomer();
         $invoice = $this->makeInvoice($customer, $by);
         $item = Item::factory()->create();
-        $freshLocation = WarehouseLocation::factory()->create();
-
         $rma = $this->makeInspectedRma($by, $customer, $invoice, $item->id, 4);
+        $freshLocation = $this->goodLocation($rma->items->firstOrFail());
 
+        $mrb = $this->releaseCustomerReturn($rma, $by, $freshLocation->id);
+        $movementCount = StockMovement::query()->count();
         $completed = app(ReturnRequestService::class)->complete($rma, $by, $freshLocation->id);
 
         $this->assertSame(ReturnRequestStatus::Completed, $completed->status);
+        $this->assertSame($movementCount, StockMovement::query()->count(), 'Completion must not move MRB-released stock again.');
 
         $movement = StockMovement::query()
-            ->where('reference_type', 'return_request')
-            ->where('reference_id', $rma->id)
+            ->where('reference_type', 'material_review_record')
+            ->where('reference_id', $mrb->id)
+            ->where('to_location_id', $freshLocation->id)
             ->firstOrFail();
 
-        $this->assertSame(StockMovementType::AdjustmentIn, $movement->movement_type);
-        $this->assertSame('0.0000', (string) $movement->unit_cost, 'A fresh location receives returned units at zero cost');
+        $this->assertSame(StockMovementType::Transfer, $movement->movement_type);
+        $this->assertSame('0.0000', (string) $movement->unit_cost, 'A zero-cost quarantine receipt stays zero through MRB release');
         $this->assertSame('0.00', (string) $movement->total_cost);
 
         $level = StockLevel::where('item_id', $item->id)->where('location_id', $freshLocation->id)->firstOrFail();

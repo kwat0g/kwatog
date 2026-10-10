@@ -22,8 +22,8 @@ class SalesOrderItem extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'sales_order_id', 'product_id', 'quantity', 'unit_price',
-        'total', 'quantity_delivered', 'delivery_date',
+        'fulfillment_policy', 'sales_order_id', 'product_id', 'quantity', 'unit_price',
+        'total', 'quantity_delivered', 'delivery_date', 'requested_delivery_date', 'price_source', 'price_agreement_id', 'pricing_date', 'price_tier_min_qty',
     ];
 
     protected $casts = [
@@ -32,7 +32,14 @@ class SalesOrderItem extends Model
         'total'              => 'decimal:2',
         'quantity_delivered' => 'decimal:2',
         'delivery_date'      => 'date',
+        'pricing_date' => 'date',
+        'requested_delivery_date' => 'date',
     ];
+
+    public function stockAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SalesOrderStockAllocation::class);
+    }
 
     public function salesOrder(): BelongsTo
     {

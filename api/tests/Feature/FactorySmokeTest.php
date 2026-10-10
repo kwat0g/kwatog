@@ -26,8 +26,7 @@ use Tests\TestCase;
 /**
  * P2.1 — Factory smoke test.
  *
- * One create() per factory; asserts the record landed in the database.
- * Reaching $this->assertTrue(true) proves all FK chains resolved.
+ * Verify individual factories and their core foreign-key chains persist.
  */
 class FactorySmokeTest extends TestCase
 {
@@ -131,13 +130,20 @@ class FactorySmokeTest extends TestCase
 
     public function test_all_core_factories_persist(): void
     {
-        Employee::factory()->create();
-        StockLevel::factory()->create();
-        SalesOrder::factory()->create();
-        PurchaseOrder::factory()->create();
-        PayrollPeriod::factory()->create();
-        GoodsReceiptNote::factory()->create();
-        Invoice::factory()->create();
-        $this->assertTrue(true); // reaching here = all chains built
+        $employee = Employee::factory()->create();
+        $stockLevel = StockLevel::factory()->create();
+        $salesOrder = SalesOrder::factory()->create();
+        $purchaseOrder = PurchaseOrder::factory()->create();
+        $payrollPeriod = PayrollPeriod::factory()->create();
+        $grn = GoodsReceiptNote::factory()->create();
+        $invoice = Invoice::factory()->create();
+
+        $this->assertDatabaseHas('employees', ['id' => $employee->id]);
+        $this->assertDatabaseHas('stock_levels', ['id' => $stockLevel->id]);
+        $this->assertDatabaseHas('sales_orders', ['id' => $salesOrder->id]);
+        $this->assertDatabaseHas('purchase_orders', ['id' => $purchaseOrder->id]);
+        $this->assertDatabaseHas('payroll_periods', ['id' => $payrollPeriod->id]);
+        $this->assertDatabaseHas('goods_receipt_notes', ['id' => $grn->id]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id]);
     }
 }

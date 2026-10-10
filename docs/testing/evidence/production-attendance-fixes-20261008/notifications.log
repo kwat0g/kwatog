@@ -1,0 +1,9 @@
+
+   PASS  Tests\Feature\Production\ProductionAttendanceConnectionTest
+  ✓ accepted reentry is present without erasing payroll clock out       19.83s  
+  ✓ clock out notifies managers and blocks new operations not historica… 1.73s  
+  ✓ future half day leave and account deactivation notify owners         1.85s  
+
+  Tests:    3 passed (16 assertions)
+  Duration: 25.25s
+

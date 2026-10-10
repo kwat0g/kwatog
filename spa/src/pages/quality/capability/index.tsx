@@ -223,6 +223,8 @@ export default function CapabilityStudyPage() {
  <option value="">
  {!selectedProductId
  ? 'Select a product first'
+ : spec?.capture_method === 'checklist'
+ ? 'Not applicable to PASS/FAIL checks'
  : specItems.length === 0
  ? 'No bilateral specs found'
  : 'Select dimension'}

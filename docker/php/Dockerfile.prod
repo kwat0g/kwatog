@@ -80,6 +80,8 @@ RUN { \
     } > /usr/local/etc/php/conf.d/zz-prod.ini
 
 # Copy app source (api/) and pre-built vendor dir.
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
+
 WORKDIR /var/www
 COPY api/ /var/www/
 COPY --from=deps /app/vendor/ /var/www/vendor/

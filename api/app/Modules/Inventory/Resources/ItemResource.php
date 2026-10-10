@@ -34,6 +34,7 @@ class ItemResource extends JsonResource
         }
         $available = bcsub($onHand, $reserved, 3);
         if (bccomp($available, '0', 3) < 0) $available = '0.000';
+        $available = (string) ($attributes['usable_quantity'] ?? $available);
 
         $reorder = (string) $this->reorder_point;
         $safety = (string) $this->safety_stock;
@@ -45,10 +46,11 @@ class ItemResource extends JsonResource
             'code' => $this->code,
             'name' => $this->name,
             'description' => $this->description,
-            'category' => $this->whenLoaded('category', fn () => $this->category ? ['id' => $this->category->hash_id, 'name' => $this->category->name] : null
+            'category' => $this->whenLoaded('category', fn () => $this->category ? ['id' => $this->category->hash_id, 'name' => $this->category->name, 'item_type' => $this->category->item_type] : null
             ),
             'item_type' => (string) $this->item_type?->value,
             'item_type_label' => $this->item_type?->label(),
+            'classification_needs_review' => $this->whenLoaded('category', fn () => ! $this->category || $this->category->item_type !== $this->item_type?->value),
             'unit_of_measure' => $this->unit_of_measure,
             'standard_cost' => (string) $this->standard_cost,
             'reorder_method' => (string) $this->reorder_method?->value,
@@ -64,7 +66,12 @@ class ItemResource extends JsonResource
             'abc_class' => $this->abc_class,
             'on_hand_quantity' => $onHand,
             'reserved_quantity' => $reserved,
+            'quality_held_quantity' => (string) ($attributes['quality_held_quantity'] ?? '0.000'),
+            'unusable_zone_quantity' => (string) ($attributes['unusable_zone_quantity'] ?? '0.000'),
+            'usable_quantity' => $available,
             'available_quantity' => $available,
+            'approved_free_stock' => $this->when(array_key_exists('approved_free_stock', $attributes), fn () => $attributes['approved_free_stock']),
+            'incoming_stock_quantity' => $this->when(array_key_exists('incoming_stock_quantity', $attributes), fn () => $attributes['incoming_stock_quantity']),
             'stock_status' => $stockStatus,
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),

@@ -10,6 +10,7 @@ enum SupplierShippingDocumentType: string
     case PackingList = 'packing_list';
     case BillOfLading = 'bill_of_lading';
     case CertificateOfAnalysis = 'certificate_of_analysis';
+    case DispatchPhoto = 'dispatch_photo';
     case Other = 'other';
 
     public function label(): string
@@ -19,6 +20,7 @@ enum SupplierShippingDocumentType: string
             self::PackingList => 'Packing list',
             self::BillOfLading => 'Bill of lading',
             self::CertificateOfAnalysis => 'Certificate of analysis (CoA)',
+            self::DispatchPhoto => 'Dispatch photo',
             self::Other => 'Other',
         };
     }

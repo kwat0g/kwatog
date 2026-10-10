@@ -8,16 +8,17 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
-use App\Common\Support\HashIdFilter;
-use App\Common\Support\SearchOperator;
 use App\Common\Services\SettingsService;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\GrnStatus;
-use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Events\GoodsReceiptNoteAccepted;
@@ -25,24 +26,29 @@ use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
-use App\Modules\ReturnManagement\Services\ReturnRequestService;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\InspectionService;
+use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentLandedCost;
+use App\Modules\SupplyChain\Services\LandedCostService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class GrnService
@@ -95,11 +101,13 @@ class GrnService
             // 2026-08-08 — compact P2P stepper: PR → PO → GRN → Bill → Paid.
             'purchaseOrder.purchaseRequest:id,pr_number',
             'shipment:id,shipment_number,status',
+            'supplierShipment.items.purchaseOrderItem',
             // Receipt order. Unordered, Postgres returns an updated row last,
             // so lines swapped places on the page once QC settled one of them.
             'items' => fn ($items) => $items->orderBy('id'),
             'items.item' => fn ($item) => $item->select('id', 'code', 'name', 'unit_of_measure')
                 ->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]),
+            'items.item.stockLevels' => fn ($levels) => $levels->where('quantity', '>', 0)->with('location.zone.warehouse'),
             'items.location.zone.warehouse',
             'items.purchaseOrderItem',
             'items.inspection',
@@ -182,153 +190,154 @@ class GrnService
                 }
 
                 $header = [
-                'purchase_order_id' => $po->id,
-                'vendor_id' => $po->vendor_id,
-                'received_date' => $meta['received_date'] ?? now()->toDateString(),
-                'received_by' => $by->id,
-                'status' => GrnStatus::PendingQc,
-                'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted,
-                'incoming_qc_handoff_at' => now(),
-                'remarks' => $meta['remarks'] ?? null,
-                'idempotency_key' => $idempotencyKey,
-                'idempotency_fingerprint' => $fingerprint,
-            ];
+                    'purchase_order_id' => $po->id,
+                    'vendor_id' => $po->vendor_id,
+                    'received_date' => $meta['received_date'] ?? now()->toDateString(),
+                    'received_by' => $by->id,
+                    'status' => GrnStatus::PendingQc,
+                    'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted,
+                    'incoming_qc_handoff_at' => now(),
+                    'remarks' => $meta['remarks'] ?? null,
+                    'idempotency_key' => $idempotencyKey,
+                    'idempotency_fingerprint' => $fingerprint,
+                ];
 
-            // Sending the PO (or a shipment arriving) stages an expected-receipt
-            // draft. Receiving against the PO completes that draft rather than
-            // opening a second GRN beside it — the draft was otherwise stranded
-            // at zero quantity with its own number, and once the PO was fully
-            // received it could never be finalized or cleared. Its zero-qty
-            // placeholder lines are replaced by the lines actually received.
-            $draft = GoodsReceiptNote::query()
-                ->where('purchase_order_id', $po->id)
-                ->where('status', GrnStatus::Draft->value)
-                ->lockForUpdate()
-                ->first();
-            if ($draft) {
-                $draft->items()->each(fn (GrnItem $line) => $line->delete());
-                $draft->forceFill($header)->save();
-                $grn = $draft;
-            } else {
-                $grn = GoodsReceiptNote::create(['grn_number' => $this->sequences->generate('grn')] + $header);
-            }
+                // Sending the PO (or a shipment arriving) stages an expected-receipt
+                // draft. Receiving against the PO completes that draft rather than
+                // opening a second GRN beside it — the draft was otherwise stranded
+                // at zero quantity with its own number, and once the PO was fully
+                // received it could never be finalized or cleared. Its zero-qty
+                // placeholder lines are replaced by the lines actually received.
+                $draft = GoodsReceiptNote::query()
+                    ->where('purchase_order_id', $po->id)
+                    ->where('status', GrnStatus::Draft->value)
+                    ->lockForUpdate()
+                    ->first();
+                if ($draft) {
+                    $draft->items()->each(fn (GrnItem $line) => $line->delete());
+                    $draft->forceFill($header)->save();
+                    $grn = $draft;
+                } else {
+                    $grn = GoodsReceiptNote::create(['grn_number' => $this->sequences->generate('grn')] + $header);
+                }
 
-            foreach ($items as $row) {
-                if (array_key_exists('coa_verified', $row)) {
-                    throw new BusinessRuleException(
-                        'COA verification is a Quality decision and cannot be set while receiving.'
+                foreach ($items as $row) {
+                    if (array_key_exists('coa_verified', $row)) {
+                        throw new BusinessRuleException(
+                            'COA verification is a Quality decision and cannot be set while receiving.'
+                        );
+                    }
+
+                    $poiId = HashIdFilter::decode($row['purchase_order_item_id'], PurchaseOrderItem::class)
+                        ?? (is_int($row['purchase_order_item_id']) ? $row['purchase_order_item_id'] : null);
+                    $poi = PurchaseOrderItem::query()->whereKey($poiId)->lockForUpdate()->firstOrFail();
+                    if ($poi->purchase_order_id !== $po->id) {
+                        throw new BusinessRuleException("PO line {$poi->id} does not belong to PO {$po->id}.");
+                    }
+
+                    $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
+                        ?? (int) $row['location_id'];
+                    $itemId = HashIdFilter::decode($row['item_id'], Item::class)
+                        ?? (int) $row['item_id'];
+                    if ((int) $poi->item_id !== (int) $itemId) {
+                        throw new BusinessRuleException(
+                            "Received item {$itemId} does not match PO line {$poi->id} item {$poi->item_id}."
+                        );
+                    }
+                    // The PO line is authoritative for the item that is received.
+                    // The caller-supplied item_id is retained only as an explicit
+                    // identity check, never as the downstream source of truth.
+                    $itemId = (int) $poi->item_id;
+                    $locationId = $this->resolveReceivingLocation($locationId);
+
+                    // One quantity/UOM/over-receipt contract is shared by direct and
+                    // staged-draft receiving so the paths cannot drift.
+                    $received = $this->receivedBaseQuantity(
+                        $poi,
+                        (string) $row['quantity_received'],
+                        $itemId,
+                        $row['received_uom_code'] ?? null,
                     );
+                    $qtyReceived = $received['base_quantity'];
+
+                    // Receipt cost is authoritative from the PO (including RFQ charges as landed cost);
+                    // price differences settle at billing. deliveredUnitCost() is per PO purchase unit;
+                    // GRN quantities and stock movements are per item base unit.
+                    // Load PO relationship for deliveredUnitCost() to compute header allocation.
+                    $poi->loadMissing('purchaseOrder.items');
+                    $unitCost = $poi->deliveredUnitCost();
+                    if ($unitCost === null || trim((string) $unitCost) === '') {
+                        throw new BusinessRuleException("PO line {$poi->id} has no authoritative unit cost; receive pricing must be recorded first.");
+                    }
+
+                    // A client may echo either the bare PO price or the delivered cost it was shown.
+                    if (array_key_exists('unit_cost', $row) && $row['unit_cost'] !== null
+                        && bccomp((string) $row['unit_cost'], (string) $poi->unit_price, 4) !== 0
+                        && bccomp((string) $row['unit_cost'], (string) $unitCost, 4) !== 0) {
+                        throw new BusinessRuleException("PO line {$poi->id}: receipt cost is fixed at the PO price ({$poi->unit_price}). Price differences are settled on the supplier bill.");
+                    }
+                    $unitCost = $this->baseUnitCost($poi, $unitCost);
+
+                    GrnItem::create([
+                        'goods_receipt_note_id' => $grn->id,
+                        'purchase_order_item_id' => $poi->id,
+                        'item_id' => $itemId,
+                        'location_id' => $locationId,
+                        'received_uom_code' => $row['received_uom_code'] ?? null,
+                        'quantity_received' => $received['base_quantity'],
+                        'quantity_received_in_uom' => $received['entered_quantity'],
+                        'received_uom_conversion_factor' => $received['conversion_factor'],
+                        'quantity_accepted' => 0,
+                        'unit_cost' => $unitCost,
+                        'remarks' => $row['remarks'] ?? null,
+                        // Preserve a supplied lot; otherwise assign receipt ownership internally.
+                        'material_lot_number' => trim((string) ($row['lot_number'] ?? $row['material_lot_number'] ?? '')) ?: 'RCV-'.(string) Str::uuid(),
+                        'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
+                        'expiry_date' => $row['expiry_date'] ?? null,
+                        // OGAMI-005 — IATF incoming resin QC attributes (null-safe).
+                        'moisture_percentage' => $row['moisture_percentage'] ?? null,
+                        'coa_document_path' => $row['coa_document_path'] ?? null,
+                        // COA verification is a Quality-owned decision. Receiving
+                        // may capture the document reference, but cannot self-verify it.
+                        'coa_verified' => false,
+                    ]);
+
+                    // Update PO line running total of received quantity (base uom).
+                    $poi->quantity_received = bcadd((string) $poi->quantity_received, $qtyReceived, 3);
+                    $poi->save();
                 }
 
-                $poiId = HashIdFilter::decode($row['purchase_order_item_id'], PurchaseOrderItem::class)
-                    ?? (is_int($row['purchase_order_item_id']) ? $row['purchase_order_item_id'] : null);
-                $poi = PurchaseOrderItem::query()->whereKey($poiId)->lockForUpdate()->firstOrFail();
-                if ($poi->purchase_order_id !== $po->id) {
-                    throw new BusinessRuleException("PO line {$poi->id} does not belong to PO {$po->id}.");
-                }
+                $this->refreshPoStatus($po, $by);
 
-                $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
-                    ?? (int) $row['location_id'];
-                $itemId = HashIdFilter::decode($row['item_id'], Item::class)
-                    ?? (int) $row['item_id'];
-                if ((int) $poi->item_id !== (int) $itemId) {
-                    throw new BusinessRuleException(
-                        "Received item {$itemId} does not match PO line {$poi->id} item {$poi->item_id}."
+                // F-06 — create incoming-QC inspections SYNCHRONOUSLY so the QC
+                // gate can never fail open when the queue worker is down or the
+                // Quality module boots late. The afterCommit event below is kept
+                // for the async/retry path; TriggerIncomingQC is idempotent and
+                // skips the records created here.
+                try {
+                    app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($grn->fresh()));
+                } catch (\Throwable $e) {
+                    $this->markIncomingQcHandoffPending(
+                        $grn->id,
+                        'Incoming QC trigger is waiting for queue replay: '.$e->getMessage(),
                     );
+                    Log::warning('Synchronous incoming-QC trigger failed', [
+                        'grn_id' => $grn->id,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
-                // The PO line is authoritative for the item that is received.
-                // The caller-supplied item_id is retained only as an explicit
-                // identity check, never as the downstream source of truth.
-                $itemId = (int) $poi->item_id;
-                $locationId = $this->resolveReceivingLocation($locationId);
 
-                // One quantity/UOM/over-receipt contract is shared by direct and
-                // staged-draft receiving so the paths cannot drift.
-                $qtyReceived = $this->receivedBaseQuantity(
-                    $poi,
-                    (string) $row['quantity_received'],
-                    $itemId,
-                    $row['received_uom_code'] ?? null,
+                // Durable event publication is recorded with the GRN write. The
+                // outbox dispatcher publishes after commit and safely replays the
+                // idempotent incoming-QC listener if the queue is unavailable.
+                $fresh = $grn->fresh();
+                app(OutboxService::class)->recordForChain(
+                    new GoodsReceiptNoteCreated($fresh),
+                    $fresh,
+                    'p2p',
+                    'grn',
+                    'received',
                 );
-
-                // Receipt cost is authoritative from the PO (including RFQ charges as landed cost);
-                // price differences settle at billing. deliveredUnitCost() is per PO purchase unit;
-                // GRN quantities and stock movements are per item base unit.
-                // Load PO relationship for deliveredUnitCost() to compute header allocation.
-                $poi->loadMissing('purchaseOrder.items');
-                $unitCost = $poi->deliveredUnitCost();
-                if ($unitCost === null || trim((string) $unitCost) === '') {
-                    throw new BusinessRuleException("PO line {$poi->id} has no authoritative unit cost; receive pricing must be recorded first.");
-                }
-
-                // A client may echo either the bare PO price or the delivered cost it was shown.
-                if (array_key_exists('unit_cost', $row) && $row['unit_cost'] !== null
-                    && bccomp((string) $row['unit_cost'], (string) $poi->unit_price, 4) !== 0
-                    && bccomp((string) $row['unit_cost'], (string) $unitCost, 4) !== 0) {
-                    throw new BusinessRuleException("PO line {$poi->id}: receipt cost is fixed at the PO price ({$poi->unit_price}). Price differences are settled on the supplier bill.");
-                }
-                $unitCost = $this->baseUnitCost($poi, $unitCost);
-
-                GrnItem::create([
-                    'goods_receipt_note_id' => $grn->id,
-                    'purchase_order_item_id' => $poi->id,
-                    'item_id' => $itemId,
-                    'location_id' => $locationId,
-                    'received_uom_code' => $row['received_uom_code'] ?? null,
-                    'quantity_received' => $qtyReceived,
-                    'quantity_accepted' => 0,
-                    'unit_cost' => $unitCost,
-                    'remarks' => $row['remarks'] ?? null,
-                    // OGAMI-012 — optional lot capture per received line. The
-                    // existing ADV3 `material_lot_number` column is the lot of
-                    // record; we also persist an optional expiry. Both null-safe.
-                    'material_lot_number' => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
-                    'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
-                    'expiry_date' => $row['expiry_date'] ?? null,
-                    // OGAMI-005 — IATF incoming resin QC attributes (null-safe).
-                    'moisture_percentage' => $row['moisture_percentage'] ?? null,
-                    'coa_document_path' => $row['coa_document_path'] ?? null,
-                    // COA verification is a Quality-owned decision. Receiving
-                    // may capture the document reference, but cannot self-verify it.
-                    'coa_verified' => false,
-                ]);
-
-                // Update PO line running total of received quantity (base uom).
-                $poi->quantity_received = bcadd((string) $poi->quantity_received, $qtyReceived, 3);
-                $poi->save();
-            }
-
-            $this->refreshPoStatus($po, $by);
-
-            // F-06 — create incoming-QC inspections SYNCHRONOUSLY so the QC
-            // gate can never fail open when the queue worker is down or the
-            // Quality module boots late. The afterCommit event below is kept
-            // for the async/retry path; TriggerIncomingQC is idempotent and
-            // skips the records created here.
-            try {
-                app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($grn->fresh()));
-            } catch (\Throwable $e) {
-                $this->markIncomingQcHandoffPending(
-                    $grn->id,
-                    'Incoming QC trigger is waiting for queue replay: '.$e->getMessage(),
-                );
-                Log::warning('Synchronous incoming-QC trigger failed', [
-                    'grn_id' => $grn->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // Durable event publication is recorded with the GRN write. The
-            // outbox dispatcher publishes after commit and safely replays the
-            // idempotent incoming-QC listener if the queue is unavailable.
-            $fresh = $grn->fresh();
-            app(OutboxService::class)->recordForChain(
-                new GoodsReceiptNoteCreated($fresh),
-                $fresh,
-                'p2p',
-                'grn',
-                'received',
-            );
 
                 return $this->show($fresh);
             });
@@ -414,32 +423,67 @@ class GrnService
                 return null; // already received — no expectation needed
             }
 
-            $grn = GoodsReceiptNote::create([
-                'grn_number'         => $this->sequences->generate('grn'),
-                'purchase_order_id'  => $lockedPo->id,
-                'vendor_id'          => $lockedPo->vendor_id,
-                'received_date'      => null,
-                'received_by'        => $by?->id,
-                'status'             => GrnStatus::Draft,
-                'remarks'            => 'Expected receipt — auto-created when the PO was sent to the supplier.',
-            ]);
-
-            $lockedPo->load('items');
-            foreach ($lockedPo->items as $line) {
-                $line->setRelation('purchaseOrder', $lockedPo);
-                GrnItem::create([
-                    'goods_receipt_note_id'  => $grn->id,
-                    'purchase_order_item_id' => $line->id,
-                    'item_id'                => $line->item_id,
-                    'location_id'            => null,
-                    'quantity_received'      => '0',
-                    'quantity_accepted'      => '0',
-                    'unit_cost'              => $line->deliveredUnitCost(),
-                ]);
-            }
+            $grn = $this->createExpectedDraft($lockedPo, null, $by, 'Expected receipt — auto-created when the PO was sent to the supplier.');
 
             return $this->show($grn->fresh());
         });
+    }
+
+    /** Stage one warehouse work item for each supplier dispatch, including replacements. */
+    public function createDraftForSupplierShipment(SupplierShipment $shipment): ?GoodsReceiptNote
+    {
+        return DB::transaction(function () use ($shipment): ?GoodsReceiptNote {
+            $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($shipment->purchase_order_id);
+            if (! in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
+                return null;
+            }
+            $linked = GoodsReceiptNote::query()->where('supplier_shipment_id', $shipment->id)->first();
+            if ($linked) {
+                return $linked;
+            }
+            $draft = GoodsReceiptNote::query()
+                ->where('purchase_order_id', $po->id)
+                ->where('status', GrnStatus::Draft->value)
+                ->whereNull('supplier_shipment_id')
+                ->lockForUpdate()
+                ->first();
+            if ($draft) {
+                $draft->forceFill(['supplier_shipment_id' => $shipment->id])->save();
+
+                return $draft;
+            }
+
+            return $this->createExpectedDraft($po, $shipment->id, null, 'Expected receipt — staged when the supplier reported dispatch.');
+        });
+    }
+
+    private function createExpectedDraft(PurchaseOrder $po, ?int $supplierShipmentId, ?User $by, string $remarks): GoodsReceiptNote
+    {
+        $grn = GoodsReceiptNote::create([
+            'grn_number' => $this->sequences->generate('grn'),
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'supplier_shipment_id' => $supplierShipmentId,
+            'received_date' => null,
+            'received_by' => $by?->id,
+            'status' => GrnStatus::Draft,
+            'remarks' => $remarks,
+        ]);
+        $po->load('items');
+        foreach ($po->items as $line) {
+            $line->setRelation('purchaseOrder', $po);
+            GrnItem::create([
+                'goods_receipt_note_id' => $grn->id,
+                'purchase_order_item_id' => $line->id,
+                'item_id' => $line->item_id,
+                'location_id' => null,
+                'quantity_received' => '0',
+                'quantity_accepted' => '0',
+                'unit_cost' => $line->deliveredUnitCost(),
+            ]);
+        }
+
+        return $grn;
     }
 
     /**
@@ -484,6 +528,11 @@ class GrnService
                 ->first();
 
             if ($grn) {
+                if ($grn->shipment_id !== null && $grn->shipment_id !== $lockedShipment->id) {
+                    throw new BusinessRuleException(
+                        "PO {$po->po_number} has an open draft GRN {$grn->grn_number} linked to another shipment; complete that receipt before receiving this shipment."
+                    );
+                }
                 $grn->forceFill(['shipment_id' => $lockedShipment->id])->save();
 
                 return $this->show($grn->fresh());
@@ -527,13 +576,13 @@ class GrnService
      *
      * @param  array<int, array{purchase_order_item_id:int|string, location_id:int|string, quantity_received:string, remarks?:string|null}>  $items
      */
-    public function finalizeDraft(GoodsReceiptNote $grn, array $items, User $by): GoodsReceiptNote
+    public function finalizeDraft(GoodsReceiptNote $grn, array $items, User $by, ?string $supplierShipmentId = null): GoodsReceiptNote
     {
         if ($grn->status !== GrnStatus::Draft) {
             throw new BusinessRuleException('Only draft GRNs can be finalized.');
         }
 
-        return DB::transaction(function () use ($grn, $items, $by) {
+        return DB::transaction(function () use ($grn, $items, $by, $supplierShipmentId) {
             $lockedGrn = GoodsReceiptNote::query()->whereKey($grn->id)->lockForUpdate()->firstOrFail();
             if ($lockedGrn->status !== GrnStatus::Draft) {
                 throw new BusinessRuleException('Only draft GRNs can be finalized.');
@@ -546,6 +595,20 @@ class GrnService
                 throw new BusinessRuleException(
                     "Cannot finalize receiving for PO {$po->po_number}: PO is {$po->status->value}."
                 );
+            }
+            $supplierShipment = null;
+            if ($supplierShipmentId !== null) {
+                $decodedId = HashIdFilter::decode($supplierShipmentId, SupplierShipment::class);
+                $supplierShipment = $decodedId ? SupplierShipment::query()->lockForUpdate()->find($decodedId) : null;
+                if (! $supplierShipment || (int) $supplierShipment->purchase_order_id !== (int) $po->id) {
+                    throw new BusinessRuleException('Supplier shipment does not belong to this purchase order.');
+                }
+            }
+            if ($lockedGrn->supplier_shipment_id !== null) {
+                if ($supplierShipment && $supplierShipment->id !== $lockedGrn->supplier_shipment_id) {
+                    throw new BusinessRuleException('This GRN is linked to a different supplier shipment.');
+                }
+                $supplierShipment ??= SupplierShipment::query()->findOrFail($lockedGrn->supplier_shipment_id);
             }
             $lockedGrn->loadMissing('items');
             $draftLineById = $lockedGrn->items->keyBy('purchase_order_item_id');
@@ -572,31 +635,34 @@ class GrnService
                     $row['location_id'],
                 );
                 $receivedUomCode = $row['received_uom_code'] ?? null;
-                $qtyReceived = $this->receivedBaseQuantity(
+                $received = $this->receivedBaseQuantity(
                     $poi,
                     (string) $row['quantity_received'],
                     (int) $draftLine->item_id,
                     $receivedUomCode,
                 );
+                $qtyReceived = $received['base_quantity'];
 
                 // Re-derive the base-unit delivered cost at finalize: the PO
                 // price or its freight allocation may have moved since staging.
                 $poi->setRelation('purchaseOrder', $po->loadMissing('items'));
 
                 $draftLine->update([
-                    'location_id'       => $locationId,
+                    'location_id' => $locationId,
                     'received_uom_code' => $receivedUomCode,
-                    'quantity_received' => $qtyReceived,
+                    'quantity_received' => $received['base_quantity'],
+                    'quantity_received_in_uom' => $received['entered_quantity'],
+                    'received_uom_conversion_factor' => $received['conversion_factor'],
                     'quantity_accepted' => '0',
-                    'unit_cost'         => $this->baseUnitCost($poi, $poi->deliveredUnitCost()),
-                    'material_lot_number' => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
+                    'unit_cost' => $this->baseUnitCost($poi, $poi->deliveredUnitCost()),
+                    'material_lot_number' => trim((string) ($row['lot_number'] ?? $row['material_lot_number'] ?? '')) ?: 'RCV-'.(string) Str::uuid(),
                     'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
-                    'expiry_date'       => $row['expiry_date'] ?? null,
+                    'expiry_date' => $row['expiry_date'] ?? null,
                     'moisture_percentage' => $row['moisture_percentage'] ?? null,
                     'coa_document_path' => $row['coa_document_path'] ?? null,
                     // COA verification is a Quality-owned decision.
-                    'coa_verified'      => false,
-                    'remarks'           => $row['remarks'] ?? null,
+                    'coa_verified' => false,
+                    'remarks' => $row['remarks'] ?? null,
                 ]);
 
                 $poi->quantity_received = bcadd((string) $poi->quantity_received, $qtyReceived, 3);
@@ -606,9 +672,10 @@ class GrnService
             $this->refreshPoStatus($po, $by);
 
             $lockedGrn->update([
-                'status'        => GrnStatus::PendingQc,
+                'supplier_shipment_id' => $supplierShipment?->id,
+                'status' => GrnStatus::PendingQc,
                 'received_date' => now()->toDateString(),
-                'received_by'   => $by->id,
+                'received_by' => $by->id,
                 'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted,
                 'incoming_qc_handoff_message' => null,
                 'incoming_qc_handoff_at' => now(),
@@ -807,6 +874,7 @@ class GrnService
                 if (! is_numeric($accepted) || bccomp($accepted, '0', 3) < 0) {
                     throw new BusinessRuleException("Accepted quantity for line {$row->id} must be a non-negative number.");
                 }
+                app(UomConversionService::class)->assertBaseQuantity($row->loadMissing('item')->item, $accepted);
                 $current = (string) $row->quantity_accepted;
                 if (bccomp($accepted, $current, 3) < 0) {
                     throw new BusinessRuleException("Accepted quantity for line {$row->id} cannot be reduced after stock was posted.");
@@ -865,6 +933,7 @@ class GrnService
 
             return $fresh;
         });
+
         return $result;
     }
 
@@ -888,6 +957,7 @@ class GrnService
                     $lockedGrn->qcInspection,
                     'Logistics rejection — no quality issue found',
                     $by,
+                    (int) $lockedGrn->qcInspection->result_version,
                 );
             }
             $this->reversePoReceipt($lockedGrn, $by);
@@ -905,6 +975,7 @@ class GrnService
 
             return $fresh;
         });
+
         return $result;
     }
 
@@ -1009,7 +1080,7 @@ class GrnService
      * - A line with no inspection (QC-exempt item) counts as not failed.
      * - An inspection with grn_item_id=null that failed means ALL lines failed.
      *
-     * @return string  One of: 'awaiting_sibling_qc', 'awaiting_mrb', 'grn_accepted', 'grn_rejected', 'grn_partially_accepted'
+     * @return string One of: 'awaiting_sibling_qc', 'awaiting_mrb', 'grn_accepted', 'grn_rejected', 'grn_partially_accepted'
      */
     public function settleIncomingQc(GoodsReceiptNote $grn, User $by): string
     {
@@ -1024,10 +1095,11 @@ class GrnService
             }
 
             $inspections = $this->incomingInspections($lockedGrn);
+            $this->assertIncomingInspectionCoverage($lockedGrn, $inspections);
+            $inspections = $inspections->reject(fn (object $row): bool => $row->status === 'cancelled');
 
             // Check if any inspection is still draft/in-progress (not terminal).
-            $pending = $inspections->first(fn (object $inspection): bool =>
-                ! in_array((string) $inspection->status, ['passed', 'failed', 'cancelled'], true)
+            $pending = $inspections->first(fn (object $inspection): bool => ! in_array((string) $inspection->status, ['passed', 'failed', 'cancelled'], true)
                 || ($inspection->status !== 'cancelled'
                     && ! $this->inspectionIsChecked($inspection))
             );
@@ -1059,20 +1131,47 @@ class GrnService
 
             // Case 1: nothing failed → accept the whole GRN.
             if ($failedInspections->isEmpty()) {
+                $lockedGrn->loadMissing('items');
+                $acceptedMap = [];
+                $hasRemovedDefects = false;
+                foreach ($lockedGrn->items as $line) {
+                    $accepted = (string) $line->quantity_received;
+                    foreach ($inspections as $inspection) {
+                        if ($inspection->status === 'passed' && $inspection->inspected_quantity !== null
+                            && ($inspection->grn_item_id === null || (int) $inspection->grn_item_id === (int) $line->id)
+                            && (int) $inspection->sample_defect_count > 0) {
+                            if ($inspection->grn_item_id === null && $lockedGrn->items->count() > 1) {
+                                throw new BusinessRuleException('Defective pieces must be attributed to one receipt line before partial acceptance.');
+                            }
+                            $accepted = max('0', bcsub($accepted, (string) $inspection->sample_defect_count, 3));
+                            $hasRemovedDefects = true;
+                        }
+                    }
+                    $acceptedMap[(int) $line->id] = $accepted;
+                }
+                if ($hasRemovedDefects) {
+                    $this->partialAccept($lockedGrn, $acceptedMap, $by);
+                    $this->rejectRemainder($lockedGrn->fresh(), 'Observed defective pieces removed during incoming sampling.', $by);
+
+                    return 'grn_partially_accepted';
+                }
                 $this->accept($lockedGrn, $by);
+
                 return 'grn_accepted';
             }
 
             // inspection_number already carries its QC- prefix.
             $reason = 'Auto-rejected: incoming inspection '.implode(', ', $failedInspectionNumbers).' failed.';
 
-            if ($this->settings->requiredBool('quality.incoming_failure.mrb_review', true)) {
+            if ($this->settings->requiredBool('quality.incoming_failure.mrb_review', true)
+                || $failedInspections->contains(fn (object $inspection): bool => $this->isRoutineSupplierDefect($inspection))) {
                 return $this->settleIncomingQcByMrb($lockedGrn, $failedInspections, $failedInspectionNumbers, $by);
             }
 
             // Legacy (MRB review off): a failed verdict is final.
             if ($grnLevelFailed) {
                 $this->reject($lockedGrn, $reason, $by);
+
                 return 'grn_rejected';
             }
 
@@ -1085,6 +1184,7 @@ class GrnService
             }
             if (collect($itemAcceptedMap)->every(fn (string $qty): bool => bccomp($qty, '0', 3) === 0)) {
                 $this->reject($lockedGrn, $reason, $by);
+
                 return 'grn_rejected';
             }
 
@@ -1133,12 +1233,22 @@ class GrnService
         foreach ($lockedGrn->items as $line) {
             $accepted = (string) $line->quantity_received;
             $rework = null;
+            foreach ($this->incomingInspections($lockedGrn) as $passedInspection) {
+                if ($passedInspection->status === 'passed' && $passedInspection->inspected_quantity !== null
+                    && ($passedInspection->grn_item_id === null || (int) $passedInspection->grn_item_id === (int) $line->id)
+                    && (int) $passedInspection->sample_defect_count > 0) {
+                    if ($passedInspection->grn_item_id === null && $lockedGrn->items->count() > 1) {
+                        throw new BusinessRuleException('Defective pieces must be attributed to one receipt line before partial acceptance.');
+                    }
+                    $accepted = max('0', bcsub($accepted, (string) $passedInspection->sample_defect_count, 3));
+                }
+            }
             foreach ($failedInspections as $inspection) {
                 if ($inspection->grn_item_id !== null && (int) $inspection->grn_item_id !== (int) $line->id) {
                     continue;
                 }
                 $decision = $decisions[(int) $inspection->id] ?? null;
-                $cap = $this->mrbAcceptableQuantity($decision, $line);
+                $cap = $this->failedInspectionAcceptableQuantity($decision, $inspection, $line);
                 if (bccomp($cap, $accepted, 3) < 0) {
                     $accepted = $cap;
                 }
@@ -1151,12 +1261,18 @@ class GrnService
             }
             $itemAcceptedMap[(int) $line->id] = $accepted;
             if ($rework !== null && bccomp($accepted, '0', 3) > 0) {
-                $reworkLines[(int) $line->id] = \App\Modules\Quality\Models\NonConformanceReport::query()->findOrFail($rework);
+                $reworkLines[(int) $line->id] = NonConformanceReport::query()->findOrFail($rework);
             }
         }
 
-        $reason = 'MRB disposition ('.implode(', ', array_unique($dispositions) ?: ['no NCR']).') on incoming inspection '
-            .implode(', ', $failedInspectionNumbers).'.';
+        $reportedProblems = $failedInspections
+            ->filter(fn (object $inspection): bool => trim((string) ($inspection->problem_description ?? '')) !== '')
+            ->map(fn (object $inspection): string => $inspection->inspection_number.': '.trim((string) $inspection->problem_description))
+            ->unique()->values();
+        $reason = $reportedProblems->isNotEmpty()
+            ? $reportedProblems->implode('; ')
+            : 'Incoming QC decision ('.implode(', ', array_unique($dispositions) ?: ['defective pieces']).') on inspection '
+                .implode(', ', $failedInspectionNumbers).'.';
 
         $allFull = true;
         $allZero = true;
@@ -1168,6 +1284,7 @@ class GrnService
 
         if ($allZero) {
             $this->reject($lockedGrn, $reason, $by);
+
             return 'grn_rejected';
         }
 
@@ -1229,6 +1346,33 @@ class GrnService
         return bccomp($cap, $received, 3) > 0 ? $received : bcadd($cap, '0', 3);
     }
 
+    private function failedInspectionAcceptableQuantity(?object $decision, object $inspection, GrnItem $line): string
+    {
+        if ($decision !== null) {
+            return $this->mrbAcceptableQuantity($decision, $line);
+        }
+        if (! $this->isRoutineSupplierDefect($inspection)) {
+            return '0';
+        }
+
+        return bcsub((string) $line->quantity_received, (string) $inspection->sample_defect_count, 3);
+    }
+
+    private function isRoutineSupplierDefect(object $inspection): bool
+    {
+        return $inspection->grn_item_id !== null
+            && $inspection->capture_method === 'checklist'
+            && $inspection->sampling_basis === 'piece'
+            && $inspection->item_quality_plan_id === null
+            && $inspection->aql_code === null
+            && (int) $inspection->sample_size === (int) $inspection->batch_quantity
+            && (int) $inspection->inspected_quantity === (int) $inspection->batch_quantity
+            && (int) $inspection->sample_defect_count > 0
+            && (int) $inspection->sample_defect_count <= (int) $inspection->batch_quantity
+            && $inspection->defects_removed_confirmed
+            && ! $inspection->critical_defect;
+    }
+
     /**
      * Open a supplier return for the rejected remainder of a partially accepted GRN.
      * Similar to openSupplierReturnForRejectedGrn but uses the remainder quantity instead of full received quantity.
@@ -1255,15 +1399,15 @@ class GrnService
 
             $poItem = $row->purchaseOrderItem;
             $lines[] = [
-                'grn_item_id'            => (int) $row->id,
+                'grn_item_id' => (int) $row->id,
                 'purchase_order_item_id' => $row->purchase_order_item_id ? (int) $row->purchase_order_item_id : null,
-                'item_id'                => (int) $row->item_id,
-                'quantity'               => $remainder,
-                'unit_price'             => $poItem
+                'item_id' => (int) $row->item_id,
+                'quantity' => $remainder,
+                'unit_price' => $poItem
                     ? $this->baseUnitCost($poItem, (string) $poItem->unit_price)
                     : (string) $row->unit_cost,
-                'reason'                 => $reason,
-                'lot_number'             => $row->material_lot_number,
+                'reason' => $reason,
+                'lot_number' => $row->material_lot_number,
                 'reversal_already_applied' => true,
             ];
         }
@@ -1317,15 +1461,15 @@ class GrnService
             }
             $poItem = $row->purchaseOrderItem;
             $lines[] = [
-                'grn_item_id'            => (int) $row->id,
+                'grn_item_id' => (int) $row->id,
                 'purchase_order_item_id' => $row->purchase_order_item_id ? (int) $row->purchase_order_item_id : null,
-                'item_id'                => (int) $row->item_id,
-                'quantity'               => $quantity,
-                'unit_price'             => $poItem
+                'item_id' => (int) $row->item_id,
+                'quantity' => $quantity,
+                'unit_price' => $poItem
                     ? $this->baseUnitCost($poItem, (string) $poItem->unit_price)
                     : (string) $row->unit_cost,
-                'reason'                 => $reason,
-                'lot_number'             => $row->material_lot_number,
+                'reason' => $reason,
+                'lot_number' => $row->material_lot_number,
                 // GrnService::reversePoReceipt() already reduced the PO
                 // received quantity, so the RMA must not do it a second time.
                 'reversal_already_applied' => true,
@@ -1368,6 +1512,7 @@ class GrnService
     {
         $inspections = $this->incomingInspections($grn);
         $this->assertIncomingInspectionCoverage($grn, $inspections);
+        $inspections = $inspections->reject(fn (object $row): bool => $row->status === 'cancelled');
 
         if ($inspections->isEmpty()) {
             return;
@@ -1388,7 +1533,7 @@ class GrnService
                 if ($inspection->grn_item_id !== null && (int) $inspection->grn_item_id !== (int) $line->id) {
                     continue;
                 }
-                if (bccomp($this->mrbAcceptableQuantity($decision, $line), (string) $line->quantity_received, 3) < 0) {
+                if (bccomp($this->failedInspectionAcceptableQuantity($decision, $inspection, $line), (string) $line->quantity_received, 3) < 0) {
                     return false;
                 }
             }
@@ -1398,14 +1543,17 @@ class GrnService
 
         // F-12 — a cancelled inspection (logistics rejection, P3.6) is a
         // completed decision; it must not block acceptance forever.
-        $blocking = $inspections->first(fn (object $inspection): bool =>
-            ! in_array((string) $inspection->status, ['passed', 'cancelled', 'failed'], true)
+        $blocking = $inspections->first(fn (object $inspection): bool => ! in_array((string) $inspection->status, ['passed', 'cancelled', 'failed'], true)
             || ($inspection->status === 'passed' && ! $this->inspectionIsChecked($inspection))
             || ($inspection->status === 'failed' && (! $this->inspectionIsChecked($inspection) || ! $mrbAllowsFull($inspection)))
         );
 
         // Full accept (no map): any unfinished or failed inspection blocks.
         if ($itemAcceptedMap === null) {
+            if ($inspections->contains(fn (object $inspection): bool => $inspection->status === 'passed'
+                && $inspection->inspected_quantity !== null && (int) $inspection->sample_defect_count > 0)) {
+                throw new BusinessRuleException('Known defective pieces cannot be accepted; settle incoming QC with the approved partial quantities.');
+            }
             if ($blocking !== null) {
                 if ((string) $blocking->status === 'passed'
                     && ! $this->inspectionIsChecked($blocking)) {
@@ -1418,6 +1566,7 @@ class GrnService
                     .((string) $blocking->status ?: 'unknown').').'
                 );
             }
+
             return;
         }
 
@@ -1437,6 +1586,21 @@ class GrnService
                 );
             }
             if ($status === 'passed') {
+                if ($inspection->inspected_quantity !== null && (int) $inspection->sample_defect_count > 0) {
+                    foreach ($grn->items as $line) {
+                        if ($inspection->grn_item_id !== null && (int) $inspection->grn_item_id !== (int) $line->id) {
+                            continue;
+                        }
+                        if ($inspection->grn_item_id === null && $grn->items->count() > 1) {
+                            throw new BusinessRuleException('Defective pieces must be attributed to one receipt line before partial acceptance.');
+                        }
+                        $cap = bcsub((string) $line->quantity_received, (string) $inspection->sample_defect_count, 3);
+                        if (bccomp((string) ($itemAcceptedMap[$line->id] ?? $line->quantity_accepted ?? '0'), $cap, 3) > 0) {
+                            throw new BusinessRuleException('Known defective pieces cannot be accepted into stock.');
+                        }
+                    }
+                }
+
                 continue;
             }
             if ($status !== 'failed') {
@@ -1463,7 +1627,7 @@ class GrnService
                 }
                 $lineId = (int) $line->id;
                 $resultingAccepted = (string) ($itemAcceptedMap[$lineId] ?? $line->quantity_accepted ?? '0');
-                $cap = $this->mrbAcceptableQuantity($decision, $line);
+                $cap = $this->failedInspectionAcceptableQuantity($decision, $inspection, $line);
                 if (bccomp($resultingAccepted, $cap, 3) > 0) {
                     throw new BusinessRuleException(bccomp($cap, '0', 3) === 0
                         ? "Line {$lineId} failed incoming QC and cannot be accepted."
@@ -1484,7 +1648,9 @@ class GrnService
             ->where('stage', 'incoming')
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->get(['id', 'status', 'inspector_id', 'reviewed_by', 'reviewed_at', 'grn_item_id', 'inspection_number']);
+            ->get(['id', 'status', 'inspector_id', 'reviewed_by', 'reviewed_at', 'grn_item_id', 'inspection_number',
+                'capture_method', 'sampling_basis', 'item_quality_plan_id', 'aql_code', 'sample_size', 'batch_quantity',
+                'inspected_quantity', 'sample_defect_count', 'defects_removed_confirmed', 'critical_defect', 'problem_description']);
     }
 
     private function inspectionIsChecked(object $inspection): bool
@@ -1531,7 +1697,7 @@ class GrnService
 
         foreach ($eligibleLineIds as $lineId) {
             if ($inspections->contains(
-                static fn (object $inspection): bool => (int) $inspection->grn_item_id === $lineId,
+                static fn (object $inspection): bool => $inspection->status !== 'cancelled' && (int) $inspection->grn_item_id === $lineId,
             )) {
                 continue;
             }
@@ -1574,16 +1740,19 @@ class GrnService
                 ?? Item::withTrashed()->find($line->item_id);
             if (! $item) {
                 $eligible[] = (int) $line->id;
+
                 continue;
             }
             if ($item->item_type === ItemType::RawMaterial) {
                 $eligible[] = (int) $line->id;
+
                 continue;
             }
             if ($item->qualityPlans()->effective(now()->toDateString())->exists()) {
                 $eligible[] = (int) $line->id;
             }
         }
+
         return $eligible;
     }
 
@@ -1705,6 +1874,13 @@ class GrnService
                     'The quality.inspections.manage permission is required to submit a terminal QC result.'
                 );
             }
+            // Validate an explicit delegate before GRN creation. GrnService::create()
+            // may synchronously create the incoming inspection, so validating only
+            // in the later single-screen creation branch would leave that path open.
+            $resolvedInspector = null;
+            if (($qcData['inspector_id'] ?? null) !== null && ($qcData['inspector_id'] ?? '') !== '') {
+                $resolvedInspector = $this->resolveIncomingInspector($qcData['inspector_id'], $by);
+            }
 
             // 1. Create GRN (pending_qc)
             $grn = $this->create($po, $items, array_merge($meta, [
@@ -1728,6 +1904,15 @@ class GrnService
                     ->get()
                 : collect();
 
+            // create() may have synchronously seeded the incoming inspection;
+            // apply an explicit, already validated delegate to that row too.
+            if ($resolvedInspector !== null && $existingInspections->isNotEmpty()) {
+                foreach ($existingInspections as $existingInspection) {
+                    $existingInspection->forceFill(['inspector_id' => $resolvedInspector->id])->save();
+                }
+                $existingInspections = $existingInspections->map(fn (Inspection $inspection) => $inspection->fresh());
+            }
+
             if ($existingInspections->isNotEmpty()) {
                 // The single-screen verdict lands on the first inspection of
                 // record; the fast-complete loop below applies it to all.
@@ -1746,12 +1931,6 @@ class GrnService
                 && $hasQcEligibleLines
                 && ! $hasFractionalQcQuantity
             ) {
-                $inspectorId = null;
-                if (! empty($qcData['inspector_id'])) {
-                    $inspectorId = HashIdFilter::decode($qcData['inspector_id'], User::class)
-                        ?? (ctype_digit((string) $qcData['inspector_id']) ? (int) $qcData['inspector_id'] : null);
-                }
-
                 $productId = null;
                 if (! empty($qcData['product_id'])) {
                     $productId = HashIdFilter::decode($qcData['product_id'], Product::class)
@@ -1767,9 +1946,7 @@ class GrnService
                     if ($totalQty < 1) {
                         throw new BusinessRuleException('Incoming inspection requires a positive received quantity.');
                     }
-                    $inspector = $inspectorId
-                        ? User::query()->findOrFail($inspectorId)
-                        : $by;
+                    $inspector = $resolvedInspector ?? $by;
 
                     try {
                         $inspection = $inspectionService->create([
@@ -1807,9 +1984,7 @@ class GrnService
                         ->sortByDesc(fn ($row) => (float) $row->quantity_received)
                         ->first();
                     if ($line) {
-                        $inspector = $inspectorId
-                            ? User::query()->findOrFail($inspectorId)
-                            : $by;
+                        $inspector = $resolvedInspector ?? $by;
                         $inspection = $inspectionService->createIncomingForItem(
                             Item::query()->findOrFail($line->item_id),
                             $this->inspectionBatchQuantity($grn),
@@ -1848,7 +2023,7 @@ class GrnService
                     ? $existingInspections
                     : collect([$inspection])->filter();
                 foreach ($inspectionsToComplete as $insp) {
-                    $this->fastCompleteInspection($insp, true, $by);
+                    $this->fastCompleteInspection($insp, true, $by, true, $qcData);
                 }
                 if ($inspection) {
                     $inspection = $inspection->fresh();
@@ -1874,7 +2049,7 @@ class GrnService
                     ? $existingInspections
                     : collect([$inspection])->filter();
                 foreach ($inspectionsToComplete as $insp) {
-                    $this->fastCompleteInspection($insp, false, $by, $isQualityFailure);
+                    $this->fastCompleteInspection($insp, false, $by, $isQualityFailure, $qcData);
                 }
                 if ($inspection) {
                     $inspection = $inspection->fresh();
@@ -1884,7 +2059,7 @@ class GrnService
                 // the receipt (through the MRB when enabled), so rejecting here
                 // would bypass both. A logistics rejection is not a QC verdict.
                 $failureAwaitsReview = $isQualityFailure && $inspectionsToComplete->contains(
-                    fn (Inspection $insp): bool => $insp->fresh()?->status === \App\Modules\Quality\Enums\InspectionStatus::AwaitingReview,
+                    fn (Inspection $insp): bool => $insp->fresh()?->status === InspectionStatus::AwaitingReview,
                 );
                 if (! $failureAwaitsReview) {
                     $grn = $this->rejectInternal(
@@ -1901,7 +2076,10 @@ class GrnService
                 'inspection' => $inspection,
                 'qc_result' => $qcResult,
                 'disposition' => $disposition,
-                'stock_updated' => in_array($qcResult, ['passed', 'passed_with_remarks'], true),
+                'stock_updated' => StockMovement::query()
+                    ->where('reference_type', 'goods_receipt_note')
+                    ->where('reference_id', $grn->id)
+                    ->exists(),
             ];
 
             if ($idempotencyKey !== null) {
@@ -1914,6 +2092,27 @@ class GrnService
 
             return $result;
         });
+    }
+
+    /**
+     * An explicit incoming inspection delegate must be active Quality. When
+     * omitted, the signed-in receiving actor owns the inspection. The signed-
+     * in actor remains the result author passed to the inspection workflow.
+     */
+    private function resolveIncomingInspector(mixed $rawInspectorId, User $by): User
+    {
+        if ($rawInspectorId === null || $rawInspectorId === '') {
+            return $by;
+        }
+
+        $id = HashIdFilter::decode((string) $rawInspectorId, User::class)
+            ?? (ctype_digit((string) $rawInspectorId) ? (int) $rawInspectorId : null);
+        $inspector = $id === null ? null : User::query()->find($id);
+        if (! $inspector || ! $inspector->is_active || ! $inspector->hasPermission('quality.inspections.manage')) {
+            throw new BusinessRuleException('The incoming QC inspector must be an active Quality user with quality.inspections.manage.');
+        }
+
+        return $inspector;
     }
 
     /**
@@ -2061,6 +2260,13 @@ class GrnService
      */
     private function snapshotLandedCosts(GoodsReceiptNote $grn, Collection $rows): void
     {
+        if ($grn->shipment_id && ! $rows->contains(fn (GrnItem $row) => bccomp((string) $row->quantity_accepted, '0', 3) > 0)) {
+            $shipment = Shipment::query()->lockForUpdate()->findOrFail($grn->shipment_id);
+            app(LandedCostService::class)->calculate($shipment);
+            foreach ($rows as $row) {
+                $row->landed_cost_total = null;
+            }
+        }
         if ($rows->every(static fn (GrnItem $row): bool => $row->landed_cost_total !== null)) {
             return;
         }
@@ -2073,22 +2279,9 @@ class GrnService
 
         foreach ($rows->groupBy('purchase_order_item_id') as $purchaseOrderItemId => $lineRows) {
             $allocation = Money::round2((string) ($allocations[$purchaseOrderItemId] ?? '0'));
-            $receivedTotal = '0';
-            foreach ($lineRows as $line) {
-                $receivedTotal = bcadd($receivedTotal, (string) $line->quantity_received, 8);
-            }
-
-            $remaining = $allocation;
-            $lastIndex = $lineRows->count() - 1;
+            $shares = Money::allocate($allocation, $lineRows->values()->map(fn (GrnItem $line) => (string) $line->quantity_received)->all());
             foreach ($lineRows->values() as $index => $line) {
-                $lineCost = $index === $lastIndex || bccomp($receivedTotal, '0', 8) === 0
-                    ? $remaining
-                    : Money::round2(bcmul(
-                        $allocation,
-                        bcdiv((string) $line->quantity_received, $receivedTotal, 12),
-                        6,
-                    ));
-                $remaining = Money::sub($remaining, $lineCost);
+                $lineCost = $shares[$index];
                 $unit = bccomp((string) $line->quantity_received, '0', 8) > 0
                     ? $this->round4(bcdiv($lineCost, (string) $line->quantity_received, 8))
                     : '0.0000';
@@ -2119,17 +2312,13 @@ class GrnService
         return $negative ? bcmul($rounded, '-1', 4) : $rounded;
     }
 
-    /**
-     * Resolve a destination used by receiving and enforce its lifecycle state.
-     * Soft-deleted locations are excluded by the model query; inactive and
-     * blocked locations must also be rejected for direct service callers.
-     */
+    /** @return array{base_quantity:string,entered_quantity:string,conversion_factor:string} */
     private function receivedBaseQuantity(
         PurchaseOrderItem $purchaseOrderItem,
         string $receivedQuantity,
         int $itemId,
         ?string $receivedUomCode,
-    ): string {
+    ): array {
         if (! is_numeric($receivedQuantity) || bccomp($receivedQuantity, '0', 3) <= 0) {
             throw new BusinessRuleException(
                 "PO line {$purchaseOrderItem->id} must have a positive received quantity."
@@ -2137,10 +2326,14 @@ class GrnService
         }
 
         $item = Item::query()->findOrFail($itemId);
-        if ($receivedUomCode !== null && trim($receivedUomCode) !== '') {
-            $receivedQuantity = $item->convertToBase($receivedQuantity, $receivedUomCode);
-        }
-        if (! is_numeric($receivedQuantity) || bccomp($receivedQuantity, '0', 3) <= 0) {
+        $enteredQuantity = bcadd($receivedQuantity, '0', 6);
+        $fromUomCode = $receivedUomCode !== null && trim($receivedUomCode) !== ''
+            ? $receivedUomCode
+            : null;
+        $conversion = app(UomConversionService::class)->toBaseWithFactor($item, $enteredQuantity, $fromUomCode);
+        $baseQuantity = $conversion['quantity'];
+        app(UomConversionService::class)->assertBaseQuantity($item, $baseQuantity);
+        if (! is_numeric($baseQuantity) || bccomp($baseQuantity, '0', 3) <= 0) {
             throw new BusinessRuleException(
                 "PO line {$purchaseOrderItem->id} converts to a non-positive base received quantity."
             );
@@ -2148,20 +2341,24 @@ class GrnService
 
         $orderedBase = $this->orderedBaseQuantity($purchaseOrderItem, $item);
         $remaining = bcsub($orderedBase, (string) $purchaseOrderItem->quantity_received, 3);
-        if (bccomp($receivedQuantity, $remaining, 3) > 0) {
+        if (bccomp($baseQuantity, $remaining, 3) > 0) {
             // OGAMI-014 — configurable tolerance is a percent of ordered qty.
             $tolerancePct = (string) $this->settings->requiredFloat('inventory.over_receipt_tolerance_pct', 0);
             $allowance = bcmul($orderedBase, bcdiv($tolerancePct, '100', 6), 3);
             $maxReceivable = bcadd($remaining, $allowance, 3);
-            if (bccomp($receivedQuantity, $maxReceivable, 3) > 0) {
+            if (bccomp($baseQuantity, $maxReceivable, 3) > 0) {
                 throw new BusinessRuleException(
-                    "Cannot receive {$receivedQuantity} for PO line {$purchaseOrderItem->id}: only {$remaining} remaining"
+                    "Cannot receive {$baseQuantity} for PO line {$purchaseOrderItem->id}: only {$remaining} remaining"
                     .($tolerancePct !== '0' ? " (tolerance {$tolerancePct}% → max {$maxReceivable})" : '').'.'
                 );
             }
         }
 
-        return $receivedQuantity;
+        return [
+            'base_quantity' => $baseQuantity,
+            'entered_quantity' => $enteredQuantity,
+            'conversion_factor' => $conversion['factor'],
+        ];
     }
 
     private function orderedBaseQuantity(PurchaseOrderItem $line, ?Item $item = null): string
@@ -2222,9 +2419,7 @@ class GrnService
     }
 
     /**
-     * Fast-complete an inspection created inline during receiveWithQc().
-     * Sets all measurement rows to is_pass = $passed and finalises status
-     * so that the QC gate and downstream events fire correctly.
+     * Submit explicit checklist and sample evidence for inline receiving.
      *
      * When $isQualityFailure is false (a logistics rejection — e.g. wrong
      * part number, short shipment) the inspection is cancelled instead of
@@ -2241,6 +2436,7 @@ class GrnService
         bool $passed,
         User $by,
         bool $isQualityFailure = true,
+        array $batchEvidence = [],
     ): void {
         $svc = $this->resolveInspectionService();
         if (! $svc) {
@@ -2250,34 +2446,88 @@ class GrnService
         // Logistics rejection: cancel the inspection so that complete() is
         // never called and no NCR is auto-opened (P3.6 audit fix).
         if (! $passed && ! $isQualityFailure) {
-            $svc->cancel($inspection, 'Logistics rejection — no quality issue found', $by);
+            $svc->cancel($inspection, 'Logistics rejection — no quality issue found', $by, (int) $inspection->result_version);
 
             return;
         }
 
-        // Fill all measurement rows with the verdict so complete() won't
-        // complain about unresolved measurements.
-        $rows = InspectionMeasurement::query()
-            ->where('inspection_id', $inspection->id)
-            ->get();
-
-        $patches = [];
-        foreach ($rows as $m) {
-            $patches[$m->id] = ['is_pass' => $passed];
-        }
-        if (! empty($patches)) {
-            $svc->recordMeasurements($inspection, $patches, $by);
-        }
-
-        // For lot_checklist inspections, set sample_defect_count = 0 (the
-        // single-screen receiveWithQc path confirms all pieces; no defects found).
-        $inspection = $inspection->fresh();
-        if ($inspection->inspection_mode && $inspection->inspection_mode->value === 'lot_checklist') {
-            $inspection->forceFill(['sample_defect_count' => 0])->save();
-            $inspection = $inspection->fresh();
+        $rows = $inspection->measurements()->orderBy('sample_index')->orderBy('id')->get();
+        $groups = $rows->groupBy(static fn (InspectionMeasurement $row): string => $row->checklistKey());
+        $rowsByLabel = [];
+        foreach ($groups as $group) {
+            $row = $group->first();
+            $label = trim((string) $row->parameter_name);
+            if ($label === '' || isset($rowsByLabel[$label])) {
+                throw new BusinessRuleException(
+                    'Single-screen QC needs uniquely named inspection requirements; finish this inspection in Quality.'
+                );
+            }
+            $rowsByLabel[$label] = $row;
         }
 
-        $svc->complete($inspection, $by);
+        $checks = $batchEvidence['checks'] ?? null;
+        if (! is_array($checks) || $checks === [] || $rowsByLabel === []) {
+            throw new BusinessRuleException('Record every inspection requirement before submitting terminal QC.');
+        }
+
+        $seen = [];
+        $decisions = [];
+        foreach ($checks as $check) {
+            if (! is_array($check)) {
+                throw new BusinessRuleException('Each QC check must identify one inspection requirement.');
+            }
+            $label = trim((string) ($check['label'] ?? ''));
+            $itemPassed = $check['passed'] ?? null;
+            if ($label === '' || ! isset($rowsByLabel[$label]) || isset($seen[$label]) || ! is_bool($itemPassed)) {
+                throw new BusinessRuleException('QC checks must uniquely match every inspection requirement.');
+            }
+            if ($passed && ! $itemPassed) {
+                throw new BusinessRuleException('A terminal QC PASS cannot contain a failed checklist requirement.');
+            }
+            $problem = trim((string) ($check['problem_description'] ?? ''));
+            if (! $itemPassed && $problem === '') {
+                $problem = trim((string) ($batchEvidence['problem_description'] ?? $batchEvidence['failure_reason'] ?? ''));
+            }
+            $decisions[] = [
+                'id' => $rowsByLabel[$label]->id,
+                'result' => $itemPassed ? 'passed' : 'failed',
+                'problem_description' => $itemPassed ? null : $problem,
+            ];
+            $seen[$label] = true;
+        }
+        if (count($seen) !== count($rowsByLabel)) {
+            throw new BusinessRuleException('Record every inspection requirement before submitting terminal QC.');
+        }
+
+        if ($inspection->usesChecklistCapture()) {
+            if ($inspection->isCountOnlyIncoming() && ! array_key_exists('sample_defect_count', $batchEvidence)) {
+                throw new BusinessRuleException('Enter the defective-piece count for the full receipt.');
+            }
+            if ($inspection->isCountOnlyIncoming() && (! is_int($batchEvidence['sample_defect_count'])
+                || $passed !== ($batchEvidence['sample_defect_count'] < $inspection->batch_quantity))) {
+                throw new BusinessRuleException('The QC result must match the full-count defective-piece quantity.');
+            }
+            $physical = (int) ($batchEvidence['sample_defect_count'] ?? 0) > 0;
+            $svc->recordBatchResult($inspection, [
+                'expected_result_version' => (int) $inspection->result_version, 'items' => $decisions,
+                'coverage_confirmed' => (bool) ($batchEvidence['coverage_confirmed'] ?? false),
+                ...(isset($batchEvidence['inspected_quantity']) ? ['inspected_quantity' => $batchEvidence['inspected_quantity']] : []),
+                'physical_defects_confirmed' => $physical,
+                ...($inspection->sampling_basis !== 'lot' ? ['sample_defect_count' => (int) ($batchEvidence['sample_defect_count'] ?? 0)] : []),
+                ...(isset($batchEvidence['defects_removed_confirmed']) ? ['defects_removed_confirmed' => $batchEvidence['defects_removed_confirmed']] : []),
+                ...($physical && ! collect($decisions)->contains('result', 'failed')
+                    ? ['problem_description' => $batchEvidence['problem_description'] ?? $batchEvidence['failure_reason'] ?? null] : []),
+            ], $by);
+
+            return;
+        }
+        $svc->recordItemResults($inspection, ['items' => $decisions], $by);
+
+        // The receiving shortcut still requires explicit sampling coverage.
+        $svc->recordBatchResult($inspection, array_replace($batchEvidence, [
+            'result' => $passed ? 'passed' : 'failed',
+            'problem_description' => $batchEvidence['problem_description'] ?? $batchEvidence['failure_reason'] ?? null,
+        ]), $by);
     }
 
     /**
@@ -2294,8 +2544,7 @@ class GrnService
         PurchaseOrder $po,
         ?User $by = null,
         ?PurchaseOrderStatus $zeroStatus = null,
-    ): void
-    {
+    ): void {
         $previousStatus = $po->status instanceof PurchaseOrderStatus
             ? $po->status->value
             : (string) $po->status;

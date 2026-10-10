@@ -6,6 +6,8 @@ namespace App\Modules\Inventory\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Inventory\Models\ItemCategory;
+use App\Modules\Inventory\Enums\ItemType;
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreItemCategoryRequest extends FormRequest
@@ -25,6 +27,7 @@ class StoreItemCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'item_type' => ['sometimes', 'required', Rule::in(ItemType::values())],
             'name'      => ['required', 'string', 'min:2', 'max:100'],
             'parent_id' => ['nullable', 'integer', 'exists:item_categories,id'],
         ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\E2E;
 
 use App\Common\Services\SettingsService;
+use App\Common\Models\AuditLog;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
@@ -16,8 +17,11 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
@@ -82,6 +86,7 @@ class BusinessProcessAuditTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['inspection.checklist_capture_enabled' => true]);
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
         $this->seed(UomSeeder::class);
@@ -237,6 +242,8 @@ class BusinessProcessAuditTest extends TestCase
             ->postJson("/api/v1/payroll-periods/{$period->hash_id}/disbursement-proofs", [
                 'proof_type' => 'deposit_slip',
                 'disbursed_amount' => $netPay,
+                'bank_name' => 'BDO',
+                'transaction_reference' => 'TXN-T-001',
                 'disbursement_date' => now()->toDateString(),
                 'file' => UploadedFile::fake()->create('deposit.pdf', 30, 'application/pdf'),
             ])
@@ -373,7 +380,6 @@ class BusinessProcessAuditTest extends TestCase
         // ── Supplier acknowledges the sent PO ──
         $this->actingAsPortal($portal)
             ->postJson("/api/v1/b2b/supplier/purchase-orders/{$poHash}/acknowledge", [
-                'expected_delivery_date' => now()->addDays(5)->toDateString(),
                 'notes' => 'Accepted as ordered.',
             ])
             ->assertOk();
@@ -382,13 +388,18 @@ class BusinessProcessAuditTest extends TestCase
 
         // ── Supplier ships against the accepted PO ──
         $this->actingAsPortal($portal)
-            ->postJson("/api/v1/b2b/supplier/purchase-orders/{$poHash}/shipments", [
+            ->post("/api/v1/b2b/supplier/purchase-orders/{$poHash}/shipments", [
                 'shipped_date' => now()->toDateString(),
+                'dispatch_photo' => \Illuminate\Http\UploadedFile::fake()->image('dispatch.jpg'),
                 'carrier' => '2GO',
                 'tracking_number' => 'TRK-'.substr(uniqid(), -6),
                 'estimated_arrival' => now()->addDays(3)->toDateString(),
                 'notes' => 'Partial lot 1 of 1.',
-            ])
+                'items' => [[
+                    'purchase_order_item_id' => $po->items()->firstOrFail()->hash_id,
+                    'quantity_shipped' => '500.00',
+                ]],
+            ], ['Accept' => 'application/json'])
             ->assertCreated();
 
         // ── Warehouse receives; QC maker + checker pass → GRN accepted ──
@@ -502,20 +513,23 @@ class BusinessProcessAuditTest extends TestCase
         $rows = \App\Modules\Quality\Models\InspectionMeasurement::query()
             ->where('inspection_id', $inspection->id)->get();
         $this->asWeb($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/lot-result", [
-                'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
-                'measurements' => [],
-                'sample_defect_count' => 0,
+            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/batch-result", [
+                'expected_result_version' => (int) $inspection->result_version,
+                'items' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'result' => 'passed'])->all(),
                 'coverage_confirmed' => true,
-                'complete' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
             ])
             ->assertOk();
+        $inspection->refresh();
         $checker = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
             'is_active' => true,
         ]);
         $this->asWeb($checker)
-            ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", ['decision' => 'passed'])
+            ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", [
+                'decision' => 'passed',
+                'expected_result_version' => (int) $inspection->result_version,
+            ])
             ->assertOk();
 
         $grn = \App\Modules\Inventory\Models\GoodsReceiptNote::query()
@@ -698,6 +712,7 @@ class BusinessProcessAuditTest extends TestCase
         \App\Modules\Quality\Models\InspectionSpecItem::create([
             'inspection_spec_id' => $spec->id,
             'parameter_name' => 'Visual return condition',
+            'acceptance_criterion' => 'Confirm the returned item matches the approved product condition criteria.',
             'parameter_type' => \App\Modules\Quality\Enums\InspectionParameterType::Visual->value,
             'is_critical' => true,
             'sort_order' => 1,
@@ -789,25 +804,53 @@ class BusinessProcessAuditTest extends TestCase
         $this->assertSame(
             'inspected',
             $rmaModel->fresh()->status->value,
-            "inspection handoff must complete cleanly, got: {$handoff}",
+            "inspection handoff must complete cleanly, got: {$handoff}; ".$inspect->json('data.inspection_handoff.message'),
         );
 
-        // QC answers the spec rows (all pass) and completes the staged return
-        // inspection — a restock disposition requires a positive verdict.
+        // QC submits complete evidence. This return checklist requires an
+        // independent Quality checker before it can pass or reach disposition.
         $returnInspection = \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'return_request')
             ->where('entity_id', $rmaModel->id)
             ->firstOrFail();
         $rows = \App\Modules\Quality\Models\InspectionMeasurement::query()
             ->where('inspection_id', $returnInspection->id)->get();
+        $versionBeforeSubmission = (int) $returnInspection->result_version;
+        $movementsBeforeQuality = StockMovement::query()->count();
         $this->actingAs($this->qc)
-            ->patchJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/measurements", [
-                'measurements' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
+            ->postJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/batch-result", [
+                'expected_result_version' => $versionBeforeSubmission,
+                'items' => $rows->map(fn ($row) => ['id' => $row->hash_id, 'result' => 'passed'])->all(),
+                'coverage_confirmed' => true,
+                'inspected_quantity' => (int) $returnInspection->sample_size,
             ])
-            ->assertOk();
-        $this->actingAs($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/complete")
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('data.status', 'awaiting_review');
+        $returnInspection->refresh();
+        $this->assertSame('awaiting_review', $returnInspection->status->value);
+        $this->assertSame('passed', $returnInspection->proposed_result->value);
+        $this->assertSame($this->qc->id, (int) $returnInspection->inspector_id);
+        $this->assertSame(0, (int) $returnInspection->sample_defect_count);
+        $this->assertSame(0, (int) $returnInspection->accepted_quantity);
+        $this->assertNull($returnInspection->completed_at);
+        $this->assertSame($versionBeforeSubmission + 1, (int) $returnInspection->result_version);
+        $this->assertSame('inspected', $rmaModel->fresh()->status->value);
+        $this->assertSame($movementsBeforeQuality, StockMovement::query()->count());
+
+        $this->actingAs($this->prodManager)
+            ->patchJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/review", [
+                'expected_result_version' => (int) $returnInspection->result_version,
+                'decision' => 'passed',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'passed');
+        $returnInspection->refresh();
+        $this->assertSame('passed', $returnInspection->status->value);
+        $this->assertSame($this->prodManager->id, (int) $returnInspection->reviewed_by);
+        $this->assertNotNull($returnInspection->reviewed_at);
+        $this->assertSame($versionBeforeSubmission + 2, (int) $returnInspection->result_version);
+        $this->assertSame('inspected', $rmaModel->fresh()->status->value);
+        $this->assertSame($movementsBeforeQuality, StockMovement::query()->count());
 
         // ── Dispose: restock the good pieces (needs a location) ──
         $location = WarehouseLocation::factory()->create();
@@ -823,6 +866,55 @@ class BusinessProcessAuditTest extends TestCase
         $dispose->assertOk();
         $this->assertSame('disposed', $rmaModel->fresh()->disposition_status);
 
+        $rmaLine = $rmaModel->items->firstOrFail()->fresh();
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $rmaLine->id)->firstOrFail();
+        $this->assertSame('held', $mrb->status->value);
+        $this->assertSame($this->csOfficer->id, (int) $mrb->held_by);
+        $this->assertSame('0.000', (string) $rmaLine->stock_movement_quantity);
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $quarantine->id)->value('quantity'));
+
+        // Completion is blocked while the independent MRB gate remains open.
+        $movementCount = StockMovement::query()->count();
+        $this->actingAs($this->csOfficer)
+            ->postJson("/api/v1/return-management/return-requests/{$rma['id']}/complete", [])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Every customer-return restock or rework line needs a completed MRB disposition before the RMA can complete.');
+        $this->assertSame('inspected', $rmaModel->fresh()->status->value);
+        $this->assertSame('held', $mrb->fresh()->status->value);
+        $this->assertSame($movementCount, StockMovement::query()->count());
+
+        $targetZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $quarantine->zone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $releaseLocation = WarehouseLocation::factory()->create(['zone_id' => $targetZone->id]);
+        $this->actingAs($this->warehouse)
+            ->postJson("/api/v1/inventory/mrb/{$mrb->hash_id}/release", [
+                'disposition' => 'use_as_is',
+                'target_location_id' => $releaseLocation->hash_id,
+                'inspected_quantity' => '8.000',
+                'evidence_reference' => 'RMA-AUDIT-REINSPECTION-'.$rmaModel->rma_number,
+                'recovery_passed' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'released');
+
+        $mrb->refresh();
+        $rmaLine->refresh();
+        $this->assertSame('released', $mrb->status->value);
+        $this->assertSame($this->warehouse->id, (int) $mrb->released_by);
+        $this->assertSame($mrb->release_movement_id, $rmaLine->quarantine_release_movement_id);
+        $this->assertSame('8.000', (string) $rmaLine->stock_movement_quantity);
+        $this->assertSame('0.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $quarantine->id)->value('quantity'));
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $releaseLocation->id)->value('quantity'));
+        $mrbAudit = AuditLog::query()->where('model_type', $mrb->getMorphClass())
+            ->where('model_id', $mrb->id)->orderBy('id')->get();
+        $this->assertSame(['created', 'updated'], $mrbAudit->pluck('action')->all());
+        $this->assertSame($this->warehouse->id, (int) $mrbAudit->last()->user_id);
+
         // ── Complete ──
         $this->actingAs($this->csOfficer)
             ->postJson("/api/v1/return-management/return-requests/{$rma['id']}/complete", [
@@ -830,6 +922,11 @@ class BusinessProcessAuditTest extends TestCase
             ])
             ->assertOk();
         $this->assertSame('completed', $rmaModel->fresh()->status->value);
+        $this->assertSame(1, StockMovement::query()
+            ->where('reference_type', 'material_review_record')
+            ->where('reference_id', $mrb->id)
+            ->where('movement_type', StockMovementType::Transfer->value)
+            ->count(), 'RMA completion must not transfer released stock a second time.');
 
         // Wrong time: a completed RMA cannot be cancelled.
         $this->actingAs($this->csOfficer)
@@ -1088,16 +1185,16 @@ class BusinessProcessAuditTest extends TestCase
         $rows = \App\Modules\Quality\Models\InspectionMeasurement::query()
             ->where('inspection_id', $inspection->id)->get();
 
-        // QC maker records an all-PASS lot checklist.
+        // QC maker records an all-PASS checklist with the current evidence version.
         $this->asWeb($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/lot-result", [
-                'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
-                'measurements' => [],
-                'sample_defect_count' => 0,
+            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/batch-result", [
+                'expected_result_version' => (int) $inspection->result_version,
+                'items' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'result' => 'passed'])->all(),
                 'coverage_confirmed' => true,
-                'complete' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
             ])
             ->assertOk();
+        $inspection->refresh();
 
         // Independent checker confirms (maker-checker gate).
         $checker = User::factory()->create([
@@ -1107,6 +1204,7 @@ class BusinessProcessAuditTest extends TestCase
         $this->asWeb($checker)
             ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", [
                 'decision' => 'passed',
+                'expected_result_version' => (int) $inspection->result_version,
             ])
             ->assertOk();
 

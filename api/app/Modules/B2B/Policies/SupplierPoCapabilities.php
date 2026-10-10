@@ -9,13 +9,18 @@ use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\B2B\Enums\DeliveryScheduleStatus;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseType;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -96,7 +101,7 @@ final class SupplierPoCapabilities
             'can_respond' => $accept || $propose || $decline,
             'can_update_shipment' => $shipOrSchedule,
             'can_upload_document' => self::canUploadDocument($po),
-            'can_schedule_delivery' => $shipOrSchedule,
+            'can_schedule_delivery' => false,
             'can_submit_invoice' => self::canSubmitInvoice($po),
         ];
     }
@@ -137,14 +142,149 @@ final class SupplierPoCapabilities
 
     public static function canSubmitInvoice(PurchaseOrder $po): bool
     {
-        return in_array($po->status, self::INVOICE_STATUSES, true) && self::hasInvoiceableReceipt($po);
+        return in_array($po->status, self::INVOICE_STATUSES, true)
+            && self::hasInvoiceableReceipt($po)
+            && ! self::hasPendingQcReplacement($po);
+    }
+
+    /** Incoming QC returns hold invoicing until their replacement shipments pass QC. */
+    public static function hasPendingQcReplacement(PurchaseOrder $po): bool
+    {
+        $preloaded = $po->getAttribute('has_qc_replacement_return');
+        if ($preloaded !== null && ! (bool) $preloaded) {
+            return false;
+        }
+
+        $returns = ReturnRequest::query()
+            ->where('purchase_order_id', $po->id)
+            ->where('source_key', 'like', 'grn-rejection:%')
+            ->whereNull('replacement_purchase_order_id')
+            ->whereNotIn('status', ['cancelled', 'rejected'])
+            ->with('items:id,return_request_id,source_po_item_id,quantity')
+            ->get();
+
+        foreach ($returns as $return) {
+            if (self::qcReplacementPending($return)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function qcReplacementPending(ReturnRequest $return): bool
+    {
+        if (! str_starts_with((string) $return->source_key, 'grn-rejection:')
+            || $return->replacement_purchase_order_id
+            || in_array($return->status?->value, ['cancelled', 'rejected'], true)) {
+            return false;
+        }
+        if (! $return->completed_at) {
+            return true;
+        }
+
+        $replacementReturnIds = self::replacementReturnIds($return);
+        $lines = $return->relationLoaded('items') ? $return->items : $return->items()->get();
+        foreach ($lines as $line) {
+            if (! $line->source_po_item_id) {
+                return true;
+            }
+            $accepted = GrnItem::query()
+                ->where('purchase_order_item_id', $line->source_po_item_id)
+                ->whereHas('grn', static fn (Builder $query) => $query
+                    ->where('purchase_order_id', $return->purchase_order_id)
+                    ->whereIn('status', GrnStatus::billableValues())
+                    ->whereHas('supplierShipment', static fn (Builder $shipment) => $shipment->whereIn('return_request_id', $replacementReturnIds)))
+                ->sum('quantity_accepted');
+            if (bccomp((string) $accepted, (string) $line->quantity, 3) < 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** A failed replacement opens a child return against the replacement shipment's GRN. */
+    private static function replacementReturnIds(ReturnRequest $return): array
+    {
+        $ids = [(int) $return->id => true];
+        $frontier = [(int) $return->id];
+        while ($frontier !== []) {
+            $children = ReturnRequest::query()
+                ->where('purchase_order_id', $return->purchase_order_id)
+                ->where('source_key', 'like', 'grn-rejection:%')
+                ->whereHas('goodsReceiptNote.supplierShipment', static fn (Builder $query) => $query->whereIn('return_request_id', $frontier))
+                ->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+            $frontier = [];
+            foreach ($children as $id) {
+                if (! isset($ids[$id])) {
+                    $ids[$id] = true;
+                    $frontier[] = $id;
+                }
+            }
+        }
+
+        return array_keys($ids);
     }
 
     public static function hasOpenQuantity(PurchaseOrder $po): bool
     {
         return self::items($po)->contains(
-            static fn (PurchaseOrderItem $item): bool => Money::gt((string) $item->quantity, (string) $item->quantity_received),
+            static fn (PurchaseOrderItem $item): bool => bccomp($item->baseOrderedQuantity(), (string) $item->quantity_received, 3) > 0,
         );
+    }
+
+    /** Extra dispatch quantity owed after incoming QC rejected goods already shipped on this PO. */
+    public static function rejectedDispatchAllowance(PurchaseOrder $po): array
+    {
+        $items = self::items($po)->keyBy('id');
+        $allowance = [];
+        ReturnRequestItem::query()
+            ->whereIn('source_po_item_id', $items->keys())
+            ->where('reversal_already_applied', true)
+            ->where('disposition', 'return_to_supplier')
+            ->whereHas('returnRequest', static fn (Builder $query) => $query
+                ->where('purchase_order_id', $po->id)
+                ->where('source_key', 'like', 'grn-rejection:%')
+                ->where('disposition_status', 'disposed')
+                ->whereNull('replacement_purchase_order_id')
+                ->whereIn('status', ['inspected', 'completed']))
+            ->get(['source_po_item_id', 'quantity'])
+            ->each(static function (ReturnRequestItem $line) use ($items, &$allowance): void {
+                $item = $items->get($line->source_po_item_id);
+                if ($item) {
+                    $id = (int) $item->id;
+                    $allowance[$id] = Money::add($allowance[$id] ?? '0', $item->purchaseQuantity((string) $line->quantity, 6));
+                }
+            });
+
+        return $allowance;
+    }
+
+    public static function shipmentDeadline(SupplierShipment $shipment): ?CarbonInterface
+    {
+        $po = $shipment->purchaseOrder;
+        $originalDeadline = $po->confirmed_delivery_date ?? $po->expected_delivery_date;
+        if ($shipment->return_request_id) {
+            return $shipment->returnRequest?->replacement_due_date ?? $originalDeadline;
+        }
+        $itemIds = $shipment->items->pluck('purchase_order_item_id');
+        if ($itemIds->isEmpty()) {
+            return $originalDeadline;
+        }
+
+        $return = ReturnRequest::query()
+            ->where('purchase_order_id', $po->id)
+            ->where('source_key', 'like', 'grn-rejection:%')
+            ->where('status', 'completed')
+            ->whereNull('replacement_purchase_order_id')
+            ->whereNotNull('replacement_due_date')
+            ->where('completed_at', '<=', $shipment->created_at)
+            ->whereHas('items', static fn (Builder $query) => $query->whereIn('source_po_item_id', $itemIds))
+            ->orderByDesc('completed_at')
+            ->first(['id', 'replacement_due_date']);
+
+        return $return?->replacement_due_date ?? $originalDeadline;
     }
 
     /**
@@ -179,9 +319,18 @@ final class SupplierPoCapabilities
     {
         return $grns
             ->whereIn('status', GrnStatus::billableValues())
-            ->whereDoesntHave('bills', static fn (Builder $bills) => $bills
-                ->where('status', '<>', BillStatus::Cancelled->value)
-                ->whereNotNull('supplier_invoice_number'));
+            ->where(static fn (Builder $query) => $query
+                ->whereHas('bills', static fn (Builder $bills) => $bills
+                    ->where('provenance_type', 'stock')
+                    ->where(static fn (Builder $eligible) => $eligible
+                        ->where('status', BillStatus::Draft->value)
+                        ->orWhere(static fn (Builder $posted) => $posted
+                            ->where('status', BillStatus::Unpaid->value)
+                            ->whereDoesntHave('payments')))
+                    ->whereNull('supplier_invoice_id')
+                    ->whereNull('supplier_invoice_number'))
+                ->orWhereDoesntHave('bills', static fn (Builder $bills) => $bills
+                    ->where('status', '<>', BillStatus::Cancelled->value)));
     }
 
     /**
@@ -216,10 +365,11 @@ final class SupplierPoCapabilities
         $scheduled = self::openScheduledQuantities($po, $excludingScheduleId);
         $result = [];
         foreach (self::items($po) as $item) {
-            $received = (string) $item->quantity_received;
+            $received = $item->purchaseQuantity((string) $item->quantity_received, 6);
             $planned = $scheduled[(int) $item->id] ?? '0';
-            $covered = Money::gt($planned, $received) ? $planned : $received;
-            $result[(int) $item->id] = Money::round2(Money::clampMin(Money::sub((string) $item->quantity, $covered), '0'));
+            $covered = bccomp($planned, $received, 6) > 0 ? $planned : $received;
+            $remaining = bcsub((string) $item->quantity, $covered, 6);
+            $result[(int) $item->id] = bccomp($remaining, '0', 6) > 0 ? bcadd($remaining, '0', 2) : '0.00';
         }
 
         return $result;
@@ -276,7 +426,7 @@ final class SupplierPoCapabilities
             ],
             'invoice' => [
                 self::canSubmitInvoice($po),
-                'Invoices need an accepted goods receipt that you have not invoiced yet.',
+                'Invoices need an accepted, un-invoiced receipt and all QC replacement pieces accepted on a later GRN.',
             ],
         };
 
@@ -290,7 +440,7 @@ final class SupplierPoCapabilities
     {
         return $po->relationLoaded('items')
             ? $po->items
-            : $po->items()->get(['id', 'purchase_order_id', 'quantity', 'quantity_received']);
+            : $po->items()->with('item')->get();
     }
 
     private static function latestResponseStatus(PurchaseOrder $po): ?PurchaseOrderResponseStatus

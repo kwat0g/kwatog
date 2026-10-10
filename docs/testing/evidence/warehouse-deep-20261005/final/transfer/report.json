@@ -1,0 +1,109 @@
+{
+  "database": "ogami_test_inventory_browser_invmuvrv1h9",
+  "phase": "transfer",
+  "checks": [
+    {
+      "name": "Real cookie login: warehouse@ogami.test"
+    },
+    {
+      "name": "Transfer creator sees the next-actor explanation; direct self-execution is rejected with no stock, movement, or audit change",
+      "evidence": {
+        "status": "pending",
+        "response": 422,
+        "movementCount": "0",
+        "auditCount": "1"
+      }
+    },
+    {
+      "name": "Real cookie login: warehouse-checker@ogami.test"
+    },
+    {
+      "name": "Independent Warehouse checker executes once; duplicate execute is rejected without another movement or audit",
+      "evidence": {
+        "sourceOpening": "6.000",
+        "sourceClosing": "4.000",
+        "destinationOpening": "0.000",
+        "destinationClosing": "2.000",
+        "reservedSourceExcluded": true,
+        "blockedDestinationExcluded": true,
+        "quarantineAndScrapDestinationsPresent": true,
+        "movementCount": "1",
+        "status": "transferred",
+        "transferredBy": "Inventory Audit Warehouse Checker"
+      }
+    }
+  ],
+  "findings": [],
+  "artifacts": [
+    "/tmp/warehouse-real-browser-final/transfer/success-transfer-order.png"
+  ],
+  "browserErrors": [],
+  "diagnostics": {
+    "consoleErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      }
+    ],
+    "failedRequests": [],
+    "httpErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/transfer-orders/5KZYy8gNxw/execute",
+        "status": 422
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/transfer-orders/5KZYy8gNxw/execute",
+        "status": 422
+      }
+    ]
+  },
+  "serverLog": "/tmp/warehouse-real-browser-final/server.log"
+}

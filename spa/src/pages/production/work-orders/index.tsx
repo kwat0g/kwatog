@@ -1,27 +1,5 @@
-/**
- * Work order board — production floor triage, not a table of records.
- *
- * The generic list scaffold (FilterBar + DataTable + Skeleton + Empty) is right
- * for 40 other resources in this ERP, and it was wrong here. A production
- * manager does not read work orders alphabetically or by creation date; they
- * arrive asking three questions in a fixed order:
- *
- *   1. What is late, or about to be?   — schedule risk
- *   2. What is stuck?                  — paused, with a reason someone wrote
- *   3. What is actually running?       — everything else, in the table
- *
- * A paginated table answers none of those without the reader doing the sorting
- * in their head. So the urgent slice is lifted out and rendered as cards where
- * the progress figure — the thing being judged — carries the type scale.
- *
- * The triage is computed from the CURRENT PAGE and says so. That is a real
- * limitation, stated rather than hidden: `planned_end`, `pause_reason` and
- * `quantity_produced` all arrive per row, and there is no server-side "at risk"
- * aggregate to ask for yet. The previous version rendered page-scoped counts as
- * headline KPIs whose `linkTo` re-filtered the whole dataset, so the number
- * changed after you clicked it. Better to scope the claim than to fake the sum.
- */
 import { useMemo } from 'react';
+import { usePermission } from '@/hooks/usePermission';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuTriangleAlert, LuCirclePause, LuClock } from '@/lib/icons';
@@ -35,6 +13,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatInt } from '@/lib/formatNumber';
+import { scheduleDate } from '@/components/production/scheduleDates';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
@@ -53,7 +32,13 @@ function startOfToday(): number {
   return d.getTime();
 }
 
-type ReasonKind = 'stuck' | 'overdue' | 'late-start';
+type ReasonKind = 'stuck' | 'overdue' | 'late-start' | 'rework';
+
+const REWORK_LABELS = {
+  required: 'Rework Required',
+  in_progress: 'Rework In Progress',
+  awaiting_qc: 'Rework Awaiting QC',
+};
 
 /**
  * Why this WO needs a decision, at most one reason per row.
@@ -63,7 +48,14 @@ type ReasonKind = 'stuck' | 'overdue' | 'late-start';
  * text names who stopped it.
  */
 function reasonFor(w: WorkOrder, today: number): { kind: ReasonKind; text: string } | null {
-  if (w.status === 'completed' || w.status === 'closed' || w.status === 'cancelled') return null;
+  if (w.status === 'closed' || w.status === 'cancelled') return null;
+  if (w.rework_status && w.rework_status.state !== 'awaiting_qc') {
+    return {
+      kind: 'rework',
+      text: `${formatInt(w.rework_status.quantity)} pieces ${w.rework_status.state === 'required' ? 'need repair. Open the work order to start rework.' : 'under repair. Open the work order to continue rework.'}`,
+    };
+  }
+  if (w.status === 'completed') return null;
 
   const at = (iso: string | null) => (iso ? new Date(iso).getTime() : NaN);
 
@@ -73,13 +65,27 @@ function reasonFor(w: WorkOrder, today: number): { kind: ReasonKind; text: strin
       text: w.pause_reason?.trim() || 'Paused with no reason recorded',
     };
   }
-  if (at(w.planned_end) < today) {
-    return { kind: 'overdue', text: `Due ${w.planned_end?.slice(0, 10) ?? '—'}` };
+  const timing = w.schedule_status ?? w.schedule_warning;
+  if (timing && timing.kind !== 'awaiting_confirmation' && timing.kind !== 'start_available') {
+    return {
+      kind: timing.kind === 'start_overdue' ? 'late-start' : 'overdue',
+      text: timing.message,
+    };
   }
-  if ((w.status === 'planned' || w.status === 'confirmed') && at(w.planned_start) < today) {
+  if (at(w.planned_end) < today) {
+    return {
+      kind: 'overdue',
+      text: `Production due ${scheduleDate(w.planned_end, 'Asia/Manila')}`,
+    };
+  }
+  if (
+    !w.mrp_generated &&
+    (w.status === 'planned' || w.status === 'confirmed') &&
+    at(w.planned_start) < today
+  ) {
     return {
       kind: 'late-start',
-      text: `Should have started ${w.planned_start?.slice(0, 10) ?? '—'}`,
+      text: `Planned start ${scheduleDate(w.planned_start, 'Asia/Manila')}`,
     };
   }
   return null;
@@ -87,6 +93,7 @@ function reasonFor(w: WorkOrder, today: number): { kind: ReasonKind; text: strin
 
 export default function WorkOrdersListPage() {
   const navigate = useNavigate();
+  const { can } = usePermission();
   // Bound to the URL so dashboard drill-downs (?status=in_progress) arrive
   // pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<WorkOrderListParams>(DEFAULT_FILTERS);
@@ -95,6 +102,7 @@ export default function WorkOrdersListPage() {
     queryKey: ['production', 'work-orders', filters],
     queryFn: () => workOrdersApi.list(filters),
     placeholderData: (prev) => prev,
+    refetchInterval: 60_000,
   });
   const { data: workOrderOptions } = useQuery({
     queryKey: ['production', 'work-orders', 'options'],
@@ -118,7 +126,39 @@ export default function WorkOrdersListPage() {
   }, [rows]);
 
   const columns: Column<WorkOrder>[] = [
-    { key: 'wo', header: 'WO #', cell: (r) => <span className="font-mono">{r.wo_number}</span> },
+    {
+      key: 'wo',
+      header: 'WO #',
+      cell: (r) => {
+        const timing = r.schedule_status ?? r.schedule_warning;
+        const informational =
+          timing?.kind === 'awaiting_confirmation' || timing?.kind === 'start_available';
+        const label =
+          timing?.kind === 'awaiting_confirmation'
+            ? 'Awaiting confirmation'
+            : timing?.kind === 'start_available'
+              ? 'Start available'
+              : timing?.kind === 'proposal_expired'
+                ? 'Proposal passed'
+                : timing?.kind === 'start_overdue'
+                  ? 'Start overdue'
+                  : 'Schedule passed';
+        return (
+          <div className="flex flex-col items-start gap-1 py-1">
+            <span className="font-mono">{r.wo_number}</span>
+            {r.production_purpose === 'stock' && <Chip variant="info">For stock</Chip>}
+            {timing && (
+              <span title={timing.message}>
+                <Chip variant={informational ? 'info' : 'warning'}>
+                  {!informational && <LuTriangleAlert size={12} className="mr-1" aria-hidden />}
+                  {label}
+                </Chip>
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
     {
       key: 'product',
       header: 'Product',
@@ -167,6 +207,9 @@ export default function WorkOrdersListPage() {
           <span className="font-mono tabular-nums text-xs">
             {formatInt(r.quantity_produced)} / {formatInt(r.quantity_target)}
           </span>
+          {r.qc_workflow === 'finish_first_v1' && r.status === 'completed' && (
+            <span className="text-xs text-muted">Production finished</span>
+          )}
           <div className="w-full h-1 bg-elevated rounded-full overflow-hidden">
             <div
               className="h-1 bg-accent rounded-full"
@@ -179,22 +222,35 @@ export default function WorkOrdersListPage() {
     },
     {
       key: 'planned',
-      header: 'Planned end',
+      header: 'Production due',
       align: 'right',
-      cell: (r) => <NumCell>{r.planned_end?.slice(0, 10) ?? '—'}</NumCell>,
+      cell: (r) => (
+        <NumCell>{r.planned_end ? scheduleDate(r.planned_end, 'Asia/Manila') : '—'}</NumCell>
+      ),
     },
     {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={variant[r.status]}>
-          {statusLabels.get(r.status) ?? r.status_label ?? r.status}
+        <Chip
+          variant={
+            r.rework_status && !['closed', 'cancelled'].includes(r.status)
+              ? 'warning'
+              : variant[r.status]
+          }
+        >
+          {r.rework_status && !['closed', 'cancelled'].includes(r.status)
+            ? REWORK_LABELS[r.rework_status.state]
+            : (statusLabels.get(r.status) ?? r.status_label ?? r.status)}
         </Chip>
       ),
     },
   ];
 
   const filterConfig: FilterConfig[] = [
+    { key: 'production_purpose', label: 'Purpose', type: 'select', options: [
+      { value: '', label: 'All' }, { value: 'stock', label: 'For stock' }, { value: 'order', label: 'Sales Order' }, { value: 'internal', label: 'Internal' },
+    ] },
     {
       key: 'status',
       label: 'Status',
@@ -207,6 +263,7 @@ export default function WorkOrdersListPage() {
     <div>
       <PageHeader
         title="Work orders"
+        actions={can('production.wo.create') ? <Button onClick={() => navigate('/production/work-orders/create')}>Produce for stock</Button> : undefined}
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'WO' : 'WOs'}` : undefined}
       />
       <FilterBar
@@ -236,12 +293,20 @@ export default function WorkOrdersListPage() {
             <h2 id="wo-attention" className="text-sm font-medium text-primary">
               Needs attention
             </h2>
-            {/* Scope stated plainly rather than implied — see the file header. */}
+            {/* Attention is computed from the current table page, not every work order. */}
             <span className="text-xs text-muted">
               {attention.length} of {rows.length} on this page
             </span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div
+            role="region"
+            aria-label="Work orders needing attention"
+            tabIndex={0}
+            className={cn(
+              'grid max-h-52 grid-cols-1 gap-2 overflow-y-auto overscroll-contain p-1 md:grid-cols-2 xl:grid-cols-3',
+              focusRing,
+            )}
+          >
             {attention.map(({ wo, reason }) => (
               <AttentionCard
                 key={wo.id}
@@ -251,6 +316,9 @@ export default function WorkOrdersListPage() {
               />
             ))}
           </div>
+          {attention.length > 3 && (
+            <p className="mt-1 text-xs text-muted">Scroll inside to see more.</p>
+          )}
         </section>
       )}
 
@@ -258,7 +326,7 @@ export default function WorkOrdersListPage() {
         <EmptyState
           icon="factory"
           title="No work orders yet"
-          description="Work orders are auto-created by the MRP engine when a sales order is confirmed."
+          description="Plan production for inventory, or confirm a Sales Order to produce its shortage."
         />
       )}
 
@@ -271,7 +339,7 @@ export default function WorkOrdersListPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
- onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+            onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
           />
         </div>
       )}
@@ -280,18 +348,13 @@ export default function WorkOrdersListPage() {
 }
 
 const TONE: Record<ReasonKind, { accent: string; icon: typeof LuTriangleAlert; label: string }> = {
+  rework: { accent: 'text-warning', icon: LuTriangleAlert, label: 'Rework' },
   stuck: { accent: 'text-warning', icon: LuCirclePause, label: 'Paused' },
   overdue: { accent: 'text-danger', icon: LuTriangleAlert, label: 'Overdue' },
   'late-start': { accent: 'text-warning', icon: LuClock, label: 'Late start' },
 };
 
-/**
- * One work order that needs a decision.
- *
- * Deliberately not a table row. The reason it surfaced is stated in words, not
- * implied by a red cell, and the left border carries severity alongside an icon
- * and a text label so the meaning survives when colour does not.
- */
+/** Keep each decision compact; full progress and details remain in the table and record. */
 function AttentionCard({
   wo,
   reason,
@@ -303,45 +366,42 @@ function AttentionCard({
 }) {
   const tone = TONE[reason.kind];
   const Icon = tone.icon;
-  const pct = Math.min(100, wo.progress_percentage);
-
   return (
     <button
       type="button"
       onClick={onOpen}
       className={cn(
-        'w-full text-left rounded-md border border-default bg-canvas p-3',
+        'w-full min-w-0 self-start text-left rounded-md border border-default bg-canvas px-3 py-2',
         'cursor-pointer hover:bg-elevated transition-colors duration-fast',
         focusRing,
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono tabular-nums text-sm font-medium">{wo.wo_number}</span>
+        <span
+          className="min-w-0 truncate font-mono tabular-nums text-xs font-medium"
+          title={wo.wo_number}
+        >
+          {wo.wo_number}
+        </span>
         <span className={cn('flex shrink-0 items-center gap-1 text-xs', tone.accent)}>
           <Icon className="w-3.5 h-3.5" aria-hidden />
           {tone.label}
         </span>
       </div>
 
-      <div className="mt-1 truncate text-sm">
-        {wo.product?.part_number ?? '—'}
-        {wo.machine?.machine_code && (
-          <span className="text-muted"> · {wo.machine.machine_code}</span>
-        )}
+      <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+        <span className="min-w-0 truncate">
+          {wo.product?.part_number ?? '—'}
+          {wo.machine?.machine_code && (
+            <span className="text-muted"> · {wo.machine.machine_code}</span>
+          )}
+        </span>
+        <span className="shrink-0 font-mono tabular-nums text-muted">
+          {formatInt(wo.quantity_produced)} / {formatInt(wo.quantity_target)}
+        </span>
       </div>
 
       <p className="mt-1 text-xs text-secondary line-clamp-2">{reason.text}</p>
-
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="font-mono tabular-nums text-lg font-medium">
-          {formatInt(wo.quantity_produced)}
-        </span>
-        <span className="text-xs text-muted">/ {formatInt(wo.quantity_target)}</span>
-        <span className="ml-auto font-mono tabular-nums text-xs text-muted">{pct}%</span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-elevated">
-        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} aria-hidden />
-      </div>
     </button>
   );
 }

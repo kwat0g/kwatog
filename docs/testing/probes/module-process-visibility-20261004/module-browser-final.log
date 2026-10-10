@@ -1,0 +1,63 @@
+[WebServer] (node:43720) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node-24 --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:43774) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 12 tests using 1 worker
+
+(node:43797) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+  ✓   1 [desktop-chromium] › e2e/chain-procure-to-pay.spec.ts:50:3 › Procure-to-Pay chain — PR lifecycle › purchasing officer creates a PR (draft → submitted) (3.8s)
+  ✓   2 [desktop-chromium] › e2e/chain-procure-to-pay.spec.ts:72:3 › Procure-to-Pay chain — PR lifecycle › warehouse cannot view purchase requests (forbidden) (1.8s)
+  ✓   3 [desktop-chromium] › e2e/chain-procure-to-pay.spec.ts:81:3 › Procure-to-Pay chain — PO lifecycle › PO flows draft → approved → sent (8.2s)
+  ✓   4 [desktop-chromium] › e2e/chain-procure-to-pay.spec.ts:134:3 › Procure-to-Pay chain — PO lifecycle › impex officer (purchasing view only) can VIEW POs but cannot CREATE (6.8s)
+  ✓   5 [desktop-chromium] › e2e/delivery-lookup-recovery.spec.ts:4:1 › delivery assignment distinguishes lookup outage from no available drivers and recovers (10.0s)
+  ✓   6 [desktop-chromium] › e2e/delivery-lookup-recovery.spec.ts:38:1 › failed delivery workflow options are visible and can be retried (7.2s)
+  ✓   7 [desktop-chromium] › e2e/material-issue-lookup-recovery.spec.ts:4:1 › material issue reports a failed item catalogue and retries without losing entered reference (8.1s)
+  ✓   8 [desktop-chromium] › e2e/quality-maintenance-lookup-recovery.spec.ts:8:3 › /quality/inspections/new names a failed prerequisite and recovers (8.2s)
+  ✓   9 [desktop-chromium] › e2e/quality-maintenance-lookup-recovery.spec.ts:8:3 › /maintenance/work-orders/create names a failed prerequisite and recovers (9.1s)
+  ✓  10 [desktop-chromium] › e2e/receiving-purchasing-lookup-recovery.spec.ts:8:3 › /inventory/grn/create reports failed prerequisite lookup and permits retry (8.7s)
+  ✓  11 [desktop-chromium] › e2e/receiving-purchasing-lookup-recovery.spec.ts:8:3 › /purchasing/purchase-requests/create reports failed prerequisite lookup and permits retry (7.6s)
+  ✘  12 [desktop-chromium] › e2e/rma-workflow.spec.ts:4:1 › RMA partial receipt preserves quantities and idempotency key across retry (8.1s)
+
+
+  1) [desktop-chromium] › e2e/rma-workflow.spec.ts:4:1 › RMA partial receipt preserves quantities and idempotency key across retry 
+
+    Error: Browser console errors
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+    + ]
+
+       at fixtures.ts:197
+
+      195 |       });
+      196 |       expect(diagnostics.pageErrors, 'Unhandled browser exceptions').toEqual([]);
+    > 197 |       expect(diagnostics.consoleErrors, 'Browser console errors').toEqual([]);
+          |                                                                   ^
+      198 |       expect(diagnostics.externalRequests).toEqual([]);
+      199 |     },
+      200 |     { auto: true },
+        at Object.base.extend.browserDiagnostics.auto (/home/ec2-user/kwatog/spa/e2e/fixtures.ts:197:67)
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/rma-workflow-RMA-partial-r-93350-dempotency-key-across-retry-desktop-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/rma-workflow-RMA-partial-r-93350-dempotency-key-across-retry-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/rma-workflow-RMA-partial-r-93350-dempotency-key-across-retry-desktop-chromium/error-context.md
+
+  1 failed
+    [desktop-chromium] › e2e/rma-workflow.spec.ts:4:1 › RMA partial receipt preserves quantities and idempotency key across retry 
+  11 passed (1.6m)

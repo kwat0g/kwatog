@@ -36,7 +36,7 @@ class ConvertPrToPoRequest extends FormRequest
     {
         return [
             // Optional required delivery date shared by every PO this
-            // conversion builds. When absent the POs get a null required date.
+            // conversion builds. When absent the POs inherit the PR date.
             'expected_delivery_date' => ['nullable', 'date'],
             // map: { pr_item_id => vendor_id }
             'vendor_map'   => ['required', 'array', 'min:1'],

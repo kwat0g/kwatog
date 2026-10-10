@@ -5,8 +5,12 @@
   "finalUrl": "/accounting/journal-entries",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -15,8 +19,12 @@
   "finalUrl": "/accounting/ap-aging",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -25,8 +33,12 @@
   "finalUrl": "/accounting/ar-aging",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -35,8 +47,12 @@
   "finalUrl": "/accounting/balance-sheet",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -45,8 +61,12 @@
   "finalUrl": "/accounting/bills",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -55,23 +75,13 @@
   "finalUrl": "/accounting/bills/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
-   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/inventory/uoms",
-    "method": "GET",
-    "status": 403
-   },
-   {
-    "url": "http://localhost/api/v1/inventory/uoms",
-    "method": "GET",
-    "status": 403
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/accounting/coa",
@@ -79,8 +89,12 @@
   "finalUrl": "/accounting/coa",
   "bouncedToLogin": false,
   "blank": false,
-  "forbidden": true,
+  "contentRoot": "main",
+  "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -89,8 +103,12 @@
   "finalUrl": "/accounting/coa/create",
   "bouncedToLogin": false,
   "blank": false,
-  "forbidden": true,
+  "contentRoot": "main",
+  "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -99,8 +117,12 @@
   "finalUrl": "/accounting/credit-notes",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -109,56 +131,27 @@
   "finalUrl": "/accounting/customers",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/accounting/customers/create",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/accounting/customers/create",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/accounting/income-statement",
@@ -166,8 +159,12 @@
   "finalUrl": "/accounting/income-statement",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -176,8 +173,12 @@
   "finalUrl": "/accounting/invoices",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -186,23 +187,13 @@
   "finalUrl": "/accounting/invoices/create",
   "bouncedToLogin": false,
   "blank": false,
-  "forbidden": true,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
-   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/inventory/uoms",
-    "method": "GET",
-    "status": 403
-   },
-   {
-    "url": "http://localhost/api/v1/inventory/uoms",
-    "method": "GET",
-    "status": 403
-   }
-  ]
+  "contentRoot": "main",
+  "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/accounting/journal-entries",
@@ -210,8 +201,12 @@
   "finalUrl": "/accounting/journal-entries",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -220,8 +215,12 @@
   "finalUrl": "/accounting/journal-entries/create",
   "bouncedToLogin": false,
   "blank": false,
-  "forbidden": true,
+  "contentRoot": "main",
+  "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -230,8 +229,12 @@
   "finalUrl": "/accounting/periods",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -240,8 +243,12 @@
   "finalUrl": "/accounting/portal-access",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -250,56 +257,27 @@
   "finalUrl": "/accounting/trial-balance",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/accounting/vendors",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/accounting/vendors",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/accounting/vendors/create",
@@ -307,8 +285,12 @@
   "finalUrl": "/accounting/vendors/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -317,8 +299,12 @@
   "finalUrl": "/action-center",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -327,8 +313,12 @@
   "finalUrl": "/admin/operations-health",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -337,8 +327,12 @@
   "finalUrl": "/admin/users",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -347,8 +341,12 @@
   "finalUrl": "/assets",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -357,8 +355,12 @@
   "finalUrl": "/assets/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -367,8 +369,12 @@
   "finalUrl": "/careers",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -377,8 +383,12 @@
   "finalUrl": "/careers/track",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -387,8 +397,12 @@
   "finalUrl": "/cookies",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -397,8 +411,12 @@
   "finalUrl": "/crm/products",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -407,8 +425,12 @@
   "finalUrl": "/crm/complaints",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -417,8 +439,12 @@
   "finalUrl": "/crm/complaints/new",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -427,8 +453,12 @@
   "finalUrl": "/crm/customers",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -437,108 +467,27 @@
   "finalUrl": "/crm/customers/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/dashboards/badges",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/business-policies",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user/preferences",
-    "method": "PATCH",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/broadcasting/auth",
-    "method": "POST",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/broadcasting/auth",
-    "method": "POST",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/dashboards/badges",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/business-policies",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/crm/inquiries",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/crm/inquiries",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/crm/price-agreements",
@@ -546,8 +495,12 @@
   "finalUrl": "/crm/price-agreements",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -556,8 +509,12 @@
   "finalUrl": "/crm/price-agreements/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -566,8 +523,12 @@
   "finalUrl": "/crm/products",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -576,8 +537,12 @@
   "finalUrl": "/crm/products/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -586,8 +551,12 @@
   "finalUrl": "/crm/sales-orders",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -596,8 +565,12 @@
   "finalUrl": "/crm/sales-orders/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -606,8 +579,12 @@
   "finalUrl": "/dashboard/finance",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -616,108 +593,27 @@
   "finalUrl": "/dashboard/finance",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/dashboards/badges",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user/preferences",
-    "method": "PATCH",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/broadcasting/auth",
-    "method": "POST",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/broadcasting/auth",
-    "method": "POST",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/business-policies",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/dashboards/badges",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/business-policies",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user/preferences",
-    "method": "PATCH",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/dashboards/finance",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/dashboard/admin",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/dashboard/admin",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/dashboard/default",
@@ -725,8 +621,12 @@
   "finalUrl": "/dashboard/default",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -735,8 +635,12 @@
   "finalUrl": "/dashboard/finance",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -745,8 +649,12 @@
   "finalUrl": "/dashboard/hr",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -755,8 +663,12 @@
   "finalUrl": "/dashboard/plant-manager",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -765,8 +677,12 @@
   "finalUrl": "/dashboard/ppc",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -775,8 +691,12 @@
   "finalUrl": "/dashboard/purchasing",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -785,8 +705,12 @@
   "finalUrl": "/dashboard/quality",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -795,8 +719,12 @@
   "finalUrl": "/dashboard/scorecard",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -805,8 +733,12 @@
   "finalUrl": "/dashboard/warehouse",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -815,8 +747,12 @@
   "finalUrl": "/driver",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -825,8 +761,12 @@
   "finalUrl": "/factory",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -835,8 +775,12 @@
   "finalUrl": "/factory/qc",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -845,8 +789,12 @@
   "finalUrl": "/hr/recruitment",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -855,56 +803,27 @@
   "finalUrl": "/hr/recruitment/applications",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/hr/recruitment/postings",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/hr/recruitment/postings",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/hr/recruitment/postings/create",
@@ -912,8 +831,12 @@
   "finalUrl": "/hr/recruitment/postings/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -922,8 +845,12 @@
   "finalUrl": "/hr/separations",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -932,8 +859,12 @@
   "finalUrl": "/hr/skills",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -942,8 +873,12 @@
   "finalUrl": "/hr/training/matrix",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -952,8 +887,12 @@
   "finalUrl": "/hr/trainings",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -962,8 +901,12 @@
   "finalUrl": "/hr/trainings/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -972,8 +915,12 @@
   "finalUrl": "/inventory/items",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -982,56 +929,27 @@
   "finalUrl": "/inventory/dashboard",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/inventory/grn",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/inventory/grn",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/inventory/grn/create",
@@ -1039,8 +957,12 @@
   "finalUrl": "/inventory/grn/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1049,8 +971,12 @@
   "finalUrl": "/inventory/items",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1059,8 +985,12 @@
   "finalUrl": "/inventory/items/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1069,8 +999,12 @@
   "finalUrl": "/inventory/material-issues",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1079,8 +1013,12 @@
   "finalUrl": "/inventory/material-issues/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1089,8 +1027,12 @@
   "finalUrl": "/inventory/mrb",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1099,8 +1041,12 @@
   "finalUrl": "/inventory/picking",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1109,8 +1055,12 @@
   "finalUrl": "/inventory/scanner",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1119,8 +1069,12 @@
   "finalUrl": "/inventory/stock-adjustments",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1129,8 +1083,12 @@
   "finalUrl": "/inventory/stock-adjustments/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1139,8 +1097,12 @@
   "finalUrl": "/inventory/stock-count",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1149,8 +1111,12 @@
   "finalUrl": "/inventory/stock-levels",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1159,8 +1125,12 @@
   "finalUrl": "/inventory/transfer-orders",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1169,8 +1139,12 @@
   "finalUrl": "/inventory/warehouse",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1179,56 +1153,27 @@
   "finalUrl": "/inventory/warehouse-map",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/maintenance",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/maintenance/downtime",
@@ -1236,8 +1181,12 @@
   "finalUrl": "/maintenance/downtime",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1246,8 +1195,12 @@
   "finalUrl": "/maintenance/mobile",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1256,8 +1209,12 @@
   "finalUrl": "/maintenance/schedules",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1266,8 +1223,12 @@
   "finalUrl": "/maintenance/schedules/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1276,8 +1237,12 @@
   "finalUrl": "/maintenance/work-orders",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1286,8 +1251,12 @@
   "finalUrl": "/maintenance/work-orders/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1296,8 +1265,12 @@
   "finalUrl": "/mrp/plans",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1306,56 +1279,27 @@
   "finalUrl": "/mrp/boms",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/mrp/boms/create",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/mrp/boms/create",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/mrp/machines",
@@ -1363,8 +1307,12 @@
   "finalUrl": "/mrp/machines",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1373,8 +1321,12 @@
   "finalUrl": "/mrp/machines/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1383,8 +1335,12 @@
   "finalUrl": "/mrp/molds",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1393,8 +1349,12 @@
   "finalUrl": "/mrp/molds/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1403,8 +1363,12 @@
   "finalUrl": "/mrp/plans",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1413,8 +1377,12 @@
   "finalUrl": "/notifications",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1423,8 +1391,12 @@
   "finalUrl": "/privacy",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1433,8 +1405,12 @@
   "finalUrl": "/production/work-orders",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1443,8 +1419,12 @@
   "finalUrl": "/production/dashboard",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1453,8 +1433,12 @@
   "finalUrl": "/production/oee",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1463,8 +1447,12 @@
   "finalUrl": "/production/routings",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1473,8 +1461,12 @@
   "finalUrl": "/production/routings/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1483,8 +1475,12 @@
   "finalUrl": "/production/schedule",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1493,8 +1489,12 @@
   "finalUrl": "/production/work-orders",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1503,88 +1503,33 @@
   "finalUrl": "/production/work-orders/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/business-policies",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user/preferences",
-    "method": "PATCH",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/broadcasting/auth",
-    "method": "POST",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/broadcasting/auth",
-    "method": "POST",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/business-policies",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/purchasing",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/purchasing/purchase-orders",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [
    {
-    "url": "http://localhost/api/v1/auth/user",
+    "url": "http://localhost:18080/api/v1/purchasing/purchase-orders?page=1&per_page=25&status=",
     "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
+    "error": "net::ERR_ABORTED"
    }
-  ]
+  ],
+  "failedApi": []
  },
  {
   "route": "/quality",
@@ -1592,8 +1537,12 @@
   "finalUrl": "/quality/dashboard",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1602,8 +1551,12 @@
   "finalUrl": "/quality/calibration",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1612,8 +1565,12 @@
   "finalUrl": "/quality/calibration/new",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1622,8 +1579,12 @@
   "finalUrl": "/quality/capability",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1632,8 +1593,12 @@
   "finalUrl": "/quality/dashboard",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1642,8 +1607,12 @@
   "finalUrl": "/quality/inspection-specs",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1652,8 +1621,12 @@
   "finalUrl": "/quality/inspection-specs/new",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1662,8 +1635,12 @@
   "finalUrl": "/quality/inspections",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1672,8 +1649,12 @@
   "finalUrl": "/quality/inspections/new",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1682,8 +1663,12 @@
   "finalUrl": "/quality/ncr-templates",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1692,8 +1677,12 @@
   "finalUrl": "/quality/ncr-templates/new",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1702,8 +1691,12 @@
   "finalUrl": "/quality/ncrs",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1712,8 +1705,12 @@
   "finalUrl": "/quality/ncrs/effectiveness",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1722,8 +1719,12 @@
   "finalUrl": "/quality/ncrs/new",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1732,33 +1733,13 @@
   "finalUrl": "/quality/traceability",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
- },
- {
-  "route": "/reset-password",
-  "role": "finance_officer",
-  "finalUrl": "/dashboard/finance",
-  "bouncedToLogin": false,
-  "blank": false,
-  "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user/preferences",
-    "method": "PATCH",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/dashboards/finance",
-    "method": "GET",
-    "status": 429
-   }
-  ]
  },
  {
   "route": "/self-service",
@@ -1766,8 +1747,12 @@
   "finalUrl": "/self-service",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1776,8 +1761,12 @@
   "finalUrl": "/self-service/documents",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1786,8 +1775,12 @@
   "finalUrl": "/self-service/dtr",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1796,8 +1789,12 @@
   "finalUrl": "/self-service/leave",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1806,8 +1803,12 @@
   "finalUrl": "/self-service/leaves",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1816,8 +1817,12 @@
   "finalUrl": "/self-service/loans",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1826,8 +1831,12 @@
   "finalUrl": "/self-service/me",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1836,8 +1845,12 @@
   "finalUrl": "/self-service/notification-preferences",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1846,8 +1859,12 @@
   "finalUrl": "/self-service/overtime",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1856,8 +1873,12 @@
   "finalUrl": "/self-service/profile",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1866,8 +1887,12 @@
   "finalUrl": "/supply-chain/deliveries",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1876,8 +1901,12 @@
   "finalUrl": "/supply-chain/deliveries",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1886,8 +1915,12 @@
   "finalUrl": "/supply-chain/deliveries/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1896,56 +1929,27 @@
   "finalUrl": "/supply-chain/fleet",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
   "route": "/supply-chain/shipments",
   "role": "finance_officer",
-  "finalUrl": "/sign-in",
-  "bouncedToLogin": true,
+  "finalUrl": "/supply-chain/shipments",
+  "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
-  "consoleErrors": [
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
-   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
-  ],
-  "failedApi": [
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/auth/user",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/contact",
-    "method": "GET",
-    "status": 429
-   },
-   {
-    "url": "http://localhost/api/v1/landing/content",
-    "method": "GET",
-    "status": 429
-   }
-  ]
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
+  "consoleErrors": [],
+  "requestFailures": [],
+  "failedApi": []
  },
  {
   "route": "/supply-chain/shipments/create",
@@ -1953,8 +1957,12 @@
   "finalUrl": "/supply-chain/shipments/create",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  },
  {
@@ -1963,8 +1971,12 @@
   "finalUrl": "/terms",
   "bouncedToLogin": false,
   "blank": false,
+  "contentRoot": "main",
   "forbidden": false,
+  "hasVisibleSkeleton": false,
+  "hasVisibleLoadingStatus": false,
   "consoleErrors": [],
+  "requestFailures": [],
   "failedApi": []
  }
 ]

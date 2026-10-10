@@ -65,16 +65,20 @@ class SweepMissingOutgoingQc extends Command
         $workOrders = WorkOrder::query()
             ->with(['creator', 'outputs' => fn ($q) => $q
                 ->where('good_count', '>', 0)
+                ->where(fn ($eligible) => $eligible->whereNull('rework_ncr_id')->orWhereIn('rework_ncr_id',
+                    DB::table('non_conformance_reports')->whereNotNull('rework_finished_at')->select('id')))
                 ->whereDoesntHave('inspections', fn ($i) => $i
-                    ->where('stage', InspectionStage::Outgoing->value)),
+                    ->where('stage', InspectionStage::Outgoing->value)
+                    ->where('status', '!=', 'cancelled')),
             ])
             ->whereIn('status', ['completed', 'closed'])
-            ->where(function ($q) {
-                $q->whereNotNull('sales_order_id')->orWhereNotNull('parent_ncr_id');
-            })
-            ->whereHas('outputs', fn ($q) => $q->where('good_count', '>', 0))
-            ->whereDoesntHave('outputs.inspections', fn ($i) => $i
-                ->where('stage', InspectionStage::Outgoing->value))
+            ->whereHas('outputs', fn ($q) => $q
+                ->where('good_count', '>', 0)
+                ->where(fn ($eligible) => $eligible->whereNull('rework_ncr_id')->orWhereIn('rework_ncr_id',
+                    DB::table('non_conformance_reports')->whereNotNull('rework_finished_at')->select('id')))
+                ->whereDoesntHave('inspections', fn ($i) => $i
+                    ->where('stage', InspectionStage::Outgoing->value)
+                    ->where('status', '!=', 'cancelled')))
             ->orderBy('id')
             ->limit($limit)
             ->get();
@@ -112,10 +116,18 @@ class SweepMissingOutgoingQc extends Command
                         return 0;
                     }
 
+                    if ($lockedWo->status?->value === 'closed') {
+                        throw new BusinessRuleException('Closed work order has missing outgoing QC. Controlled reconciliation required; automatic creation and reopening are prohibited.');
+                    }
+
                     $count = 0;
-                    foreach ($lockedWo->outputs()->where('good_count', '>', 0)->orderBy('id')->get() as $output) {
+                    foreach ($lockedWo->outputs()->where('good_count', '>', 0)
+                        ->where(fn ($eligible) => $eligible->whereNull('rework_ncr_id')->orWhereIn('rework_ncr_id',
+                            DB::table('non_conformance_reports')->whereNotNull('rework_finished_at')->select('id')))
+                        ->orderBy('id')->get() as $output) {
                         $exists = $output->inspections()
                             ->where('stage', InspectionStage::Outgoing->value)
+                            ->where('status', '!=', 'cancelled')
                             ->exists();
                         if ($exists) {
                             continue;

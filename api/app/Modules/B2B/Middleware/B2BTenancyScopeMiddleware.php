@@ -38,6 +38,7 @@ class B2BTenancyScopeMiddleware
 
             SalesOrder::addGlobalScope('b2b_tenancy', $scope);
             Invoice::addGlobalScope('b2b_tenancy', $scope);
+            \App\Modules\Accounting\Models\InvoicePaymentSubmission::addGlobalScope('b2b_tenancy', $scope);
             CustomerComplaint::addGlobalScope('b2b_tenancy', $scope);
             DeliverySchedule::addGlobalScope('b2b_tenancy', $scope);
             ReturnRequest::addGlobalScope('b2b_tenancy', $scope);

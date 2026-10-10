@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
-use App\Modules\Auth\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -36,8 +35,14 @@ class TransferOrderResource extends JsonResource
             'reason'          => $this->reason,
             'status'          => $this->status,
             'status_label'    => $this->status?->label() ?? Str::headline((string) $this->status),
-            'created_by'      => $this->whenLoaded('creator', fn () => new UserResource($this->creator)),
-            'transferred_by'  => $this->whenLoaded('transferrer', fn () => new UserResource($this->transferrer)),
+            'created_by'      => $this->whenLoaded('creator', fn () => $this->creator ? [
+                'id' => $this->creator->hash_id,
+                'name' => $this->creator->name,
+            ] : null),
+            'transferred_by'  => $this->whenLoaded('transferrer', fn () => $this->transferrer ? [
+                'id' => $this->transferrer->hash_id,
+                'name' => $this->transferrer->name,
+            ] : null),
             'transferred_at'  => $this->transferred_at?->toISOString(),
             'created_at'      => $this->created_at?->toISOString(),
         ];

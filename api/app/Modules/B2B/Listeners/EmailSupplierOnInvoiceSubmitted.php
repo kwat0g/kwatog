@@ -17,7 +17,8 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
 
     public function handle(SupplierInvoiceSubmitted $event): void
     {
-        $bill = $event->bill->loadMissing(['vendor', 'purchaseOrder']);
+        $bill = $event->bill->loadMissing(['vendor', 'purchaseOrder', 'supplierInvoice']);
+        $invoiceNumber = $bill->supplierInvoice?->number ?? $bill->supplier_invoice_number ?? $bill->bill_number;
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
             'link_to' => '/accounting/bills/'.$bill->hash_id,
@@ -30,7 +31,7 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
             $fallback->notifyPermission(
                 'accounting.vendors.view',
                 'Supplier invoice email',
-                "Supplier invoice {$bill->bill_number} was submitted, but the supplier has no usable email address. Confirm receipt through the supplier portal or an approved channel.",
+                "Supplier invoice {$invoiceNumber} was submitted, but the supplier has no usable email address. Confirm receipt through the supplier portal or an approved channel.",
                 $context,
             );
             return;
@@ -45,7 +46,7 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
             $fallback->notifyPermission(
                 'accounting.vendors.view',
                 'Supplier invoice email',
-                "The confirmation email for supplier invoice {$bill->bill_number} could not be accepted by the email provider. Review the submission in Accounts Payable.",
+                "The confirmation email for supplier invoice {$invoiceNumber} could not be accepted by the email provider. Review the submission in Accounts Payable.",
                 $context,
             );
             Log::warning('Supplier invoice email enqueue failed', [

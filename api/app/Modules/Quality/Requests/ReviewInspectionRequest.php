@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Requests;
 
-use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\InspectionOutcome;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,6 +21,7 @@ class ReviewInspectionRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'expected_result_version' => [$this->route('inspection')?->usesChecklistCapture() ? 'required' : 'sometimes', 'integer', 'min:0'],
             'decision' => ['required', Rule::in([
                 InspectionStatus::Passed->value,
                 InspectionStatus::Failed->value,

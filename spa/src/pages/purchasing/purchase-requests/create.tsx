@@ -271,12 +271,11 @@ export default function CreatePurchaseRequestPage() {
               <Input
                 label="Needed by"
                 type="date"
+                min={localIsoDate()}
+                helper="Today or later. Sets the purchase order's expected delivery date."
                 {...register('required_delivery_date')}
                 error={errors.required_delivery_date?.message}
               />
-              <p className="mt-1 text-xs text-muted">
-                When the material must arrive. Drives the PO's expected delivery date.
-              </p>
             </div>
             <Textarea
               label="Reason"

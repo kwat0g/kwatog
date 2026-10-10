@@ -21,6 +21,9 @@ class MaintenanceLog extends Model
     protected $fillable = [
         'work_order_id',
         'description',
+        'finding',
+        'action_taken',
+        'result',
         'logged_by',
         'created_at',
     ];

@@ -151,6 +151,38 @@ class PayrollVoidTest extends TestCase
         $this->assertSame((string) $orig->total_credit, (string) $reversal->total_debit);
     }
 
+    public function test_void_cannot_post_reversal_before_future_dated_payroll_entry(): void
+    {
+        $user = $this->makeUser();
+        $period = $this->finalizedPeriod($user, postGl: false);
+        $futurePostingDate = now()->addMonths(3)->endOfMonth()->toDateString();
+        $period->forceFill(['payroll_date' => $futurePostingDate])->save();
+
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        $journalEntryId = app(PayrollGlPostingService::class)->post($period->fresh());
+        $this->assertNotNull($journalEntryId);
+
+        try {
+            app(PayrollPeriodService::class)->void($period->fresh(), $user, 'future-date guard');
+            $this->fail('A reversal dated before its posted entry must be refused.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+            $this->assertStringContainsString('cannot be reversed before its original posting date', $exception->getMessage());
+            $this->assertStringContainsString($futurePostingDate, $exception->getMessage());
+        }
+
+        $this->assertSame('finalized', DB::table('payroll_periods')->where('id', $period->id)->value('status'));
+        $this->assertSame('posted', DB::table('journal_entries')->where('id', $journalEntryId)->value('status'));
+        $this->assertNull(DB::table('journal_entries')->where('id', $journalEntryId)->value('reversed_by_entry_id'));
+        $this->assertDatabaseMissing('journal_entries', [
+            'reference_type' => 'journal_entry_reversal',
+            'reference_id' => $journalEntryId,
+        ]);
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'payroll.period.void',
+            'model_id' => $period->id,
+        ]);
+    }
+
     public function test_voided_period_audit_logged(): void
     {
         $user = $this->makeUser();

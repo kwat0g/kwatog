@@ -37,7 +37,9 @@ use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
 use App\Modules\Attendance\Listeners\NotifyOnOvertimeDecided;
 use App\Modules\Attendance\Listeners\NotifyOnOvertimeSubmitted;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Listeners\EmailSupplierOnInvoiceSubmitted;
 use App\Modules\B2B\Listeners\EmailSupplierOnPurchaseOrderCancelled;
@@ -52,6 +54,7 @@ use App\Modules\CRM\Listeners\EmailCustomerOnSalesOrderConfirmed;
 use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Services\PricingReviewService;
 use App\Modules\Dashboard\Observers\BadgeInvalidationObserver;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\EmployeeCreated;
@@ -61,6 +64,7 @@ use App\Modules\HR\Listeners\AutoProvisionUserOnEmployeeHire;
 use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Listeners\InitializeLeaveBalances;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
+use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Models\ProfileUpdateRequest;
@@ -94,14 +98,17 @@ use App\Modules\Loans\Events\LoanDecided;
 use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Listeners\NotifyOnLoanDecided;
 use App\Modules\Loans\Listeners\NotifyOnLoanSubmitted;
+use App\Modules\Maintenance\Events\MaintenanceWorkOrderCreated;
+use App\Modules\Maintenance\Listeners\NotifyMaintenanceWorkOrder;
 use App\Modules\Maintenance\Events\PreventiveMaintenanceGenerationRequested;
 use App\Modules\Maintenance\Listeners\GeneratePreventiveMaintenanceOnRequested;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\MRP\Events\BomPricingReviewRequested;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Events\MrpReplanRequested;
+use App\Modules\MRP\Listeners\QueueMrpOnOutgoingInspectionFailed;
 use App\Modules\MRP\Listeners\QueueMrpOnReplanRequested;
 use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
-use App\Modules\MRP\Listeners\QueueMrpOnOutgoingInspectionFailed;
 use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
@@ -116,12 +123,15 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Events\ProductionReceiptRequested;
 use App\Modules\Production\Events\WorkOrderCompleted;
+use App\Modules\Production\Events\WorkOrderQualityResolved;
 use App\Modules\Production\Events\WorkOrderStatusChanged;
+use App\Modules\Production\Listeners\AutoCloseResolvedWorkOrder;
 use App\Modules\Production\Listeners\CreateProductionReceiptOnOutputRequested;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Observers\ProductionStaffingObserver;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
@@ -142,6 +152,7 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
 use App\Modules\Quality\Events\NcrRecurrenceLinked;
+use App\Modules\Quality\Events\OutgoingQuantityReleased;
 use App\Modules\Quality\Listeners\AcceptGrnOnIncomingQcPass;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
 use App\Modules\Quality\Listeners\NotifyOnInspectionFailed;
@@ -186,6 +197,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ScheduleTickFailureTracker::class);
         $this->app->singleton(SchedulerExecutionLedger::class);
         $this->app->bind(SupplierDispatchGateway::class, SupplierPortalDispatchGateway::class);
+        $this->app->scoped(\App\Modules\CRM\Services\SalesOrderSupplyService::class);
     }
 
     public function boot(): void
@@ -254,6 +266,10 @@ class AppServiceProvider extends ServiceProvider
 
         // Sprint 4: invalidate financial-statement caches on JE mutation.
         JournalEntry::observe(JournalEntryObserver::class);
+        foreach ([Attendance::class, LeaveRequest::class,
+            Employee::class, User::class] as $staffingModel) {
+            $staffingModel::observe(ProductionStaffingObserver::class);
+        }
 
         // Polish Task S2 (real-time): bump the badge cache version + broadcast
         // BadgesChanged on any write to a model that backs a sidebar badge, so
@@ -308,6 +324,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SalesOrderConfirmed::class, [QueueMrpOnSalesOrderConfirmed::class, 'handle']);
         Event::listen(StockMovementCompleted::class, [QueueMrpOnStockMovementCompleted::class, 'handle']);
         Event::listen(InspectionFailed::class, [QueueMrpOnOutgoingInspectionFailed::class, 'handle']);
+        Event::listen(BomPricingReviewRequested::class, [PricingReviewService::class, 'handle']);
         Event::listen(MrpReplanRequested::class, [QueueMrpOnReplanRequested::class, 'handle']);
 
         // Sprint 6 Task 56: machine breakdown / restoration handling.
@@ -319,13 +336,16 @@ class AppServiceProvider extends ServiceProvider
         // Task A4: Notify Finance when a delivery is confirmed (draft invoice ready).
         Event::listen(DeliveryConfirmed::class, [NotifyFinanceOnDeliveryConfirmed::class, 'handle']);
         Event::listen(DeliveryConfirmed::class, [EmailCustomerOnDeliveryConfirmed::class, 'handle']);
+        Event::listen(DeliveryConfirmed::class, [\App\Modules\ReturnManagement\Listeners\CompleteCustomerReplacement::class, 'handle']);
         Event::listen(InvoiceFinalized::class, [EmailCustomerOnInvoiceFinalized::class, 'handle']);
         Event::listen(OfficialReceiptIssued::class, [EmailCustomerOnOfficialReceiptIssued::class, 'handle']);
         Event::listen(CreditNoteFinalized::class, [EmailPartyOnCreditNoteFinalized::class, 'handle']);
         Event::listen(CustomerComplaintUpdated::class, [EmailCustomerOnComplaintUpdated::class, 'handle']);
         Event::listen(ReturnRequestUpdated::class, [EmailPartyOnReturnRequestUpdated::class, 'handle']);
+        Event::listen(ReturnRequestUpdated::class, [\App\Modules\ReturnManagement\Listeners\CompleteCustomerReplacement::class, 'handle']);
         Event::listen(SupplierInvoiceSubmitted::class, [EmailSupplierOnInvoiceSubmitted::class, 'handle']);
         Event::listen(BudgetActualsSyncRequested::class, [RunBudgetActualsSyncOnRequested::class, 'handle']);
+        Event::listen(MaintenanceWorkOrderCreated::class, [NotifyMaintenanceWorkOrder::class, 'handle']);
         Event::listen(PreventiveMaintenanceGenerationRequested::class, [GeneratePreventiveMaintenanceOnRequested::class, 'handle']);
         Event::listen(MonthlyDepreciationRequested::class, [RunMonthlyDepreciationOnRequested::class, 'handle']);
         Event::listen(DeliveryInvoiceRequested::class, [CreateDraftInvoiceOnDeliveryInvoiceRequested::class, 'handle']);
@@ -341,8 +361,10 @@ class AppServiceProvider extends ServiceProvider
         // ADV7 — auto-trigger in-process QC on WO start.
         Event::listen(WorkOrderStatusChanged::class, [TriggerInProcessQC::class,          'handle']);
         Event::listen(WorkOrderCompleted::class, [TriggerOutgoingQC::class,           'handle']);
+        Event::listen(WorkOrderQualityResolved::class, [AutoCloseResolvedWorkOrder::class, 'handle']);
         Event::listen(WorkOrderCompleted::class, [NotifyOnWorkOrderCompleted::class,  'handle']);
         Event::listen(InspectionPassed::class, [CreateDeliveryDraftOnQcPass::class, 'handle']);
+        Event::listen(OutgoingQuantityReleased::class, [CreateDeliveryDraftOnQcPass::class, 'handle']);
         Event::listen(InspectionPassed::class, [AcceptGrnOnIncomingQcPass::class,      'handle']);
         // OGAMI-005 — an incoming pass with a CoA on file verifies the CoA
         // (trace §7.7: the column previously had no writer at all).
@@ -352,6 +374,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(GoodsReceiptNoteCreated::class, [TriggerIncomingQC::class,                'handle']);
         Event::listen(GoodsReceiptNoteCreated::class, [NotifyOnGrnReceived::class,              'handle']);
         // Auto-bill chain — GRN accepted → draft supplier bill for review.
+        Event::listen(GoodsReceiptNoteAccepted::class, [PricingReviewService::class, 'receiptCostChanged']);
         Event::listen(GoodsReceiptNoteAccepted::class, [AutoCreateBillOnGrnAccepted::class,      'handle']);
         Event::listen(PurchaseRequestApproved::class, [NotifyOnPurchaseRequestApproved::class,  'handle']);
         Event::listen(PurchaseRequestApproved::class, [ConsolidatePurchaseOrders::class,        'handle']);

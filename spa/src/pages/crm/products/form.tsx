@@ -3,7 +3,7 @@
  * Server-side validation errors land on the matching field; sane Zod schema
  * mirrors the StoreProductRequest rules.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
@@ -18,10 +18,12 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { accountsApi } from '@/api/accounting/accounts';
+import { crmCustomersApi } from '@/api/crm/customers';
 import { productsApi } from '@/api/crm/products';
 import { uomsApi } from '@/api/inventory/uoms';
 import type { Product, CreateProductData, UpdateProductData } from '@/types/crm';
 import { usePermission } from '@/hooks/usePermission';
+import { useDebounce } from '@/hooks/useDebounce';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -43,6 +45,22 @@ export function ProductForm({ initial, mode }: Props) {
     queryFn: uomsApi.list,
     staleTime: 300_000,
   });
+  const [customerSearch, setCustomerSearch] = useState('');
+  const debouncedCustomerSearch = useDebounce(customerSearch, 300);
+  const {
+    data: customers,
+    isError: customersError,
+    refetch: retryCustomers,
+  } = useQuery({
+    queryKey: ['crm', 'customers', 'product-access', debouncedCustomerSearch],
+    queryFn: () =>
+      crmCustomersApi.list({
+        per_page: 100,
+        is_active: true,
+        search: debouncedCustomerSearch || undefined,
+      }),
+    enabled: can('accounting.customers.view'),
+  });
   const canViewRevenueAccounts = can('accounting.coa.view');
   const { data: revenueAccountsResponse } = useQuery({
     queryKey: ['accounting', 'accounts', 'revenue'],
@@ -52,14 +70,18 @@ export function ProductForm({ initial, mode }: Props) {
   });
   const revenueAccounts = revenueAccountsResponse?.data ?? [];
 
-    const form = useForm<FormValues>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       part_number: initial?.part_number ?? '',
       name: initial?.name ?? '',
       description: initial?.description ?? '',
-      unit_of_measure: initial?.unit_of_measure ?? '',
+      unit_of_measure: initial?.unit_of_measure.toUpperCase() ?? '',
       standard_cost: initial?.standard_cost ?? '',
+      base_selling_price: initial?.base_selling_price ?? '',
+      minimum_selling_price: initial?.minimum_selling_price ?? '',
+      portal_visibility: initial?.portal_visibility ?? 'restricted',
+      portal_customer_ids: initial?.portal_customers?.map((customer) => customer.id) ?? [],
       revenue_account_id: initial?.revenue_account_id ?? '',
       is_active: initial?.is_active ?? true,
     },
@@ -67,6 +89,8 @@ export function ProductForm({ initial, mode }: Props) {
   const {
     register,
     handleSubmit,
+    getValues,
+    setValue,
     setError,
     watch,
     reset,
@@ -83,14 +107,39 @@ export function ProductForm({ initial, mode }: Props) {
         part_number: initial.part_number,
         name: initial.name,
         description: initial.description ?? '',
-        unit_of_measure: initial.unit_of_measure,
+        unit_of_measure: initial.unit_of_measure.toUpperCase(),
         standard_cost: initial.standard_cost,
+        base_selling_price: initial.base_selling_price ?? '',
+        minimum_selling_price: initial.minimum_selling_price ?? '',
+        portal_visibility: initial.portal_visibility ?? 'restricted',
+        portal_customer_ids: initial.portal_customers?.map((customer) => customer.id) ?? [],
         revenue_account_id: initial.revenue_account_id ?? '',
         is_active: initial.is_active,
       });
     }
   }, [initial, reset]);
 
+  useEffect(() => {
+    if (!initial) return;
+
+    const canonicalUom = uoms.find(
+      (uom) => uom.code.toUpperCase() === initial.unit_of_measure.toUpperCase(),
+    );
+    if (
+      canonicalUom &&
+      getValues('unit_of_measure')?.toUpperCase() === canonicalUom.code.toUpperCase()
+    ) {
+      setValue('unit_of_measure', canonicalUom.code, { shouldDirty: false });
+    }
+  }, [initial, uoms, getValues, setValue]);
+
+  const selectedCustomers = watch('portal_customer_ids') ?? [];
+  const accessCustomers = [
+    ...(initial?.portal_customers ?? []),
+    ...(customers?.data ?? []).filter(
+      (customer) => !initial?.portal_customers?.some((existing) => existing.id === customer.id),
+    ),
+  ];
   const isActive = watch('is_active');
   const { ref: isActiveRef, ...isActiveRegister } = register('is_active');
   void isActiveRef;
@@ -99,6 +148,8 @@ export function ProductForm({ initial, mode }: Props) {
     mutationFn: (values: FormValues) => {
       const payload: CreateProductData | UpdateProductData = {
         ...values,
+        base_selling_price: values.base_selling_price || null,
+        minimum_selling_price: values.minimum_selling_price || null,
         description: values.description?.trim() ? values.description : null,
       };
       return mode === 'create'
@@ -126,7 +177,7 @@ export function ProductForm({ initial, mode }: Props) {
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
-      className="max-w-3xl mx-auto px-5 py-4"
+      className="min-w-0 w-full px-5 py-4"
     >
       <FormDraftBanner safety={safety} inset={false} />
       <fieldset className="mb-8">
@@ -186,12 +237,14 @@ export function ProductForm({ initial, mode }: Props) {
             required
             prefix="₱"
             {...register('standard_cost')}
+            readOnly={mode === 'edit' && !can('inventory.costs.approve')}
             error={errors.standard_cost?.message}
             placeholder="0.00"
             className="font-mono"
           />
           {canViewRevenueAccounts ? (
             <Select
+              searchable
               label="Revenue Account"
               {...register('revenue_account_id')}
               error={errors.revenue_account_id?.message}
@@ -211,9 +264,113 @@ export function ProductForm({ initial, mode }: Props) {
           )}
         </div>
         <p className="mt-2 text-xs text-muted">
-          Internal accounting figure. Customer pricing is set per Price Agreement (Sales → Customers
-          → Price Agreements).
+          {mode === 'edit' &&
+            !can('inventory.costs.approve') &&
+            'Financial fields require Finance approval. Submit changes from the product record. '}
+          Internal accounting figure. Confirm full unit cost before setting selling prices;
+          customers never see this cost.
         </p>
+      </fieldset>
+
+      <fieldset className="mb-8 rounded-lg border border-default bg-canvas p-4 sm:p-5">
+        <legend className="px-1 text-sm font-semibold">Selling prices and customer access</legend>
+        <p className="mb-4 text-sm text-muted">
+          Base price applies when no customer agreement covers the requested delivery date.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label="Base selling price"
+            prefix="₱"
+            inputMode="decimal"
+            {...register('base_selling_price')}
+            readOnly={mode === 'edit' && !can('inventory.costs.approve')}
+            error={errors.base_selling_price?.message}
+            placeholder="Not configured"
+            helper="Per unit, before VAT. Leave unset if not ready to sell."
+          />
+          <Input
+            label="Minimum selling price"
+            prefix="₱"
+            inputMode="decimal"
+            {...register('minimum_selling_price')}
+            readOnly={mode === 'edit' && !can('inventory.costs.approve')}
+            error={errors.minimum_selling_price?.message}
+            placeholder="Not configured"
+            helper="Blocks lower base, agreed and volume prices. No floor protection when unset."
+          />
+        </div>
+        <Select
+          label="Customer portal visibility"
+          containerClassName="mt-4"
+          {...register('portal_visibility')}
+          error={errors.portal_visibility?.message}
+        >
+          <option value="restricted">Private — assigned customers only</option>
+          <option value="standard">Standard — all active customers</option>
+        </Select>
+        <p className="mt-2 text-xs text-muted">
+          An active product needs a base price or applicable agreement before it can be ordered.
+          Assignments stay available if an agreement expires.
+        </p>
+        <div className="mt-4 border-t border-default pt-4">
+          <p className="mb-2 text-sm font-medium">
+            Assigned customers ({selectedCustomers.length})
+          </p>
+          {can('accounting.customers.view') ? (
+            <>
+              <Input
+                aria-label="Find customers to assign"
+                value={customerSearch}
+                onChange={(event) => setCustomerSearch(event.target.value)}
+                placeholder="Search customers"
+              />
+              {customersError && (
+                <p role="alert" className="mt-2 text-sm text-danger-fg">
+                  Cannot load customers.{' '}
+                  <Button type="button" size="sm" onClick={() => retryCustomers()}>
+                    Retry
+                  </Button>
+                </p>
+              )}
+              <div className="mt-2 max-h-52 overflow-y-auto rounded-md border border-default divide-y divide-default">
+                {accessCustomers.map((customer) => (
+                  <label
+                    key={customer.id}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-surface"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCustomers.includes(customer.id)}
+                      onChange={(event) =>
+                        setValue(
+                          'portal_customer_ids',
+                          event.target.checked
+                            ? [...selectedCustomers, customer.id]
+                            : selectedCustomers.filter((id) => id !== customer.id),
+                          { shouldDirty: true },
+                        )
+                      }
+                    />
+                    {customer.name}
+                  </label>
+                ))}
+                {!accessCustomers.length && (
+                  <p className="p-3 text-sm text-muted">No customers found.</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              Customer access requires permission to view customers. Existing assignments are
+              preserved.
+            </p>
+          )}
+          {errors.portal_customer_ids?.message && (
+            <p role="alert" className="mt-2 text-xs text-danger-fg">
+              {errors.portal_customer_ids.message}
+            </p>
+          )}
+        </div>
       </fieldset>
 
       <fieldset className="mb-8">

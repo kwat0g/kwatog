@@ -442,15 +442,13 @@ class BadgeService
                 'counter'     => fn (): int => $user->unreadNotifications()->count(),
             ],
 
-            // CRM > Sales orders — drafts awaiting confirmation. (The old
-            // 'pending_confirmation' status never existed in SalesOrderStatus;
-            // drafts are the only pre-confirmation state — fixed 2026-08-08.)
+            // Sales orders still awaiting review, negotiation, or confirmation.
             'pending_so' => [
                 'permissions' => ['crm.sales_orders.view'],
                 'label'       => 'Sales Orders',
                 'description' => 'Sales orders awaiting confirmation',
                 'counter'     => fn (): int => SalesOrder::query()
-                    ->where('status', SalesOrderStatus::Draft->value)
+                    ->whereIn('status', [SalesOrderStatus::Draft->value, SalesOrderStatus::AwaitingConfirmation->value, SalesOrderStatus::DeliveryNegotiation->value])
                     ->count(),
             ],
 

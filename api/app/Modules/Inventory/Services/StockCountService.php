@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
-use App\Common\Services\DocumentSequenceService;
-use App\Common\Services\SettingsService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -29,17 +32,16 @@ class StockCountService
         private readonly SettingsService $settings,
     ) {}
 
-    public function listSessions(): Collection
+    public function listSessions(?int $perPage = null): Collection|LengthAwarePaginator
     {
-        return StockCountSession::query()
-            ->with(['warehouse', 'zone', 'creator', 'approver'])
-            ->orderByDesc('created_at')
-            ->get();
+        $query = StockCountSession::query()->with(['warehouse', 'zone', 'creator', 'approver'])->orderByDesc('created_at')->orderByDesc('id');
+
+        return $perPage === null ? $query->get() : $query->paginate($perPage);
     }
 
     public function getSession(int $id): StockCountSession
     {
-        return StockCountSession::with([
+        $session = StockCountSession::with([
             'items.location.zone.warehouse',
             'items.item',
             'items.counter',
@@ -49,20 +51,31 @@ class StockCountService
             'creator',
             'approver',
         ])->findOrFail($id);
+        $movements = StockMovement::query()->whereNotNull('lot_number')
+            ->whereIn('item_id', $session->items->pluck('item_id'))
+            ->where(fn ($query) => $query->whereIn('from_location_id', $session->items->pluck('location_id'))
+                ->orWhereIn('to_location_id', $session->items->pluck('location_id')))
+            ->orderBy('created_at')->orderBy('id')->get()->groupBy('item_id');
+        foreach ($session->items as $line) {
+            $rows = ($movements->get($line->item_id) ?? collect())->filter(fn ($row) => (int) $row->from_location_id === (int) $line->location_id || (int) $row->to_location_id === (int) $line->location_id);
+            $line->setAttribute('source_lots', app(StockLocationSummaryService::class)->lots($line->item_id, $line->location_id, $rows));
+        }
+
+        return $session;
     }
 
     public function createSession(array $data, User $user): StockCountSession
     {
         return DB::transaction(function () use ($data, $user) {
             $session = StockCountSession::create([
-                'session_number'  => $this->sequences->generate('stock_count'),
-                'title'           => $data['title'],
-                'scope'           => $data['scope'] ?? (string) $this->settings->get('inventory.stock_count.default_scope', ''),
-                'warehouse_id'    => $data['warehouse_id'] ?? null,
-                'zone_id'         => $data['zone_id'] ?? null,
-                'status'          => StockCountSessionStatus::Draft->value,
+                'session_number' => $this->sequences->generate('stock_count'),
+                'title' => $data['title'],
+                'scope' => $data['scope'] ?? (string) $this->settings->get('inventory.stock_count.default_scope', ''),
+                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'zone_id' => $data['zone_id'] ?? null,
+                'status' => StockCountSessionStatus::Draft->value,
                 'total_locations' => 0,
-                'created_by'      => $user->id,
+                'created_by' => $user->id,
             ]);
 
             // Auto-populate the current stock snapshot. startSession() refreshes
@@ -83,17 +96,17 @@ class StockCountService
                 if ($stockLevels->isNotEmpty()) {
                     foreach ($stockLevels as $sl) {
                         $items[] = [
-                            'session_id'      => $session->id,
-                            'location_id'     => $loc->id,
-                            'item_id'         => $sl->item_id,
+                            'session_id' => $session->id,
+                            'location_id' => $loc->id,
+                            'item_id' => $sl->item_id,
                             'system_quantity' => $sl->quantity,
                             'counted_quantity' => null,
-                            'variance'        => 0,
+                            'variance' => 0,
                             'variance_percent' => 0,
-                            'lot_number'      => null,
-                            'status'          => StockCountItemStatus::Pending->value,
-                            'created_at'      => now(),
-                            'updated_at'      => now(),
+                            'lot_number' => null,
+                            'status' => StockCountItemStatus::Pending->value,
+                            'created_at' => now(),
+                            'updated_at' => now(),
                         ];
                     }
                 }
@@ -147,6 +160,7 @@ class StockCountService
                 $key = $level->location_id.':'.$level->item_id;
                 if ($existing->has($key)) {
                     $existing[$key]->update(['system_quantity' => $level->quantity]);
+
                     continue;
                 }
                 $newItems[] = [
@@ -172,9 +186,10 @@ class StockCountService
             $session->update(['total_locations' => $totalItems]);
 
             $session->update([
-                'status'    => StockCountSessionStatus::InProgress->value,
+                'status' => StockCountSessionStatus::InProgress->value,
                 'frozen_at' => now(),
             ]);
+
             return $session->fresh()->load(['warehouse', 'zone', 'items.location', 'items.item']);
         });
     }
@@ -192,19 +207,27 @@ class StockCountService
                 throw new BusinessRuleException('Session is not in progress.');
             }
 
+            $baseItem = Item::withTrashed()->findOrFail($item->item_id);
+            $uomConversions = app(UomConversionService::class);
+            $uomConversions->assertBaseQuantity($baseItem, (string) $data['counted_quantity']);
+            foreach ($data['variance_allocations'] ?? [] as $allocation) {
+                $uomConversions->assertBaseQuantity($baseItem, (string) $allocation['quantity']);
+            }
+
             $item->update([
-                'counted_quantity'  => $data['counted_quantity'],
-                'variance'          => bcsub((string) $data['counted_quantity'], (string) $item->system_quantity, 3),
-                'variance_percent'  => $this->variancePercent(
+                'counted_quantity' => $data['counted_quantity'],
+                'variance' => bcsub((string) $data['counted_quantity'], (string) $item->system_quantity, 3),
+                'variance_percent' => $this->variancePercent(
                     (string) $data['counted_quantity'],
                     (string) $item->system_quantity,
                 ),
-                'lot_number'        => $data['lot_number'] ?? $item->lot_number,
-                'status'            => StockCountItemStatus::Counted->value,
-                'counted_by'        => $user->id,
-                'counted_at'        => now(),
-                'notes'             => $data['notes'] ?? $item->notes,
-                'verified_by'       => null,
+                'lot_number' => $data['lot_number'] ?? null,
+                'variance_allocations' => $data['variance_allocations'] ?? null,
+                'status' => StockCountItemStatus::Counted->value,
+                'counted_by' => $user->id,
+                'counted_at' => now(),
+                'notes' => $data['notes'] ?? $item->notes,
+                'verified_by' => null,
             ]);
 
             $counted = $session->items()
@@ -263,6 +286,10 @@ class StockCountService
             if ($item->status !== StockCountItemStatus::Counted) {
                 throw new BusinessRuleException('Item must be counted first.');
             }
+            $varianceTolerance = (string) $this->settings->requiredFloat('inventory.stock_count.variance_tolerance_pct', 0);
+            if (bccomp(ltrim((string) $item->variance_percent, '-'), $varianceTolerance, 2) <= 0) {
+                throw new BusinessRuleException('This variance is at or below the approval tolerance.');
+            }
             if ((int) $item->counted_by === (int) $user->id || (int) $session->created_by === (int) $user->id) {
                 throw new BusinessRuleException('A different user must approve this stock-count variance.');
             }
@@ -316,7 +343,7 @@ class StockCountService
                 $absoluteVariance = ltrim($variance, '-');
                 if (bccomp($absoluteVariance, '0', 3) > 0) {
                     $varianceCount++;
-                    $varianceValue = bcadd($varianceValue, $absoluteVariance, 2);
+
                 }
 
                 // If variance exceeds the configured tolerance and is not verified, require approval.
@@ -335,16 +362,22 @@ class StockCountService
                         // overage at the current WAC inside its lock; it also
                         // handles the stock decrease path.
                         $this->adjustments->reconcileStockCountItem($item, $user);
+                        $postedValue = StockAdjustment::query()
+                            ->whereHas('stockMovement', fn ($q) => $q->where('reference_type', 'stock_count_session')
+                                ->where('reference_id', $session->id))
+                            ->where('item_id', $item->item_id)->where('location_id', $item->location_id)
+                            ->sum('value');
+                        $varianceValue = bcadd($varianceValue, (string) $postedValue, 2);
                     }
                 }
             }
 
             $session->update([
-                'status'           => StockCountSessionStatus::Completed->value,
-                'completed_at'     => now(),
-                'approved_by'      => $user->id,
-                'variance_count'   => $varianceCount,
-                'variance_value'   => $varianceValue,
+                'status' => StockCountSessionStatus::Completed->value,
+                'completed_at' => now(),
+                'approved_by' => $user->id,
+                'variance_count' => $varianceCount,
+                'variance_value' => $varianceValue,
             ]);
 
             return $session->fresh()->load([
@@ -365,6 +398,7 @@ class StockCountService
                 throw new BusinessRuleException('Session already completed or cancelled.');
             }
             $session->update(['status' => StockCountSessionStatus::Cancelled->value]);
+
             return $session->fresh();
         });
     }

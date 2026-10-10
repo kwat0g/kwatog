@@ -4,21 +4,23 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
+use App\Modules\Production\Models\DefectType;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\NonConformanceReport;
-use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Requests\AddNcrActionRequest;
 use App\Modules\Quality\Requests\CreateNcrRequest;
 use App\Modules\Quality\Requests\ListNcrRequest;
 use App\Modules\Quality\Resources\NcrActionResource;
 use App\Modules\Quality\Resources\NcrResource;
 use App\Modules\Quality\Services\NcrService;
-use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -42,6 +44,7 @@ class NcrController
             fn ($case) => ['value' => $case->value, 'label' => method_exists($case, 'label') ? $case->label() : $label($case->value)],
             $cases,
         );
+
         return response()->json(['data' => [
             'sources' => $map(NcrSource::cases()),
             'severities' => $map(NcrSeverity::cases()),
@@ -76,7 +79,7 @@ class NcrController
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(static fn (User $user): array => [
-                    'id'   => $user->hash_id,
+                    'id' => $user->hash_id,
                     'name' => $user->name,
                 ])
                 ->values(),
@@ -86,26 +89,62 @@ class NcrController
     public function addAction(AddNcrActionRequest $request, NonConformanceReport $ncr): NcrActionResource
     {
         $action = $this->service->addAction($ncr, $request->validated(), $request->user());
+
         return new NcrActionResource($action);
     }
 
     public function setDisposition(Request $request, NonConformanceReport $ncr): NcrResource
     {
         $data = $request->validate([
-            'disposition'            => ['required', Rule::in(NcrDisposition::values())],
-            'root_cause'             => ['nullable', 'string', 'max:5000'],
-            'corrective_action'      => ['nullable', 'string', 'max:5000'],
-            'mrb_accepted_quantity'  => ['nullable', 'decimal:0,3', 'min:0'],
+            'disposition' => ['required', Rule::in(NcrDisposition::values())],
+            'root_cause' => ['nullable', 'string', 'max:5000'],
+            'corrective_action' => ['nullable', 'string', 'max:5000'],
+            'mrb_accepted_quantity' => ['nullable', 'decimal:0,3', 'min:0'],
+            'sorting_evidence' => ['sometimes', 'array:inspected_quantity,evidence_reference,performed_by,recovery_passed,defects_segregated,concession_approval_reference,trial_scrapped_quantity,trial_defects'],
+            'sorting_evidence.defects_segregated' => ['sometimes', 'boolean'],
+            'sorting_evidence.inspected_quantity' => ['required_with:sorting_evidence', 'decimal:0,3', 'gt:0'],
+            'sorting_evidence.evidence_reference' => ['required_with:sorting_evidence', 'string', 'max:500'],
+            'sorting_evidence.concession_approval_reference' => ['nullable', 'string', 'max:500'],
+            'sorting_evidence.performed_by' => ['required_with:sorting_evidence', 'string'],
+            'sorting_evidence.recovery_passed' => ['sometimes', 'accepted'],
+            'sorting_evidence.trial_scrapped_quantity' => ['sometimes', 'integer', 'min:0'],
+            'sorting_evidence.trial_defects' => ['sometimes', 'array'],
+            'sorting_evidence.trial_defects.*' => ['array:defect_type_id,count'],
+            'sorting_evidence.trial_defects.*.defect_type_id' => ['required', 'string'],
+            'sorting_evidence.trial_defects.*.count' => ['required', 'integer', 'min:1'],
         ]);
+        if (! $request->user()->hasPermission('quality.ncr.manage')
+            && (! $this->service->awaitsMrbDecision($ncr)
+                || $ncr->disposition !== null
+                || $data['disposition'] !== NcrDisposition::ReturnToSupplier->value
+                || ! isset($data['mrb_accepted_quantity'])
+                || bccomp((string) $data['mrb_accepted_quantity'], '0', 3) <= 0
+                || ! isset($data['sorting_evidence'])
+                || isset($data['root_cause'])
+                || isset($data['corrective_action']))) {
+            throw new ForbiddenActionException('Only NCR managers can make this disposition. Inspection reviewers may approve sorted-good release on a pending incoming receipt.');
+        }
+        if (isset($data['sorting_evidence']['trial_defects'])) {
+            $data['sorting_evidence']['trial_defects'] = array_map(static fn (array $defect): array => [
+                'defect_type_id' => DefectType::tryDecodeHash($defect['defect_type_id']), 'count' => (int) $defect['count'],
+            ], $data['sorting_evidence']['trial_defects']);
+        }
         $ncr = $this->service->setDisposition(
             $ncr,
             (string) $data['disposition'],
-            $data['root_cause']        ?? null,
+            $data['root_cause'] ?? null,
             $data['corrective_action'] ?? null,
             $request->user(),
             isset($data['mrb_accepted_quantity']) ? (string) $data['mrb_accepted_quantity'] : null,
+            isset($data['sorting_evidence']) ? array_replace($data['sorting_evidence'], ['performed_by' => User::tryDecodeHash($data['sorting_evidence']['performed_by']), 'inspected_quantity' => (string) $data['sorting_evidence']['inspected_quantity'], 'recovery_passed' => $request->boolean('sorting_evidence.recovery_passed')]) : [],
         );
+
         return new NcrResource($ncr);
+    }
+
+    public function retryQuarantine(Request $request, NonConformanceReport $ncr): NcrResource
+    {
+        return new NcrResource($this->service->retryQuarantine($ncr, $request->user()));
     }
 
     public function close(Request $request, NonConformanceReport $ncr): NcrResource
@@ -116,6 +155,7 @@ class NcrController
     public function cancel(Request $request, NonConformanceReport $ncr): NcrResource
     {
         $reason = $request->input('reason');
+
         return new NcrResource($this->service->cancel($ncr, is_string($reason) ? $reason : null, $request->user()));
     }
 
@@ -132,8 +172,8 @@ class NcrController
     public function bulkClose(Request $request): JsonResponse
     {
         $request->validate([
-            'ncr_ids'         => ['required', 'array', 'min:1', 'max:200'],
-            'ncr_ids.*'       => ['required', 'string'],
+            'ncr_ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ncr_ids.*' => ['required', 'string'],
             'resolution_note' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -144,13 +184,14 @@ class NcrController
         $results = [];
         $success = 0;
         $skipped = 0;
-        $failed  = 0;
+        $failed = 0;
 
         foreach ((array) $request->input('ncr_ids') as $hashId) {
             $decoded = $hashids->decode((string) $hashId);
             if (empty($decoded)) {
                 $results[] = ['ncr_id' => $hashId, 'status' => 'failed', 'message' => 'Invalid ID.'];
                 $failed++;
+
                 continue;
             }
 
@@ -158,6 +199,7 @@ class NcrController
             if (! $ncr) {
                 $results[] = ['ncr_id' => $hashId, 'status' => 'failed', 'message' => 'Not found.'];
                 $failed++;
+
                 continue;
             }
 
@@ -207,10 +249,10 @@ class NcrController
         return response()->json([
             'data' => [
                 'summary' => [
-                    'total'   => count($results),
+                    'total' => count($results),
                     'success' => $success,
                     'skipped' => $skipped,
-                    'failed'  => $failed,
+                    'failed' => $failed,
                 ],
                 'results' => $results,
             ],
@@ -243,7 +285,7 @@ class NcrController
         }
 
         if ($e instanceof HttpExceptionInterface) {
-            $status  = $e->getStatusCode();
+            $status = $e->getStatusCode();
             $message = trim($e->getMessage());
             if ($status >= 400 && $status < 500 && $message !== '') {
                 return $message;
@@ -251,9 +293,9 @@ class NcrController
         }
 
         Log::error('NcrController::bulkClose — unexpected failure closing an NCR.', [
-            'ncr_id'    => $ncrId,
+            'ncr_id' => $ncrId,
             'exception' => $e::class,
-            'message'   => $e->getMessage(),
+            'message' => $e->getMessage(),
         ]);
 
         return 'An unexpected error stopped this NCR from closing.';

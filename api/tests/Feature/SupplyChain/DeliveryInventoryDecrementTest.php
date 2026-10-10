@@ -11,24 +11,41 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\MovementGlPostingService;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Models\Inspection;
-use App\Modules\Inventory\Models\WarehouseLocation;
-use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\HasPassedInProcessQc;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\TestCase;
 
 final class DeliveryInventoryDecrementTest extends TestCase
 {
+    use HasPassedInProcessQc;
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class, ChartOfAccountsSeeder::class]);
+    }
 
     public function test_dispatch_decrements_finished_goods_and_links_the_stock_movement(): void
     {
@@ -128,6 +145,7 @@ final class DeliveryInventoryDecrementTest extends TestCase
             'planned_start' => now()->subDay(), 'planned_end' => now(),
             'status' => 'completed', 'created_by' => $user->id,
         ]);
+        $this->passInProcessQc($workOrder);
         $output = WorkOrderOutput::create([
             'work_order_id' => $workOrder->id, 'recorded_by' => $user->id, 'recorded_at' => now(),
             'good_count' => 10, 'reject_count' => 0, 'batch_code' => 'FG-STOCK-BATCH',
@@ -139,6 +157,8 @@ final class DeliveryInventoryDecrementTest extends TestCase
             'reference_type' => 'work_order_output', 'reference_id' => $output->id,
             'created_by' => $user->id, 'created_at' => now(),
         ]);
+        app(MovementGlPostingService::class)->postFor($receipt);
+        $this->assertSame(MovementGlHandoffStatus::Generated, $receipt->fresh()->gl_handoff_status);
         $output->update(['production_receipt_movement_id' => $receipt->id, 'production_receipt_handoff_status' => 'generated']);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-STOCK-'.substr(uniqid(), -6), 'stage' => 'outgoing', 'status' => 'passed',
@@ -159,6 +179,8 @@ final class DeliveryInventoryDecrementTest extends TestCase
                 'inspection_id' => $inspection->id,
             ]],
         ], $user);
+
+        $this->prepareShipmentForDispatch($delivery);
 
         return [$delivery, $location, $item];
     }

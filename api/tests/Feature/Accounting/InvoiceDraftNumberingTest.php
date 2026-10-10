@@ -7,6 +7,7 @@ namespace Tests\Feature\Accounting;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -56,8 +57,12 @@ class InvoiceDraftNumberingTest extends TestCase
         return Account::query()->where('code', $code)->firstOrFail()->hash_id;
     }
 
-    private function makeDraft(InvoiceService $svc, User $user, Customer $customer): \App\Modules\Accounting\Models\Invoice
+    private function makeDraft(InvoiceService $svc, User $user, Customer $customer): Invoice
     {
+        if (! $customer->email) {
+            $customer->forceFill(['email' => 'invoice-'.uniqid().'@example.test'])->save();
+        }
+
         return $svc->create([
             'customer_id' => $customer->hash_id,
             'lifecycle_type' => 'prebill',
@@ -74,6 +79,12 @@ class InvoiceDraftNumberingTest extends TestCase
                 ],
             ],
         ], $user);
+    }
+
+    private function approveAndFinalize(InvoiceService $service, Invoice $draft, User $approver, User $poster): Invoice
+    {
+        $service->approvePrebill($draft, $approver);
+        return $service->finalize($draft, $poster);
     }
 
     public function test_draft_invoice_has_null_invoice_number_until_finalize(): void
@@ -95,13 +106,15 @@ class InvoiceDraftNumberingTest extends TestCase
     public function test_finalize_stamps_sequence_formatted_invoice_number(): void
     {
         $user     = $this->newUser();
+        $approver = $this->newUser();
+        $poster   = $this->newUser();
         $customer = Customer::create(['name' => 'Nissan PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
 
         $draft = $this->makeDraft($svc, $user, $customer);
         $this->assertNull($draft->invoice_number);
 
-        $finalized = $svc->finalize($draft, $user);
+        $finalized = $this->approveAndFinalize($svc, $draft, $approver, $poster);
 
         $this->assertSame(InvoiceStatus::Finalized, $finalized->status);
         $this->assertNotNull($finalized->invoice_number);
@@ -115,33 +128,28 @@ class InvoiceDraftNumberingTest extends TestCase
     public function test_standard_invoice_cannot_finalize_without_confirmed_delivery_provenance(): void
     {
         $user = $this->newUser();
+        $poster = $this->newUser();
         $customer = Customer::create(['name' => 'Undelivered Customer', 'payment_terms_days' => 30]);
-        $invoice = app(InvoiceService::class)->create([
-            'customer_id' => $customer->hash_id,
-            'date' => '2026-04-01',
-            'lifecycle_type' => 'standard',
-            'is_vatable' => false,
-            'items' => [[
-                'revenue_account_id' => $this->accountHashId('4010'),
-                'description' => 'Undelivered goods',
-                'quantity' => '1',
-                'unit_price' => '100.00',
-            ]],
-        ], $user);
+        $invoice = $this->makeDraft(app(InvoiceService::class), $user, $customer);
+        // Simulate a legacy or inconsistent persisted standard draft so the
+        // finalization guard remains covered independently of creation rules.
+        $invoice->forceFill(['lifecycle_type' => 'standard'])->save();
 
         $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
         $this->expectExceptionMessage('confirmed delivered quantity');
-        app(InvoiceService::class)->finalize($invoice, $user);
+        app(InvoiceService::class)->finalize($invoice, $poster);
     }
 
     public function test_cancelled_draft_does_not_burn_a_sequence_number(): void
     {
         $user     = $this->newUser();
+        $approver = $this->newUser();
+        $poster   = $this->newUser();
         $customer = Customer::create(['name' => 'Honda PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
 
         // Draft #1 — first finalized invoice in this period must get -0001.
-        $first = $svc->finalize($this->makeDraft($svc, $user, $customer), $user);
+        $first = $this->approveAndFinalize($svc, $this->makeDraft($svc, $user, $customer), $approver, $poster);
         $this->assertMatchesRegularExpression(
             '/^INV-\d{6}-0001$/',
             $first->invoice_number,
@@ -157,7 +165,7 @@ class InvoiceDraftNumberingTest extends TestCase
 
         // Draft #3 — must be -0002, not -0003. If cancel ever reserves a sequence,
         // this assertion fails immediately.
-        $second = $svc->finalize($this->makeDraft($svc, $user, $customer), $user);
+        $second = $this->approveAndFinalize($svc, $this->makeDraft($svc, $user, $customer), $approver, $poster);
         $this->assertMatchesRegularExpression(
             '/^INV-\d{6}-0002$/',
             $second->invoice_number,
@@ -168,6 +176,7 @@ class InvoiceDraftNumberingTest extends TestCase
     public function test_finalize_rejects_a_stale_draft_after_the_persisted_invoice_is_cancelled(): void
     {
         $user     = $this->newUser();
+        $poster   = $this->newUser();
         $customer = Customer::create(['name' => 'Stale Toyota PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
         $draft    = $this->makeDraft($svc, $user, $customer);
@@ -180,7 +189,7 @@ class InvoiceDraftNumberingTest extends TestCase
 
         $exception = null;
         try {
-            $svc->finalize($draft, $user);
+            $svc->finalize($draft, $poster);
         } catch (\RuntimeException $e) {
             $exception = $e;
         }
@@ -197,7 +206,13 @@ class InvoiceDraftNumberingTest extends TestCase
     public function test_cancelling_an_invoice_releases_its_delivery_and_reconciles_the_sales_order(): void
     {
         $user = $this->newUser();
-        $customer = Customer::create(['name' => 'Reinvoice Customer', 'payment_terms_days' => 30]);
+        $approver = $this->newUser();
+        $poster = $this->newUser();
+        $customer = Customer::create([
+            'name' => 'Reinvoice Customer',
+            'email' => 'reinvoice-'.uniqid().'@example.test',
+            'payment_terms_days' => 30,
+        ]);
         $salesOrder = SalesOrder::create([
             'so_number' => 'SO-CANCEL-'.substr(uniqid(), -5),
             'customer_id' => $customer->id,
@@ -217,7 +232,7 @@ class InvoiceDraftNumberingTest extends TestCase
         ]);
 
         $service = app(InvoiceService::class);
-        $invoice = $service->finalize($service->create([
+        $draft = $service->create([
             'customer_id' => $customer->hash_id,
             'sales_order_id' => $salesOrder->hash_id,
             'delivery_id' => $delivery->hash_id,
@@ -232,10 +247,11 @@ class InvoiceDraftNumberingTest extends TestCase
                 'quantity' => '1',
                 'unit_price' => '100.00',
             ]],
-        ], $user), $user);
+        ], $user);
+        $invoice = $this->approveAndFinalize($service, $draft, $approver, $poster);
         $delivery->forceFill(['invoice_id' => $invoice->id])->save();
 
-        $service->cancel($invoice, $user);
+        $service->cancel($invoice, $poster);
 
         $this->assertSame(InvoiceStatus::Cancelled, $invoice->fresh()->status);
         $this->assertSame(SalesOrderStatus::Confirmed, $salesOrder->fresh()->status);
@@ -245,9 +261,12 @@ class InvoiceDraftNumberingTest extends TestCase
     public function test_finalize_calculates_from_the_locked_invoice_and_items_when_caller_is_stale(): void
     {
         $user     = $this->newUser();
+        $approver = $this->newUser();
+        $poster   = $this->newUser();
         $customer = Customer::create(['name' => 'Authoritative Nissan PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
         $draft    = $this->makeDraft($svc, $user, $customer);
+        $svc->approvePrebill($draft, $approver);
         $itemId   = $draft->items->firstOrFail()->id;
 
         // Change the persisted aggregate and line while retaining the stale
@@ -262,7 +281,7 @@ class InvoiceDraftNumberingTest extends TestCase
             'total'    => '9000.00',
         ]);
 
-        $finalized = $svc->finalize($draft, $user);
+        $finalized = $svc->finalize($draft, $poster);
 
         $this->assertSame('10000.00', (string) $draft->total_amount, 'The caller must remain stale for this regression.');
         $this->assertSame('9000.00', (string) $finalized->total_amount);
@@ -274,10 +293,12 @@ class InvoiceDraftNumberingTest extends TestCase
     public function test_update_rejects_a_stale_draft_after_the_persisted_invoice_is_finalized(): void
     {
         $user     = $this->newUser();
+        $approver = $this->newUser();
         $customer = Customer::create(['name' => 'Stale Update PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
         $draft    = $this->makeDraft($svc, $user, $customer);
         $originalItem = $draft->items->firstOrFail();
+        $svc->approvePrebill($draft, $approver);
 
         DB::table('invoices')->where('id', $draft->id)->update([
             'status' => InvoiceStatus::Finalized->value,

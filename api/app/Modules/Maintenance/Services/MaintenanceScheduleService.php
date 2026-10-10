@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Services;
 
 use App\Common\Support\SearchOperator;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenanceScheduleInterval;
@@ -38,6 +39,10 @@ class MaintenanceScheduleService
                 $q->where($f, $filters[$f]);
             }
         }
+        if (! empty($filters['maintainable_id'])) {
+            $targetClass = ($filters['maintainable_type'] ?? null) === 'mold' ? Mold::class : Machine::class;
+            $q->where('maintainable_id', HashIdFilter::decode($filters['maintainable_id'], $targetClass) ?? 0);
+        }
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOL));
         }
@@ -46,8 +51,19 @@ class MaintenanceScheduleService
             $q->where('description', SearchOperator::like(), $term);
         }
 
-        return $q->orderBy('next_due_at')
+        $page = $q->orderBy('next_due_at')
             ->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+        $rows = $page->getCollection();
+        $machines = Machine::query()->whereIn('id', $rows->where('maintainable_type', MaintainableType::Machine)
+            ->pluck('maintainable_id'))->get()->keyBy('id');
+        $molds = Mold::query()->whereIn('id', $rows->where('maintainable_type', MaintainableType::Mold)
+            ->pluck('maintainable_id'))->get()->keyBy('id');
+        foreach ($rows as $schedule) {
+            $schedule->setRelation('target', ($schedule->maintainable_type === MaintainableType::Machine
+                ? $machines : $molds)->get($schedule->maintainable_id));
+        }
+
+        return $page;
     }
 
     public function show(MaintenanceSchedule $schedule): MaintenanceSchedule
@@ -89,6 +105,7 @@ class MaintenanceScheduleService
                 'description' => $data['description'],
                 'interval_type' => $interval->value,
                 'interval_value' => (int) $data['interval_value'],
+                'estimated_duration_minutes' => $data['estimated_duration_minutes'] ?? 60,
                 'running_hours_baseline' => $type === MaintainableType::Machine
                     && $interval === MaintenanceScheduleInterval::Hours
                     ? (string) $machine?->running_hours_total
@@ -107,7 +124,7 @@ class MaintenanceScheduleService
     {
         return DB::transaction(function () use ($schedule, $data) {
             $schedule->fill(array_intersect_key($data, array_flip([
-                'description', 'interval_type', 'interval_value',
+                'description', 'interval_type', 'interval_value', 'estimated_duration_minutes',
                 'is_active', 'last_performed_at',
             ])));
             // interval_type is editable, so re-run the create-time guard — else a
@@ -122,7 +139,9 @@ class MaintenanceScheduleService
                     $schedule->running_hours_baseline = (string) $machine->running_hours_total;
                 }
             }
-            $schedule->next_due_at = $this->computeNextDueAt($schedule);
+            if ($schedule->isDirty(['interval_type', 'interval_value', 'last_performed_at'])) {
+                $schedule->next_due_at = $this->computeNextDueAt($schedule);
+            }
             $schedule->save();
 
             return $schedule;
@@ -269,9 +288,10 @@ class MaintenanceScheduleService
             ->where('interval_type', MaintenanceScheduleInterval::Shots->value)
             ->whereDoesntHave('workOrders', fn (Builder $q) => $q->whereNotIn('status', ['completed', 'cancelled']))
             ->get();
+        $molds = Mold::query()->whereIn('id', $rows->pluck('maintainable_id'))->get()->keyBy('id');
 
-        return $rows->filter(function (MaintenanceSchedule $s) use ($thresholdPct) {
-            $mold = Mold::find($s->maintainable_id);
+        return $rows->filter(function (MaintenanceSchedule $s) use ($thresholdPct, $molds) {
+            $mold = $molds->get($s->maintainable_id);
             if (! $mold) {
                 return false;
             }

@@ -11,6 +11,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Services\CapacityPlanningService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -20,16 +21,22 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Requests\CancelWorkOrderRequest;
 use App\Modules\Production\Requests\ConfirmWorkOrderRequest;
+use App\Modules\Production\Requests\ExecuteWorkOrderRequest;
+use App\Modules\Production\Requests\ExtendWorkOrderRunRequest;
 use App\Modules\Production\Requests\PauseWorkOrderRequest;
 use App\Modules\Production\Requests\RecordOutputRequest;
+use App\Modules\Production\Requests\RecordTrialOutputRequest;
+use App\Modules\Production\Requests\ReviewWorkOrderSlotRequest;
 use App\Modules\Production\Requests\StoreWorkOrderRequest;
 use App\Modules\Production\Resources\WorkOrderOutputResource;
 use App\Modules\Production\Resources\WorkOrderResource;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 
 class WorkOrderController
 {
@@ -94,11 +101,13 @@ class WorkOrderController
             'products' => Product::query()
                 ->active()
                 ->orderBy('part_number')
-                ->get(['id', 'part_number', 'name'])
+                ->with(['inspectionSpec.items', 'inspectionSpec.currentRevision'])
+                ->get(['id', 'part_number', 'name', 'is_active', 'unit_of_measure'])
                 ->map(static fn (Product $product): array => [
                     'id' => $product->hash_id,
                     'part_number' => $product->part_number,
                     'name' => $product->name,
+                    'stock_production' => app(\App\Modules\Production\Services\StockProductionPlanningService::class)->productReadiness($product),
                 ])
                 ->values(),
             'machines' => Machine::query()
@@ -187,7 +196,9 @@ class WorkOrderController
     {
         $payload = $request->validated();
         $payload['created_by'] = $request->user()->id;
-        $wo = $this->service->createDraft($payload);
+        $wo = ($payload['production_purpose'] ?? null) === 'stock'
+            ? app(\App\Modules\Production\Services\StockProductionPlanningService::class)->create($payload, $request->user())
+            : $this->service->createDraft($payload);
 
         return (new WorkOrderResource($wo))->response()->setStatusCode(201);
     }
@@ -245,6 +256,7 @@ class WorkOrderController
                 $workOrder,
                 $request->input('machine_id'),
                 $request->input('mold_id'),
+                $request->validated(),
             );
         } catch (IllegalLifecycleTransitionException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
@@ -269,13 +281,31 @@ class WorkOrderController
      *     @OA\Response(response=422, description="Invalid state transition")
      * )
      */
-    public function start(WorkOrder $workOrder): WorkOrderResource|JsonResponse
+    public function executionReadiness(Request $request, WorkOrder $workOrder): JsonResponse
+    {
+        $actor = $request->user();
+        $canReview = app(WorkOrderAssignmentService::class)->canAssign($actor, $workOrder)
+            && ($actor->hasPermission('production.schedule.confirm') || $actor->hasPermission('production.wo.confirm'))
+            && ($workOrder->status->value === 'confirmed' || $actor->hasPermission('production.work_orders.lifecycle'));
+
+        return response()->json(['data' => $this->service->executionReadiness($workOrder) + ['can_review_slot' => $canReview,
+            'can_assign_crew' => app(WorkOrderAssignmentService::class)->canAssign($actor, $workOrder),
+            'production_deadline' => $workOrder->planned_end?->toIso8601String(),
+            'can_approve_late_production' => in_array($workOrder->status->value, ['paused', 'in_progress'], true) && $actor->hasPermission('production.work_orders.lifecycle')]]);
+    }
+
+    public function rescheduleSuggestion(ReviewWorkOrderSlotRequest $request, WorkOrder $workOrder): JsonResponse
+    {
+        return response()->json(['data' => app(CapacityPlanningService::class)->suggestReschedule($workOrder, $request->validated('preferred_date'))]);
+    }
+
+    public function start(ExecuteWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse
     {
         if (! request()->user()->hasPermission('production.work_orders.lifecycle')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
         try {
-            $wo = $this->service->start($workOrder, (int) request()->user()->id);
+            $wo = $this->service->start($workOrder, (int) $request->user()->id, $request->validated());
         } catch (IllegalLifecycleTransitionException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
@@ -283,6 +313,31 @@ class WorkOrderController
         }
 
         return new WorkOrderResource($wo);
+    }
+
+    public function extendRun(ExtendWorkOrderRunRequest $request, WorkOrder $workOrder): WorkOrderResource
+    {
+        return new WorkOrderResource($this->service->extendRun($workOrder, $request->user(), $request->validated()));
+    }
+
+    public function reviewSlot(ReviewWorkOrderSlotRequest $request, WorkOrder $workOrder): WorkOrderResource
+    {
+        $data = $request->validated();
+        if (isset($data['machine_id']) || isset($data['mold_id'])) {
+            throw new BusinessRuleException('Remaining production keeps its assigned equipment. Release and review equipment separately before scheduling a different production run.');
+        }
+
+        return new WorkOrderResource($this->service->reviewSlot($workOrder,
+            Carbon::parse($data['scheduled_start'])->timezone(config('app.timezone')),
+            Carbon::parse($data['scheduled_end'])->timezone(config('app.timezone')),
+            $request->user()->id, $data['reason'], $data));
+    }
+
+    public function releaseResources(Request $request, WorkOrder $workOrder): WorkOrderResource
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+
+        return new WorkOrderResource($this->service->releaseResources($workOrder, $data['reason']));
     }
 
     public function pause(PauseWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse
@@ -302,13 +357,13 @@ class WorkOrderController
         return new WorkOrderResource($wo);
     }
 
-    public function resume(WorkOrder $workOrder): WorkOrderResource|JsonResponse
+    public function resume(ExecuteWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse
     {
         if (! request()->user()->hasPermission('production.work_orders.lifecycle')) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
         try {
-            $wo = $this->service->resume($workOrder);
+            $wo = $this->service->resume($workOrder, $request->user()->id, $request->validated());
         } catch (IllegalLifecycleTransitionException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
@@ -324,7 +379,15 @@ class WorkOrderController
             return response()->json(['message' => 'Forbidden'], 403);
         }
         try {
-            $wo = $this->service->complete($workOrder);
+            $data = request()->validate([
+                'qc_workflow' => ['prohibited'],
+                'short_completion_reason' => ['nullable', 'string', 'max:2000'],
+                'production_finished_at' => ['nullable', 'date'],
+            ]);
+            $finishedAt = isset($data['production_finished_at'])
+                ? Carbon::parse($data['production_finished_at'], config('app.timezone'))
+                : null;
+            $wo = $this->service->complete($workOrder, $data['short_completion_reason'] ?? null, $finishedAt);
         } catch (IllegalLifecycleTransitionException $e) {
             return response()->json(['message' => $e->getMessage(), 'code' => $e->errorCode()], 409);
         } catch (BusinessRuleException $e) {
@@ -366,6 +429,14 @@ class WorkOrderController
     public function chain(WorkOrder $workOrder): JsonResponse
     {
         return response()->json(['data' => $this->service->chain($workOrder)]);
+    }
+
+    public function recordTrial(RecordTrialOutputRequest $request, WorkOrder $workOrder, WorkOrderOutputService $outputs): WorkOrderOutputResource
+    {
+        $key = $request->header('X-Idempotency-Key');
+        abort_unless(is_string($key) && strlen($key) > 0 && strlen($key) <= 128, 422, 'A submission key is required.');
+
+        return new WorkOrderOutputResource($outputs->recordTrial($workOrder, $request->validated(), $request->user()->id, $key));
     }
 
     /** Sprint 6 Task 55 — record production output (idempotent). */

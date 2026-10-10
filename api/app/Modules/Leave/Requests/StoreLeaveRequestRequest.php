@@ -26,13 +26,13 @@ class StoreLeaveRequestRequest extends FormRequest
     public function rules(): array
     {
         $settings = app(SettingsService::class);
-        $pastDays = $settings->requiredInt('leave.request.past_window_days', 0);
         $futureDays = $settings->requiredInt('leave.request.future_window_days', 0);
         $today = now()->startOfDay();
+        $minimumDate = in_array($this->input('half_day_period'), ['am', 'pm'], true) ? $today->copy() : $today->copy()->addDay();
         return [
             'employee_id'   => ['required', 'string'],
             'leave_type_id' => ['required', 'string'],
-            'start_date'    => ['required', 'date', 'after_or_equal:'.$today->copy()->subDays($pastDays)->toDateString(), 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
+            'start_date'    => ['required', 'date', 'after_or_equal:'.$minimumDate->toDateString(), 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
             'end_date'      => ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$today->copy()->addDays($futureDays)->toDateString()],
             // M-18 half-day leave: nullable enum 'am'|'pm'.
             'half_day_period' => ['nullable', 'in:am,pm'],
@@ -47,7 +47,7 @@ class StoreLeaveRequestRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'start_date.after_or_equal'  => 'Start date is outside the configured request window.',
+            'start_date.after_or_equal'  => in_array($this->input('half_day_period'), ['am', 'pm'], true) ? 'Choose today or a later date.' : 'Choose tomorrow or a later date.',
             'start_date.before_or_equal' => 'Start date is outside the configured request window.',
             'end_date.before_or_equal'   => 'End date is outside the configured request window.',
         ];

@@ -1,0 +1,22 @@
+{
+  "results": [
+    {
+      "name": "whole row navigation, draft restore, unknown reload locks counts, receipt check, no automatic repost, desktop/mobile",
+      "status": "passed",
+      "posts": 1
+    },
+    {
+      "name": "unknown late proposal opens recovery after reload and blocks live output",
+      "status": "passed"
+    },
+    {
+      "name": "support worker remains view only",
+      "status": "passed"
+    },
+    {
+      "name": "former recorder retains late-report path, mobile layout",
+      "status": "passed"
+    }
+  ],
+  "errors": []
+}

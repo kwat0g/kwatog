@@ -67,6 +67,7 @@ export default function App() {
  {supplyChainRoutes}
  {productionRoutes}
  {maintenanceRoutes}
+ {maintenanceMobileRoutes}
  {assetsRoutes}
  {advancedRoutes}
  {selfServiceRoutes}
@@ -77,11 +78,6 @@ export default function App() {
   Uses AuthGuard with the main session (operators sign in via /sign-in).
  FactoryFloorLayout renders a mobile-first shell with bottom nav. */}
  {factoryRoutes}
-
- {/* Maintenance Mobile PWA — Mobile-first for maintenance techs.
-  Uses AuthGuard with the main session (techs sign in via /sign-in).
- MaintenanceMobileLayout renders a mobile-first shell with bottom nav. */}
- {maintenanceMobileRoutes}
 
  {/* B2B Portals — Supplier + Customer
  SECURITY: Portal routes are deliberately outside the main AuthGuard

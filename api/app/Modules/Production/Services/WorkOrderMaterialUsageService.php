@@ -9,13 +9,13 @@ use App\Common\Support\Money;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
 use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
-use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
@@ -30,9 +30,9 @@ class WorkOrderMaterialUsageService
 {
     /**
      * @return array<int, array<string, mixed>> One deterministic row per item.
-     *                                            Repeated BOM rows are aggregated
-     *                                            because manual slips are item
-     *                                            scoped, not allocated to BOM lines.
+     *                                          Repeated BOM rows are aggregated
+     *                                          because manual slips are item
+     *                                          scoped, not allocated to BOM lines.
      */
     public function groups(WorkOrder $workOrder, bool $includeReservations = true, bool $lockReservationLevels = false): array
     {
@@ -336,6 +336,9 @@ class WorkOrderMaterialUsageService
             }
         }
 
+        $trialUnits = (string) WorkOrderOutput::query()->where('work_order_id', $workOrder->id)->sum('trial_quantity');
+        $routedUnits = bcadd($routedUnits, $trialUnits, 4);
+
         return bccomp($canonicalUnits, $routedUnits, 4) >= 0 ? $canonicalUnits : $routedUnits;
     }
 
@@ -546,6 +549,7 @@ class WorkOrderMaterialUsageService
 
         $references = array_map(static function (array $reference): array {
             unset($reference['_key']);
+
             return $reference;
         }, $references);
         $workOrder->update(['material_lot_references' => $references]);
@@ -558,7 +562,7 @@ class WorkOrderMaterialUsageService
     {
         return WorkOrderOutput::query()
             ->where('work_order_id', $workOrder->id)
-            ->where(fn ($query) => $query->where('good_count', '>', 0)->orWhere('reject_count', '>', 0))
+            ->where(fn ($query) => $query->where('good_count', '>', 0)->orWhere('reject_count', '>', 0)->orWhere('trial_quantity', '>', 0))
             ->exists()
             || WoOperation::query()
                 ->where('work_order_id', $workOrder->id)
@@ -606,7 +610,7 @@ class WorkOrderMaterialUsageService
     }
 
     /** @param array<int, int|string|null> $sourceIds
-     *  @return array<int, array{quantity:string,cost:string}>
+     * @return array<int, array{quantity:string,cost:string}>
      */
     private function returnTotalsBySource(array $sourceIds): array
     {

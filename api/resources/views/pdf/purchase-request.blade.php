@@ -119,7 +119,7 @@
 @include('pdf._components.approval_signatures', ['approvals' => $approvals])
 
 <div class="footer">
-    Generated on {{ $now->format('M d, Y · H:i') }} ·
+    Generated on {{ $now->format('M d, Y · g:i A') }} ·
     {{ $company['name'] }}
 </div>
 

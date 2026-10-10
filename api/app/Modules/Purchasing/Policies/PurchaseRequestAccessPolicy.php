@@ -156,19 +156,13 @@ final class PurchaseRequestAccessPolicy
             && ($pr->sourcing_method === PurchaseRequestSourcingMethod::DirectPo || $pr->rfqHandedBack());
     }
 
-    /**
-     * An approved PR (status approved = something is still unordered) may go
-     * to RFQ when the buyer chose RFQ, when Direct PO could not auto-convert
-     * (no preferred supplier or price), or when a previous RFQ handed a
-     * remainder back. One RFQ at a time.
-     */
+    /** An approved RFQ-sourced PR may start one RFQ at a time. */
     public function canStartRfq(User $user, PurchaseRequest $pr): bool
     {
         return $user->hasPermission('purchasing.rfq.manage')
             && $this->canView($user, $pr)
             && $pr->status === PurchaseRequestStatus::Approved
-            && ($pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
-                || $pr->po_conversion_status === PurchaseRequestConversionStatus::ManualRequired)
+            && $pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
             && ! $pr->hasActiveRfq();
     }
 

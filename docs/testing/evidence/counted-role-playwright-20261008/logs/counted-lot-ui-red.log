@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /home/ec2-user/kwatog/spa
+
+ ❯ src/pages/quality/inspections/components/CountedBatchInspectionPanel.test.tsx (3 tests | 1 failed) 510ms
+   × uses an affected-lot confirmation instead of a piece count for material lots 36ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/quality/inspections/components/CountedBatchInspectionPanel.test.tsx > uses an affected-lot confirmation instead of a piece count for material lots
+Error: expect(element).not.toBeInTheDocument()
+
+expected document not to contain element, found <input
+  aria-describedby="input-r3-helper"
+  aria-invalid="false"
+  class="flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none px-3 text-sm"
+  id="input-r3"
+  max="1"
+  min="0"
+  required=""
+  step="1"
+  type="number"
+  value=""
+/> instead
+ ❯ src/pages/quality/inspections/components/CountedBatchInspectionPanel.test.tsx:78:48
+     76|   vi.mocked(inspectionsApi.recordBatchResult).mockResolvedValue({ ...l…
+     77|   panel(lot);
+     78|   expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+       |                                                ^
+     79|   expect(screen.getByText(/200.500 kg/)).toBeVisible();
+     80|   fireEvent.click(screen.getByRole('checkbox', { name: 'Material lot h…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  18:32:02
+   Duration  3.19s (transform 459ms, setup 117ms, import 1.15s, tests 510ms, environment 1.01s)
+

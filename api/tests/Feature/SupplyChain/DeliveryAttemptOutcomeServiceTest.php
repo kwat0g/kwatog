@@ -5,28 +5,42 @@ declare(strict_types=1);
 namespace Tests\Feature\SupplyChain;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\AuditLog;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
-use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\MovementGlPostingService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Quality\Enums\InspectionParameterType;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
-use App\Modules\ReturnManagement\Services\ReturnRequestService;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryAttemptOutcome;
 use App\Modules\SupplyChain\Services\DeliveryAttemptOutcomeService;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -34,17 +48,24 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\Support\HasPassedInProcessQc;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\TestCase;
 
 class DeliveryAttemptOutcomeServiceTest extends TestCase
 {
+    use HasPassedInProcessQc;
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         $this->seed([RolePermissionSeeder::class, SettingsSeeder::class, ChartOfAccountsSeeder::class]);
     }
 
@@ -52,6 +73,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
     {
         [$delivery, $actor, $quarantine, $finishedGood, $soLine] = $this->dispatchedDelivery();
         $line = $delivery->items()->firstOrFail();
+        $journalEntriesBefore = DB::table('journal_entries')->count();
         $service = app(DeliveryAttemptOutcomeService::class);
 
         $reported = $service->report($delivery, $actor, $this->reportPayload($line, '0', '0', '4'));
@@ -70,7 +92,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $this->assertSame(0, ReturnRequest::query()->count());
         $this->assertSame(0, StockMovement::query()->where('movement_type', StockMovementType::DeliveryReturn->value)->count());
         $this->assertSame(0, DB::table('credit_notes')->count());
-        $this->assertSame(0, DB::table('journal_entries')->count());
+        $this->assertSame($journalEntriesBefore, DB::table('journal_entries')->count());
         $this->assertSame('0.00', (string) $soLine->fresh()->quantity_delivered);
         $this->assertNull(StockLevel::query()->where('item_id', $finishedGood->id)->where('location_id', $quarantine->id)->value('quantity'));
     }
@@ -79,6 +101,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
     {
         [$delivery, $actor, $quarantine, $finishedGood] = $this->dispatchedDelivery();
         $line = $delivery->items()->firstOrFail();
+        $journalEntriesBefore = DB::table('journal_entries')->count();
         $attempts = app(DeliveryAttemptOutcomeService::class);
         $reported = $attempts->report($delivery, $actor, $this->reportPayload($line, '0', '4', '0'));
         $reconciled = $attempts->receive($reported, $actor, [
@@ -96,14 +119,14 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $this->assertSame('4.5000', (string) $movement->unit_cost);
         $this->assertSame('9.00', (string) $movement->total_cost);
         $this->assertSame(MovementGlHandoffStatus::NotRequired, $movement->gl_handoff_status);
-        $this->assertSame(0, DB::table('journal_entries')->count());
+        $this->assertSame($journalEntriesBefore, DB::table('journal_entries')->count());
         $this->assertSame(0, DB::table('credit_notes')->count());
         $this->assertSame(1, ReturnRequest::query()->count());
 
         $source = StockMovement::query()->where('movement_type', StockMovementType::Delivery->value)->sole();
         // A delivery return has to name the reconciled RMA line it settles, so
         // the replay must carry it to reach the cumulative-quantity guard.
-        $returnItem = \App\Modules\ReturnManagement\Models\ReturnRequestItem::query()
+        $returnItem = ReturnRequestItem::query()
             ->where('return_request_id', ReturnRequest::query()->sole()->id)->firstOrFail();
         try {
             app(StockMovementService::class)->move(new StockMovementInput(
@@ -121,7 +144,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
                 createdBy: $actor->id,
             ));
             $this->fail('A second movement must not recover more stock than the depot physically counted.');
-        } catch (\App\Modules\Inventory\Exceptions\InvalidMovementException $error) {
+        } catch (InvalidMovementException $error) {
             $this->assertStringContainsString('physically reconciled', $error->getMessage());
         }
         $this->assertSame(1, StockMovement::query()->where('movement_type', StockMovementType::DeliveryReturn->value)->count());
@@ -130,84 +153,159 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
 
     public function test_only_passed_checked_truck_restock_reopens_original_outgoing_capacity(): void
     {
-        [$delivery, $actor, $quarantine, , , , $finishedLocation, $product, $checker] = $this->dispatchedDelivery();
+        [$delivery, , $quarantine, $finishedGood, , $driver, , $product, $checker] = $this->dispatchedDelivery(withDriver: true);
+        self::assertNotNull($driver);
         $line = $delivery->items()->firstOrFail();
-        $attempts = app(DeliveryAttemptOutcomeService::class);
-        $reported = $attempts->report($delivery, $actor, $this->reportPayload($line, '0', '4', '0'));
-        $received = $attempts->receive($reported, $actor, [
-            'request_key' => (string) Str::uuid(),
-            'quarantine_location_id' => $quarantine->hash_id,
-            'variance_reason' => 'The depot counted two units from the four declared truck-return units.',
-            'lines' => [['delivery_item_id' => $line->hash_id, 'received_quantity' => '2']],
-        ]);
+        $this->actingAs($driver)
+            ->postJson("/api/v1/driver/deliveries/{$delivery->hash_id}/attempt-outcome", $this->reportPayload($line, '0', '4', '0'))
+            ->assertOk();
+        $this->assertSame(DeliveryStatus::ReturnPending, $delivery->fresh()->status);
 
+        $receiver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+            'is_active' => true,
+        ]);
+        $receipt = $this->actingAs($receiver)
+            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/truck-return-receipt", [
+                'request_key' => (string) Str::uuid(),
+                'quarantine_location_id' => $quarantine->hash_id,
+                'variance_reason' => 'The depot counted two units from the four declared truck-return units.',
+                'lines' => [['delivery_item_id' => $line->hash_id, 'received_quantity' => '2']],
+            ]);
+        $this->assertSame(200, $receipt->status(), $receipt->content());
+        $received = $delivery->fresh();
+        $this->assertSame(DeliveryStatus::Returned, $received->status);
         $this->assertSame([], app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id));
-        $rma = ReturnRequest::query()->with('items')->findOrFail($received->attemptOutcome->return_request_id);
+        $outcome = DeliveryAttemptOutcome::query()->where('delivery_id', $delivery->id)->sole();
+        $rma = ReturnRequest::query()->with('items')
+            ->where('delivery_attempt_outcome_id', $outcome->id)->sole();
         $rmaItem = $rma->items->sole();
         $this->assertSame('0.000', (string) $rmaItem->stock_movement_quantity, 'Depot receipt is not a final stock disposition.');
         $this->assertNotNull($rmaItem->quarantine_movement_id);
 
-        $returnInspection = Inspection::query()->create([
-            'inspection_number' => 'QC-TRUCK-'.Str::upper(Str::random(8)),
-            'stage' => 'customer_return',
-            'status' => 'passed',
-            'inspector_id' => $actor->id,
-            'reviewed_by' => $checker->id,
-            'reviewed_at' => now(),
-            'product_id' => $product->id,
-            'entity_type' => 'return_request',
-            'entity_id' => $rma->id,
-            'batch_quantity' => 2,
-            'accepted_quantity' => 2,
-            'sample_size' => 1,
-            'accept_count' => 1,
-            'reject_count' => 0,
-            'defect_count' => 0,
-            'completed_at' => now(),
+        $qualityMaker = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+            'is_active' => true,
         ]);
+        $spec = InspectionSpec::query()->create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $qualityMaker->id,
+        ]);
+        InspectionSpecItem::query()->create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Truck return condition',
+            'parameter_type' => InspectionParameterType::Visual->value,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
+        $this->actingAs($qualityMaker)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/inspect")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'inspected');
+        $returnInspection = Inspection::query()
+            ->where('entity_type', 'return_request')->where('entity_id', $rma->id)->sole();
         $this->assertTrue($returnInspection->requiresMakerChecker());
+        $measurements = InspectionMeasurement::query()->where('inspection_id', $returnInspection->id)->get();
+        $this->assertNotEmpty($measurements);
+        $this->actingAs($qualityMaker)
+            ->patchJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/measurements", [
+                'measurements' => $measurements->map(fn (InspectionMeasurement $measurement): array => [
+                    'id' => $measurement->hash_id,
+                    'is_pass' => true,
+                ])->all(),
+            ])
+            ->assertOk();
+        $this->actingAs($qualityMaker)
+            ->postJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/complete")
+            ->assertOk()
+            ->assertJsonPath('data.status', InspectionStatus::AwaitingReview->value);
+        $this->assertSame(0, (int) $returnInspection->fresh()->accepted_quantity);
+        $this->assertSame([], app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id));
 
-        $ordinaryRma = ReturnRequest::query()->create([
-            'rma_number' => 'RMA-ORD-'.Str::upper(Str::random(8)),
-            'type' => 'customer_return',
-            'status' => 'received',
-            'sales_order_id' => $delivery->sales_order_id,
-            'customer_id' => $delivery->salesOrder->customer_id,
-            'created_by' => $actor->id,
-            'return_date' => now()->toDateString(),
+        Role::query()->where('slug', 'qc_inspector')->firstOrFail()->permissions()->syncWithoutDetaching([
+            Permission::query()->where('slug', 'quality.inspections.review')->value('id'),
         ]);
-        $ordinaryInspection = Inspection::query()->create([
-            'inspection_number' => 'QC-ORD-'.Str::upper(Str::random(8)),
-            'stage' => 'customer_return',
-            'status' => 'in_progress',
-            'product_id' => $product->id,
-            'entity_type' => 'return_request',
-            'entity_id' => $ordinaryRma->id,
-            'batch_quantity' => 1,
-            'sample_size' => 1,
+        $this->actingAs($qualityMaker)
+            ->patchJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/review", ['decision' => 'passed'])
+            ->assertForbidden();
+        $this->assertSame(InspectionStatus::AwaitingReview, $returnInspection->fresh()->status);
+        $this->actingAs($checker)
+            ->patchJson("/api/v1/quality/inspections/{$returnInspection->hash_id}/review", ['decision' => 'passed'])
+            ->assertOk()
+            ->assertJsonPath('data.status', InspectionStatus::Passed->value);
+        $this->assertSame(0, (int) $returnInspection->fresh()->accepted_quantity, 'Only outgoing inspections release sellable production quantity.');
+
+        $disposer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+            'is_active' => true,
         ]);
-        $this->assertFalse($ordinaryInspection->requiresMakerChecker(), 'Ordinary customer RMAs keep their existing inspection policy.');
+        $this->actingAs($disposer)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
+                'dispositions' => [['item_id' => $rmaItem->hash_id, 'disposition' => 'restock']],
+            ])
+            ->assertOk();
+        $rmaItem->refresh();
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $rmaItem->id)->firstOrFail();
+        $this->assertSame('held', $mrb->status->value);
+        $this->assertSame($disposer->id, (int) $mrb->held_by);
+        $this->assertSame('0.000', (string) $rmaItem->stock_movement_quantity);
+        $this->assertSame('2.000', (string) StockLevel::query()
+            ->where('item_id', $finishedGood->id)->where('location_id', $quarantine->id)->value('quantity'));
+        $movementCount = StockMovement::query()->count();
+        $this->actingAs($disposer)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete")
+            ->assertUnprocessable();
+        $this->assertSame($movementCount, StockMovement::query()->count());
+        $this->assertSame([], app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id));
 
-        $rma->forceFill([
-            'status' => 'inspected',
-            'inspected_at' => now(),
-            'inspection_id' => $returnInspection->id,
-            'inspection_handoff_status' => 'generated',
-        ])->save();
-        $disposed = app(ReturnRequestService::class)->dispose(
-            $rma->fresh(),
-            [['item_id' => $rmaItem->hash_id, 'disposition' => 'restock']],
-            $actor,
-            locationId: (int) $finishedLocation->id,
-        );
+        $releaseActor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+            'is_active' => true,
+        ]);
+        $releaseZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $quarantine->zone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $releaseLocation = WarehouseLocation::factory()->create(['zone_id' => $releaseZone->id]);
+        $release = $this->actingAs($releaseActor)
+            ->postJson("/api/v1/inventory/mrb/{$mrb->hash_id}/release", [
+                'disposition' => 'use_as_is',
+                'target_location_id' => $releaseLocation->hash_id,
+                'inspected_quantity' => '2.000',
+                'evidence_reference' => 'TRUCK-RETURN-REINSPECTION-'.$rma->rma_number,
+                'recovery_passed' => true,
+            ]);
+        $this->assertSame(200, $release->status(), $release->content());
+        $release->assertJsonPath('data.status', 'released');
 
-        $releasedItem = $disposed->items->sole();
-        $this->assertSame('2.000', (string) $releasedItem->stock_movement_quantity);
-        $this->assertNotNull($releasedItem->quarantine_release_movement_id);
+        $mrb->refresh();
+        $rmaItem->refresh();
+        $this->assertSame($releaseActor->id, (int) $mrb->released_by);
+        $this->assertSame($mrb->release_movement_id, $rmaItem->quarantine_release_movement_id);
+        $this->assertSame('2.000', (string) $rmaItem->stock_movement_quantity);
+        $this->assertSame('0.000', (string) StockLevel::query()
+            ->where('item_id', $finishedGood->id)->where('location_id', $quarantine->id)->value('quantity'));
+        $this->assertSame('2.000', (string) StockLevel::query()
+            ->where('item_id', $finishedGood->id)->where('location_id', $releaseLocation->id)->value('quantity'));
+        $mrbAudit = AuditLog::query()->where('model_type', $mrb->getMorphClass())
+            ->where('model_id', $mrb->id)->orderBy('id')->get();
+        $this->assertSame(['created', 'updated'], $mrbAudit->pluck('action')->all());
+        $this->assertSame($releaseActor->id, (int) $mrbAudit->last()->user_id);
+
         $options = app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id);
         $this->assertCount(1, $options);
         $this->assertSame('2.00', $options[0]['remaining_quantity']);
+        $movementCount = StockMovement::query()->count();
+        $this->actingAs($disposer)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+        $this->assertSame($movementCount, StockMovement::query()->count(), 'RMA completion must not move released stock twice.');
 
+        // Simulate corrupt legacy/import data only after the real chain completed.
+        $releasedItem = $rmaItem->fresh();
         $releasedItem->forceFill(['disposition' => 'rework'])->save();
         $this->assertSame([], app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id), 'Rework stock does not replenish outgoing inspection capacity.');
 
@@ -215,7 +313,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $returnInspection->forceFill(['status' => 'failed'])->save();
         $this->assertSame([], app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id), 'A failed return inspection does not replenish capacity.');
 
-        $returnInspection->forceFill(['status' => 'passed', 'reviewed_by' => $actor->id])->save();
+        $returnInspection->forceFill(['status' => 'passed', 'reviewed_by' => $qualityMaker->id])->save();
         $this->assertSame([], app(DeliveryService::class)->inspectionOptions((int) $delivery->sales_order_id), 'The return inspector cannot approve their own result.');
     }
 
@@ -365,11 +463,29 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $payload = ['request_key' => (string) Str::uuid(), 'variance_reason' => 'Found in the carrier holding bay.',
             'quarantine_location_id' => $quarantine->hash_id,
             'lines' => [['delivery_item_id' => $line->hash_id, 'received_quantity' => '1.333']]];
+        $before = $delivery->fresh()->attemptOutcome;
+        $returnMovements = StockMovement::query()->where('item_id', $item->id)
+            ->where('movement_type', StockMovementType::DeliveryReturn)->count();
+        try {
+            $service->receiveLate($delivery, $actor, $payload);
+            $this->fail('Piece recovery quantities must remain whole numbers.');
+        } catch (BusinessRuleException $error) {
+            $this->assertSame('Piece quantities must be whole numbers.', $error->getMessage());
+        }
+        $afterRejectedRecovery = $delivery->fresh()->attemptOutcome;
+        $this->assertSame('0.000', $afterRejectedRecovery->items->first()->warehouse_received_quantity);
+        $this->assertSame('4.000', $afterRejectedRecovery->items->first()->unaccounted_quantity);
+        $this->assertSame($before->revisions()->count(), $afterRejectedRecovery->revisions()->count());
+        $this->assertSame(0, ReturnRequest::query()->where('delivery_attempt_outcome_id', $before->id)->count());
+        $this->assertSame($returnMovements, StockMovement::query()->where('item_id', $item->id)
+            ->where('movement_type', StockMovementType::DeliveryReturn)->count());
+
+        $payload['lines'][0]['received_quantity'] = '1';
         $first = $service->receiveLate($delivery, $actor, $payload);
         $service->receiveLate($delivery, $actor, $payload);
         $this->assertSame(1, ReturnRequest::query()->where('delivery_attempt_outcome_id', $first->attemptOutcome->id)->count());
         $payload['request_key'] = (string) Str::uuid();
-        $payload['lines'][0]['received_quantity'] = '2.667';
+        $payload['lines'][0]['received_quantity'] = '3';
         $second = $service->receiveLate($delivery, $actor, $payload);
         $this->assertSame(2, $second->attemptOutcome->returnRequests()->count());
         $this->assertSame('0.000', $second->attemptOutcome->items->first()->unaccounted_quantity);
@@ -384,7 +500,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         }
         $payload['request_key'] = (string) Str::uuid();
         $payload['lines'][0]['received_quantity'] = '0.001';
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $service->receiveLate($delivery, $actor, $payload);
     }
 
@@ -403,11 +519,11 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
     public function test_customer_can_track_non_arrival_without_claiming_credit_or_replacement(): void
     {
         [$delivery, $actor] = $this->dispatchedDelivery();
-        $portal = \App\Modules\B2B\Models\CustomerPortalUser::create([
+        $portal = CustomerPortalUser::create([
             'customer_id' => $delivery->salesOrder->customer_id, 'name' => 'Receiving desk',
             'email' => Str::uuid().'@example.test', 'password' => 'Testing!1234', 'is_active' => true,
         ]);
-        $service = app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class);
+        $service = app(ReturnCaseService::class);
         $payload = ['request_key' => (string) Str::uuid(), 'message' => 'Our receiving dock is still waiting.'];
         $case = $service->reportNotArrived($delivery, $payload, $actor, $portal);
         $replay = $service->reportNotArrived($delivery, $payload, $actor, $portal);
@@ -438,12 +554,12 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
     public function test_customer_tracking_intake_cannot_access_another_customers_delivery(): void
     {
         [$delivery, $actor] = $this->dispatchedDelivery();
-        $portal = \App\Modules\B2B\Models\CustomerPortalUser::create([
+        $portal = CustomerPortalUser::create([
             'customer_id' => Customer::factory()->create()->id, 'name' => 'Other customer',
             'email' => Str::uuid().'@example.test', 'password' => 'Testing!1234', 'is_active' => true,
         ]);
         try {
-            app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->reportNotArrived($delivery,
+            app(ReturnCaseService::class)->reportNotArrived($delivery,
                 ['request_key' => (string) Str::uuid()], $actor, $portal);
             $this->fail('Customer ownership must be checked in the locked service.');
         } catch (HttpException $error) {
@@ -480,9 +596,12 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
     private function dispatchedDelivery(bool $withDriver = false): array
     {
         $actor = User::factory()->create();
-        $checker = User::factory()->create();
+        $checker = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            'is_active' => true,
+        ]);
         $assignedDriver = $withDriver
-            ? User::factory()->create(['role_id' => \App\Modules\Auth\Models\Role::query()->where('slug', 'driver')->value('id')])
+            ? User::factory()->create(['role_id' => Role::query()->where('slug', 'driver')->value('id')])
             : null;
         $customer = Customer::factory()->create();
         $product = Product::factory()->create(['unit_of_measure' => 'pcs', 'standard_cost' => '4.50']);
@@ -523,6 +642,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
             'status' => 'completed',
             'created_by' => $actor->id,
         ]);
+        $this->passInProcessQc($workOrder);
         $output = WorkOrderOutput::create([
             'work_order_id' => $workOrder->id,
             'recorded_by' => $actor->id,
@@ -544,6 +664,8 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
             'created_by' => $actor->id,
             'created_at' => now(),
         ]);
+        app(MovementGlPostingService::class)->postFor($receipt);
+        $this->assertSame(MovementGlHandoffStatus::Generated, $receipt->fresh()->gl_handoff_status);
         $output->update([
             'production_receipt_movement_id' => $receipt->id,
             'production_receipt_handoff_status' => 'generated',
@@ -573,6 +695,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
             'scheduled_date' => now()->toDateString(),
             'items' => [['sales_order_item_id' => $soLine->id, 'quantity' => '4.00', 'inspection_id' => $inspection->id]],
         ], $actor);
+        $this->prepareShipmentForDispatch($delivery);
         $delivery->forceFill(['status' => DeliveryStatus::Loading->value, 'cost_recognition_mode' => 'legacy'])->save();
         $delivery = app(DeliveryService::class)->updateStatus($delivery, DeliveryStatus::InTransit);
 

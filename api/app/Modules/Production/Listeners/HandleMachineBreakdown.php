@@ -79,6 +79,10 @@ class HandleMachineBreakdown implements ShouldQueue
         $outcomeCode = 'machine_missing_or_not_in_breakdown';
 
         DB::transaction(function () use ($event, &$machine, &$pausedWo, &$candidates, &$outcomeCode): void {
+            $ownerId = Machine::find($event->machine->id)?->current_work_order_id;
+            if ($ownerId) {
+                WorkOrder::whereKey($ownerId)->lockForUpdate()->first();
+            }
             $machine = Machine::query()
                 ->lockForUpdate()
                 ->find($event->machine->id);
@@ -95,6 +99,9 @@ class HandleMachineBreakdown implements ShouldQueue
             $outcomeCode = 'breakdown_published_without_running_work_order';
 
             $woId = $machine->current_work_order_id;
+            if ($woId !== $ownerId) {
+                throw new \RuntimeException('Machine owner changed during breakdown; retry event with current ownership.');
+            }
             if ($woId) {
                 $wo = WorkOrder::query()->lockForUpdate()->find($woId);
                 if ($wo && $wo->status === WorkOrderStatus::InProgress) {
@@ -104,10 +111,7 @@ class HandleMachineBreakdown implements ShouldQueue
                         MachineDowntimeCategory::Breakdown,
                     );
 
-                    // WorkOrderService::pause releases a machine to idle for
-                    // ordinary pauses. A breakdown must remain unavailable
-                    // until the explicit restoration transition closes its
-                    // downtime row.
+                    // Preserve breakdown state and retained ownership until explicit release.
                     $machine->refresh();
                     $machine->update([
                         'status' => MachineStatus::Breakdown->value,

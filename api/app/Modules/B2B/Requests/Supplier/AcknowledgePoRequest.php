@@ -16,7 +16,7 @@ class AcknowledgePoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'expected_delivery_date' => ['nullable', 'date'],
+            'expected_delivery_date' => ['prohibited'],
             'notes'                  => ['nullable', 'string', 'max:500'],
         ];
     }

@@ -40,7 +40,7 @@ class InternalSupplierActivityController extends Controller
     {
         abort_unless($this->access->canView($request->user(), $purchaseOrder), 404);
 
-        $shipments = $purchaseOrder->supplierShipments()->withCount('updates')->get();
+        $shipments = $purchaseOrder->supplierShipments()->with('items.purchaseOrderItem', 'purchaseOrder', 'returnRequest')->withCount('updates')->get();
         $schedules = DeliverySchedule::query()
             ->where('purchase_order_id', $purchaseOrder->id)
             ->whereNotNull('vendor_id')
@@ -71,12 +71,19 @@ class InternalSupplierActivityController extends Controller
             return response()->json(['data' => ['shipment' => null, 'documents' => []]]);
         }
 
-        $documents = $this->documentsFor($po)->sortBy(
-            static fn (PortalShippingDocument $doc): int => $doc->document_type === SupplierShippingDocumentType::CertificateOfAnalysis->value ? 0 : 1,
-        );
+        $documents = $this->documentsFor($po)
+            ->filter(static fn (PortalShippingDocument $doc): bool => $doc->supplier_shipment_id === null
+                || (int) $doc->supplier_shipment_id === (int) $goodsReceiptNote->supplier_shipment_id)
+            ->sortBy(
+                static fn (PortalShippingDocument $doc): int => $doc->document_type === SupplierShippingDocumentType::CertificateOfAnalysis->value ? 0 : 1,
+            );
+
+        $linked = $goodsReceiptNote->supplierShipment()->with('items.purchaseOrderItem', 'purchaseOrder', 'returnRequest')->first();
 
         return response()->json(['data' => [
-            'shipment' => $po->supplierShipment ? (new SupplierShipmentResource($po->supplierShipment))->resolve() : null,
+            'shipment' => $linked ? (new SupplierShipmentResource($linked))->resolve() : null,
+            'shipments' => $po->supplierShipments()->with('items.purchaseOrderItem', 'purchaseOrder', 'returnRequest')->get()
+                ->map(static fn ($shipment): array => (new SupplierShipmentResource($shipment))->resolve())->values()->all(),
             'documents' => $this->documentRows($documents),
         ]]);
     }
@@ -112,6 +119,7 @@ class InternalSupplierActivityController extends Controller
     {
         return PortalShippingDocument::query()
             ->where('purchase_order_id', $po->id)
+            ->with('supplierShipment')
             ->orderByDesc('uploaded_at')
             ->get();
     }
@@ -124,6 +132,7 @@ class InternalSupplierActivityController extends Controller
     {
         return $documents->map(static fn (PortalShippingDocument $doc): array => [
             'id' => $doc->hash_id,
+            'supplier_shipment_id' => $doc->supplierShipment?->hash_id,
             'document_type' => $doc->document_type,
             'document_type_label' => SupplierShippingDocumentType::tryFrom((string) $doc->document_type)?->label()
                 ?? ($doc->document_type === 'supplier_invoice' ? 'Supplier invoice' : (string) $doc->document_type),

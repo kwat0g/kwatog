@@ -22,10 +22,20 @@ export const billsApi = {
  client.post<ApiSuccess<Bill>>(`/bills/${id}/post`, data).then((r) => r.data.data),
  cancel: (id: string) =>
  client.patch<ApiSuccess<Bill>>(`/bills/${id}/cancel`).then((r) => r.data.data),
-  recordPayment: (id: string, data: CreateBillPaymentData, idempotencyKey: string) =>
-  client.post<ApiSuccess<BillPayment>>(`/bills/${id}/payments`, data, {
+  recordPayment: (id: string, data: CreateBillPaymentData, idempotencyKey: string) => {
+  const body = new FormData();
+  body.append('cash_account_id', data.cash_account_id);
+  body.append('payment_date', data.payment_date);
+  body.append('amount', data.amount);
+  body.append('payment_method', data.payment_method);
+  body.append('reference_number', data.reference_number);
+  if (data.proof_file) body.append('proof_file', data.proof_file);
+  return client.post<ApiSuccess<BillPayment>>(`/bills/${id}/payments`, body, {
     headers: { 'Idempotency-Key': idempotencyKey },
-  }).then((r) => r.data.data),
+  }).then((r) => r.data.data);
+  },
+  paymentProofUrl: (billId: string, paymentId: string) =>
+  `/api/v1/bills/${billId}/payments/${paymentId}/proof`,
   approvePayment: (billId: string, paymentId: string) =>
   client.post<ApiSuccess<BillPayment>>(`/bills/${billId}/payments/${paymentId}/approve`).then((r) => r.data.data),
   rejectPayment: (billId: string, paymentId: string, remarks: string) =>

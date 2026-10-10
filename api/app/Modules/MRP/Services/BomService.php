@@ -36,7 +36,7 @@ class BomService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Bom::query()
-            ->with(['product:id,part_number,name,unit_of_measure'])
+            ->with(['product:id,part_number,name,unit_of_measure,standard_cost,base_selling_price,minimum_selling_price'])
             ->withCount('items');
 
         TrashedFilter::apply($q, $filters);
@@ -64,7 +64,7 @@ class BomService
 
     public function show(Bom $bom): Bom
     {
-        return $bom->load(['product', 'items.item:id,code,name,unit_of_measure,item_type']);
+        return $bom->load(['product.inventoryItem', 'items.item:id,code,name,unit_of_measure,item_type']);
     }
 
     public function activeForProduct(int $productId): ?Bom
@@ -120,7 +120,7 @@ class BomService
             $this->requestAutomaticReplan($created, 'bom_changed');
 
             return $created;
-        });
+        }, 3);
     }
 
     /** "Edit" creates a new version. Old version stays archived. */
@@ -141,6 +141,7 @@ class BomService
     public function restore(Bom $bom): Bom
     {
         return DB::transaction(function () use ($bom): Bom {
+            Product::withTrashed()->whereKey($bom->product_id)->lockForUpdate()->firstOrFail();
             $row = Bom::withTrashed()->lockForUpdate()->findOrFail($bom->id);
             if (! $row->trashed()) {
                 return $this->show($row);
@@ -156,6 +157,11 @@ class BomService
                 );
             }
 
+            if ($row->is_active) {
+                $itemIds = $row->items()->pluck('item_id')->all();
+                Item::withTrashed()->whereIn('id', $itemIds)->orderBy('id')->lockForUpdate()->get();
+                $this->integrity->assertValid($row);
+            }
             $row->restore();
 
             return $this->show($row->fresh());
@@ -164,11 +170,14 @@ class BomService
 
     public function delete(Bom $bom): void
     {
-        // Preserve audit trail — only allow deleting inactive (historical) versions.
-        if ($bom->is_active) {
-            throw new BusinessRuleException('Cannot delete the active BOM. Archive it by creating a new version instead.');
-        }
-        $bom->delete();
+        DB::transaction(function () use ($bom): void {
+            Product::withTrashed()->whereKey($bom->product_id)->lockForUpdate()->firstOrFail();
+            $row = Bom::query()->whereKey($bom->id)->lockForUpdate()->firstOrFail();
+            if ($row->is_active) {
+                throw new BusinessRuleException('Cannot delete the active BOM. Archive it by creating a new version instead.');
+            }
+            $row->delete();
+        });
     }
 
     public function assertComponentIntegrity(Bom $bom): void
@@ -201,7 +210,7 @@ class BomService
      */
     private function validateDefinition(int $productId, array $itemRows): void
     {
-        $product = Product::query()->active()->find($productId);
+        $product = Product::query()->active()->lockForUpdate()->find($productId);
         if ($product === null) {
             throw new BusinessRuleException('The finished-good product is missing or inactive.');
         }
@@ -244,7 +253,7 @@ class BomService
             throw new BusinessRuleException('A BOM may contain each component item only once.');
         }
 
-        $items = Item::query()->whereIn('id', $itemIds)->get()->keyBy('id');
+        $items = Item::query()->whereIn('id', $itemIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
         if ($items->count() !== count($itemIds)) {
             throw new BusinessRuleException('Every BOM component must reference an existing item.');
         }
@@ -426,7 +435,7 @@ class BomService
             // OGAMI-015 — does this component item resolve to a manufactured
             // sub-assembly with its own active BOM? Convention: the CRM Product
             // whose part_number matches the item code is the manufactured form.
-            $subBom = $this->subAssemblyBomFor($row->item?->code);
+            $subBom = $this->subAssemblyBomFor($row->item);
 
             if ($subBom !== null) {
                 if (in_array($subBom->product_id, $productPath, true)) {
@@ -485,7 +494,7 @@ class BomService
 
         foreach ($bom->items as $row) {
             $grossFloat = $this->grossQuantityForLine($row, $multiplier);
-            $subBom = $this->subAssemblyBomFor($row->item?->code);
+            $subBom = $this->subAssemblyBomFor($row->item);
 
             if ($subBom === null) {
                 $iid = (int) $row->item_id;
@@ -517,6 +526,9 @@ class BomService
                     $grossFloat,
                 )),
             );
+            if ($toManufacture > 0.000001 && strcasecmp((string) $row->item->unit_of_measure, 'pcs') === 0) {
+                $toManufacture = ceil($toManufacture);
+            }
             $children = [];
             if ($toManufacture > 0.000001) {
                 $this->productionPlanInto(
@@ -559,9 +571,9 @@ class BomService
         return (float) $grossString;
     }
 
-    private function subAssemblyBomFor(?string $itemCode): ?Bom
+    private function subAssemblyBomFor(?Item $item): ?Bom
     {
-        return $this->manufacturedComponents->forCode($itemCode);
+        return $this->manufacturedComponents->forItem($item);
     }
 
     /**

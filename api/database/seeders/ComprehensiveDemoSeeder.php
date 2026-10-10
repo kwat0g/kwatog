@@ -1176,6 +1176,7 @@ class ComprehensiveDemoSeeder extends Seeder
                     'inspection_spec_revision_id' => $revisionId,
                     'parameter_name'     => $p['name'],
                     'parameter_type'     => $p['type'],
+                    'acceptance_criterion' => $p['type'] === 'visual' ? 'No cracks, damage, contamination, flash or short shots.' : null,
                     'unit_of_measure'    => $p['uom'],
                     'nominal_value'      => $p['nominal'],
                     'tolerance_min'      => $p['tol_min'],

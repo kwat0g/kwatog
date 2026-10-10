@@ -15,7 +15,7 @@ class StoreCollectionRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('accounting.invoices.collect') ?? false;
+        return $this->user()?->hasPermission('accounting.invoices.collect_manual') ?? false;
     }
 
     /**
@@ -30,11 +30,6 @@ class StoreCollectionRequest extends FormRequest
      *   - `99999999999999999.99` had no upper bound and hit the column as a
      *     22003 overflow -> HTTP 500.
      *
-     * Note the SPA collection form uses z.coerce.number() with no precision
-     * refinement (spa/src/pages/accounting/invoices/detail.tsx:38), so unlike
-     * the journal-entry form it does not yet mirror this shape client-side; a
-     * three-decimal entry now surfaces as a mapped 422 instead of a silent
-     * round. Adding the client-side refinement is tracked separately.
      */
     public function rules(): array
     {
@@ -44,7 +39,20 @@ class StoreCollectionRequest extends FormRequest
             'amount'           => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:'.self::MAX_AMOUNT],
             'payment_method'   => ['required', Rule::in(PaymentMethod::values())],
             'reference_number' => ['nullable', 'string', 'max:50'],
-            'idempotency_key'  => ['nullable', 'string', 'max:100'],
+            'manual_reason' => ['required', 'string', 'min:10', 'max:500'],
+            'idempotency_key'  => ['required', 'string', 'max:100', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('manual_reason'))) $this->merge(['manual_reason' => trim($this->input('manual_reason'))]);
+    }
+
+    public function after(): array
+    {
+        return [function (\Illuminate\Validation\Validator $validator): void {
+            if (array_diff(array_keys($this->all()), array_keys($this->rules()))) $validator->errors()->add('manual_reason', 'Only exceptional collection details can be submitted.');
+        }];
     }
 }

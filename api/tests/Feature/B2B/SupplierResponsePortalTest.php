@@ -99,7 +99,6 @@ class SupplierResponsePortalTest extends TestCase
 
         $response = $this->postJson($this->respondUrl($po), [
             'type'                   => 'accept',
-            'proposed_delivery_date' => '2026-10-20',
             'notes'                  => 'Accepted as ordered.',
         ]);
 
@@ -109,7 +108,7 @@ class SupplierResponsePortalTest extends TestCase
 
         $fresh = $po->fresh();
         $this->assertSame('acknowledged', $fresh->status->value);
-        $this->assertSame('2026-10-20', $fresh->confirmed_delivery_date->toDateString());
+        $this->assertSame($po->expected_delivery_date->toDateString(), $fresh->confirmed_delivery_date->toDateString());
 
         $this->assertDatabaseHas('purchase_order_responses', [
             'purchase_order_id' => $po->id,
@@ -136,6 +135,60 @@ class SupplierResponsePortalTest extends TestCase
 
         $this->assertSame($first, $replay);
         $this->assertSame(1, PurchaseOrderResponse::query()->where('purchase_order_id', $po->id)->count());
+    }
+
+    public function test_accept_cannot_change_delivery_date(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+
+        $this->actAs($user);
+        $this->postJson($this->respondUrl($po), [
+            'type' => 'accept',
+            'proposed_delivery_date' => $po->expected_delivery_date->copy()->addDay()->toDateString(),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['proposed_delivery_date']);
+
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/acknowledge", [
+            'expected_delivery_date' => $po->expected_delivery_date->copy()->addDay()->toDateString(),
+        ])->assertUnprocessable()->assertJsonValidationErrors(['expected_delivery_date']);
+
+        $this->assertSame('sent', $po->fresh()->status->value);
+    }
+
+    public function test_portal_can_propose_delivery_date_without_changing_order_lines(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $proposedDate = $po->expected_delivery_date->copy()->addDay()->toDateString();
+
+        $this->actAs($user);
+        $this->postJson($this->respondUrl($po), [
+            'type' => 'propose',
+            'proposed_delivery_date' => $proposedDate,
+            'items' => [],
+        ])->assertCreated()->assertJsonPath('data.type', 'propose');
+
+        $this->assertSame('supplier_proposed', $po->fresh()->status->value);
+        $this->assertSame($proposedDate, $po->latestResponse()->firstOrFail()->proposed_delivery_date->toDateString());
+        $this->assertSame(0, $po->latestResponse()->firstOrFail()->items()->count());
+    }
+
+    public function test_portal_rejects_a_proposal_that_keeps_the_required_date_and_lines(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+
+        $this->actAs($user);
+        $this->postJson($this->respondUrl($po), [
+            'type' => 'propose',
+            'proposed_delivery_date' => $po->expected_delivery_date->toDateString(),
+            'items' => [],
+        ])->assertUnprocessable();
+
+        $this->assertSame('sent', $po->fresh()->status->value);
     }
 
     public function test_portal_propose_response_stores_items(): void

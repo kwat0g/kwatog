@@ -1,4 +1,5 @@
 /** Supply Chain — Create Shipment (inbound import PO shipment). */
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -6,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { shipmentsApi } from '@/api/supply-chain';
-import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -17,6 +17,7 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+const costAmount = z.string().max(16).regex(/^\d{1,13}(?:\.\d{1,2})?$/, 'Enter a non-negative amount with up to 2 decimals.').optional().or(z.literal(''));
 const schema = z.object({
  purchase_order_id: z.string().min(1, 'Purchase order is required'),
  carrier: z.string().max(100).optional().or(z.literal('')),
@@ -26,28 +27,24 @@ const schema = z.object({
  etd: z.string().optional().or(z.literal('')),
  eta: z.string().optional().or(z.literal('')),
  notes: z.string().max(2000).optional().or(z.literal('')),
- incoterm: z.string().optional().or(z.literal('')),
+ freight_cost: costAmount,
+ insurance_cost: costAmount,
+ duties_amount: costAmount,
+ brokerage_fee: costAmount,
+ other_charges: costAmount,
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateShipmentPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const [poSearch, setPoSearch] = useState('');
 
- const { data: posData, isLoading: posLoading, isError: posError } = useQuery({
- queryKey: ['purchasing', 'purchase-orders', 'for-shipment'],
- queryFn: () => purchaseOrdersApi.list({ status: 'sent', per_page: 200 }),
+ const { data: posData, isLoading: posLoading, isError: posError, refetch: refetchPurchaseOrders } = useQuery({
+ queryKey: ['supply-chain', 'shipments', 'purchase-order-options', poSearch],
+ queryFn: () => shipmentsApi.purchaseOrderOptions({ search: poSearch, per_page: 100 }),
  });
  const poList = posData?.data ?? [];
- const { data: shipmentOptions } = useQuery({
- queryKey: ['supply-chain', 'shipments', 'options'],
- queryFn: () => shipmentsApi.options(),
- staleTime: 300_000,
- });
-
- if (posError) {
- toast.error('Failed to load purchase orders');
- }
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
@@ -58,12 +55,17 @@ export default function CreateShipmentPage() {
  container_number: '',
  bl_number: '',
  etd: '',
- eta: '',
+  eta: '',
  notes: '',
- incoterm: '',
- },
+  freight_cost: '',
+  insurance_cost: '',
+  duties_amount: '',
+  brokerage_fee: '',
+  other_charges: '',
+  },
  });
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = form;
+ const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = form;
+ const selectedPo = poList.find((po) => po.id === watch('purchase_order_id'));
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) =>
@@ -76,7 +78,11 @@ export default function CreateShipmentPage() {
  etd: data.etd || undefined,
  eta: data.eta || undefined,
  notes: data.notes || undefined,
- incoterm: data.incoterm ? data.incoterm as import('@/types/supplyChain').Incoterm : undefined,
+ freight_cost: data.freight_cost || undefined,
+ insurance_cost: data.insurance_cost || undefined,
+ duties_amount: data.duties_amount || undefined,
+ brokerage_fee: data.brokerage_fee || undefined,
+ other_charges: data.other_charges || undefined,
  }),
  onSuccess: (shipment) => {
  qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
@@ -96,23 +102,37 @@ export default function CreateShipmentPage() {
  backTo="/supply-chain/shipments"
  backLabel="Shipments"
  />
+      {posError && (
+        <div role="alert" className="mx-5 mt-3 flex items-center justify-between gap-3 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger-fg">
+          <span>Failed to load purchase orders.</span>
+          <Button variant="secondary" size="sm" onClick={() => void refetchPurchaseOrders()}>
+            Retry purchase orders
+          </Button>
+        </div>
+      )}
+      {!posLoading && !posError && poList.length === 0 && (
+        <p role="status" className="mx-5 mt-3 text-sm text-muted">
+          No shipment-ready purchase orders are available. Send the order to the supplier or resolve its response first.
+        </p>
+      )}
       <FormDraftBanner safety={safety} />
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
- className="max-w-3xl mx-auto px-5 py-4"
+ className="min-w-0 w-full px-5 py-4"
  >
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Purchase order</legend>
- <Select
+ <Select searchable
  label="Purchase order"
+ onSearch={setPoSearch}
  {...register('purchase_order_id')}
  error={errors.purchase_order_id?.message}
  required
  disabled={posLoading || posError}
  >
- <option value="">
- {posLoading ? 'Loading POs…' : posError ? 'Failed to load POs' : '— Select approved PO —'}
- </option>
+        <option value="">
+ {posLoading ? 'Loading POs…' : posError ? 'Failed to load POs' : '— Select shipment-ready PO —'}
+        </option>
  {poList.map((po) => (
  <option key={po.id} value={po.id}>
  {po.po_number} — {po.vendor?.name ?? '—'}
@@ -136,10 +156,12 @@ export default function CreateShipmentPage() {
  error={errors.vessel?.message}
  placeholder="Enter vessel name"
  />
- <Select label="Incoterm" {...register('incoterm')} error={errors.incoterm?.message}>
- <option value="">— Select incoterm —</option>
- {(shipmentOptions?.incoterms ?? []).map((option) => <option key={option.value} value={option.value}>{option.value} — {option.label}</option>)}
- </Select>
+ <Input
+ label="Incoterm"
+ value={selectedPo?.incoterm ?? '—'}
+ readOnly
+ helper="Uses the purchase order term printed on customs documents."
+ />
  </div>
  <div className="grid grid-cols-2 gap-3 mt-3">
  <Input
@@ -178,6 +200,17 @@ export default function CreateShipmentPage() {
  </fieldset>
 
  <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Landed costs</legend>
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+ <Input label="Freight cost" type="number" min="0" step="0.01" prefix="₱" {...register('freight_cost')} error={errors.freight_cost?.message} />
+ <Input label="Insurance cost" type="number" min="0" step="0.01" prefix="₱" {...register('insurance_cost')} error={errors.insurance_cost?.message} />
+ <Input label="Duties" type="number" min="0" step="0.01" prefix="₱" {...register('duties_amount')} error={errors.duties_amount?.message} />
+ <Input label="Brokerage fee" type="number" min="0" step="0.01" prefix="₱" {...register('brokerage_fee')} error={errors.brokerage_fee?.message} />
+ <Input label="Other charges" type="number" min="0" step="0.01" prefix="₱" {...register('other_charges')} error={errors.other_charges?.message} />
+ </div>
+ </fieldset>
+
+ <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Notes</legend>
  <Textarea
  label="Notes"
@@ -199,7 +232,7 @@ export default function CreateShipmentPage() {
  <Button
  type="submit"
  variant="primary"
- disabled={isSubmitting || mutation.isPending}
+ disabled={isSubmitting || mutation.isPending || posError || poList.length === 0}
  loading={mutation.isPending}
  >
  {mutation.isPending ? 'Creating…' : 'Create shipment'}

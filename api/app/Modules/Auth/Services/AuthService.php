@@ -225,6 +225,17 @@ class AuthService
                 'must_change_password' => false,
             ])->save();
 
+            if ($request->hasSession()) {
+                $guard = Auth::guard('web');
+                $guard->setUser($locked);
+                $request->session()->put(
+                    'password_hash_web',
+                    method_exists($guard, 'hashPasswordForCookie')
+                        ? $guard->hashPasswordForCookie($locked->password)
+                        : $locked->password,
+                );
+            }
+
             // Trim history beyond depth
             $keepIds = $locked->passwordHistory()
                 ->limit($historyDepth)

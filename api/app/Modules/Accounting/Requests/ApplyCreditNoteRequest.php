@@ -23,11 +23,12 @@ class ApplyCreditNoteRequest extends FormRequest
             // reaches Money::round2() and then the invoice/bill balance
             // comparison, so bare 'numeric' let '1e3' raise a BCMath ValueError
             // (500) and an unbounded value overflow decimal(15,2) (500).
-            'amount'     => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:'.self::MAX_AMOUNT],
+            'operation_key' => ['required', 'uuid'],
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0', 'max:'.self::MAX_AMOUNT],
             // Typed so an array payload can't reach CreditNoteService::decode(),
             // whose (string) cast would TypeError into a 500. HashIDs resolved there.
             'invoice_id' => ['nullable', 'string'],
-            'bill_id'    => ['nullable', 'string'],
+            'bill_id' => ['nullable', 'string'],
         ];
     }
 }

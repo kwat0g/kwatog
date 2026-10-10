@@ -26,7 +26,7 @@ class StockCountItemAuditTest extends TestCase
             'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
             'is_active' => true,
         ]);
-        $item = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create(['is_active' => true]);
         StockLevel::query()->create([
             'item_id' => $item->id,

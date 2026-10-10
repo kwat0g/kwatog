@@ -15,9 +15,12 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { ChipVariant } from '@/components/ui/Chip';
@@ -39,16 +42,32 @@ const releaseSchema = z
     disposition: z.string().min(1, 'Disposition is required.'),
     target_location_id: z.string().optional().or(z.literal('')),
     notes: z.string().max(1000).optional().or(z.literal('')),
+    evidence_reference: z.string().trim().max(500).optional().or(z.literal('')),
+    concession_approval_reference: z.string().trim().max(500).optional().or(z.literal('')),
+    recovery_passed: z.boolean().optional(),
   })
   .refine((v) => !requiresTarget(v.disposition as MrbDisposition) || !!v.target_location_id, {
     message: 'A target good location is required for rework / use-as-is.',
     path: ['target_location_id'],
+  })
+  .refine(
+    (v) =>
+      !requiresTarget(v.disposition as MrbDisposition) || Boolean(v.evidence_reference?.trim()),
+    {
+      message: 'Completed reinspection evidence is required before releasing good inventory.',
+      path: ['evidence_reference'],
+    },
+  )
+  .refine((v) => !requiresTarget(v.disposition as MrbDisposition) || v.recovery_passed === true, {
+    message: 'Confirm completed reinspection of all held material passed.',
+    path: ['recovery_passed'],
   });
 type ReleaseValues = z.infer<typeof releaseSchema>;
 
 export default function MrbDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { can } = usePermission();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const [releaseOpen, setReleaseOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -76,7 +95,10 @@ export default function MrbDetailPage() {
       />
     );
 
-  const canRelease = can('inventory.mrb.manage') && data.status === 'held';
+  const canManage = can('inventory.mrb.manage');
+  const isHoldCreator = data.held_by_id === currentUserId;
+  const canRelease = canManage && data.status === 'held' && data.actions?.can_release === true;
+  const releaseBlocked = canManage && data.status === 'held' && data.actions?.can_release === false;
 
   return (
     <div>
@@ -91,6 +113,13 @@ export default function MrbDetailPage() {
               <Button variant="primary" onClick={() => setReleaseOpen(true)}>
                 Release
               </Button>
+            )}
+            {releaseBlocked && (
+              <p role="status" className="text-xs text-muted">
+                {isHoldCreator
+                  ? 'Another authorized user must release a hold you created.'
+                  : 'This MRB can no longer be released by your account.'}
+              </p>
             )}
           </div>
         }
@@ -115,6 +144,11 @@ export default function MrbDetailPage() {
           value={
             data.disposition_label ??
             data.ncr?.disposition_label ??
+            (data.return_request?.disposition === 'rework'
+              ? 'Rework'
+              : data.return_request
+                ? 'Restock (use as is)'
+                : undefined) ??
             data.disposition ??
             data.ncr?.disposition ??
             '—'
@@ -138,6 +172,21 @@ export default function MrbDetailPage() {
             <Field label="Source location" value={data.source_location?.full_code} mono />
             <Field label="Quarantine location" value={data.quarantine_location?.full_code} mono />
             <Field label="Release location" value={data.release_location?.full_code} mono />
+            <Field
+              label="Linked customer return"
+              value={
+                data.return_request ? (
+                  <Link
+                    to={`/return-management/${data.return_request.id}`}
+                    className="font-mono text-accent hover:underline"
+                  >
+                    {data.return_request.rma_number}
+                  </Link>
+                ) : (
+                  '—'
+                )
+              }
+            />
             <Field label="Hold movement" value={data.hold_movement_id} mono />
             <Field label="Release movement" value={data.release_movement_id} mono />
             <Field
@@ -175,6 +224,14 @@ export default function MrbDetailPage() {
           </dl>
         </Panel>
 
+        {data.concession_approval_reference && (
+          <Panel title="Concession approval">
+            <p className="text-sm break-words">{data.concession_approval_reference}</p>
+            <p className="mt-1 text-xs text-muted">
+              Released by {data.released_by} · {formatDateTime(data.released_at)}
+            </p>
+          </Panel>
+        )}
         <Panel title="Timeline">
           <ol className="space-y-3 text-sm">
             <li className="flex items-start gap-3">
@@ -249,14 +306,30 @@ function ReleaseModal({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const customerReturn = Boolean(record.return_request);
+  const canReleaseGoodStock = record.actions?.can_release_good_stock !== false;
   // Start from the MRB decision recorded on the NCR. It stays editable: a
   // rework that fails still has to be scrapped or returned from here.
-  const decided = record.ncr?.disposition ?? '';
+  const decided =
+    record.ncr?.disposition ??
+    (customerReturn
+      ? record.return_request?.disposition === 'rework'
+        ? 'rework'
+        : 'use_as_is'
+      : '');
+  const releaseOptions = dispositions.filter(
+    (option) =>
+      !(customerReturn && option.value === 'return_to_supplier') &&
+      (canReleaseGoodStock || !['rework', 'use_as_is'].includes(option.value)),
+  );
   // Released stock usually goes back to the bin it was held from.
   const initial = {
-    disposition: decided,
+    disposition: !canReleaseGoodStock && requiresTarget(decided as MrbDisposition) ? '' : decided,
     target_location_id: record.source_location?.id ?? '',
     notes: '',
+    evidence_reference: '',
+    concession_approval_reference: '',
+    recovery_passed: false,
   };
   const {
     register,
@@ -266,11 +339,24 @@ function ReleaseModal({
     setError,
     formState: { errors, isSubmitting },
   } = useForm<ReleaseValues>({
-    resolver: zodResolver(releaseSchema),
+    resolver: zodResolver(
+      releaseSchema.refine(
+        (v) =>
+          v.disposition !== 'use_as_is' ||
+          !record.requires_concession_approval ||
+          (Boolean(v.concession_approval_reference?.trim()) &&
+            v.concession_approval_reference?.trim() !== v.evidence_reference?.trim()),
+        {
+          message: 'Provide separate authorized concession approval or customer sign-off.',
+          path: ['concession_approval_reference'],
+        },
+      ),
+    ),
     defaultValues: initial,
   });
   const disposition = watch('disposition');
   const needsTarget = requiresTarget(disposition as MrbDisposition);
+  const needsConcession = disposition === 'use_as_is' && record.requires_concession_approval;
 
   const { data: warehouses } = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
@@ -308,9 +394,21 @@ function ReleaseModal({
           ? v.target_location_id || undefined
           : undefined,
         notes: v.notes || undefined,
+        ...(requiresTarget(v.disposition as MrbDisposition)
+          ? {
+              evidence_reference: v.evidence_reference?.trim(),
+              concession_approval_reference:
+                v.disposition === 'use_as_is'
+                  ? v.concession_approval_reference?.trim() || undefined
+                  : undefined,
+              inspected_quantity: String(record.quantity),
+              recovery_passed: v.recovery_passed === true,
+            }
+          : {}),
       }),
     onSuccess: (rec) => {
       qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
+      qc.invalidateQueries({ queryKey: ['return-request'] });
       toast.success(`MRB ${rec.mrb_number} released (${rec.disposition}).`);
       reset(initial);
       onClose();
@@ -344,18 +442,27 @@ function ReleaseModal({
           helper={
             decided && record.ncr
               ? `MRB decision on ${record.ncr.ncr_number}: ${dispositions.find((d) => d.value === decided)?.label ?? decided}.`
-              : undefined
+              : customerReturn
+                ? `RMA ${record.return_request?.rma_number}: ${record.return_request?.disposition ?? 'restock'}.`
+                : undefined
           }
           {...register('disposition')}
           error={errors.disposition?.message}
         >
           <option value="">Select disposition…</option>
-          {dispositions.map((d) => (
+          {releaseOptions.map((d) => (
             <option key={d.value} value={d.value}>
               {d.label}
             </option>
           ))}
         </Select>
+
+        {customerReturn && !canReleaseGoodStock && (
+          <p role="status" className="text-sm text-warning-fg">
+            You recorded this return inspection. Another independent reviewer must release good
+            stock; only scrap is available to your account.
+          </p>
+        )}
 
         {/* Mounted once the tree has loaded, so the default bin has an option to select. */}
         {needsTarget && warehouses && (
@@ -373,6 +480,54 @@ function ReleaseModal({
               </option>
             ))}
           </Select>
+        )}
+
+        {needsTarget && (
+          <div className="space-y-3 border-t border-default pt-3">
+            <p className="text-sm text-muted">
+              Completed reinspection must cover the full held quantity:{' '}
+              <span className="font-mono">
+                {record.quantity} {record.item?.unit_of_measure}
+              </span>
+              .{' '}
+              {needsConcession
+                ? 'Every held piece must be reviewed against the approved concession before release.'
+                : 'All held material must pass before it returns to good inventory.'}
+            </p>
+            <Input
+              label="Completed reinspection evidence reference"
+              required
+              maxLength={500}
+              helper="Reference the completed reinspection document and verified material label."
+              {...register('evidence_reference')}
+              error={errors.evidence_reference?.message}
+            />
+            {needsConcession && (
+              <Input
+                label="Concession approval / customer sign-off reference"
+                required
+                maxLength={500}
+                helper="Reference authorized acceptance of the known deviation, separate from reinspection."
+                {...register('concession_approval_reference')}
+                error={errors.concession_approval_reference?.message}
+              />
+            )}
+            <Checkbox
+              id={`mrb-recovery-${record.id}`}
+              className="min-h-11"
+              label={
+                needsConcession
+                  ? 'Completed reinspection confirms all held material meets the approved concession.'
+                  : 'Completed reinspection confirms all held material passes every requirement.'
+              }
+              {...register('recovery_passed')}
+            />
+            {errors.recovery_passed && (
+              <p role="alert" className="text-xs text-danger-fg">
+                {errors.recovery_passed.message}
+              </p>
+            )}
+          </div>
         )}
 
         <Textarea
@@ -399,7 +554,13 @@ function ReleaseModal({
           <Button
             type="submit"
             variant="primary"
-            disabled={isSubmitting || mutation.isPending}
+            disabled={
+              isSubmitting ||
+              mutation.isPending ||
+              (needsTarget &&
+                (!watch('evidence_reference')?.trim() || !watch('recovery_passed'))) ||
+              (needsConcession && !watch('concession_approval_reference')?.trim())
+            }
             loading={mutation.isPending}
           >
             {mutation.isPending ? 'Releasing…' : 'Release'}

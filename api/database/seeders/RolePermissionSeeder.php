@@ -81,8 +81,6 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.salary_adjustments.view',    'name' => 'View Salary Adjustments'],
                 ['slug' => 'hr.salary_adjustments.request', 'name' => 'Request Salary Adjustment (maker)'],
                 ['slug' => 'hr.salary_adjustments.act',     'name' => 'Approve / Reject Salary Adjustment (checker)'],
-                // REC-02 — SoD override: approve a profile-change request you submitted.
-                ['slug' => 'hr.profile_updates.self_review_override', 'name' => 'Review Own Profile-Change Request (SoD override)'],
                 // T3.4 — Training matrix + certification expiry alerts.
                 ['slug' => 'hr.trainings.view',              'name' => 'View Training Catalog'],
                 ['slug' => 'hr.trainings.manage',            'name' => 'Manage Training Catalog'],
@@ -118,10 +116,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.periods.create',      'name' => 'Create Payroll Period'],
                 ['slug' => 'payroll.periods.compute',     'name' => 'Compute Payroll'],
                 ['slug' => 'payroll.periods.approve',     'name' => 'Approve Payroll'],
-                 ['slug' => 'payroll.periods.request_correction', 'name' => 'Request Payroll Correction'],
-                 ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
-                 ['slug' => 'payroll.periods.bank_file',   'name' => 'Manage Payroll Bank Files'],
-                 ['slug' => 'payroll.periods.disburse',    'name' => 'Record Payroll Disbursement'],
+                ['slug' => 'payroll.periods.request_correction', 'name' => 'Request Payroll Correction'],
+                ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
+                ['slug' => 'payroll.periods.bank_file',   'name' => 'Manage Payroll Bank Files'],
+                ['slug' => 'payroll.periods.disburse',    'name' => 'Record Payroll Disbursement'],
                 // REC-01 — void a finalized period (reverses GL posting,
                 // transitions to Voided). This is an administrator-only recovery
                 // control; operational HR and Finance roles deliberately omit it.
@@ -154,7 +152,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'loans.view',          'name' => 'View Loans'],
                 ['slug' => 'loans.create',        'name' => 'Create Loan / Cash Advance'],
                 ['slug' => 'loans.approve',       'name' => 'Approve Loan'],
-                ['slug' => 'loans.write_off',     'name' => 'Write Off Loan'],
+                ['slug' => 'loans.write_off',     'name' => 'Cancel Pending Loans and Record Payments'],
                 ['slug' => 'loans.write_off.request', 'name' => 'Request Loan Write-off'],
                 ['slug' => 'loans.write_off.approve', 'name' => 'Approve Loan Write-off'],
             ],
@@ -172,7 +170,6 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.journal.create',       'name' => 'Create Journal Entries'],
                 ['slug' => 'accounting.journal.post',         'name' => 'Post Journal Entries'],
                 ['slug' => 'accounting.journal.reverse',      'name' => 'Reverse Posted Journal Entries'],
-                ['slug' => 'accounting.journal.self_post_override', 'name' => 'Self-Post Journal Entries (SoD override)'],
                 // Vendors & Bills (AP)
                 ['slug' => 'accounting.vendors.view',         'name' => 'View Vendors'],
                 ['slug' => 'accounting.vendors.manage',       'name' => 'Manage Vendors'],
@@ -192,6 +189,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.invoices.prebill_approve', 'name' => 'Approve Prebill Invoices'],
                 ['slug' => 'accounting.invoices.update',      'name' => 'Update / Cancel Invoices'],
                 ['slug' => 'accounting.invoices.collect',     'name' => 'Record Collections'],
+                ['slug' => 'accounting.invoices.collect_manual', 'name' => 'Record Exceptional Collections'],
                 // REC-13 — AR/AP credit notes.
                 ['slug' => 'accounting.credit_notes.view',    'name' => 'View Credit Notes'],
                 ['slug' => 'accounting.credit_notes.manage',  'name' => 'Create / Finalize / Apply Credit Notes'],
@@ -221,6 +219,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'inventory.view',                'name' => 'View Inventory'],
                 ['slug' => 'inventory.stock_levels.view',   'name' => 'View Live Stock Levels'],
                 ['slug' => 'inventory.items.manage',        'name' => 'Manage Items'],
+                ['slug' => 'inventory.costs.review', 'name' => 'Review Supplier Costs'],
+                ['slug' => 'inventory.costs.approve', 'name' => 'Approve Standard Costs'],
                 ['slug' => 'inventory.warehouse.manage',    'name' => 'Manage Warehouse Structure'],
                 ['slug' => 'inventory.grn.create',          'name' => 'Create / Accept GRN'],
                 ['slug' => 'inventory.issue.create',        'name' => 'Issue Materials'],
@@ -237,13 +237,17 @@ class RolePermissionSeeder extends Seeder
 
             // Purchasing
             'purchasing' => [
-                ['slug' => 'purchasing.view',         'name' => 'View Purchasing'],
+                ['slug' => 'purchasing.view',         'name' => 'View Purchase Requests and Orders'],
+                ['slug' => 'purchasing.chain.view',   'name' => 'View Company Procurement Chain'],
                 ['slug' => 'purchasing.pr.create',    'name' => 'Create Purchase Request'],
                 ['slug' => 'purchasing.pr.approve',   'name' => 'Approve Purchase Request'],
                 ['slug' => 'purchasing.po.create',    'name' => 'Create Purchase Order'],
+                ['slug' => 'purchasing.po.view_all', 'name' => 'Read All Purchase Orders'],
+                ['slug' => 'purchasing.po.responses.resolve', 'name' => 'Resolve Supplier Purchase Order Responses'],
                 ['slug' => 'purchasing.po.approve',   'name' => 'Approve Purchase Order'],
                 ['slug' => 'purchasing.po.sod_override', 'name' => 'Approve PO to Self-Created Vendor (SoD override)'],
                 ['slug' => 'purchasing.po.send',      'name' => 'Send PO to Supplier'],
+                ['slug' => 'purchasing.delivery_schedules.review', 'name' => 'Review Supplier Delivery Plans'],
                 // Series F — Task F4: supplier performance dashboard.
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
                 ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
@@ -262,6 +266,7 @@ class RolePermissionSeeder extends Seeder
             // Supply Chain
             'supply_chain' => [
                 ['slug' => 'supply_chain.view',                 'name' => 'View Supply Chain'],
+                ['slug' => 'supply_chain.shipments.view', 'name' => 'View Inbound Shipments and Import Documents'],
                 ['slug' => 'supply_chain.shipments.manage',     'name' => 'Manage Shipments'],
                 ['slug' => 'supply_chain.fleet.manage',         'name' => 'Manage Vehicles'],
                 // The read counterpart to .create/.confirm, which existed
@@ -279,7 +284,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'production.view',                  'name' => 'View Production'],
                 ['slug' => 'production.wo.create',             'name' => 'Create Work Order'],
                 ['slug' => 'production.wo.confirm',            'name' => 'Confirm Work Order'],
+                ['slug' => 'production.wo.cancel_stock',       'name' => 'Cancel Unstarted Stock Work Order'],
                 ['slug' => 'production.wo.record',             'name' => 'Record Production Output'],
+                ['slug' => 'production.wo.assign',             'name' => 'Assign Work-order Crew'],
                 ['slug' => 'production.work_orders.view',      'name' => 'View Work Orders'],
                 ['slug' => 'production.work_orders.lifecycle', 'name' => 'Transition Work Order Status'],
                 ['slug' => 'production.machines.manage',       'name' => 'Manage Machines'],
@@ -319,6 +326,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.products.manage',            'name' => 'Manage Products'],
                 ['slug' => 'crm.price_agreements.view',      'name' => 'View Price Agreements'],
                 ['slug' => 'crm.price_agreements.manage',    'name' => 'Manage Price Agreements'],
+                ['slug' => 'crm.price_agreements.propose', 'name' => 'Propose Price Agreements'],
+                ['slug' => 'crm.price_agreements.approve', 'name' => 'Approve Price Proposals'],
                 ['slug' => 'crm.sales_orders.view',          'name' => 'View Sales Orders'],
                 ['slug' => 'crm.sales_orders.create',        'name' => 'Create Sales Orders'],
                 ['slug' => 'crm.sales_orders.update',        'name' => 'Update Draft Sales Orders'],
@@ -365,9 +374,11 @@ class RolePermissionSeeder extends Seeder
 
             // Maintenance
             'maintenance' => [
+                ['slug' => 'maintenance.work.assigned', 'name' => 'Access Assigned Maintenance Work'],
                 ['slug' => 'maintenance.view',           'name' => 'View Maintenance'],
                 ['slug' => 'maintenance.wo.create',      'name' => 'Create Maintenance Work Order'],
                 ['slug' => 'maintenance.wo.assign',      'name' => 'Assign Maintenance Work Order'],
+                ['slug' => 'maintenance.wo.verify', 'name' => 'Verify Maintenance Repair'],
                 ['slug' => 'maintenance.wo.complete',    'name' => 'Complete Maintenance Work Order'],
                 ['slug' => 'maintenance.schedules.manage', 'name' => 'Manage Maintenance Schedules'],
             ],
@@ -387,8 +398,10 @@ class RolePermissionSeeder extends Seeder
             ],
             'hr_separation' => [
                 ['slug' => 'hr.separation.view',         'name' => 'View Employee Separations'],
+                ['slug' => 'hr.separation.view_all',     'name' => 'Review Company Clearances and Final Pay'],
                 ['slug' => 'hr.separation.initiate',     'name' => 'Initiate Employee Separation'],
                 ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
+                ['slug' => 'hr.clearance.work_company',  'name' => 'Work Own Department Clearance Tasks Company-wide'],
                 ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
                 // HR-04 — correction path for mistakenly initiated separations.
                 // Also granted to hr_officer by migration 0483 on deployed
@@ -490,19 +503,19 @@ class RolePermissionSeeder extends Seeder
         return [
             'system_admin' => [
                 'name' => 'System Administrator',
-                'description' => 'Full access to every module. Override gate via AuthServiceProvider.',
+                'description' => 'Administers users, roles, settings, audit logs, sessions, backups and integrations; business approval chains still enforce their designated approvers and maker-checker rules.',
                 'permissions' => '*',
             ],
             'hr_officer' => [
                 'name' => 'HR Officer',
-                'description' => 'Manages employees, attendance, leave; sees sensitive HR data.',
+                'description' => 'Manages employee records, recruitment, training, attendance, leave, loans and separations; prepares payroll and statutory submissions, maintains government contribution tables and reviews profile changes; submits salary changes for independent approval.',
                 'permissions' => array_merge(
-                    // REC-02/03 — hr_officer is a MAKER: requests salary adjustments
-                    // and reviews profile changes, but cannot approve either kind of
-                    // request they themselves submitted (overrides + .act withheld).
+                    // REC-02/03 — HR may review profile changes but cannot self-review;
+                    // salary adjustments also require a separate checker role.
                     $this->module('hr', except: [
-                        'hr.profile_updates.self_review_override',
                         'hr.salary_adjustments.act',
+                        'hr.employees.reset_password',
+                        'hr.employees.deactivate_account',
                         // Task SS2 — bank-account changes require BOTH HR and
                         // Finance sign-off. `module('hr')` used to hand HR the
                         // Finance leg too, so one HR officer could clear both
@@ -512,9 +525,9 @@ class RolePermissionSeeder extends Seeder
                     ]),
                     $this->module('attendance'),
                     $this->module('leave'),
-                    $this->module('hr_separation'),
+                    $this->module('hr_separation', except: ['hr.clearance.work_company']),
                     $this->module('hr_recruitment'),
-                     $this->module('loans'),
+                    $this->module('loans', except: ['loans.write_off.request', 'loans.write_off.approve']),
                     $this->selfService(),
                     [
                         'payroll.view',
@@ -533,6 +546,7 @@ class RolePermissionSeeder extends Seeder
                         'payroll.thirteenth_month.run',
                         'payroll.anomalies.review',
                         'payroll.gov_tables.manage',
+                        'admin.gov_tables.manage',
                         'dashboard.hr.view',
                         'search.global',
                         'notifications.preferences.manage',
@@ -542,25 +556,26 @@ class RolePermissionSeeder extends Seeder
             ],
             'finance_officer' => [
                 'name' => 'Finance Officer',
-                'description' => 'Reviews, approves, finalizes, and disburses payroll; manages accounting ledgers.',
+                'description' => 'Manages accounting, budgets, loans and fixed assets; reviews and disburses payroll; approves purchases, financial returns, stock adjustments, bank changes and Finance clearance; reviews supplier quotations without running sourcing.',
                 'permissions' => array_merge(
                     // HR owns the payroll work (create, compute, correction).
                     // Finance is the checker and payment owner: it can review a
                     // period, either approve or return it for correction, then
                     // finalize/disburse after HR's work has passed review.
                     [
+                        'crm.price_agreements.approve', 'crm.products.view', 'crm.price_agreements.view', 'inventory.costs.review', 'inventory.costs.approve',
                         'payroll.periods.view',
                         'payroll.periods.approve',
-                         'payroll.periods.request_correction',
-                         'payroll.periods.finalize',
-                         'payroll.periods.bank_file',
-                         'payroll.periods.disburse',
+                        'payroll.periods.request_correction',
+                        'payroll.periods.finalize',
+                        'payroll.periods.bank_file',
+                        'payroll.periods.disburse',
                     ],
                     $this->module('accounting', except: [
-                        'accounting.journal.self_post_override',
                         // Sales/CRM owns customer master-data creation and
                         // maintenance. Finance retains the view needed for AR.
                         'accounting.customers.manage',
+                        'accounting.invoices.collect_manual',
                     ]),
                     $this->module('b2b'),
                     $this->module('budgeting'),
@@ -571,8 +586,8 @@ class RolePermissionSeeder extends Seeder
                     [
                         'dashboard.accounting.view',
                         'search.global', 'notifications.preferences.manage',
-                         'hr.profile_updates.finance_review',
-                         'loans.write_off.request', 'loans.write_off.approve',
+                        'hr.profile_updates.finance_review',
+                        'loans.write_off.request', 'loans.write_off.approve',
                         // Finance is the sole checker for explicitly classified
                         // non-stock customer credits; it needs to open the RMA
                         // and act on its finance-only approval step.
@@ -592,12 +607,12 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.view',
                         'purchasing.rfq.view',
                         'purchasing.pr.approve',
-                        'purchasing.po.approve',
+                        'purchasing.po.approve', 'purchasing.po.view_all',
                         // Separation clearance — Finance is step 4 of the
                         // documented workflow and signs the Finance-owned items
                         // (cash advance / loan). Which items Finance may sign
                         // is decided by SeparationService's per-department gate.
-                        'hr.separation.view',
+                        'hr.separation.view', 'hr.separation.view_all',
                         'hr.clearance.sign',
                         // O2C 2026-09-25 — the auto-invoice failure notice and
                         // bottleneck link to the delivery, where Retry invoice
@@ -613,13 +628,13 @@ class RolePermissionSeeder extends Seeder
             // No dashboard of its own — reads what it signs.
             'vice_president' => [
                 'name' => 'Vice President',
-                'description' => 'Executive sign-off on high-value purchases, payments, loans and asset disposals.',
+                'description' => 'Reviews financial statements, budgets, supplier quotations and customer complaints; provides executive approval for purchases, payments, loans, salary adjustments and asset disposals without running sourcing, payroll preparation or HR records.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
                         'purchasing.view',
                         'purchasing.pr.approve',
-                        'purchasing.po.approve',
+                        'purchasing.po.approve', 'purchasing.po.view_all',
                         'purchasing.rfq.view',
                         // Final approver of the cash_advance (step 3) and
                         // company_loan (step 4) chains, and the final checker of
@@ -665,6 +680,7 @@ class RolePermissionSeeder extends Seeder
                         'crm.products.view',
                         'crm.price_agreements.view',
                         'crm.price_agreements.manage',
+                        'crm.price_agreements.propose',
                         'crm.sales_orders.view',
                         'crm.complaints.view',
                         'crm.complaints.manage',
@@ -689,6 +705,7 @@ class RolePermissionSeeder extends Seeder
                         'accounting.customers.view',
                         'crm.products.view',
                         'crm.price_agreements.view',
+                        'crm.price_agreements.propose',
                         'crm.sales_orders.view',
                         'crm.sales_orders.create',
                         'crm.sales_orders.update',
@@ -702,7 +719,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'production_manager' => [
                 'name' => 'Production Manager',
-                'description' => 'Oversees work orders, output, OEE.',
+                'description' => 'Runs production work orders and schedules, records output and efficiency, reviews quality and customer complaints, approves company loans, salary changes and returns; reads planning, procurement, inventory, maintenance and assets needed for production.',
                 'permissions' => array_merge(
                     // M052 H-08 — routings (process plans) are ppc_head's to
                     // author; the documented boundary for this role is
@@ -719,8 +736,8 @@ class RolePermissionSeeder extends Seeder
                         'mrp.plans.view', 'mrp.runs.view',
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
-                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
-                         'quality.inspections.review',
+                        'quality.view', 'quality.inspections.view', 'quality.ncr.view',
+                        'quality.inspections.review',
                         'crm.view', 'crm.complaints.view',
                         // Read-only purchasing. The 2026-09-10 PR redesign made
                         // the chain money-only (Finance → VP) and removed the
@@ -731,12 +748,11 @@ class RolePermissionSeeder extends Seeder
                         // stays so the MRP plan detail can open the PRs it links
                         // to (show is gated on `purchasing.view`).
                         'purchasing.view',
-                        // Step 2 ("Manager") of the company_loan chain — same
-                        // stall class as the PR fix: the step names this role,
-                        // so it needs the route permission to act on it.
+                        // Older submitted company loans retain their Manager
+                        // step and still need these route permissions.
                         'loans.view', 'loans.approve',
                         'dashboard.plant_manager.view',
-                        'maintenance.view', 'assets.view',
+                        'maintenance.view', 'maintenance.wo.verify', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
@@ -744,14 +760,7 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         // Final step of the return_request approval chain.
                         'return_management.view', 'return_management.approve',
-                        // LN-01 — production_manager is step 2 ("Manager") of the
-                        // seeded company_loan chain in WorkflowSeeder, but held no
-                        // loans slug at all, so the approve route rejected the only
-                        // role that step accepts and every submitted company loan
-                        // stalled at step 2. Same defect as M036 on
-                        // purchasing.pr.approve and L-37 on
-                        // return_management.approve. Read + approve only: raising
-                        // a loan stays HR's.
+                        // Keep access for the saved Manager step on older loans.
                         'loans.view', 'loans.approve',
                         // REC-03 — production_manager is the step-1 checker on the
                         // salary_adjustment chain.
@@ -762,7 +771,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'ppc_head' => [
                 'name' => 'PPC Head',
-                'description' => 'Production Planning & Control — owns the schedule and BOMs.',
+                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data; creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
                     $this->module('forecasting'),
@@ -770,6 +779,7 @@ class RolePermissionSeeder extends Seeder
                     [
                         'production.view', 'production.work_orders.view',
                         'production.wo.create', 'production.wo.confirm',
+                        'production.wo.cancel_stock',
                         // The scheduler endpoints PPC owns (/mrp/scheduler/*)
                         // are gated on this slug, but it lives in the
                         // `production` permission bucket — so $this->module('mrp')
@@ -778,11 +788,12 @@ class RolePermissionSeeder extends Seeder
                         // (production.gantt_mini) was stripped from its default
                         // dashboard for the same reason.
                         'production.schedule.view',
+                        'production.wo.assign',
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
                         // PPC owns the finished-good catalog used by its BOMs and plans.
                         'crm.view', 'crm.products.view', 'crm.products.manage',
-                        'dashboard.ppc.view', 'maintenance.view', 'assets.view',
+                        'dashboard.ppc.view', 'maintenance.view', 'assets.view', 'inventory.costs.review',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
@@ -800,12 +811,12 @@ class RolePermissionSeeder extends Seeder
             ],
             'purchasing_officer' => [
                 'name' => 'Purchasing Officer',
-                'description' => 'Manages PRs, POs, vendor relationships.',
+                'description' => 'Runs purchase requests, orders, RFQs, supplier selection and performance; tracks purchased goods receipts, inbound shipments and supplier returns, and reads bills, vendors and outbound delivery status; financial approvals follow the designated workflow.',
                 'permissions' => array_merge(
-                    $this->module('purchasing', except: ['purchasing.po.sod_override']),
+                    $this->module('purchasing', except: ['purchasing.po.sod_override', 'purchasing.pr.approve', 'purchasing.po.approve']),
                     $this->selfService(),
                     [
-                        'inventory.view', 'inventory.grn.create', 'supply_chain.view', 'supply_chain.shipments.manage',
+                        'inventory.view', 'inventory.costs.review', 'supply_chain.shipments.view', 'supply_chain.shipments.manage',
                         'supply_chain.deliveries.view',
                         'accounting.vendors.view', 'accounting.bills.view',
                         // Buyers look up POs, vendors and RFQs by number all day;
@@ -823,7 +834,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'warehouse_staff' => [
                 'name' => 'Warehouse Staff',
-                'description' => 'Receives goods, issues materials, counts stock, manages warehouse map.',
+                'description' => 'Manages inventory, warehouse locations, receipts, material issues, counts, picking and quarantine holds; receives returns, stages outbound deliveries and signs warehouse separation-clearance tasks; stock adjustments require independent approval.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
@@ -851,13 +862,13 @@ class RolePermissionSeeder extends Seeder
                         // documented workflow and signs the materials-return
                         // item; scoped by SeparationService's per-department gate.
                         'hr.separation.view',
-                        'hr.clearance.sign',
+                        'hr.clearance.sign', 'hr.clearance.work_company',
                     ],
                 ),
             ],
             'qc_inspector' => [
                 'name' => 'QC Inspector',
-                'description' => 'Logs inspection results, raises NCRs, views RMAs.',
+                'description' => 'Manages inspections, specifications, nonconformance, calibration and traceability; inspects returns and manages quarantine holds; reads inventory, customer complaints and supplier quotations needed for quality review.',
                 'permissions' => array_merge(
                     $this->module('quality'),
                     $this->selfService(),
@@ -876,7 +887,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'maintenance_tech' => [
                 'name' => 'Maintenance Technician',
-                'description' => 'Executes maintenance work orders.',
+                'description' => 'Creates and completes maintenance work orders, reads maintenance schedules, machines and assets, and signs maintenance separation-clearance tasks; does not assign work or manage schedules.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
@@ -888,14 +899,22 @@ class RolePermissionSeeder extends Seeder
                         // documented workflow and signs the pending-work item;
                         // scoped by SeparationService's per-department gate.
                         'hr.separation.view',
-                        'hr.clearance.sign',
+                        'hr.clearance.sign', 'hr.clearance.work_company',
                         'search.global', 'notifications.preferences.manage',
                     ],
                 ),
             ],
+            'maintenance_supervisor' => [
+                'name' => 'Maintenance Supervisor',
+                'description' => 'Assigns maintenance technicians and manages preventive schedules without administrator access.',
+                'permissions' => array_merge($this->selfService(), [
+                    'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.assign',
+                    'maintenance.wo.verify', 'maintenance.schedules.manage', 'mrp.machines.view', 'assets.view', 'search.global',
+                ]),
+            ],
             'impex_officer' => [
                 'name' => 'ImpEx Officer',
-                'description' => 'Tracks imported shipments and customs documents.',
+                'description' => 'Manages inbound shipments, customs documents, outbound dispatch, delivery confirmation and fleet; reads linked purchase requests and orders without creating or approving procurement documents.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
@@ -919,7 +938,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'department_head' => [
                 'name' => 'Department Head',
-                'description' => 'Owns their department\u2019s needs: raises PRs; approves leaves, OT and loans for their department.',
+                'description' => 'Reads department employee records, raises purchase requests, approves department leave, overtime, loans and returns, and signs department separation-clearance tasks; purchase approvals follow the financial workflow.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
@@ -930,7 +949,7 @@ class RolePermissionSeeder extends Seeder
                         // Department Head is the first approver in both loan
                         // workflows; list/show remain department-scoped.
                         'loans.view', 'loans.approve',
-                        'purchasing.view', 'purchasing.pr.approve',
+                        'purchasing.view',
                         // 2026-09-10 — PR chain redesign: department heads are the
                         // human creators of purchase requests (their department\u2019s
                         // need authority); rank-and-file staff never touch the form.
@@ -954,12 +973,12 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Self-service portal access only.',
                 'permissions' => array_merge(
                     $this->selfService(),
-                    ['notifications.preferences.manage'],
+                    ['notifications.preferences.manage', 'maintenance.work.assigned'],
                 ),
             ],
             'driver' => [
                 'name' => 'Driver',
-                'description' => 'Delivery driver (self-scoped delivery view). Driver routes scope by driver_id FK — no module permissions required.',
+                'description' => 'Reads assigned delivery runs and records delivery outcomes and proof; uses employee self-service without general logistics, inventory or procurement access.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     ['supply_chain.driver.access'],
@@ -1073,8 +1092,8 @@ class RolePermissionSeeder extends Seeder
     }
 
     /**
-     * @param array<string, array<int, array{slug: string, name: string, description?: string}>> $catalog
-     * @param array<string, array{name: string, description: string, permissions: string|array<int, string>}> $roles
+     * @param  array<string, array<int, array{slug: string, name: string, description?: string}>>  $catalog
+     * @param  array<string, array{name: string, description: string, permissions: string|array<int, string>}>  $roles
      */
     protected function validateCatalog(array $catalog, array $roles): void
     {

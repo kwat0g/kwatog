@@ -65,6 +65,7 @@ class TriggerIncomingQC implements ShouldQueue
                     ->where('entity_type', InspectionEntityType::Grn->value)
                     ->where('entity_id', $grn->id)
                     ->whereNull('grn_item_id')
+                    ->where('status', '!=', 'cancelled')
                     ->exists();
                 if ($legacyInspectionExists) {
                     return [$grn, 0, 1, 1];
@@ -92,6 +93,7 @@ class TriggerIncomingQC implements ShouldQueue
                     $hasInspection = Inspection::query()
                         ->where('stage', InspectionStage::Incoming->value)
                         ->where('grn_item_id', $line->id)
+                        ->where('status', '!=', 'cancelled')
                         ->exists();
                     if ($hasInspection) {
                         $existing++;

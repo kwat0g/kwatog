@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { supplierActivityApi } from '@/api/b2b/supplier-activity';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatDate } from '@/lib/formatDate';
+import { overDispatchedLines } from '@/lib/supplierDispatch';
 import type { SupplierActivityDocument } from '@/types/supplierActivity';
 
 /**
@@ -26,6 +26,7 @@ export function SupplierDocumentsTable({ documents }: { documents: SupplierActiv
             <Th>Type</Th>
             <Th>File</Th>
             <Th>Uploaded</Th>
+            <Th>Applies to</Th>
           </tr>
         </thead>
         <tbody>
@@ -49,6 +50,7 @@ export function SupplierDocumentsTable({ documents }: { documents: SupplierActiv
               <Td mono className="text-muted">
                 {doc.uploaded_at ? formatDate(doc.uploaded_at) : '—'}
               </Td>
+              <Td>{doc.supplier_shipment_id ? 'Shipment' : 'PO-wide'}</Td>
             </tr>
           ))}
         </tbody>
@@ -57,8 +59,11 @@ export function SupplierDocumentsTable({ documents }: { documents: SupplierActiv
   );
 }
 
-/** Shipments, documents and delivery plans the supplier reported against this PO. */
-export function SupplierActivityPanel({ purchaseOrderId }: { purchaseOrderId: string }) {
+/** Shipments and documents the supplier reported against this PO. */
+export function SupplierActivityPanel({ purchaseOrderId, orderedLines }: {
+  purchaseOrderId: string;
+  orderedLines: Array<{ id: string; quantity: string; description: string }>;
+}) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', purchaseOrderId, 'supplier-activity'],
     queryFn: () => supplierActivityApi.forPurchaseOrder(purchaseOrderId),
@@ -87,19 +92,22 @@ export function SupplierActivityPanel({ purchaseOrderId }: { purchaseOrderId: st
     );
   }
 
-  const nothingReported =
-    data.shipments.length === 0 && data.documents.length === 0 && data.delivery_schedules.length === 0;
+  const nothingReported = data.shipments.length === 0 && data.documents.length === 0;
+  const overDispatched = overDispatchedLines(data.shipments, orderedLines);
 
   return (
     <Panel title="Supplier activity" meta="Reported through the supplier portal" noPadding>
       {nothingReported ? (
         <p className="px-3 py-2 text-sm text-muted">
-          The supplier has not reported shipments, documents or delivery plans yet.
+          The supplier has not reported shipments or documents yet.
         </p>
       ) : (
         <div className="divide-y divide-default">
           {data.shipments.length > 0 && (
             <div className="overflow-x-auto">
+              {overDispatched.length > 0 && <p role="alert" className="px-3 py-2 text-sm text-warning-fg">
+                Recorded dispatch exceeds ordered quantity for {overDispatched.map((line) => orderedLines.find((item) => item.id === line.id)?.description ?? 'PO item').join(', ')}. Review shipment history before receiving.
+              </p>}
               <table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
@@ -107,6 +115,7 @@ export function SupplierActivityPanel({ purchaseOrderId }: { purchaseOrderId: st
                     <Th>Tracking</Th>
                     <Th>Shipped</Th>
                     <Th>ETA</Th>
+                    <Th>Dispatched</Th>
                     <Th align="right">Updates</Th>
                   </tr>
                 </thead>
@@ -118,7 +127,14 @@ export function SupplierActivityPanel({ purchaseOrderId }: { purchaseOrderId: st
                       <Td mono className="text-muted">
                         {shipment.shipped_date ? formatDate(shipment.shipped_date) : '—'}
                       </Td>
-                      <Td mono>{shipment.estimated_arrival ? formatDate(shipment.estimated_arrival) : '—'}</Td>
+                      <Td mono>{shipment.estimated_arrival ? formatDate(shipment.estimated_arrival) : '—'}
+                        {shipment.late_eta && <div className="text-warning-fg text-xs">At risk: ETA after confirmed date</div>}
+                      </Td>
+                      <Td>{shipment.quantity_recorded ? shipment.items?.map((line) => <div key={line.purchase_order_item_id}>
+                        {line.description ?? 'PO item'}: {line.quantity_shipped}
+                      </div>) : 'Quantity not recorded'}
+                        {shipment.notes && <div className="text-xs text-muted">Reason / notes: {shipment.notes}</div>}
+                      </Td>
                       <Td align="right" mono className="text-muted">
                         {shipment.updates_count ?? '—'}
                       </Td>
@@ -131,42 +147,6 @@ export function SupplierActivityPanel({ purchaseOrderId }: { purchaseOrderId: st
 
           {data.documents.length > 0 && <SupplierDocumentsTable documents={data.documents} />}
 
-          {data.delivery_schedules.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Delivery plan</Th>
-                    <Th>Lines</Th>
-                    <Th>Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.delivery_schedules.map((schedule) => (
-                    <tr key={schedule.id} className={trCls}>
-                      <Td mono>{schedule.month}</Td>
-                      <Td>
-                        {schedule.lines.map((line) => (
-                          <div key={`${schedule.id}-${line.purchase_order_item_id ?? line.product_name}`}>
-                            {line.product_name}{' '}
-                            <span className="font-mono tabular-nums text-muted">× {line.quantity}</span>
-                          </div>
-                        ))}
-                        {(schedule.cancel_reason ?? schedule.reject_reason) && (
-                          <div className="text-xs text-muted">
-                            {schedule.cancel_reason ?? schedule.reject_reason}
-                          </div>
-                        )}
-                      </Td>
-                      <Td>
-                        <Chip variant={chipVariantForStatus(schedule.status)}>{schedule.status_label}</Chip>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
     </Panel>

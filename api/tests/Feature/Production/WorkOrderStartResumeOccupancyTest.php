@@ -17,9 +17,13 @@ use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Services\InspectionSpecService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
+use Tests\Support\HasAssignedProductionCrew;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\TestCase;
 
 /**
@@ -37,10 +41,16 @@ use Tests\TestCase;
  */
 class WorkOrderStartResumeOccupancyTest extends TestCase
 {
+    use HasAssignedProductionCrew;
+    use HasPassedInProcessQc;
     use RefreshDatabase;
 
     private WorkOrderService $service;
+
     private User $user;
+
+    private User $productionManager;
+
     private Product $product;
 
     protected function setUp(): void
@@ -48,16 +58,22 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
         parent::setUp();
 
         Event::fake();
+        $this->travelTo(Carbon::parse('2026-10-06 09:00:00', config('app.timezone')));
+        $this->seed(RolePermissionSeeder::class);
 
         $this->service = app(WorkOrderService::class);
-        $this->user    = User::factory()->create();
+        $this->user = User::factory()->create();
+        $this->productionManager = User::factory()->withRole('production_manager')->create();
         $this->product = Product::create([
-            'part_number'     => 'WO-OCC-1',
-            'name'            => 'Occupancy Product',
+            'part_number' => 'WO-OCC-1',
+            'name' => 'Occupancy Product',
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => 10.00,
-            'is_active'       => true,
+            'standard_cost' => 10.00,
+            'is_active' => true,
         ]);
+        app(InspectionSpecService::class)->upsertForProduct($this->product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual'],
+        ], $this->user->id);
     }
 
     private function machine(): Machine
@@ -68,17 +84,17 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
     private function mold(): Mold
     {
         return Mold::create([
-            'mold_code'                     => 'MD-' . substr(uniqid(), -5),
-            'name'                          => 'Test Mold',
-            'product_id'                    => $this->product->id,
-            'cavity_count'                  => 1,
-            'cycle_time_seconds'            => 30,
-            'output_rate_per_hour'          => 100,
-            'setup_time_minutes'            => 10,
-            'current_shot_count'            => 0,
-            'max_shots_before_maintenance'  => 100000,
-            'lifetime_max_shots'            => 1000000,
-            'status'                        => 'available',
+            'mold_code' => 'MD-'.substr(uniqid(), -5),
+            'name' => 'Test Mold',
+            'product_id' => $this->product->id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 100,
+            'setup_time_minutes' => 10,
+            'current_shot_count' => 0,
+            'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000,
+            'status' => 'available',
         ]);
     }
 
@@ -86,27 +102,34 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
     {
         $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
 
-        return WorkOrder::factory()->create([
-            'product_id'              => $this->product->id,
-            'machine_id'              => $machine->id,
-            'mold_id'                 => $mold->id,
-            'status'                  => WorkOrderStatus::Planned->value,
-            'quantity_target'         => 100,
-            'planned_start'           => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end'             => Carbon::today()->addDays(2)->toDateTimeString(),
-            'work_order_class'        => 'non_stock',
-            'exception_reason'        => 'Occupancy gate test',
+        $workOrder = WorkOrder::factory()->create([
+            'product_id' => $this->product->id,
+            'machine_id' => $machine->id,
+            'mold_id' => $mold->id,
+            'status' => WorkOrderStatus::Planned->value,
+            'quantity_target' => 100,
+            'planned_start' => now()->toDateTimeString(),
+            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'work_order_class' => 'non_stock',
+            'exception_reason' => 'Occupancy gate test',
             'exception_authorized_by' => $this->user->id,
-            'created_by'              => $this->user->id,
+            'created_by' => $this->user->id,
         ]);
+        $actor = User::factory()->create();
+        $this->assignProductionCrew($workOrder, $actor);
+
+        return $workOrder;
     }
 
     private function startedWo(Machine $machine, Mold $mold): WorkOrder
     {
-        return $this->service->start(
+        $workOrder = $this->service->start(
             $this->service->confirm($this->nonStockWo($machine, $mold)),
-            $this->user->id,
+            $this->productionManager->id,
         );
+        $this->passInProcessQc($workOrder);
+
+        return $workOrder;
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -120,20 +143,21 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
     public function test_resume_refused_when_another_work_order_took_the_machine_during_pause(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
+        $mold = $this->mold();
 
         $wo1 = $this->startedWo($machine, $mold);
         $paused1 = $this->service->pause($wo1, 'Material shortage', MachineDowntimeCategory::MaterialShortage);
 
+        $this->service->releaseResources($paused1, 'Explicit equipment release for revised production slot.');
+        $this->travel(10)->minutes();
         $wo2 = $this->startedWo($machine, $mold);
 
         try {
-            $this->service->resume($paused1);
+            $this->service->resume($paused1, $this->productionManager->id);
             $this->fail('resume() must refuse a machine that is running another work order.');
         } catch (BusinessRuleException $e) {
             $this->assertSame(
-                "Machine {$machine->machine_code} is currently running work order {$wo2->wo_number}. "
-                . 'Complete or pause that work order first.',
+                'Equipment is occupied by WO '.$wo2->wo_number.'. Production management must complete or explicitly release that work first.',
                 $e->getMessage()
             );
         }
@@ -152,7 +176,7 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
     public function test_start_refused_when_machine_is_already_running_another_work_order(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
+        $mold = $this->mold();
 
         $wo1 = $this->startedWo($machine, $mold);
 
@@ -160,12 +184,11 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
         $wo2->forceFill(['status' => WorkOrderStatus::Confirmed->value])->save();
 
         try {
-            $this->service->start($wo2, $this->user->id);
+            $this->service->start($wo2, $this->productionManager->id);
             $this->fail('start() must refuse a machine that is running another work order.');
         } catch (BusinessRuleException $e) {
             $this->assertSame(
-                "Machine {$machine->machine_code} is currently running work order {$wo1->wo_number}. "
-                . 'Complete or pause that work order first.',
+                'Equipment is occupied by WO '.$wo1->wo_number.'. Production management must complete or explicitly release that work first.',
                 $e->getMessage()
             );
         }
@@ -178,7 +201,7 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
     public function test_resume_refused_when_mold_went_to_maintenance_during_pause(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
+        $mold = $this->mold();
 
         $wo = $this->startedWo($machine, $mold);
         $paused = $this->service->pause($wo, 'Planned maintenance', MachineDowntimeCategory::PlannedMaintenance);
@@ -186,26 +209,26 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
         $mold->update(['status' => MoldStatus::Maintenance->value]);
 
         try {
-            $this->service->resume($paused);
+            $this->service->resume($paused, $this->productionManager->id);
             $this->fail('resume() must refuse a mold that entered maintenance during the pause.');
         } catch (BusinessRuleException $e) {
             $this->assertSame('Assigned mold is not available to resume production.', $e->getMessage());
         }
 
         $this->assertSame(WorkOrderStatus::Paused, $paused->fresh()->status);
-        $this->assertSame(MachineStatus::Idle, $machine->fresh()->status);
-        $this->assertNull($machine->fresh()->current_work_order_id);
+        $this->assertSame(MachineStatus::Running, $machine->fresh()->status);
+        $this->assertSame($wo->id, $machine->fresh()->current_work_order_id);
     }
 
     public function test_resume_succeeds_when_machine_and_mold_are_still_free(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
+        $mold = $this->mold();
 
         $wo = $this->startedWo($machine, $mold);
         $paused = $this->service->pause($wo, 'Material shortage', MachineDowntimeCategory::MaterialShortage);
 
-        $resumed = $this->service->resume($paused);
+        $resumed = $this->service->resume($paused, $this->productionManager->id);
 
         $this->assertSame(WorkOrderStatus::InProgress, $resumed->status);
         $this->assertNull($resumed->pause_reason);
@@ -222,12 +245,12 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
     public function test_start_on_a_machine_already_bound_to_this_work_order_keeps_existing_refusal(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
+        $mold = $this->mold();
 
         $wo = $this->startedWo($machine, $mold);
 
         try {
-            $this->service->start($wo->fresh(), $this->user->id);
+            $this->service->start($wo->fresh(), $this->productionManager->id);
             $this->fail('Double start must stay refused by the state machine.');
         } catch (IllegalLifecycleTransitionException $e) {
             $this->assertSame(

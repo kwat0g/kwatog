@@ -2,6 +2,10 @@
 
 export interface SupplierActivityShipment {
  id: string;
+ can_edit?: boolean;
+ quantity_recorded?: boolean;
+ late_eta?: boolean;
+ items?: Array<{ purchase_order_item_id: string; description?: string | null; quantity_shipped: string }>;
  shipped_date: string | null;
  carrier: string | null;
  tracking_number: string | null;
@@ -13,6 +17,7 @@ export interface SupplierActivityShipment {
 
 export interface SupplierActivityDocument {
  id: string;
+ supplier_shipment_id?: string | null;
  document_type: string;
  document_type_label: string;
  original_filename: string;
@@ -30,6 +35,8 @@ export interface SupplierActivityScheduleLine {
 export interface SupplierActivitySchedule {
  id: string;
  month: string;
+ planned_delivery_date?: string | null;
+ precision?: 'day' | 'month';
  status: string;
  status_label: string;
  lines: SupplierActivityScheduleLine[];
@@ -45,5 +52,6 @@ export interface PurchaseOrderSupplierActivity {
 
 export interface GrnSupplierDocuments {
  shipment: SupplierActivityShipment | null;
+ shipments: SupplierActivityShipment[];
  documents: SupplierActivityDocument[];
 }

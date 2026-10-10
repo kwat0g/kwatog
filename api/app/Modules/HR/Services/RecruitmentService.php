@@ -262,6 +262,10 @@ class RecruitmentService
             $locked->stage = $next;
             $locked->save();
 
+            if ($next === ApplicationStage::Hired) {
+                $this->fillPostingIfComplete($locked->job_posting_id);
+            }
+
             $interview = null;
             if ($interviewData && $next === ApplicationStage::Interview) {
                 $interview = $this->createInterviewRecord($locked, $interviewData, $actor);
@@ -496,6 +500,7 @@ class RecruitmentService
             'phone' => $application->phone,
             'department_id' => $posting->department?->hash_id,
             'position_id' => $posting->position?->hash_id,
+            'employment_type' => $posting->employment_type?->value,
         ];
     }
 
@@ -526,27 +531,9 @@ class RecruitmentService
                 throw new BusinessRuleException('This employee is already linked to another application.');
             }
 
-            $posting = JobPosting::withTrashed()
-                ->lockForUpdate()
-                ->findOrFail($lockedApplication->job_posting_id);
-
             $lockedApplication->converted_employee_id = $lockedEmployee->id;
             $lockedApplication->save();
-
-            $hiredCount = JobApplication::query()
-                ->where('job_posting_id', $posting->id)
-                ->where('stage', ApplicationStage::Hired->value)
-                ->whereNotNull('converted_employee_id')
-                ->count();
-
-            if ($hiredCount >= $posting->slots && $posting->status !== JobPostingStatus::Filled) {
-                if (! $posting->status->canTransitionTo(JobPostingStatus::Filled)) {
-                    throw new BusinessRuleException("Cannot mark posting as filled from {$posting->status->value}.");
-                }
-
-                $posting->status = JobPostingStatus::Filled;
-                $posting->save();
-            }
+            $this->fillPostingIfComplete($lockedApplication->job_posting_id);
 
             $this->recordApplicationEvent(
                 $lockedApplication,
@@ -559,6 +546,23 @@ class RecruitmentService
                 ['employee_id' => $employee->hash_id],
             );
         });
+    }
+
+    private function fillPostingIfComplete(int $postingId): void
+    {
+        $posting = JobPosting::withTrashed()->lockForUpdate()->findOrFail($postingId);
+        if ($posting->status !== JobPostingStatus::Open) {
+            return;
+        }
+
+        $hiredCount = JobApplication::query()
+            ->where('job_posting_id', $posting->id)
+            ->where('stage', ApplicationStage::Hired->value)
+            ->count();
+        if ($hiredCount >= $posting->slots) {
+            $posting->status = JobPostingStatus::Filled;
+            $posting->save();
+        }
     }
 
     private function createInterviewRecord(

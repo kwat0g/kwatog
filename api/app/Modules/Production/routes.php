@@ -2,12 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Modules\Production\Controllers\AssignedWorkOrderController;
 use App\Modules\Production\Controllers\DashboardController;
+use App\Modules\Production\Controllers\LateProductionReportController;
 use App\Modules\Production\Controllers\OeeController;
 use App\Modules\Production\Controllers\ProductionRoutingController;
 use App\Modules\Production\Controllers\WoOperationController;
+use App\Modules\Production\Controllers\WorkOrderAssignmentController;
 use App\Modules\Production\Controllers\WorkOrderController;
+use App\Modules\Production\Controllers\WorkOrderReworkController;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Middleware\AssignedWorkerAccount;
 use App\Modules\Production\Models\DefectType;
 use Illuminate\Support\Facades\Route;
 
@@ -46,6 +51,12 @@ Route::middleware(['auth:sanctum', 'feature:production', 'permission:production.
     })->middleware('permission:production.work_orders.view');
 
     /* ─── Work orders (Task 51) ─── */
+    Route::get('/work-orders/{workOrder}/crew', [WorkOrderAssignmentController::class, 'show'])->middleware('permission:production.work_orders.view');
+    Route::get('/work-orders/{workOrder}/crew-options', [WorkOrderAssignmentController::class, 'options'])->middleware('permission:production.wo.assign');
+    Route::post('/work-orders/{workOrder}/crew', [WorkOrderAssignmentController::class, 'store'])->middleware('permission:production.wo.assign');
+    Route::get('/work-orders/{workOrder}/assignment-suggestion', [WorkOrderAssignmentController::class, 'suggestion'])->middleware('permission:production.wo.assign');
+    Route::post('/work-orders/{workOrder}/assignment-suggestion', [WorkOrderAssignmentController::class, 'generateSuggestion'])->middleware('permission:production.wo.assign');
+    Route::post('/work-orders/{workOrder}/assignment-apply', [WorkOrderAssignmentController::class, 'apply'])->middleware('permission:production.wo.assign');
     Route::get('/work-orders/form-options', [WorkOrderController::class, 'formOptions'])->middleware('permission:production.work_orders.view');
     Route::get('/work-orders/options', [WorkOrderController::class, 'options'])->middleware('permission:production.work_orders.view');
     Route::get('/work-orders', [WorkOrderController::class, 'index'])->middleware('permission:production.work_orders.view');
@@ -55,17 +66,35 @@ Route::middleware(['auth:sanctum', 'feature:production', 'permission:production.
     Route::delete('/work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->middleware('permission:production.wo.create');
     Route::patch('/work-orders/{workOrder}/restore', [WorkOrderController::class, 'restore'])->middleware('permission:production.wo.create')->withTrashed();
     Route::post('/work-orders/{workOrder}/confirm', [WorkOrderController::class, 'confirm'])->middleware('permission:production.wo.confirm');
+    Route::post('/work-orders/{workOrder}/review-slot', [WorkOrderController::class, 'reviewSlot'])->middleware('permission:production.wo.assign');
+    Route::get('/work-orders/{workOrder}/execution-readiness', [WorkOrderController::class, 'executionReadiness'])->middleware('permission:production.work_orders.lifecycle');
+    Route::get('/work-orders/{workOrder}/reschedule-suggestion', [WorkOrderController::class, 'rescheduleSuggestion'])->middleware('permission:production.wo.assign');
+    Route::post('/work-orders/{workOrder}/extend-run', [WorkOrderController::class, 'extendRun'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/start', [WorkOrderController::class, 'start'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/release-resources', [WorkOrderController::class, 'releaseResources'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/pause', [WorkOrderController::class, 'pause'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/resume', [WorkOrderController::class, 'resume'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/close', [WorkOrderController::class, 'close'])->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->middleware('permission:production.work_orders.lifecycle');
+    Route::get('/work-orders/{workOrder}/rework/{ncr}/suggestion', [WorkOrderReworkController::class, 'suggestion'])->middleware('permission:production.wo.assign');
+    Route::post('/work-orders/{workOrder}/rework/{ncr}/review-slot', [WorkOrderReworkController::class, 'reviewSlot'])->middleware('permission:production.wo.assign');
+    Route::post('/work-orders/{workOrder}/rework/{ncr}/start', [WorkOrderReworkController::class, 'start'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/rework/{ncr}/outputs', [WorkOrderReworkController::class, 'record'])->middleware('permission:production.wo.record');
+    Route::post('/work-orders/{workOrder}/rework/{ncr}/finish', [WorkOrderReworkController::class, 'finish'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->middleware('permission_any:production.work_orders.lifecycle,production.wo.cancel_stock');
 
     /* ─── Output recording (Task 55) ─── */
     Route::get('/work-orders/{workOrder}/outputs', [WorkOrderController::class, 'listOutputs'])->middleware('permission:production.work_orders.view');
+    Route::post('/work-orders/{workOrder}/trial-outputs', [WorkOrderController::class, 'recordTrial'])->middleware('permission:production.wo.record');
     Route::post('/work-orders/{workOrder}/outputs', [WorkOrderController::class, 'recordOutput'])->middleware('permission:production.wo.record');
     Route::post('/work-orders/{workOrder}/outputs/{output}/retry-receipt', [WorkOrderController::class, 'retryProductionReceipt'])->middleware('permission:production.wo.record');
+
+    Route::get('/late-production-reports', [LateProductionReportController::class, 'index'])
+        ->middleware(['permission:production.work_orders.lifecycle', 'permission:production.wo.record']);
+    Route::post('/late-production-reports/{report}/approve', [LateProductionReportController::class, 'approve'])
+        ->middleware(['permission:production.work_orders.lifecycle', 'permission:production.wo.record']);
+    Route::post('/late-production-reports/{report}/reject', [LateProductionReportController::class, 'reject'])
+        ->middleware(['permission:production.work_orders.lifecycle', 'permission:production.wo.record']);
 
     /* ─── OEE (Task 57) ─── */
     Route::get('/oee/machine/{machine}', [OeeController::class, 'forMachine'])->middleware('permission:production.dashboard.view');
@@ -99,4 +128,19 @@ Route::middleware(['auth:sanctum', 'feature:production', 'permission:production.
     Route::post('/operations/{operation}/output', [WoOperationController::class, 'recordOutput'])->middleware('permission:production.wo.record');
     Route::post('/operations/{operation}/complete', [WoOperationController::class, 'complete'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/operations/{operation}/skip', [WoOperationController::class, 'skip'])->middleware('permission:production.work_orders.lifecycle');
+});
+
+Route::middleware(['auth:sanctum', 'feature:production', AssignedWorkerAccount::class])->prefix('production')->group(function () {
+    Route::get('/my-work-orders', [AssignedWorkOrderController::class, 'index']);
+    Route::get('/my-work-orders/history', [AssignedWorkOrderController::class, 'history']);
+    Route::get('/my-work-orders/{workOrder}', [AssignedWorkOrderController::class, 'show']);
+    Route::get('/my-work-orders/{workOrder}/late-production-report-options', [AssignedWorkOrderController::class, 'lateReportOptions']);
+    Route::get('/my-work-orders/{workOrder}/late-production-reports', [AssignedWorkOrderController::class, 'lateReports']);
+    Route::post('/my-work-orders/{workOrder}/late-production-reports', [AssignedWorkOrderController::class, 'proposeLateProduction']);
+    Route::get('/my-work-orders/{workOrder}/output-options', [AssignedWorkOrderController::class, 'options']);
+    Route::get('/my-work-orders/{workOrder}/outputs', [AssignedWorkOrderController::class, 'outputs']);
+    Route::post('/my-work-orders/{workOrder}/trial-outputs', [AssignedWorkOrderController::class, 'recordTrial']);
+    Route::post('/my-work-orders/{workOrder}/outputs', [AssignedWorkOrderController::class, 'record']);
+    Route::post('/my-work-orders/{workOrder}/rework/{ncr}/outputs', [AssignedWorkOrderController::class, 'record']);
+    Route::get('/my-output-receipts/{workOrder}', [AssignedWorkOrderController::class, 'receipt']);
 });

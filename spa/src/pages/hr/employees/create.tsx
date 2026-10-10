@@ -4,14 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { employeesApi, type CreateEmployeeData } from '@/api/hr/employees';
-import { shiftsApi } from '@/api/attendance/shifts';
 import { recruitmentApi } from '@/api/recruitment';
 import { EmployeeForm, type EmployeeFormValues } from '@/components/hr/EmployeeForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import type { ApiValidationError } from '@/types';
 import type { Employee } from '@/types/hr';
-import { localIsoDate } from '@/lib/formatDate';
 
 const cleanup = (d: EmployeeFormValues): CreateEmployeeData => {
  const out: Record<string, unknown> = { ...d };
@@ -48,6 +46,7 @@ export default function CreateEmployeePage() {
  },
  department: conversionData.department_id ? { id: conversionData.department_id } : null,
  position: conversionData.position_id ? { id: conversionData.position_id } : null,
+ employment_type: conversionData.employment_type ?? '',
  } as unknown as Employee)
  : null;
 
@@ -57,16 +56,7 @@ export default function CreateEmployeePage() {
  if (fromApplication) {
  (payload as unknown as Record<string, unknown>).from_application = fromApplication;
  }
- const shiftId = payload.shift_id;
- delete (payload as unknown as Partial<typeof payload> & { shift_id?: unknown }).shift_id;
- const employee = await employeesApi.create(payload);
- if (shiftId) {
- await shiftsApi.assignEmployee(employee.id, {
- shift_id: shiftId,
- effective_date: payload.date_hired || localIsoDate(),
- });
- }
- return employee;
+ return employeesApi.create(payload);
  },
  onSuccess: (employee) => {
  qc.invalidateQueries({ queryKey: ['hr', 'employees'] });
@@ -100,7 +90,7 @@ export default function CreateEmployeePage() {
  backLabel="Employees"
  />
  {fromApplication && conversionData && (
- <div className="mx-auto mt-4 max-w-4xl rounded-md border border-info/30 bg-info-bg/5 px-4 py-3">
+ <div className="min-w-0 w-full mt-4 rounded-md border border-info/30 bg-info-bg/5 px-4 py-3">
  <p className="text-sm">
  <span className="font-medium">Converting applicant:</span>{' '}
  {conversionData.first_name} {conversionData.last_name}.
@@ -110,6 +100,7 @@ export default function CreateEmployeePage() {
  )}
  <EmployeeForm
  employee={prefillEmployee}
+ lockPostingFields={!!fromApplication}
  onSubmit={(d) => mutation.mutate(d)}
  onCancel={() => navigate('/hr/employees')}
  isPending={mutation.isPending}

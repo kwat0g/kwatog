@@ -26,8 +26,10 @@ class Delivery extends Model
     use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
+        'automatic_supply_key',
         'delivery_number', 'sales_order_id', 'vehicle_id', 'driver_id',
         'status', 'scheduled_date', 'original_scheduled_date', 'reschedule_count',
+        'expected_delivery_date', 'carrier',
         'departed_at', 'delivered_at',
         'confirmed_at', 'confirmed_by', 'receipt_photo_path',
         'invoice_id', 'notes', 'created_by',
@@ -42,6 +44,7 @@ class Delivery extends Model
     protected $casts = [
         'status'         => DeliveryStatus::class,
         'scheduled_date' => 'date',
+        'expected_delivery_date' => 'date',
         'original_scheduled_date' => 'date',
         'reschedule_count' => 'integer',
         'departed_at'    => 'datetime',
@@ -62,7 +65,7 @@ class Delivery extends Model
 
     public function vehicle(): BelongsTo
     {
-        return $this->belongsTo(Vehicle::class);
+        return $this->belongsTo(Vehicle::class)->withTrashed();
     }
 
     public function driver(): BelongsTo

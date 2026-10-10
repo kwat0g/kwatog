@@ -80,6 +80,57 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertJsonCount(1, 'data');
     }
 
+    public function test_conversion_prefills_posting_department_position_and_employment_type(): void
+    {
+        $position = Position::factory()->create(['department_id' => $this->posting->department_id]);
+        $this->posting->update(['position_id' => $position->id, 'employment_type' => 'probationary']);
+        $this->application->forceFill(['stage' => ApplicationStage::Hired])->save();
+
+        $this->actingAs($this->hrUser)
+            ->getJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/convert")
+            ->assertOk()
+            ->assertJsonPath('data.department_id', Department::findOrFail($this->posting->department_id)->hash_id)
+            ->assertJsonPath('data.position_id', $position->hash_id)
+            ->assertJsonPath('data.employment_type', 'probationary');
+    }
+
+    public function test_hiring_fills_one_slot_posting_before_employee_conversion(): void
+    {
+        $this->posting->update(['slots' => 1]);
+        $this->application->forceFill(['stage' => ApplicationStage::Offer])->save();
+
+        $this->actingAs($this->hrUser)
+            ->patchJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/stage", ['action' => 'advance'])
+            ->assertOk()
+            ->assertJsonPath('data.stage', 'hired');
+
+        $this->assertSame(JobPostingStatus::Filled, $this->posting->fresh()->status);
+        $this->assertNull($this->application->fresh()->converted_employee_id);
+        $this->getJson('/api/v1/public/recruitment/job-postings')
+            ->assertOk()
+            ->assertJsonMissing(['posting_number' => $this->posting->posting_number]);
+    }
+
+    public function test_hiring_keeps_posting_open_until_all_slots_are_filled(): void
+    {
+        $this->posting->update(['slots' => 2]);
+        $this->application->forceFill(['stage' => ApplicationStage::Offer])->save();
+        $this->actingAs($this->hrUser)
+            ->patchJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/stage", ['action' => 'advance'])
+            ->assertOk();
+        $this->assertSame(JobPostingStatus::Open, $this->posting->fresh()->status);
+
+        $other = $this->application->replicate();
+        $other->forceFill([
+            'application_number' => 'JA-T-SECOND', 'tracking_code' => 'RCT-SECOND',
+            'email' => 'second@test.com', 'stage' => ApplicationStage::Offer,
+        ])->save();
+        $this->actingAs($this->hrUser)
+            ->patchJson("/api/v1/hr/recruitment/applications/{$other->hash_id}/stage", ['action' => 'advance'])
+            ->assertOk();
+        $this->assertSame(JobPostingStatus::Filled, $this->posting->fresh()->status);
+    }
+
     public function test_hr_application_filters_and_pagination_are_server_side(): void
     {
         $other = $this->application->replicate();

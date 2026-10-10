@@ -1,0 +1,62 @@
+{
+  "results": [
+    {
+      "name": "Role accounts sign in and workers punch in",
+      "status": "passed"
+    },
+    {
+      "name": "Start issues materials and creates a draft only",
+      "status": "passed"
+    },
+    {
+      "name": "Warehouse confirms actual handover",
+      "status": "passed"
+    },
+    {
+      "name": "Recorder captures five setup pieces on mobile",
+      "status": "passed"
+    },
+    {
+      "name": "Counted QC form records zero defects without per-check answers",
+      "status": "passed"
+    },
+    {
+      "name": "Support worker cannot record production",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "method": "GET",
+      "path": "/inventory/material-handovers/sources?work_order_id=5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/inventory/material-handovers/group",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/5KZYy8gNxw/outputs",
+      "status": 422,
+      "message": "A submission key is required."
+    }
+  ]
+}

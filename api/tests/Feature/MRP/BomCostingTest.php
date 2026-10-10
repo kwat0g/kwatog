@@ -53,7 +53,7 @@ class BomCostingTest extends TestCase
         $this->assertSame('33.95', (string) $bom->material_cost);
         $this->assertSame('standard_cost', $bom->cost_basis);
         $this->assertNotNull($bom->costed_at);
-        $this->assertSame([], $bom->cost_warnings);
+        $this->assertContains('missing_routing', array_column($bom->cost_warnings, 'type'));
     }
 
     public function test_bom_costing_converts_alternate_uom_before_extending_cost(): void
@@ -106,6 +106,7 @@ class BomCostingTest extends TestCase
         ]);
         $subassemblyItem = Item::factory()->create([
             'code' => $subassembly->part_number,
+            'item_type' => 'finished_good',
             'standard_cost' => '99.0000',
             'unit_of_measure' => 'pcs',
         ]);
@@ -147,10 +148,12 @@ class BomCostingTest extends TestCase
         ]);
         $itemA = Item::factory()->create([
             'code' => $productA->part_number,
+            'item_type' => 'finished_good',
             'unit_of_measure' => 'pcs',
         ]);
         $itemB = Item::factory()->create([
             'code' => $productB->part_number,
+            'item_type' => 'finished_good',
             'unit_of_measure' => 'pcs',
         ]);
 
@@ -274,6 +277,7 @@ class BomCostingTest extends TestCase
         ]);
         $subassemblyItem = Item::factory()->create([
             'code' => $subassembly->part_number,
+            'item_type' => 'finished_good',
             'standard_cost' => '99.0000',
             'unit_of_measure' => 'pcs',
         ]);

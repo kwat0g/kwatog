@@ -66,15 +66,21 @@ export default function CreateAssetPage() {
   });
   const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = form;
 
-  const { data: deptData, isLoading: deptLoading } = useQuery({
+  const departmentsQuery = useQuery({
     queryKey: ['hr', 'departments', 'list'],
     queryFn: () => departmentsApi.list({ per_page: 200 }),
     staleTime: 300_000,
   });
-  const { data: assetOptions } = useQuery({
+  const assetOptionsQuery = useQuery({
     queryKey: ['assets', 'options'],
     queryFn: assetsApi.options,
   });
+  const assetOptions = assetOptionsQuery.data;
+  const deptData = departmentsQuery.data;
+  const deptLoading = departmentsQuery.isFetching;
+  const lookups = [departmentsQuery, assetOptionsQuery];
+  const lookupFailed = lookups.some(query => query.isError);
+  const lookupPending = lookups.some(query => query.isFetching);
 
   useEffect(() => {
     if (!watch('category') && assetOptions?.categories?.length) {
@@ -114,7 +120,12 @@ export default function CreateAssetPage() {
     <div>
       <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
       <FormDraftBanner safety={safety} />
-      <form onSubmit={handleSubmit((data) => mutation.mutate(data), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
+      {lookupFailed && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+        Asset options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+          lookups.forEach(query => { if (query.isError) void query.refetch(); });
+        }}>Retry options</Button>
+      </div>}
+      <form onSubmit={handleSubmit((data) => { if (!lookupFailed && !lookupPending) mutation.mutate(data); }, onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
           <Input label="Name" {...register('name')} error={errors.name?.message} required />
@@ -122,7 +133,7 @@ export default function CreateAssetPage() {
             <Select label="Category" {...register('category')} error={errors.category?.message} required>
               {(assetOptions?.categories ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
-            <Select label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
+            <Select searchable label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
               <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
               {deptData?.data?.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </Select>
@@ -163,7 +174,7 @@ export default function CreateAssetPage() {
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={() => navigate('/assets')}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || lookupFailed || lookupPending} loading={mutation.isPending}>
             {mutation.isPending ? 'Creating…' : 'Create asset'}
           </Button>
         </FormActions>

@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Inventory;
+
+use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Services\ItemCostReviewService;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Tests\TestCase;
+
+class ItemCostReviewTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_only_finance_can_apply_a_received_standard_cost_and_repeat_is_safe(): void
+    {
+        Queue::fake();
+        $this->seed(RolePermissionSeeder::class);
+        $item = Item::factory()->create(['standard_cost' => '10.0000']);
+        $grn = GoodsReceiptNote::factory()->create(['status' => 'accepted', 'accepted_at' => now()]);
+        $line = $grn->items()->create(['purchase_order_item_id' => PurchaseOrderItem::create(['purchase_order_id' => $grn->purchase_order_id, 'item_id' => $item->id, 'description' => 'Cost review material', 'quantity' => '5', 'unit' => $item->unit_of_measure, 'unit_price' => '12.00', 'total' => '60.00'])->id, 'location_id' => WarehouseLocation::factory()->create()->id, 'item_id' => $item->id, 'quantity_received' => '5', 'quantity_accepted' => '5', 'unit_cost' => '12.0000']);
+        $review = app(ItemCostReviewService::class)->capture($line, '12.0000');
+        $this->assertSame('10.0000', $item->fresh()->standard_cost);
+        $warehouse = User::factory()->create(['role_id' => Role::where('slug', 'warehouse_staff')->value('id')]);
+        $this->actingAs($warehouse)->putJson('/api/v1/inventory/items/'.$item->hash_id, ['standard_cost' => '12.0000'])->assertForbidden();
+        $this->actingAs($warehouse)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Review'])->assertForbidden();
+        $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $this->actingAs($finance)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Approved receipt cost basis'])->assertOk()->assertJsonPath('data.status', 'approved');
+        $this->assertSame('12.0000', $item->fresh()->standard_cost);
+        $this->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Repeat'])->assertOk();
+        $staleLine = $grn->items()->create(['purchase_order_item_id' => $line->purchase_order_item_id, 'location_id' => $line->location_id, 'item_id' => $item->id, 'quantity_received' => '5', 'quantity_accepted' => '5', 'unit_cost' => '14.0000']);
+        $staleReview = app(ItemCostReviewService::class)->capture($staleLine, '14.0000');
+        $staleLine->update(['unit_cost' => '15.0000']);
+        $this->postJson('/api/v1/inventory/cost-reviews/'.$staleReview->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Review changed receipt'])->assertUnprocessable();
+        $this->assertSame('12.0000', $item->fresh()->standard_cost);
+    }
+}

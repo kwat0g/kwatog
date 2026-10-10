@@ -1,0 +1,10 @@
+
+Running 3 tests using 1 worker
+
+(node:2763166) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+  ✓  1 [real-chromium] › e2e-real/quality-checklist-capture.spec.ts:15:1 › all five stages use real PASS/FAIL capture with independent review (29.8s)
+  ✓  2 [real-chromium] › e2e-real/quality-checklist-capture.spec.ts:91:1 › authoring stays usable on mobile, dark and shop-floor themes (6.5s)
+  ✓  3 [real-chromium] › e2e-real/quality-checklist-capture.spec.ts:106:1 › Warehouse, PPC and employee accounts cannot overwrite or review Quality evidence (4.9s)
+
+  3 passed (42.9s)

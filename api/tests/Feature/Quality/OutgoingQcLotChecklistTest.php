@@ -208,7 +208,7 @@ class OutgoingQcLotChecklistTest extends TestCase
 
         // The claim resolves the row for complete(), which refuses on any
         // measurement left without a pass/fail.
-        $inspection->forceFill(['sample_defect_count' => 0])->save();
+        $inspection->forceFill(['sample_defect_count' => 0, 'inspected_quantity' => $inspection->sample_size])->save();
         $this->assertSame(InspectionStatus::Passed, $this->checkedVerdict($inspection->fresh()));
     }
 
@@ -372,7 +372,7 @@ class OutgoingQcLotChecklistTest extends TestCase
             ->where('id', '!=', $unanswered->id)
             ->update(['is_pass' => true, 'measured_value' => '10.0000']);
 
-        $inspection->forceFill(['sample_defect_count' => 0])->save();
+        $inspection->forceFill(['sample_defect_count' => 0, 'inspected_quantity' => $inspection->sample_size])->save();
 
         $this->assertNull($unanswered->fresh()->is_pass, 'Nothing resolved the row.');
 
@@ -457,7 +457,7 @@ class OutgoingQcLotChecklistTest extends TestCase
                         ->values()
                         ->all(),
                     'sample_defect_count' => 0,
-                    'complete' => true,
+                    'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
                 ],
             )
             ->assertSuccessful();
@@ -493,7 +493,7 @@ class OutgoingQcLotChecklistTest extends TestCase
             'checklist' => $checklist,
             'measurements' => $measurements,
             'sample_defect_count' => 0,
-            'complete' => true,
+            'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
         ];
     }
 
@@ -600,6 +600,6 @@ class OutgoingQcLotChecklistTest extends TestCase
             ->where('inspection_id', $inspection->id)
             ->update(['is_pass' => true, 'measured_value' => '10.0000']);
 
-        $inspection->forceFill(['sample_defect_count' => $defects])->save();
+        $inspection->forceFill(['sample_defect_count' => $defects, 'inspected_quantity' => $inspection->sample_size, 'defects_removed_confirmed' => true])->save();
     }
 }

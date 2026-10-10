@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Bom;
 
@@ -21,10 +23,29 @@ final class BomManufacturedComponentResolver
 
     public function forItem(?Item $item): ?Bom
     {
-        return $this->forCode($item?->code);
+        if ($item === null) {
+            return null;
+        }
+        $bom = $this->resolveCode($item->code);
+        if ($bom === null) {
+            return null;
+        }
+        if ($item->item_type !== ItemType::FinishedGood) {
+            throw new BusinessRuleException("Item {$item->code} matches an active manufactured product but is not a finished-good item.");
+        }
+        if (strcasecmp((string) $item->unit_of_measure, (string) $bom->product->unit_of_measure) !== 0) {
+            throw new BusinessRuleException("Item {$item->code} base unit must match its manufactured product unit.");
+        }
+
+        return $bom;
     }
 
     public function forCode(?string $itemCode): ?Bom
+    {
+        return $this->forItem(Item::query()->where('code', $itemCode)->first());
+    }
+
+    private function resolveCode(?string $itemCode): ?Bom
     {
         if ($itemCode === null || $itemCode === '') {
             return null;
@@ -40,6 +61,10 @@ final class BomManufacturedComponentResolver
             ->with('activeBom')
             ->first();
 
-        return $this->cache[$itemCode] = $product?->activeBom;
+        $bom = $product?->activeBom;
+        $product?->unsetRelation('activeBom');
+        $bom?->setRelation('product', $product);
+
+        return $this->cache[$itemCode] = $bom;
     }
 }

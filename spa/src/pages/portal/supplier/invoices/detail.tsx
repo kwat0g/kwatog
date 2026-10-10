@@ -37,8 +37,9 @@ export default function SupplierInvoiceDetailPage() {
 
   const downloadPdf = async () => {
     try {
-      const blob = await supplierPortalApi.downloadInvoicePdf(id!);
-      downloadBlob(blob, `${invoice?.bill_number ?? 'Invoice'}.pdf`);
+      if (!invoice?.invoice_attachment) return;
+      const blob = await supplierPortalApi.downloadShippingDocument(invoice.invoice_attachment.id);
+      downloadBlob(blob, invoice.invoice_attachment.original_filename);
     } catch {
       toast.error('Failed to download PDF.');
     }
@@ -50,7 +51,7 @@ export default function SupplierInvoiceDetailPage() {
         title={
           invoice ? (
             <>
-              {invoice.bill_number}{' '}
+              {invoice.supplier_invoice_number}{' '}
               <Chip variant={chipVariantForStatus(invoice.status)}>
                 {invoice.status_label ?? invoice.status}
               </Chip>
@@ -62,8 +63,8 @@ export default function SupplierInvoiceDetailPage() {
         subtitle={
           invoice
             ? [
-                invoice.supplier_invoice_number ? `Your invoice ${invoice.supplier_invoice_number}` : null,
-                invoice.goods_receipt_note ? `Receipt ${invoice.goods_receipt_note.grn_number}` : null,
+                invoice.purchase_order?.po_number,
+                `${invoice.bills.length} receipt match${invoice.bills.length === 1 ? '' : 'es'}`,
                 invoice.date ? formatDate(invoice.date) : null,
               ]
                 .filter(Boolean)
@@ -72,9 +73,9 @@ export default function SupplierInvoiceDetailPage() {
         }
         backTo="/portal/supplier/invoices"
         backLabel="Invoices"
-        actions={invoice ? (
+        actions={invoice?.invoice_attachment ? (
           <Button variant="secondary" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
-            Download PDF
+            Download invoice file
           </Button>
         ) : undefined}
       />
@@ -101,6 +102,22 @@ export default function SupplierInvoiceDetailPage() {
               <StatCard label="Balance" value={formatPeso(invoice.balance)} />
               <StatCard label="Due Date" value={invoice.due_date ? formatDate(invoice.due_date) : '—'} />
             </KpiGrid>
+
+            <Panel title="Receipt matches" meta={String(invoice.bills.length)} noPadding>
+              <div className="overflow-x-auto">
+                <table className={tableCls}>
+                  <thead><tr className={theadTrCls}><Th>GRN</Th><Th>AP bill</Th><Th>Status</Th><Th align="right">Amount</Th><Th align="right">Balance</Th></tr></thead>
+                  <tbody>{invoice.bills.map((bill) => (
+                    <tr key={bill.id} className={trCls}>
+                      <Td mono>{bill.grn_number ?? '—'}</Td><Td mono>{bill.bill_number}</Td>
+                      <Td><Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip></Td>
+                      <Td align="right" mono>{formatPeso(bill.total_amount)}</Td>
+                      <Td align="right" mono>{formatPeso(bill.balance)}</Td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </Panel>
 
             {invoice.items && invoice.items.length > 0 && (
               <Panel title="Items" meta={String(invoice.items.length)} noPadding>

@@ -7,6 +7,7 @@ namespace Tests\Feature\Common;
 use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Models\OutboxMessage;
 use App\Common\Services\OutboxDispatcher;
+use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -15,7 +16,11 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\MRP\Events\MrpPlanGenerated;
 use App\Modules\MRP\Jobs\RunAutomaticMrpJob;
+use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Models\Inspection;
 use Database\Seeders\RolePermissionSeeder;
@@ -138,5 +143,43 @@ class OutboxFactEventToleranceTest extends TestCase
         $this->assertNotSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
         $this->assertStringContainsString('changed after publication',
             (string) DB::table('event_outbox')->where('id', $message->getKey())->value('last_error'));
+    }
+
+    public function test_generated_plan_can_refresh_after_a_later_update_but_not_announce_a_cancelled_plan(): void
+    {
+        $plan = MrpPlan::create([
+            'mrp_plan_no' => 'MRP-OUTBOX-1',
+            'sales_order_id' => $this->confirmedOrder()->id,
+            'generated_by' => $this->ppc->id,
+            'version' => 1,
+            'status' => 'active',
+            'generated_at' => now(),
+        ]);
+        $codec = app(OutboxEventCodec::class);
+        $encoded = $codec->encode(new MrpPlanGenerated($plan));
+        $this->travel(5)->seconds();
+        $plan->update(['draft_wo_count' => 1]);
+
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+        $this->assertSame(1, $event->broadcastWith()['draft_wo_count']);
+        $this->assertTrue($event->broadcastWhen());
+
+        $this->travel(5)->seconds();
+        $plan->update(['status' => 'cancelled']);
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+        $this->assertFalse($event->broadcastWhen());
+    }
+
+    public function test_payroll_finalization_fact_can_decode_after_bank_status_changes(): void
+    {
+        $period = PayrollPeriod::factory()->create(['status' => 'finalized']);
+        $codec = app(OutboxEventCodec::class);
+        $encoded = $codec->encode(new PayrollPeriodFinalized($period));
+        $this->travel(5)->seconds();
+        $period->forceFill(['bank_file_status' => 'manual_required'])->save();
+
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+        $this->assertInstanceOf(PayrollPeriodFinalized::class, $event);
+        $this->assertSame('manual_required', $event->period->bank_file_status->value);
     }
 }

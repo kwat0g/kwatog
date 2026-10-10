@@ -6,6 +6,8 @@ namespace App\Modules\Inventory\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Inventory\Models\ItemCategory;
+use App\Modules\Inventory\Enums\ItemType;
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateItemCategoryRequest extends FormRequest
@@ -27,6 +29,7 @@ class UpdateItemCategoryRequest extends FormRequest
         $id = $this->route('itemCategory')?->id;
 
         return [
+            'item_type' => ['sometimes', 'required', Rule::in(ItemType::values())],
             'name'      => ['sometimes', 'required', 'string', 'min:2', 'max:100'],
             // Prevent making a category its own parent.
             'parent_id' => ['nullable', 'integer', 'exists:item_categories,id', $id ? 'not_in:' . $id : ''],

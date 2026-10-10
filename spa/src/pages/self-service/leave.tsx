@@ -1,5 +1,6 @@
 /** Sprint 8 — Task 74 + SS-LF. Self-service: my leave requests. In-portal filing. */
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,7 +21,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { formatDate } from '@/lib/formatDate';
+import { formatDate, manilaIsoDate, tomorrowIsoDate } from '@/lib/formatDate';
 import { downloadAuthenticatedFile } from '@/api/download';
 import type { ApiValidationError } from '@/types';
 import type { SelfServiceLeaveType, SelfServiceLeaveBalanceSelf } from '@/types/self-service';
@@ -44,6 +45,12 @@ const schema = z
     half_day_period: z.string().min(1).default('none'),
     reason: z.string().max(2000).optional().or(z.literal('')),
     document: z.any().optional(),
+  })
+  .superRefine((d, context) => {
+    const halfDay = d.half_day_period === 'am' || d.half_day_period === 'pm';
+    if (d.start_date && d.start_date < (halfDay ? manilaIsoDate() : tomorrowIsoDate())) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ['start_date'], message: halfDay ? 'Choose today or a later date.' : 'Choose tomorrow or a later date.' });
+    }
   })
   .refine((d) => d.end_date >= d.start_date, {
     message: 'End date must be on or after start date',
@@ -90,7 +97,11 @@ const columns: Column<LeaveRequest>[] = [
   {
     key: 'leave_request_no',
     header: 'Request no',
-    cell: (r) => <NumCell>{r.leave_request_no ?? r.id}</NumCell>,
+    cell: (r) => (
+      <Link to={`/self-service/leaves/${r.id}`} className="text-link hover:underline" aria-label={`View leave request ${r.leave_request_no}`}>
+        <NumCell>{r.leave_request_no ?? r.id}</NumCell>
+      </Link>
+    ),
   },
   {
     key: 'type',
@@ -155,22 +166,25 @@ export default function SelfServiceLeavePage() {
     placeholderData: (prev) => prev,
   });
 
-  const { data: types } = useQuery({
+  const typesQuery = useQuery({
     queryKey: ['leave-types-self'],
     queryFn: () => selfServiceApi.leaveTypes(),
     staleTime: 5 * 60_000,
   });
 
-  const { data: leaveOptions } = useQuery({
+  const optionsQuery = useQuery({
     queryKey: ['leave-request-options'],
     queryFn: () => leaveRequestsApi.options(),
     staleTime: 5 * 60_000,
   });
 
-  const { data: balances } = useQuery({
+  const balancesQuery = useQuery({
     queryKey: ['self-service', 'leave-balances'],
     queryFn: () => selfServiceApi.leaveBalancesMe(),
   });
+  const types = typesQuery.data;
+  const leaveOptions = optionsQuery.data;
+  const balances = balancesQuery.data;
 
   const balanceMap = useMemo<Record<string, SelfServiceLeaveBalanceSelf>>(
     () =>
@@ -204,12 +218,17 @@ export default function SelfServiceLeavePage() {
   const startDate = watch('start_date');
   const endDate = watch('end_date');
   const halfDayPeriod = watch('half_day_period');
-  const { data: dateOptions, isLoading: isHolidayLookupLoading } = useQuery({
+  const minimumDate = halfDayPeriod === 'am' || halfDayPeriod === 'pm' ? manilaIsoDate() : tomorrowIsoDate();
+  const dateOptionsQuery = useQuery({
     queryKey: ['leave-request-options', startDate, endDate],
     queryFn: () => leaveRequestsApi.options({ from: startDate, to: endDate }),
     enabled: Boolean(startDate && endDate && endDate >= startDate),
     staleTime: 5 * 60_000,
   });
+  const dateOptions = dateOptionsQuery.data;
+  const lookups = [typesQuery, optionsQuery, ...(startDate && endDate && endDate >= startDate ? [dateOptionsQuery] : [])];
+  const lookupFailed = lookups.some(query => query.isError);
+  const lookupPending = lookups.some(query => query.isFetching);
   const holidayDates = useMemo(() => new Set(dateOptions?.holiday_dates ?? []), [dateOptions]);
   const selectedBalance = selectedTypeId ? balanceMap[selectedTypeId] : null;
   const selectedType = selectedTypeId
@@ -332,6 +351,7 @@ export default function SelfServiceLeavePage() {
           title="File Leave Request"
         >
           <form onSubmit={handleSubmit((v) => {
+            if (lookupFailed || lookupPending) return;
             if (estimatedDays <= 0) {
               setError(v.half_day_period === 'none' ? 'end_date' : 'half_day_period', {
                 message: 'Leave must include at least one working day, excluding Sundays and public holidays.',
@@ -340,6 +360,14 @@ export default function SelfServiceLeavePage() {
             }
             file.mutate(v);
           })} className="space-y-4 py-4">
+            {lookupFailed && <div role="alert" className="text-sm text-danger-fg">
+              Leave options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+                lookups.forEach(query => { if (query.isError) void query.refetch(); });
+              }}>Retry options</Button>
+            </div>}
+            {balancesQuery.isError && <div role="alert" className="text-sm text-danger-fg">
+              Leave balance could not be loaded. The server will check eligibility when you submit. <Button variant="secondary" size="sm" onClick={() => void balancesQuery.refetch()}>Retry balance</Button>
+            </div>}
             {!hasEmployeeLink && (
               <div className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">
                 Your account is not linked to an employee record. Contact HR to file leave.
@@ -391,6 +419,7 @@ export default function SelfServiceLeavePage() {
               <Input
                 label="Start date"
                 type="date"
+                min={minimumDate}
                 {...register('start_date')}
                 error={errors.start_date?.message}
                 required
@@ -398,6 +427,7 @@ export default function SelfServiceLeavePage() {
               <Input
                 label="End date"
                 type="date"
+                min={startDate && startDate > minimumDate ? startDate : minimumDate}
                 {...register('end_date')}
                 error={errors.end_date?.message}
                 required
@@ -421,6 +451,7 @@ export default function SelfServiceLeavePage() {
               {...register('half_day_period')}
               error={errors.half_day_period?.message}
             >
+              <option value="none">Full day</option>
               {(leaveOptions?.half_day_periods ?? []).map((period) => (
                 <option key={period.value} value={period.value}>
                   {period.label}
@@ -458,7 +489,7 @@ export default function SelfServiceLeavePage() {
               <Button
                 type="submit"
                 variant="primary"
-                disabled={file.isPending || isHolidayLookupLoading || !hasEmployeeLink}
+                disabled={file.isPending || lookupFailed || lookupPending || !hasEmployeeLink}
                 loading={file.isPending}
               >
                 {file.isPending ? 'Submitting…' : 'Submit request'}

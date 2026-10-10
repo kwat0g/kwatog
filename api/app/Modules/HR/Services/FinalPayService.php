@@ -233,7 +233,7 @@ class FinalPayService
                 }
 
                 $posted = $existing->status === JournalEntryStatus::Draft
-                    ? $this->journals->post($existing, $by)
+                    ? $this->journals->postSystem($existing, (int) $by->id)
                     : $existing->fresh(['lines.account']);
 
                 $lockedClearance->forceFill(['journal_entry_id' => $posted->id])->save();
@@ -331,7 +331,7 @@ class FinalPayService
                 'reference_id'   => $lockedClearance->id,
                 'lines'          => $lines,
             ], $by);
-            $posted = $this->journals->post($je, $by);
+            $posted = $this->journals->postSystem($je, (int) $by->id);
             $lockedClearance->forceFill(['journal_entry_id' => $posted->id])->save();
 
             return $posted;

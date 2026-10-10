@@ -8,8 +8,11 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MrbStatus;
+use App\Modules\Inventory\Services\QuarantineService;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,16 +23,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Ties a nonconforming lot (optionally linked to an NCR / inspection) to the
  * physical quarantine stock movement, its disposition, and the release
  * movement. The `status` lifecycle field is excluded from `$fillable` and
- * written via property-set inside {@see \App\Modules\Inventory\Services\QuarantineService}.
+ * written via property-set inside {@see QuarantineService}.
  */
 class MaterialReviewRecord extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $table = 'material_review_records';
 
     protected $fillable = [
-        'mrb_number', 'ncr_id', 'inspection_id', 'item_id', 'quantity',
+        'mrb_number', 'ncr_id', 'inspection_id', 'return_request_item_id', 'item_id', 'quantity',
         'source_location_id', 'quarantine_location_id',
         'disposition', 'hold_movement_id', 'release_movement_id',
         'held_by', 'held_at', 'released_by', 'released_at',
@@ -39,11 +42,19 @@ class MaterialReviewRecord extends Model
     ];
 
     protected $casts = [
-        'quantity'    => 'decimal:3',
-        'status'      => MrbStatus::class,
-        'held_at'     => 'datetime',
+        'quantity' => 'decimal:3',
+        'status' => MrbStatus::class,
+        'held_at' => 'datetime',
         'released_at' => 'datetime',
     ];
+
+    public function requiresConcessionApproval(): bool
+    {
+        $this->loadMissing(['ncr.inspection', 'inspection']);
+
+        return (int) $this->ncr?->affected_quantity > 0
+            || ($this->inspection ?? $this->ncr?->inspection)?->status === InspectionStatus::Failed;
+    }
 
     public function item(): BelongsTo
     {
@@ -58,6 +69,11 @@ class MaterialReviewRecord extends Model
     public function inspection(): BelongsTo
     {
         return $this->belongsTo(Inspection::class, 'inspection_id');
+    }
+
+    public function returnRequestItem(): BelongsTo
+    {
+        return $this->belongsTo(ReturnRequestItem::class);
     }
 
     public function sourceLocation(): BelongsTo

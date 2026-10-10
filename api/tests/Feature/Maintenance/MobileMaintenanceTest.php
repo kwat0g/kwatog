@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Maintenance;
 
+use App\Common\Services\SettingsService;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
+use App\Modules\Attendance\Models\Shift;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
@@ -13,18 +19,19 @@ use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
-use App\Modules\Maintenance\Models\MachineConditionReading;
-use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Controllers\MachineConditionReadingController;
+use App\Modules\Maintenance\Models\MachineConditionReading;
+use App\Modules\Maintenance\Models\MaintenanceLog;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
 use App\Modules\MRP\Models\Machine;
-use App\Common\Services\SettingsService;
 use Database\Seeders\MachineSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Tests\TestCase;
 
@@ -99,6 +106,10 @@ class MobileMaintenanceTest extends TestCase
     public function test_mobile_mwo_completion_records_parts_used(): void
     {
         $wo = $this->createMwo(MaintenanceWorkOrderStatus::InProgress);
+        $department = Department::firstOrCreate(['code' => 'MAINT'], ['name' => 'Maintenance']);
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $technician = User::factory()->withRole('maintenance_tech')->create(['employee_id' => $employee->id]);
+        $wo->update(['assigned_to' => $employee->id]);
 
         // Seed a spare part usage record directly (bypassing stock movement)
         // to test that the completion response includes parts.
@@ -127,7 +138,13 @@ class MobileMaintenanceTest extends TestCase
         ]);
 
         // Complete the work order
-        $completeResponse = $this->actingAs($this->admin)
+        $this->actingAs($technician)->postJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/work-records", [
+            'finding' => 'Worn bearing', 'action_taken' => 'Replaced bearing', 'result' => 'passed',
+        ])->assertCreated();
+        $this->actingAs($technician)->postJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/reconcile-parts", [
+            'confirm_consumed' => true,
+        ])->assertOk();
+        $completeResponse = $this->actingAs($technician)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/complete", [
                 'remarks'          => 'Replaced worn bearing',
                 'downtime_minutes' => 45,
@@ -139,14 +156,30 @@ class MobileMaintenanceTest extends TestCase
 
         // Verify spare parts are included in the detail response
         $this->assertNotEmpty($completeResponse->json('data.spare_parts'));
-        $this->assertEquals('2.00', $completeResponse->json('data.spare_parts.0.quantity'));
+        $this->assertEquals('2.000', $completeResponse->json('data.spare_parts.0.quantity'));
     }
 
     public function test_mobile_mwo_start_transitions_to_in_progress(): void
     {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', config('app.timezone')));
+        $department = Department::firstOrCreate(['code' => 'MAINT'], ['name' => 'Maintenance']);
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $technician = User::factory()->withRole('maintenance_tech')->create(['employee_id' => $employee->id]);
+        $shift = Shift::create([
+            'name' => 'Mobile maintenance shift', 'start_time' => '08:00', 'end_time' => '16:00', 'is_active' => true,
+        ]);
+        EmployeeShiftAssignment::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'effective_date' => '2026-01-01', 'working_days' => [1, 2, 3, 4, 5],
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour(),
+        ]);
         $wo = $this->createMwo(MaintenanceWorkOrderStatus::Open);
+        $wo->update(['assigned_to' => $employee->id]);
 
-        $response = $this->actingAs($this->admin)
+        $response = $this->actingAs($technician)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/start");
 
         $response->assertOk();
@@ -242,6 +275,11 @@ class MobileMaintenanceTest extends TestCase
     public function test_mobile_mwo_cannot_complete_before_start(): void
     {
         $wo = $this->createMwo(MaintenanceWorkOrderStatus::Open);
+        MaintenanceLog::create([
+            'work_order_id' => $wo->id, 'description' => 'Legacy passing work result',
+            'finding' => 'Inspection passed', 'action_taken' => 'Checked machine',
+            'result' => 'passed', 'logged_by' => $this->admin->id,
+        ]);
 
         $response = $this->actingAs($this->admin)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/complete");
@@ -257,6 +295,9 @@ class MobileMaintenanceTest extends TestCase
     {
         $wo = $this->createMwo(MaintenanceWorkOrderStatus::InProgress);
 
+        $this->actingAs($this->admin)->postJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/work-records", [
+            'finding' => 'Inspection complete', 'action_taken' => 'Serviced machine', 'result' => 'passed',
+        ])->assertCreated();
         $this->actingAs($this->admin)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo->hash_id}/complete")
             ->assertOk();

@@ -86,9 +86,9 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::post('/{employee}/provision-account', [EmployeeAccountController::class, 'provision'])
             ->middleware('permission:hr.employees.provision_account');
         Route::post('/{employee}/deactivate-account', [EmployeeAccountController::class, 'deactivate'])
-            ->middleware('permission:hr.employees.deactivate_account');
+            ->middleware('permission:admin.users.manage');
         Route::patch('/{employee}/reset-password', [EmployeeAccountController::class, 'resetPassword'])
-            ->middleware('permission:hr.employees.reset_password');
+            ->middleware('permission:admin.users.manage');
 
         // U4 — onboarding workflow.
         Route::get('/{employee}/onboarding', [EmployeeOnboardingController::class, 'show'])
@@ -212,9 +212,9 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     // U3 (HR side) — review queue for profile-update requests.
     Route::prefix('profile-update-requests')->group(function () {
         Route::get('/', [ProfileUpdateReviewController::class, 'index'])
-            ->middleware('permission:hr.employees.view');
+            ->middleware('permission_any:hr.employees.view,hr.profile_updates.finance_review');
         Route::get('/options', [ProfileUpdateReviewController::class, 'options'])
-            ->middleware('permission:hr.employees.view');
+            ->middleware('permission_any:hr.employees.view,hr.profile_updates.finance_review');
         Route::patch('/{profileUpdateRequest}/review', [ProfileUpdateReviewController::class, 'review'])
             ->middleware('permission:hr.employees.edit');
         // Task SS2 — Finance leg for bank-account changes (dual approval).

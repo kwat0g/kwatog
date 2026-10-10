@@ -45,7 +45,7 @@ class LoanService
         private readonly JournalEntryService $journals,
     ) {}
 
-    /** @return array<int, array{value:string,label:string,interest_rate:string,interest_rate_percent:string,approval_steps:int}> */
+    /** @return array<int, array{value:string,label:string,interest_rate:string,interest_rate_percent:string,approval_steps:int,vp_approval_threshold:?string}> */
     public function types(): array
     {
         $workflows = WorkflowDefinition::query()
@@ -65,6 +65,7 @@ class LoanService
                     'interest_rate' => $rate,
                     'interest_rate_percent' => LoanRate::percent($rate),
                     'approval_steps' => count($workflow->steps ?? []),
+                    'vp_approval_threshold' => collect($workflow->steps ?? [])->firstWhere('role', 'vice_president')['threshold'] ?? null,
                 ];
             })
             ->values()
@@ -122,8 +123,7 @@ class LoanService
         $max = Money::mul($monthly, $multiplier);
         $hasActive = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
-            ->where('loan_type', $type->value)
-            ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
+            ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value, LoanStatus::WriteOffPending->value])
             ->exists();
 
         return [
@@ -144,18 +144,12 @@ class LoanService
             // submissions cannot both pass the active-loan check.
             $employee = Employee::query()->lockForUpdate()->findOrFail($employeeId);
 
-            // One active loan per type rule.
-            $hasActive = EmployeeLoan::query()
-                ->where('employee_id', $employeeId)
-                ->where('loan_type', $type->value)
-                ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
-                ->exists();
-            if ($hasActive) {
-                throw new BusinessRuleException("An active or pending {$type->value} already exists for this employee.");
+            $limits = $this->limitsFor($employee, $type);
+            if ($limits['has_active']) {
+                throw new BusinessRuleException('This employee already has a pending or active loan or cash advance.');
             }
 
             // Cap check.
-            $limits = $this->limitsFor($employee, $type);
             if (bccomp($principal, $limits['principal_max'], 2) > 0) {
                 throw new BusinessRuleException('Principal exceeds maximum of '.app(\App\Common\Services\CurrencyDisplayService::class)->format($limits['principal_max'])." for {$type->value}.");
             }

@@ -55,7 +55,12 @@ export default function InvoicesPage() {
  { key: 'due_date', header: 'Due', cell: (r) => <NumCell className={r.is_overdue ? 'text-danger-fg' : undefined}>{formatDate(r.due_date)}</NumCell> },
  { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
  { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
- { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.display_status)}>{statusLabels.get(r.display_status) ?? r.display_status}</Chip> },
+ { key: 'status', header: 'Status', cell: (r) => {
+  const status = r.lifecycle_type === 'prebill' && r.status === 'draft' && !r.prebill_approved_at
+   ? 'awaiting prebill approval'
+   : r.display_status;
+  return <Chip variant={chipVariantForStatus(status)}>{statusLabels.get(status) ?? status}</Chip>;
+ } },
  ];
 
  const filterConfig: FilterConfig[] = [

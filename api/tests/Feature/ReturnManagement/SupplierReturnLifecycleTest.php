@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\ReturnManagement;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\CreditNote;
-use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
@@ -19,14 +20,17 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemUomConversion;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Uom;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\SupplierDispatchStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Models\SupplierOrderDispatch;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
@@ -56,7 +60,7 @@ class SupplierReturnLifecycleTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
         $this->seed(WorkflowSeeder::class);
-        app(\App\Common\Services\SettingsService::class)->set('budgeting.enforcement_mode', 'off');
+        app(SettingsService::class)->set('budgeting.enforcement_mode', 'off');
     }
 
     private function admin(): User
@@ -82,14 +86,14 @@ class SupplierReturnLifecycleTest extends TestCase
     private function postedJournalEntry(User $by): JournalEntry
     {
         return JournalEntry::create([
-            'entry_number' => 'JE-RMA-' . substr(uniqid(), -8),
-            'date'         => now()->toDateString(),
-            'description'  => 'Posted target bill fixture',
-            'total_debit'  => '1.00',
+            'entry_number' => 'JE-RMA-'.substr(uniqid(), -8),
+            'date' => now()->toDateString(),
+            'description' => 'Posted target bill fixture',
+            'total_debit' => '1.00',
             'total_credit' => '1.00',
-            'status'       => JournalEntryStatus::Posted,
-            'posted_at'    => now(),
-            'posted_by'    => $by->id,
+            'status' => JournalEntryStatus::Posted,
+            'posted_at' => now(),
+            'posted_by' => $by->id,
         ]);
     }
 
@@ -100,46 +104,46 @@ class SupplierReturnLifecycleTest extends TestCase
      */
     private function receivedShipment(User $by, bool $isVatable = true): array
     {
-        $vendor   = Vendor::factory()->create(['created_by' => null]);
-        $item     = Item::factory()->create(['unit_of_measure' => 'kg']);
+        $vendor = Vendor::factory()->create(['created_by' => null]);
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
-        $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
+        $expense = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
         $po = PurchaseOrder::factory()->create([
-            'vendor_id'    => $vendor->id,
-            'created_by'   => $by->id,
-            'subtotal'     => '1000.00',
-            'vat_amount'   => $isVatable ? '120.00' : '0.00',
+            'vendor_id' => $vendor->id,
+            'created_by' => $by->id,
+            'subtotal' => '1000.00',
+            'vat_amount' => $isVatable ? '120.00' : '0.00',
             'total_amount' => $isVatable ? '1120.00' : '1000.00',
-            'is_vatable'   => $isVatable,
+            'is_vatable' => $isVatable,
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Received])->save();
 
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin for supplier-return lifecycle',
-            'quantity'          => '100.00',
-            'unit'              => 'kg',
-            'unit_price'        => '10.00',
-            'total'             => '1000.00',
+            'item_id' => $item->id,
+            'description' => 'Resin for supplier-return lifecycle',
+            'quantity' => '100.00',
+            'unit' => 'kg',
+            'unit_price' => '10.00',
+            'total' => '1000.00',
             'quantity_received' => '100.00',
         ]);
 
         $grn = GoodsReceiptNote::factory()->create([
             'purchase_order_id' => $po->id,
-            'vendor_id'         => $vendor->id,
-            'received_by'       => $by->id,
-            'status'            => 'accepted',
+            'vendor_id' => $vendor->id,
+            'received_by' => $by->id,
+            'status' => 'accepted',
         ]);
         $grnItem = GrnItem::create([
-            'goods_receipt_note_id'  => $grn->id,
+            'goods_receipt_note_id' => $grn->id,
             'purchase_order_item_id' => $poItem->id,
-            'item_id'                => $item->id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '100.000',
-            'quantity_accepted'      => '100.000',
-            'unit_cost'              => '10.0000',
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '100.000',
+            'quantity_accepted' => '100.000',
+            'unit_cost' => '10.0000',
         ]);
 
         // Put the goods physically on the shelf so the return can take them off.
@@ -154,34 +158,34 @@ class SupplierReturnLifecycleTest extends TestCase
         ));
 
         $bill = Bill::create([
-            'bill_number'       => 'BILL-SL-' . substr(uniqid(), -5),
-            'vendor_id'         => $vendor->id,
+            'bill_number' => 'BILL-SL-'.substr(uniqid(), -5),
+            'vendor_id' => $vendor->id,
             'purchase_order_id' => $po->id,
-            'status'            => 'unpaid',
-            'subtotal'          => '1000.00',
-            'vat_amount'        => $isVatable ? '120.00' : '0.00',
-            'total_amount'      => $isVatable ? '1120.00' : '1000.00',
-            'amount_paid'       => '0.00',
-            'balance'           => $isVatable ? '1120.00' : '1000.00',
-            'date'              => now()->toDateString(),
-            'due_date'          => now()->addDays(30)->toDateString(),
-            'is_vatable'        => $isVatable,
+            'status' => 'unpaid',
+            'subtotal' => '1000.00',
+            'vat_amount' => $isVatable ? '120.00' : '0.00',
+            'total_amount' => $isVatable ? '1120.00' : '1000.00',
+            'amount_paid' => '0.00',
+            'balance' => $isVatable ? '1120.00' : '1000.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'is_vatable' => $isVatable,
             // A supplier credit can only be applied to a bill that reached the
             // GL (CreditNoteService::apply → "The target bill does not have a
             // posted journal entry."). A billed GRN is posted in production, so
             // the fixture has to be too.
-            'journal_entry_id'  => $this->postedJournalEntry($by)->id,
-            'created_by'        => $by->id,
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
         ]);
         $billItem = BillItem::create([
-            'bill_id'            => $bill->id,
+            'bill_id' => $bill->id,
             'expense_account_id' => $expense->id,
-            'item_id'            => $item->id,
-            'description'        => 'Received resin',
-            'quantity'           => '100.00',
-            'unit'               => 'kg',
-            'unit_price'         => '10.00',
-            'total'              => '1000.00',
+            'item_id' => $item->id,
+            'description' => 'Received resin',
+            'quantity' => '100.00',
+            'unit' => 'kg',
+            'unit_price' => '10.00',
+            'total' => '1000.00',
         ]);
 
         return compact('vendor', 'item', 'location', 'po', 'poItem', 'grnItem', 'bill', 'billItem');
@@ -305,6 +309,7 @@ class SupplierReturnLifecycleTest extends TestCase
                 'disposition' => 'return_to_supplier',
             ]],
             'create_replacement_po' => true,
+            'required_delivery_date' => now()->addDays(4)->toDateString(),
             'location_id' => $ctx['location']->hash_id,
         ])->assertOk();
 
@@ -314,6 +319,9 @@ class SupplierReturnLifecycleTest extends TestCase
         $this->assertSame('1.00', (string) $replacementItem->quantity);
         $this->assertSame('BAG', (string) $replacementItem->unit);
         $this->assertSame('25.00', (string) $replacementItem->unit_price);
+        $this->assertSame(PurchaseOrderStatus::Approved, $replacement->status);
+        $this->assertSame(0, $replacement->approvalRecords()->count());
+        $this->assertSame(SupplierDispatchStatus::ManualRequired, SupplierOrderDispatch::where('purchase_order_id', $replacement->id)->firstOrFail()->status);
         $this->assertNotNull($ctx['po']->fresh()->short_closed_at);
         $this->assertSame(0, bccomp((string) $ctx['poItem']->fresh()->quantity_received, '0', 3));
     }
@@ -377,7 +385,7 @@ class SupplierReturnLifecycleTest extends TestCase
         $rma = $service->receive($rma, [(int) $line->id => '1.000'], null, $admin);
         $rma = $service->inspect($rma, 'Supplier return inspected.', $admin);
 
-        $case = new ReturnCase();
+        $case = new ReturnCase;
         $case->forceFill([
             'case_number' => 'CASE-SUP-'.substr(uniqid(), -8),
             'type' => 'supplier',
@@ -406,23 +414,23 @@ class SupplierReturnLifecycleTest extends TestCase
     public function test_supplier_return_walks_the_full_workflow_over_http(): void
     {
         $admin = $this->admin();
-        $ctx   = $this->receivedShipment($admin);
+        $ctx = $this->receivedShipment($admin);
 
         // ── Create ────────────────────────────────────────────────────────
         $created = $this->actingAs($admin)
             ->postJson('/api/v1/return-management/return-requests', [
-                'type'              => 'supplier_return',
-                'vendor_id'         => $ctx['vendor']->hash_id,
+                'type' => 'supplier_return',
+                'vendor_id' => $ctx['vendor']->hash_id,
                 'purchase_order_id' => $ctx['po']->hash_id,
-                'bill_id'           => $ctx['bill']->hash_id,
-                'reason_code'       => 'quality_issue',
-                'return_date'       => now()->toDateString(),
-                'items'             => [[
-                    'item_id'             => $ctx['item']->hash_id,
-                    'quantity'            => 20,
-                    'unit_price'          => 10,
-                    'source_po_item_id'   => $ctx['poItem']->hash_id,
-                    'source_grn_item_id'  => $ctx['grnItem']->hash_id,
+                'bill_id' => $ctx['bill']->hash_id,
+                'reason_code' => 'quality_issue',
+                'return_date' => now()->toDateString(),
+                'items' => [[
+                    'item_id' => $ctx['item']->hash_id,
+                    'quantity' => 20,
+                    'unit_price' => 10,
+                    'source_po_item_id' => $ctx['poItem']->hash_id,
+                    'source_grn_item_id' => $ctx['grnItem']->hash_id,
                     'source_bill_item_id' => $ctx['billItem']->hash_id,
                 ]],
             ])
@@ -493,12 +501,13 @@ class SupplierReturnLifecycleTest extends TestCase
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rmaId}/dispose", [
                 'dispositions' => [[
-                    'item_id'     => $line->hash_id,
+                    'item_id' => $line->hash_id,
                     'disposition' => 'return_to_supplier',
-                    'notes'       => 'Moisture out of spec.',
+                    'notes' => 'Moisture out of spec.',
                 ]],
                 'create_replacement_po' => true,
-                'location_id'   => $ctx['location']->hash_id,
+                'required_delivery_date' => now()->addDays(4)->toDateString(),
+                'location_id' => $ctx['location']->hash_id,
             ])
             ->assertOk();
 
@@ -529,7 +538,7 @@ class SupplierReturnLifecycleTest extends TestCase
         $this->assertSame(StockMovementType::ReturnToVendor, $movement->movement_type);
         $this->assertSame('18.000', (string) $movement->quantity, 'Only the returned quantity leaves stock.');
         $this->assertSame($movement->id, (int) $line->fresh()->stock_movement_id);
-        $this->assertSame('82.000', (string) \App\Modules\Inventory\Models\StockLevel::where('item_id', $ctx['item']->id)
+        $this->assertSame('82.000', (string) StockLevel::where('item_id', $ctx['item']->id)
             ->where('location_id', $ctx['location']->id)->firstOrFail()->quantity, '100 on shelf − 18 shipped back');
 
         // ── Complete: closes the RMA; nothing left to move, no location asked ─
@@ -575,19 +584,19 @@ class SupplierReturnLifecycleTest extends TestCase
     public function test_supplier_return_without_source_lineage_is_refused_cleanly(): void
     {
         $admin = $this->admin();
-        $ctx   = $this->receivedShipment($admin);
+        $ctx = $this->receivedShipment($admin);
 
         // No source GRN / PO lines — the service cannot reverse the receipt.
         $created = $this->actingAs($admin)
             ->postJson('/api/v1/return-management/return-requests', [
-                'type'              => 'supplier_return',
-                'vendor_id'         => $ctx['vendor']->hash_id,
+                'type' => 'supplier_return',
+                'vendor_id' => $ctx['vendor']->hash_id,
                 'purchase_order_id' => $ctx['po']->hash_id,
-                'reason_code'       => 'quality_issue',
-                'return_date'       => now()->toDateString(),
-                'items'             => [[
-                    'item_id'    => $ctx['item']->hash_id,
-                    'quantity'   => 5,
+                'reason_code' => 'quality_issue',
+                'return_date' => now()->toDateString(),
+                'items' => [[
+                    'item_id' => $ctx['item']->hash_id,
+                    'quantity' => 5,
                     'unit_price' => 10,
                 ]],
             ])
@@ -603,10 +612,10 @@ class SupplierReturnLifecycleTest extends TestCase
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$created['id']}/dispose", [
                 'dispositions' => [[
-                    'item_id'     => $rma->items()->firstOrFail()->hash_id,
+                    'item_id' => $rma->items()->firstOrFail()->hash_id,
                     'disposition' => 'return_to_supplier',
                 ]],
-                'location_id'  => $ctx['location']->hash_id,
+                'location_id' => $ctx['location']->hash_id,
             ])
             ->assertStatus(422);
 
@@ -650,7 +659,7 @@ class SupplierReturnLifecycleTest extends TestCase
         ]);
 
         try {
-            app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)->create([
+            app(ReturnRequestService::class)->create([
                 'type' => 'supplier_return',
                 'vendor_id' => $ctx['vendor']->id,
                 'purchase_order_id' => $ctx['po']->id,
@@ -664,7 +673,7 @@ class SupplierReturnLifecycleTest extends TestCase
                 ]],
             ], $admin);
             $this->fail('A bill line from a different purchase order must be rejected.');
-        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+        } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('bill provenance', strtolower($e->getMessage()));
         }
     }
@@ -693,12 +702,13 @@ class SupplierReturnLifecycleTest extends TestCase
             'source_bill_item_id' => $ctx['billItem']->id,
         ]);
 
-        $disposed = app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)->dispose(
+        $disposed = app(ReturnRequestService::class)->dispose(
             $rma->load('items'),
             [['item_id' => $line->hash_id, 'disposition' => 'return_to_supplier']],
             $admin,
             true,
             $ctx['location']->id,
+            now()->addDays(4)->toDateString(),
         );
 
         $replacement = $disposed->replacementPurchaseOrder;

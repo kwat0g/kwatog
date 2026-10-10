@@ -40,6 +40,7 @@ class MultiLevelBomTest extends TestCase
     {
         return Item::factory()->create([
             'code'            => $code,
+            'item_type'       => str_starts_with($code, 'RM-') ? 'raw_material' : 'finished_good',
             'unit_of_measure' => 'pcs',
         ]);
     }

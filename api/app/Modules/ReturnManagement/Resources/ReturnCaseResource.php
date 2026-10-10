@@ -92,11 +92,7 @@ class ReturnCaseResource extends JsonResource
                 'total_amount' => (string) $this->creditNote->total_amount,
             ] : null),
             'replacement_order' => $this->replacementOrderSummary(),
-            'replacement_delivery' => $this->whenLoaded('replacementDelivery', fn (): ?array => $this->replacementDelivery ? [
-                'id' => $this->replacementDelivery->hash_id,
-                'delivery_number' => $this->replacementDelivery->delivery_number,
-                'status' => $this->enumValue($this->replacementDelivery->status),
-            ] : null),
+            'replacement_delivery' => $this->replacementDeliverySummary(),
             'resolution_goods_receipt_note' => $this->whenLoaded('resolutionGoodsReceiptNote', fn (): ?array => $this->resolutionGoodsReceiptNote ? [
                 'id' => $this->resolutionGoodsReceiptNote->hash_id,
                 'grn_number' => $this->resolutionGoodsReceiptNote->grn_number,
@@ -184,6 +180,21 @@ class ReturnCaseResource extends JsonResource
         $redelivered = $this->relationLoaded('receiptAllocations')
             ? $this->receiptAllocations->where('return_case_line_id', $line->id)->reduce(fn ($sum, $row) => bcadd($sum, $row->quantity, 3), '0.000')
             : '0.000';
+        if ($this->type?->value === 'customer' && $this->resolution?->value === 'redelivery'
+            && $this->relationLoaded('replacementSalesOrder') && $this->replacementSalesOrder?->relationLoaded('deliveries')) {
+            $available = $this->replacementSalesOrder->deliveries->where('status', \App\Modules\SupplyChain\Enums\DeliveryStatus::Confirmed)
+                ->flatMap->items->filter(fn ($item) => (int) $item->salesOrderItem?->product_id === (int) $line->product_id)
+                ->reduce(fn ($sum, $item) => bcadd($sum, (string) $item->quantity, 3), '0.000');
+            foreach ($this->lines->where('product_id', $line->product_id)->sortBy('id') as $affectedLine) {
+                $required = bcadd((string) ($affectedLine->verified_missing_quantity ?? '0'), (string) ($affectedLine->verified_defective_quantity ?? '0'), 3);
+                $allocated = bccomp($available, $required, 3) < 0 ? $available : $required;
+                if ((int) $affectedLine->id === (int) $line->id) {
+                    $redelivered = $allocated;
+                    break;
+                }
+                $available = bcsub($available, $allocated, 3);
+            }
+        }
         $redeliveryRemaining = bcsub(bcadd((string) ($line->verified_missing_quantity ?? '0'), (string) ($line->verified_defective_quantity ?? '0'), 3), $redelivered, 3);
         if ($this->relationLoaded('returnRequest') && $this->returnRequest?->relationLoaded('items')) {
             foreach ($this->returnRequest->items as $returnLine) {
@@ -255,6 +266,16 @@ class ReturnCaseResource extends JsonResource
         }
 
         return null;
+    }
+
+    private function replacementDeliverySummary(): ?array
+    {
+        $delivery = $this->relationLoaded('replacementDelivery') ? $this->replacementDelivery : null;
+        if ($this->relationLoaded('replacementSalesOrder') && $this->replacementSalesOrder?->relationLoaded('deliveries')) {
+            $delivery = $this->replacementSalesOrder->deliveries
+                ->filter(fn ($shipment) => $this->enumValue($shipment->status) !== 'cancelled')->sortByDesc('id')->first() ?? $delivery;
+        }
+        return $delivery ? ['id' => $delivery->hash_id, 'delivery_number' => $delivery->delivery_number, 'status' => $this->enumValue($delivery->status)] : null;
     }
 
     private function hashForeignKey(int|string|null $id): ?string

@@ -18,10 +18,12 @@ class BulkAssignShiftRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'department_id'  => ['required', 'string'],
-            'shift_id'       => ['required', 'string'],
+            'department_id' => ['required', 'string'],
+            'working_days' => ['required', 'array', 'list', 'min:1', 'max:7'],
+            'working_days.*' => ['required', 'integer:strict', 'distinct:strict', 'between:1,7'],
+            'shift_id' => ['required', 'string'],
             'effective_date' => ['required', 'date'],
-            'end_date'       => ['nullable', 'date', 'after_or_equal:effective_date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:effective_date'],
         ];
     }
 
@@ -30,10 +32,11 @@ class BulkAssignShiftRequest extends FormRequest
         $d = $this->validated();
         $deptId = Department::tryDecodeHash($d['department_id']);
         $shiftId = Shift::tryDecodeHash($d['shift_id']);
-        abort_if(!$deptId, 422, 'Invalid department.');
-        abort_if(!$shiftId, 422, 'Invalid shift.');
+        abort_if(! $deptId, 422, 'Invalid department.');
+        abort_if(! $shiftId, 422, 'Invalid shift.');
         $d['department_id'] = $deptId;
         $d['shift_id'] = $shiftId;
+
         return $d;
     }
 }

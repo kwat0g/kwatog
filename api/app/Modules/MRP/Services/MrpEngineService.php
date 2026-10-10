@@ -16,10 +16,9 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
-use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
-use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
@@ -29,8 +28,8 @@ use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
-use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Production\Services\WorkOrderMaterialUsageService;
+use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
@@ -38,10 +37,13 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Services\OpenSupplyService;
 use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\QualityStockHoldService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -154,6 +156,10 @@ class MrpEngineService
                     'actor_type' => $actorId === null ? 'system' : 'user',
                     'actor_id' => $actorId,
                 ];
+                DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
+                $so = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+                $supplyRecovery = app(\App\Modules\SupplyChain\Services\DeliveryService::class)->reconcileAutomaticSupply($so, \App\Modules\Auth\Models\User::findOrFail($recordedBy));
+                app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->allocate($so, \App\Modules\Auth\Models\User::findOrFail($recordedBy), \Illuminate\Support\Str::uuid()->toString());
                 // Lock + supersede prior active plan.
                 $previous = MrpPlan::where('sales_order_id', $so->id)
                     ->where('status', MrpPlanStatus::Active->value)
@@ -174,7 +180,7 @@ class MrpEngineService
                 $linesPerItem = []; // [item_id => array of so_line_id]
                 // L-32 — warnings collected during the explode pass are carried
                 // into the diagnostics array built below.
-                $diagnostics = [];
+                $diagnostics = array_map(fn ($message) => ['type' => 'supply_review_required', 'message' => $message], $supplyRecovery['blockers']);
                 $productionNodesByLine = [];
                 $costSummary = [
                     'material_cost' => Money::zero(),
@@ -210,6 +216,17 @@ class MrpEngineService
                                 'message' => 'Production already covers the remaining sales-order quantity. Confirm outgoing QC and delivery before ordering more material.',
                             ];
                         }
+
+                        continue;
+                    }
+
+                    $repairCommitment = WorkOrder::query()->where('sales_order_item_id', $line->id)->whereNotNull('rework_source_output_id')
+                        ->whereIn('status', ['planned', 'confirmed', 'in_progress', 'paused'])->get(['quantity_target', 'quantity_produced'])
+                        ->sum(fn ($repair): float => max(0.0, (float) $repair->quantity_target - (float) $repair->quantity_produced));
+                    $manufacturingQuantity = max(0.0, $remainingQuantity - $repairCommitment);
+                    if ($manufacturingQuantity <= 0.000001) {
+                        $bomAvailableByLine[$line->id] = true;
+
                         continue;
                     }
 
@@ -240,38 +257,38 @@ class MrpEngineService
                     $unitTotalCost = (string) ($activeBom->total_cost ?? $line->product?->standard_cost ?? '0.00');
                     $costSummary['material_cost'] = Money::add(
                         $costSummary['material_cost'],
-                        bcmul((string) $remainingQuantity, $unitMaterialCost, 8),
+                        bcmul((string) $manufacturingQuantity, $unitMaterialCost, 8),
                     );
                     $costSummary['labor_cost'] = Money::add(
                         $costSummary['labor_cost'],
-                        bcmul((string) $remainingQuantity, $unitLaborCost, 8),
+                        bcmul((string) $manufacturingQuantity, $unitLaborCost, 8),
                     );
                     $costSummary['machine_cost'] = Money::add(
                         $costSummary['machine_cost'],
-                        bcmul((string) $remainingQuantity, $unitMachineCost, 8),
+                        bcmul((string) $manufacturingQuantity, $unitMachineCost, 8),
                     );
                     $costSummary['overhead_cost'] = Money::add(
                         $costSummary['overhead_cost'],
-                        bcmul((string) $remainingQuantity, $unitOverheadCost, 8),
+                        bcmul((string) $manufacturingQuantity, $unitOverheadCost, 8),
                     );
                     $costSummary['planned_production_cost'] = Money::add(
                         $costSummary['planned_production_cost'],
-                        bcmul((string) $remainingQuantity, $unitTotalCost, 8),
+                        bcmul((string) $manufacturingQuantity, $unitTotalCost, 8),
                     );
                     $costSummary['products'][] = [
                         'product_id' => (int) $line->product_id,
                         'part_number' => (string) $line->product?->part_number,
                         'name' => (string) $line->product?->name,
-                        'quantity' => round($remainingQuantity, 3),
+                        'quantity' => round($manufacturingQuantity, 3),
                         'unit_cost' => $unitTotalCost,
-                        'extended_cost' => Money::round2(bcmul((string) $remainingQuantity, $unitTotalCost, 8)),
+                        'extended_cost' => Money::round2(bcmul((string) $manufacturingQuantity, $unitTotalCost, 8)),
                     ];
                     // Invalid BOM data (cycles, depth overflow, or missing UOM
                     // conversions) must fail the run rather than being mislabeled
                     // as a missing BOM and silently under-planning demand.
                     $productionPlan = $this->boms->productionPlan(
                         (int) $line->product_id,
-                        $remainingQuantity,
+                        $manufacturingQuantity,
                         $quantityToManufacture,
                     );
                     $productionNodesByLine[$line->id] = $productionPlan['subassemblies'];
@@ -342,6 +359,9 @@ class MrpEngineService
                         'gross' => round($gross, 3),
                         'on_hand' => round((float) $supply['on_hand'], 3),
                         'reserved' => round((float) $supply['reserved'], 3),
+                        'usable' => round((float) $supply['usable'], 3),
+                        'quality_held' => round((float) $supply['quality_held'], 3),
+                        'unusable_zone' => round((float) $supply['unusable_zone'], 3),
                         'in_transit' => round((float) $supply['in_transit'] + (float) ($supply['linked_transit'][$so->id] ?? 0), 3),
                         'open_purchase_requests' => round($openPurchaseRequests, 3),
                         'linked_purchase_orders' => round($committedPo, 3),
@@ -513,6 +533,7 @@ class MrpEngineService
                     if ($remainingQuantity <= 0.000001) {
                         $this->cancelStalePlannedRootWorkOrders($line->id, $plan->id);
                         $this->cancelStalePlannedChildWorkOrders($line->id, $plan->id);
+
                         continue;
                     }
 
@@ -523,7 +544,7 @@ class MrpEngineService
                         continue;
                     }
 
-                    $plannedStart = $line->delivery_date->copy()->subDays(2)->toDateTimeString();
+                    $plannedStart = now()->toDateTimeString();
                     $plannedEnd = $line->delivery_date->copy()->subDay()->toDateTimeString();
                     // Receiver-earlier, argument-later, and day-granular on both
                     // sides. Carbon 3 made diffIn* SIGNED, and this read
@@ -548,11 +569,11 @@ class MrpEngineService
                     $progressedWos = WorkOrder::query()
                         ->where('sales_order_item_id', $line->id)
                         ->whereNull('parent_wo_id')
-                        ->whereIn('status', [
+                        ->where(fn ($query) => $query->whereIn('status', [
                             WorkOrderStatus::Confirmed->value,
                             WorkOrderStatus::InProgress->value,
                             WorkOrderStatus::Paused->value,
-                        ])
+                        ])->orWhere(fn ($planned) => $planned->where('status', WorkOrderStatus::Planned->value)->whereHas('currentProductionSchedule')))
                         ->get(['quantity_target', 'quantity_good']);
                     // A WO's target is good pieces; rejects do not consume it.
                     $openProduction = $progressedWos->sum(function (WorkOrder $workOrder): float {
@@ -574,6 +595,8 @@ class MrpEngineService
                         ->whereNotNull('mrp_plan_id')
                         ->where('mrp_plan_id', '!=', $plan->id)
                         ->where('status', WorkOrderStatus::Planned->value)
+                        ->whereDoesntHave('currentProductionSchedule')
+                        ->whereDoesntHave('materials', fn ($q) => $q->where('actual_quantity_issued', '>', 0))
                         ->orderByDesc('id')
                         ->get();
 
@@ -602,6 +625,7 @@ class MrpEngineService
                             $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
                         }
                         $rootWorkOrder = $reuse->fresh();
+                        $this->workOrders->reconcilePlannedMaterialPlan($rootWorkOrder);
                         $draftWoCount++;
                     } else {
                         $rootWorkOrder = $this->workOrders->createDraft([
@@ -643,6 +667,9 @@ class MrpEngineService
 
                 // Link the SO to this plan.
                 $so->update(['mrp_plan_id' => $plan->id]);
+                if ($lines->contains(fn ($line) => $line->fulfillment_policy === 'stock_first')) {
+                    app(\App\Modules\SupplyChain\Services\DeliveryService::class)->draftOrderSupply($so, \App\Modules\Auth\Models\User::findOrFail($recordedBy));
+                }
 
                 $finalPlan = $plan->fresh();
                 app(OutboxService::class)->recordForChain(
@@ -765,6 +792,7 @@ class MrpEngineService
             'triggered_by' => $trigger->value,
             'triggered_by_user_id' => $userId,
             'status' => MrpRunStatus::Running->value,
+            'summary' => ['sales_order_ids' => $salesOrderIds ?? []],
         ]);
 
         try {
@@ -773,6 +801,7 @@ class MrpEngineService
                 $salesOrderQuery->whereIn('id', array_values(array_unique(array_map('intval', $salesOrderIds))));
             }
             $sos = $salesOrderQuery->get();
+            $run->update(['summary' => ['sales_order_ids' => $sos->modelKeys()]]);
 
             $shortagesTotal = 0;
             $prsCreated = 0;
@@ -853,6 +882,7 @@ class MrpEngineService
                     ? MrpRunStatus::Partial->value
                     : MrpRunStatus::Completed->value,
                 'summary' => [
+                    'sales_order_ids' => $sos->modelKeys(),
                     'per_sales_order' => $perSo,
                     'failed_sales_orders' => $failedSalesOrders,
                     'incomplete_sales_orders' => $incompleteSalesOrders,
@@ -903,7 +933,7 @@ class MrpEngineService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = MrpPlan::query()
-            ->with(['salesOrder:id,so_number,customer_id', 'salesOrder.customer:id,name', 'generator:id,name,role_id']);
+            ->with(['salesOrder:id,so_number,customer_id,status', 'salesOrder.customer:id,name', 'generator:id,name,role_id']);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -924,10 +954,12 @@ class MrpEngineService
         return $plan->load([
             'salesOrder.customer:id,name',
             'generator:id,name,role_id',
-            'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,mrp_plan_id,parent_wo_id',
+            'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,planned_end,preferred_production_date,mrp_plan_id,parent_wo_id',
             'workOrders.parent:id,wo_number',
+            'workOrders.currentProductionSchedule',
             'priorProgressedWorkOrders' => fn ($query) => $query->where('mrp_plans.version', '<', $plan->version),
             'priorProgressedWorkOrders.parent:id,wo_number',
+            'priorProgressedWorkOrders.currentProductionSchedule',
             'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date,mrp_plan_id',
             'purchaseRequests.purchaseOrders:id,po_number,status,purchase_request_id',
             'priorProgressedPurchaseRequests' => fn ($query) => $query->where('mrp_plans.version', '<', $plan->version),
@@ -944,6 +976,8 @@ class MrpEngineService
             ->whereNotNull('mrp_plan_id')
             ->where('mrp_plan_id', '!=', $planId)
             ->where('status', WorkOrderStatus::Planned->value)
+            ->whereDoesntHave('currentProductionSchedule')
+            ->whereDoesntHave('materials', fn ($q) => $q->where('actual_quantity_issued', '>', 0))
             ->lockForUpdate()
             ->get();
 
@@ -979,8 +1013,8 @@ class MrpEngineService
             $parentStart = $parent->planned_start instanceof Carbon
                 ? $parent->planned_start->copy()
                 : Carbon::parse($parent->planned_start);
-            $childEnd = $parentStart->copy()->subDay();
-            $childStart = $childEnd->copy()->subDay();
+            $childEnd = $parent->planned_end->copy();
+            $childStart = $parentStart->copy();
 
             $priorChildren = WorkOrder::query()
                 ->where('parent_wo_id', $parent->id)
@@ -988,6 +1022,8 @@ class MrpEngineService
                 ->whereNotNull('mrp_plan_id')
                 ->where('mrp_plan_id', '!=', $plan->id)
                 ->where('status', WorkOrderStatus::Planned->value)
+                ->whereDoesntHave('currentProductionSchedule')
+                ->whereDoesntHave('materials', fn ($q) => $q->where('actual_quantity_issued', '>', 0))
                 ->orderByDesc('id')
                 ->get();
 
@@ -1001,6 +1037,7 @@ class MrpEngineService
                     'priority' => $priority,
                 ])->save();
                 $child = $child->fresh();
+                $this->workOrders->reconcilePlannedMaterialPlan($child);
 
                 foreach ($priorChildren as $surplus) {
                     $surplus->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
@@ -1048,6 +1085,8 @@ class MrpEngineService
             ->whereNotNull('mrp_plan_id')
             ->where('mrp_plan_id', '!=', $planId)
             ->where('status', WorkOrderStatus::Planned->value)
+            ->whereDoesntHave('currentProductionSchedule')
+            ->whereDoesntHave('materials', fn ($q) => $q->where('actual_quantity_issued', '>', 0))
             ->lockForUpdate()
             ->get();
 
@@ -1056,7 +1095,7 @@ class MrpEngineService
         }
     }
 
-    /** Good output still held for this SO is production already performed, not fresh raw demand. */
+    /** Good output for this SO remains production already performed, regardless of WO status. */
     private function remainingToProduce(SalesOrderItem $line): float
     {
         $good = 0;
@@ -1073,18 +1112,34 @@ class MrpEngineService
         if ($roots->isNotEmpty()) {
             $outputs = WorkOrderOutput::query()
                 ->whereIn('work_order_id', $roots->pluck('id'))
-                ->get(['id', 'good_count']);
+                ->get(['id', 'good_count', 'reject_count', 'rework_ncr_id']);
             if ($outputs->isNotEmpty()) {
-                $latestResults = DB::table('inspections')
+                $latestResults = Inspection::query()->with(['ncr', 'resultAuthors', 'workOrderOutput.workOrder'])
                     ->whereIn('work_order_output_id', $outputs->pluck('id'))
                     ->where('stage', 'outgoing')
+                    ->where('status', '!=', InspectionStatus::Cancelled->value)
                     ->orderByDesc('id')
-                    ->get(['work_order_output_id', 'status'])
+                    ->get()
                     ->unique('work_order_output_id')
                     ->keyBy('work_order_output_id');
+                $good += $outputs->whereNotNull('rework_ncr_id')->sum('good_count');
+                $inlineRepairs = NonConformanceReport::query()
+                    ->whereIn('rework_work_order_id', $roots->pluck('id'))->whereNotIn('status', ['closed', 'cancelled'])
+                    ->where('disposition', 'rework')->whereNotNull('sorting_approved_at')
+                    ->whereHas('inspection', fn ($q) => $q->where('entity_type', 'work_order')->whereIn('entity_id', $roots->pluck('id')))->get();
+                foreach ($inlineRepairs as $repair) {
+                    $processed = $outputs->where('rework_ncr_id', $repair->id)->sum(fn ($output) => $output->good_count + $output->reject_count);
+                    $good += max(0, (int) $repair->confirmed_rework_quantity - (int) $processed);
+                }
                 foreach ($outputs as $output) {
-                    if (($latestResults->get($output->id)?->status ?? null) === InspectionStatus::Failed->value) {
-                        $good -= (int) $output->good_count;
+                    $result = $latestResults->get($output->id);
+                    if (in_array($result?->status, [InspectionStatus::Failed, InspectionStatus::Passed], true) && $result->ncr && (($result->ncr->status->value !== 'cancelled' && $result->ncr->disposition === null) || ($result->ncr->status->value === 'cancelled' && (int) $result->accepted_quantity === 0))) {
+                        continue; // Held pending disposition is still a production commitment.
+                    }
+                    if ($result?->status === InspectionStatus::Failed) {
+                        $good -= (int) $output->good_count - ($result->canReleaseOutgoing() ? (int) $result->accepted_quantity : 0);
+                    } elseif ($result?->status === InspectionStatus::Passed && ! ($result->ncr && $result->ncr->disposition === null)) {
+                        $good -= max(0, (int) $output->good_count - (int) $result->accepted_quantity);
                     }
                 }
             }
@@ -1092,6 +1147,10 @@ class MrpEngineService
 
         $delivered = (float) $line->quantity_delivered;
 
+        if ($line->fulfillment_policy === 'stock_first') {
+            $coverage = app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->lineCoverage($line);
+            return max(0.0, (float) $coverage['demand'] - (float) $coverage['ready_quantity'] - (float) $coverage['awaiting_qc']);
+        }
         return max(0.0, (float) $line->quantity - max($delivered, min((float) $line->quantity, (float) $good)));
     }
 
@@ -1222,27 +1281,30 @@ class MrpEngineService
             return $planningSupply[$itemId];
         }
 
-        $levels = StockLevel::where('item_id', $itemId)
-            ->whereHas('location.zone', function ($q) {
-                $q->whereNotIn('zone_type', [
-                    WarehouseZoneType::Quarantine->value,
-                    WarehouseZoneType::Scrap->value,
-                ]);
-            })
-            ->orderBy('location_id')
-            ->lockForUpdate()
-            ->get();
-        $onHand = (float) $levels->sum('quantity');
-        $reserved = (float) $levels->sum('reserved_quantity');
+        $query = StockLevel::where('item_id', $itemId)->with('location.zone.warehouse')
+            ->orderBy('location_id');
+        // QC locks precede stock locks, matching material reservations and issues.
+        foreach ((clone $query)->get(['item_id', 'location_id']) as $level) {
+            app(QualityStockHoldService::class)->heldQuantity($itemId, (int) $level->location_id);
+        }
+        $levels = $query->lockForUpdate()->get();
+        $readiness = app(StockLocationSummaryService::class)->availability($levels);
+        $onHand = (float) $readiness['on_hand_quantity'];
+        $reserved = (float) $readiness['reserved_quantity'];
+        $usable = (float) $readiness['usable_quantity'];
         $inTransit = $this->inTransit($itemId);
         $item = Item::query()->findOrFail($itemId);
         [$linkedPos, $linkedTransit, $unplannedHeld, $linkedTransitBySo, $unplannedPendingPo, $linkedQcBySo] = $this->linkedPurchaseOrderSupply($item);
         $openRequests = $this->openUnplannedRequestQuantity($itemId);
         $safetyStock = (float) $item->safety_stock;
+        $stockCommitted = (float) $this->openSupply->stockPlanningSupply($itemId)['other_stock_demand'];
 
         return $planningSupply[$itemId] = [
             'on_hand' => $onHand,
             'reserved' => $reserved,
+            'usable' => $usable,
+            'quality_held' => (float) $readiness['quality_held_quantity'],
+            'unusable_zone' => (float) $readiness['unusable_zone_quantity'],
             'in_transit' => max(0.0, $inTransit - $linkedTransit),
             'open_requests' => $openRequests,
             'linked_pos' => $linkedPos,
@@ -1251,7 +1313,7 @@ class MrpEngineService
             'awaiting_qc' => $unplannedHeld,
             'pending_purchase_orders' => $unplannedPendingPo,
             'safety_stock' => $safetyStock,
-            'available' => max(0.0, $onHand - $reserved + $inTransit - $linkedTransit + $openRequests + $unplannedHeld + $unplannedPendingPo - $safetyStock),
+            'available' => max(0.0, $usable + $inTransit - $linkedTransit + $openRequests + $unplannedHeld + $unplannedPendingPo - $safetyStock - $stockCommitted),
         ];
     }
 
@@ -1272,7 +1334,7 @@ class MrpEngineService
                 PurchaseOrderStatus::Draft->value,
                 PurchaseOrderStatus::PendingApproval->value,
             ]))
-            ->get(['po.id as po_id', 'po.status', 'po.pending_change_response_id', 'mp.sales_order_id', 'poi.id as line_id', 'poi.quantity', 'poi.quantity_received', 'poi.unit']);
+            ->get(['po.id as po_id', 'pr.stock_production_work_order_id', 'po.status', 'po.pending_change_response_id', 'mp.sales_order_id', 'poi.id as line_id', 'poi.quantity', 'poi.quantity_received', 'poi.unit']);
 
         $linked = [];
         $linkedTransit = 0.0;
@@ -1283,6 +1345,10 @@ class MrpEngineService
             $remaining = max(0.0, $ordered - (float) $line->quantity_received);
             $inTransit = in_array($line->status, $openStatuses, true)
                 || ($line->status === PurchaseOrderStatus::PendingApproval->value && $line->pending_change_response_id !== null);
+            if ($line->stock_production_work_order_id) {
+                if ($inTransit) $linkedTransit += $remaining;
+                continue;
+            }
             if ($line->sales_order_id !== null) {
                 $sid = (int) $line->sales_order_id;
                 $linked[$sid] = ($linked[$sid] ?? 0.0) + $remaining;
@@ -1310,10 +1376,11 @@ class MrpEngineService
             })
             ->whereNull('po.deleted_at')
             ->where('po.status', '!=', PurchaseOrderStatus::Cancelled->value)
-            ->get(['mp.sales_order_id', 'gi.quantity_received', 'gi.quantity_accepted']);
+            ->get(['pr.stock_production_work_order_id', 'mp.sales_order_id', 'gi.quantity_received', 'gi.quantity_accepted']);
         $unplannedHeld = 0.0;
         $linkedQcBySo = [];
         foreach ($held as $row) {
+            if ($row->stock_production_work_order_id) continue;
             $remainder = max(0.0, (float) $row->quantity_received - (float) $row->quantity_accepted);
             if ($row->sales_order_id !== null) {
                 $sid = (int) $row->sales_order_id;
@@ -1384,6 +1451,7 @@ class MrpEngineService
     private function openPurchaseRequestQuantity(int $salesOrderId, int $itemId): float
     {
         $baseQty = $this->openSupply->openRequestBaseQuantity($itemId, $salesOrderId, false);
+
         return (float) $baseQty;
     }
 
@@ -1394,6 +1462,7 @@ class MrpEngineService
     private function openUnplannedRequestQuantity(int $itemId): float
     {
         $baseQty = $this->openSupply->openRequestBaseQuantity($itemId, null, true, true);
+
         return (float) $baseQty;
     }
 

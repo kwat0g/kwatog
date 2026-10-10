@@ -360,6 +360,7 @@ export default function CreateReturnRequestPage() {
       setValue('invoice_id', choice.rootId ?? '');
       setValue('sales_order_id', '');
       setValue(`items.${index}.product_id`, choice.product_id ?? '');
+      setValue(`items.${index}.item_id`, choice.item_id ?? '', { shouldValidate: true });
     } else {
       setValue('sales_order_id', choice.rootId ?? '');
       setValue('invoice_id', '');
@@ -454,7 +455,7 @@ export default function CreateReturnRequestPage() {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((data) => mutation.mutate(data), onFormInvalid<FormValues>())}
-        className="max-w-4xl mx-auto px-5 py-4 space-y-4"
+        className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Type & Source">
           <div className="grid grid-cols-2 gap-3">
@@ -482,7 +483,7 @@ export default function CreateReturnRequestPage() {
           </div>
           {returnType === 'customer_return' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-              <Select
+              <Select searchable
                 label="Customer"
                 required
                 {...register('customer_id')}
@@ -503,7 +504,7 @@ export default function CreateReturnRequestPage() {
           )}
           {returnType === 'supplier_return' && (
             <div className="mt-3">
-              <Select
+              <Select searchable
                 label="Supplier"
                 required
                 {...register('vendor_id')}
@@ -642,7 +643,7 @@ export default function CreateReturnRequestPage() {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
                       <div className="md:col-span-3">
                         {financeOnly ? (
-                          <Select
+                          <Select searchable
                             label="Credited product"
                             {...register(`items.${index}.product_id` as const)}
                             error={itemError?.product_id?.message}
@@ -657,7 +658,7 @@ export default function CreateReturnRequestPage() {
                             )}
                           </Select>
                         ) : isSupplierReturn ? (
-                          <Select
+                          <Select searchable
                             label="Inventory item"
                             {...register(`items.${index}.item_id` as const)}
                             error={itemError?.item_id?.message}
@@ -698,7 +699,7 @@ export default function CreateReturnRequestPage() {
                       </div>
                       {!financeOnly && (
                         <div className="md:col-span-4">
-                          <Select
+                          <Select searchable
                             label={isSupplierReturn ? 'Accepted GRN line' : 'Source line'}
                             {...register(`items.${index}.source_line` as const)}
                             error={itemError?.source_line?.message}
@@ -722,7 +723,7 @@ export default function CreateReturnRequestPage() {
                       )}
                       {isSupplierReturn && (
                         <div className="md:col-span-3">
-                          <Select
+                          <Select searchable
                             label="Bill line (optional)"
                             {...register(`items.${index}.bill_line` as const)}
                             onChange={(event) => selectBillLine(index, event.target.value)}

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Services\SettingsService;
+use App\Common\Services\OutboxDispatcher;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -30,8 +34,10 @@ use App\Modules\Quality\Models\ItemQualityPlan;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -64,7 +70,7 @@ use Tests\TestCase;
  *    – Critical checklist item marked is_pass=false → failed, even with
  *    0 defects and all other items passing.
  *
- * 6. test_record_lot_result_passes_noncritical_checklist_with_zero_defects
+ * 6. test_record_lot_result_accepts_one_segregated_noncritical_defective_piece
  *    – Only non-critical checklist items NG, sample_defect_count 0 → passed.
  *
  * 7. test_record_lot_result_requires_sample_defect_count
@@ -83,8 +89,8 @@ use Tests\TestCase;
  *     – Critical dimensional parameter out of tolerance → failed.
  *
  * 12. test_receive_with_qc_single_screen_works_on_lot_checklist
- *     – GrnService::receiveWithQc() → GrnService::fastCompleteInspection()
- *     sets sample_defect_count = 0 on lot_checklist before complete().
+ *     – Receives a new GRN, records every checklist result through the
+ *     receiving flow, confirms the checker gate holds stock, then reviews it.
  *
  * 13. test_measured_pieces_* – the piece-row count comes from the
  *     stage-agnostic quality.inspection.measured_pieces setting, falling back
@@ -103,8 +109,15 @@ class IncomingLotChecklistTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['inspection.checklist_capture_enabled' => false]);
 
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(ChartOfAccountsSeeder::class);
+        User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'is_active' => true,
+        ]);
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -148,7 +161,10 @@ class IncomingLotChecklistTest extends TestCase
 
     private function review(Inspection $inspection, string $decision, string $remarks = ''): Inspection
     {
-        return $this->inspSvc->review($inspection->fresh(), $decision, $remarks !== '' ? $remarks : null, $this->checker);
+        $inspection = $inspection->fresh();
+
+        return $this->inspSvc->review($inspection, $decision, $remarks !== '' ? $remarks : null, $this->checker,
+            $inspection->usesChecklistCapture() ? (int) $inspection->result_version : null);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -256,7 +272,7 @@ class IncomingLotChecklistTest extends TestCase
                 ])->values()->all(),
                 'measurements' => [],
                 'sample_defect_count' => 0,
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertSuccessful()
             ->assertJsonPath('data.status', InspectionStatus::AwaitingReview->value);
@@ -265,6 +281,7 @@ class IncomingLotChecklistTest extends TestCase
 
         // GRN should be accepted.
         $this->assertSame(GrnStatus::Accepted, $grn->fresh()->status);
+        $this->assertDraftSupplierBillExists($grn);
     }
 
     public function test_record_lot_result_fails_when_defects_exceed_accept(): void
@@ -285,7 +302,7 @@ class IncomingLotChecklistTest extends TestCase
                 ])->values()->all(),
                 'measurements' => [],
                 'sample_defect_count' => 2, // Exceeds accept_count of 1
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertSuccessful()
             ->assertJsonPath('data.status', InspectionStatus::AwaitingReview->value);
@@ -323,8 +340,8 @@ class IncomingLotChecklistTest extends TestCase
                     'is_pass' => $r->id === $criticalRow->id ? false : true,
                 ])->values()->all(),
                 'measurements' => [],
-                'sample_defect_count' => 0,
-                'complete' => true,
+                'sample_defect_count' => 1,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertSuccessful()
             ->assertJsonPath('data.status', InspectionStatus::AwaitingReview->value);
@@ -332,7 +349,7 @@ class IncomingLotChecklistTest extends TestCase
         $this->review($inspection, InspectionStatus::Failed->value, 'Critical checklist failure confirmed.');
     }
 
-    public function test_record_lot_result_passes_noncritical_checklist_with_zero_defects(): void
+    public function test_record_lot_result_accepts_one_segregated_noncritical_defective_piece(): void
     {
         $grn = $this->createGrnWith($this->item, 1000);
         $inspection = Inspection::query()
@@ -351,13 +368,40 @@ class IncomingLotChecklistTest extends TestCase
                     'is_pass' => $r->id === $nonCritical->id ? false : true,
                 ])->values()->all(),
                 'measurements' => [],
-                'sample_defect_count' => 0,
-                'complete' => true,
+                'sample_defect_count' => 1,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertSuccessful()
             ->assertJsonPath('data.status', InspectionStatus::AwaitingReview->value);
 
         $this->review($inspection, InspectionStatus::Passed->value);
+        $this->assertSame(GrnStatus::PartialAccepted, $grn->fresh()->status);
+        $this->assertSame('999.000', (string) $grn->items()->firstOrFail()->fresh()->quantity_accepted);
+        $bill = $this->assertDraftSupplierBillExists($grn);
+        $this->assertSame('999.00', (string) $bill->items()->sole()->quantity);
+    }
+
+    private function assertDraftSupplierBillExists(GoodsReceiptNote $grn): Bill
+    {
+        $grn = $grn->fresh();
+        $handoff = DB::table('chain_step_runs')
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->where('step', $grn->status->value)
+            ->first();
+        $this->assertNotNull($handoff, 'Accepted GRN must persist its supplier-bill outbox handoff.');
+        $this->assertContains($handoff->status, ['pending', 'published']);
+
+        if ($handoff->status === 'pending') {
+            app(OutboxDispatcher::class)->dispatch((string) $handoff->outbox_id);
+        }
+
+        $this->assertSame('published', DB::table('chain_step_runs')->where('outbox_id', $handoff->outbox_id)->value('status'));
+        $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->sole();
+        $this->assertSame(BillStatus::Draft, $bill->status);
+        $this->assertNull($bill->journal_entry_id);
+
+        return $bill;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -381,7 +425,7 @@ class IncomingLotChecklistTest extends TestCase
                     'is_pass' => true,
                 ])->values()->all(),
                 'measurements' => [],
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
                 // sample_defect_count missing
             ])
             ->assertUnprocessable();
@@ -405,7 +449,7 @@ class IncomingLotChecklistTest extends TestCase
                 ])->values()->all(),
                 'measurements' => [],
                 'sample_defect_count' => 999, // Exceeds sample_size
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertUnprocessable();
     }
@@ -425,7 +469,7 @@ class IncomingLotChecklistTest extends TestCase
                 ],
                 'measurements' => [],
                 'sample_defect_count' => 0,
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertUnprocessable();
     }
@@ -451,7 +495,7 @@ class IncomingLotChecklistTest extends TestCase
                 ])->values()->all(),
                 'measurements' => [],
                 'sample_defect_count' => 0,
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertForbidden();
     }
@@ -506,7 +550,7 @@ class IncomingLotChecklistTest extends TestCase
                     'measured_value' => $index === 0 ? '8.50' : '10.00',
                 ])->all(),
                 'sample_defect_count' => 0,
-                'complete' => true,
+                'complete' => true, 'coverage_confirmed' => true, 'defects_removed_confirmed' => true,
             ])
             ->assertSuccessful()
             ->assertJsonPath('data.status', InspectionStatus::AwaitingReview->value);
@@ -615,28 +659,68 @@ class IncomingLotChecklistTest extends TestCase
     // Tests: Integration
     // ──────────────────────────────────────────────────────────────────────────
 
-    public function test_receive_with_qc_single_screen_works_on_lot_checklist(): void
+    public function test_receive_with_qc_single_screen_works_on_full_piece_count(): void
     {
-        $grn = $this->createGrnWith($this->item);
-        $inspection = Inspection::query()
-            ->where('entity_type', 'grn')
-            ->where('entity_id', $grn->id)
-            ->firstOrFail();
+        config(['inspection.checklist_capture_enabled' => true]);
 
-        // Simulate fastCompleteInspection by setting sample_defect_count = 0
-        // and marking all rows as pass.
-        $rows = $inspection->measurements;
-        foreach ($rows as $row) {
-            $row->forceFill(['is_pass' => true])->save();
-        }
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value,
+            'created_by' => $this->user->id,
+        ]);
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id' => $this->item->id,
+            'description' => 'Incoming checklist material',
+            'quantity' => '1000.000',
+            'unit' => 'pcs',
+            'unit_price' => '10.00',
+            'total' => '10000.00',
+            'quantity_received' => '0.000',
+        ]);
+        $location = WarehouseLocation::factory()->create();
+        $checks = [['label' => 'Full piece count', 'passed' => true]];
 
-        // Complete should work on lot_checklist with sample_defect_count set.
-        $inspection->forceFill(['sample_defect_count' => 0])->save();
-        $completed = $this->inspSvc->complete($inspection, $this->user);
+        $this->actingAs($this->user);
+        $result = $this->grnSvc->receiveWithQc($po, [[
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $this->item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '1000.000',
+            'unit_cost' => '10.00',
+        ]], ['received_date' => now()->toDateString()], [
+            'result' => 'passed',
+            'coverage_confirmed' => true,
+            'inspected_quantity' => 1000,
+            'sample_defect_count' => 0,
+            'critical_defect' => false,
+            'defects_removed_confirmed' => false,
+            'checks' => $checks,
+        ], $this->user);
 
-        $this->assertSame(InspectionStatus::AwaitingReview, $completed->status);
-        $completed = $this->review($completed, InspectionStatus::Passed->value);
+        $grn = $result['grn'];
+        $inspection = $result['inspection'];
+        $this->assertSame(GrnStatus::PendingQc, $grn->status);
+        $this->assertSame(InspectionStatus::AwaitingReview, $inspection->status);
+        $this->assertFalse($result['stock_updated']);
+        $this->assertSame(0, \App\Modules\Inventory\Models\StockMovement::query()
+            ->where('reference_type', 'goods_receipt_note')->where('reference_id', $grn->id)->count());
+        $this->assertSame('0.000', (string) $grn->items()->firstOrFail()->quantity_accepted);
+        $this->assertSame($inspection->sample_size, $inspection->inspected_quantity);
+        $this->assertSame(0, $inspection->measurements->whereNotNull('measured_value')->count());
+        $this->assertTrue($inspection->measurements->every(fn ($row) => $row->item_result === 'passed'));
+        $this->assertDatabaseHas('inspection_result_authors', [
+            'inspection_id' => $inspection->id,
+            'user_id' => $this->user->id,
+        ]);
+
+        $this->actingAs($this->checker);
+        $completed = $this->review($inspection, InspectionStatus::Passed->value);
         $this->assertSame(InspectionStatus::Passed, $completed->status);
+        $this->assertSame($this->checker->id, $completed->reviewed_by);
+        $this->assertSame(GrnStatus::Accepted, $grn->fresh()->status);
+        $this->assertSame('1000.000', (string) $grn->items()->firstOrFail()->fresh()->quantity_accepted);
+        $this->assertSame(1, \App\Modules\Inventory\Models\StockMovement::query()
+            ->where('reference_type', 'goods_receipt_note')->where('reference_id', $grn->id)->count());
     }
 
     // ──────────────────────────────────────────────────────────────────────────

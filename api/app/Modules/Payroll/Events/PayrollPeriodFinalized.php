@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -14,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
  * this event opens the door for additional listeners (per-employee
  * payslip notifications, per-period summary email, etc.).
  */
-class PayrollPeriodFinalized
+class PayrollPeriodFinalized implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 

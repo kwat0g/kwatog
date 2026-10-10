@@ -9,6 +9,7 @@ use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -16,6 +17,8 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\ItemUomConversion;
+use App\Modules\Inventory\Models\Uom;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnGlPostingService;
 use App\Modules\Inventory\Services\GrnService;
@@ -473,7 +476,7 @@ class RfqFreightCapitalizationTest extends TestCase
         Bill::query()->where('goods_receipt_note_id', $grn->id)->get()
             ->each(fn (Bill $draft) => $draft->forceFill(['status' => BillStatus::Cancelled])->save());
 
-        $bill = $this->billSvc->create([
+        $bill = $this->billSvc->createDraft([
             'bill_number' => 'RFQ-MAN-1',
             'vendor_id' => $po->vendor->hash_id,
             'purchase_order_id' => $po->hash_id,
@@ -513,6 +516,136 @@ class RfqFreightCapitalizationTest extends TestCase
             ]));
 
         return $this->grnSvc->accept($grn, $this->user);
+    }
+
+    public function test_large_quantity_preserves_the_full_freight_and_vat_when_billed_and_posted(): void
+    {
+        [$po, $poi, $item] = $this->polyBagOrder();
+        $grn = $this->acceptedGrn($po, [[$poi, $item, '150000']], WarehouseLocation::factory()->create());
+        $bill = $this->billSvc->createDraftForGrn($grn, $this->user);
+
+        $this->assertSame('0.4833', (string) $bill->items->first()->unit_price);
+        $this->assertSame('72500.00', (string) $bill->subtotal);
+        $this->assertSame('8700.00', (string) $bill->vat_amount);
+        $this->assertSame('81200.00', (string) $bill->total_amount);
+        $this->assertSame('72500.00', $bill->three_way_match_snapshot['lines'][0]['po_total']);
+        $this->assertSame('72500.00', $bill->three_way_match_snapshot['lines'][0]['bill_total']);
+
+        $invoice = SupplierInvoice::create([
+            'vendor_id' => $po->vendor_id, 'purchase_order_id' => $po->id,
+            'number' => 'POLY-BAG-INVOICE', 'date' => now()->toDateString(),
+            'gross_total' => '81200.00', 'submitted_at' => now(),
+        ]);
+        $bill->update(['supplier_invoice_id' => $invoice->id]);
+        $posted = $this->billSvc->postDraft($bill->fresh(), $this->user);
+        $this->assertSame(BillStatus::Unpaid, $posted->status);
+        $this->assertSame('72500.00', $posted->three_way_match_snapshot['lines'][0]['bill_total']);
+        $journal = $posted->journalEntry->load('lines.account');
+        $this->assertSame('81200.00', Money::add(...$journal->lines->pluck('debit')->all()));
+        $this->assertSame('81200.00', Money::add(...$journal->lines->pluck('credit')->all()));
+        $this->assertSame('8700.00', (string) $journal->lines->firstWhere('account.code', '1310')->debit);
+        $this->assertSame('72495.00', (string) $journal->lines->firstWhere('account.code', '2110')->debit);
+        $this->assertSame('5.00', (string) $journal->lines->firstWhere('account.code', '5040')->debit);
+    }
+
+    public function test_partial_receipts_preserve_freight_cents_and_do_not_duplicate_them_on_replay(): void
+    {
+        [$po, $poi, $item] = $this->polyBagOrder();
+        $location = WarehouseLocation::factory()->create();
+        $bills = [];
+        foreach (['24166.67', '24166.66', '24166.67'] as $expected) {
+            $grn = $this->acceptedGrn($po->fresh(), [[$poi, $item, '50000']], $location);
+            $bill = $this->billSvc->createDraftForGrn($grn, $this->user);
+            $this->assertSame($expected, (string) $bill->subtotal);
+            $replayed = $this->billSvc->createDraftForGrn($grn, $this->user);
+            $this->assertSame($bill->id, $replayed->id);
+            $this->assertSame($expected, (string) $replayed->subtotal);
+            $bills[] = $replayed;
+        }
+        $this->assertSame('72500.00', Money::add(...array_map(fn (Bill $bill) => (string) $bill->subtotal, $bills)));
+        $this->assertSame('8700.00', Money::add(...array_map(fn (Bill $bill) => (string) $bill->vat_amount, $bills)));
+        $this->assertSame('81200.00', Money::add(...array_map(fn (Bill $bill) => (string) $bill->total_amount, $bills)));
+        foreach ($bills as $bill) {
+            $replayed = $this->billSvc->createDraftForGrn($bill->goodsReceiptNote, $this->user);
+            $this->assertSame((string) $bill->subtotal, (string) $replayed->subtotal);
+            $this->assertSame((string) $bill->vat_amount, (string) $replayed->vat_amount);
+        }
+    }
+
+    public function test_header_freight_cent_is_billed_exactly_once_across_three_lines(): void
+    {
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value, 'is_vatable' => false,
+            'created_by' => $this->user->id, 'subtotal' => '3.01',
+            'rfq_freight_amount' => '0.01', 'rfq_vat_amount' => '0.00',
+        ]);
+        $lines = [];
+        for ($index = 0; $index < 3; $index++) {
+            $item = Item::factory()->create(['unit_of_measure' => 'pcs']);
+            $poi = PurchaseOrderItem::create([
+                'purchase_order_id' => $po->id, 'item_id' => $item->id, 'description' => $item->name,
+                'quantity' => '100', 'unit' => 'pcs', 'unit_price' => '0.01', 'total' => '1.00',
+            ]);
+            $lines[] = [$poi, $item, '100'];
+        }
+        $grn = $this->acceptedGrn($po, $lines, WarehouseLocation::factory()->create());
+        $bill = $this->billSvc->createDraftForGrn($grn, $this->user);
+        $this->assertSame('3.01', (string) $bill->total_amount);
+    }
+
+    public function test_partial_receipts_allocate_a_quoted_vat_cent_exactly_once(): void
+    {
+        [$po, $poi, $item] = $this->polyBagOrder();
+        $po->update(['rfq_vat_amount' => '0.01']);
+        $location = WarehouseLocation::factory()->create();
+        $bills = [];
+        foreach (['0.00', '0.01', '0.00'] as $vat) {
+            $grn = $this->acceptedGrn($po->fresh(), [[$poi, $item, '50000']], $location);
+            $bill = $this->billSvc->createDraftForGrn($grn, $this->user);
+            $this->assertSame($vat, (string) $bill->vat_amount);
+            $bills[] = $bill;
+        }
+        $this->assertSame('0.01', Money::add(...array_map(fn (Bill $bill) => (string) $bill->vat_amount, $bills)));
+        foreach ($bills as $bill) {
+            $replayed = $this->billSvc->createDraftForGrn($bill->goodsReceiptNote, $this->user);
+            $this->assertSame((string) $bill->vat_amount, (string) $replayed->vat_amount);
+        }
+    }
+
+    public function test_freight_billing_uses_base_receipt_quantities_for_a_purchase_in_boxes(): void
+    {
+        [$po, $poi, $item] = $this->polyBagOrder();
+        $base = Uom::firstOrCreate(['code' => 'pcs'], ['name' => 'Pieces']);
+        $box = Uom::firstOrCreate(['code' => 'BOX'], ['name' => 'Box']);
+        ItemUomConversion::create([
+            'item_id' => $item->id, 'from_uom_id' => $box->id, 'to_uom_id' => $base->id,
+            'factor' => '100.000000',
+        ]);
+        $po->update(['rfq_freight_amount' => '0.00']);
+        $poi->update(['quantity' => '1500', 'unit' => 'BOX', 'unit_price' => '48.00', 'rfq_line_freight_amount' => '500.00']);
+        $grn = $this->acceptedGrn($po->fresh(), [[$poi, $item, '150000']], WarehouseLocation::factory()->create());
+        $bill = $this->billSvc->createDraftForGrn($grn, $this->user);
+        $this->assertSame('150000.00', (string) $bill->items->first()->quantity);
+        $this->assertSame('pcs', $bill->items->first()->unit);
+        $this->assertSame('72500.00', (string) $bill->subtotal);
+        $this->assertSame('81200.00', (string) $bill->total_amount);
+        $this->assertNotSame('blocked', $bill->three_way_match_snapshot['overall_status']);
+    }
+
+    private function polyBagOrder(): array
+    {
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value, 'is_vatable' => false,
+            'created_by' => $this->user->id, 'subtotal' => '72500.00',
+            'rfq_freight_amount' => '500.00', 'rfq_vat_amount' => '8700.00', 'total_amount' => '81200.00',
+        ]);
+        $item = Item::factory()->create(['name' => 'Standard Poly Bag', 'unit_of_measure' => 'pcs']);
+        $poi = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id, 'item_id' => $item->id, 'description' => $item->name,
+            'quantity' => '150000', 'unit' => 'pcs', 'unit_price' => '0.48', 'total' => '72000.00',
+        ]);
+
+        return [$po, $poi, $item];
     }
 
     /**

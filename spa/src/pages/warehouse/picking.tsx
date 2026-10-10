@@ -1,179 +1,482 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { LuMapPin, LuPackage, LuTruck } from '@/lib/icons';
-import { pickingListApi } from '@/api/inventory/warehouseWms';
-import { materialIssuesApi } from '@/api/inventory/material-issues';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { isAxiosError } from 'axios';
+import { stockMovementsApi } from '@/api/inventory/stock';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Panel } from '@/components/ui/Panel';
-import { SkeletonBlock, SkeletonTable } from '@/components/ui/Skeleton';
+import { FilterBar } from '@/components/ui/FilterBar';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import { formatDate } from '@/lib/formatDate';
-import { focusRingInset } from '@/lib/focus';
+import { productionDateTime as formatDateTime } from '@/components/production/scheduleDates';
+import type { MaterialHandoverTask, MaterialHandoverTaskDetail } from '@/types/inventory';
 
+const statusLabels = {
+  pending: 'Pending handover',
+  handed_over: 'Resolved',
+  needs_review: 'Needs review',
+};
+
+function HandoverDetails({
+  selector,
+  search = '',
+  onLoaded,
+}: {
+  selector:
+    | { work_order_id: string; material_issue_id?: never }
+    | { material_issue_id: string; work_order_id?: never }
+    | { maintenance_work_order_id: string };
+  search?: string;
+  onLoaded?: (detail: MaterialHandoverTaskDetail) => void;
+}) {
+  const { can } = usePermission();
+  const client = useQueryClient();
+  const initialized = useRef(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [recipient, setRecipient] = useState('');
+  const detail = useQuery({
+    queryKey: ['inventory', 'material-handovers', 'detail', selector],
+    queryFn: () => stockMovementsApi.handoverSources(selector),
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (!detail.data) return;
+    const eligible = detail.data.sources
+      .filter(
+        (source) => source.eligible && !source.handover && Number(source.remaining_quantity) > 0,
+      )
+      .map((source) => source.movement_id);
+    if (!initialized.current) {
+      setSelected(eligible.length <= 100 ? eligible : []);
+      const defaultId = detail.data.default_recipient_id;
+      if (defaultId && detail.data.recipients.some((option) => option.value === defaultId))
+        setRecipient(defaultId);
+      initialized.current = true;
+    } else {
+      setSelected((previous) => previous.filter((id) => eligible.includes(id)));
+      setRecipient((previous) =>
+        detail.data!.recipients.some((option) => option.value === previous) ? previous : '',
+      );
+    }
+    onLoaded?.(detail.data);
+  }, [detail.data, onLoaded]);
+  const record = useMutation({
+    mutationFn: () => stockMovementsApi.handoverGroup({ received_by_employee_id: recipient,
+      sources: detail.data!.sources.filter((source) => selected.includes(source.movement_id))
+        .map((source) => ({ movement_id: source.movement_id, expected_quantity: source.remaining_quantity })),
+    }),
+    onSuccess: async () => {
+      toast.success('Material handover recorded.');
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['inventory', 'material-handovers'] }),
+        client.invalidateQueries({ queryKey: ['inventory', 'movements'] }),
+        client.invalidateQueries({ queryKey: ['inventory', 'picking'] }),
+        client.invalidateQueries({ queryKey: ['production', 'work-orders'] }),
+        client.invalidateQueries({ queryKey: ['my-work-orders'] }),
+        client.invalidateQueries({ queryKey: ['maintenance', 'work-order'] }),
+        client.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] }),
+        client.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] }),
+      ]);
+    },
+  });
+  if (detail.isLoading)
+    return (
+      <p role="status" className="p-4 text-sm text-muted">
+        Loading handover details…
+      </p>
+    );
+  if (detail.isError)
+    return (
+      <div role="alert" className="p-4 text-sm text-danger-fg">
+        Handover details could not be loaded.{' '}
+        <Button size="sm" onClick={() => void detail.refetch()}>
+          Retry details
+        </Button>
+      </div>
+    );
+  const data = detail.data;
+  if (!data) return null;
+  const editable = can('inventory.issue.create') && data.status === 'pending';
+  const unavailable = detail.isFetching || record.isPending || record.isError;
+  const eligibleCount = data.sources.filter(
+    (source) => source.eligible && !source.handover && Number(source.remaining_quantity) > 0,
+  ).length;
+  return (
+    <section
+      className="p-3 sm:p-4 space-y-3 min-w-0"
+      aria-label={`Handover details for ${data.label}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-medium">{data.label} · Issued materials</h2>
+        <span className="text-xs text-muted">
+          {data.pending_lines} pending · {data.handed_over_lines} handed over ·{' '}
+          {
+            data.sources.filter(
+              (source) => Number(source.remaining_quantity) <= 0 && !source.handover,
+            ).length
+          }{' '}
+          fully returned
+        </span>
+      </div>
+      <p className="text-xs text-muted">
+        Review requested parts or issued locations, lots and remaining quantities. Select only materials
+        physically received.
+      </p>
+      {data.status === 'needs_review' && (
+        <p role="status" className="text-sm text-warning-fg">
+          Some issued materials need review. Receipt recording is unavailable.
+        </p>
+      )}
+      {editable && eligibleCount > 100 && (
+        <p role="status" className="text-sm text-warning-fg">
+          Select a batch of up to 100 lines. No lines were selected automatically.
+        </p>
+      )}
+      <div
+        className="max-h-96 overflow-y-auto overscroll-contain divide-y divide-default border-y border-default"
+        tabIndex={0}
+        aria-label="Issued material sources"
+      >
+        {data.sources.map((source) => {
+          const eligible =
+            source.eligible && !source.handover && Number(source.remaining_quantity) > 0;
+          const matched =
+            !!search.trim() &&
+            `${source.item.code} ${source.item.name}`
+              .toLocaleLowerCase()
+              .includes(search.trim().toLocaleLowerCase());
+          const unit = source.item.unit_of_measure;
+          return (
+            <div key={source.movement_id} className="py-3 space-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 min-w-0">
+                  {editable && eligible && (
+                    <Checkbox
+                      aria-label={`Select ${source.item.code} ${source.movement_id}`}
+                      checked={selected.includes(source.movement_id)}
+                      disabled={
+                        unavailable ||
+                        (!selected.includes(source.movement_id) && selected.length >= 100)
+                      }
+                      onChange={(event) =>
+                        setSelected((previous) =>
+                          event.target.checked
+                            ? [...previous, source.movement_id]
+                            : previous.filter((id) => id !== source.movement_id),
+                        )
+                      }
+                    />
+                  )}
+                  <div className="min-w-0">
+                    <span className="font-medium break-words">{source.item.code}</span>
+                    <p className="text-sm text-secondary break-words">{source.item.name}</p>
+                    {matched && <Chip variant="info">Matches search</Chip>}
+                  </div>
+                </div>
+                <Chip
+                  variant={
+                    Number(source.remaining_quantity) <= 0
+                      ? 'neutral'
+                      : source.handover
+                        ? 'success'
+                        : 'warning'
+                  }
+                >
+                  {Number(source.remaining_quantity) <= 0
+                    ? 'Fully returned'
+                    : source.handover
+                      ? 'Handed over'
+                      : data.status === 'needs_review'
+                        ? 'Historical handover missing'
+                        : 'Pending handover'}
+                </Chip>
+              </div>
+              <dl className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <div>
+                  <dt className="text-muted">Issued from</dt>
+                  <dd className="break-words">{source.location?.code ?? 'Location unavailable'}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Lot</dt>
+                  <dd className="break-all">{source.lot_number ?? 'Not recorded'}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Issued</dt>
+                  <dd className="tabular-nums">
+                    {source.issued_quantity} {unit}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Returned</dt>
+                  <dd className="tabular-nums">
+                    {source.returned_quantity} {unit}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Remaining</dt>
+                  <dd className="tabular-nums font-medium">
+                    {source.remaining_quantity} {unit}
+                  </dd>
+                </div>
+              </dl>
+              {source.handover && (
+                <p className="text-xs text-muted">
+                  Received by {source.handover.recipient_name} ·{' '}
+                  {formatDateTime(source.handover.handed_over_at)} · Quantity{' '}
+                  {source.handover.quantity} {unit} · Recorded by{' '}
+                  {source.handover.recorded_by ?? 'Warehouse'}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {editable && (
+        <div className="space-y-3">
+          <div className="max-w-sm">
+            <SearchableSelect
+              label="Received by"
+              value={recipient}
+              onChange={setRecipient}
+              options={data.recipients}
+              disabled={unavailable}
+              placeholder="Choose Production worker…"
+            />
+          </div>
+          {!data.recipients.length && (
+            <p role="alert" className="text-sm text-warning-fg">
+              No active assigned recipient. Ask PPC to review the WO crew.
+            </p>
+          )}
+          {record.isError && (
+            <div role="alert" className="space-y-2 text-sm text-danger-fg">
+              <p>
+                {isAxiosError(record.error) &&
+                typeof record.error.response?.data?.message === 'string'
+                  ? record.error.response.data.message
+                  : 'Handover could not be saved. Reload details, then try again.'}
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={detail.isFetching}
+                onClick={async () => {
+                  await detail.refetch();
+                  record.reset();
+                }}
+              >
+                Reload handover details
+              </Button>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">Confirm the selected materials were received by this worker.</p>
+            <Button
+              variant="primary"
+              loading={record.isPending}
+              disabled={
+                unavailable ||
+                !selected.length ||
+                selected.length > 100 ||
+                !data.recipients.some((option) => option.value === recipient)
+              }
+              onClick={() => record.mutate()}
+            >
+              Confirm handover ({selected.length} lines)
+            </Button>
+          </div>
+        </div>
+      )}
+      {!can('inventory.issue.create') && data.status === 'pending' && (
+        <p className="text-sm text-muted">Ask Warehouse to confirm material handover.</p>
+      )}
+    </section>
+  );
+}
 
 export default function PickingListPage() {
- const { can } = usePermission();
- const canPick = can('inventory.picking.view');
-
- const [selectedMis, setSelectedMis] = useState<string | null>(null);
-
- const { data: slipResp, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'material-issues', 'list'],
- queryFn: () => materialIssuesApi.list({ status: 'issued', per_page: 50 }),
- });
- const slips = slipResp?.data ?? [];
-
- const { data: pickingList, isFetching: loadingList } = useQuery({
- queryKey: ['inventory', 'picking', selectedMis],
- queryFn: () => pickingListApi.forMis(selectedMis!),
- enabled: !!selectedMis,
- });
-
- return (
- <div>
- <PageHeader
- title="Picking Lists"
- subtitle={slipResp ? `${slips.length} ready to pick` : undefined}
- />
-
- <div className="px-5 py-4">
- {isLoading && !slipResp && <SkeletonTable rows={4} columns={4} />}
- {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button onClick={() => refetch()}>Retry</Button>} />}
- {slipResp && slips.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No material issues to pick"
- description="All issued slips have been picked, or none are in 'issued' status."
- />
- )}
- {slipResp && slips.length > 0 && (
- <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
- {/* Slip list */}
- <div className="col-span-3 space-y-1">
- <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
- Issued slips ({slips.length})
- </div>
- {slips.map((slip) => (
- <button
- key={slip.id}
- type="button"
- onClick={() => setSelectedMis(slip.id)}
- className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
- selectedMis === slip.id ? 'bg-accent/10 text-accent border border-accent/30 shadow-sm' : 'bg-surface border border-default text-secondary hover:border-subtle hover:text-primary hover:bg-elevated'
- }`}
- >
- <div className="font-mono">{slip.slip_number}</div>
- <div className="truncate">{slip.work_order?.wo_number ?? '—'}</div>
- <div className="text-2xs text-muted mt-0.5">{formatDate(slip.issued_date ?? slip.created_at)}</div>
- </button>
- ))}
- </div>
-
- {/* Picking list detail */}
- <div className="col-span-9 space-y-3">
- {!selectedMis && (
- <div className="text-sm text-muted text-center py-5">Select a slip to view its picking list.</div>
- )}
- {selectedMis && loadingList && (
- <div className="space-y-3">
- <SkeletonBlock className="h-40" />
- <SkeletonBlock className="h-60" />
- </div>
- )}
- {pickingList && (
- <>
- {/* Header */}
- <Panel
- title={`Picking: ${pickingList.slip_number}`}
- meta={pickingList.work_order ? `Work Order: ${pickingList.work_order}` : undefined}
- >
- <div className="flex gap-4 text-xs text-muted">
- <span>{pickingList.total_lines} lines</span>
- <span>{pickingList.total_items} unique items</span>
- <span>Issued: {formatDate(pickingList.issued_date)}</span>
- </div>
- </Panel>
-
- {/* Picking lines */}
- <Panel title="Pick items">
- <div className="space-y-3">
- {pickingList.lines.map((line, li) => (
- <div key={li} className="border border-subtle rounded-md bg-surface/50">
- {/* Line header */}
- <div className="flex items-center justify-between px-3 py-1.5 border-b border-subtle bg-elevated/30">
- <div className="flex items-center gap-2 text-xs">
- <LuPackage size={14} className="text-muted" />
- <span className="font-mono font-medium">{line.item_code}</span>
- <span className="text-muted">{line.item_name}</span>
- </div>
- <div className="text-xs">
- Need: <span className="font-mono font-medium text-primary">{Number(line.quantity_required).toFixed(3)}</span>
- {' '}{line.unit_of_measure}
- </div>
- </div>
-
- {/* Suggestions */}
- <div className="p-2 space-y-1">
- {line.suggestions.length === 0 && (
- <div className="text-xs text-muted italic px-2 py-1">
- No available stock at any location.
- </div>
- )}
- {line.suggestions.map((sug, si) => (
- <div
- key={si}
- className="flex items-center justify-between px-2 py-1 rounded text-xs hover:bg-elevated/50 transition-colors"
- >
- <div className="flex items-center gap-2 min-w-0">
- <LuMapPin size={12} className="shrink-0 text-accent" />
- <span className="font-mono">{sug.location.full_code}</span>
- <span className="text-muted text-2xs">
- {sug.location.zone} / {sug.location.warehouse}
- </span>
- </div>
- <div className="flex items-center gap-3 shrink-0">
- {sug.lot_number && (
- <span className="text-2xs text-muted">Lot: {sug.lot_number}</span>
- )}
- <span className="text-muted text-2xs">
- Avail: <span className="font-mono">{Number(sug.quantity_available).toFixed(3)}</span>
- </span>
- <Chip variant="info">
- Pick: {Number(sug.quantity_to_pick).toFixed(3)}
- </Chip>
- </div>
- </div>
- ))}
- </div>
- </div>
- ))}
- </div>
- </Panel>
-
- {/* Action */}
- <div className="flex justify-end gap-2 pt-1">
- <Button
- variant="primary"
- size="sm"
- icon={<LuTruck size={14} />}
- disabled={!canPick}
- onClick={() => {
- // Navigate to detail for recording the pick
- window.location.href = `/inventory/material-issues/${selectedMis}`;
- }}
- >
- Record picks
- </Button>
- </div>
- </>
- )}
- </div>
- </div>
- )}
- </div>
- </div>
- );
+  const { can } = usePermission();
+  const [params] = useSearchParams();
+  const maintenanceId = params.get('maintenance_work_order_id');
+  const workOrderId = params.get('work_order_id');
+  const slipId = workOrderId ? null : params.get('material_issue_id');
+  const [filters, setFilters] = useState({
+    status: maintenanceId || workOrderId || slipId ? '' : 'pending',
+    search: '',
+    page: 1,
+    per_page: 25,
+  });
+  const [resolvedWorkOrderId, setResolvedWorkOrderId] = useState<string | null>(null);
+  const effectiveWorkOrderId = workOrderId ?? resolvedWorkOrderId;
+  const [reviewed, setReviewed] = useState<Record<string, MaterialHandoverTask>>({});
+  const tasks = useQuery({
+    queryKey: ['inventory', 'material-handovers', 'list', filters, effectiveWorkOrderId, maintenanceId],
+    queryFn: () =>
+      stockMovementsApi.handoverTasks({
+        ...filters,
+        status: filters.status as MaterialHandoverTask['status'] | '',
+        ...(maintenanceId ? { maintenance_work_order_id: maintenanceId } : effectiveWorkOrderId ? { work_order_id: effectiveWorkOrderId } : {}),
+      }),
+    enabled: can('inventory.picking.view'),
+  });
+  const updateReviewed = (detail: MaterialHandoverTaskDetail) =>
+    setReviewed((previous) =>
+      previous[detail.id]?.status === detail.status &&
+      previous[detail.id]?.pending_lines === detail.pending_lines
+        ? previous
+        : { ...previous, [detail.id]: detail },
+    );
+  const changeFilters = (next: typeof filters) => {
+    setReviewed({});
+    setFilters(next);
+  };
+  const columns: Column<MaterialHandoverTask>[] = [
+    {
+      key: 'label',
+      header: 'WO / Slip',
+      cell: (row) => <span className="font-medium">{row.label}</span>,
+    },
+    { key: 'lines', header: 'Material lines', align: 'right', cell: (row) => row.total_lines },
+    {
+      key: 'status',
+      header: 'Handover status',
+      cell: (row) => (
+        <Chip variant={row.status === 'handed_over' ? 'success' : 'warning'}>
+          {row.status === 'handed_over' && row.handed_over_lines === 0
+            ? 'Fully returned'
+            : statusLabels[row.status]}
+          {row.status === 'pending' ? ` · ${row.pending_lines} lines` : ''}
+        </Chip>
+      ),
+    },
+    {
+      key: 'latest',
+      header: 'Latest issue',
+      cell: (row) => (row.latest_issue_at ? formatDateTime(row.latest_issue_at) : '—'),
+    },
+    {
+      key: 'review',
+      header: 'Review',
+      cell: () => <span className="text-link">Review handover</span>,
+    },
+  ];
+  const rows = (tasks.data?.data ?? []).map((row) => reviewed[row.id] ?? row);
+  const completedReviews = Object.values(reviewed).filter(
+    (row) => !rows.some((task) => task.id === row.id),
+  );
+  return (
+    <div>
+      <PageHeader
+        title="Material Handover"
+        subtitle={
+          tasks.data
+            ? `${tasks.data.meta.total} ${filters.status === 'pending' ? 'pending handover tasks' : 'handover tasks'}`
+            : 'Confirm materials received by Production or Maintenance'
+        }
+      />
+      <FilterBar
+        filters={[
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            options: [
+              { value: 'pending', label: 'Pending handover' },
+              { value: 'handed_over', label: 'Resolved' },
+              { value: 'needs_review', label: 'Needs review' },
+              { value: '', label: 'All' },
+            ],
+          },
+        ]}
+        values={filters}
+        onFilter={(_key, value) =>
+          changeFilters({ ...filters, status: String(value ?? ''), page: 1 })
+        }
+        searchPlaceholder="Search WO, slip, material code or name…"
+        onSearch={(search) => changeFilters({ ...filters, search, page: 1 })}
+      />
+      <div className="px-5 py-4 space-y-4 min-w-0">
+        {(maintenanceId || workOrderId || slipId) && (
+          <div className="border border-default rounded-md">
+            <HandoverDetails
+              key={maintenanceId ?? workOrderId ?? slipId!}
+              selector={
+                maintenanceId ? { maintenance_work_order_id: maintenanceId } : workOrderId ? { work_order_id: workOrderId } : { material_issue_id: slipId! }
+              }
+              onLoaded={(detail) => {
+                if (slipId && detail.work_order_id) setResolvedWorkOrderId(detail.work_order_id);
+              }}
+            />
+          </div>
+        )}
+        {tasks.isLoading && <SkeletonTable rows={5} columns={5} />}
+        {tasks.isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load material handovers"
+            action={<Button onClick={() => void tasks.refetch()}>Retry</Button>}
+          />
+        )}
+        {tasks.data && (
+          <DataTable
+            tableKey="material-handovers"
+            columns={columns}
+            data={rows}
+            meta={tasks.data.meta}
+            expandOnRowClick
+            renderExpanded={(row) => (
+              <HandoverDetails
+                selector={
+                  row.maintenance_work_order_id
+                    ? { maintenance_work_order_id: row.maintenance_work_order_id }
+                    : row.work_order_id
+                    ? { work_order_id: row.work_order_id }
+                    : { material_issue_id: row.material_issue_id! }
+                }
+                search={filters.search}
+                onLoaded={updateReviewed}
+              />
+            )}
+            onPageChange={(page) => changeFilters({ ...filters, page })}
+            onPageSizeChange={(per_page) => changeFilters({ ...filters, per_page, page: 1 })}
+            emptyState={
+              <EmptyState
+                icon="inbox"
+                title={
+                  filters.status === 'pending' && !filters.search
+                    ? 'No pending material handovers'
+                    : 'No matching material handovers'
+                }
+                description={
+                  filters.status === 'pending' && !filters.search
+                    ? 'Requested or issued materials awaiting receipt will appear here.'
+                    : 'Review the status filter or search terms.'
+                }
+              />
+            }
+          />
+        )}
+        {completedReviews.map((row) => (
+          <div key={row.id} className="border border-default rounded-md">
+            <HandoverDetails
+              selector={
+                row.maintenance_work_order_id
+                    ? { maintenance_work_order_id: row.maintenance_work_order_id }
+                    : row.work_order_id
+                  ? { work_order_id: row.work_order_id }
+                  : { material_issue_id: row.material_issue_id! }
+              }
+              search={filters.search}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

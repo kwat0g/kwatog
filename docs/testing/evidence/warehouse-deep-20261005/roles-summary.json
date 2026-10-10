@@ -1,0 +1,122 @@
+[
+  {
+    "account": "warehouse",
+    "route": "/inventory/stock-movements",
+    "status": 200
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/material-issues",
+    "status": 200
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/transfer-orders",
+    "status": 200
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/mrb",
+    "status": 200
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/stock-adjustments",
+    "status": 200
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/grn/5KZYy8gNxw",
+    "errors": []
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/material-issues/r9lgRMXOwN",
+    "errors": []
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/mrb/5KZYy8gNxw",
+    "errors": []
+  },
+  {
+    "account": "warehouse",
+    "route": "/inventory/picking?material_issue_id=r9lgRMXOwN",
+    "errors": []
+  },
+  {
+    "account": "ppc",
+    "route": "/inventory/stock-movements",
+    "status": 403
+  },
+  {
+    "account": "ppc",
+    "route": "/inventory/material-issues",
+    "status": 403
+  },
+  {
+    "account": "ppc",
+    "route": "/inventory/transfer-orders",
+    "status": 403
+  },
+  {
+    "account": "ppc",
+    "route": "/inventory/mrb",
+    "status": 403
+  },
+  {
+    "account": "ppc",
+    "route": "/inventory/stock-adjustments",
+    "status": 403
+  },
+  {
+    "account": "finance",
+    "route": "/inventory/stock-movements",
+    "status": 403
+  },
+  {
+    "account": "finance",
+    "route": "/inventory/material-issues",
+    "status": 403
+  },
+  {
+    "account": "finance",
+    "route": "/inventory/transfer-orders",
+    "status": 403
+  },
+  {
+    "account": "finance",
+    "route": "/inventory/mrb",
+    "status": 403
+  },
+  {
+    "account": "finance",
+    "route": "/inventory/stock-adjustments",
+    "status": 200
+  },
+  {
+    "account": "crm",
+    "route": "/inventory/stock-movements",
+    "status": 403
+  },
+  {
+    "account": "crm",
+    "route": "/inventory/material-issues",
+    "status": 403
+  },
+  {
+    "account": "crm",
+    "route": "/inventory/transfer-orders",
+    "status": 403
+  },
+  {
+    "account": "crm",
+    "route": "/inventory/mrb",
+    "status": 403
+  },
+  {
+    "account": "crm",
+    "route": "/inventory/stock-adjustments",
+    "status": 403
+  }
+]

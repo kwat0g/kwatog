@@ -19,9 +19,16 @@ use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Services\WorkOrderOutputService;
-use App\Modules\Quality\Models\Inspection;
-use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Services\InspectionService;
+use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\SupplyChain\Models\Vehicle;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\DemoAccountSeeder;
+use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\PositionSeeder;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 
 $database = (string) config('database.connections.pgsql.database');
 if (! str_starts_with($database, 'ogami_test_dispatch_browser_') || $database !== getenv('DISPATCH_BROWSER_DB')) {
@@ -30,14 +37,20 @@ if (! str_starts_with($database, 'ogami_test_dispatch_browser_') || $database !=
 // Fixture seeding must never populate the shared runtime settings cache.
 config(['cache.default' => 'array']);
 $run = strtoupper(preg_replace('/[^a-z0-9]/i', '', getenv('DISPATCH_RUN_ID') ?: ''));
-if (strlen($run) < 6 || strlen($run) > 16) throw new RuntimeException('Use a unique 6–16 character DISPATCH_RUN_ID.');
-if (Product::where('part_number', 'FG-'.$run)->exists()) throw new RuntimeException('Use a fresh database and run identifier.');
+if (strlen($run) < 6 || strlen($run) > 16) {
+    throw new RuntimeException('Use a unique 6–16 character DISPATCH_RUN_ID.');
+}
+if (Product::where('part_number', 'FG-'.$run)->exists()) {
+    throw new RuntimeException('Use a fresh database and run identifier.');
+}
 foreach ([
-    Database\Seeders\RolePermissionSeeder::class, Database\Seeders\SettingsSeeder::class,
-    Database\Seeders\ChartOfAccountsSeeder::class, Database\Seeders\DepartmentSeeder::class,
-    Database\Seeders\PositionSeeder::class, Database\Seeders\DemoAccountSeeder::class,
-    Database\Seeders\WorkflowSeeder::class,
-] as $seeder) (new $seeder)->run();
+    RolePermissionSeeder::class, SettingsSeeder::class,
+    ChartOfAccountsSeeder::class, DepartmentSeeder::class,
+    PositionSeeder::class, DemoAccountSeeder::class,
+    WorkflowSeeder::class,
+] as $seeder) {
+    (new $seeder)->run();
+}
 foreach (['supply_chain', 'inventory', 'quality', 'b2b', 'return_management'] as $module) {
     app(SettingsService::class)->set('modules.'.$module, true, 'modules');
 }
@@ -56,6 +69,9 @@ CustomerPortalUser::create([
     'must_change_password' => false, 'password_changed_at' => now(),
 ]);
 $product = Product::factory()->create(['part_number' => 'FG-'.$run, 'name' => 'Dispatch audit part', 'unit_of_measure' => 'pcs', 'standard_cost' => '4.50']);
+app(InspectionSpecService::class)->upsertForProduct($product->id, [
+    ['parameter_name' => 'Visual condition', 'parameter_type' => 'visual', 'is_critical' => false],
+], $qc->id, 'Delivery dispatch audit spec');
 $item = Item::factory()->create(['code' => $product->part_number, 'name' => $product->name, 'item_type' => 'finished_good', 'unit_of_measure' => 'pcs']);
 $zone = WarehouseZone::factory()->create(['zone_type' => 'finished_goods']);
 $locations = collect(['A', 'B', 'C'])->map(fn ($code) => WarehouseLocation::factory()->create(['zone_id' => $zone->id, 'code' => 'FG-'.$code, 'is_active' => true]));
@@ -72,6 +88,19 @@ $workOrder = WorkOrder::create([
     'planned_start' => now()->subDay(), 'planned_end' => now(), 'status' => 'completed',
     'batch_number' => 'WO-BATCH-'.$run, 'created_by' => $manager->id,
 ]);
+$inspectionService = app(InspectionService::class);
+$processInspection = $inspectionService->create([
+    'stage' => 'in_process', 'product_id' => $product->id, 'batch_quantity' => 10,
+    'entity_type' => 'work_order', 'entity_id' => $workOrder->id,
+    'notes' => 'Explicit starting state for the delivery and dispatch subchain.',
+], $qc);
+$processInspection->measurements()->update(['is_pass' => true, 'item_result' => 'passed']);
+$processInspection->forceFill([
+    'status' => 'passed', 'proposed_result' => 'passed', 'recorded_result' => 'passed',
+    'accepted_quantity' => 10, 'inspected_quantity' => (int) $processInspection->sample_size,
+    'sample_defect_count' => 0, 'defect_count' => 0, 'completed_at' => now(),
+])->save();
+$processInspection->resultAuthors()->create(['user_id' => $qc->id]);
 $batches = [];
 foreach ([6, 4] as $index => $quantity) {
     $output = WorkOrderOutput::create([
@@ -80,19 +109,19 @@ foreach ([6, 4] as $index => $quantity) {
     ]);
     // Exercise the actual production receipt handoff; never hand-stamp a lot.
     $output = app(WorkOrderOutputService::class)->retryProductionReceipt($output, $manager);
-    if ($output->productionReceiptMovement?->lot_number !== $output->batch_code) throw new RuntimeException('Production receipt lost its batch lot.');
-    $inspection = Inspection::create([
-        'inspection_number' => 'QC-'.$run.'-'.$index, 'stage' => 'outgoing', 'status' => 'passed',
-        'inspector_id' => $manager->id, 'reviewed_by' => $qc->id, 'reviewed_at' => now(),
-        'product_id' => $product->id, 'entity_type' => 'work_order', 'entity_id' => $workOrder->id,
-        'work_order_output_id' => $output->id, 'batch_quantity' => $quantity, 'accepted_quantity' => $quantity,
-        'sample_size' => 1, 'accept_count' => 1, 'reject_count' => 0, 'defect_count' => 0, 'completed_at' => now(),
-    ]);
-    InspectionMeasurement::create([
-        'inspection_id' => $inspection->id, 'sample_index' => 1, 'parameter_name' => 'Visual condition',
-        'parameter_type' => 'visual', 'is_critical' => true, 'is_pass' => true,
-        'notes' => 'No visible defects in the sampled unit; prerequisite evidence for the reviewed output.',
-    ]);
+    if ($output->productionReceiptMovement?->lot_number !== $output->batch_code) {
+        throw new RuntimeException('Production receipt lost its batch lot.');
+    }
+    $inspection = $inspectionService->createForOutput($output, $workOrder, $qc);
+    $inspection->measurements()->update(['is_pass' => true, 'item_result' => 'passed']);
+    $inspection->forceFill([
+        'inspection_number' => 'QC-'.$run.'-'.$index, 'status' => 'passed',
+        'reviewed_by' => $manager->id, 'reviewed_at' => now(), 'accepted_quantity' => $quantity,
+        'proposed_result' => 'passed', 'recorded_result' => 'passed',
+        'inspected_quantity' => (int) $inspection->sample_size, 'sample_defect_count' => 0,
+        'accept_count' => 1, 'reject_count' => 0, 'defect_count' => 0, 'completed_at' => now(),
+    ])->save();
+    $inspection->resultAuthors()->create(['user_id' => $qc->id]);
     if ($index === 0) {
         $stock->move(new StockMovementInput(type: StockMovementType::Transfer, itemId: $item->id, quantity: '6.000', fromLocationId: $locations[0]->id, toLocationId: $locations[1]->id, lotNumber: $output->batch_code));
         $stock->move(new StockMovementInput(type: StockMovementType::Transfer, itemId: $item->id, quantity: '4.000', fromLocationId: $locations[1]->id, toLocationId: $locations[2]->id, lotNumber: $output->batch_code));

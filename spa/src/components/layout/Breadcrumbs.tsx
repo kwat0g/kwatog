@@ -51,6 +51,7 @@ const MODULE_PATHS: Record<string, string> = {
 };
 
 const TITLE_OVERRIDES: Record<string, string> = {
+ picking: 'Material Handover',
  hr: 'HR',
  mrp: 'MRP',
  crm: 'CRM',

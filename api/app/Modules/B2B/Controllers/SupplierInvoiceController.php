@@ -6,14 +6,17 @@ namespace App\Modules\B2B\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Requests\Supplier\SubmitInvoiceRequest;
+use App\Modules\B2B\Resources\SupplierInvoiceResource;
 use App\Modules\B2B\Services\SupplierInvoiceService;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
 
 /**
@@ -30,6 +33,41 @@ class SupplierInvoiceController extends Controller
         /** @var SupplierPortalUser $user */
         $user = $request->user('supplier_portal');
         return $user;
+    }
+
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $query = SupplierInvoice::query()
+            ->where('vendor_id', $this->user($request)->vendor_id)
+            ->with(['purchaseOrder:id,po_number', 'bills.goodsReceiptNote:id,grn_number', 'bills.items', 'bills.payments', 'documents'])
+            ->orderByDesc('id');
+        $status = $request->query('status');
+        if ($status === 'voided') {
+            $query->whereNotNull('voided_at');
+        } else {
+            $query->whereNull('voided_at');
+            match ($status) {
+                'submitted' => $query->whereHas('bills')->whereDoesntHave('bills', fn ($q) => $q->where('status', '!=', BillStatus::Draft->value)),
+                'unpaid' => $query->whereHas('bills', fn ($q) => $q->where('status', BillStatus::Unpaid->value))
+                    ->whereDoesntHave('bills', fn ($q) => $q->where('status', BillStatus::Cancelled->value)),
+                'partial' => $query->whereHas('bills', fn ($q) => $q->whereIn('status', [BillStatus::Partial->value, BillStatus::Paid->value]))
+                    ->whereHas('bills', fn ($q) => $q->where('status', '!=', BillStatus::Paid->value))
+                    ->whereDoesntHave('bills', fn ($q) => $q->where('status', BillStatus::Cancelled->value)),
+                'paid' => $query->whereHas('bills')->whereDoesntHave('bills', fn ($q) => $q->where('status', '!=', BillStatus::Paid->value)),
+                'requires_correction' => $query->whereHas('bills', fn ($q) => $q->where('status', BillStatus::Cancelled->value)),
+                default => null,
+            };
+        }
+
+        return SupplierInvoiceResource::collection($query->paginate(max(1, min((int) $request->query('per_page', 25), 100))));
+    }
+
+    public function show(SupplierInvoice $supplierInvoice, Request $request): SupplierInvoiceResource
+    {
+        abort_if((int) $supplierInvoice->vendor_id !== (int) $this->user($request)->vendor_id, 403);
+        $supplierInvoice->load(['purchaseOrder:id,po_number', 'bills.goodsReceiptNote:id,grn_number', 'bills.items', 'bills.payments', 'documents']);
+
+        return new SupplierInvoiceResource($supplierInvoice);
     }
 
     /**
@@ -72,13 +110,14 @@ class SupplierInvoiceController extends Controller
         }
 
         $bill = $result['bill']->load('goodsReceiptNote:id,grn_number');
+        $invoice = $result['invoice'] ?? null;
 
         return response()->json([
             'data'    => [
-                'id'                    => $bill->hash_id,
+                'id'                    => $request->has('bill_ids') ? $invoice?->hash_id : $bill->hash_id,
                 'bill_number'           => $bill->bill_number,
-                'supplier_invoice_number' => $bill->supplier_invoice_number,
-                'total_amount'          => (string) $bill->total_amount,
+                'supplier_invoice_number' => $invoice?->number ?? $bill->supplier_invoice_number,
+                'total_amount'          => (string) ($invoice?->gross_total ?? $bill->total_amount),
                 'status'                => (string) $bill->status?->value,
                 'status_label'          => BillStatus::tryFrom((string) $bill->status?->value)?->label() ?? (string) $bill->status,
                 'goods_receipt_note'    => $bill->goodsReceiptNote ? [

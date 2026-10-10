@@ -10,12 +10,25 @@ use App\Modules\CRM\Requests\AcceptSalesOrderResponseRequest;
 use App\Modules\CRM\Requests\RejectSalesOrderResponseRequest;
 use App\Modules\CRM\Resources\SalesOrderResponseResource;
 use App\Modules\CRM\Services\SalesOrderResponseService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class SalesOrderResponseController
 {
     public function __construct(private readonly SalesOrderResponseService $service) {}
+
+    public function proposeDeliveryDate(Request $request, SalesOrder $salesOrder): JsonResponse
+    {
+        $data = $request->validate([
+            'proposed_delivery_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'notes' => ['required', 'string', 'max:1000'],
+        ]);
+
+        return response()->json(['data' => new SalesOrderResponseResource(
+            $this->service->proposeDeliveryDate($salesOrder, $request->user(), $data),
+        )], 201);
+    }
 
     public function index(Request $request, SalesOrder $salesOrder): AnonymousResourceCollection
     {

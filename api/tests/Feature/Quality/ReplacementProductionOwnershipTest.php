@@ -12,7 +12,9 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\MRP\Events\MrpPlanGenerated;
 use App\Modules\MRP\Jobs\RunAutomaticMrpJob;
 use App\Modules\MRP\Listeners\QueueMrpOnOutgoingInspectionFailed;
@@ -77,6 +79,15 @@ class ReplacementProductionOwnershipTest extends TestCase
             'work_order_id' => $original->id, 'recorded_by' => $this->user->id, 'recorded_at' => now(),
             'good_count' => 10, 'reject_count' => 0,
         ]);
+        $item = Item::factory()->create(['code' => $product->part_number, 'item_type' => 'finished_good']);
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'finished_goods']);
+        $location = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $receipt = StockMovement::create([
+            'movement_type' => 'production_receipt', 'item_id' => $item->id, 'quantity' => '10', 'unit_cost' => '5.00', 'total_cost' => '50.00',
+            'to_location_id' => $location->id, 'reference_type' => 'work_order_output', 'reference_id' => $output->id, 'created_by' => $this->user->id, 'lot_number' => 'ORIGINAL-'.$output->id,
+        ]);
+        $output->forceFill(['production_receipt_movement_id' => $receipt->id])->save();
+        StockLevel::create(['item_id' => $item->id, 'location_id' => $location->id, 'quantity' => 10, 'reserved_quantity' => 0, 'weighted_avg_cost' => '5.00']);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-T-'.substr(uniqid(), -8), 'stage' => 'outgoing', 'status' => 'failed',
             'product_id' => $product->id, 'entity_type' => 'work_order', 'entity_id' => $original->id,

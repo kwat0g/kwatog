@@ -20,7 +20,6 @@ use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
-use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderResponse;
@@ -32,9 +31,13 @@ use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\ReturnManagement\Services\ReturnCaseService;
+use App\Modules\ReturnManagement\Services\ReturnCaseSettlementService;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use Carbon\Carbon;
@@ -43,6 +46,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Business logic for the Customer B2B Portal.
@@ -72,7 +76,7 @@ class CustomerPortalService
     public function dashboard(int $customerId): array
     {
         $openSoCount = SalesOrder::where('customer_id', $customerId)
-            ->whereIn('status', [SalesOrderStatus::Draft->value, SalesOrderStatus::Confirmed->value])->count();
+            ->whereIn('status', [SalesOrderStatus::Draft->value, SalesOrderStatus::AwaitingConfirmation->value, SalesOrderStatus::DeliveryNegotiation->value, SalesOrderStatus::Confirmed->value])->count();
 
         $pendingDeliveryCount = Delivery::whereHas(
             'salesOrder',
@@ -126,7 +130,7 @@ class CustomerPortalService
 
     /**
      * Self-service order catalog — every product this customer may order,
-     * resolved from their active price agreements.
+     * resolved from eligible products and applicable selling prices.
      *
      * @return list<array{id: string, part_number: ?string, name: ?string, unit_of_measure: ?string, unit_price: string, pricing_method: string}>
      */
@@ -136,39 +140,22 @@ class CustomerPortalService
             ? Carbon::parse($asOf)->toDateString()
             : now()->toDateString();
 
-        $query = PriceAgreement::query()
-            ->with('product:id,part_number,name,unit_of_measure')
-            ->where('customer_id', $customerId)
-            ->whereHas('customer', fn ($q) => $q->active())
-            ->whereHas('product', fn ($q) => $q->active())
-            ->whereDate('effective_from', '<=', $date)
-            ->whereDate('effective_to', '>=', $date)
-            ->orderByDesc('effective_from');
-
+        $query = Product::query()->active()->where(function ($query) use ($customerId): void {
+            $query->where('portal_visibility', 'standard')
+                ->orWhereHas('portalCustomers', fn ($customers) => $customers->whereKey($customerId));
+        });
         if ($search !== null && trim($search) !== '') {
             $term = '%'.trim($search).'%';
-            $query->whereHas('product', function ($q) use ($term): void {
-                $q->where('part_number', 'ilike', $term)
-                    ->orWhere('name', 'ilike', $term);
-            });
+            $query->where(fn ($q) => $q->where('part_number', 'ilike', $term)->orWhere('name', 'ilike', $term));
         }
-
         $catalog = [];
-        $seenProductIds = [];
-        foreach ($query->get() as $agreement) {
-            $product = $agreement->product;
-            if (! $product || isset($seenProductIds[$product->id])) {
-                continue;
-            }
-            $seenProductIds[$product->id] = true;
-
+        foreach ($query->orderBy('part_number')->get() as $product) {
+            try { $quote = $this->prices->quote($customerId, $product->id, Carbon::parse($date), '1'); }
+            catch (\Illuminate\Validation\ValidationException) { continue; }
             $catalog[] = [
-                'id'              => $product->hash_id,
-                'part_number'     => $product->part_number,
-                'name'            => $product->name,
-                'unit_of_measure' => $product->unit_of_measure,
-                'unit_price'      => $this->prices->resolveUnitPrice($agreement, '1'),
-                'pricing_method'  => $agreement->pricing_method?->value ?? 'flat',
+                'id' => $product->hash_id, 'part_number' => $product->part_number, 'name' => $product->name,
+                'unit_of_measure' => $product->unit_of_measure, 'unit_price' => $quote['unit_price'],
+                'price_source' => $quote['price_source'], 'pricing_method' => $quote['price_tier_min_qty'] !== null ? 'tiered' : 'flat',
             ];
         }
 
@@ -178,12 +165,9 @@ class CustomerPortalService
     /**
      * Place a sales order on behalf of the authenticated portal customer.
      *
-     * Every line is gated against the customer's own active price agreements
-     * (same source as catalog()), so a portal user can never order a product
-     * they have no price for — or, by construction, another customer's
-     * product. The SO is created as a Draft, owned by the system user for
-     * audit-row integrity, and internal sales is notified to review + confirm
-     * (confirmation is what triggers MRP).
+     * Each line uses the customer's available catalog and current pricing.
+     * The order awaits Sales confirmation, with system attribution retained
+     * for audit integrity. Confirmation starts MRP; submission does not.
      */
     /** @return array{order: SalesOrder, replayed: bool} */
     public function placeOrder(int $customerId, array $data, CustomerPortalUser $portalUser): array
@@ -191,10 +175,7 @@ class CustomerPortalService
         $idempotencyKey = (string) $data['idempotency_key'];
         unset($data['idempotency_key']);
 
-        $orderDate = ($data['date'] ?? null) !== null && ($data['date'] ?? '') !== ''
-            ? Carbon::parse($data['date'])
-            : now();
-        $orderDateString = $orderDate->toDateString();
+        $orderDateString = today()->toDateString();
 
         $items = [];
         foreach ($data['items'] as $idx => $item) {
@@ -204,10 +185,6 @@ class CustomerPortalService
             }
 
             $deliveryDate = Carbon::parse($item['delivery_date']);
-            if ($deliveryDate->lt($orderDate)) {
-                throw new BusinessRuleException("items.{$idx}.delivery_date must be on or after the order date.");
-            }
-
             $items[] = [
                 'product_id'    => $productId,
                 'quantity'      => bcadd((string) $item['quantity'], '0', 2),
@@ -215,12 +192,12 @@ class CustomerPortalService
             ];
         }
 
-        $fingerprint = hash('sha256', json_encode([
+        $fingerprintData = [
             'customer_id' => $customerId,
             'date' => $orderDateString,
             'notes' => $data['notes'] ?? null,
             'items' => $items,
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+        ];
 
         // Portal users are not internal users — impersonate a system user so
         // HasAuditLog writes a valid users.id into audit_logs.user_id and the
@@ -232,12 +209,13 @@ class CustomerPortalService
             $items,
             $data,
             $idempotencyKey,
-            $fingerprint,
+            $fingerprintData,
             $portalUser,
         ): array {
             // Serialise first-order submissions per customer. The unique index
             // below is still the final arbiter; this lock also makes retries
             // return the original order rather than surfacing a unique-key 500.
+            $this->prices->lockPricingReferences(array_column($items, 'product_id'), [$customerId]);
             $customer = Customer::query()->lockForUpdate()->find($customerId);
             if (! $customer || ! $customer->is_active) {
                 throw new BusinessRuleException('This customer account is inactive. Contact Ogami support.');
@@ -248,6 +226,10 @@ class CustomerPortalService
                 ->where('portal_idempotency_key', $idempotencyKey)
                 ->lockForUpdate()
                 ->first();
+            // A retry uses the original submission date, even after midnight.
+            // The submitted date never controls a new customer order's date.
+            $fingerprintData['date'] = $existing?->date->toDateString() ?? $orderDateString;
+            $fingerprint = hash('sha256', json_encode($fingerprintData, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
             if ($existing) {
                 if (! hash_equals((string) $existing->portal_idempotency_fingerprint, $fingerprint)) {
                     throw new BusinessRuleException('This idempotency key was already used for a different order payload.');
@@ -257,13 +239,8 @@ class CustomerPortalService
             }
 
             foreach ($items as $idx => $item) {
-                try {
-                    $this->prices->resolve($customerId, (int) $item['product_id'], Carbon::parse($item['delivery_date']));
-                } catch (NoPriceAgreementException) {
-                    throw new BusinessRuleException(
-                        "items.{$idx}.product_id is not available for ordering on the requested delivery date.",
-                    );
-                }
+                $this->assertRequestedDeliveryDate($item['delivery_date'], $idx);
+
             }
 
             $so = $this->systemUser->impersonate(function () use ($customerId, $orderDateString, $items, $data, $idempotencyKey, $fingerprint): SalesOrder {
@@ -273,6 +250,7 @@ class CustomerPortalService
                     'items' => $items,
                     'notes' => $data['notes'] ?? null,
                     'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
+                    'quote_signature' => $data['quote_signature'] ?? null,
                     'portal_idempotency_key' => $idempotencyKey,
                     'portal_idempotency_fingerprint' => $fingerprint,
                 ], $this->systemUser->user()->id);
@@ -305,6 +283,10 @@ class CustomerPortalService
 
         if (! $replayed) {
             $this->notifySalesOrderReview($so, $portalUser);
+            $this->notifications->sendPortalInApp([$portalUser], 'sales_order.submitted', [
+                'title' => $so->so_number.' submitted', 'message' => 'Your order awaits Sales confirmation. You can edit or cancel it before confirmation.',
+                'link_to' => '/portal/customer/orders/'.$so->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $so->hash_id,
+            ], 'so:'.$so->id.':submitted');
         }
 
         return ['order' => $so, 'replayed' => $replayed];
@@ -356,7 +338,9 @@ class CustomerPortalService
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
-        return $query->paginate($perPage);
+        $result = $query->paginate($perPage);
+        app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+        return $result;
     }
 
     public function salesOrderDetail(int $customerId, SalesOrder $salesOrder): SalesOrder
@@ -366,9 +350,10 @@ class CustomerPortalService
         $salesOrder->load([
             'items.product:id,part_number,name',
             'latestResponse.items',
+            'deliveryNegotiations',
             'deliveries:id,sales_order_id,delivery_number,status,delivered_at,confirmed_at',
             'invoices:id,sales_order_id,invoice_number,total_amount,status,created_at',
-            'workOrders:id,sales_order_id,wo_number,status',
+            'workOrders:id,sales_order_id,wo_number,status,quantity_target,quantity_produced,planned_start',
         ]);
 
         $salesOrder->workOrders->each(function ($workOrder): void {
@@ -389,11 +374,92 @@ class CustomerPortalService
         return $salesOrder;
     }
 
+    public function quoteOrder(CustomerPortalUser $user, array $data): array
+    {
+        $existing = null;
+        if (! empty($data['sales_order_id'])) {
+            $id = SalesOrder::tryDecodeHash($data['sales_order_id']);
+            $existing = SalesOrder::query()->where('customer_id', $user->customer_id)->findOrFail($id);
+            if (! $existing->status->isBeforeConfirmation() || $existing->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+                throw new BusinessRuleException('Only your unconfirmed customer order can be quoted for editing.');
+            }
+        }
+        $items = [];
+        foreach ($data['items'] as $index => $item) {
+            $this->assertRequestedDeliveryDate($item['delivery_date'], $index);
+            $productId = Product::tryDecodeHash($item['product_id']);
+            if ($productId === null) { throw new BusinessRuleException('Invalid product in quote.'); }
+            $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date']];
+        }
+        $quote = $this->salesOrderService->quoteOrder($user->customer_id, $items, $existing, true);
+        $quote['items'] = array_map(function ($line): array {
+            $line['product_id'] = app('hashids')->encode($line['product_id']);
+            $line['price_agreement_id'] = $line['price_agreement_id'] ? app('hashids')->encode($line['price_agreement_id']) : null;
+            unset($line['existing_id']);
+            return $line;
+        }, $quote['items']);
+        return $quote;
+    }
+
+    private function assertRequestedDeliveryDate(string $date, int $index): void
+    {
+        $earliest = today()->addDays(4)->toDateString();
+        if ($date < $earliest) {
+            throw new BusinessRuleException("items.{$index}.delivery_date must be more than 3 days from today. Earliest date: {$earliest}.");
+        }
+    }
+
+    public function updateOrder(SalesOrder $salesOrder, CustomerPortalUser $user, array $data): SalesOrder
+    {
+        return DB::transaction(function () use ($salesOrder, $user, $data): SalesOrder {
+            $row = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
+            abort_if($row->customer_id !== $user->customer_id, 403);
+            $before = $this->salesOrderDetail($user->customer_id, $row)->toArray();
+            $items = [];
+            foreach ($data['items'] as $idx => $item) {
+                $productId = HashIdFilter::decode((string) $item['product_id'], Product::class);
+                if ($productId === null) {
+                    throw new BusinessRuleException("items.{$idx}.product_id is not a valid product.");
+                }
+                $this->assertRequestedDeliveryDate($item['delivery_date'], $idx);
+                $items[] = ['product_id' => $productId, 'quantity' => $item['quantity'], 'delivery_date' => $item['delivery_date']];
+            }
+            $updated = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->update(
+                $row, ['items' => $items, 'notes' => $data['notes'] ?? null, 'quote_signature' => $data['quote_signature'] ?? null], $user,
+            ));
+            $this->recordCustomerAudit('customer.order.updated', $updated, $user->id, $user->customer_id, [
+                'before' => $before, 'after' => $updated->toArray(),
+            ]);
+            $this->notifySalesOrderReview($updated, $user);
+            return $updated;
+        });
+    }
+
+    public function cancelOrder(SalesOrder $salesOrder, CustomerPortalUser $user, ?string $reason): SalesOrder
+    {
+        return DB::transaction(function () use ($salesOrder, $user, $reason): SalesOrder {
+            $row = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
+            abort_if($row->customer_id !== $user->customer_id, 403);
+            $cancelled = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->cancel($row, $reason, $user));
+            $this->recordCustomerAudit('customer.order.cancelled', $cancelled, $user->id, $user->customer_id, ['reason' => $reason]);
+            return $cancelled;
+        });
+    }
+
     public function salesOrderChain(int $customerId, SalesOrder $salesOrder): array
     {
         abort_if($salesOrder->customer_id !== $customerId, 403);
 
-        return $this->salesOrderService->chain($salesOrder);
+        return array_map(static function (array $step): array {
+            unset($step['href']);
+            if (in_array($step['label'], ['Ready from stock', 'Stock + production'], true)) {
+                $step['label'] = $step['state'] === 'done' ? 'Supply ready' : 'Preparing supply';
+            }
+            if ($step['label'] === 'QC approved stock') $step['label'] = 'Quality approved';
+            $step['description'] = $step['state'] === 'rejected'
+                ? 'Order preparation needs attention. Our team is resolving it; contact sales for an update.' : null;
+            return $step;
+        }, $this->salesOrderService->chain($salesOrder));
     }
 
     /**
@@ -543,7 +609,7 @@ class CustomerPortalService
         abort_if($invoice->customer_id !== $customerId, 403);
         abort_if(! in_array($invoice->status, [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid], true), 404);
 
-        $invoice->load(['salesOrder:id,so_number', 'items', 'collections']);
+        $invoice->load(['salesOrder:id,so_number', 'items', 'collections', 'paymentSubmissions']);
 
         return $invoice;
     }
@@ -574,7 +640,7 @@ class CustomerPortalService
 
         $delivery->load([
             'salesOrder:id,so_number',
-            'items.salesOrderItem.product:id,part_number,name',
+            'items.salesOrderItem.product:id,part_number,name,unit_of_measure',
             'proofs',
             'blockingReturnCase',
             'driver:id,name',
@@ -592,40 +658,249 @@ class CustomerPortalService
      * is a no-op).
      *
      * @param array{
-     *   receiver_name?: string|null,
+     *   receiver_name: string,
      *   receiver_position?: string|null,
      *   delivery_remarks?: string|null,
+     *   lines: array<array{delivery_item_id: string, received_quantity: string}>,
      * } $receiverData
      */
     public function confirmDelivery(int $customerId, Delivery $delivery, array $receiverData, CustomerPortalUser $portalUser): Delivery
     {
-        abort_if(! $delivery->salesOrder || $delivery->salesOrder->customer_id !== $customerId, 403);
+        return DB::transaction(function () use ($customerId, $delivery, $receiverData, $portalUser): Delivery {
+            $salesOrderId = Delivery::query()->whereKey($delivery->id)->value('sales_order_id');
+            $order = $salesOrderId ? SalesOrder::query()->lockForUpdate()->find($salesOrderId) : null;
+            $locked = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            abort_if(! $order || (int) $order->customer_id !== $customerId || (int) $locked->sales_order_id !== (int) $salesOrderId
+                || (int) $portalUser->customer_id !== $customerId, 403);
 
-        $confirmed = $this->systemUser->impersonate(function () use ($delivery, $receiverData): Delivery {
-            return $this->deliveryService->confirm($delivery, $this->systemUser->user(), $receiverData);
+            if ($locked->status === DeliveryStatus::Confirmed) {
+                return $this->deliveryDetail($customerId, $locked);
+            }
+
+            $lines = $receiverData['lines'] ?? [];
+            $this->validateReceiptLines($locked, $lines);
+
+            $confirmed = $this->systemUser->impersonate(function () use ($locked, $receiverData): Delivery {
+                return $this->deliveryService->confirm($locked, $this->systemUser->user(), $receiverData);
+            });
+
+            AuditLog::create([
+                'user_id' => null,
+                'actor_type' => 'customer_portal',
+                'action' => 'customer.delivery.confirmed',
+                'model_type' => Delivery::class,
+                'model_id' => $delivery->getKey(),
+                'old_values' => null,
+                'new_values' => [
+                    'portal_user_id' => $portalUser->hash_id,
+                    'email' => $portalUser->email,
+                    'customer_id' => app('hashids')->encode($customerId),
+                    'delivery_number' => $delivery->delivery_number,
+                    'lines' => $lines,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'source_command' => request()?->route()?->getName() ?? 'b2b.customer.deliveries.confirm',
+                'correlation_id' => request()?->attributes->get('request_id') ?? request()?->header('X-Request-ID'),
+                'created_at' => now(),
+            ]);
+
+            return $this->deliveryDetail($customerId, $confirmed);
         });
+    }
 
-        AuditLog::create([
-            'user_id' => null,
-            'actor_type' => 'customer_portal',
-            'action' => 'customer.delivery.confirmed',
-            'model_type' => Delivery::class,
-            'model_id' => $delivery->getKey(),
-            'old_values' => null,
-            'new_values' => [
-                'portal_user_id' => $portalUser->hash_id,
-                'email' => $portalUser->email,
-                'customer_id' => app('hashids')->encode($customerId),
-                'delivery_number' => $delivery->delivery_number,
-            ],
-            'ip_address' => request()?->ip(),
-            'user_agent' => request()?->userAgent(),
-            'source_command' => request()?->route()?->getName() ?? 'b2b.customer.deliveries.confirm',
-            'correlation_id' => request()?->attributes->get('request_id') ?? request()?->header('X-Request-ID'),
-            'created_at' => now(),
-        ]);
+    private function validateReceiptLines(Delivery $delivery, array $lines): void
+    {
+        $items = $delivery->items()->with('salesOrderItem.product:id,unit_of_measure')->lockForUpdate()->get()->keyBy('id');
+        if (! is_array($lines) || $items->isEmpty() || count($lines) !== $items->count()) {
+            throw ValidationException::withMessages(['lines' => ['Confirm the received quantity for every delivery item.']]);
+        }
+        $seen = [];
+        foreach ($lines as $index => $line) {
+            $itemId = HashIdFilter::decode($line['delivery_item_id'] ?? null, DeliveryItem::class);
+            $item = $itemId ? $items->get($itemId) : null;
+            if (! $item || isset($seen[$itemId])) {
+                throw ValidationException::withMessages(["lines.{$index}.delivery_item_id" => ['Select each item from this delivery exactly once.']]);
+            }
+            $seen[$itemId] = true;
+            $quantity = $line['received_quantity'] ?? null;
+            if (! is_string($quantity) || ! preg_match('/^\d{1,12}(?:\.\d{1,2})?$/D', $quantity)) {
+                throw ValidationException::withMessages(["lines.{$index}.received_quantity" => ['Enter a non-negative quantity with up to two decimal places.']]);
+            }
+            if (in_array(strtolower(trim((string) $item->salesOrderItem?->product?->unit_of_measure)), ['pcs', 'pieces', 'pc'], true)
+                && bccomp($quantity, bcadd($quantity, '0', 0), 3) !== 0) {
+                throw ValidationException::withMessages(["lines.{$index}.received_quantity" => ['Enter a whole number of pieces.']]);
+            }
+            if (bccomp($quantity, (string) ($item->customer_received_quantity ?? $item->quantity), 3) !== 0) {
+                throw ValidationException::withMessages(["lines.{$index}.received_quantity" => ['Received quantity must match the recorded delivery quantity. Report a problem before confirming a shortage or excess.']]);
+            }
+        }
+    }
 
-        return $confirmed;
+    /** The relationship, not a matching product, determines which shipments can be reviewed together. */
+    public function receiptGroup(int $customerId, Delivery $anchor): ?array
+    {
+        $anchor = Delivery::with('salesOrder')->findOrFail($anchor->id);
+        abort_unless((int) $anchor->salesOrder?->customer_id === $customerId, 403);
+        $cases = ReturnCase::query()->where('customer_id', $customerId)->where('type', 'customer')
+            ->where('resolution', 'redelivery')->whereIn('status', ['in_progress', 'resolved']);
+        if ($anchor->salesOrder->return_case_id) {
+            $cases->whereKey($anchor->salesOrder->return_case_id)->where('replacement_sales_order_id', $anchor->sales_order_id);
+        } else {
+            $cases->where('delivery_id', $anchor->id)->whereNotNull('replacement_sales_order_id');
+        }
+        $matches = $cases->limit(2)->get();
+        if ($matches->count() !== 1) {
+            return null;
+        }
+        $case = $matches->first()->load('lines', 'replacementSalesOrder.items', 'returnRequest.items', 'delivery.salesOrder');
+        $order = $case->replacementSalesOrder;
+        if (! $order || (int) $order->return_case_id !== (int) $case->id || (int) $order->customer_id !== $customerId
+            || ! $case->delivery || (int) $case->delivery->salesOrder?->customer_id !== $customerId) {
+            return null;
+        }
+        $replacements = Delivery::with('salesOrder')->where('sales_order_id', $order->id)->whereIn('status', ['delivered', 'confirmed'])->orderBy('id')->get();
+        if ($anchor->id !== $case->delivery_id && ! $replacements->contains('id', $anchor->id)) {
+            return null;
+        }
+        $shipments = collect([$case->delivery])->concat($replacements)->map(fn (Delivery $delivery): array => [
+            'kind' => $delivery->id === $case->delivery_id ? 'original' : 'replacement',
+            'already_confirmed' => $delivery->status === DeliveryStatus::Confirmed,
+            'delivery' => $this->deliveryDetail($customerId, $delivery),
+        ])->all();
+        $reason = $replacements->isEmpty() ? 'Replacement shipment has not arrived yet.' : null;
+        if ($order->status->value === 'cancelled' || $order->items->isEmpty()
+            || bccomp((string) $order->subtotal, '0', 2) !== 0 || bccomp((string) $order->vat_amount, '0', 2) !== 0
+            || bccomp((string) $order->total_amount, '0', 2) !== 0
+            || $order->items->contains(fn ($line): bool => bccomp((string) $line->unit_price, '0', 2) !== 0 || bccomp((string) $line->total, '0', 2) !== 0)) {
+            $reason = 'The replacement order must be approved with zero prices before confirming both shipments.';
+        }
+        $coverage = [];
+        foreach ($shipments as $shipment) {
+            $delivery = $shipment['delivery'];
+            if (! in_array($delivery->status, [DeliveryStatus::Delivered, DeliveryStatus::Confirmed], true)) {
+                $reason ??= 'Both shipments must arrive before their receipts can be confirmed together.';
+            }
+            if (! $delivery->proofs->contains(fn ($proof): bool => in_array($proof->proof_type, ['photo', 'signed_dr', 'customer_po_confirmation'], true))) {
+                $reason ??= 'Awaiting driver proof of delivery for '.$delivery->delivery_number.'.';
+            }
+            $hold = $delivery->blockingReturnCase;
+            if ($hold && ($shipment['kind'] !== 'original' || (int) $hold->id !== (int) $case->id)) {
+                $reason ??= 'Another problem report must be resolved before confirming both shipments.';
+            }
+            if ($shipment['kind'] === 'original' && ReturnCase::where('delivery_id', $delivery->id)->whereKeyNot($case->id)
+                ->whereNotIn('status', ['resolved', 'withdrawn', 'rejected'])
+                ->where(fn ($q) => $q->where('intake_kind', 'delivery_trace')->orWhereHas('lines', fn ($line) => $line->where('missing_quantity', '>', 0)->orWhere('defective_quantity', '>', 0)))->exists()) {
+                $reason ??= 'Another problem report must be resolved before confirming both shipments.';
+            }
+            if ($delivery->items->isEmpty()) {
+                $reason ??= 'Shipment quantities need review before confirming.';
+            }
+            foreach ($delivery->items as $item) {
+                if ($shipment['kind'] === 'replacement') {
+                    $productId = $item->salesOrderItem?->product_id;
+                    $coverage[$productId] = bcadd($coverage[$productId] ?? '0', (string) ($item->customer_received_quantity ?? $item->quantity), 3);
+                }
+            }
+        }
+        foreach ($case->lines->groupBy('product_id') as $productId => $lines) {
+            $required = $lines->reduce(fn ($sum, $line) => bcadd($sum, bcadd((string) ($line->verified_missing_quantity ?? '0'), (string) ($line->verified_defective_quantity ?? '0'), 3), 3), '0');
+            if (bccomp($coverage[$productId] ?? '0', $required, 3) < 0 || bccomp($required, '0', 3) <= 0) {
+                $reason ??= 'Replacement shipments do not yet cover all verified quantities. Confirm arrived shipments separately.';
+            }
+        }
+        try {
+            app(ReturnCaseSettlementService::class)->assertPhysicalReturnComplete($case);
+        } catch (BusinessRuleException $error) {
+            $reason ??= $error->getMessage();
+        }
+        $snapshot = [
+            'case' => [$case->id, $case->status->value, $case->resolution?->value, $case->replacement_sales_order_id],
+            'order' => [$order->id, $order->status->value, $order->subtotal, $order->vat_amount, $order->total_amount,
+                $order->items->sortBy('id')->map(fn ($line) => [$line->id, $line->product_id, $line->quantity, $line->unit_price, $line->total])->values()->all()],
+            'lines' => $case->lines->sortBy('id')->map(fn ($line) => [$line->id, $line->product_id, $line->verified_missing_quantity, $line->verified_defective_quantity])->values()->all(),
+            'return' => $case->returnRequest ? [$case->returnRequest->id, $case->returnRequest->status->value,
+                $case->returnRequest->items->sortBy('id')->map(fn ($line) => [$line->id, $line->source_delivery_item_id, $line->quantity, $line->returned_quantity, $line->reversal_already_applied])->values()->all()] : null,
+            'shipments' => array_map(static fn ($shipment) => [
+                $shipment['delivery']->id, $shipment['delivery']->sales_order_id, $shipment['delivery']->status->value,
+                $shipment['delivery']->items->sortBy('id')->map(fn ($line) => [$line->id, $line->sales_order_item_id, $line->quantity, $line->customer_received_quantity])->values()->all(),
+                $shipment['delivery']->proofs->sortBy('id')->map(fn ($proof) => [$proof->id, $proof->proof_type])->values()->all(),
+            ], $shipments),
+        ];
+        return [
+            'case' => $case, 'version' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)),
+            'can_confirm' => $reason === null && collect($shipments)->contains(fn ($shipment) => ! $shipment['already_confirmed']),
+            'blocked_reason' => $reason, 'shipments' => $shipments,
+        ];
+    }
+
+    public function confirmReceiptGroup(int $customerId, Delivery $anchor, array $data, CustomerPortalUser $portalUser): array
+    {
+        abort_unless((int) $portalUser->customer_id === $customerId, 403);
+        return DB::transaction(function () use ($customerId, $anchor, $data, $portalUser): array {
+            $initial = $this->receiptGroup($customerId, $anchor);
+            if (! $initial) {
+                throw ValidationException::withMessages(['shipments' => 'These shipments cannot be confirmed together.']);
+            }
+            $orderIds = collect($initial['shipments'])->pluck('delivery.sales_order_id')->unique()->sort()->values();
+            SalesOrder::whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get();
+            // Holding both orders prevents shipment membership from changing during the receipt.
+            $deliveryIds = collect($initial['shipments'])->pluck('delivery.id')->sort()->values();
+            Delivery::whereIn('id', $deliveryIds)->orderBy('id')->lockForUpdate()->get();
+            DeliveryItem::whereIn('delivery_id', $deliveryIds)->orderBy('id')->lockForUpdate()->get();
+            ReturnCase::whereKey($initial['case']->id)->lockForUpdate()->firstOrFail();
+            $group = $this->receiptGroup($customerId, $anchor);
+            if (! $group || $group['version'] !== $initial['version']) {
+                throw ValidationException::withMessages(['version' => 'Shipment details changed. Review the refreshed quantities before confirming.']);
+            }
+            $expected = collect($group['shipments'])->keyBy(fn ($shipment) => $shipment['delivery']->id);
+            $payloads = [];
+            foreach ($data['shipments'] as $index => $shipment) {
+                $id = HashIdFilter::decode($shipment['delivery_id'], Delivery::class);
+                if (! $id || ! $expected->has($id) || isset($payloads[$id])) {
+                    throw ValidationException::withMessages(["shipments.{$index}.delivery_id" => 'Select each reviewed shipment exactly once.']);
+                }
+                try {
+                    $this->validateReceiptLines($expected[$id]['delivery'], $shipment['lines']);
+                } catch (ValidationException $error) {
+                    $errors = [];
+                    foreach ($error->errors() as $field => $messages) {
+                        $errors["shipments.{$index}.{$field}"] = $messages;
+                    }
+                    throw ValidationException::withMessages($errors);
+                }
+                $payloads[$id] = $shipment;
+            }
+            if (count($payloads) !== $expected->count()) {
+                throw ValidationException::withMessages(['shipments' => 'Review every shipment shown before confirming.']);
+            }
+            if (! $group['blocked_reason'] && $expected->every(fn ($shipment) => $shipment['already_confirmed'])) {
+                return $group;
+            }
+            if (! hash_equals($group['version'], $data['version'])) {
+                throw ValidationException::withMessages(['version' => 'Shipment details changed. Review the refreshed quantities before confirming.']);
+            }
+            if (! $group['can_confirm']) {
+                throw ValidationException::withMessages(['shipments' => $group['blocked_reason'] ?? 'These receipts are already confirmed.']);
+            }
+            $receiver = array_intersect_key($data, array_flip(['receiver_name', 'receiver_position', 'delivery_remarks']));
+            foreach ($group['shipments'] as $shipment) {
+                if ($shipment['kind'] === 'replacement' && ! $shipment['already_confirmed']) {
+                    $delivery = $shipment['delivery'];
+                    $this->confirmDelivery($customerId, $delivery, $receiver + ['lines' => $payloads[$delivery->id]['lines']], $portalUser);
+                }
+            }
+            $case = $group['case'];
+            app(ReturnCaseService::class)->synchronizeReplacement((int) $case->id);
+            if ($case->fresh()->status->value !== 'resolved') {
+                throw new BusinessRuleException('Replacement work is not complete. Review the problem report before confirming both shipments.');
+            }
+            $original = $group['shipments'][0]['delivery'];
+            if ($original->status !== DeliveryStatus::Confirmed) {
+                $this->confirmDelivery($customerId, $original, $receiver + ['lines' => $payloads[$original->id]['lines']], $portalUser);
+            }
+            return $this->receiptGroup($customerId, $anchor);
+        }, 3);
     }
 
     /* ─── Complaints ─────────────────────────────────────────────── */

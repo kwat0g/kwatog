@@ -132,7 +132,7 @@ class LotTraceabilityTest extends TestCase
         $this->assertSame($lot, $history[1]->lot_number);
     }
 
-    public function test_lot_capture_is_optional_and_null_safe(): void
+    public function test_supplier_lot_and_expiry_are_optional_but_internal_receipt_lot_is_traceable(): void
     {
         $item = Item::factory()->create(['is_active' => true]);
         $location = WarehouseLocation::factory()->create();
@@ -164,7 +164,18 @@ class LotTraceabilityTest extends TestCase
         $this->passIncomingQc($grn);
         $grn = $this->grnSvc->accept($grn->fresh(), $this->user);
         $this->assertSame(GrnStatus::Accepted, $grn->status);
-        $this->assertNull($grn->items->first()->material_lot_number);
+        $line = $grn->items->first();
+        $this->assertNotNull($line);
+        $this->assertMatchesRegularExpression(
+            '/^RCV-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/D',
+            $line->material_lot_number,
+        );
+        $this->assertNull($line->supplier_lot_reference);
+        $this->assertNull($line->expiry_date);
+
+        $history = $this->movements->lotHistory($item->id, $line->material_lot_number);
+        $this->assertCount(1, $history);
+        $this->assertSame($line->material_lot_number, $history->first()->lot_number);
     }
 
     public function test_incoming_resin_qc_attributes_persist_on_grn_line(): void

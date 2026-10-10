@@ -1,0 +1,14 @@
+
+Running 5 tests using 1 worker
+
+(node:61404) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+  ✓  1 [real-chromium] › e2e-real/live-procurement.spec.ts:1071:3 › Live procurement runbook › finance-only customer return only offers rejection to Finance (36.0s)
+  ✓  2 [real-chromium] › e2e-real/live-procurement.spec.ts:1128:3 › Live procurement runbook › PR to accepted GRN recovers one draft bill after automation actor loss (1.6m)
+  ✓  3 [real-chromium] › e2e-real/live-procurement.spec.ts:1478:3 › Live procurement runbook › post supplier bill and approve its partial payment (1.5m)
+  ✓  4 [real-chromium] › e2e-real/live-procurement.spec.ts:1768:3 › Live procurement runbook › cancels an unpaid bill and routes its pending payment to rejection (3.2m)
+  ✓  5 [real-chromium] › e2e-real/live-procurement.spec.ts:2210:3 › Live procurement runbook › return accepted goods through receipt, disposition, and replacement PO (1.3m)
+
+  Slow test file: [real-chromium] › e2e-real/live-procurement.spec.ts (8.3m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  5 passed (8.5m)

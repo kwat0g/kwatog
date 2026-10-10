@@ -1,0 +1,286 @@
+[
+  {
+    "name": "list",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "viewport": 1440,
+    "body": "Inspections\n166 inspections\nNew inspection\nTo inspect (50)\nAwaiting review (1)\nFailed / on hold (29)\nAll (166)\nStage: All\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nStatus: All\nDraft\nIn progress\nAwaiting review\nPassed\nFailed\nCancelled\nDATE\n→\nShowing 25 of 166 results, page 1\nINSPECTION\tPRODUCT\tSTAGE\tQUANTITY / COVERAGE\tPROBLEM\tSTATUS\tCOMPLETED\nQC-202610-0160\tQC-BULK-0041231fd8-docporro nam praesentium\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\n—\n\tDraft\t—\nQC-202610-0159\tQC-0041231fd8-docChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tDraft\t—\nQC-202610-0158\tQC-0041231fd8-docChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0157\tQC-0041231fd8-docChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0156\tQC-0041231fd8-docChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0155\tQC-BULK-0041231fd8-sizreprehenderit eveniet nulla\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0154\tQC-0041231fd8-sizChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0153\tQC-0041231fd8-sizChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0152\tQC-0041231fd8-sizChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0151\tQC-0041231fd8-sizChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0150\tQC-BULK-0041231fd8-pasomnis ab sit\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0149\tQC-0041231fd8-pasChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0148\tQC-0041231fd8-pasChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0147\tQC-0041231fd8-pasChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0146\tQC-0041231fd8-pasChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0145\tQC-BULK-000828ae65-docvelit ad voluptas\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0144\tQC-000828ae65-docChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0143\tQC-000828ae65-docChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0142\tQC-000828ae65-docChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0141\tQC-000828ae65-docChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0140\tQC-BULK-000828ae65-sizvoluptas voluptas suscipit\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0139\tQC-000828ae65-sizChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0138\tQC-000828ae65-sizChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0137\tQC-000828ae65-sizChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0136\tQC-000828ae65-sizChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\n1–25 of 166\nRows\n25\n50\n100\nPage 1 of 7",
+    "smallButtons": [
+      {
+        "name": "New inspection",
+        "width": 127,
+        "height": 28
+      },
+      {
+        "name": "To inspect (50)",
+        "width": 102,
+        "height": 28
+      },
+      {
+        "name": "Awaiting review (1)",
+        "width": 121,
+        "height": 28
+      },
+      {
+        "name": "Failed / on hold (29)",
+        "width": 128,
+        "height": 28
+      },
+      {
+        "name": "All (166)",
+        "width": 68,
+        "height": 28
+      },
+      {
+        "name": "Customize columns",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "compact density",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "default density",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "spacious density",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "First page",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "Previous page",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "Next page",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "Last page",
+        "width": 28,
+        "height": 28
+      }
+    ]
+  },
+  {
+    "name": "list",
+    "width": 390,
+    "scrollWidth": 390,
+    "viewport": 390,
+    "body": "Inspections\n166 inspections\nNew inspection\nTo inspect (50)\nAwaiting review (1)\nFailed / on hold (29)\nAll (166)\nStage: All\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nStatus: All\nDraft\nIn progress\nAwaiting review\nPassed\nFailed\nCancelled\nDATE\n→\nShowing 25 of 166 results, page 1\nINSPECTION\tPRODUCT\tSTAGE\tQUANTITY / COVERAGE\tPROBLEM\tSTATUS\tCOMPLETED\nQC-202610-0160\tQC-BULK-0041231fd8-docporro nam praesentium\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\n—\n\tDraft\t—\nQC-202610-0159\tQC-0041231fd8-docChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tDraft\t—\nQC-202610-0158\tQC-0041231fd8-docChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0157\tQC-0041231fd8-docChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0156\tQC-0041231fd8-docChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0155\tQC-BULK-0041231fd8-sizreprehenderit eveniet nulla\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0154\tQC-0041231fd8-sizChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0153\tQC-0041231fd8-sizChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0152\tQC-0041231fd8-sizChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0151\tQC-0041231fd8-sizChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0150\tQC-BULK-0041231fd8-pasomnis ab sit\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0149\tQC-0041231fd8-pasChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0148\tQC-0041231fd8-pasChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0147\tQC-0041231fd8-pasChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0146\tQC-0041231fd8-pasChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\n—\n\tPassed\t2026-10-06\nQC-202610-0145\tQC-BULK-000828ae65-docvelit ad voluptas\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0144\tQC-000828ae65-docChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0143\tQC-000828ae65-docChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0142\tQC-000828ae65-docChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0141\tQC-000828ae65-docChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nIdentification: Required supplier certificate missing.\n\tFailed\t2026-10-06\nQC-202610-0140\tQC-BULK-000828ae65-sizvoluptas voluptas suscipit\tIncoming\t\n125.500 KG\n\n1 lot to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0139\tQC-000828ae65-sizChecklist browser proof\tSupplier Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0138\tQC-000828ae65-sizChecklist browser proof\tCustomer Return\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0137\tQC-000828ae65-sizChecklist browser proof\tOutgoing\t\n100.000 PCS\n\n100 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\nQC-202610-0136\tQC-000828ae65-sizChecklist browser proof\tIn-process\t\n100.000 PCS\n\n5 pieces to inspect\n\n\t\nSurface condition: One defective piece fails several checks. Fit check: One piece measures 10.2 mm, above the approved limit. Identification: One defective piece fails several checks.\n\tFailed\t2026-10-06\n1–25 of 166\nRows\n25\n50\n100\nPage 1 of 7",
+    "smallButtons": [
+      {
+        "name": "New inspection",
+        "width": 127,
+        "height": 28
+      },
+      {
+        "name": "To inspect (50)",
+        "width": 102,
+        "height": 28
+      },
+      {
+        "name": "Awaiting review (1)",
+        "width": 121,
+        "height": 28
+      },
+      {
+        "name": "Failed / on hold (29)",
+        "width": 128,
+        "height": 28
+      },
+      {
+        "name": "All (166)",
+        "width": 68,
+        "height": 28
+      },
+      {
+        "name": "Customize columns",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "compact density",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "default density",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "spacious density",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "First page",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "Previous page",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "Next page",
+        "width": 28,
+        "height": 28
+      },
+      {
+        "name": "Last page",
+        "width": 28,
+        "height": 28
+      }
+    ]
+  },
+  {
+    "name": "create",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "viewport": 1440,
+    "body": "Back to inspections\nOpen inspection\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\n\nInspections from receipts, production and returns already appear in your inspection list. Open one here only when you need a manual inspection.\n\nInspection details\nStage*\n— Select —\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nSelect…\nBB-001 — Wiper Motor Bobbin\nBU-001 — Windshield Wiper Bushing\nCHECKLIST-0003263937-pass — Checklist browser proof\nCHECKLIST-190700 — Checklist browser proof\nCHECKLIST-190948 — Checklist browser proof\nCHECKLIST-191137 — Checklist browser proof\nCHECKLIST-192102 — Checklist browser proof\nCHECKLIST-1928585f75 — Checklist browser proof\nCHECKLIST-193613a8b7 — Checklist browser proof\nCHECKLIST-1953156dc3 — Checklist browser proof\nCHECKLIST-1955193f61 — Checklist browser proof\nCHECKLIST-2046526464 — Checklist browser proof\nCHECKLIST-2119518fff — Checklist browser proof\nCHECKLIST-21251493a3 — Checklist browser proof\nCHECKLIST-2127014a5f — Checklist browser proof\nCHECKLIST-213840815e — Checklist browser proof\nCHECKLIST-21483318be — Checklist browser proof\nCREW-858223 — Crew assignment test product\nDP-dp118-KG — Delivery precision finished good dp118\nE2E-QC-qc118 — 100-piece QC browser test qc118\nMOWN-P-m1r20 — Maintenance ownership product m1r20\nMOWN-P-m1s2 — Maintenance ownership product m1s2\nPC-001 — Pivot Cap Cover Type A\nPC-002 — Pivot Cap Cover Type B\nQC-0003514c2c-doc — Checklist browser proof\nQC-0003514c2c-pas — Checklist browser proof\nQC-0003514c2c-siz — Checklist browser proof\nQC-00054058db-pas — Checklist browser proof\nQC-00054058db-siz — Checklist browser proof\nQC-0006516d90-doc — Checklist browser proof\nQC-0006516d90-pas — Checklist browser proof\nQC-0006516d90-siz — Checklist browser proof\nQC-000828ae65-doc — Checklist browser proof\nQC-000828ae65-pas — Checklist browser proof\nQC-000828ae65-siz — Checklist browser proof\nQC-0041231fd8-doc — Checklist browser proof\nQC-0041231fd8-pas — Checklist browser proof\nQC-0041231fd8-siz — Checklist browser proof\nRC-001 — Relay Cover Standard\nRC-002 — Relay Cover Large\nRMA-mrbr12-FG — Customer return finished good mrbr12\nRMA-r5x9q-FG — Customer return finished good r5x9q\nRMA-rma118-FG — Customer return finished good rma118\nSTART-QC-st118 — Work-order start QC test st118\nWB-001 — Wiper Bushing (Standard)\nWB-002 — Wiper Bushing (Heavy Duty)\nProduct*\nBatch quantity*\nNotes (optional)\nInspection coverage\n\nReceipts and returns create their own inspections with the correct item, quantity, unit, and approved plan. Use those records for acceptance and recovery.\n\nFind source inspections\nCancel\nOpen inspection",
+    "smallButtons": [
+      {
+        "name": "Restore",
+        "width": 60,
+        "height": 28
+      },
+      {
+        "name": "Discard",
+        "width": 60,
+        "height": 28
+      },
+      {
+        "name": "Show Product",
+        "width": 16,
+        "height": 30
+      },
+      {
+        "name": "Find source inspections",
+        "width": 148,
+        "height": 28
+      },
+      {
+        "name": "Cancel",
+        "width": 74,
+        "height": 32
+      },
+      {
+        "name": "Open inspection",
+        "width": 126,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "name": "create",
+    "width": 390,
+    "scrollWidth": 390,
+    "viewport": 390,
+    "body": "Back to inspections\nOpen inspection\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\n\nInspections from receipts, production and returns already appear in your inspection list. Open one here only when you need a manual inspection.\n\nInspection details\nStage*\n— Select —\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nSelect…\nBB-001 — Wiper Motor Bobbin\nBU-001 — Windshield Wiper Bushing\nCHECKLIST-0003263937-pass — Checklist browser proof\nCHECKLIST-190700 — Checklist browser proof\nCHECKLIST-190948 — Checklist browser proof\nCHECKLIST-191137 — Checklist browser proof\nCHECKLIST-192102 — Checklist browser proof\nCHECKLIST-1928585f75 — Checklist browser proof\nCHECKLIST-193613a8b7 — Checklist browser proof\nCHECKLIST-1953156dc3 — Checklist browser proof\nCHECKLIST-1955193f61 — Checklist browser proof\nCHECKLIST-2046526464 — Checklist browser proof\nCHECKLIST-2119518fff — Checklist browser proof\nCHECKLIST-21251493a3 — Checklist browser proof\nCHECKLIST-2127014a5f — Checklist browser proof\nCHECKLIST-213840815e — Checklist browser proof\nCHECKLIST-21483318be — Checklist browser proof\nCREW-858223 — Crew assignment test product\nDP-dp118-KG — Delivery precision finished good dp118\nE2E-QC-qc118 — 100-piece QC browser test qc118\nMOWN-P-m1r20 — Maintenance ownership product m1r20\nMOWN-P-m1s2 — Maintenance ownership product m1s2\nPC-001 — Pivot Cap Cover Type A\nPC-002 — Pivot Cap Cover Type B\nQC-0003514c2c-doc — Checklist browser proof\nQC-0003514c2c-pas — Checklist browser proof\nQC-0003514c2c-siz — Checklist browser proof\nQC-00054058db-pas — Checklist browser proof\nQC-00054058db-siz — Checklist browser proof\nQC-0006516d90-doc — Checklist browser proof\nQC-0006516d90-pas — Checklist browser proof\nQC-0006516d90-siz — Checklist browser proof\nQC-000828ae65-doc — Checklist browser proof\nQC-000828ae65-pas — Checklist browser proof\nQC-000828ae65-siz — Checklist browser proof\nQC-0041231fd8-doc — Checklist browser proof\nQC-0041231fd8-pas — Checklist browser proof\nQC-0041231fd8-siz — Checklist browser proof\nRC-001 — Relay Cover Standard\nRC-002 — Relay Cover Large\nRMA-mrbr12-FG — Customer return finished good mrbr12\nRMA-r5x9q-FG — Customer return finished good r5x9q\nRMA-rma118-FG — Customer return finished good rma118\nSTART-QC-st118 — Work-order start QC test st118\nWB-001 — Wiper Bushing (Standard)\nWB-002 — Wiper Bushing (Heavy Duty)\nProduct*\nBatch quantity*\nNotes (optional)\nInspection coverage\n\nReceipts and returns create their own inspections with the correct item, quantity, unit, and approved plan. Use those records for acceptance and recovery.\n\nFind source inspections\nCancel\nOpen inspection",
+    "smallButtons": [
+      {
+        "name": "Restore",
+        "width": 60,
+        "height": 28
+      },
+      {
+        "name": "Discard",
+        "width": 60,
+        "height": 28
+      },
+      {
+        "name": "Show Product",
+        "width": 16,
+        "height": 30
+      },
+      {
+        "name": "Find source inspections",
+        "width": 148,
+        "height": 28
+      },
+      {
+        "name": "Cancel",
+        "width": 74,
+        "height": 32
+      },
+      {
+        "name": "Open inspection",
+        "width": 126,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "name": "failed",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "viewport": 1440,
+    "checklistY": 598.828125,
+    "body": "Back to inspections\nQC-202610-0152Failed\nQC-0041231fd8-siz — Checklist browser proof\nOpen NCR\nReport another defect\nRecord flow\nOpened\nOct 6, 2026\nIn progress\nChecker review\nOct 6, 2026\nFailed\nOct 6, 2026\n\nNext action: QC disposition owner: follow NCR-202610-0028. Stock remains subject to its disposition and release checks.\n\nInspection details\nStage\nOutgoing\nSource quantity\n100.000 PCS\nFull piece coverage\n100 pieces\nAcceptance rule\nAll checks must pass. Any observed defect fails inspection.\nSample defects\n1\nApproved for release\n0 pieces\nFailed size checks\n1\nInspection checklist\n3 of 3 checks completed · 3 failed\n\nSource: 100.000 PCS · Required full coverage: 100 pieces\n\nCheck every piece; record one PASS or FAIL per requirement.\n\nSurface condition\n\nHow to check: Document / reference check\n\nPASS requirement: No cracks or contamination.\n\nFAIL\n\nProblem: One defective piece fails several checks.\n\nFit check\nCritical\n\nHow to check: Measurement\n\nPASS requirement: Fits the approved inspection gauge.\n\nTarget: 10.0000 mm\nLowest allowed: 9.9000 mm\nHighest allowed: 10.1000 mm\nFAIL\n\nActual size: 10.2000 mm\n\nProblem: One piece measures 10.2 mm, above the approved limit.\n\nIdentification\n\nHow to check: Document / reference check\n\nPASS requirement: Part identification matches the production or supplier record.\n\nFAIL\n\nProblem: One defective piece fails several checks.\n\nInspection evidence is locked. Follow the linked NCR before stock release.\nLinked records\nPRODUCT\nQC-0041231fd8-siz — Checklist browser proof\nSOURCE RECORD\nWO-QC-0041231fd8-siz\nIn Progress\nOUTPUT BATCH\njevK3gKAGo\nWO-QC-0041231fd8-siz · good 100\nNONCONFORMANCE / RECOVERY\nNCR-202610-0028\nOpen\nINSPECTION SPEC\nv1\nactive\nInspection history\nInspection created by\nChecklist Maker\nResults recorded by\nChecklist Maker\nCreated\nOct 6, 2026 · 4:41 PM\nStarted\nOct 6, 2026 · 4:41 PM\nCompleted\nOct 6, 2026 · 4:42 PM\nReviewed by\nChecklist Checker\nReviewed\nOct 6, 2026 · 4:42 PM\n\nChecker remarks\n\nIndependent inspection evidence verified.",
+    "smallButtons": [
+      {
+        "name": "Open NCR",
+        "width": 79,
+        "height": 28
+      },
+      {
+        "name": "Report another defect",
+        "width": 137,
+        "height": 28
+      }
+    ]
+  },
+  {
+    "name": "failed",
+    "width": 390,
+    "scrollWidth": 390,
+    "viewport": 390,
+    "checklistY": 754.203125,
+    "body": "Back to inspections\nQC-202610-0152Failed\nQC-0041231fd8-siz — Checklist browser proof\nOpen NCR\nReport another defect\nRecord flow\nOpened\nOct 6, 2026\nIn progress\nChecker review\nOct 6, 2026\nFailed\nOct 6, 2026\n\nNext action: QC disposition owner: follow NCR-202610-0028. Stock remains subject to its disposition and release checks.\n\nInspection details\nStage\nOutgoing\nSource quantity\n100.000 PCS\nFull piece coverage\n100 pieces\nAcceptance rule\nAll checks must pass. Any observed defect fails inspection.\nSample defects\n1\nApproved for release\n0 pieces\nFailed size checks\n1\nInspection checklist\n3 of 3 checks completed · 3 failed\n\nSource: 100.000 PCS · Required full coverage: 100 pieces\n\nCheck every piece; record one PASS or FAIL per requirement.\n\nSurface condition\n\nHow to check: Document / reference check\n\nPASS requirement: No cracks or contamination.\n\nFAIL\n\nProblem: One defective piece fails several checks.\n\nFit check\nCritical\n\nHow to check: Measurement\n\nPASS requirement: Fits the approved inspection gauge.\n\nTarget: 10.0000 mm\nLowest allowed: 9.9000 mm\nHighest allowed: 10.1000 mm\nFAIL\n\nActual size: 10.2000 mm\n\nProblem: One piece measures 10.2 mm, above the approved limit.\n\nIdentification\n\nHow to check: Document / reference check\n\nPASS requirement: Part identification matches the production or supplier record.\n\nFAIL\n\nProblem: One defective piece fails several checks.\n\nInspection evidence is locked. Follow the linked NCR before stock release.\nLinked records\nPRODUCT\nQC-0041231fd8-siz — Checklist browser proof\nSOURCE RECORD\nWO-QC-0041231fd8-siz\nIn Progress\nOUTPUT BATCH\njevK3gKAGo\nWO-QC-0041231fd8-siz · good 100\nNONCONFORMANCE / RECOVERY\nNCR-202610-0028\nOpen\nINSPECTION SPEC\nv1\nactive\nInspection history\nInspection created by\nChecklist Maker\nResults recorded by\nChecklist Maker\nCreated\nOct 6, 2026 · 4:41 PM\nStarted\nOct 6, 2026 · 4:41 PM\nCompleted\nOct 6, 2026 · 4:42 PM\nReviewed by\nChecklist Checker\nReviewed\nOct 6, 2026 · 4:42 PM\n\nChecker remarks\n\nIndependent inspection evidence verified.",
+    "smallButtons": [
+      {
+        "name": "Open NCR",
+        "width": 79,
+        "height": 28
+      },
+      {
+        "name": "Report another defect",
+        "width": 137,
+        "height": 28
+      }
+    ]
+  },
+  {
+    "name": "incoming",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "viewport": 1440,
+    "checklistY": 598.828125,
+    "body": "Back to inspections\nQC-202610-0150Passed\nQC-BULK-0041231fd8-pas — omnis ab sit\nRecord flow\nOpened\nOct 6, 2026\nIn progress\nChecker review\nOct 6, 2026\nPassed\nOct 6, 2026\n\nNext action: Warehouse: linked receipt is accepted.\n\nInspection details\nStage\nIncoming\nSource quantity\n125.500 KG\nLot coverage\n1 lot\nAcceptance rule\nAll checks must pass. Any observed defect fails inspection.\nSample defects\nNo affected lot\nWarehouse acceptance\n125.500 KG · Accepted\nFailed size checks\n0\nInspection checklist\n3 of 3 checks completed\n\nSource: 125.500 KG · Coverage: 1 lot\n\nCheck the material lot using its approved plan. Source quantities retain their material unit.\n\nSurface condition\n\nHow to check: Document / reference check\n\nPASS requirement: No cracks or contamination.\n\nPASS\nFit check\nCritical\n\nHow to check: Measurement\n\nPASS requirement: Fits the approved inspection gauge.\n\nTarget: 10.0000 mm\nLowest allowed: 9.9000 mm\nHighest allowed: 10.1000 mm\nPASS\n\nActual size: 10.0000 mm\n\nIdentification\n\nHow to check: Document / reference check\n\nPASS requirement: Part identification matches the production or supplier record.\n\nPASS\nInspection evidence is locked. Check linked records for downstream acceptance and release.\nLinked records\nINVENTORY ITEM\nQC-BULK-0041231fd8-pas — omnis ab sit\nSOURCE RECORD\nGRN-0041231fd8-pas\nAccepted\nQUALITY PLAN\nv1\nfull\nInspection history\nInspection created by\nChecklist Maker\nResults recorded by\nChecklist Maker\nCreated\nOct 6, 2026 · 4:41 PM\nStarted\nOct 6, 2026 · 4:42 PM\nCompleted\nOct 6, 2026 · 4:42 PM\nReviewed by\nChecklist Checker\nReviewed\nOct 6, 2026 · 4:42 PM\n\nNotes\n\nQuality plan v1; GRN GRN-0041231fd8-pas.\n\nChecker remarks\n\nIndependent inspection evidence verified.",
+    "smallButtons": []
+  },
+  {
+    "name": "incoming",
+    "width": 390,
+    "scrollWidth": 390,
+    "viewport": 390,
+    "checklistY": 692.609375,
+    "body": "Back to inspections\nQC-202610-0150Passed\nQC-BULK-0041231fd8-pas — omnis ab sit\nRecord flow\nOpened\nOct 6, 2026\nIn progress\nChecker review\nOct 6, 2026\nPassed\nOct 6, 2026\n\nNext action: Warehouse: linked receipt is accepted.\n\nInspection details\nStage\nIncoming\nSource quantity\n125.500 KG\nLot coverage\n1 lot\nAcceptance rule\nAll checks must pass. Any observed defect fails inspection.\nSample defects\nNo affected lot\nWarehouse acceptance\n125.500 KG · Accepted\nFailed size checks\n0\nInspection checklist\n3 of 3 checks completed\n\nSource: 125.500 KG · Coverage: 1 lot\n\nCheck the material lot using its approved plan. Source quantities retain their material unit.\n\nSurface condition\n\nHow to check: Document / reference check\n\nPASS requirement: No cracks or contamination.\n\nPASS\nFit check\nCritical\n\nHow to check: Measurement\n\nPASS requirement: Fits the approved inspection gauge.\n\nTarget: 10.0000 mm\nLowest allowed: 9.9000 mm\nHighest allowed: 10.1000 mm\nPASS\n\nActual size: 10.0000 mm\n\nIdentification\n\nHow to check: Document / reference check\n\nPASS requirement: Part identification matches the production or supplier record.\n\nPASS\nInspection evidence is locked. Check linked records for downstream acceptance and release.\nLinked records\nINVENTORY ITEM\nQC-BULK-0041231fd8-pas — omnis ab sit\nSOURCE RECORD\nGRN-0041231fd8-pas\nAccepted\nQUALITY PLAN\nv1\nfull\nInspection history\nInspection created by\nChecklist Maker\nResults recorded by\nChecklist Maker\nCreated\nOct 6, 2026 · 4:41 PM\nStarted\nOct 6, 2026 · 4:42 PM\nCompleted\nOct 6, 2026 · 4:42 PM\nReviewed by\nChecklist Checker\nReviewed\nOct 6, 2026 · 4:42 PM\n\nNotes\n\nQuality plan v1; GRN GRN-0041231fd8-pas.\n\nChecker remarks\n\nIndependent inspection evidence verified.",
+    "smallButtons": []
+  }
+]

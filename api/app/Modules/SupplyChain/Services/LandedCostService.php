@@ -77,6 +77,17 @@ class LandedCostService
             ]);
 
             $poItems = $shipment->purchaseOrder?->items;
+            $receipt = GoodsReceiptNote::query()->where('shipment_id', $shipment->id)->first();
+            if ($receipt && $receipt->items()->where('quantity_received', '>', 0)->exists()) {
+                $received = $receipt->items()->where('quantity_received', '>', 0)->get()->groupBy('purchase_order_item_id');
+                $poItems = $poItems->filter(fn ($line) => $received->has($line->id))->values();
+                foreach ($poItems as $line) {
+                    $quantity = $received[$line->id]->reduce(fn ($sum, $row) => bcadd($sum, (string) $row->quantity_received, 6), '0');
+                    $factor = $line->item->convertToBase('1', $line->unit);
+                    $line->quantity = bcdiv($quantity, $factor, 6);
+                    $line->total = bcmul((string) $line->quantity, (string) $line->unit_price, 6);
+                }
+            }
             if (! $poItems || $poItems->isEmpty()) {
                 throw new BusinessRuleException('Shipment has no purchase order items to allocate costs against.');
             }
@@ -240,19 +251,7 @@ class LandedCostService
     /** @return array<int, string> */
     private function allocate(Collection $items, array $ratios, string $total): array
     {
-        $values = [];
-        $allocated = Money::zero();
-        $last = $items->count() - 1;
-
-        foreach ($items as $index => $item) {
-            $value = $index === $last
-                ? Money::sub($total, $allocated)
-                : Money::mul($total, (string) ($ratios[$index] ?? '0'));
-            $values[$index] = $value;
-            $allocated = Money::add($allocated, $value);
-        }
-
-        return $values;
+        return Money::allocate($total, $ratios);
     }
 
     /**

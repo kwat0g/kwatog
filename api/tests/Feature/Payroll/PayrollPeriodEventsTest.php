@@ -57,12 +57,20 @@ class PayrollPeriodEventsTest extends TestCase
     /** Build an Approved period ready to be finalized. */
     private function makeApprovedPeriod(): PayrollPeriod
     {
+        $approver = $this->makeUser();
         $period = PayrollPeriod::factory()->create([
             'period_start' => '2026-07-01',
             'period_end'   => '2026-07-15',
             'payroll_date' => '2026-07-15',
             'is_first_half' => true,
             'status'       => PayrollPeriodStatus::Approved->value,
+        ]);
+        $period->forceFill(['approved_by' => $approver->id, 'approved_at' => now()])->save();
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'gross_pay' => '10000.00',
+            'net_pay' => '10000.00',
+            'total_deductions' => '0.00',
         ]);
         return $period;
     }

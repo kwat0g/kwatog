@@ -176,14 +176,8 @@ class OutgoingQcIdempotencyTest extends TestCase
             ->count());
     }
 
-    // ─── Test 2: WO without sales_order_id skipped ───────────────────────────
-
-    /**
-     * The listener skips genuinely internal WOs (no sales_order_id AND no
-     * parent_ncr_id — see REC-07). Calling handle() twice on such a WO must
-     * create zero inspections.
-     */
-    public function test_wo_without_sales_order_id_creates_no_inspection(): void
+    /** Internal production must receive the same output-bound QC as sales production. */
+    public function test_wo_without_sales_order_id_gets_output_bound_inspection(): void
     {
         $internalWo = WorkOrder::create([
             'wo_number' => 'WO-TEST-P37-INTERNAL',
@@ -200,18 +194,26 @@ class OutgoingQcIdempotencyTest extends TestCase
             'created_by' => $this->user->id,
         ]);
 
+        WorkOrderOutput::create([
+            'work_order_id' => $internalWo->id,
+            'recorded_by' => $this->user->id,
+            'recorded_at' => now(),
+            'good_count' => 48,
+            'reject_count' => 2,
+            'batch_code' => 'WO-TEST-P37-INTERNAL-B01',
+        ]);
         $event = new WorkOrderCompleted($internalWo);
 
         $this->listener->handle($event);
         $this->listener->handle($event);
 
         $this->assertSame(
-            0,
+            1,
             Inspection::query()
                 ->where('entity_type', InspectionEntityType::WorkOrder->value)
                 ->where('entity_id', $internalWo->id)
                 ->count(),
-            'Internal WO (no sales_order_id) must never get an outgoing inspection.'
+            'Internal WO must have exactly one outgoing inspection for its good output.'
         );
     }
 
@@ -331,7 +333,7 @@ class OutgoingQcIdempotencyTest extends TestCase
     public function test_unexpected_inspection_failure_is_rethrown_instead_of_using_fallback(): void
     {
         $inspectionService = Mockery::mock(InspectionService::class);
-        $inspectionService->shouldReceive('create')
+        $inspectionService->shouldReceive('createForOutput')
             ->once()
             ->andThrow(new \RuntimeException('inspection database unavailable'));
         $this->app->instance(InspectionService::class, $inspectionService);
@@ -366,14 +368,15 @@ class OutgoingQcIdempotencyTest extends TestCase
             ->count());
     }
 
-    public function test_delayed_completion_event_still_creates_inspection_after_close(): void
+    public function test_delayed_completion_event_requires_controlled_reconciliation_after_close(): void
     {
         $staleEvent = new WorkOrderCompleted($this->workOrder->fresh());
         $this->workOrder->update(['status' => 'closed']);
 
         $this->listener->handle($staleEvent);
 
-        $this->assertSame(2, Inspection::query()
+        $this->assertSame('closed', $this->workOrder->fresh()->status->value);
+        $this->assertSame(0, Inspection::query()
             ->where('stage', InspectionStage::Outgoing->value)
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', $this->workOrder->id)
@@ -392,6 +395,7 @@ class OutgoingQcIdempotencyTest extends TestCase
         InspectionSpecItem::create([
             'inspection_spec_id' => $spec->id,
             'parameter_name' => 'Visual condition',
+            'acceptance_criterion' => 'No visible damage',
             'parameter_type' => InspectionParameterType::Visual->value,
             'is_critical' => true,
             'sort_order' => 1,

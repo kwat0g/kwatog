@@ -20,6 +20,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
@@ -32,6 +33,7 @@ use Tests\TestCase;
  */
 class CreateDeliveryDriverGateTest extends TestCase
 {
+    use HasPassedInProcessQc;
     use ReceivesProductionOutput;
     use RefreshDatabase;
 
@@ -93,6 +95,8 @@ class CreateDeliveryDriverGateTest extends TestCase
         $officer = $this->officer();
         $soItem = $this->soItem();
         $inspection = Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->whereNotNull('work_order_output_id')
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', WorkOrder::query()->where('sales_order_item_id', $soItem->id)->value('id'))
             ->firstOrFail();
@@ -201,6 +205,7 @@ class CreateDeliveryDriverGateTest extends TestCase
             'status' => 'completed',
             'created_by' => $user->id,
         ]);
+        $this->passInProcessQc($workOrder);
 
         $output = WorkOrderOutput::create([
             'work_order_id' => $workOrder->id,
@@ -243,6 +248,8 @@ class CreateDeliveryDriverGateTest extends TestCase
             ->where('sales_order_item_id', $soItem->id)
             ->value('id');
         $inspection = Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->whereNotNull('work_order_output_id')
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', $workOrderId)
             ->firstOrFail();

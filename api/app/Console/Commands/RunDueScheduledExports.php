@@ -17,7 +17,9 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Series E (Task E2) — every-5-min scheduler tick. For each due export:
@@ -86,6 +88,9 @@ class RunDueScheduledExports extends Command
                 if ($token !== null) {
                     $this->releaseAfterFailure($row, $token, $e);
                 }
+                if ($e instanceof ValidationException) {
+                    $row->update(['is_active' => false]);
+                }
                 $this->emailFailures->notify(
                     $row->owner,
                     'Scheduled export',
@@ -146,6 +151,8 @@ class RunDueScheduledExports extends Command
             throw new \RuntimeException('Scheduled export owner no longer exists.');
         }
 
+        $row->setRelation('owner', $this->runner->freshActor($row->owner));
+
         // Revalidate the persisted module, columns, filters, implementation,
         // and owner capability immediately before background execution. A
         // schedule may outlive a role/permission change, and its JSON payload
@@ -157,6 +164,7 @@ class RunDueScheduledExports extends Command
             (array) ($row->filters ?? []),
             $row->owner,
         );
+        $authorizationContext = $this->runner->authorizationContext($row->owner, (array) $row->columns, (array) ($row->filters ?? []));
         $filename = sprintf(
             '%s-%s.%s',
             str_replace('.', '_', $row->module),
@@ -177,9 +185,11 @@ class RunDueScheduledExports extends Command
                 $format,
                 $row->owner->id,
                 true,
+                scheduleId: (int) $row->id,
+                authorizationContext: $authorizationContext,
             ));
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Storage::disk(ScheduledExportArtifactService::DISK)->delete($artifactPath);
+            Storage::disk(ScheduledExportArtifactService::DISK)->delete($artifactPath);
             throw $e;
         }
 

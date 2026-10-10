@@ -130,7 +130,7 @@ export default function SupplierDashboardPage() {
                               to={`/portal/supplier/invoices/${inv.id}`}
                               className="font-mono font-medium text-accent hover:underline"
                             >
-                              {inv.bill_number}
+                              {inv.supplier_invoice_number}
                             </Link>
                           </Td>
                           <Td className="text-muted">{inv.date ? formatDate(inv.date) : '—'}</Td>

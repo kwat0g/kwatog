@@ -18,11 +18,11 @@ export const supplyChainRoutes = (
  <Route element={<ModuleGuard module="supply_chain" />}>
  <Route path="/supply-chain" element={<Navigate to="/supply-chain/deliveries" replace />} />
  <Route path="/supply-chain/shipments"
- element={<PermissionGuard permission="supply_chain.view"><ShipmentsListPage /></PermissionGuard>} />
+ element={<PermissionGuard anyOf={['supply_chain.view', 'supply_chain.shipments.view']}><ShipmentsListPage /></PermissionGuard>} />
  <Route path="/supply-chain/shipments/create"
  element={<PermissionGuard permission="supply_chain.shipments.manage"><ShipmentCreatePage /></PermissionGuard>} />
  <Route path="/supply-chain/shipments/:id"
- element={<PermissionGuard permission="supply_chain.view"><ShipmentDetailPage /></PermissionGuard>} />
+ element={<PermissionGuard anyOf={['supply_chain.view', 'supply_chain.shipments.view']}><ShipmentDetailPage /></PermissionGuard>} />
  {/* Either the broad module read or the narrow delivery read. The warehouse
      holds only the latter, and its dashboard tile links straight here — a
      single-permission guard would have 403'd its own "Open →". */}

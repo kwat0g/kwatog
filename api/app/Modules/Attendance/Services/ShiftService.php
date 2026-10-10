@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Support\TrashedFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\Shift;
+use App\Modules\HR\Models\Employee;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -23,10 +25,13 @@ class ShiftService
     {
         $q = Shift::query();
         TrashedFilter::apply($q, $filters);
-        if (!empty($filters['search'])) $q->where('name', SearchOperator::like(), SearchOperator::contains($filters['search']));
+        if (! empty($filters['search'])) {
+            $q->where('name', SearchOperator::like(), SearchOperator::contains($filters['search']));
+        }
         if (array_key_exists('is_active', $filters) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }
+
         return $q->orderBy('name')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
@@ -46,6 +51,7 @@ class ShiftService
     public function update(Shift $shift, array $data): Shift
     {
         return DB::transaction(function () use ($shift, $data) {
+            $this->lockAffectedEmployees($shift);
             $locked = Shift::query()->lockForUpdate()->findOrFail($shift->getKey());
             $recomputeDtr = array_intersect(array_keys($data), self::DTR_INPUT_FIELDS) !== [];
             $this->assertDistinctTimes(
@@ -71,7 +77,25 @@ class ShiftService
                 throw new BusinessRuleException('Choose another default shift before disabling or unmarking this one.');
             }
 
-            $locked->update($data);
+            $locked->fill($data);
+            $rulesChanged = $locked->isDirty(self::DTR_INPUT_FIELDS);
+            $locked->save();
+            if ($rulesChanged) {
+                $employeeIds = $locked->assignments()->pluck('employee_id')->map(fn ($id) => (int) $id)->all();
+                app(WorkOrderAssignmentService::class)->assertCalendarChangesSafe($employeeIds);
+                if (Attendance::withTrashed()->where('shift_id', $locked->id)->whereHas('punches')->exists()) {
+                    throw new BusinessRuleException('This shift has recorded punch history. Create a new shift and assign it from a future date.');
+                }
+                $history = Attendance::withTrashed()->where('shift_id', $locked->id)->whereHas('employee')
+                    ->whereExists(fn ($query) => $query->selectRaw('1')->from('payroll_periods')
+                        ->whereIn('status', ['processing', 'computed', 'approved', 'finalized', 'disbursed'])
+                        ->whereColumn('period_start', '<=', 'attendances.date')->whereColumn('period_end', '>=', 'attendances.date'))->cursor();
+                foreach ($history as $attendance) {
+                    if (! app(AttendanceDateMutabilityGuard::class)->isMutable((int) $attendance->employee_id, $attendance->date->toDateString())) {
+                        throw new BusinessRuleException('This shift has recorded punch or locked payroll history. Create a new shift and assign it from a future date.');
+                    }
+                }
+            }
 
             if ($recomputeDtr) {
                 $attendanceDays = Attendance::query()
@@ -93,6 +117,12 @@ class ShiftService
                 }
             }
 
+            if ($rulesChanged) {
+                foreach ($employeeIds as $employeeId) {
+                    app(WorkOrderAssignmentService::class)->notifyStaffingChange($employeeId, 'shift-'.$locked->id.'-'.sha1(json_encode($data)), 'HR shift hours changed. Review the saved WO crew and schedule.');
+                }
+            }
+
             return $locked->fresh();
         });
     }
@@ -100,6 +130,7 @@ class ShiftService
     public function restore(Shift $shift): void
     {
         DB::transaction(function () use ($shift): void {
+            $this->lockAffectedEmployees($shift);
             $locked = Shift::withTrashed()->lockForUpdate()->findOrFail($shift->getKey());
             $locked->restore();
         });
@@ -108,6 +139,7 @@ class ShiftService
     public function delete(Shift $shift): void
     {
         DB::transaction(function () use ($shift): void {
+            $this->lockAffectedEmployees($shift);
             $locked = Shift::query()->lockForUpdate()->findOrFail($shift->getKey());
             if ($locked->is_default) {
                 throw new BusinessRuleException('Choose another default shift before deleting this one.');
@@ -117,6 +149,13 @@ class ShiftService
             }
             $locked->delete();
         });
+    }
+
+    private function lockAffectedEmployees(Shift $shift): void
+    {
+        Employee::whereIn('id', $shift->assignments()->select('employee_id'))
+            ->orWhereIn('id', Attendance::where('shift_id', $shift->id)->select('employee_id'))
+            ->orderBy('id')->lockForUpdate()->get();
     }
 
     private function assertDistinctTimes(mixed $start, mixed $end): void

@@ -12,86 +12,115 @@ import { wasReportedGlobally } from '@/api/client';
 type ValidationMessage = { path: string; message: string };
 
 function humanizePath(path: string): string {
- return path
-  .replace(/\.(\d+)(?=\.)/g, ' $1')
-  .replace(/[._-]+/g, ' ')
-  .replace(/\b\w/g, (char) => char.toUpperCase());
+  return path
+    .replace(/\.(\d+)(?=\.)/g, ' $1')
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function collectMessages(errors: Record<string, unknown>, parentPath = ''): ValidationMessage[] {
- const msgs: ValidationMessage[] = [];
+  const msgs: ValidationMessage[] = [];
 
- for (const [key, val] of Object.entries(errors)) {
- if (!val || typeof val !== 'object') continue;
- const node = val as Record<string, unknown>;
- const path = parentPath ? `${parentPath}.${key}` : key;
+  for (const [key, val] of Object.entries(errors)) {
+    if (!val || typeof val !== 'object') continue;
+    const node = val as Record<string, unknown>;
+    const path = parentPath ? `${parentPath}.${key}` : key;
 
- // Leaf error: { message: "..." }
- if (typeof node.message === 'string' && node.message) {
- msgs.push({ path, message: node.message });
- continue;
- }
+    // Leaf error: { message: "..." }
+    if (typeof node.message === 'string' && node.message) {
+      msgs.push({ path, message: node.message });
+      continue;
+    }
 
- // Array root error: { root: { message: "..." } }
- const root = node.root as Record<string, unknown> | undefined;
- if (root && typeof root.message === 'string' && root.message) {
- msgs.push({ path, message: root.message });
- }
+    // Array root error: { root: { message: "..." } }
+    const root = node.root as Record<string, unknown> | undefined;
+    if (root && typeof root.message === 'string' && root.message) {
+      msgs.push({ path, message: root.message });
+    }
 
- // Recurse into nested objects / array items
- msgs.push(...collectMessages(node, path));
- }
+    // Recurse into nested objects / array items
+    msgs.push(...collectMessages(node, path));
+  }
 
- return msgs.filter((entry, index, all) => all.findIndex((item) => item.path === entry.path && item.message === entry.message) === index);
+  return msgs.filter(
+    (entry, index, all) =>
+      all.findIndex((item) => item.path === entry.path && item.message === entry.message) === index,
+  );
 }
 
-function formatValidationMessage(path: string, message: string, labels?: Record<string, string>): string {
- const label = labels?.[path] ?? humanizePath(path);
- if (/^(required|is required|this field is required)\.?$/i.test(message.trim())) return `${label} is required.`;
- if (message.toLowerCase().includes(label.toLowerCase())) return message;
- return `${label}: ${message}`;
+function formatValidationMessage(
+  path: string,
+  message: string,
+  labels?: Record<string, string>,
+): string {
+  const label = labels?.[path] ?? humanizePath(path);
+  // Laravel's "The bank name field is prohibited." means the API refuses this field on this
+  // endpoint; say what that means for the person, not the validator's word for it.
+  if (/\bis prohibited\b/i.test(message)) return `${label} can't be changed here.`;
+  if (/^(required|is required|this field is required)\.?$/i.test(message.trim()))
+    return `${label} is required.`;
+  if (message.toLowerCase().includes(label.toLowerCase())) return message;
+  return `${label}: ${message}`;
 }
 
 export function focusFirstInvalidField(): void {
- if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined') return;
 
- // RHF updates aria-invalid before invoking the invalid callback. Deferring a
- // frame lets the browser see the new attributes and keeps keyboard users at
- // the first field that needs attention instead of leaving focus on Submit.
- window.setTimeout(() => {
- const firstInvalid = document.querySelector<HTMLElement>(
- '[aria-invalid="true"]:not([disabled])',
- );
- firstInvalid?.focus({ preventScroll: false });
- }, 0);
+  // RHF updates aria-invalid before invoking the invalid callback. Deferring a
+  // frame lets the browser see the new attributes and keeps keyboard users at
+  // the first field that needs attention instead of leaving focus on Submit.
+  window.setTimeout(() => {
+    const firstInvalid = document.querySelector<HTMLElement>(
+      '[aria-invalid="true"]:not([disabled])',
+    );
+    firstInvalid?.focus({ preventScroll: false });
+  }, 0);
 }
 
 export function onFormInvalid<T extends FieldValues>(
- labels?: Partial<Record<keyof T & string, string>>,
+  labels?: Partial<Record<keyof T & string, string>>,
 ): (errors: FieldErrors<T>) => void {
- return (errors) => {
- focusFirstInvalidField();
- const messages = collectMessages(errors as Record<string, unknown>).map(({ path, message }) =>
-  formatValidationMessage(path, message, labels as Record<string, string> | undefined),
- );
+  return (errors) => {
+    focusFirstInvalidField();
+    const messages = collectMessages(errors as Record<string, unknown>).map(({ path, message }) =>
+      formatValidationMessage(path, message, labels as Record<string, string> | undefined),
+    );
 
- if (messages.length === 0) {
- toast.error('Enter the required fields before submitting.', { duration: 5000 });
- return;
- }
+    if (messages.length === 0) {
+      toast.error('Enter the required fields before submitting.', { duration: 5000 });
+      return;
+    }
 
- if (messages.length === 1) {
- toast.error(messages[0], { duration: 5000 });
- return;
- }
+    if (messages.length === 1) {
+      toast.error(messages[0], { duration: 5000 });
+      return;
+    }
 
- // Multiple: show up to 3 specific messages, then "and N more"
- const head = messages.slice(0, 3);
- const more = messages.length > 3 ? `\n• …and ${messages.length - 3} more` : '';
- toast.error(`Please fix the following:\n• ${head.join('\n• ')}${more}`, { duration: 6000 });
- };
+    // Multiple: show up to 3 specific messages, then "and N more"
+    const head = messages.slice(0, 3);
+    const more = messages.length > 3 ? `\n• …and ${messages.length - 3} more` : '';
+    toast.error(`Please fix the following:\n• ${head.join('\n• ')}${more}`, { duration: 6000 });
+  };
 }
 
+/**
+ * One readable toast for a Laravel field-error map. Laravel's own `message` for several
+ * errors is "<first error> (and N more errors)", which hides every error after the first.
+ * Lists up to three field messages, then how many more.
+ */
+export function summarizeServerErrors(
+  errors: Record<string, string[]>,
+  labels?: Record<string, string>,
+): string {
+  const messages = Object.entries(errors).map(([field, msgs]) =>
+    formatValidationMessage(field, msgs[0] ?? 'Enter a valid value.', labels),
+  );
+  if (messages.length <= 1) return messages[0] ?? 'Check the highlighted fields and try again.';
+
+  const more = messages.length > 3 ? `\n• …and ${messages.length - 3} more` : '';
+
+  return `Please fix the following:\n• ${messages.slice(0, 3).join('\n• ')}${more}`;
+}
 
 /**
  * Map a Laravel 422 response into RHF `setError` calls and surface a toast.
@@ -99,33 +128,33 @@ export function onFormInvalid<T extends FieldValues>(
  * fall back to a generic toast).
  */
 export function applyServerValidationErrors<T extends FieldValues>(
- err: unknown,
- setError: UseFormSetError<T>,
- fallbackMessage = 'Failed to save. Please try again.',
+  err: unknown,
+  setError: UseFormSetError<T>,
+  fallbackMessage = 'Failed to save. Please try again.',
 ): boolean {
- if (err instanceof AxiosError && err.response?.status === 422) {
- const data = err.response.data as ApiValidationError;
- if (data.errors) {
- Object.entries(data.errors).forEach(([field, msgs]) => {
- setError(field as Path<T>, { type: 'server', message: msgs[0] });
- });
- const first = Object.entries(data.errors)[0];
- if (first) {
-  const [field, messages] = first;
-  toast.error(formatValidationMessage(field, messages[0] ?? 'Enter a valid value.'));
- }
- // The fields are now marked aria-invalid; send the keyboard there rather
- // than leaving focus on a submit button the user just bounced off.
- focusFirstInvalidField();
- return true;
- }
- if (data.message) {
- toast.error(data.message);
- return true;
- }
- }
- reportMutationError(err, fallbackMessage);
- return false;
+  if (err instanceof AxiosError && err.response?.status === 422) {
+    const data = err.response.data as ApiValidationError;
+    if (data.errors) {
+      Object.entries(data.errors).forEach(([field, msgs]) => {
+        setError(field as Path<T>, { type: 'server', message: msgs[0] });
+      });
+      const first = Object.entries(data.errors)[0];
+      if (first) {
+        const [field, messages] = first;
+        toast.error(formatValidationMessage(field, messages[0] ?? 'Enter a valid value.'));
+      }
+      // The fields are now marked aria-invalid; send the keyboard there rather
+      // than leaving focus on a submit button the user just bounced off.
+      focusFirstInvalidField();
+      return true;
+    }
+    if (data.message) {
+      toast.error(data.message);
+      return true;
+    }
+  }
+  reportMutationError(err, fallbackMessage);
+  return false;
 }
 
 /**
@@ -142,23 +171,29 @@ export function applyServerValidationErrors<T extends FieldValues>(
  *    saying "Failed to create PO." would be less true, not more helpful.
  */
 export function reportMutationError(err: unknown, fallbackMessage: string): void {
- if (wasReportedGlobally(err)) return;
+  if (wasReportedGlobally(err)) return;
 
- if (err instanceof AxiosError) {
-  const data = err.response?.data as { message?: string; errors?: Record<string, string[]> } | undefined;
-  // A 422 with no field map still carries a usable sentence ("Budget for this
-  // fiscal year already exists"). Field-level 422s are handled above.
-  const firstFieldError = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined;
-  toast.error(firstFieldError ?? data?.message ?? fallbackMessage);
-  return;
- }
+  if (err instanceof AxiosError) {
+    const data = err.response?.data as
+      | { message?: string; errors?: Record<string, string[]> }
+      | undefined;
+    // A 422 with no field map still carries a usable sentence ("Budget for this
+    // fiscal year already exists"). Field-level 422s are handled above.
+    const firstFieldError = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined;
+    toast.error(firstFieldError ?? data?.message ?? fallbackMessage);
+    return;
+  }
 
- // A plain Error thrown by client-side guard code is authored copy, so it is
- // safe to show. Anything else is not a message.
- if (err instanceof Error && err.message && !/^Request failed with status code/.test(err.message)) {
-  toast.error(err.message);
-  return;
- }
+  // A plain Error thrown by client-side guard code is authored copy, so it is
+  // safe to show. Anything else is not a message.
+  if (
+    err instanceof Error &&
+    err.message &&
+    !/^Request failed with status code/.test(err.message)
+  ) {
+    toast.error(err.message);
+    return;
+  }
 
- toast.error(fallbackMessage);
+  toast.error(fallbackMessage);
 }

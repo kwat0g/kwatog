@@ -26,7 +26,7 @@ class SeparationController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return ClearanceResource::collection($this->service->list($request->query()));
+        return ClearanceResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function options(): JsonResponse
@@ -41,9 +41,9 @@ class SeparationController
         ]]);
     }
 
-    public function show(Clearance $clearance): ClearanceResource
+    public function show(Request $request, Clearance $clearance): ClearanceResource
     {
-        return new ClearanceResource($this->service->show($clearance));
+        return new ClearanceResource($this->service->show($clearance, $request->user()));
     }
 
     /**

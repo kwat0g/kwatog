@@ -34,6 +34,15 @@ export interface PayrollPeriodSummary {
  total_gross: string;
  total_deductions: string;
  total_net: string;
+ deduction_breakdown: {
+  sss_employee_share: string;
+  philhealth_employee_share: string;
+  pagibig_employee_share: string;
+  withholding_tax: string;
+  loan_deductions: string;
+ };
+ uncategorized_deductions: string;
+ net_adjustments: string;
 }
 
 export interface BankFileRef {
@@ -69,6 +78,12 @@ export interface PayrollPeriod {
  creator?: { id: string; name: string };
  summary?: PayrollPeriodSummary | null;
  gl_entry_number?: string | null;
+ gl_reversal?: {
+  original_entry_id: string;
+  original_entry_number: string;
+  reversal_entry_id: string;
+  reversal_entry_number: string;
+ } | null;
  gl_handoff_status?: PayrollGlHandoffStatus;
  gl_handoff_status_label?: string;
  gl_handoff_note?: string | null;

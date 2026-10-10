@@ -39,11 +39,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 class ReturnCaseCustomerReplacementTest extends TestCase
 {
+    use HasPassedInProcessQc;
     use ReceivesProductionOutput;
     use RefreshDatabase;
 
@@ -113,7 +115,6 @@ class ReturnCaseCustomerReplacementTest extends TestCase
             ->assertOk()->json('data.replacement_order.id');
         $replacement = SalesOrder::query()->where('return_case_id', ReturnCase::tryDecodeHash($case['id']))->firstOrFail();
         $this->assertSame('0.00', $replacement->total_amount);
-        $this->actingAs($salesOfficer)->postJson('/api/v1/crm/sales-orders/'.$replacementId.'/confirm')->assertOk();
         $replacement->refresh();
         $this->assertSame(SalesOrderStatus::Confirmed, $replacement->status);
 
@@ -129,6 +130,7 @@ class ReturnCaseCustomerReplacementTest extends TestCase
             'planned_start' => now()->subDay(), 'planned_end' => now(), 'status' => 'completed',
             'created_by' => $salesOfficer->id,
         ]);
+        $this->passInProcessQc($workOrder);
         $output = WorkOrderOutput::create([
             'work_order_id' => $workOrder->id, 'recorded_by' => $salesOfficer->id,
             'recorded_at' => now(), 'good_count' => 5, 'reject_count' => 0,
@@ -172,16 +174,15 @@ class ReturnCaseCustomerReplacementTest extends TestCase
             'plate_number' => 'RMA-'.Str::upper(Str::random(6)), 'name' => 'RMA replacement van',
             'vehicle_type' => 'van', 'status' => 'available',
         ]);
-        $this->actingAs($warehouseOperator)->patchJson($deliveryPath.'/assignment', [
+        $this->actingAs($warehouseOperator)->post($deliveryPath.'/shipment-plan', [
             'vehicle_id' => $vehicle->hash_id, 'driver_id' => $driver->hash_id,
-            'reason' => 'Assign replacement shipment.',
-        ])->assertOk();
-        $this->actingAs($warehouseOperator)->patchJson($deliveryPath.'/status', ['status' => 'loading'])->assertOk();
-        $this->actingAs($warehouseOperator)->patchJson($deliveryPath.'/status', ['status' => 'in_transit'])->assertOk();
-        $this->actingAs($warehouseOperator)->patchJson($deliveryPath.'/status', ['status' => 'delivered'])->assertOk();
-        $this->actingAs($warehouseOperator)->postJson($deliveryPath.'/proofs', [
-            'proof_type' => 'signed_dr', 'file' => UploadedFile::fake()->create('signed-dr.pdf', 10, 'application/pdf'),
-        ])->assertCreated();
+            'scheduled_date' => now()->toDateString(), 'expected_delivery_date' => now()->toDateString(),
+            'carrier' => 'Ogami delivery fleet', 'reason' => 'Assign replacement shipment.', 'dispatch' => true,
+            'loading_photo' => UploadedFile::fake()->image('loaded.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk()->assertJsonPath('data.status', 'in_transit');
+        $this->actingAs($driver)->post('/api/v1/driver/deliveries/'.$delivery['id'].'/receipt', [
+            'photo' => UploadedFile::fake()->image('customer-receipt.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk()->assertJsonPath('data.status', 'delivered');
         $this->actingAs($warehouseOperator)->postJson($deliveryPath.'/confirm', [
             'receiver_name' => 'Customer receiving desk',
         ])->assertOk()->assertJsonPath('data.status', 'confirmed')
@@ -189,7 +190,7 @@ class ReturnCaseCustomerReplacementTest extends TestCase
 
         $this->assertSame(0, $replacement->invoices()->count());
         $this->assertDatabaseCount('invoices', 0);
-        $this->actingAs($customerService)->postJson($actions, ['action' => 'resolve'])
+        $this->actingAs($customerService)->getJson($casePath)
             ->assertOk()->assertJsonPath('data.status', 'resolved');
         $this->assertSame(0, $replacement->fresh()->invoices()->count());
     }

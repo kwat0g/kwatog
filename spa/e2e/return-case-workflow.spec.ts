@@ -48,6 +48,7 @@ async function setup(page: import('@playwright/test').Page): Promise<{ posts: Ar
 }
 
 test('desktop intake submits a delivery problem and retry repeats the idempotent request', async ({ page }) => {
+  test.info().annotations.push({ type: 'expected-http-response', description: '422 POST /api/v1/return-management/cases' });
   const { posts } = await setup(page);
   await page.goto('/return-management/cases/new');
   await page.getByLabel('Search by document number').fill('DEL-CASE');
@@ -163,6 +164,7 @@ test('finance credit manager without return manage can create a credit in progre
 });
 
 test('supplier redelivery links additive receipts and retains both choices after a failed save', async ({ page }) => {
+  test.info().annotations.push({ type: 'expected-http-response', description: '422 POST /api/v1/return-management/cases/split_case/actions' });
   await mockAuth(page, {
     id: 'supplier_manager', name: 'Returns', email: 'returns@ogami.test', roleSlug: 'return_manager', roleName: 'Return Manager',
     permissions: ['return_management.view', 'return_management.manage'],
@@ -186,7 +188,7 @@ test('supplier redelivery links additive receipts and retains both choices after
   let attempts = 0;
   let submitted: Record<string, unknown> | null = null;
   await page.route('**/return-management/cases/split_case/actions', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
+    if (route.request().method() !== 'POST') return route.fallback();
     attempts += 1;
     submitted = route.request().postDataJSON() as Record<string, unknown>;
     if (attempts === 1) return route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ message: 'Receipt links could not be saved yet.' }) });

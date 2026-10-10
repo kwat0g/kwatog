@@ -1,15 +1,12 @@
 /**
  * concurrent-payroll.js
  *
- * Simulates concurrent access to the payroll module — a critical financial
- * operation that must be serialized correctly under load.
+ * Simulates concurrent read access to the payroll module.
  *
- * This script deliberately uses a LOW VU count (10) because payroll
- * endpoints acquire row-level locks and involve heavy DB computation.
+ * This script deliberately uses a LOW VU count (10) for this read workload.
  * The goal is to verify:
  *   1. No 500 Internal Server Errors under concurrent access
- *   2. Proper serialization — responses are either 200 OK or 403 Forbidden
- *      (if another period is being finalized), never 500
+ *   2. Responses are either 200 OK or 403 Forbidden, never 500
  *   3. Response bodies are valid JSON with the expected structure
  *
  * Pass-criteria (enforced by thresholds):
@@ -19,7 +16,7 @@
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, getAuthCookie } from './config.js';
+import { BASE_URL, getAuthCookie, getStatefulHeaders, loadTestEmail } from './config.js';
 
 export const options = {
   vus: 10,
@@ -32,30 +29,39 @@ export const options = {
   },
 };
 
-export default function () {
-  // ------------------------------------------------------------------ auth --
-  const sessionCookie = getAuthCookie(BASE_URL);
-  if (!sessionCookie) {
-    console.error('VU authentication failed — skipping iteration');
-    return;
+export function setup() {
+  const sessions = [];
+  for (let userId = 1; userId <= 10; userId++) {
+    const email = loadTestEmail('system-admin', userId);
+    const cookie = getAuthCookie(BASE_URL, email);
+    if (!cookie) {
+      throw new Error(`Load-test authentication failed for ${email}`);
+    }
+    sessions.push({ email, cookie });
   }
+  return { sessions };
+}
+
+export default function (data) {
+  const { cookie: sessionCookie } = data.sessions[(__VU - 1) % data.sessions.length];
 
   const headers = {
     Accept: 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    ...getStatefulHeaders(BASE_URL),
     Cookie: sessionCookie,
   };
 
   // -------------------------------------------------- list payroll periods --
   const periodsRes = http.get(
-    `${BASE_URL}/api/v1/payroll/periods?page=1&per_page=10`,
+    `${BASE_URL}/api/v1/payroll-periods?page=1&per_page=10`,
     { headers },
   );
 
   // Acceptable statuses:
   //   200 — success
   //   403 — user lacks payroll.view permission (expected for non-payroll users)
-  //   No 500s allowed — that would indicate a serialization failure
+  //   No 500s allowed — that would indicate a server failure
   const periodsOk = check(periodsRes, {
     'payroll/periods no server error': (r) =>
       r.status !== 500 && r.status !== 502 && r.status !== 503,
@@ -111,7 +117,7 @@ export default function () {
 
     if (latestPeriodId) {
       const detailRes = http.get(
-        `${BASE_URL}/api/v1/payroll/periods/${latestPeriodId}`,
+        `${BASE_URL}/api/v1/payroll-periods/${latestPeriodId}`,
         { headers },
       );
 

@@ -24,7 +24,7 @@ class Bill extends Model
     }
 
     protected $fillable = [
-        'bill_number', 'vendor_id', 'department_id', 'purchase_order_id', 'goods_receipt_note_id', 'landed_cost_shipment_id', 'provenance_type', 'exception_evidence', 'exception_owner_id', 'exception_approved_by', 'exception_approved_at',
+        'bill_number', 'vendor_id', 'department_id', 'purchase_order_id', 'goods_receipt_note_id', 'supplier_invoice_id', 'landed_cost_shipment_id', 'provenance_type', 'exception_evidence', 'exception_owner_id', 'exception_approved_by', 'exception_approved_at',
         'date', 'due_date', 'is_vatable', 'withholding_tax_type', 'ewt_rate', 'ewt_amount', 'cancelled_at', 'cancelled_by',
         'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
         'status', 'journal_entry_id', 'created_by', 'remarks',
@@ -65,6 +65,11 @@ class Bill extends Model
     public function goodsReceiptNote(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Inventory\Models\GoodsReceiptNote::class);
+    }
+
+    public function supplierInvoice(): BelongsTo
+    {
+        return $this->belongsTo(SupplierInvoice::class);
     }
 
     public function landedCostShipment(): BelongsTo

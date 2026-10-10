@@ -35,6 +35,8 @@ export interface ItemCategory {
   name: string;
   parent_id: string | null;
   parent_name: string | null;
+  item_type?: ItemType | null;
+  item_type_label?: string | null;
   children?: ItemCategory[];
 }
 
@@ -43,7 +45,8 @@ export interface Item {
   code: string;
   name: string;
   description: string | null;
-  category: { id: string; name: string } | null;
+  category: { id: string; name: string; item_type?: ItemType | null } | null;
+  classification_needs_review?: boolean;
   item_type: ItemType;
   item_type_label: string;
   unit_of_measure: string;
@@ -59,6 +62,11 @@ export interface Item {
   on_hand_quantity: string;
   reserved_quantity: string;
   available_quantity: string;
+  approved_free_stock?: string;
+  incoming_stock_quantity?: string;
+  quality_held_quantity?: string;
+  unusable_zone_quantity?: string;
+  usable_quantity?: string;
   stock_status: StockStatus;
   created_at?: string;
   updated_at?: string;
@@ -68,7 +76,8 @@ export type ItemOption = Pick<Item, 'id' | 'code' | 'name' | 'unit_of_measure'>;
 
 export interface QualityPlanParameter {
   parameter_name: string;
-  parameter_type: 'dimensional' | 'visual' | 'functional';
+  parameter_type: 'dimensional' | 'visual' | 'functional' | null;
+  acceptance_criterion?: string;
   unit_of_measure?: string | null;
   nominal_value?: number | null;
   tolerance_min?: number | null;
@@ -78,6 +87,7 @@ export interface QualityPlanParameter {
 }
 
 export interface ItemQualityPlan {
+  capture_method?: 'measurement' | 'checklist';
   id: string;
   version: number;
   stage: 'incoming';
@@ -99,7 +109,7 @@ export interface CreateItemData {
   name: string;
   description?: string;
   category_id: string;
-  item_type: ItemType;
+  item_type?: ItemType;
   unit_of_measure: string;
   standard_cost: string;
   reorder_method: ReorderMethod;
@@ -155,6 +165,10 @@ export interface StockLevel {
   quantity: string;
   reserved_quantity: string;
   available: string;
+  usable_quantity?: string;
+  quality_held_quantity?: string;
+  expired_quantity?: string;
+  unusable_zone_quantity?: string;
   weighted_avg_cost: string;
   total_value: string;
   lock_version: number;
@@ -162,11 +176,13 @@ export interface StockLevel {
 }
 
 export interface StockMovement {
+  handover?: MaterialHandover | null;
+  handover_remaining_quantity?: string | null;
   id: string;
   created_at: string;
   movement_type: StockMovementType;
   movement_type_label?: string;
-  item: { id: string; code: string; name: string } | null;
+  item: { id: string; code: string; name: string; unit_of_measure?: string } | null;
   from_location: { id: string; code: string } | null;
   to_location: { id: string; code: string } | null;
   quantity: string;
@@ -182,9 +198,69 @@ export interface StockMovement {
     journal_entry?: { id: string; entry_number: string } | null;
   };
   reference_type: string | null;
-  reference_id: number | null;
+  reference_id: string | null;
+  reference_label?: string | null;
+  reference_work_order_id?: string | null;
+  reference_url?: string | null;
   remarks: string | null;
   creator: { id: string; name: string } | null;
+}
+
+export interface MaterialHandover {
+  recipient_name: string;
+  quantity: string;
+  handed_over_at: string;
+  recorded_by: string | null;
+}
+
+export interface MaterialHandoverTask {
+  maintenance_work_order_id?: string | null;
+  id: string;
+  work_order_id: string | null;
+  material_issue_id: string | null;
+  label: string;
+  status: 'pending' | 'handed_over' | 'needs_review';
+  total_lines: number;
+  handed_over_lines: number;
+  pending_lines: number;
+  latest_issue_at: string | null;
+}
+
+export interface MaterialHandoverSource {
+  request_id?: string | null;
+  requested_quantity?: string;
+  movement_id: string;
+  item: { id: string; code: string; name: string; unit_of_measure: string };
+  location: { id: string; code: string } | null;
+  lot_number: string | null;
+  issued_quantity: string;
+  returned_quantity: string;
+  remaining_quantity: string;
+  eligible: boolean;
+  handover: MaterialHandover | null;
+}
+
+export interface MaterialHandoverTaskDetail extends MaterialHandoverTask {
+  sources: MaterialHandoverSource[];
+  recipients: Array<{ value: string; label: string }>;
+  default_recipient_id: string | null;
+}
+
+export interface MaterialReservation {
+  id: string;
+  work_order: { id: string; wo_number: string } | null;
+  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
+  location: { id: string; full_code: string } | null;
+  quantity: string;
+  status: 'reserved' | 'issued' | 'released';
+  reserved_at: string | null;
+  ended_at: string | null;
+}
+
+export interface WorkOrderReservations {
+  id: string;
+  work_order: MaterialReservation['work_order'];
+  materials: MaterialReservation[];
 }
 
 export interface MaterialReturnOptions {
@@ -201,7 +277,12 @@ export interface MaterialReturnOptions {
   lot_number?: string | null;
   gross_production_units?: string;
   consumption_floor?: string;
-  consumption_basis?: 'unlinked_issue' | 'preproduction' | 'saved_bom_norm' | 'fixed_saved_plan' | 'no_recipe';
+  consumption_basis?:
+    | 'unlinked_issue'
+    | 'preproduction'
+    | 'saved_bom_norm'
+    | 'fixed_saved_plan'
+    | 'no_recipe';
   message?: string | null;
 }
 
@@ -216,7 +297,7 @@ export interface StockAdjustment {
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
   status_label?: string;
-  item: { id: string; code: string; name: string } | null;
+  item: { id: string; code: string; name: string; unit_of_measure?: string } | null;
   location: { id: string; code: string } | null;
   stock_movement: StockMovement | null;
   requested_by: { id: string; name: string } | null;
@@ -232,17 +313,25 @@ export interface StockAdjustment {
 }
 
 export interface GrnItem {
+  active_quality_holds?: Array<{ id: string; ncr_number: string; quantity: string | null }>;
+  original_received_quantity?: string;
+  returned_quantity?: string;
+  net_received_quantity?: string;
   id: string;
   purchase_order_item_id: string;
+  purchase_order_unit?: string | null;
   item?: {
     id: string;
     code: string;
     name: string;
     unit_of_measure: string;
     quality_plan_ready: boolean;
+    stored_bins?: Array<{ id: string; full_code: string; quantity: string }>;
   };
   location?: { id: string; code: string; full_code: string };
   quantity_received: string;
+  quantity_received_in_uom: string | null;
+  received_uom_conversion_factor: string | null;
   quantity_accepted: string;
   quantity_remaining?: string;
   quantity_outstanding?: string | null;
@@ -265,6 +354,17 @@ export interface GrnItem {
 
 export interface GoodsReceiptNote {
   id: string;
+  supplier_shipment?: {
+    id: string;
+    tracking_number: string | null;
+    items: Array<{
+      purchase_order_item_id: string | null;
+      quantity_shipped: string;
+      quantity_received: string;
+      difference: string;
+      unit: string | null;
+    }>;
+  } | null;
   grn_number: string;
   received_date: string | null;
   status: GrnStatus;
@@ -318,6 +418,7 @@ export interface GoodsReceiptNote {
 }
 
 export interface FinalizeGrnData {
+  supplier_shipment_id?: string | null;
   items: Array<{
     purchase_order_item_id: string;
     location_id: string;
@@ -360,6 +461,8 @@ export interface MaterialIssueSlipItem {
   item?: { id: string; code: string; name: string; unit_of_measure: string };
   location?: { id: string; code: string };
   quantity_issued: string;
+  quantity_issued_in_uom: string | null;
+  issued_uom_conversion_factor: string | null;
   unit_cost: string;
   total_cost: string;
   issued_uom_code: string | null;
@@ -407,6 +510,8 @@ export interface MrbRecord {
   disposition: string | null;
   disposition_label?: string | null;
   quantity: string;
+  concession_approval_reference?: string | null;
+  requires_concession_approval?: boolean;
   item: { id: string; code: string; name: string; unit_of_measure: string } | null;
   ncr: {
     id: string;
@@ -427,11 +532,22 @@ export interface MrbRecord {
     status_label?: string | null;
     batch_quantity?: number;
   } | null;
+  return_request: {
+    id: string;
+    rma_number: string;
+    line_id: string;
+    disposition: string | null;
+  } | null;
+  actions?: {
+    can_release: boolean;
+    can_release_good_stock: boolean;
+  };
   source_location: MrbLocation | null;
   quarantine_location: MrbLocation | null;
   release_location: MrbLocation | null;
   hold_movement_id: string | null;
   release_movement_id: string | null;
+  held_by_id: string | null;
   held_by: string | null;
   held_at: string | null;
   released_by: string | null;
@@ -441,6 +557,7 @@ export interface MrbRecord {
 }
 
 export interface CreateMrbData {
+  lot_number?: string;
   item_id: string;
   quantity: string;
   source_location_id: string;
@@ -451,6 +568,10 @@ export interface CreateMrbData {
 }
 
 export interface ReleaseMrbData {
+  concession_approval_reference?: string;
+  inspected_quantity?: string;
+  evidence_reference?: string;
+  recovery_passed?: boolean;
   disposition: MrbDisposition;
   target_location_id?: string;
   notes?: string;

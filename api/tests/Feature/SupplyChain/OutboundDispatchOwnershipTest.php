@@ -13,6 +13,8 @@ use App\Modules\SupplyChain\Models\Delivery;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\TestCase;
 
 /**
@@ -23,11 +25,13 @@ use Tests\TestCase;
  */
 class OutboundDispatchOwnershipTest extends TestCase
 {
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        Storage::fake('local');
         $this->seed(RolePermissionSeeder::class);
     }
 
@@ -56,6 +60,7 @@ class OutboundDispatchOwnershipTest extends TestCase
             'created_by' => $by->id,
         ]);
         $delivery->forceFill(['status' => 'in_transit'])->save();
+        $this->attachDeliveryEvidence($delivery);
 
         return $delivery;
     }

@@ -58,6 +58,7 @@ enum AlertType: string
     case MrpScheduleConflict = 'mrp_schedule_conflict';
     case MrpRunFailed        = 'mrp_run_failed';
     case MrpDataError        = 'mrp_data_error';
+    case ReplenishmentBlocked = 'replenishment_blocked';
 
     /** Raised from SchedulerExecutionLedger::health() — see AlertEngineService::checkScheduler(). */
     case SchedulerStale      = 'scheduler_stale';
@@ -87,6 +88,7 @@ enum AlertType: string
             self::MrpScheduleConflict => 'MRP schedule conflict',
             self::MrpRunFailed => 'MRP run failed',
             self::MrpDataError => 'MRP data error',
+            self::ReplenishmentBlocked => 'Replenishment blocked',
             self::SchedulerStale => 'Scheduler stale',
         };
     }

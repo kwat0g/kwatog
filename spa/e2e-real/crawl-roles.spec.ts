@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { captureNetwork, loginAs, navigateSpa, ROLES } from './helpers';
 
 /**
@@ -28,8 +30,11 @@ test.describe.configure({ mode: 'parallel' });
 const ALL: string[] = JSON.parse(
   fs.readFileSync(new URL('./routes.json', import.meta.url), 'utf8'),
 );
-const ROUTES = ALL.filter((r) => r !== '/login' && r !== '/sign-in' && r !== '/forgot-password' && !r.startsWith('/portal/'));
+const ROUTES = ALL.filter((r) => !['/login', '/sign-in', '/forgot-password', '/reset-password'].includes(r) && !r.startsWith('/portal/'));
 const ROLES_TO_CRAWL = ROLES.filter((r) => r.slug !== 'system_admin');
+const RESULTS_DIR = process.env.E2E_AUDIT_RESULTS_DIR
+  ? path.resolve(process.env.E2E_AUDIT_RESULTS_DIR)
+  : fileURLToPath(new URL('./results/', import.meta.url));
 
 const CHUNK = 25;
 const FORBIDDEN_TEXT = /\b403\b|forbidden|access denied|not authorized|don.t have permission/i;
@@ -43,8 +48,8 @@ test('account number 4030 is not reported as a forbidden page', () => {
 });
 
 function appendRows(file: string, rows: Array<Record<string, unknown>>): void {
-  const resultsUrl = new URL(`./results/${file}`, import.meta.url);
-  fs.mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
+  const resultsUrl = path.join(RESULTS_DIR, file);
+  fs.mkdirSync(RESULTS_DIR, { recursive: true });
   let existing: Array<Record<string, unknown>>;
   try {
     existing = JSON.parse(fs.readFileSync(resultsUrl, 'utf8'));
@@ -67,14 +72,14 @@ ROLES_TO_CRAWL.forEach((role) => {
   test.describe(`${role.slug} route crawl`, () => {
     test.describe.configure({ mode: 'serial' });
     test.beforeAll(() => {
-      fs.mkdirSync(new URL('./results/', import.meta.url), { recursive: true });
-      fs.writeFileSync(new URL(`./results/${file}`, import.meta.url), '[]');
+      fs.mkdirSync(RESULTS_DIR, { recursive: true });
+      fs.writeFileSync(path.join(RESULTS_DIR, file), '[]');
     });
 
     chunks.forEach((routes, ci) => {
       test(`${role.slug}: chunk ${ci + 1}/${chunks.length} (${routes[0]} … ${routes[routes.length - 1]})`, async ({
         page,
-      }) => {
+      }, testInfo) => {
         test.setTimeout(600_000);
         await loginAs(page, role.email, role.password);
         const rows: Array<Record<string, unknown>> = [];
@@ -89,13 +94,53 @@ ROLES_TO_CRAWL.forEach((role) => {
             await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30_000 });
             appBooted = true;
           }
-          await page.waitForTimeout(2500);
+          if (route === '/dashboard') {
+            await page.waitForURL((url) => url.pathname !== '/dashboard', { timeout: 15_000 }).catch(() => undefined);
+          }
+          const routeMain = page.locator('main').first();
+          if ((await routeMain.count()) === 0) {
+            await routeMain.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => undefined);
+          }
+          await page.waitForFunction(
+            () => {
+              const contentRoot = document.querySelector('main') ?? document.body;
+              const hasText = contentRoot.innerText.trim().length >= 20;
+              const hasVisibleSkeleton = Array.from(contentRoot.querySelectorAll('.animate-shimmer')).some((element) => {
+                const { width, height } = element.getBoundingClientRect();
+                return width > 0 && height > 0;
+              });
+              const hasVisibleLoadingStatus = Array.from(contentRoot.querySelectorAll('[role="status"][aria-label="Loading"]')).some((element) => {
+                const { width, height } = element.getBoundingClientRect();
+                return width > 0 && height > 0;
+              });
+              return hasText || hasVisibleSkeleton || hasVisibleLoadingStatus;
+            },
+            undefined,
+            { timeout: 5000 },
+          ).catch(() => undefined);
+          try {
+            await net.waitForApiIdle();
+          } catch (error) {
+            hardFailures.push(`${route} API requests did not settle: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          const loadingIndicators = page.locator('main .animate-shimmer:visible, main [role="status"][aria-label="Loading"]:visible');
+          await expect(loadingIndicators).toHaveCount(0, { timeout: 10_000 }).catch(() => undefined);
           const finalUrl = page.url().replace(/http:\/\/[^/]+/, '');
           const bodyText = ((await page.locator('body').innerText().catch(() => '')) ?? '').trim();
           const main = page.locator('main').first();
           const hasMain = (await page.locator('main').count()) > 0;
           const renderedText = hasMain ? (await main.innerText().catch(() => '')).trim() : bodyText;
-          const blank = renderedText.length < 20;
+          const hasVisibleSkeleton = await (hasMain ? main : page.locator('body'))
+            .locator('.animate-shimmer:visible')
+            .count()
+            .then((count) => count > 0)
+            .catch(() => false);
+          const hasVisibleLoadingStatus = await (hasMain ? main : page.locator('body'))
+            .locator('[role="status"][aria-label="Loading"]:visible')
+            .count()
+            .then((count) => count > 0)
+            .catch(() => false);
+          const blank = renderedText.length < 20 && !hasVisibleSkeleton && !hasVisibleLoadingStatus;
           const serverErrors = net.failedRequests.filter((r) => (r.status as number) >= 500);
           const rateLimits = net.failedRequests.filter((r) => r.status === 429);
           rows.push({
@@ -106,16 +151,33 @@ ROLES_TO_CRAWL.forEach((role) => {
             blank,
             contentRoot: hasMain ? 'main' : 'body',
             forbidden: FORBIDDEN_TEXT.test(bodyText),
+            hasVisibleSkeleton,
+            hasVisibleLoadingStatus,
             consoleErrors: net.errors.slice(0, 5),
+            requestFailures: net.requestFailures.slice(0, 10),
             failedApi: net.failedRequests.slice(0, 10),
           });
           if (serverErrors.length > 0) {
             hardFailures.push(`${route} server errors: ${JSON.stringify(serverErrors)}`);
           }
+          if (!hasMain) {
+            hardFailures.push(`${route} did not render the main landmark`);
+          }
           if (rateLimits.length > 0) {
             hardFailures.push(`${route} rate-limited requests: ${JSON.stringify(rateLimits)}`);
           }
-          if (blank) hardFailures.push(`${route} rendered blank`);
+          if (hasVisibleSkeleton || hasVisibleLoadingStatus) {
+            hardFailures.push(`${route} remained in a loading state after waiting for its route and API requests`);
+          }
+          if (blank) {
+            await testInfo.attach(`blank-${role.slug}-${ci + 1}-${rows.length}.png`, {
+              body: await page.screenshot(),
+              contentType: 'image/png',
+            });
+            hardFailures.push(
+              `${route} rendered blank (main text ${renderedText.length} chars, body text ${bodyText.length} chars, skeleton ${hasVisibleSkeleton}, loading status ${hasVisibleLoadingStatus})`,
+            );
+          }
           net.stop();
           if (/sign-in|\/login/.test(finalUrl)) {
             await loginAs(page, role.email, role.password);

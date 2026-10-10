@@ -96,10 +96,11 @@ class ChartOfAccountsHardeningTest extends TestCase
             ],
         ], $this->admin);
         $this->accounts->deactivate($cash);
+        $checker = User::factory()->create(['role_id' => $this->admin->role_id]);
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('inactive and cannot receive new postings');
-        $journals->post($je, $this->admin);
+        $journals->post($je, $checker);
     }
 
     public function test_generic_update_cannot_change_account_status(): void

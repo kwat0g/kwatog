@@ -1,10 +1,11 @@
 /** Sprint 8 — Task 69. Maintenance WO detail. Action buttons gated by status + permission. */
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
+import { LuPlus } from '@/lib/icons';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
@@ -20,48 +21,46 @@ import { formatDateTime } from '@/lib/formatDate';
 import { maintenanceStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import type { ChainStep } from '@/types/chain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
+import { RecoveryPanel, WorkLogControl, WorkLogContent } from './RecoveryPanel';
+import { SparePartSheet } from './SparePartSheet';
+import { AssignmentPanel } from './AssignmentPanel';
+import { PartReconciliationPanel } from './PartReconciliationPanel';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function MaintenanceWorkOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const { can } = usePermission();
+  const { can, canAny } = usePermission();
+  const selfService = useLocation().pathname.startsWith('/self-service/');
+  const isSupervisor = useAuthStore((state) => state.user?.role.slug === 'maintenance_supervisor');
   const qc = useQueryClient();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeRemarks, setCompleteRemarks] = useState('');
-  const [completeDowntime, setCompleteDowntime] = useState<number>(0);
   const [confirmStart, setConfirmStart] = useState(false);
   // The cancellation reason is part of the work order's history, so it is
   // collected in ReasonDialog rather than window.prompt.
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [assigneeId, setAssigneeId] = useState('');
+  const [partOpen, setPartOpen] = useState(false);
+  const [inspectionReason, setInspectionReason] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'work-order', id],
     queryFn: () => workOrdersApi.show(id),
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
   const { data: options } = useQuery({
     queryKey: ['maintenance', 'work-order-options'],
     queryFn: workOrdersApi.options,
     staleTime: 5 * 60 * 1000,
   });
-  const { data: assignees } = useQuery({
-    queryKey: ['maintenance', 'work-order-assignees'],
-    queryFn: workOrdersApi.assignees,
-    enabled: can('maintenance.wo.assign'),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  useEffect(() => {
-    setAssigneeId(data?.assignee?.id ?? '');
-  }, [data?.assignee?.id]);
-
   const startMutation = useMutation({
     mutationFn: () => workOrdersApi.start(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
+      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+      setConfirmStart(false);
       toast.success('Work order started.');
     },
     onError: (error) => reportMutationError(error, 'Could not start the work order.'),
@@ -70,34 +69,36 @@ export default function MaintenanceWorkOrderDetailPage() {
     mutationFn: () =>
       workOrdersApi.complete(id, {
         remarks: completeRemarks || undefined,
-        downtime_minutes: completeDowntime,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
+      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
       toast.success('Work order completed.');
       setCompleteOpen(false);
     },
     onError: (error) => reportMutationError(error, 'Could not complete the work order.'),
   });
   const cancelMutation = useMutation({
-    mutationFn: (reason: string) => workOrdersApi.cancel(id, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
-      toast.success('Work order cancelled.');
-      setCancelOpen(false);
+    mutationFn: async (reason: string) => {
+      if (isSupervisor) {
+        const updated = await workOrdersApi.reconcileParts(id, {
+          ...(data?.parts_readiness?.outstanding.length ? { confirm_consumed: true } : {}),
+          inspection_reason: inspectionReason.trim(),
+        });
+        qc.setQueryData(['maintenance', 'work-order', id], updated);
+        void qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
+      }
+      return workOrdersApi.cancel(id, reason);
     },
-    onError: (error) => reportMutationError(error, 'Could not cancel the work order.'),
-  });
-  const assignMutation = useMutation({
-    mutationFn: () => workOrdersApi.assign(id, assigneeId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
-      toast.success('Work order assigned.');
+      toast.success('Work order cancelled.');
+      setCancelOpen(false);
+      setInspectionReason('');
     },
-    onError: (error) => reportMutationError(error, 'Could not assign the work order.'),
+    onError: (error) => reportMutationError(error, 'Could not cancel the work order.'),
   });
-
   if (isLoading) return <SkeletonDetail />;
   if (isError || !data) {
     return (
@@ -133,22 +134,25 @@ export default function MaintenanceWorkOrderDetailPage() {
 
   const hasAction = (action: NonNullable<typeof data.available_actions>[number]) =>
     data.available_actions?.includes(action) ?? false;
+  const canCloseWork = data.closure_readiness?.can_close_work ?? false;
+  const canCloseParts = data.parts_readiness?.can_close_parts ?? data.spare_parts?.length === 0;
 
   return (
     <div>
       <PageHeader
         title={data.mwo_number}
         subtitle={
-          data.maintainable ? `${data.maintainable_type} · ${data.maintainable.name}` : undefined
+          data.maintainable ? `${data.maintainable.code ?? data.maintainable_type} · ${data.maintainable.name}` : undefined
         }
-        backTo="/maintenance/work-orders"
+        backTo={selfService ? "/self-service/maintenance-work-orders" : "/maintenance/work-orders"}
         backLabel="Work orders"
+        bottom={<ChainHeader steps={chainSteps} />}
         actions={
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5 sm:max-w-64 xl:max-w-none">
             <Chip variant={STATUS_CHIP[data.status]}>
               {data.status_label ?? statusLabel.get(data.status) ?? data.status}
             </Chip>
-            {hasAction('start') && can('maintenance.wo.complete') && (
+            {hasAction('start') && canAny('maintenance.wo.complete', 'maintenance.wo.assign') && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -158,12 +162,13 @@ export default function MaintenanceWorkOrderDetailPage() {
                 Start
               </Button>
             )}
-            {hasAction('complete') && can('maintenance.wo.complete') && (
+            <WorkLogControl order={data} />
+            {!data.verification_required && hasAction('complete') && canCloseWork && canCloseParts && canAny('maintenance.wo.complete', 'maintenance.wo.assign') && (
               <Button variant="primary" size="sm" onClick={() => setCompleteOpen(true)}>
                 Complete
               </Button>
             )}
-            {hasAction('cancel') && can('maintenance.wo.complete') && (
+            {hasAction('cancel') && canCloseParts && canAny('maintenance.wo.complete', 'maintenance.wo.assign') && (!isSupervisor || inspectionReason.trim().length >= 5) && (
               <Button
                 variant="danger"
                 size="sm"
@@ -177,30 +182,27 @@ export default function MaintenanceWorkOrderDetailPage() {
         }
       />
 
-      <div className="px-5 pt-3 pb-4">
-        <ChainHeader steps={chainSteps} />
-      </div>
-
-      <div className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
+      <div className="grid grid-cols-1 gap-4 px-5 py-5 xl:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
+        <div className="min-w-0 space-y-4">
           <Panel title="Description">
             <p className="text-sm whitespace-pre-line">{data.description}</p>
             {data.remarks && (
               <div className="mt-3 pt-3 border-t border-subtle text-sm">
                 <span className="text-xs uppercase tracking-wider text-muted block mb-1">
-                  Remarks
+                  {data.status === 'cancelled' ? 'Cancellation reason' : 'Work performed'}
                 </span>
                 <span className="text-secondary whitespace-pre-line">{data.remarks}</span>
               </div>
             )}
           </Panel>
 
-          <Panel title="Logs" meta={data.logs?.length ? `${data.logs.length}` : undefined}>
+          <Panel title="Work history" meta={data.logs?.length ? `${data.logs.length}` : undefined}>
+            {!canCloseWork && (hasAction('complete') || hasAction('submit_repair')) && <p className="mb-3 text-xs text-muted">{data.closure_readiness?.blocker}</p>}
             {data.logs && data.logs.length > 0 ? (
               <ul className="divide-y divide-subtle">
                 {data.logs.map((log) => (
                   <li key={log.id} className="py-2">
-                    <div className="text-sm">{log.description}</div>
+                    <WorkLogContent log={log} />
                     <div className="text-xs text-muted font-mono">
                       {log.created_at ? formatDateTime(log.created_at) : '—'}
                       {log.logger ? ` · ${log.logger.name}` : ''}
@@ -209,45 +211,64 @@ export default function MaintenanceWorkOrderDetailPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted">No log entries yet.</p>
+              <p className="text-sm text-muted">No work recorded yet.</p>
             )}
           </Panel>
+
+          <PartReconciliationPanel
+            order={data}
+            isSupervisor={isSupervisor}
+            inspectionReason={inspectionReason}
+            onInspectionReasonChange={setInspectionReason}
+          />
 
           <Panel
             title="Spare parts"
             meta={data.spare_parts?.length ? `${data.spare_parts.length}` : undefined}
+            actions={(data.can_record_work ?? ((hasAction('complete') || hasAction('submit_repair')) && can('maintenance.wo.complete'))) ? (
+              <Button variant="secondary" size="sm" icon={<LuPlus size={14} />} onClick={() => setPartOpen(true)}>
+                Request spare parts
+              </Button>
+            ) : undefined}
           >
             {data.spare_parts && data.spare_parts.length > 0 ? (
               <table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
                     <Th>Item</Th>
-                    <Th align="right">Qty</Th>
+                    <Th align="right">Gross / returned / net qty</Th>
                     <Th align="right">Unit cost</Th>
-                    <Th align="right">Total</Th>
+                    <Th align="right">Gross / returned / net cost</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.spare_parts.map((sp) => (
                     <tr key={sp.id} className={trCls}>
                       <Td>
-                        {sp.item ? (
-                          <span>
-                            <span className="font-mono">{sp.item.code}</span>
-                            <span className="ml-2 text-muted">{sp.item.name}</span>
-                          </span>
-                        ) : (
-                          '—'
-                        )}
+                        <div>
+                          {sp.item ? (
+                            <>
+                              <span className="font-mono">{sp.item.code}</span>
+                              <span className="ml-2 text-muted">{sp.item.name}</span>
+                            </>
+                          ) : '—'}
+                          {sp.stock_movement_id && can('inventory.view') && <Link className="ml-2 text-accent" to={`/inventory/stock-levels?view=movements&movement_id=${sp.stock_movement_id}`}>Stock movement</Link>}
+                          {sp.lot_number && <span className="ml-2 text-muted">Lot {sp.lot_number}</span>}
+                          <div className="mt-1 text-xs text-muted">
+                            {sp.work_record ? <>Work record: {sp.work_record.finding} · {sp.work_record.action_taken}</> : 'Work record not captured.'}
+                            {' · Issued by '}{sp.issuer?.name ?? '—'}
+                          </div>
+                        </div>
                       </Td>
                       <Td align="right" mono>
-                        {sp.quantity}
+                        {sp.quantity} / {sp.returned_quantity} / {(Number(sp.quantity) - Number(sp.returned_quantity)).toFixed(3)}
                       </Td>
                       <Td align="right" mono>
                         {formatPeso(sp.unit_cost)}
                       </Td>
                       <Td align="right" mono className="font-medium">
-                        {formatPeso(sp.total_cost)}
+                        {formatPeso(sp.total_cost)} / {formatPeso(sp.returned_cost)} /{' '}
+                        {formatPeso((Number(sp.total_cost) - Number(sp.returned_cost)).toFixed(2))}
                       </Td>
                     </tr>
                   ))}
@@ -259,7 +280,8 @@ export default function MaintenanceWorkOrderDetailPage() {
           </Panel>
         </div>
 
-        <aside className="space-y-3">
+        <aside className="min-w-0 space-y-4">
+          <RecoveryPanel order={data} />
           <Panel title="Details">
             <dl className="text-sm divide-y divide-subtle">
               <Detail label="Type">{data.type_label ?? data.type}</Detail>
@@ -271,40 +293,10 @@ export default function MaintenanceWorkOrderDetailPage() {
               <Detail label="Completed">
                 {data.completed_at ? formatDateTime(data.completed_at) : '—'}
               </Detail>
-              <Detail label="Downtime">
-                <span className="font-mono tabular-nums">{data.downtime_minutes}</span> min
-              </Detail>
-              <Detail label="Cost">
-                <span className="font-mono tabular-nums">{formatPeso(data.cost)}</span>
-              </Detail>
             </dl>
           </Panel>
           {hasAction('assign') && can('maintenance.wo.assign') && (
-            <Panel title="Assignment">
-              <Select
-                label="Assignee"
-                value={assigneeId}
-                onChange={(event) => setAssigneeId(event.target.value)}
-                disabled={assignMutation.isPending}
-              >
-                <option value="">Select an active employee</option>
-                {(assignees ?? []).map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.employee_no} · {employee.name}
-                  </option>
-                ))}
-              </Select>
-              <Button
-                type="button"
-                variant="primary"
-                className="mt-3 w-full"
-                onClick={() => assignMutation.mutate()}
-                disabled={!assigneeId || assignMutation.isPending}
-                loading={assignMutation.isPending}
-              >
-                {assignMutation.isPending ? 'Assigning…' : 'Assign work order'}
-              </Button>
-            </Panel>
+            <AssignmentPanel order={data} />
           )}
         </aside>
       </div>
@@ -322,14 +314,7 @@ export default function MaintenanceWorkOrderDetailPage() {
             onChange={(e) => setCompleteRemarks(e.target.value)}
             rows={3}
           />
-          <Input
-            label="Downtime (minutes)"
-            type="number"
-            min={0}
-            value={completeDowntime}
-            onChange={(e) => setCompleteDowntime(Number(e.target.value))}
-            className="font-mono tabular-nums"
-          />
+          <p className="text-xs text-muted">Downtime is calculated from the machine downtime record.</p>
         </div>
         <ModalFooter>
           <Button variant="secondary" onClick={() => setCompleteOpen(false)}>
@@ -352,9 +337,8 @@ export default function MaintenanceWorkOrderDetailPage() {
         title="Start work order?"
         description={
           <>
-            The clock starts on <span className="font-mono">{data.mwo_number}</span>
-            {data.maintainable ? <> for {data.maintainable.name}</> : null}. Downtime is measured
-            from this moment and feeds the OEE figures.
+            Work starts on <span className="font-mono">{data.mwo_number}</span>
+            {data.maintainable ? <> for {data.maintainable.name}</> : null}. Downtime uses the recorded equipment downtime start.
           </>
         }
         variant="primary"
@@ -374,6 +358,7 @@ export default function MaintenanceWorkOrderDetailPage() {
             {Number(data.cost) > 0 ? <> ({formatPeso(data.cost)} of parts already booked)</> : null}
             . It cannot be reopened — raise a new work order instead. Your reason is kept on the
             record.
+            {isSupervisor && <p className="mt-2">Supervisor inspection reason is recorded with the parts reconciliation before cancellation.</p>}
           </>
         }
         reasonLabel="Cancellation reason"
@@ -383,6 +368,13 @@ export default function MaintenanceWorkOrderDetailPage() {
         cancelLabel="Keep it open"
         variant="danger"
         pending={cancelMutation.isPending}
+      />
+      <SparePartSheet
+        workOrderId={id}
+        logs={data.logs ?? []}
+        isOpen={partOpen && (data.can_record_work ?? ((hasAction('complete') || hasAction('submit_repair')) && can('maintenance.wo.complete')))}
+        onClose={() => setPartOpen(false)}
+        desktop
       />
     </div>
   );

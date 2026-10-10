@@ -22,6 +22,18 @@ use App\Modules\Inventory\Models\Uom;
  */
 class UomConversionService
 {
+    /** Physical quantities use the item base unit after conversion. */
+    public function assertBaseQuantity(Item $item, string $quantity): void
+    {
+        if (! preg_match('/^\d+(?:\.\d{1,6})?$/D', $quantity)) {
+            throw new BusinessRuleException('Quantity must be a non-negative decimal number.');
+        }
+        if (in_array(strtoupper(trim((string) $item->unit_of_measure)), ['PC', 'PCS', 'PIECE', 'PIECES', 'EA', 'EACH', 'UNIT', 'UNITS', 'SET', 'SETS'], true)
+            && bccomp($quantity, bcdiv($quantity, '1', 0), 6) !== 0) {
+            throw new BusinessRuleException('Piece quantities must be whole numbers.');
+        }
+    }
+
     /**
      * Convert a quantity expressed in $fromUomCode into the item base uom.
      *
@@ -35,15 +47,25 @@ class UomConversionService
      */
     public function toBase(Item $item, string $qty, ?string $fromUomCode = null): string
     {
+        return $this->toBaseWithFactor($item, $qty, $fromUomCode)['quantity'];
+    }
+
+    /**
+     * Convert a quantity and return the factor used for document history.
+     *
+     * @return array{quantity:string,factor:string}
+     */
+    public function toBaseWithFactor(Item $item, string $qty, ?string $fromUomCode = null): array
+    {
         $baseCode = (string) $item->unit_of_measure;
 
         if ($fromUomCode === null || $this->sameCode($fromUomCode, $baseCode)) {
-            return bcadd($qty, '0', 6);
+            return ['quantity' => bcadd($qty, '0', 6), 'factor' => '1.000000'];
         }
 
         $factor = $this->factor($item, $fromUomCode, $baseCode);
 
-        return bcmul($qty, $factor, 6);
+        return ['quantity' => bcmul($qty, $factor, 6), 'factor' => $factor];
     }
 
     /**
@@ -56,12 +78,13 @@ class UomConversionService
     public function factor(Item $item, string $fromUomCode, string $toUomCode): string
     {
         $from = $this->uomByCode($fromUomCode);
-        $to   = $this->uomByCode($toUomCode);
+        $to = $this->uomByCode($toUomCode);
 
         $conv = ItemUomConversion::query()
             ->where('item_id', $item->id)
             ->where('from_uom_id', $from->id)
             ->where('to_uom_id', $to->id)
+            ->lockForUpdate()
             ->first();
 
         if (! $conv) {
@@ -86,6 +109,7 @@ class UomConversionService
             // — so an unknown code is user input to correct, not a fault.
             throw new BusinessRuleException("Unknown unit of measure: {$code}.");
         }
+
         return $uom;
     }
 

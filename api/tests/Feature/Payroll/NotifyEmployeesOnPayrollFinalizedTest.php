@@ -19,7 +19,7 @@ class NotifyEmployeesOnPayrollFinalizedTest extends TestCase
 
     public function test_failed_payroll_rows_do_not_receive_payslip_ready_notifications(): void
     {
-        $period = PayrollPeriod::factory()->create();
+        $period = PayrollPeriod::factory()->create(['status' => 'finalized']);
         $failedEmployee = Employee::factory()->create();
         $validEmployee = Employee::factory()->create();
         $failedUser = User::factory()->create(['employee_id' => $failedEmployee->id, 'is_active' => true]);
@@ -48,5 +48,19 @@ class NotifyEmployeesOnPayrollFinalizedTest extends TestCase
             'notifiable_id' => $validUser->id,
             'type' => 'chain.payslip_ready',
         ]);
+    }
+
+    public function test_delayed_finalization_notice_does_not_publish_a_voided_period(): void
+    {
+        $period = PayrollPeriod::factory()->create(['status' => 'finalized']);
+        $employee = Employee::factory()->create();
+        $user = User::factory()->create(['employee_id' => $employee->id, 'is_active' => true]);
+        Payroll::factory()->create(['payroll_period_id' => $period->id, 'employee_id' => $employee->id, 'error_message' => null]);
+        $event = new PayrollPeriodFinalized($period);
+        $period->newQuery()->whereKey($period->id)->update(['status' => 'voided']);
+
+        app(NotifyEmployeesOnPayrollFinalized::class)->handle($event);
+
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $user->id, 'type' => 'chain.payslip_ready']);
     }
 }

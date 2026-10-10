@@ -16,10 +16,13 @@ use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\InspectionSpecRevision;
+use App\Modules\Quality\Resources\InspectionSpecResource;
+use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\Quality\Services\SpcService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class InspectionSpecBoundaryTest extends TestCase
@@ -27,6 +30,7 @@ class InspectionSpecBoundaryTest extends TestCase
     use RefreshDatabase;
 
     private User $manager;
+
     private User $viewer;
 
     protected function setUp(): void
@@ -40,6 +44,126 @@ class InspectionSpecBoundaryTest extends TestCase
         $this->viewer = $this->userWithPermissions('inspection-spec-viewer', [
             'quality.specs.view',
         ]);
+    }
+
+    public function test_checklist_publication_retains_specification_limits_and_validates_them(): void
+    {
+        config(['inspection.checklist_capture_enabled' => true]);
+        $product = Product::factory()->create();
+        $payload = $this->payload($product, ['notes' => 'Verify using approved gauge.']);
+        $payload['capture_method'] = 'checklist';
+        $this->actingAs($this->manager, 'sanctum')->postJson('/api/v1/quality/inspection-specs', $payload)
+            ->assertOk()->assertJsonPath('data.capture_method', 'checklist')
+            ->assertJsonPath('data.items.0.nominal_value', '-1.0000')
+            ->assertJsonPath('data.items.0.tolerance_min', '-2.0000')
+            ->assertJsonPath('data.items.0.acceptance_criterion', 'Verify using approved gauge.');
+        $payload['items'][0]['nominal_value'] = '1.0000';
+        $this->postJson('/api/v1/quality/inspection-specs', $payload)->assertUnprocessable()
+            ->assertJsonValidationErrors('items.0.nominal_value');
+    }
+
+    public function test_size_specification_requires_unit_and_all_dimensions_despite_written_reference(): void
+    {
+        config(['inspection.checklist_capture_enabled' => true]);
+        $product = Product::factory()->create();
+        $payload = [
+            'product_id' => $product->hash_id,
+            'capture_method' => 'checklist',
+            'items' => [[
+                'parameter_name' => 'Size',
+                'parameter_type' => 'dimensional',
+                'acceptance_criterion' => 'Dimensions are within the limits on the approved product drawing.',
+                'is_critical' => false,
+            ]],
+        ];
+
+        $this->actingAs($this->manager, 'sanctum')->postJson('/api/v1/quality/inspection-specs', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['items.0.unit_of_measure', 'items.0.nominal_value', 'items.0.tolerance_min', 'items.0.tolerance_max']);
+
+        $payload['items'][0] += ['unit_of_measure' => 'mm', 'nominal_value' => '10', 'tolerance_min' => '9.9', 'tolerance_max' => '10.1'];
+        foreach (['unit_of_measure', 'nominal_value', 'tolerance_min', 'tolerance_max'] as $field) {
+            $incomplete = $payload;
+            $incomplete['items'][0][$field] = '';
+            $this->postJson('/api/v1/quality/inspection-specs', $incomplete)->assertUnprocessable()
+                ->assertJsonValidationErrors("items.0.$field");
+        }
+        $payload['capture_method'] = 'measurement';
+        $payload['items'][0]['unit_of_measure'] = '   ';
+        $this->postJson('/api/v1/quality/inspection-specs', $payload)->assertUnprocessable()
+            ->assertJsonValidationErrors('items.0.unit_of_measure');
+        $this->assertDatabaseCount('inspection_spec_revisions', 0);
+    }
+
+    public function test_direct_checklist_publication_rejects_size_without_dimensions(): void
+    {
+        config(['inspection.checklist_capture_enabled' => true]);
+        $product = Product::factory()->create();
+        try {
+            app(InspectionSpecService::class)->upsertForProduct($product->id, [[
+                'parameter_name' => 'Size',
+                'parameter_type' => 'dimensional',
+                'acceptance_criterion' => 'Use the approved drawing.',
+            ]], $this->manager->id, null, 'checklist');
+            $this->fail('Incomplete size specification was published.');
+        } catch (ValidationException $exception) {
+            $this->assertEqualsCanonicalizing(
+                ['items.0.unit_of_measure', 'items.0.nominal_value', 'items.0.tolerance_min', 'items.0.tolerance_max'],
+                array_keys($exception->errors()),
+            );
+        }
+        $this->assertDatabaseCount('inspection_spec_revisions', 0);
+    }
+
+    public function test_visual_and_gauge_fit_checks_can_be_published_without_dimensions(): void
+    {
+        config(['inspection.checklist_capture_enabled' => true]);
+        $product = Product::factory()->create();
+        $this->actingAs($this->manager, 'sanctum')->postJson('/api/v1/quality/inspection-specs', [
+            'product_id' => $product->hash_id,
+            'capture_method' => 'checklist',
+            'items' => [
+                ['parameter_name' => 'Appearance', 'parameter_type' => 'visual', 'acceptance_criterion' => 'No cracks.'],
+                ['parameter_name' => 'Fit / function', 'parameter_type' => 'functional', 'acceptance_criterion' => 'Fits approved gauge FG-01.'],
+            ],
+        ])->assertOk()->assertJsonPath('data.items.0.nominal_value', null)
+            ->assertJsonPath('data.items.1.nominal_value', null);
+    }
+
+    public function test_global_checklist_capture_rejects_measurement_specs_without_usable_instructions(): void
+    {
+        config(['inspection.checklist_capture_enabled' => true]);
+        $product = Product::factory()->create();
+        $payload = $this->payload($product, [
+            'parameter_type' => 'visual',
+            'unit_of_measure' => null,
+            'nominal_value' => null,
+            'tolerance_min' => null,
+            'tolerance_max' => null,
+            'notes' => null,
+        ]);
+        $payload['capture_method'] = 'measurement';
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/v1/quality/inspection-specs', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items.0.acceptance_criterion');
+
+        $this->assertDatabaseCount('inspection_specs', 0);
+    }
+
+    public function test_inspection_spec_service_rejects_missing_instructions_when_global_capture_is_active(): void
+    {
+        config(['inspection.checklist_capture_enabled' => true]);
+        $product = Product::factory()->create();
+        $items = [[
+            'parameter_name' => 'Surface condition',
+            'parameter_type' => 'visual',
+            'notes' => null,
+        ]];
+
+        $this->expectException(ValidationException::class);
+        app(InspectionSpecService::class)->upsertForProduct($product->id, $items, $this->manager->id);
     }
 
     public function test_archive_and_restore_are_symmetric_and_soft_deleted_rows_bind(): void
@@ -227,7 +351,7 @@ class InspectionSpecBoundaryTest extends TestCase
             ]);
         }
 
-        $result = (new SpcService())->computeForSpec($latest->id);
+        $result = (new SpcService)->computeForSpec($latest->id);
 
         $this->assertArrayNotHasKey($oldItem->hash_id, $result);
         $this->assertSame(5, $result[$newItem->hash_id]['sample_count']);
@@ -308,7 +432,7 @@ class InspectionSpecBoundaryTest extends TestCase
         }
 
         // Enough samples, but zero sigma: capability is undefined, not infinite.
-        $this->assertSame([], (new SpcService())->computeForSpec($spec->id));
+        $this->assertSame([], (new SpcService)->computeForSpec($spec->id));
 
         $this->actingAs($this->viewer, 'sanctum')
             ->getJson("/api/v1/quality/inspection-specs/{$spec->hash_id}/spc")
@@ -399,6 +523,27 @@ class InspectionSpecBoundaryTest extends TestCase
             ->assertJsonPath('data.0.product.part_number', 'ARCHIVED-PRODUCT');
 
         $this->assertNotNull($response->json('data.0.product.deleted_at'));
+    }
+
+    public function test_inspection_spec_resource_does_not_lazy_load_current_revision(): void
+    {
+        $first = $this->createSpec(Product::factory()->create(), $this->manager);
+        $second = $this->createSpec(Product::factory()->create(), $this->manager);
+        $specs = InspectionSpec::query()
+            ->withCount('items')
+            ->whereIn('id', [$first->id, $second->id])
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(2, $specs);
+        $this->assertFalse($specs->first()->relationLoaded('currentRevision'));
+        $resource = InspectionSpecResource::collection($specs)->resolve();
+
+        $this->assertCount(2, $resource);
+        $this->assertArrayNotHasKey('capture_method', $resource[0]);
+        $this->assertArrayNotHasKey('capture_method', $resource[1]);
+        $this->assertSame(1, $resource[0]['item_count']);
+        $this->assertSame(1, $resource[1]['item_count']);
     }
 
     public function test_database_rejects_cross_spec_revision_pairs_and_invalid_geometry(): void

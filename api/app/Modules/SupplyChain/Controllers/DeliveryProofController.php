@@ -6,8 +6,10 @@ namespace App\Modules\SupplyChain\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\DeliveryProofType;
 use App\Modules\SupplyChain\Models\DeliveryProof;
+use App\Modules\SupplyChain\Services\DeliveryService;
 use App\Modules\SupplyChain\Resources\DeliveryProofResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +17,6 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
-use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -40,7 +41,7 @@ class DeliveryProofController
     /** GET /supply-chain/deliveries/{delivery}/proofs */
     public function index(Delivery $delivery): AnonymousResourceCollection
     {
-        $proofs = $delivery->proofs()->with('uploader')->orderByDesc('created_at')->get();
+        $proofs = $delivery->proofs()->withTrashed()->with('uploader')->orderByDesc('created_at')->get();
         // Ensure delivery is loaded so the resource can build view URLs.
         $proofs->each(fn ($p) => $p->setRelation('delivery', $delivery));
 
@@ -56,36 +57,13 @@ class DeliveryProofController
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $status = $delivery->status instanceof \BackedEnum ? $delivery->status->value : (string) $delivery->status;
-        if ($status === 'confirmed' && $validated['proof_type'] === DeliveryProofType::CertificateOfConformance->value) {
-            throw new BusinessRuleException('A Certificate of Conformance cannot be replaced after delivery confirmation.');
+        if ($validated['proof_type'] === DeliveryProofType::LoadingPhoto->value) {
+            $request->validate(['file' => ['required', 'file', 'mimes:jpg,jpeg,png,heic,webp', 'max:10240']]);
         }
-
-        $file = $request->file('file');
-        $dir = "deliveries/{$delivery->id}/proofs";
-        $path = $file->store($dir, 'local');
-        if ($path === false) {
-            throw new BusinessRuleException('Unable to store delivery proof.');
-        }
-
-        try {
-            $proof = DeliveryProof::create([
-                'delivery_id' => $delivery->id,
-                'proof_type' => $validated['proof_type'],
-                'file_name' => $file->getClientOriginalName(),
-                'file_path' => $path,
-                'file_size' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
-                'uploaded_by' => $request->user()->id,
-                'notes' => $validated['notes'] ?? null,
-            ]);
-        } catch (\Throwable $e) {
-            Storage::disk('local')->delete($path);
-            throw $e;
-        }
-
-        $proof->load('uploader');
-        $proof->setRelation('delivery', $delivery);
+        $proof = app(DeliveryService::class)->uploadProof(
+            $delivery, $request->file('file'), DeliveryProofType::from($validated['proof_type']),
+            $request->user(), $validated['notes'] ?? null,
+        );
 
         return (new DeliveryProofResource($proof))->response()->setStatusCode(201);
     }
@@ -152,7 +130,7 @@ class DeliveryProofController
     public function destroy(Delivery $delivery, DeliveryProof $proof): JsonResponse
     {
         if ($proof->delivery_id !== $delivery->id) {
-            throw new RuntimeException('Proof does not belong to this delivery.');
+            abort(404, 'Proof does not belong to this delivery.');
         }
 
         try {
@@ -175,8 +153,11 @@ class DeliveryProofController
 
                 // Once a delivery has been confirmed, removing the last proof
                 // would leave the confirmation undefensible.
-                $remaining = $locked->proofs()->where('id', '!=', $target->id)->count();
+                $remaining = $locked->proofs()->where('id', '!=', $target->id)->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count();
                 $status = $locked->status instanceof \BackedEnum ? $locked->status->value : $locked->status;
+                if ($target->proof_type === DeliveryProofType::LoadingPhoto->value && ! in_array($status, ['scheduled', 'loading', 'cancelled'], true)) {
+                    throw new BusinessRuleException('Loading evidence cannot be archived after dispatch.');
+                }
                 if ($status === 'confirmed' && $target->proof_type === DeliveryProofType::CertificateOfConformance->value) {
                     throw new BusinessRuleException('The Certificate of Conformance cannot be deleted from a confirmed delivery.');
                 }
@@ -197,12 +178,15 @@ class DeliveryProofController
     public function restore(Delivery $delivery, DeliveryProof $proof): JsonResponse
     {
         if ($proof->delivery_id !== $delivery->id) {
-            throw new RuntimeException('Proof does not belong to this delivery.');
+            abort(404, 'Proof does not belong to this delivery.');
         }
 
         DB::transaction(function () use ($delivery, $proof): void {
             $lockedDelivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
             $lockedProof = DeliveryProof::withTrashed()->lockForUpdate()->findOrFail($proof->id);
+            if (! $lockedProof->trashed()) {
+                throw new BusinessRuleException('Only archived delivery proofs can be restored.');
+            }
             if (! Storage::disk('local')->exists((string) $lockedProof->file_path)) {
                 throw new BusinessRuleException('The archived delivery proof file is missing and cannot be restored.');
             }

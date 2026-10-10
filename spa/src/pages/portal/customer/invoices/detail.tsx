@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { SubmitPaymentDialog } from './SubmitPaymentDialog';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuFileDown } from '@/lib/icons';
@@ -28,11 +30,13 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export default function CustomerInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [showPayment, setShowPayment] = useState(false);
 
   const { data: invoice, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'invoice', id],
     queryFn: () => customerPortalApi.getInvoice(id!),
     enabled: !!id,
+    refetchInterval: (query) => query.state.data && !['paid', 'cancelled'].includes(query.state.data.status) && document.visibilityState === 'visible' ? 30_000 : false,
   });
 
   const downloadPdf = async () => {
@@ -43,6 +47,8 @@ export default function CustomerInvoiceDetailPage() {
       toast.error('Failed to download PDF.');
     }
   };
+  const isOpen = invoice?.status === 'finalized' || invoice?.status === 'partial';
+  const pendingPayment = invoice?.payment_submissions?.some((payment) => payment.status === 'pending');
 
   return (
     <div>
@@ -51,8 +57,8 @@ export default function CustomerInvoiceDetailPage() {
           invoice ? (
             <>
               {invoice.invoice_number}{' '}
-              <Chip variant={chipVariantForStatus(invoice.status)}>
-                {invoice.status_label ?? invoice.status}
+              <Chip variant={isOpen ? 'warning' : chipVariantForStatus(invoice.status)}>
+                {isOpen ? pendingPayment ? 'Awaiting payment verification' : 'Awaiting payment' : invoice.status_label ?? invoice.status}
               </Chip>
             </>
           ) : (
@@ -63,9 +69,12 @@ export default function CustomerInvoiceDetailPage() {
         backTo="/portal/customer/invoices"
         backLabel="Invoices"
         actions={invoice ? (
+          <div className="flex flex-wrap gap-2">
+          {invoice.can_submit_payment && <Button size="sm" onClick={() => setShowPayment(true)}>Submit payment</Button>}
           <Button variant="secondary" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
             Download PDF
           </Button>
+          </div>
         ) : undefined}
       />
 
@@ -91,6 +100,21 @@ export default function CustomerInvoiceDetailPage() {
               <StatCard label="Balance Due" value={formatPeso(invoice.balance)} />
               <StatCard label="Due Date" value={invoice.due_date ? formatDate(invoice.due_date) : '—'} />
             </KpiGrid>
+
+            {!!invoice.payment_submissions?.length && <Panel title="Payment submissions">
+              <div className="space-y-4">
+                {invoice.payment_submissions.map((payment) => <div key={payment.id} className="space-y-2 border-b border-default pb-4 last:border-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>{payment.sending_bank} · {payment.reference_number} · {formatPeso(payment.amount)}</span>
+                    <Chip variant={payment.status === 'verified' ? 'success' : payment.status === 'rejected' ? 'danger' : 'warning'}>{payment.status === 'pending' ? 'Awaiting verification' : payment.status === 'verified' ? 'Payment verified' : 'Rejected'}</Chip>
+                  </div>
+                  <p className="text-xs text-muted">Payment date: {formatDate(payment.payment_date)}</p>
+                  {payment.status === 'pending' && <p role="status" className="text-sm text-muted">Payment submitted. Finance will verify receipt of funds. Your invoice balance changes after verification.</p>}
+                  {payment.rejection_reason && <p role="alert" className="text-sm text-danger-fg">{payment.rejection_reason}</p>}
+                  <Button variant="secondary" size="sm" onClick={async () => { try { downloadBlob(await customerPortalApi.downloadInvoicePaymentProof(invoice.id, payment.id), payment.proof_file_name); } catch { toast.error('Payment proof download failed. Please retry.'); } }}>Download proof</Button>
+                </div>)}
+              </div>
+            </Panel>}
 
             {invoice.items && invoice.items.length > 0 && (
               <Panel title="Items" meta={String(invoice.items.length)} noPadding>
@@ -146,6 +170,7 @@ export default function CustomerInvoiceDetailPage() {
           </>
         )}
       </div>
+      {showPayment && invoice && <SubmitPaymentDialog invoice={invoice} onClose={() => setShowPayment(false)} />}
     </div>
   );
 }

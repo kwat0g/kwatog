@@ -1,5 +1,6 @@
 // Sprint 4 — Lean Accounting types.
 // IDs are HashID strings, never numbers. Decimal money values are strings.
+import type { ApprovalRecordPayload } from '@/lib/approvals';
 
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 export type NormalBalance = 'debit' | 'credit';
@@ -143,6 +144,7 @@ export interface BillPayment {
   payment_method: PaymentMethod;
   payment_method_label?: string;
   reference_number: string | null;
+  proof_file_name?: string | null;
   status: 'pending_approval' | 'rejected' | 'posted' | 'voided';
   status_label?: string;
   cash_account?: { id: string; code: string; name: string } | null;
@@ -151,16 +153,11 @@ export interface BillPayment {
   void_reason?: string | null;
   void_reversal_journal_entry?: { id: string; entry_number: string; status: string } | null;
   replacement_payment_id?: string | null;
-  approval_records?: Array<{
-    step_order: number;
-    role_slug: string;
-    action: string;
-    approver?: { id: string; name: string } | null;
-    remarks?: string | null;
-    acted_at?: string | null;
-  }>;
+  approval_records?: ApprovalRecordPayload[];
   created_at?: string;
   can_decide?: boolean;
+  can_void?: boolean;
+  void_block_reason?: string | null;
 }
 
 export interface Bill {
@@ -168,6 +165,7 @@ export interface Bill {
   bill_number: string;
   /** The supplier's own invoice reference, set when they submit through the portal. */
   supplier_invoice_number?: string | null;
+  supplier_invoice_group_total?: string | null;
   supplier_invoice_date?: string | null;
   supplier_invoice_submitted_at?: string | null;
   supplier_invoice_attachment?: { id: string; original_filename: string } | null;
@@ -186,6 +184,7 @@ export interface Bill {
   /** 2026-08-08 — GRN this bill was auto-created from (draft auto-bills). */
   goods_receipt_note_id?: string | null;
   status_label?: string;
+  payment_approval_pending?: boolean;
   is_overdue: boolean;
   aging_bucket: string;
   remarks: string | null;
@@ -258,7 +257,8 @@ export interface CreateBillPaymentData {
   payment_date: string;
   amount: string;
   payment_method: PaymentMethod;
-  reference_number?: string;
+  reference_number: string;
+  proof_file?: File;
 }
 
 export interface Customer {
@@ -316,13 +316,30 @@ export interface Collection {
   created_at?: string;
 }
 export interface Invoice {
+  payment_submissions?: import('./invoice-payments').InvoicePaymentSubmission[];
+  can_submit_payment?: boolean;
+  payment_submission_blocked_reason?: string | null;
   /** 2026-08-08 — O2C stepper: upstream sales order + delivery. */
   sales_order?: { id: string; so_number: string } | null;
-  delivery?: { id: string; delivery_number: string } | null;
+  delivery?: { id: string; delivery_number: string; status?: string } | null;
   id: string;
   invoice_number: string | null;
   date: string;
   due_date: string;
+  revision?: string;
+  lifecycle_type?: 'standard' | 'prebill';
+  prebill_reason?: string | null;
+  prebill_approved_at?: string | null;
+  prebill_approved_by?: { id: string; name: string } | null;
+  status_history?: Array<{
+    event_type: 'created' | 'updated' | 'prebill_approved' | 'status_changed';
+    from_status: InvoiceStatus | null;
+    to_status: InvoiceStatus | null;
+    actor_name: string | null;
+    actor_type: string;
+    occurred_at: string;
+  }>;
+  created_by?: { id: string; name: string } | null;
   is_vatable: boolean;
   subtotal: string;
   vat_amount: string;
@@ -363,14 +380,17 @@ export interface CreateInvoiceData {
   due_date?: string;
   is_vatable?: boolean;
   remarks?: string;
-  items: CreateInvoiceItemData[];
+ items: CreateInvoiceItemData[];
 }
+export type UpdateInvoiceData = CreateInvoiceData & { expected_revision: string };
 export interface CreateCollectionData {
+  manual_reason: string;
   cash_account_id: string;
   collection_date: string;
   amount: string;
   payment_method: PaymentMethod;
   reference_number?: string;
+  idempotency_key: string;
 }
 
 // ─── Statements ───────────────────────────────
@@ -569,6 +589,7 @@ export interface CreateCreditNoteData {
   lines: Array<{ account_id: string; description: string; amount: string }>;
 }
 export interface ApplyCreditNoteData {
+  operation_key: string;
   amount: string;
   invoice_id?: string;
   bill_id?: string;

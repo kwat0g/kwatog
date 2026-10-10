@@ -35,6 +35,14 @@ class PriceAgreement extends Model
         'tiers'          => 'array',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(function (self $agreement): void {
+            if (! $agreement->wasRecentlyCreated && ! $agreement->wasChanged(['product_id', 'customer_id'])) return;
+            Product::find($agreement->product_id)?->portalCustomers()->syncWithoutDetaching([$agreement->customer_id]);
+        });
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

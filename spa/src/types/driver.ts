@@ -12,6 +12,8 @@ export interface DriverDelivery extends DeliveryAttemptFields {
  next_status?: DriverDeliveryStatus | null;
  next_status_label?: string | null;
  scheduled_date: string | null;
+ expected_delivery_date: string | null;
+ carrier: string | null;
  departed_at: string | null;
  delivered_at: string | null;
  confirmed_at: string | null;

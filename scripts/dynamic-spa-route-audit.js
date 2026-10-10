@@ -45,7 +45,13 @@ function discoverRoutes() {
   for (const file of fs.readdirSync(ROUTES_DIR).filter((name) => name.endsWith('.tsx'))) {
     const source = fs.readFileSync(path.join(ROUTES_DIR, file), 'utf8');
     for (const match of source.matchAll(/\bpath\s*=\s*"([^"]+)"/g)) {
-      if (match[1].startsWith('/') && match[1] !== '*') routes.add(match[1]);
+      if (!match[1].startsWith('/') || match[1] === '*') continue;
+      if (match[1] === '/portal/:type/change-password') {
+        routes.add('/portal/supplier/change-password');
+        routes.add('/portal/customer/change-password');
+      } else {
+        routes.add(match[1]);
+      }
     }
   }
   return [...routes].sort();

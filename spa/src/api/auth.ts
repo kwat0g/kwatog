@@ -11,6 +11,7 @@ export interface AuthEmployee {
  employee_no: string;
  full_name: string;
  department_id: string | null;
+ photo_url?: string | null;
 }
 
 export interface AuthUser {

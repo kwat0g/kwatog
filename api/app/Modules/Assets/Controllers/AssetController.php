@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Controllers;
 
-use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Requests\ApproveAssetDisposalRequest;
 use App\Modules\Assets\Requests\AssociateAssetRequest;
 use App\Modules\Assets\Requests\DisposeAssetRequest;
@@ -19,6 +19,7 @@ use App\Modules\Assets\Services\AssetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Resources\Json\JsonResource;
 
 class AssetController
 {
@@ -57,9 +58,21 @@ class AssetController
         return new AssetResource($this->service->show($asset));
     }
 
+    public function associationOptions(Request $request, Asset $asset): AnonymousResourceCollection
+    {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        return JsonResource::collection($this->service->associationOptions($asset, $filters));
+    }
+
     public function store(StoreAssetRequest $request): JsonResponse
     {
         $asset = $this->service->create($request->validated());
+
         return (new AssetResource($asset))->response()->setStatusCode(201);
     }
 
@@ -76,12 +89,14 @@ class AssetController
     public function destroy(Asset $asset): JsonResponse
     {
         $this->service->delete($asset);
+
         return response()->json(null, 204);
     }
 
     public function restore(Asset $asset): JsonResponse
     {
         $asset->restore();
+
         return response()->json(['message' => 'Asset restored.']);
     }
 

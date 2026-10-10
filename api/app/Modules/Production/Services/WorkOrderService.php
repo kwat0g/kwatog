@@ -14,13 +14,19 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Inventory\Enums\ReservationStatus;
+use App\Modules\Inventory\Enums\MaterialIssueStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\MaterialReservation;
+use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Services\FinishedGoodInventoryService;
 use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
@@ -31,12 +37,15 @@ use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\BomService;
 use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Events\WorkOrderCompleted;
+use App\Modules\Production\Events\WorkOrderQualityResolved;
 use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
+use App\Modules\Production\Models\LateProductionReport;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WoOperation;
@@ -45,10 +54,12 @@ use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Support\WorkOrderStateMachine;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStatus;
-use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Listeners\TriggerInProcessQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\InspectionSpecService;
+use App\Modules\Quality\Services\QualityStockHoldService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -106,10 +117,15 @@ class WorkOrderService
                 'machine:id,machine_code,name',
                 'mold:id,mold_code,name',
                 'exceptionAuthorizer:id,name',
+                'currentProductionSchedule',
+                'activeReworks:id,rework_work_order_id,confirmed_rework_quantity,rework_started_at,rework_finished_at',
             ]);
 
         TrashedFilter::apply($q, $filters);
 
+        if (! empty($filters['production_purpose']) && in_array($filters['production_purpose'], ['stock', 'order', 'internal'], true)) {
+            $q->where('production_purpose', $filters['production_purpose']);
+        }
         if (! empty($filters['status'])) {
             // A single status string or an array (the floor PWA filters by
             // several at once: status[]=in_progress&status[]=confirmed&…).
@@ -158,9 +174,11 @@ class WorkOrderService
             'creator:id,name,role_id',
             'exceptionAuthorizer:id,name',
             'materials.item:id,code,name,unit_of_measure',
-            'outputs.recorder:id,name,role_id', 'outputs.defects.defectType',
+            'outputs.recorder:id,name,role_id', 'outputs.defects.defectType', 'outputs.inspections',
+            'outputs.productionReceiptMovement',
             'inspections:id,inspection_number,stage,status,entity_type,entity_id,completed_at',
-            'downtimes', 'schedules.machine:id,machine_code,name',
+            'downtimes', 'schedules.machine:id,machine_code,name', 'currentProductionSchedule',
+            'activeReworks:id,rework_work_order_id,confirmed_rework_quantity,rework_started_at,rework_finished_at',
         ]);
     }
 
@@ -176,7 +194,15 @@ class WorkOrderService
     public function createDraft(array $data): WorkOrder
     {
         return DB::transaction(function () use ($data) {
+            $product = Product::query()->lockForUpdate()->findOrFail((int) $data['product_id']);
+            $activeBom = empty($data['rework_source_output_id']) ? $this->boms->activeForProduct((int) $product->id) : null;
             $payload = [
+                'production_purpose' => $data['production_purpose'] ?? (! empty($data['sales_order_id']) ? 'order' : null),
+                'stock_creation_request_key' => $data['stock_creation_request_key'] ?? null,
+                'stock_creation_fingerprint' => $data['stock_creation_fingerprint'] ?? null,
+                'preferred_production_date' => $data['preferred_production_date'] ?? null,
+                'minimum_workers' => $data['minimum_workers'] ?? 1,
+                'maximum_workers' => $data['maximum_workers'] ?? null,
                 'wo_number' => $this->sequences->generate('work_order'),
                 'product_id' => (int) $data['product_id'],
                 'sales_order_id' => $data['sales_order_id'] ?? null,
@@ -184,6 +210,7 @@ class WorkOrderService
                 'mrp_plan_id' => $data['mrp_plan_id'] ?? null,
                 'parent_wo_id' => $data['parent_wo_id'] ?? null,
                 'parent_ncr_id' => $data['parent_ncr_id'] ?? null,
+                'rework_source_output_id' => $data['rework_source_output_id'] ?? null,
                 'machine_id' => $data['machine_id'] ?? null,
                 'mold_id' => $data['mold_id'] ?? null,
                 'quantity_target' => (int) $data['quantity_target'],
@@ -196,7 +223,11 @@ class WorkOrderService
                 'work_order_class' => $data['work_order_class'] ?? 'standard',
                 'exception_reason' => $data['exception_reason'] ?? null,
                 'exception_authorized_by' => $data['exception_authorized_by'] ?? $data['created_by'],
-                'material_plan_source' => $this->boms->activeForProduct((int) $data['product_id']) !== null ? 'bom' : null,
+                'material_plan_source' => ! empty($data['rework_source_output_id']) ? 'manual' : ($activeBom ? 'bom' : null),
+                'bom_id' => $activeBom?->id, 'bom_version' => $activeBom?->version,
+                'unit_standard_cost' => bccomp((string) $product->standard_cost, '0', 4) > 0 ? $product->standard_cost : null,
+                'cost_source' => bccomp((string) $product->standard_cost, '0', 4) > 0 ? 'product_standard_cost' : null,
+                'cost_snapshot_at' => bccomp((string) $product->standard_cost, '0', 4) > 0 ? now() : null,
                 'created_by' => (int) $data['created_by'],
             ];
             $wo = WorkOrder::create($payload);
@@ -209,7 +240,7 @@ class WorkOrderService
             // add materials manually. Once a BOM exists, however, direct
             // requirement errors must roll back instead of silently creating
             // an unmaterialized WO.
-            if ($this->boms->activeForProduct((int) $data['product_id']) !== null) {
+            if (empty($data['rework_source_output_id']) && $activeBom) {
                 $rows = $this->boms->directRequirements((int) $data['product_id'], (float) $data['quantity_target']);
                 foreach ($rows as $row) {
                     $wo->materials()->create([
@@ -228,10 +259,41 @@ class WorkOrderService
             // Snapshot the active routing after the WO and material plan exist.
             // The operation service is idempotent so retries cannot duplicate
             // the execution rows for the same work order.
-            $this->operations->generateFromRouting($wo);
+            if (! $wo->rework_source_output_id) {
+                $this->operations->generateFromRouting($wo);
+            }
 
             return $this->show($wo->fresh());
         });
+    }
+
+    /** Planning evidence never replaces transactional reservation and execution guards. */
+    public function proposalReadiness(WorkOrder $wo): array
+    {
+        $blockers = [];
+        foreach ($this->materialUsage->groups($wo) as $group) {
+            $needed = bcsub((string) $group['required_quantity'], (string) $group['coverage_quantity'], 3);
+            if (bccomp($needed, '0', 3) <= 0) {
+                continue;
+            }
+            $levels = StockLevel::where('item_id', $group['item_id'])->with('location.zone.warehouse')->get();
+            $available = app(StockLocationSummaryService::class)->availability($levels)['usable_quantity'];
+            if (bccomp($available, $needed, 3) < 0) {
+                $blockers[] = ['code' => 'material', 'owner' => 'Warehouse',
+                    'message' => ($group['item']['code'] ?? 'Material').': insufficient usable stock. Receive or release materials first.'];
+            }
+        }
+        if (! $this->productionReadiness($wo)['ready']) {
+            $blockers[] = ['code' => 'dependency', 'owner' => 'Production', 'message' => 'Complete required subassembly work orders first.'];
+        }
+        try {
+            $specs = app(InspectionSpecService::class);
+            $specs->assertInspectable($specs->forProduct($wo->product_id));
+        } catch (BusinessRuleException $error) {
+            $blockers[] = ['code' => 'quality', 'owner' => 'Quality', 'message' => $error->getMessage()];
+        }
+
+        return $blockers;
     }
 
     /**
@@ -243,12 +305,12 @@ class WorkOrderService
      * Sprint 6 audit §1.1: this previously only stamped the status change.
      * Now it actually reserves stock.
      */
-    public function confirm(WorkOrder $wo, ?int $machineId = null, ?int $moldId = null): WorkOrder
+    public function confirm(WorkOrder $wo, ?int $machineId = null, ?int $moldId = null, ?array $review = null): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Confirmed);
         $from = $wo->status?->value ?? 'planned';
 
-        $result = DB::transaction(function () use ($wo, $machineId, $moldId, &$from) {
+        $result = DB::transaction(function () use ($wo, $machineId, $moldId, $review, &$from) {
             // Re-read the WO under a lock. Scheduler confirmation and the
             // direct WO endpoint can otherwise both pass the outer transition
             // check against the same stale planned row.
@@ -257,6 +319,7 @@ class WorkOrderService
                 throw new BusinessRuleException('Work order not found.');
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::Confirmed);
+            $lockedWo->assertFinishFirstRoutingCompatible();
             $from = $lockedWo->status?->value ?? 'planned';
 
             $targetMachineId = $machineId ?? $lockedWo->machine_id;
@@ -273,10 +336,34 @@ class WorkOrderService
             }
 
             $this->assertAssignmentValid($lockedWo, $machine, $mold);
+            $slot = ProductionSchedule::query()->where('work_order_id', $lockedWo->id)->whereNull('rework_ncr_id')->where('reserves_capacity', true)->latest('id')->first();
+            if (! $slot) {
+                $start = $lockedWo->planned_start?->copy();
+                if (! $start) {
+                    throw new BusinessRuleException('PPC must select an explicit production start and schedule before confirming.');
+                }
+                $end = $start->copy()->addMinutes(app(ProductionResourceService::class)->reservationMinutes($lockedWo, $mold));
+                app(ProductionResourceService::class)->assertReservation($lockedWo, $machine, $mold, $start, $end);
+                $slot = ProductionSchedule::create(['work_order_id' => $lockedWo->id, 'machine_id' => $machine->id, 'mold_id' => $mold->id,
+                    'scheduled_start' => $start, 'scheduled_end' => $end, 'priority_order' => $lockedWo->priority ?? 0, 'status' => 'pending', 'reserves_capacity' => true]);
+            } elseif ((int) $slot->machine_id !== (int) $machine->id || (int) $slot->mold_id !== (int) $mold->id) {
+                throw new BusinessRuleException('Equipment differs from the production proposal. PPC must revise the proposal before confirming.');
+            }
+            app(ProductionResourceService::class)->assertReservation($lockedWo, $machine, $mold, $slot->scheduled_start, $slot->scheduled_end, $slot->id);
+            if ($review !== null && ((int) $slot->id !== (int) $review['schedule_id']
+                || ! $slot->updated_at->equalTo(Carbon::parse($review['schedule_updated_at']))
+                || app(WorkOrderAssignmentService::class)->currentCrew($lockedWo)?->id !== $review['expected_crew_id'])) {
+                throw new BusinessRuleException('Schedule or crew changed. Refresh and review before confirming.');
+            }
+            app(WorkOrderAssignmentService::class)->assertReadyForConfirmation($lockedWo, $slot);
+            if (now()->max($slot->scheduled_start)->addMinutes(app(ProductionResourceService::class)->durationMinutes($lockedWo, $mold))->gt($slot->scheduled_end)) {
+                throw new BusinessRuleException('Proposal no longer fits. Find a new slot before confirming.');
+            }
             $this->assertProductionDependenciesReady($lockedWo);
 
             $lockedWo->forceFill([
                 'status' => WorkOrderStatus::Confirmed->value,
+                'scheduling_diagnostic' => null,
                 'machine_id' => $machine->id,
                 'mold_id' => $mold->id,
             ])->save();
@@ -287,9 +374,10 @@ class WorkOrderService
             // take this one. When both this WO and the incumbent carry schedule
             // rows, the conflict is restricted to overlapping time windows;
             // otherwise any other active WO on the same machine blocks confirm.
-            $this->assertMachineAvailable($lockedWo);
+            $slot->update(['status' => 'confirmed', 'is_confirmed' => true, 'confirmed_at' => now()]);
 
             $this->reserveMaterialsFor($lockedWo);
+            app(WoOperationService::class)->refreshPendingSchedule($lockedWo);
 
             $confirmed = $this->show($lockedWo->fresh());
             $this->recordStatusChange($confirmed, $from, WorkOrderStatus::Confirmed->value);
@@ -309,21 +397,153 @@ class WorkOrderService
      * needed from backed reservations, and creates any remaining MaterialIssue
      * stock movements via StockMovementService.
      */
-    public function start(WorkOrder $wo, int $startedBy): WorkOrder
+    /** Read-only preview; start and resume still revalidate under their transaction locks. */
+    public function executionReadiness(WorkOrder $wo): array
+    {
+        $wo->loadMissing(['product', 'machine', 'mold']);
+        $crews = app(WorkOrderAssignmentService::class);
+        $resources = app(ProductionResourceService::class);
+        $slot = $crews->schedule($wo);
+        $crew = $crews->currentCrew($wo);
+        $blockers = [];
+        $check = function (string $code, callable $guard, ?string $owner = null) use (&$blockers): void {
+            try {
+                $guard();
+            } catch (BusinessRuleException $error) {
+                $blockers[] = array_filter(['code' => $code, 'message' => $error->getMessage(), 'owner' => $owner], fn ($value) => $value !== null);
+            }
+        };
+        $check('state', function () use ($wo) {
+            if (! in_array($wo->status, [WorkOrderStatus::Confirmed, WorkOrderStatus::Paused, WorkOrderStatus::InProgress], true)) {
+                throw new BusinessRuleException('Only confirmed, paused or running production can be reviewed.');
+            }
+        });
+        $check('material', function () use ($wo) {
+            if (in_array($wo->status, [WorkOrderStatus::Paused, WorkOrderStatus::InProgress], true)) {
+                $this->materialUsage->assertProductionCoverage($wo);
+            } else {
+                $this->assertMaterialPlan($wo);
+                $this->materialUsage->assertCoverage($wo);
+            }
+        });
+        if (! in_array($wo->work_order_class, ['service', 'non_stock'], true)) {
+            $check('inventory', fn () => app(FinishedGoodInventoryService::class)->assertReady($wo->product), 'Warehouse');
+        }
+        $check('dependency', fn () => $this->assertProductionDependenciesReady($wo));
+        $check('quality', function () use ($wo) {
+            $wo->assertFinishFirstRoutingCompatible();
+            if (in_array($wo->status, [WorkOrderStatus::Paused, WorkOrderStatus::InProgress], true)) {
+                if ($wo->status !== WorkOrderStatus::Paused || ! $this->hasPendingStartupTrial($wo)) {
+                    $wo->assertProcessQualityReleased();
+                }
+
+                return;
+            }
+            $specs = app(InspectionSpecService::class);
+            $specs->assertInspectable($specs->forProduct($wo->product_id));
+        });
+        $check('equipment', function () use ($wo, $resources) {
+            if (! $wo->machine || ! $wo->mold) {
+                throw new BusinessRuleException('Assign an available machine and mold before production.');
+            }
+            $resources->assertCanAcquire($wo, $wo->machine, $wo->mold);
+        });
+        $needsReschedule = false;
+        $preview = null;
+        $presence = [];
+        $requiresDeadlineApproval = false;
+        try {
+            if (! $wo->machine || ! $wo->mold) {
+                throw new BusinessRuleException('Assign equipment before starting.');
+            }
+            $extending = $wo->status === WorkOrderStatus::InProgress;
+            $preview = $resources->executionWindow($wo, $wo->machine, $wo->mold, allowLate: $extending);
+            $requiresDeadlineApproval = $extending && $wo->planned_end && $preview['window']->scheduled_end->gt($wo->planned_end);
+            foreach ($crew?->members ?? [] as $member) {
+                if (! $member->employee) {
+                    continue;
+                }
+                $entry = $crews->presence($member->employee, now()) + ['employee_id' => $member->employee->hash_id, 'name' => $member->employee->full_name];
+                $presence[] = $entry;
+                if ($entry['state'] === 'blocked') {
+                    $blockers[] = ['code' => 'presence', 'message' => $entry['name'].': '.$entry['reason']];
+                }
+            }
+            $unverified = collect($presence)->where('state', 'unknown');
+            if ($preview['mode'] === 'early' && $unverified->isNotEmpty()) {
+                $blockers[] = ['code' => 'presence', 'message' => 'Early start needs verified attendance: '.$unverified->pluck('name')->implode(', ').'.'];
+            }
+            if (! collect($blockers)->contains('code', 'presence')) {
+                $check('crew', fn () => $crews->assertScheduledCrew($wo, $preview['window'], allowHoliday: $preview['allow_holiday'], lock: false));
+            }
+        } catch (BusinessRuleException $error) {
+            $preview = null;
+            $needsReschedule = true;
+            $message = $error->getMessage();
+            if ($slot && $slot->scheduled_start->gt(now()) && $wo->machine && $wo->mold) {
+                try {
+                    $resources->assertReservation($wo, $wo->machine, $wo->mold, $slot->scheduled_start, $slot->scheduled_end, $slot->id, forExecution: true);
+                    $crews->assertScheduledCrew($wo, $slot, allowHoliday: true, lock: false);
+                    $needsReschedule = false;
+                    $message = 'Scheduled for later. Early start needs free resources and verified worker attendance.';
+                } catch (BusinessRuleException $scheduleError) {
+                    $message = $scheduleError->getMessage();
+                }
+            }
+            $blockers[] = ['code' => 'schedule', 'message' => $message];
+        }
+        $check('crew', fn () => $crews->assertReadyForStart($wo, lock: false));
+
+        return ['ready' => $blockers === [], 'needs_reschedule' => $needsReschedule, 'blockers' => $blockers,
+            'start_mode' => $preview['mode'] ?? null, 'requires_late_start_acknowledgement' => ($preview['mode'] ?? null) === 'late',
+            'execution_start' => $preview ? $preview['window']->scheduled_start->toIso8601String() : null,
+            'execution_end' => $preview ? $preview['window']->scheduled_end->toIso8601String() : null,
+            'estimated_finish' => $preview ? now()->addMinutes($resources->durationMinutes($wo, $wo->mold))->toIso8601String() : null,
+            'requires_late_production_approval' => $requiresDeadlineApproval,
+            'presence' => $presence, 'expected_crew_id' => $crew?->hash_id,
+            'schedule' => $slot ? $crews->serializeSchedule($slot) : null];
+    }
+
+    public function extendRun(WorkOrder $wo, User $actor, array $data): WorkOrder
+    {
+        return DB::transaction(function () use ($wo, $actor, $data) {
+            $locked = WorkOrder::lockForUpdate()->findOrFail($wo->id);
+            $locked->assertProcessQualityReleased();
+            $this->assertProductionDependenciesReady($locked);
+            $this->materialUsage->assertProductionCoverage($locked);
+            app(ProductionResourceService::class)->extendRun($locked, $actor, $data);
+
+            return $this->show($locked->fresh());
+        }, 3);
+    }
+
+    public function start(WorkOrder $wo, int $startedBy, array $execution = []): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
         $from = $wo->status?->value ?? 'confirmed';
 
-        $result = DB::transaction(function () use ($wo, $startedBy, &$from) {
+        $result = DB::transaction(function () use ($wo, $startedBy, $execution, &$from) {
             $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
             if (! $lockedWo) {
                 throw new BusinessRuleException('Work order not found.');
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
+            $lockedWo->assertFinishFirstRoutingCompatible();
+            if (array_key_exists('expected_crew_id', $execution)
+                && app(WorkOrderAssignmentService::class)->currentCrew($lockedWo)?->id !== $execution['expected_crew_id']) {
+                throw new BusinessRuleException('Crew changed. Review the current crew before start or resume.');
+            }
             $from = $lockedWo->status?->value ?? 'confirmed';
             $this->assertMaterialPlan($lockedWo);
             $this->assertProductionDependenciesReady($lockedWo);
+            $specs = app(InspectionSpecService::class);
+            $specs->assertInspectable($specs->forProduct($lockedWo->product_id));
             $this->materialUsage->assertCoverage($lockedWo, lockReservationLevels: true);
+            if (! in_array($lockedWo->work_order_class, ['service', 'non_stock'], true)) {
+                $inventory = app(FinishedGoodInventoryService::class);
+                $inventory->assertReady($lockedWo->product);
+                $inventory->ensureItem($lockedWo->product);
+            }
 
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
             $mold = $lockedWo->mold_id ? Mold::lockForUpdate()->find($lockedWo->mold_id) : null;
@@ -336,14 +556,7 @@ class WorkOrderService
             if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
                 throw new BusinessRuleException('Assigned mold is not available.');
             }
-            $this->assertMachineNotOccupied($lockedWo, $machine);
-            $this->assertMoldNotOccupied($lockedWo, $mold);
-
-            $machine->update([
-                'status' => MachineStatus::Running->value,
-                'current_work_order_id' => $lockedWo->id,
-            ]);
-            $mold->update(['status' => MoldStatus::InUse->value]);
+            app(ProductionResourceService::class)->acquire($lockedWo, $machine, $mold, actor: User::findOrFail($startedBy), execution: $execution);
 
             // ADV3 — IATF 16949 traceability: every WO run is a Production Batch.
             // Generate batch_number on first start (assertTransition prevents double-start).
@@ -370,10 +583,14 @@ class WorkOrderService
                     ->markInProduction((int) $lockedWo->sales_order_id);
             }
 
-            $started = $this->show($lockedWo->fresh());
-            $this->recordStatusChange($started, $from, WorkOrderStatus::InProgress->value);
+            $this->recordStatusChange($lockedWo, $from, WorkOrderStatus::InProgress->value);
+            if (! $lockedWo->usesFinishFirstQc()) {
+                app(TriggerInProcessQC::class)->handle(
+                    new WorkOrderStatusChanged($lockedWo, $from, WorkOrderStatus::InProgress->value),
+                );
+            }
 
-            return $started;
+            return $this->show($lockedWo->fresh());
         });
 
         return $result;
@@ -404,14 +621,10 @@ class WorkOrderService
                     'category' => $category->value,
                     'description' => $reason,
                 ]);
-                $isCurrentOccupant = (int) $machine->current_work_order_id === (int) $lockedWo->id;
                 if ($category === MachineDowntimeCategory::Breakdown) {
                     // A breakdown pause must enter the same authoritative
                     // machine-status flow as an operator transition. This
                     // keeps the maintenance queue and alert listener alive.
-                    if ($isCurrentOccupant) {
-                        $machine->update(['current_work_order_id' => null]);
-                    }
                     if ($machine->status !== MachineStatus::Breakdown) {
                         $this->machines->transitionStatus(
                             $machine,
@@ -419,19 +632,9 @@ class WorkOrderService
                             $reason,
                         );
                     }
-                } else {
-                    $updates = [];
-                    if ($isCurrentOccupant) {
-                        $updates['current_work_order_id'] = null;
-                        if ($machine->status === MachineStatus::Running) {
-                            $updates['status'] = MachineStatus::Idle->value;
-                        }
-                    }
-                    if (! empty($updates)) {
-                        $machine->update($updates);
-                    }
                 }
             }
+
             $lockedWo->update([
                 'status' => WorkOrderStatus::Paused->value,
                 'pause_reason' => $reason,
@@ -461,19 +664,104 @@ class WorkOrderService
      * `parent_work_order_cannot_start_before_subassembly_child_is_ready`) and
      * produced finished goods from material that was never issued.
      */
-    public function resume(WorkOrder $wo): WorkOrder
+    public function releaseResources(WorkOrder $wo, string $reason): WorkOrder
+    {
+        return DB::transaction(function () use ($wo, $reason) {
+            $wo = WorkOrder::query()->lockForUpdate()->findOrFail($wo->id);
+            if ($wo->status !== WorkOrderStatus::Paused || trim($reason) === '') {
+                throw new BusinessRuleException('Only paused production can explicitly release resources; enter a reason.');
+            }
+            $machine = Machine::query()->lockForUpdate()->findOrFail($wo->machine_id);
+            $mold = Mold::query()->lockForUpdate()->findOrFail($wo->mold_id);
+            app(ProductionResourceService::class)->release($wo, $machine, $mold);
+            $wo->update(['production_released_at' => now(), 'pause_reason' => $reason]);
+
+            return $this->show($wo->fresh());
+        });
+    }
+
+    public function reviewSlot(WorkOrder $wo, Carbon $start, Carbon $end, int $reviewedBy, string $reason, ?array $review = null): WorkOrder
+    {
+        return DB::transaction(function () use ($wo, $start, $end, $reviewedBy, $reason, $review) {
+            $wo = WorkOrder::query()->lockForUpdate()->findOrFail($wo->id);
+            if (! in_array($wo->status, [WorkOrderStatus::Confirmed, WorkOrderStatus::Paused], true)) {
+                throw new BusinessRuleException('Review replacement timing only for Confirmed or Paused production. Running timing cannot be changed.');
+            }
+            if (! empty($review['preferred_production_date']) && $start->toDateString() < $review['preferred_production_date']) {
+                throw new BusinessRuleException('Schedule precedes the selected production day. Choose a matching time.');
+            }
+            $preferenceMatches = ! array_key_exists('preferred_production_date', $review ?? [])
+                || $wo->preferred_production_date?->toDateString() === $review['preferred_production_date'];
+            $allowLate = app(ProductionResourceService::class)->assertDeadlineReview($wo, $end, User::findOrFail($reviewedBy), $review ?? []);
+            if ($preferenceMatches && $review !== null && ! isset($review['employee_ids']) && app(ProductionResourceService::class)->reviewedSlotReplay($wo, $review, $reviewedBy, null, $wo->machine_id, $wo->mold_id)) {
+                return $this->show($wo->fresh());
+            }
+            $resources = app(ProductionResourceService::class);
+            if ($review !== null && isset($review['employee_ids'])) {
+                if ($resources->reviewedSlotReplay($wo, $review, $reviewedBy, null, $wo->machine_id, $wo->mold_id)) {
+                    $current = app(WorkOrderAssignmentService::class)->currentCrew($wo);
+                    if ($preferenceMatches && $current && $current->assigned_by === $reviewedBy
+                        && $current->recorder_employee_id === $review['recorder_employee_id']
+                        && $current->reason === trim($reason)
+                        && $current->members->pluck('employee_id')->sort()->values()->all() === collect($review['employee_ids'])->sort()->values()->all()) {
+                        return $this->show($wo->fresh());
+                    }
+                    throw new BusinessRuleException('Crew changed. Refresh before reviewing timing and workers together.');
+                }
+            }
+            $crews = app(WorkOrderAssignmentService::class);
+            $actor = User::findOrFail($reviewedBy);
+            $holiday = false;
+            for ($day = $start->copy()->startOfDay(); $day->lt($end); $day->addDay()) {
+                $holiday = $holiday || $crews->isHoliday($day);
+            }
+            if ($holiday && (empty($review['holiday_authorized']) || ! $actor->hasPermission('production.work_orders.lifecycle'))) {
+                throw new BusinessRuleException('Holiday production requires explicit Production Management authorization for this interval.');
+            }
+            if (isset($review['employee_ids'])) {
+                $machine = Machine::whereKey($wo->machine_id)->lockForUpdate()->firstOrFail();
+                $mold = Mold::whereKey($wo->mold_id)->lockForUpdate()->firstOrFail();
+                app(ProductionResourceService::class)->assertReservation($wo, $machine, $mold, $start, $end, allowLate: $allowLate);
+                $proposed = new ProductionSchedule(['scheduled_start' => $start, 'scheduled_end' => $end]);
+                $crews->assign($wo, $review + ['minimum_workers' => count($review['employee_ids']),
+                    'maximum_workers' => count($review['employee_ids']), '_reviewed_slot' => $proposed, '_allow_holiday' => $holiday], $actor);
+            }
+            $this->assertProductionDependenciesReady($wo);
+            app(ProductionResourceService::class)->reviewSlot($wo, $start, $end, $reviewedBy, $reason, null, $wo->machine_id, $wo->mold_id, $holiday, $review ?? []);
+            $changes = ['scheduling_diagnostic' => null];
+            if (array_key_exists('preferred_production_date', $review ?? [])) {
+                $changes['preferred_production_date'] = $review['preferred_production_date'];
+            }
+            $wo->update($changes);
+            app(WoOperationService::class)->refreshPendingSchedule($wo);
+            if ($wo->status === WorkOrderStatus::Paused) {
+                $wo->update(['pause_reason' => $reason]);
+            }
+
+            return $this->show($wo->fresh());
+        }, 3);
+    }
+
+    public function resume(WorkOrder $wo, ?int $resumedBy = null, array $execution = []): WorkOrder
     {
         $this->assertResumable($wo);
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
         $from = $wo->status?->value ?? 'paused';
 
-        $result = DB::transaction(function () use ($wo, &$from) {
+        $result = DB::transaction(function () use ($wo, $resumedBy, $execution, &$from) {
             $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
             if (! $lockedWo) {
                 throw new BusinessRuleException('Work order not found.');
             }
             $this->assertResumable($lockedWo);
+            if (! $this->hasPendingStartupTrial($lockedWo)) {
+                $lockedWo->assertProcessQualityReleased();
+            }
             $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
+            if (array_key_exists('expected_crew_id', $execution)
+                && app(WorkOrderAssignmentService::class)->currentCrew($lockedWo)?->id !== $execution['expected_crew_id']) {
+                throw new BusinessRuleException('Crew changed. Review the current crew before start or resume.');
+            }
             $from = $lockedWo->status?->value ?? 'paused';
             // The full BOM is the start gate. After a pause, require issued
             // material only for the saved per-item norm of production already
@@ -507,18 +795,16 @@ class WorkOrderService
             if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
                 throw new BusinessRuleException('Assigned mold is not available to resume production.');
             }
-            $this->assertMachineNotOccupied($lockedWo, $machine);
-            $this->assertMoldNotOccupied($lockedWo, $mold);
-            $machine->update([
-                'status' => MachineStatus::Running->value,
-                'current_work_order_id' => $lockedWo->id,
-            ]);
+            app(ProductionResourceService::class)->acquire($lockedWo, $machine, $mold, actor: $resumedBy ? User::findOrFail($resumedBy) : auth()->user(), execution: $execution);
             $lockedWo->update([
                 'status' => WorkOrderStatus::InProgress->value,
-                'pause_reason' => null,
+                'pause_reason' => null, 'production_released_at' => null,
             ]);
             $resumed = $this->show($lockedWo->fresh());
             $this->recordStatusChange($resumed, $from, WorkOrderStatus::InProgress->value);
+            if ($this->autoFinishIfTargetReached($resumed)) {
+                $resumed = $this->show($resumed->fresh());
+            }
 
             return $resumed;
         });
@@ -526,63 +812,137 @@ class WorkOrderService
         return $result;
     }
 
-    public function complete(WorkOrder $wo): WorkOrder
+    public function autoFinishIfTargetReached(WorkOrder $wo): bool
+    {
+        return DB::transaction(function () use ($wo): bool {
+            $locked = WorkOrder::query()->lockForUpdate()->findOrFail($wo->id);
+            if (! $locked->usesFinishFirstQc() || $locked->rework_source_output_id
+                || $locked->status !== WorkOrderStatus::InProgress
+                || (int) $locked->quantity_target < 1
+                || (int) $locked->quantity_produced < (int) $locked->quantity_target) {
+                return false;
+            }
+            try {
+                $this->complete($locked);
+            } catch (BusinessRuleException) {
+                // Preserve saved output while an existing completion prerequisite awaits resolution.
+                return false;
+            }
+
+            return true;
+        });
+    }
+
+    public function productionCompletionBlocker(WorkOrder $wo): ?string
+    {
+        if ($wo->status !== WorkOrderStatus::InProgress
+            || (int) ($wo->usesFinishFirstQc() ? $wo->quantity_produced : $wo->quantity_good) < (int) $wo->quantity_target) {
+            return null;
+        }
+        try {
+            $this->assertProductionCompletionReady($wo);
+            $this->assertFinishedGoodsReceiptAndLedgerSettled($wo);
+        } catch (BusinessRuleException $error) {
+            return $error->getMessage();
+        }
+
+        return null;
+    }
+
+    private function assertProductionCompletionReady(WorkOrder $wo): void
+    {
+        $finishFirst = $wo->usesFinishFirstQc();
+        $wo->assertFinishFirstRoutingCompatible();
+        if ($finishFirst && LateProductionReport::query()->where('work_order_id', $wo->id)
+            ->whereIn('status', ['pending', 'correction'])->exists()) {
+            throw new BusinessRuleException('Review pending late production reports before finishing this work order.');
+        }
+        if ($wo->outputs()->where('held_quantity', '>', 0)->exists()) {
+            throw new BusinessRuleException('Resolve held historical production through QC recovery before completing this work order.');
+        }
+        $wo->assertProcessQualityReleased();
+        app(WorkOrderMaterialHandoverService::class)->assertForCompletion($wo);
+
+        $incompleteOps = WoOperation::query()
+            ->where('work_order_id', $wo->id)
+            ->whereNotIn('status', [
+                WoOperationStatus::Completed->value,
+                WoOperationStatus::Skipped->value,
+            ])
+            ->exists();
+        if ($incompleteOps) {
+            throw new BusinessRuleException(
+                "Work order {$wo->wo_number} cannot be completed because some routing operations are still pending or in progress."
+            );
+        }
+    }
+
+    public function complete(WorkOrder $wo, ?string $shortCompletionReason = null, ?Carbon $productionFinishedAt = null): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Completed);
         $from = $wo->status?->value ?? 'in_progress';
 
-        $result = DB::transaction(function () use ($wo, &$from) {
+        $result = DB::transaction(function () use ($wo, $shortCompletionReason, $productionFinishedAt, &$from) {
             $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
             if (! $lockedWo) {
                 throw new BusinessRuleException('Work order not found.');
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::Completed);
+            $finishFirst = $lockedWo->usesFinishFirstQc();
+            if ($productionFinishedAt !== null && ! $finishFirst) {
+                throw new BusinessRuleException('An actual production finish time is supported only for finish-first work orders.');
+            }
+            $this->assertProductionCompletionReady($lockedWo);
             $from = $lockedWo->status?->value ?? 'in_progress';
 
-            $incompleteOps = WoOperation::query()
-                ->where('work_order_id', $lockedWo->id)
-                ->whereNotIn('status', [
-                    WoOperationStatus::Completed->value,
-                    WoOperationStatus::Skipped->value,
-                ])
-                ->exists();
-            if ($incompleteOps) {
-                throw new BusinessRuleException(
-                    "Work order {$lockedWo->wo_number} cannot be completed because some routing operations are still pending or in progress."
-                );
-            }
             // A completed WO hands its good output to outgoing QC. With no
             // good output there is nothing to inspect or ship, and a completed
             // WO can no longer record output, so the order line was left short
             // behind a status that claimed the work was done.
-            if ((int) $lockedWo->quantity_good < 1) {
+            $completionQuantity = $finishFirst ? (int) $lockedWo->quantity_produced : (int) $lockedWo->quantity_good;
+            if ($completionQuantity < 1 && ! ($lockedWo->rework_source_output_id && (int) $lockedWo->quantity_produced === (int) $lockedWo->quantity_target)
+                && ! ((int) $lockedWo->quantity_produced > 0 && trim((string) $shortCompletionReason) !== '')) {
                 throw new BusinessRuleException(
-                    "Work order {$lockedWo->wo_number} has no good output to complete. Record its output, or pause and cancel it."
+                    $finishFirst
+                        ? "Work order {$lockedWo->wo_number} has no recorded physical output to complete."
+                        : "Work order {$lockedWo->wo_number} has no good output to complete. Record good output or resolve its defects through authorized recovery."
                 );
             }
-
+            if ($completionQuantity < (int) $lockedWo->quantity_target && ! $lockedWo->rework_source_output_id) {
+                $reason = trim((string) $shortCompletionReason);
+                if ($reason === '' || mb_strlen($reason) > 2000) {
+                    throw new BusinessRuleException('Production is below target. Enter a short-completion reason before finishing the run.');
+                }
+                $lockedWo->forceFill(['short_completion_reason' => $reason])->save();
+            }
+            $this->assertFinishedGoodsReceiptAndLedgerSettled($lockedWo);
             $produced = (int) $lockedWo->quantity_produced;
             $rejected = (int) $lockedWo->quantity_rejected;
             $scrap = $produced > 0 ? round(($rejected / $produced) * 100, 2) : 0.0;
+            $actualFinish = $productionFinishedAt ?? Carbon::now();
+            if ($finishFirst) {
+                $latestOutputFinish = $lockedWo->outputs()->reorder()->selectRaw('MAX(COALESCE(production_finished_at, recorded_at)) AS latest_finish')->first()?->latest_finish;
+                $latestScheduledFinish = ProductionSchedule::query()->where('work_order_id', $lockedWo->id)
+                    ->whereNull('rework_ncr_id')->whereIn('status', ['confirmed', 'executed'])->max('scheduled_end');
+                $latestApprovedReportFinish = LateProductionReport::query()->where('work_order_id', $lockedWo->id)
+                    ->where('status', 'approved')->max('production_finished_at');
+                $executionEvidenceEnd = collect([$latestScheduledFinish, $latestApprovedReportFinish])->filter()->max();
+                if (! $lockedWo->actual_start || $actualFinish->gt(now()) || $actualFinish->lt($lockedWo->actual_start)
+                    || ($latestOutputFinish && $actualFinish->lt(Carbon::parse($latestOutputFinish)))
+                    || ($productionFinishedAt !== null && (! $executionEvidenceEnd || $actualFinish->gt(Carbon::parse($executionEvidenceEnd))))) {
+                    throw new BusinessRuleException('Production finish time must be between the actual start, latest approved production finish, and current time.');
+                }
+            }
             $lockedWo->update([
                 'status' => WorkOrderStatus::Completed->value,
-                'actual_end' => Carbon::now(),
+                'actual_end' => $actualFinish,
                 'scrap_rate' => $scrap,
             ]);
-            $machine = $lockedWo->machine_id
-                ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
-                : null;
-            if ($machine && (int) $machine->current_work_order_id === (int) $lockedWo->id) {
-                $updates = ['current_work_order_id' => null];
-                if ($machine->status === MachineStatus::Running) {
-                    $updates['status'] = MachineStatus::Idle->value;
-                }
-                $machine->update($updates);
-            }
-            if ($lockedWo->mold_id) {
+            if ($lockedWo->machine_id && $lockedWo->mold_id) {
+                $machine = Machine::query()->lockForUpdate()->find($lockedWo->machine_id);
                 $mold = Mold::query()->lockForUpdate()->find($lockedWo->mold_id);
-                if ($mold && $mold->status === MoldStatus::InUse) {
-                    $mold->update(['status' => MoldStatus::Available->value]);
+                if ($machine && $mold) {
+                    app(ProductionResourceService::class)->release($lockedWo, $machine, $mold);
                 }
             }
             // M050 — a completed work order retires its schedule rows so they
@@ -604,7 +964,13 @@ class WorkOrderService
                 'work_order',
                 WorkOrderStatus::Completed->value,
             );
-            $this->recordStatusChange($completed, $from, WorkOrderStatus::Completed->value);
+            $this->recordStatusChange($completed, $from, WorkOrderStatus::Completed->value,
+                $productionFinishedAt ? 'Production finished at '.$actualFinish->toIso8601String().'; recorded at '.now()->toIso8601String().'.' : null);
+            $actor = auth()->user() ?? User::query()->find($completed->created_by);
+            if ($actor) {
+                $this->requestQualityClose($completed, $actor);
+                $completed->refresh();
+            }
 
             return $completed;
         });
@@ -644,44 +1010,112 @@ class WorkOrderService
         return $result;
     }
 
+    public function requestQualityClose(WorkOrder $wo, User $by): void
+    {
+        if ($this->autoFinishIfTargetReached($wo)) {
+            $wo = $wo->fresh();
+        }
+        app(OutboxService::class)->record(new WorkOrderQualityResolved($wo, $by));
+        $this->autoCloseIfReady($wo, $by);
+    }
+
+    public function autoCloseIfReady(WorkOrder $wo, User $by): bool
+    {
+        return DB::transaction(function () use ($wo): bool {
+            $locked = WorkOrder::query()->lockForUpdate()->find($wo->id);
+            if (! $locked || $locked->status !== WorkOrderStatus::Completed || $this->qualityCloseBlocker($locked) !== null) {
+                return false;
+            }
+            $locked->update(['status' => WorkOrderStatus::Closed->value]);
+            $this->recordStatusChange($locked, 'completed', 'closed', 'Automatically closed after production and quality resolution.');
+            app(WorkOrderReworkService::class)->notifyProduction($locked, null, 'closed');
+
+            return true;
+        });
+    }
+
+    public function qualityCloseBlocker(WorkOrder $wo): ?string
+    {
+        if ($wo->status !== WorkOrderStatus::Completed) {
+            return null;
+        }
+        try {
+            $this->assertQualityGateSettled($wo);
+        } catch (BusinessRuleException $e) {
+            return $e->getMessage();
+        }
+
+        return null;
+    }
+
     public function cancel(WorkOrder $wo, ?string $reason = null): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Cancelled);
         $from = $wo->status?->value ?? 'planned';
 
         $result = DB::transaction(function () use ($wo, $reason, &$from) {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
             if (! $lockedWo) {
                 throw new BusinessRuleException('Work order not found.');
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::Cancelled);
+            if ($lockedWo->rework_source_output_id) {
+                throw new BusinessRuleException('A confirmed NCR repair cannot be cancelled. Finish and account for its good or rejected pieces so the linked NCR can resolve.');
+            }
+            if ((int) $lockedWo->quantity_produced > 0 || $lockedWo->outputs()->exists()) {
+                throw new BusinessRuleException('A work order with produced output cannot be cancelled. Finish production and resolve its QC or defects.');
+            }
+            if ($lockedWo->production_purpose === 'stock') {
+                $reason = trim($reason ?? '');
+                if ($reason === '' || mb_strlen($reason) > 500) {
+                    throw new BusinessRuleException('Enter a cancellation reason of 1 to 500 characters.');
+                }
+                $this->assertStockCancellationSafe($lockedWo);
+            }
+            if ($lockedWo->production_purpose === 'stock' && $lockedWo->parent_wo_id === null) {
+                $descendants = collect();
+                $visit = function (WorkOrder $parent) use (&$visit, &$descendants): void {
+                    foreach ($parent->children()->where('status', '!=', 'cancelled')->lockForUpdate()->get() as $child) {
+                        $this->assertStockCancellationSafe($child);
+                        if ($child->status->value !== 'planned' || $child->currentProductionSchedule()->exists()
+                            || $child->machine_id || $child->mold_id || $child->outputs()->exists()
+                            || $child->crews()->whereNull('ended_at')->exists()
+                            || $child->materials()->where('actual_quantity_issued', '>', 0)->exists()) {
+                            throw new BusinessRuleException("Review committed subassembly {$child->wo_number} before cancelling its stock production.");
+                        }
+                        $visit($child);
+                        $descendants->push($child);
+                    }
+                };
+                $visit($lockedWo);
+                $requests = \App\Modules\Purchasing\Models\PurchaseRequest::whereIn('stock_production_work_order_id', $descendants->pluck('id')->push($lockedWo->id))
+                    ->whereNotIn('status', ['cancelled', 'rejected'])->lockForUpdate()->get();
+                foreach ($requests as $request) {
+                    if (! $request->is_auto_generated || $request->status->value !== 'draft'
+                        || $request->purchaseOrders()->exists() || $request->rfqs()->exists()) {
+                        throw new BusinessRuleException("Review purchasing {$request->pr_number} before cancelling its stock production.");
+                    }
+                }
+                foreach ($requests as $request) app(\App\Modules\Purchasing\Services\PurchaseRequestService::class)->cancel($request);
+                foreach ($descendants as $child) $this->cancel($child, $reason);
+            }
             $from = $lockedWo->status?->value ?? 'planned';
             $this->materialUsage->assertReservationLedgerConsistent($lockedWo);
 
             $lockedWo->update([
-                'status' => WorkOrderStatus::Cancelled->value,
+                'status' => WorkOrderStatus::Cancelled->value, 'scheduling_diagnostic' => null,
                 'pause_reason' => $reason,
             ]);
 
             // Sprint 6 audit §1.1: release any reservations held by this WO.
             $this->releaseReservedMaterials($lockedWo);
 
-            // Free machine + mold if currently bound.
-            $machine = $lockedWo->machine_id
-                ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
-                : null;
-            if ($machine && (int) $machine->current_work_order_id === (int) $lockedWo->id) {
-                $updates = ['current_work_order_id' => null];
-                if ($machine->status === MachineStatus::Running) {
-                    $updates['status'] = MachineStatus::Idle->value;
-                }
-                $machine->update($updates);
-            }
-            if ($lockedWo->mold_id) {
-                $mold = Mold::query()->lockForUpdate()->find($lockedWo->mold_id);
-                if ($mold && $mold->status === MoldStatus::InUse) {
-                    $mold->update(['status' => MoldStatus::Available->value]);
-                }
+            $machine = $lockedWo->machine_id ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id) : null;
+            $mold = $lockedWo->mold_id ? Mold::query()->lockForUpdate()->find($lockedWo->mold_id) : null;
+            app(ProductionResourceService::class)->release($lockedWo, $machine, $mold);
+            if ($lockedWo->production_purpose === 'stock') {
+                $lockedWo->crews()->whereNull('ended_at')->whereNull('rework_ncr_id')->update(['ended_at' => now()]);
             }
             // M050 — a cancelled work order releases its reserved machine
             // window so the scheduler can replan the slot.
@@ -701,6 +1135,53 @@ class WorkOrderService
         return $result;
     }
 
+    private function assertStockCancellationSafe(WorkOrder $wo): void
+    {
+        if (! in_array($wo->status, [WorkOrderStatus::Planned, WorkOrderStatus::Confirmed], true)
+            || $wo->actual_start !== null || (int) $wo->quantity_produced > 0 || $wo->outputs()->exists()
+            || $wo->operations()->where(function ($query): void {
+                $query->where('status', '!=', WoOperationStatus::Pending->value)
+                    ->orWhereNotNull('setup_start')->orWhereNotNull('actual_start')
+                    ->orWhere('qty_completed', '>', 0)->orWhere('qty_scrapped', '>', 0);
+            })->exists()) {
+            throw new BusinessRuleException("Only unstarted planned or confirmed stock production can be cancelled. Review {$wo->wo_number}.");
+        }
+        if ($wo->materials()->where('actual_quantity_issued', '>', 0)->exists()
+            || MaterialReservation::where('work_order_id', $wo->id)->where('status', ReservationStatus::Issued->value)->exists()
+            || MaterialIssueSlip::where('work_order_id', $wo->id)->where('status', MaterialIssueStatus::Issued->value)->exists()
+            || StockMovement::where('reference_type', 'work_order')->where('reference_id', $wo->id)
+                ->where('movement_type', StockMovementType::MaterialIssue->value)->exists()) {
+            throw new BusinessRuleException('Issued materials must be reconciled before cancelling stock production.');
+        }
+    }
+
+    /** Refresh only an untouched automatic BOM plan; execution snapshots stay fixed. */
+    public function reconcilePlannedMaterialPlan(WorkOrder $wo): void
+    {
+        if ($wo->status !== WorkOrderStatus::Planned || $wo->currentProductionSchedule()->exists()
+            || $wo->materials()->where('actual_quantity_issued', '>', 0)->exists()
+            || $wo->material_plan_source !== 'bom') {
+            throw new BusinessRuleException('Only untouched BOM work orders can refresh their material plan.');
+        }
+        $bom = $this->boms->activeForProduct($wo->product_id);
+        if (! $bom) {
+            throw new BusinessRuleException('Configure an active BOM before refreshing production.');
+        }
+        $bom = $this->boms->ensureFreshForPlanning($bom);
+        $rows = $this->boms->directRequirements($wo->product_id, (float) $wo->quantity_target);
+        $wo->materials()->delete();
+        foreach ($rows as $row) {
+            $wo->materials()->create([
+                'item_id' => $row['item_id'], 'bom_quantity' => $row['gross_quantity'],
+                'standard_unit_cost' => $row['standard_unit_cost'], 'standard_cost' => $row['standard_cost'],
+                'actual_quantity_issued' => '0', 'actual_cost' => '0',
+                'cost_variance' => Money::sub('0.00', $row['standard_cost']), 'variance' => '0',
+            ]);
+        }
+        $wo->forceFill(['bom_id' => $bom->id, 'bom_version' => $bom->version])->save();
+        $wo->unsetRelation('materials');
+    }
+
     public function delete(WorkOrder $wo): void
     {
         DB::transaction(function () use ($wo): void {
@@ -711,6 +1192,10 @@ class WorkOrderService
             if ($lockedWo->status !== WorkOrderStatus::Planned) {
                 throw new BusinessRuleException('Only planned work orders can be deleted.');
             }
+            if ($lockedWo->production_purpose === 'stock') {
+                throw new BusinessRuleException('Cancel stock work orders to release related commitments and preserve history.');
+            }
+            app(ProductionResourceService::class)->releaseReservation($lockedWo);
             $lockedWo->delete();
         });
     }
@@ -777,6 +1262,15 @@ class WorkOrderService
      * transition (409 + stable code) the state machine raises, because "this
      * work order is not paused" is a state conflict, not a malformed request.
      */
+    private function hasPendingStartupTrial(WorkOrder $wo): bool
+    {
+        $active = $wo->inspections()->where('stage', 'in_process')->where('status', '!=', 'cancelled')->get();
+        $startup = $active->whereNull('wo_operation_id')->first();
+
+        return $active->count() === 1 && $startup?->startup_trial_required
+            && in_array($startup->status->value, ['draft', 'in_progress'], true);
+    }
+
     private function assertResumable(WorkOrder $wo): void
     {
         if ($wo->status !== WorkOrderStatus::Paused) {
@@ -892,155 +1386,11 @@ class WorkOrderService
      * The caller should hold row locks on the WO, machine, and mold when the
      * assignment is being persisted.
      */
-    public function assertAssignmentValid(WorkOrder $wo, Machine $machine, Mold $mold): void
+    public function assertAssignmentValid(WorkOrder $wo, Machine $machine, Mold $mold, ?int $quantity = null): void
     {
-        if ((int) $mold->product_id !== (int) $wo->product_id) {
-            throw new BusinessRuleException('The selected mold is not configured for this work-order product.');
-        }
-        if (! in_array($machine->status, [MachineStatus::Idle, MachineStatus::Running], true)) {
-            throw new BusinessRuleException('The selected machine is not available for scheduling.');
-        }
-        if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
-            throw new BusinessRuleException('The selected mold is not available for scheduling.');
-        }
-        if ((int) $mold->current_shot_count + (int) $wo->quantity_target > (int) $mold->max_shots_before_maintenance) {
-            throw new BusinessRuleException('The selected mold has insufficient rated shot life remaining for this work-order quantity.');
-        }
-        if (! $mold->compatibleMachines()->whereKey($machine->id)->exists()) {
-            throw new BusinessRuleException('The selected machine and mold are not compatible.');
-        }
-    }
+        app(ProductionResourceService::class)->assertCompatibility($wo, $machine, $mold);
+        app(ProductionResourceService::class)->assertMoldLife($mold, $quantity ?? max(0, (int) $wo->quantity_target - (int) $wo->quantity_good), $wo->id);
 
-    /**
-     * OGAMI-015 — block confirming a work order onto a machine that is already
-     * committed to another active (Confirmed or InProgress) work order.
-     *
-     * Resolution strategy:
-     *   - If this WO has schedule rows for the machine AND a candidate
-     *     conflicting WO also has schedule rows, the two are only in conflict
-     *     when their [scheduled_start, scheduled_end) windows overlap.
-     *   - Otherwise (either side lacks schedule rows), any other active WO
-     *     bound to the same machine is treated as a conflict.
-     *
-     * @throws BusinessRuleException when the machine is already committed.
-     */
-    private function assertMachineAvailable(WorkOrder $wo): void
-    {
-        if (! $wo->machine_id) {
-            return;
-        }
-
-        $candidates = WorkOrder::query()
-            ->where('machine_id', $wo->machine_id)
-            ->where('id', '!=', $wo->id)
-            ->whereIn('status', [
-                WorkOrderStatus::Confirmed->value,
-                WorkOrderStatus::InProgress->value,
-            ])
-            ->get();
-
-        if ($candidates->isEmpty()) {
-            return;
-        }
-
-        // Schedule windows for THIS WO on the target machine (if any).
-        $activeScheduleStatuses = [
-            ProductionScheduleStatus::Pending->value,
-            ProductionScheduleStatus::Confirmed->value,
-            ProductionScheduleStatus::Executed->value,
-        ];
-
-        $ownWindows = ProductionSchedule::where('work_order_id', $wo->id)
-            ->where('machine_id', $wo->machine_id)
-            ->whereIn('status', $activeScheduleStatuses)
-            ->get(['scheduled_start', 'scheduled_end']);
-
-        foreach ($candidates as $other) {
-            $otherWindows = ProductionSchedule::where('work_order_id', $other->id)
-                ->where('machine_id', $wo->machine_id)
-                ->whereIn('status', $activeScheduleStatuses)
-                ->get(['scheduled_start', 'scheduled_end']);
-
-            // Only do the precise time-window comparison when BOTH sides have
-            // schedule rows. Otherwise fall back to a blanket conflict.
-            if ($ownWindows->isNotEmpty() && $otherWindows->isNotEmpty()) {
-                foreach ($ownWindows as $own) {
-                    foreach ($otherWindows as $cand) {
-                        if ($own->scheduled_start < $cand->scheduled_end
-                            && $cand->scheduled_start < $own->scheduled_end) {
-                            throw new BusinessRuleException(
-                                "Machine is already committed to work order {$other->wo_number} "
-                                .'over an overlapping schedule window.'
-                            );
-                        }
-                    }
-                }
-
-                // No overlap with this candidate — keep checking others.
-                continue;
-            }
-
-            throw new BusinessRuleException(
-                "Machine is already committed to active work order {$other->wo_number}."
-            );
-        }
-    }
-
-    /**
-     * PR-03 — runtime occupancy gate for start()/resume(). Unlike
-     * assertMachineAvailable() (confirm()'s planned-window approximation),
-     * this reads the locked machine row itself: pausing frees the machine, so
-     * a second work order may legitimately be confirmed and started on it
-     * while the first is paused — and neither a resume of the paused work
-     * order nor a fresh start may then bind a machine that is already running
-     * a different one.
-     */
-    private function assertMachineNotOccupied(WorkOrder $wo, Machine $machine): void
-    {
-        $occupantId = $machine->current_work_order_id;
-        if ($occupantId === null || (int) $occupantId === (int) $wo->id) {
-            return;
-        }
-
-        $occupantNumber = WorkOrder::withTrashed()
-            ->whereKey((int) $occupantId)
-            ->value('wo_number');
-
-        throw new BusinessRuleException(
-            "Machine {$machine->machine_code} is currently running work order "
-            .($occupantNumber ?? "#{$occupantId}").'. Complete or pause that work order first.'
-        );
-    }
-
-    /**
-     * PR-04 — runtime occupancy gate for the MOLD, mirroring
-     * assertMachineNotOccupied(). Pausing frees the machine but deliberately
-     * leaves the mold InUse, and an InUse mold reads as available to the
-     * capacity scheduler — so between a pause and a resume the same mold can
-     * be promised to another work order on another press. Neither a resume of
-     * the paused work order nor a fresh start may then bind a mold that is
-     * actively running a different one: one physical mold cannot sit in two
-     * machines, and both WOs would increment current_shot_count, corrupting
-     * the rated-shot-life accounting (M050).
-     */
-    private function assertMoldNotOccupied(WorkOrder $wo, Mold $mold): void
-    {
-        $occupant = WorkOrder::query()
-            ->where('mold_id', $mold->id)
-            ->where('id', '!=', (int) $wo->id)
-            ->whereIn('status', [
-                WorkOrderStatus::Confirmed->value,
-                WorkOrderStatus::InProgress->value,
-            ])
-            ->orderBy('id')
-            ->first(['id', 'wo_number']);
-
-        if ($occupant) {
-            throw new BusinessRuleException(
-                "Mold {$mold->mold_code} is currently bound to work order {$occupant->wo_number}. "
-                .'Complete or pause that work order first.'
-            );
-        }
     }
 
     /**
@@ -1056,6 +1406,12 @@ class WorkOrderService
      */
     private function assertQualityGateSettled(WorkOrder $wo): void
     {
+        $missing = $wo->outputs()->where('good_count', '>', 0)
+            ->whereDoesntHave('inspections', fn ($q) => $q->where('stage', 'outgoing')->whereIn('status', ['passed', 'failed']))
+            ->pluck('batch_code');
+        if ($missing->isNotEmpty()) {
+            throw new BusinessRuleException('WO cannot close without final QC coverage for output batches: '.$missing->implode(', ').'.');
+        }
         $unsettled = Inspection::query()
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', (int) $wo->id)
@@ -1075,8 +1431,13 @@ class WorkOrderService
             );
         }
 
+        if (! $wo->inspections()->whereIn('stage', ['in_process', 'outgoing'])->whereIn('status', ['passed', 'failed'])->exists()) {
+            throw new BusinessRuleException('WO cannot close without final QC coverage. Complete required inspections first.');
+        }
+        if ($wo->work_order_class !== 'non_stock' && (int) $wo->quantity_good > (int) $wo->outputs()->whereNull('rework_ncr_id')->sum('good_count')) {
+            throw new BusinessRuleException('WO cannot close: recorded output batches do not cover its good quantity. Reconcile production output first.');
+        }
         $openNcrs = NonConformanceReport::query()
-            ->where('source', NcrSource::InspectionFail->value)
             ->whereNotNull('inspection_id')
             ->whereHas('inspection', fn ($q) => $q
                 ->where('entity_type', InspectionEntityType::WorkOrder->value)
@@ -1094,6 +1455,52 @@ class WorkOrderService
                 .$openNcrs->implode(', ').' are still open. Resolve the disposition and CAPA first.'
             );
         }
+        $wo->assertProcessQualityReleased();
+        $this->assertFinishedGoodsReceiptAndLedgerSettled($wo);
+        foreach ($wo->outputs()->where('good_count', '>', 0)->with('productionReceiptMovement')->get() as $output) {
+            $inspection = $output->inspections()->where('stage', 'outgoing')->where('status', '!=', 'cancelled')->orderByDesc('id')->first();
+            $settledLoss = $inspection?->hasResolvedOutgoingDisposition() ?? false;
+            if (! $inspection || ! $inspection->isMakerChecked() || (! $inspection->canReleaseOutgoing() && ! $settledLoss)) {
+                throw new BusinessRuleException('Waiting for independently approved QC or resolved defect disposition for batch '.$output->batch_code.'.');
+            }
+        }
+    }
+
+    /** Production cannot hand good output to QC or Delivery before stock and GL settle. */
+    private function assertFinishedGoodsReceiptAndLedgerSettled(WorkOrder $wo): void
+    {
+        $outputs = $wo->outputs()
+            ->where('good_count', '>', 0)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $recordedGood = (int) $wo->outputs()->whereNull('rework_ncr_id')->sum('good_count');
+        if ($wo->work_order_class !== 'non_stock' && (int) $wo->quantity_good > $recordedGood) {
+            throw new BusinessRuleException(
+                'WO cannot complete: recorded output batches do not cover its good quantity. Reconcile production output first.'
+            );
+        }
+
+        foreach ($outputs as $output) {
+            if ($output->production_receipt_handoff_status !== ProductionReceiptHandoffStatus::Generated
+                || ! $output->production_receipt_movement_id) {
+                throw new BusinessRuleException(
+                    'Stock receipt pending. Ask Warehouse to check inventory setup, then click Retry in Recent outputs.'
+                );
+            }
+
+            $movement = StockMovement::query()->lockForUpdate()->find($output->production_receipt_movement_id);
+            if (! $movement) {
+                throw new BusinessRuleException(
+                    "Work order {$wo->wo_number} cannot complete: finished-goods stock receipt for batch {$output->batch_code} is missing. Reconcile the receipt before continuing."
+                );
+            }
+            if (! $movement->gl_handoff_status?->isResolved()) {
+                throw new BusinessRuleException(
+                    "Work order {$wo->wo_number} cannot complete: finished-goods batch {$output->batch_code} has an unresolved General Ledger handoff. Ask Accounting to retry the linked stock movement before completing production."
+                );
+            }
+        }
     }
 
     /**
@@ -1108,6 +1515,9 @@ class WorkOrderService
      */
     private function reserveMaterialsFor(WorkOrder $wo): void
     {
+        foreach (StockLevel::query()->whereIn('item_id', $wo->materials()->pluck('item_id'))->orderBy('item_id')->orderBy('location_id')->get() as $level) {
+            app(QualityStockHoldService::class)->heldQuantity((int) $level->item_id, (int) $level->location_id);
+        }
         // `materials.item` (not just `materials`) because the insufficient-stock
         // message below names the item by code, and Model::preventLazyLoading is
         // active outside production.
@@ -1187,6 +1597,7 @@ class WorkOrderService
                 break;
             }
             $available = bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3);
+            $available = bcsub($available, app(QualityStockHoldService::class)->heldQuantity($itemId, (int) $level->location_id), 3);
             if (bccomp($available, '0', 3) <= 0) {
                 continue;
             }
@@ -1218,6 +1629,9 @@ class WorkOrderService
             }
         }
 
+        foreach (MaterialReservation::where('work_order_id', $wo->id)->where('status', ReservationStatus::Reserved->value)->orderBy('item_id')->orderBy('location_id')->get() as $reservation) {
+            app(QualityStockHoldService::class)->heldQuantity((int) $reservation->item_id, (int) $reservation->location_id);
+        }
         $reservations = MaterialReservation::where('work_order_id', $wo->id)
             ->where('status', ReservationStatus::Reserved->value)
             ->lockForUpdate()
@@ -1274,9 +1688,7 @@ class WorkOrderService
                 continue;
             }
 
-            $preferredLot = $this->locationSummary->preferredLot((int) $res->item_id, (int) $res->location_id);
-
-            $movement = $this->stock->move(new StockMovementInput(
+            $issueMovements = $this->stock->issueAcrossLots(new StockMovementInput(
                 type: StockMovementType::MaterialIssue,
                 itemId: (int) $res->item_id,
                 fromLocationId: (int) $res->location_id,
@@ -1286,8 +1698,6 @@ class WorkOrderService
                 referenceId: $wo->id,
                 remarks: "WO {$wo->wo_number} material issue (reservation #{$res->id})",
                 createdBy: $userId,
-                lotNumber: $preferredLot['lot_number'] ?? null,
-                expiryDate: $preferredLot['expiry_date'] ?? null,
             ));
 
             $res->update([
@@ -1318,7 +1728,8 @@ class WorkOrderService
                 ->lockForUpdate()
                 ->first();
             if ($material !== null) {
-                $actualCost = Money::add((string) $material->actual_cost, (string) $movement->total_cost);
+                $issueCost = $issueMovements->reduce(fn (string $sum, $movement): string => Money::add($sum, (string) $movement->total_cost), '0.00');
+                $actualCost = Money::add((string) $material->actual_cost, $issueCost);
                 $material->actual_quantity_issued = bcadd((string) $material->actual_quantity_issued, $qty, 3);
                 $material->actual_cost = $actualCost;
                 $itemPlan = WorkOrderMaterial::query()
@@ -1381,12 +1792,14 @@ class WorkOrderService
             })
             ->orderByRaw('(quantity - reserved_quantity) DESC')
             ->lockForUpdate()
-            ->first();
-        if (! $row) {
-            return null;
+            ->get();
+        foreach ($row as $level) {
+            $available = bcsub(bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3), app(QualityStockHoldService::class)->heldQuantity($itemId, (int) $level->location_id), 3);
+            if (bccomp($available, $needed, 3) >= 0) {
+                return (int) $level->location_id;
+            }
         }
-        $available = bcsub((string) $row->quantity, (string) $row->reserved_quantity, 3);
 
-        return bccomp($available, $needed, 3) >= 0 ? (int) $row->location_id : null;
+        return null;
     }
 }

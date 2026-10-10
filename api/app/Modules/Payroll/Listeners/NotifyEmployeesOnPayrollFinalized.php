@@ -7,6 +7,7 @@ namespace App\Modules\Payroll\Listeners;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +19,10 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
     public function handle(PayrollPeriodFinalized $event): void
     {
         try {
-            $period = $event->period;
+            $period = $event->period->fresh();
+            if (! app(PayrollPublicationPolicy::class)->isPeriodPublishable($period)) {
+                return;
+            }
 
             $userIds = DB::table('payrolls')
                 ->where('payroll_period_id', $period->id)
@@ -27,7 +31,9 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
                 ->join('users', 'users.employee_id', '=', 'employees.id')
                 ->pluck('users.id');
 
-            if ($userIds->isEmpty()) return;
+            if ($userIds->isEmpty()) {
+                return;
+            }
 
             // P01-03 — cross-call dedupe. A redelivered finalize event (the
             // listener failed after the insert committed, so the outbox row
@@ -47,17 +53,19 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
                 $userIds = $userIds->diff($alreadyNotified);
             }
 
-            if ($userIds->isEmpty()) return;
+            if ($userIds->isEmpty()) {
+                return;
+            }
 
             $users = User::query()->whereIn('id', $userIds)->where('is_active', true)->get();
             $periodLabel = $this->periodLabel($period);
 
             $this->notifications->send($users, 'chain.payslip_ready', [
-                'title'       => 'Payslip Ready',
-                'message'     => "Your payslip for {$periodLabel} is ready.",
-                'link_to'     => '/self-service/payslips',
+                'title' => 'Payslip Ready',
+                'message' => "Your payslip for {$periodLabel} is ready.",
+                'link_to' => '/self-service/payslips',
                 'entity_type' => 'payroll_period',
-                'entity_id'   => method_exists($period, 'getHashIdAttribute') ? $period->hash_id : null,
+                'entity_id' => method_exists($period, 'getHashIdAttribute') ? $period->hash_id : null,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyEmployeesOnPayrollFinalized failed', ['error' => $e->getMessage()]);
@@ -68,7 +76,8 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
     private function periodLabel(object $period): string
     {
         $start = $period->start_date ?? $period->period_start ?? null;
-        $end   = $period->end_date   ?? $period->period_end   ?? null;
+        $end = $period->end_date ?? $period->period_end ?? null;
+
         return $start && $end ? "{$start} – {$end}" : (string) ($period->name ?? 'Payroll Period');
     }
 }

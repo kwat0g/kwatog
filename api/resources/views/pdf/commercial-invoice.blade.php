@@ -33,6 +33,13 @@
 </style>
 </head>
 <body>
+@if($isDraft ?? false)
+<div style="border: 1px solid #999; padding: 8px; margin-bottom: 12px; font-weight: bold;">
+    DRAFT — INTERNAL RECONCILIATION ONLY<br>
+    <span style="font-weight: normal;">Recorded receipt quantities are used where available; otherwise quantities represent PO intent.
+    This draft does not replace the supplier's official invoice or packing list and is not customs clearance evidence.</span>
+</div>
+@endif
 
 <div class="header">
     <div>
@@ -164,25 +171,13 @@
     </tbody>
 </table>
 
-{{-- Totals --}}
-@if($po)
+{{-- Shipment-specific draft value; supplier invoice establishes tax and official totals. --}}
 <table class="totals">
-    <tr>
-        <td class="label">Subtotal</td>
-        <td class="amt">{{ number_format((float) $po->subtotal, 2) }}</td>
-    </tr>
-    @if((float) $po->vat_amount > 0)
-    <tr>
-        <td class="label">VAT (12%)</td>
-        <td class="amt">{{ number_format((float) $po->vat_amount, 2) }}</td>
-    </tr>
-    @endif
     <tr class="total">
-        <td class="label">Total Amount (PHP)</td>
-        <td class="amt">{{ number_format((float) $po->total_amount, 2) }}</td>
+        <td class="label">Draft merchandise value (PHP, tax excluded)</td>
+        <td class="amt">{{ number_format((float) $subtotal, 2) }}</td>
     </tr>
 </table>
-@endif
 
 {{-- Landed costs (if calculated) --}}
 @if($shipment->landed_cost_total && (float) $shipment->landed_cost_total > 0)
@@ -211,7 +206,7 @@
 @endif
 
 <div class="footer">
-    Generated on {{ $now->format('M d, Y · H:i') }} ·
+    Generated on {{ $now->format('M d, Y · g:i A') }} ·
     {{ $company['name'] }}
 </div>
 

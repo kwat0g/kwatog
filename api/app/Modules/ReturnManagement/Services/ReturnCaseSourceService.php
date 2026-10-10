@@ -84,7 +84,7 @@ class ReturnCaseSourceService
             if (DB::transactionLevel() > 0) {
                 PurchaseOrder::query()->lockForUpdate()->findOrFail($source->purchase_order_id);
             }
-            $source->load('vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem');
+            $source->load('vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem', 'supplierShipment.items');
             if ($source->status->value === 'draft') {
                 throw new BusinessRuleException('Record actual receipt first, or report missing goods against the purchase order.');
             }
@@ -104,7 +104,7 @@ class ReturnCaseSourceService
         if ($customer) $source->loadMissing('items.stockMovements');
         $kind = $customer ? 'delivery' : ($source instanceof GoodsReceiptNote ? 'grn' : 'purchase_order');
         $party = $customer ? $source->salesOrder?->customer : $source->vendor;
-        $lines = $source->items->map(function ($line) use ($customer, $kind) {
+        $lines = $source->items->map(function ($line) use ($customer, $kind, $source) {
             if ($customer) {
                 $product = $line->salesOrderItem?->product;
                 $item = $product ? Item::query()->where('code', $product->part_number)->where('item_type', 'finished_good')->first() : null;
@@ -125,7 +125,13 @@ class ReturnCaseSourceService
                 $received = $kind === 'grn' ? (string) $line->quantity_received : '0.000';
                 $outstanding = $this->missingLimit($poLine);
                 $maximum = $kind === 'grn' ? bcadd($received, $outstanding, 3) : $outstanding;
-                $expected = $kind === 'grn' ? $received : $outstanding;
+                $shipmentLine = $kind === 'grn' ? $source->supplierShipment?->items
+                    ->firstWhere('purchase_order_item_id', $poLine->id) : null;
+                $declared = $shipmentLine && $item
+                    ? $item->convertToBase((string) $shipmentLine->quantity_shipped, $poLine->unit)
+                    : null;
+                $expected = $declared !== null && bccomp($declared, $received, 3) > 0
+                    ? $declared : ($kind === 'grn' ? $received : $outstanding);
                 $unit = $item?->unit_of_measure ?: $poLine->unit;
                 $code = $item?->code;
                 $name = $item?->name ?: $poLine->description;
@@ -170,8 +176,11 @@ class ReturnCaseSourceService
         return bccomp($remaining, '0', 3) > 0 ? $remaining : '0.000';
     }
 
-    public function prepareLines(Model $source, array $rows): array
+    public function prepareLines(Model $source, array $rows, bool $warehouseReport = false, bool $customerReport = false): array
     {
+        if ($warehouseReport && (! ($source instanceof GoodsReceiptNote) || ! $source->supplierShipment)) {
+            throw ValidationException::withMessages(['source_id' => 'Choose a receipt matched to a supplier shipment.']);
+        }
         $options = collect($this->options($source)['lines'])->keyBy('id');
         $seen = [];
         $result = [];
@@ -186,11 +195,33 @@ class ReturnCaseSourceService
             $expected = $source instanceof Delivery ? $option['expected_quantity'] : (string) ($row['expected_quantity'] ?? $option['expected_quantity']);
             $received = (string) $row['received_quantity'];
             $defective = (string) ($row['defective_quantity'] ?? '0');
+            foreach (['expected_quantity' => $expected, 'received_quantity' => $received, 'defective_quantity' => $defective] as $field => $quantity) {
+                if (! preg_match('/^\d{1,9}(?:\.\d{1,3})?$/D', $quantity)) {
+                    throw ValidationException::withMessages(["lines.$index.$field" => 'Enter a non-negative quantity with up to three decimal places.']);
+                }
+                if ($customerReport && in_array(strtolower(trim((string) $option['unit'])), ['pcs', 'pc', 'pieces'], true)
+                    && bccomp($quantity, bcadd($quantity, '0', 0), 3) !== 0) {
+                    throw ValidationException::withMessages(["lines.$index.$field" => 'Enter a whole number of pieces.']);
+                }
+            }
+            if ($source instanceof Delivery && isset($row['expected_quantity'])
+                && bccomp((string) $row['expected_quantity'], $option['expected_quantity'], 3) !== 0) {
+                throw ValidationException::withMessages(["lines.$index.expected_quantity" => 'Expected quantity must match this delivery.']);
+            }
+            if ($option['lot_number'] && isset($row['lot_number']) && trim((string) $row['lot_number']) !== $option['lot_number']) {
+                throw ValidationException::withMessages(["lines.$index.lot_number" => 'Lot number must match the source record.']);
+            }
+            if ($warehouseReport && bccomp($expected, $option['expected_quantity'], 3) !== 0) {
+                throw ValidationException::withMessages(["lines.$index.expected_quantity" => 'Use the quantity declared in the matched supplier shipment.']);
+            }
             if (bccomp($expected, '0', 3) <= 0 || bccomp($expected, $option['maximum_quantity'], 3) > 0) {
                 throw ValidationException::withMessages(["lines.$index.expected_quantity" => 'Expected quantity must be positive and within the source order quantity.']);
             }
-            if (bccomp($received, '0', 3) < 0 || bccomp($defective, '0', 3) < 0 || bccomp($received, $expected, 3) > 0 || bccomp($defective, $received, 3) > 0) {
-                throw ValidationException::withMessages(["lines.$index.received_quantity" => 'Received cannot exceed expected; damaged quantity must be part of what arrived.']);
+            if (bccomp($received, $expected, 3) > 0) {
+                throw ValidationException::withMessages(["lines.$index.received_quantity" => 'Received quantity cannot exceed expected quantity.']);
+            }
+            if (bccomp($defective, $received, 3) > 0) {
+                throw ValidationException::withMessages(["lines.$index.defective_quantity" => 'Damaged quantity cannot exceed received quantity.']);
             }
             if ($source instanceof GoodsReceiptNote && bccomp($received, $option['received_quantity'], 3) !== 0) {
                 throw ValidationException::withMessages(["lines.$index.received_quantity" => 'Actual quantity must match this receipt. Correct receiving through the warehouse workflow first.']);

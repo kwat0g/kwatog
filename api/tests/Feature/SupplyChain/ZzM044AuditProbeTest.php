@@ -31,6 +31,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
@@ -42,6 +43,7 @@ use Tests\TestCase;
  */
 class ZzM044AuditProbeTest extends TestCase
 {
+    use HasPassedInProcessQc;
     use ReceivesProductionOutput;
     use RefreshDatabase;
 
@@ -95,6 +97,14 @@ class ZzM044AuditProbeTest extends TestCase
             ->where('delivery_id', $ctx['delivery']->id)->where('proof_type', 'coc')->firstOrFail();
 
         $officer = $this->userWith(['supply_chain.deliveries.create', 'supply_chain.view']);
+        $proofRows = $this->actingAs($officer)->getJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}"
+        )->assertOk()->json('data.proofs');
+        $cocRow = collect($proofRows)->firstWhere('id', $coc->hash_id);
+        $this->assertSame([false, 'The Certificate of Conformance cannot be deleted from a confirmed delivery.'], [
+            $cocRow['can_archive'] ?? null,
+            $cocRow['archive_block_reason'] ?? null,
+        ]);
 
         // Delete the certificate — confirmed CoC evidence is immutable.
         $deleteCoc = $this->actingAs($officer)->deleteJson(
@@ -115,18 +125,37 @@ class ZzM044AuditProbeTest extends TestCase
             'the confirmed CoC remains the only CoC.');
     }
 
+    public function test_only_proof_on_a_confirmed_delivery_has_an_archive_block_reason(): void
+    {
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
+        InspectionMeasurement::query()->where('inspection_id', $ctx['inspection']->id)->delete();
+        $this->addProof($ctx['delivery'], $ctx['officer']);
+        app(DeliveryService::class)->confirm($ctx['delivery'], $ctx['officer']);
+        $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->firstOrFail();
+
+        $proofRows = $this->actingAs($ctx['officer'])->getJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}"
+        )->assertOk()->json('data.proofs');
+        $proofRow = collect($proofRows)->firstWhere('id', $proof->hash_id);
+
+        $this->assertSame([false, 'Cannot delete the only proof of a confirmed delivery.'], [
+            $proofRow['can_archive'] ?? null,
+            $proofRow['archive_block_reason'] ?? null,
+        ]);
+    }
+
     // ── P3. Proof mutation after confirmation ────────────────────────────────
 
-    public function test_probe_receipt_photo_can_be_replaced_after_confirmation(): void
+    public function test_assigned_driver_can_add_receipt_photo_after_confirmation(): void
     {
         $ctx = $this->scenario(status: DeliveryStatus::Delivered);
         $this->addProof($ctx['delivery'], $ctx['officer']);
         app(DeliveryService::class)->confirm($ctx['delivery'], $ctx['officer']);
 
         $officer = $this->userWith(['supply_chain.deliveries.create']);
-        $this->actingAs($officer)->post(
-            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/receipt",
-            ['file' => UploadedFile::fake()->image('late.jpg')]
+        $this->actingAs($this->assignedDriver($ctx['delivery']))->post(
+            "/api/v1/driver/deliveries/{$ctx['delivery']->hash_id}/receipt",
+            ['photo' => UploadedFile::fake()->image('late.jpg')]
         )->assertOk();
 
         $this->assertNotNull(Delivery::find($ctx['delivery']->id)->receipt_photo_path,
@@ -160,7 +189,7 @@ class ZzM044AuditProbeTest extends TestCase
         $results = [];
 
         // dispatch (loading) straight from scheduled requires a vehicle
-        $ctx = $this->scenario();
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
         $results['loading_without_vehicle'] = $this->attempt(fn () => $svc->updateStatus($ctx['delivery'], DeliveryStatus::Loading));
 
         // scheduled -> in_transit (skip loading)
@@ -286,10 +315,10 @@ class ZzM044AuditProbeTest extends TestCase
         imagedestroy($image);
         $file = new UploadedFile($tmp, '../../../../etc/passwd.jpg', 'image/jpeg', null, true);
 
-        $this->actingAs($officer)->post(
-            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs",
-            ['proof_type' => 'photo', 'file' => $file]
-        )->assertStatus(201);
+        $this->actingAs($this->assignedDriver($ctx['delivery']))->post(
+            "/api/v1/driver/deliveries/{$ctx['delivery']->hash_id}/receipt",
+            ['photo' => $file]
+        )->assertOk();
 
         $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->latest('id')->firstOrFail();
         fwrite(STDERR, "\n[M044 upload] file_path={$proof->file_path} file_name={$proof->file_name}\n");
@@ -329,39 +358,270 @@ class ZzM044AuditProbeTest extends TestCase
             'The proof stream must not let a client filename forge the header.');
     }
 
-    // ── P8. Files after a delivery is archived ───────────────────────────────
+    // ── P8. Archive guards and restoration ──────────────────────────────────
 
-    public function test_probe_archive_deletes_the_files_and_restore_cannot_bind(): void
+    public function test_probe_archive_preserves_proof_evidence(): void
     {
         $ctx = $this->scenario();
         $officer = $this->userWith(['supply_chain.deliveries.create']);
-        $this->actingAs($officer)->post(
-            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs",
-            ['proof_type' => 'photo', 'file' => UploadedFile::fake()->image('dr.jpg')]
-        )->assertStatus(201);
-        $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->firstOrFail();
+        // Simulate an inconsistent legacy/import row; the upload endpoint
+        // correctly rejects proof before dispatch, but archive must preserve
+        // already-stored evidence if such a row exists.
+        $path = "deliveries/{$ctx['delivery']->id}/proofs/dr.jpg";
+        $proof = DeliveryProof::create([
+            'delivery_id' => $ctx['delivery']->id,
+            'proof_type' => 'photo',
+            'file_name' => 'dr.jpg',
+            'file_path' => $path,
+            'file_size' => 5,
+            'mime_type' => 'image/jpeg',
+            'uploaded_by' => $officer->id,
+        ]);
+        Storage::disk('local')->put($path, 'proof');
         $this->assertTrue(Storage::disk('local')->exists($proof->file_path));
 
-        $this->actingAs($officer)
-            ->deleteJson("/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}")
-            ->assertStatus(204);
+        $this->actingAs($officer)->deleteJson("/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot archive a delivery with proof documents; preserve its evidence.');
 
-        // MEASURED: the physical artifact is gone, the proof row is NOT archived
-        // with its parent, and the restore route cannot bind the archived row.
-        $this->assertFalse(Storage::disk('local')->exists($proof->file_path),
-            'PROBE: archiving a delivery permanently deletes its proof files.');
-        $this->assertNull(DeliveryProof::find($proof->id)?->deleted_at,
-            'PROBE: the proof row stays live and now points at a missing file.');
+        $this->assertNotNull(Delivery::find($ctx['delivery']->id));
+        $this->assertTrue(Storage::disk('local')->exists($proof->file_path));
+        $this->assertNotNull(DeliveryProof::find($proof->id));
+    }
 
-        $restore = $this->actingAs($officer)
-            ->patchJson("/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/restore");
-        fwrite(STDERR, "\n[M044 restore] status={$restore->status()} body={$restore->getContent()}\n");
-        $this->assertSame(404, $restore->status(),
-            'PROBE: the restore route lacks withTrashed(), so it 404s for every valid target.');
-        $message = (string) ($restore->json('message') ?? '');
-        fwrite(STDERR, "[M044 restore message] {$message}\n");
-        $this->assertStringNotContainsString((string) $ctx['delivery']->id, $message,
-            'A 404 message must not leak the raw primary key.');
+    public function test_delivered_delivery_with_proof_cannot_be_deleted_or_lose_evidence(): void
+    {
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
+        $delivery = $ctx['delivery'];
+        $officer = $this->userWith(['supply_chain.deliveries.create']);
+        $this->actingAs($this->assignedDriver($delivery))->post(
+            "/api/v1/driver/deliveries/{$delivery->hash_id}/receipt",
+            ['photo' => UploadedFile::fake()->image('archive-proof.jpg')]
+        )->assertOk();
+        $proof = DeliveryProof::query()->where('delivery_id', $delivery->id)->firstOrFail();
+        $auditCount = DB::table('audit_logs')->where('model_type', $delivery->getMorphClass())
+            ->where('model_id', $delivery->id)->count();
+
+        $this->actingAs($officer)->deleteJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot delete a delivered shipment; process a customer return instead.');
+
+        $this->assertNotNull(Delivery::find($delivery->id));
+        $this->assertTrue(Storage::disk('local')->exists($proof->file_path));
+        $this->assertSame($auditCount, DB::table('audit_logs')->where('model_type', $delivery->getMorphClass())
+            ->where('model_id', $delivery->id)->count());
+    }
+
+    public function test_restore_route_recovers_an_archived_delivery_and_audits_the_change(): void
+    {
+        $ctx = $this->scenario(createDelivery: false);
+        $delivery = $this->bareScheduledDelivery($ctx['so'], $ctx['officer']);
+        $officer = $this->userWith(['supply_chain.deliveries.create']);
+
+        $this->actingAs($officer)->deleteJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}")
+            ->assertNoContent();
+        $this->assertNotNull(Delivery::withTrashed()->findOrFail($delivery->id)->deleted_at);
+
+        $this->actingAs($officer)->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/restore")
+            ->assertOk()
+            ->assertJsonPath('message', 'Delivery restored.');
+
+        $this->assertNotNull(Delivery::find($delivery->id));
+        $audit = DB::table('audit_logs')->where('model_type', $delivery->getMorphClass())
+            ->where('model_id', $delivery->id)->where('user_id', $officer->id)
+            ->where('action', 'updated')->latest('id')->first();
+        $this->assertNotNull($audit);
+        $this->assertNotEmpty(json_decode($audit->old_values, true)['deleted_at'] ?? null);
+        $this->assertArrayHasKey('deleted_at', json_decode($audit->new_values, true));
+        $this->assertNull(json_decode($audit->new_values, true)['deleted_at']);
+    }
+
+    public function test_restore_refuses_an_archived_delivery_with_missing_proof_files(): void
+    {
+        $ctx = $this->scenario(createDelivery: false);
+        $delivery = $this->bareScheduledDelivery($ctx['so'], $ctx['officer']);
+        $proof = DeliveryProof::create([
+            'delivery_id' => $delivery->id,
+            'proof_type' => 'photo',
+            'file_name' => 'missing.jpg',
+            'file_path' => "deliveries/{$delivery->id}/proofs/missing.jpg",
+            'mime_type' => 'image/jpeg',
+            'uploaded_by' => $ctx['officer']->id,
+        ]);
+        DB::table('deliveries')->where('id', $delivery->id)->update(['deleted_at' => now()]);
+        $officer = $this->userWith(['supply_chain.deliveries.create']);
+
+        $this->actingAs($officer)->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/restore")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot restore a delivery while one or more proof files are missing.');
+
+        $this->assertNull(Delivery::find($delivery->id));
+        $this->assertNotNull(Delivery::withTrashed()->findOrFail($delivery->id)->deleted_at);
+        $this->assertNotNull(DeliveryProof::find($proof->id));
+    }
+
+    public function test_restore_rejects_an_active_delivery_without_audit_changes(): void
+    {
+        $ctx = $this->scenario(createDelivery: false);
+        $delivery = $this->bareScheduledDelivery($ctx['so'], $ctx['officer']);
+        $officer = $this->userWith(['supply_chain.deliveries.create']);
+        $auditCount = DB::table('audit_logs')->where('model_type', $delivery->getMorphClass())
+            ->where('model_id', $delivery->id)->count();
+
+        $this->actingAs($officer)->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/restore")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only archived deliveries can be restored.');
+
+        $this->assertSame(DeliveryStatus::Scheduled, Delivery::findOrFail($delivery->id)->status);
+        $this->assertSame($auditCount, DB::table('audit_logs')->where('model_type', $delivery->getMorphClass())
+            ->where('model_id', $delivery->id)->count());
+    }
+
+    public function test_archived_delivery_proof_is_listed_and_can_be_restored(): void
+    {
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
+        $officer = $this->userWith(['supply_chain.deliveries.create', 'supply_chain.view']);
+        $this->actingAs($this->assignedDriver($ctx['delivery']))->post(
+            "/api/v1/driver/deliveries/{$ctx['delivery']->hash_id}/receipt",
+            ['photo' => UploadedFile::fake()->image('restore-proof.jpg')]
+        )->assertOk();
+        $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->firstOrFail();
+
+        $this->actingAs($officer)->deleteJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs/{$proof->hash_id}"
+        )->assertNoContent();
+
+        $archived = DeliveryProof::withTrashed()->findOrFail($proof->id);
+        $this->assertNotNull($archived->deleted_at);
+        $this->assertTrue(Storage::disk('local')->exists($proof->file_path));
+        $archiveAudit = DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+            ->where('model_id', $proof->id)->where('user_id', $officer->id)
+            ->where('action', 'deleted')->latest('id')->first();
+        $this->assertNotNull($archiveAudit);
+        $this->assertNull(json_decode($archiveAudit->old_values, true)['deleted_at'] ?? null);
+        $detail = $this->actingAs($officer)->getJson("/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}")
+            ->assertOk();
+        $this->assertNotEmpty($detail->json('data.proofs'));
+        $this->assertNotNull($detail->json('data.proofs.0.deleted_at'));
+        $this->assertFalse($detail->json('data.can_confirm'));
+
+        $this->actingAs($officer)->patchJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs/{$proof->hash_id}/restore"
+        )->assertOk()->assertJsonPath('message', 'Delivery proof restored.');
+
+        $this->assertNull(DeliveryProof::findOrFail($proof->id)->deleted_at);
+        $restoreAudit = DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+            ->where('model_id', $proof->id)->where('user_id', $officer->id)
+            ->where('action', 'updated')->latest('id')->first();
+        $this->assertNotNull($restoreAudit);
+        $this->assertNotEmpty(json_decode($restoreAudit->old_values, true)['deleted_at'] ?? null);
+        $this->assertArrayHasKey('deleted_at', json_decode($restoreAudit->new_values, true));
+        $this->assertNull(json_decode($restoreAudit->new_values, true)['deleted_at']);
+        $restored = $this->actingAs($officer)->getJson("/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}")
+            ->assertOk();
+        $this->assertNull($restored->json('data.proofs.0.deleted_at'));
+        $this->assertTrue($restored->json('data.can_confirm'));
+    }
+
+    public function test_restore_route_resolves_an_archived_delivery_proof(): void
+    {
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
+        $officer = $this->userWith(['supply_chain.deliveries.create', 'supply_chain.view']);
+        $this->actingAs($this->assignedDriver($ctx['delivery']))->post(
+            "/api/v1/driver/deliveries/{$ctx['delivery']->hash_id}/receipt",
+            ['photo' => UploadedFile::fake()->image('restore-route.jpg')]
+        )->assertOk();
+        $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->firstOrFail();
+        $this->actingAs($officer)->deleteJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs/{$proof->hash_id}"
+        )->assertNoContent();
+
+        $this->actingAs($officer)->patchJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs/{$proof->hash_id}/restore"
+        )->assertOk()->assertJsonPath('message', 'Delivery proof restored.');
+
+        $this->assertNull(DeliveryProof::findOrFail($proof->id)->deleted_at);
+    }
+
+    public function test_proof_mutations_reject_a_proof_under_another_delivery(): void
+    {
+        $ctx = $this->scenario(createDelivery: false);
+        $delivery = $this->bareScheduledDelivery($ctx['so'], $ctx['officer']);
+        $otherDelivery = $this->bareScheduledDelivery($ctx['so'], $ctx['officer']);
+        $this->addProof($delivery, $ctx['officer']);
+        $proof = DeliveryProof::query()->where('delivery_id', $delivery->id)->firstOrFail();
+        Storage::disk('local')->put($proof->file_path, 'proof bytes');
+
+        $auditCount = DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+            ->where('model_id', $proof->id)->count();
+        $deleteWrongParent = $this->actingAs($ctx['officer'])->deleteJson(
+            "/api/v1/supply-chain/deliveries/{$otherDelivery->hash_id}/proofs/{$proof->hash_id}"
+        );
+        $activeUnchanged = DeliveryProof::find($proof->id)?->deleted_at === null
+            && DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+                ->where('model_id', $proof->id)->count() === $auditCount;
+
+        $this->actingAs($ctx['officer'])->deleteJson(
+            "/api/v1/supply-chain/deliveries/{$delivery->hash_id}/proofs/{$proof->hash_id}"
+        )->assertNoContent();
+        $archivedAuditCount = DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+            ->where('model_id', $proof->id)->count();
+        $restoreWrongParent = $this->actingAs($ctx['officer'])->patchJson(
+            "/api/v1/supply-chain/deliveries/{$otherDelivery->hash_id}/proofs/{$proof->hash_id}/restore"
+        );
+        $archivedUnchanged = DeliveryProof::withTrashed()->find($proof->id)?->trashed()
+            && DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+                ->where('model_id', $proof->id)->count() === $archivedAuditCount;
+
+        $this->assertSame([404, 404], [$deleteWrongParent->status(), $restoreWrongParent->status()],
+            'A proof ID from another delivery must not produce a server error or mutate either delivery.');
+        $this->assertTrue($activeUnchanged, 'A rejected delete must leave proof and audit state unchanged.');
+        $this->assertTrue($archivedUnchanged, 'A rejected restore must leave proof and audit state unchanged.');
+    }
+
+    public function test_restore_rejects_an_active_delivery_proof_without_audit_changes(): void
+    {
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
+        $officer = $this->userWith(['supply_chain.deliveries.create']);
+        $this->addProof($ctx['delivery'], $officer);
+        $proof = DeliveryProof::query()->where('delivery_id', $ctx['delivery']->id)->firstOrFail();
+        Storage::disk('local')->put($proof->file_path, 'proof bytes');
+        $auditCount = DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+            ->where('model_id', $proof->id)->count();
+
+        $this->actingAs($officer)->patchJson(
+            "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs/{$proof->hash_id}/restore"
+        )->assertStatus(422)
+            ->assertJsonPath('message', 'Only archived delivery proofs can be restored.');
+
+        $this->assertNotNull(DeliveryProof::find($proof->id));
+        $this->assertSame($auditCount, DB::table('audit_logs')->where('model_type', $proof->getMorphClass())
+            ->where('model_id', $proof->id)->count());
+    }
+
+    public function test_proof_upload_requires_a_dispatched_delivery(): void
+    {
+        $officer = $this->userWith(['supply_chain.deliveries.create']);
+        foreach ([DeliveryStatus::Scheduled, DeliveryStatus::Cancelled] as $status) {
+            $ctx = $this->scenario(status: $status);
+            $beforeProofs = DeliveryProof::query()->count();
+            $beforeFiles = Storage::disk('local')->allFiles();
+
+            $this->actingAs($this->assignedDriver($ctx['delivery']))->post(
+                "/api/v1/driver/deliveries/{$ctx['delivery']->hash_id}/receipt",
+                ['photo' => UploadedFile::fake()->image("{$status->value}.jpg")]
+            )->assertStatus(422)
+                ->assertJsonPath('message', 'Customer receipt evidence can only be uploaded after dispatch.');
+
+            $this->assertSame($beforeProofs, DeliveryProof::query()->count());
+            $this->assertSame($beforeFiles, Storage::disk('local')->allFiles());
+        }
+
+        $ctx = $this->scenario(status: DeliveryStatus::InTransit);
+        $this->actingAs($this->assignedDriver($ctx['delivery']))->post(
+            "/api/v1/driver/deliveries/{$ctx['delivery']->hash_id}/receipt",
+            ['photo' => UploadedFile::fake()->image('dispatched.jpg')]
+        )->assertOk();
     }
 
     // ── P9. Quantity / money validation ──────────────────────────────────────
@@ -541,21 +801,71 @@ class ZzM044AuditProbeTest extends TestCase
         foreach ($observed as $status => $result) {
             $this->assertSame(422, $result['status'],
                 "PROBE: AR must refuse a {$status} delivery.");
+            $this->assertStringContainsString('confirmed delivered quantity', $result['message'],
+                "The {$status} attempt must be refused by the delivery-completion gate.");
+            $this->assertSame($result['linked_invoice_count_before'], $result['linked_invoice_count_after'],
+                "The {$status} attempt must not create a downstream invoice.");
         }
+    }
+
+    public function test_probe_ar_cannot_stage_a_standard_sales_order_invoice_without_delivery(): void
+    {
+        $ctx = $this->scenario(createDelivery: false);
+        $result = $this->invoiceViaAccounting($ctx);
+
+        $this->assertSame(422, $result['status']);
+        $this->assertStringContainsString('confirmed delivered quantity', $result['message']);
+        $this->assertSame(0, $result['linked_invoice_count_before']);
+        $this->assertSame(0, $result['linked_invoice_count_after']);
+    }
+
+    public function test_finance_api_cannot_create_a_second_invoice_for_a_confirmed_delivery(): void
+    {
+        $ctx = $this->scenario(status: DeliveryStatus::Delivered);
+        $this->addProof($ctx['delivery'], $ctx['officer']);
+        $confirmed = app(DeliveryService::class)->confirm($ctx['delivery'], $ctx['officer']);
+        $invoiceCount = DB::table('invoices')->where('delivery_id', $confirmed->id)->count();
+        $itemCount = DB::table('invoice_items')->where('invoice_id', $confirmed->invoice_id)->count();
+        $auditCount = DB::table('audit_logs')
+            ->where('model_type', \App\Modules\Accounting\Models\Invoice::class)
+            ->count();
+        $finance = $this->userWith(['accounting.invoices.create', 'accounting.invoices.view']);
+        $revenue = DB::table('accounts')->where('code', '4010')->value('id');
+
+        $this->actingAs($finance)->postJson('/api/v1/invoices', [
+            'customer_id' => $ctx['customer']->hash_id,
+            'sales_order_id' => $ctx['so']->hash_id,
+            'delivery_id' => $confirmed->hash_id,
+            'date' => '2026-09-06',
+            'items' => [[
+                'revenue_account_id' => app('hashids')->encode((int) $revenue),
+                'description' => 'Duplicate invoice attempt',
+                'quantity' => '10',
+                'unit_price' => '100.00',
+            ]],
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'This delivery already has an invoice and cannot be invoiced again.');
+
+        $this->assertSame($invoiceCount, DB::table('invoices')->where('delivery_id', $confirmed->id)->count());
+        $this->assertSame($itemCount, DB::table('invoice_items')->where('invoice_id', $confirmed->invoice_id)->count());
+        $this->assertSame($auditCount, DB::table('audit_logs')
+            ->where('model_type', \App\Modules\Accounting\Models\Invoice::class)->count());
+        $this->assertSame($confirmed->invoice_id, Delivery::find($confirmed->id)->invoice_id);
     }
 
     /** @param array<string, mixed> $ctx */
     private function invoiceViaAccounting(array $ctx): array
     {
         $clerk = $this->userWith(['accounting.invoices.create', 'accounting.invoices.view']);
-        $revenue = DB::table('accounts')->where('code', '4000')->value('id')
+        $before = DB::table('invoices')->where('sales_order_id', $ctx['so']->id)->count();
+        $revenue = DB::table('accounts')->where('code', '4010')->value('id')
             ?? DB::table('accounts')->where('account_type', 'revenue')->value('id');
 
         $response = $this->actingAs($clerk)->postJson('/api/v1/invoices', [
             'customer_id' => $ctx['customer']->hash_id,
             'date' => '2026-09-06',
             'sales_order_id' => $ctx['so']->hash_id,
-            'delivery_id' => $ctx['delivery']->hash_id,
+            'delivery_id' => $ctx['delivery']?->hash_id,
             'items' => [[
                 'revenue_account_id' => app('hashids')->encode((int) $revenue),
                 'description' => 'Probe line',
@@ -564,7 +874,12 @@ class ZzM044AuditProbeTest extends TestCase
             ]],
         ]);
 
-        return ['status' => $response->status(), 'message' => (string) ($response->json('message') ?? '')];
+        return [
+            'status' => $response->status(),
+            'message' => (string) ($response->json('message') ?? ''),
+            'linked_invoice_count_before' => $before,
+            'linked_invoice_count_after' => DB::table('invoices')->where('sales_order_id', $ctx['so']->id)->count(),
+        ];
     }
 
     // ── P14. Customer portal cross-tenant isolation ──────────────────────────
@@ -599,6 +914,9 @@ class ZzM044AuditProbeTest extends TestCase
         // There is no portal confirm/dispute route at all — record that.
         $observed['confirm_route'] = $this->postJson(
             "/api/v1/b2b/customer/deliveries/{$victim['delivery']->hash_id}/confirm",
+            ['receiver_name' => 'Customer A receiver', 'lines' => $victim['delivery']->items()->get()->map(fn ($item) => [
+                'delivery_item_id' => $item->hash_id, 'received_quantity' => rtrim(preg_replace('/(\.\d*?)0+$/', '$1', (string) ($item->customer_received_quantity ?? $item->quantity)), '.'),
+            ])->all()],
         )->status();
 
         fwrite(STDERR, "\n[M044 portal cross-tenant] ".json_encode($observed, JSON_PRETTY_PRINT)."\n");
@@ -629,6 +947,17 @@ class ZzM044AuditProbeTest extends TestCase
         ]);
     }
 
+    private function bareScheduledDelivery(SalesOrder $salesOrder, User $createdBy): Delivery
+    {
+        return Delivery::create([
+            'delivery_number' => 'DR-ARCHIVE-'.substr(uniqid('', true), -10),
+            'sales_order_id' => $salesOrder->id,
+            'status' => DeliveryStatus::Scheduled->value,
+            'scheduled_date' => '2026-09-10',
+            'created_by' => $createdBy->id,
+        ]);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private function attempt(callable $fn): string
@@ -655,7 +984,18 @@ class ZzM044AuditProbeTest extends TestCase
             $role->permissions()->syncWithoutDetaching([$perm->id]);
         }
 
-        return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $user->flushPermissionsCache();
+
+        return $user;
+    }
+
+    private function assignedDriver(Delivery $delivery): User
+    {
+        $driver = User::factory()->withRole('driver')->create(['is_active' => true]);
+        $delivery->forceFill(['driver_id' => $driver->id])->save();
+
+        return $driver;
     }
 
     private function addProof(Delivery $d, User $by): void
@@ -713,6 +1053,7 @@ class ZzM044AuditProbeTest extends TestCase
             'planned_start' => '2026-08-30 08:00:00', 'planned_end' => '2026-08-31 17:00:00',
             'status' => 'completed', 'created_by' => $officer->id,
         ]);
+        $this->passInProcessQc($workOrder);
         $output = WorkOrderOutput::create([
             'work_order_id' => $workOrder->id, 'recorded_by' => $officer->id,
             'recorded_at' => '2026-08-31 17:00:00',

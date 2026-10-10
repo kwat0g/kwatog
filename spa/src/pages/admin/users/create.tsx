@@ -11,7 +11,6 @@ import { adminUsersApi } from '@/api/admin/users';
 import type { EmployeeCandidate } from '@/types/admin';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
-import { useDebounce } from '@/hooks/useDebounce';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { applyServerValidationErrors } from '@/lib/formErrors';
 
@@ -41,7 +40,6 @@ export default function AdminCreateUserPage() {
  const [tempPasswordModal, setTempPasswordModal] = useState<string | null>(null);
  const [employeeSearch, setEmployeeSearch] = useState('');
  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeCandidate | null>(null);
- const debouncedEmployeeSearch = useDebounce(employeeSearch, 300);
 
  const rolesQuery = useQuery({
  queryKey: ['admin-user-options'],
@@ -57,11 +55,11 @@ export default function AdminCreateUserPage() {
  const departmentId = useWatch({ control: form.control, name: 'department_id' });
 
  const candidatesQuery = useQuery({
- queryKey: ['admin-employee-candidates', departmentId, debouncedEmployeeSearch],
+ queryKey: ['admin-employee-candidates', departmentId, employeeSearch],
  queryFn: ({ signal }) =>
  adminUsersApi.employeeCandidates({
  department_id: departmentId,
- search: debouncedEmployeeSearch || undefined,
+ search: employeeSearch || undefined,
  }, signal),
  enabled: !!departmentId,
  placeholderData: (prev) => prev,
@@ -137,11 +135,11 @@ export default function AdminCreateUserPage() {
  <form
  noValidate
  onSubmit={handleSubmit(onSubmit)}
- className="max-w-2xl mx-auto px-5 py-4"
+ className="min-w-0 w-full px-5 py-4"
  >
  <Panel title="Employee">
  <fieldset className="space-y-4">
- <Select
+ <Select searchable
  label="Department"
  {...register('department_id', { onChange: (e) => onDepartmentChange(e.target.value) })}
  error={errors.department_id?.message}
@@ -155,15 +153,8 @@ export default function AdminCreateUserPage() {
  </option>
  ))}
  </Select>
- <Input
- label="Find employee"
- value={employeeSearch}
- onChange={(event) => setEmployeeSearch(event.target.value)}
- placeholder="Employee no, last name, or first name"
- helper="Only employees without a user account are listed."
- disabled={!departmentId}
- />
- <Select
+
+ <Select searchable onSearch={(value) => setEmployeeSearch(value)} title="Employee no, last name, or first name"
  label="Employee"
  {...register('employee_id', { onChange: (e) => onEmployeeChange(e.target.value) })}
  error={errors.employee_id?.message ?? (candidatesQuery.isError ? 'Could not load employees. Retry before submitting.' : undefined)}
@@ -219,7 +210,7 @@ export default function AdminCreateUserPage() {
  }
  required={!selectedEmployee?.email}
  />
- <Select
+ <Select searchable
  label="Role"
  {...register('role_id')}
  error={errors.role_id?.message ?? (rolesQuery.isError ? 'Could not load roles. Retry before submitting.' : undefined)}

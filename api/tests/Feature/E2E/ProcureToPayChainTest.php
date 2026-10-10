@@ -14,6 +14,7 @@ use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -28,6 +29,7 @@ use Database\Seeders\SettingsSeeder;
 use Database\Seeders\UomSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -38,7 +40,7 @@ use Tests\TestCase;
  * Chain: PR (buyer drafts, buyer submits) → Finance approves → VP approves →
  *   buyer converts to PO (draft) → buyer submits PO → Finance approves →
  *   VP approves → buyer sends → warehouse creates GRN (pending_qc) → QC
- *   inspector records lot result + completes → production manager (checker)
+ *   inspector submits the pinned incoming checklist → independent QC checker
  *   reviews → warehouse accepts → stock moves + auto-bill staged → Finance
  *   posts bill → Finance records payment (pending) → Finance + VP approve →
  *   cash GL entry posted.
@@ -68,6 +70,7 @@ class ProcureToPayChainTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['inspection.checklist_capture_enabled' => true]);
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
@@ -271,45 +274,56 @@ class ProcureToPayChainTest extends TestCase
             'a passed incoming QC must end in an accepted GRN (auto or manual)',
         );
 
+        $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->firstOrFail();
+        $supplier = SupplierPortalUser::create([
+            'vendor_id' => $po->vendor_id,
+            'name' => 'Supplier',
+            'email' => 'e2e-supplier-'.uniqid().'@ogami.test',
+            'password' => bcrypt('Password1!'),
+            'is_active' => true,
+        ]);
+        Sanctum::actingAs($supplier, ['*'], 'supplier_portal');
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-E2E-'.uniqid(),
+            'date' => now()->toDateString(),
+            'gross_total' => (string) $bill->total_amount,
+            'bill_ids' => [$bill->hash_id],
+        ])->assertCreated();
+        $this->app['auth']->guard('supplier_portal')->forgetUser();
+        $this->actingAs($this->warehouse, 'sanctum');
+
         return [$grn->fresh(), $po->fresh()];
     }
 
     /**
-     * Lot-result → complete (maker) → review (checker), as the QC gate expects.
+     * Batch checklist submission (maker) → review (checker), as the QC gate expects.
      * GRN incoming inspections are maker-checker gated (requiresMakerChecker).
      */
     private function passIncomingQc(\App\Modules\Inventory\Models\GoodsReceiptNote $grn): void
     {
-        $inspection = $grn->qcInspection;
-        $this->assertNotNull($inspection, 'GRN must have an incoming inspection');
+        // GRN show() eager-loads only the summary columns; reload through the
+        // relation before reading the pinned sample size and result version.
+        $inspection = $grn->qcInspection()->firstOrFail();
+        $this->assertGreaterThan(0, (int) $inspection->sample_size, 'Incoming inspection must have a positive planned sample.');
         $inspectionId = $inspection->hash_id;
 
-        $rows = \App\Modules\Quality\Models\InspectionMeasurement::query()
-            ->where('inspection_id', $inspection->id)
-            ->get();
-
-        // Tick every checklist row PASS with no reading (verdict-only surface).
-        // checklist.*._id wants the raw integer id; `complete: true` folds the
-        // sample_defect_count requirement into this single call.
-        $checklist = $rows->map(fn ($r) => [
-            'id' => $r->hash_id,
-            'is_pass' => true,
-        ])->all();
-
-        $lotRes = $this->actingAs($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$inspectionId}/lot-result", [
-                'checklist' => $checklist,
+        $result = $this->actingAs($this->qc)
+            ->postJson("/api/v1/quality/inspections/{$inspectionId}/batch-result", [
+                'expected_result_version' => (int) $inspection->result_version,
                 'measurements' => [],
-                'sample_defect_count' => 0,
-                'complete' => true,
+                'coverage_confirmed' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
+                'physical_defects_confirmed' => false,
             ]);
-        $lotRes->assertOk();
+        $result->assertOk();
 
-        $lotStatus = $lotRes->json('data.status');
+        $lotStatus = $result->json('data.status');
         if ($lotStatus === 'awaiting_review') {
+            $inspection->refresh();
             $revRes = $this->actingAs($this->qcChecker)
                 ->patchJson("/api/v1/quality/inspections/{$inspectionId}/review", [
                     'decision' => 'passed',
+                    'expected_result_version' => (int) $inspection->result_version,
                 ]);
             $revRes->assertOk();
         }
@@ -423,30 +437,27 @@ class ProcureToPayChainTest extends TestCase
             ->assertForbidden();
 
         $payment = $this->postBillAndPay($bill->fresh());
-        $this->assertSame(BillPaymentStatus::PendingApproval->value, $payment->status->value);
+        $this->assertSame(BillPaymentStatus::Posted->value, $payment->status->value);
 
         // -- Wrong actor: buyer may not approve payments ----------------------
         $this->actingAs($this->buyer)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
             ->assertForbidden();
 
-        // -- Maker ≠ checker: the recording finance cannot even act on it; a
-        // second finance officer is the step-1 checker -----------------------
+        // -- Below the VP threshold, Finance's recorded payment posts at once.
         $this->actingAs($this->finance)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
-            ->assertForbidden();
+            ->assertStatus(422);
 
         $this->actingAs($this->financeChecker)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
-            ->assertOk();
-        $payment->refresh();
-        $this->assertSame(BillPaymentStatus::PendingApproval->value, $payment->status->value, 'VP step remains after Finance');
+            ->assertStatus(422);
 
         $this->actingAs($this->vp)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
-            ->assertOk();
+            ->assertStatus(422);
         $payment->refresh();
-        $this->assertSame(BillPaymentStatus::Posted->value, $payment->status->value, 'final approval posts the payment');
+        $this->assertSame(BillPaymentStatus::Posted->value, $payment->status->value);
 
         // -- Integrity: the posted payment carries a GL cash entry ------------
         $this->assertNotNull($payment->fresh()->journal_entry_id, 'posted payment must carry a journal entry');
@@ -479,6 +490,7 @@ class ProcureToPayChainTest extends TestCase
                 'payment_date' => now()->toDateString(),
                 'amount' => (string) $bill->total_amount,
                 'payment_method' => 'bank_transfer',
+                'reference_number' => 'E2E-SKIP',
             ])
             ->assertStatus(422);
     }
@@ -523,7 +535,7 @@ class ProcureToPayChainTest extends TestCase
 
     public function test_cancelling_a_bill_with_an_open_payment_refuses_or_reverses_cleanly(): void
     {
-        $po = $this->createApprovedPoDirectly();
+        $po = $this->createApprovedPoDirectly('600.00');
         [$grn] = $this->receivePoFully($po);
         $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->firstOrFail();
         $payment = $this->postBillAndPay($bill->fresh());
@@ -532,19 +544,16 @@ class ProcureToPayChainTest extends TestCase
         // No money has moved yet (amount_paid is zero), so cancellation is
         // ALLOWED — the AP state is authoritative again.
         $this->actingAs($this->finance)
-            ->patchJson("/api/v1/bills/{$bill->hash_id}/cancel", [])
+            ->patchJson("/api/v1/bills/{$bill->hash_id}/cancel", ['reason' => 'Supplier order cancelled before payment.'])
             ->assertOk();
         $bill->refresh();
         $this->assertSame(BillStatus::Cancelled->value, $bill->status->value);
 
-        // The orphaned reservation must dead-end at EVERY approval step, not
-        // just the payout: even step 1 refuses, so a dead bill never
-        // accumulates approval bookkeeping for a payment that can never post.
+        // The orphaned reservation must dead-end at the VP step.
         $this->actingAs($this->financeChecker)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
             ->assertStatus(422);
 
-        // And the final step stays refused too (defense in depth).
         $this->actingAs($this->vp)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
             ->assertStatus(422);
@@ -567,9 +576,9 @@ class ProcureToPayChainTest extends TestCase
     // 5. MAKER-CHECKER — the VP cannot approve the payment they recorded
     // ------------------------------------------------------------------
 
-    public function test_payment_maker_cannot_be_the_sole_checker(): void
+    public function test_only_vp_can_approve_high_value_bill_payment(): void
     {
-        $po = $this->createApprovedPoDirectly();
+        $po = $this->createApprovedPoDirectly('600.00');
         [$grn] = $this->receivePoFully($po);
         $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->firstOrFail();
 
@@ -579,10 +588,6 @@ class ProcureToPayChainTest extends TestCase
 
         $cash = $this->cashAccount();
 
-        // VP records the payment (VP holds accounting.bills.pay? No — only
-        // finance does. Use finance to record, then check that the SAME
-        // finance user approving twice does not fully approve the payment:
-        // the second approval must be refused or land on the VP step.)
         $res = $this->actingAs($this->finance)
             ->withHeaders(['Idempotency-Key' => 'e2e-mc-'.substr(uniqid(), -8)])
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments", [
@@ -590,21 +595,25 @@ class ProcureToPayChainTest extends TestCase
                 'payment_date' => now()->toDateString(),
                 'amount' => (string) $bill->fresh()->total_amount,
                 'payment_method' => 'bank_transfer',
+                'reference_number' => 'E2E-MC',
             ]);
         $res->assertCreated();
         $payment = $this->fromApiId(BillPayment::class, $res->json('data.id'));
 
-        // The maker cannot act on their own payment; the second finance
-        // officer approves step 1 only → still pending (VP step outstanding).
+        // Finance records the payment; only the VP approves this bill total.
         $this->actingAs($this->finance)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
             ->assertForbidden();
         $this->actingAs($this->financeChecker)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
-            ->assertOk();
+            ->assertForbidden();
         $payment->refresh();
         $this->assertSame(BillPaymentStatus::PendingApproval->value, $payment->status->value,
-            'a single Finance approval must not post the payment');
+            'Finance cannot approve a high-value payment');
+        $this->actingAs($this->vp)
+            ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
+            ->assertOk();
+        $this->assertSame(BillPaymentStatus::Posted, $payment->fresh()->status);
     }
 
     // ------------------------------------------------------------------
@@ -629,6 +638,7 @@ class ProcureToPayChainTest extends TestCase
             'payment_date' => now()->toDateString(),
             'amount' => (string) $bill->fresh()->total_amount,
             'payment_method' => 'bank_transfer',
+            'reference_number' => 'E2E-IDEM',
         ];
 
         $first = $this->actingAs($this->finance)
@@ -655,7 +665,7 @@ class ProcureToPayChainTest extends TestCase
     // Internals
     // ------------------------------------------------------------------
 
-    private function createApprovedPoDirectly(): PurchaseOrder
+    private function createApprovedPoDirectly(string $unitPrice = '12.00'): PurchaseOrder
     {
         $vendor = Vendor::create([
             'name' => 'Vendor-'.substr(uniqid(), -5),
@@ -666,7 +676,7 @@ class ProcureToPayChainTest extends TestCase
             'po_number' => 'PO-'.substr(uniqid(), -6),
             'vendor_id' => $vendor->id,
             'date' => now()->toDateString(),
-            'total_amount' => '1200.00',
+            'total_amount' => \App\Common\Support\Money::mul('100', $unitPrice),
             'created_by' => $this->buyer->id,
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Draft->value])->save();
@@ -676,8 +686,8 @@ class ProcureToPayChainTest extends TestCase
             'description' => 'Adhesive resin',
             'quantity' => '100.000',
             'unit' => 'KG',
-            'unit_price' => '12.00',
-            'total' => '1200.00',
+            'unit_price' => $unitPrice,
+            'total' => \App\Common\Support\Money::mul('100', $unitPrice),
             'quantity_received' => '0.000',
         ]);
 

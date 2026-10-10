@@ -18,6 +18,12 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
+use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionResultAuthor;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -38,6 +44,8 @@ foreach ([
     Database\Seeders\PositionSeeder::class,
     Database\Seeders\DemoAccountSeeder::class,
     Database\Seeders\WorkflowSeeder::class,
+    Database\Seeders\UomSeeder::class,
+    Database\Seeders\InventoryItemSeeder::class,
 ] as $seeder) {
     (new $seeder)->run();
 }
@@ -47,6 +55,11 @@ $warehouseUser = User::query()->where('email', 'warehouse@ogami.test')->firstOrF
 $warehouseChecker = User::factory()->create([
     'name' => 'Inventory Audit Warehouse Checker',
     'email' => 'warehouse-checker@ogami.test',
+    'role_id' => $warehouseUser->role_id,
+]);
+$warehouseFinisher = User::factory()->create([
+    'name' => 'Inventory Audit Warehouse Finisher',
+    'email' => 'warehouse-finisher@ogami.test',
     'role_id' => $warehouseUser->role_id,
 ]);
 $purchaser = User::query()->where('email', 'purchasing@ogami.test')->firstOrFail();
@@ -255,6 +268,109 @@ $reservation = MaterialReservation::query()->create([
     'reserved_at' => now(),
 ]);
 
+// Explicit starting state for the stock-adjustment/QC-hold browser test:
+// 100 finished units exist, but outgoing inspection released only 98.
+$qualityHoldItem = Item::factory()->create([
+    'code' => 'AUD-QC-HOLD',
+    'name' => 'Inventory audit QC-held finished good',
+    'unit_of_measure' => 'pcs',
+    'item_type' => 'finished_good',
+    'standard_cost' => '5.00',
+    'reorder_point' => '0',
+    'safety_stock' => '0',
+    'is_active' => true,
+]);
+$qualityZone = WarehouseZone::factory()->create([
+    'warehouse_id' => $warehouse->id,
+    'code' => 'QC-FG',
+    'name' => 'QC-held finished goods',
+    'zone_type' => 'finished_goods',
+]);
+$qualityLocation = WarehouseLocation::factory()->create([
+    'zone_id' => $qualityZone->id,
+    'code' => 'AUD-QC-HOLD-BIN',
+    'is_active' => true,
+    'is_blocked' => false,
+]);
+$qualityProduct = App\Modules\CRM\Models\Product::query()->create([
+    'part_number' => 'AUD-QC-HOLD-PART',
+    'name' => 'Inventory audit QC-held part',
+]);
+$qualityMaker = User::factory()->create();
+$qualityReviewer = User::factory()->create();
+$qualityWorkOrder = WorkOrder::factory()->create([
+    'wo_number' => 'WO-AUD-QC-HOLD',
+    'product_id' => $qualityProduct->id,
+    'created_by' => $qualityMaker->id,
+    'status' => 'closed',
+    'quantity_target' => 100,
+    'quantity_produced' => 100,
+    'quantity_good' => 100,
+]);
+$processInspection = Inspection::query()->create([
+    'inspection_number' => 'QC-AUD-HOLD-IP',
+    'stage' => InspectionStage::InProcess->value,
+    'status' => InspectionStatus::Passed->value,
+    'product_id' => $qualityProduct->id,
+    'entity_type' => InspectionEntityType::WorkOrder->value,
+    'entity_id' => $qualityWorkOrder->id,
+    'batch_quantity' => 100,
+    'accepted_quantity' => 100,
+    'sample_size' => 20,
+    'inspector_id' => $qualityMaker->id,
+    'reviewed_by' => $qualityReviewer->id,
+    'reviewed_at' => now(),
+    'completed_at' => now(),
+]);
+InspectionResultAuthor::query()->create([
+    'inspection_id' => $processInspection->id,
+    'user_id' => $qualityMaker->id,
+]);
+$qualityOutput = WorkOrderOutput::query()->create([
+    'work_order_id' => $qualityWorkOrder->id,
+    'recorded_by' => $qualityMaker->id,
+    'recorded_at' => now(),
+    'good_count' => 100,
+    'reject_count' => 0,
+    'batch_code' => 'AUD-QC-HOLD-LOT',
+]);
+Inspection::query()->create([
+    'inspection_number' => 'QC-AUD-HOLD-OUT',
+    'stage' => InspectionStage::Outgoing->value,
+    'status' => InspectionStatus::Passed->value,
+    'product_id' => $qualityProduct->id,
+    'entity_type' => InspectionEntityType::WorkOrder->value,
+    'entity_id' => $qualityWorkOrder->id,
+    'work_order_output_id' => $qualityOutput->id,
+    'batch_quantity' => 100,
+    'accepted_quantity' => 98,
+    'sample_size' => 20,
+    'inspector_id' => $qualityMaker->id,
+    'reviewed_by' => $qualityReviewer->id,
+    'reviewed_at' => now(),
+    'completed_at' => now(),
+]);
+$qualityReceipt = App\Modules\Inventory\Models\StockMovement::query()->create([
+    'movement_type' => 'production_receipt',
+    'item_id' => $qualityHoldItem->id,
+    'quantity' => '100.000',
+    'unit_cost' => '5.0000',
+    'total_cost' => '500.00',
+    'to_location_id' => $qualityLocation->id,
+    'reference_type' => 'work_order_output',
+    'reference_id' => $qualityOutput->id,
+    'created_by' => $qualityMaker->id,
+    'lot_number' => 'AUD-QC-HOLD-LOT',
+]);
+$qualityOutput->forceFill(['production_receipt_movement_id' => $qualityReceipt->id])->save();
+App\Modules\Inventory\Models\StockLevel::query()->create([
+    'item_id' => $qualityHoldItem->id,
+    'location_id' => $qualityLocation->id,
+    'quantity' => '100.000',
+    'reserved_quantity' => '0.000',
+    'weighted_avg_cost' => '5.0000',
+]);
+
 app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 5, 'inventory');
 // A normal inventory adjustment above this value must enter the existing
 // Finance approval path; stock-count variance approval remains a separate
@@ -279,8 +395,13 @@ $fixture = [
     'available_location' => $availableLocation->hash_id,
     'work_order' => $workOrder->hash_id,
     'reservation' => $reservation->hash_id,
+    'quality_hold_item' => $qualityHoldItem->hash_id,
+    'quality_hold_location' => $qualityLocation->hash_id,
+    'quality_hold_on_hand' => '100.000',
+    'quality_hold_quantity' => '2.000',
     'count_zone' => $raw->hash_id,
     'warehouse_checker' => $warehouseChecker->email,
+    'warehouse_finisher' => $warehouseFinisher->email,
 ];
 
 $json = json_encode($fixture, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);

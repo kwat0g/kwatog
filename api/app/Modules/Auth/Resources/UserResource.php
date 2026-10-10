@@ -34,6 +34,7 @@ class UserResource extends JsonResource
                         'id'          => $e->hash_id,
                         'employee_no' => $e->employee_no,
                         'full_name'   => $e->full_name,
+                        'photo_url'   => $e->photo_path ? "/api/v1/hr/employees/{$e->hash_id}/photo" : null,
                         'department_id' => optional($e->department_id) ? \App\Modules\HR\Models\Department::query()->whereKey($e->department_id)->first()?->hash_id : null,
                     ] : null;
                 })()

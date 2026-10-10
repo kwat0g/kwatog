@@ -10,7 +10,10 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
+use App\Common\Support\DepartmentScope;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Services\AttendanceDateMutabilityGuard;
@@ -22,10 +25,10 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
-use App\Common\Support\DepartmentScope;
-use App\Common\Support\TrashedFilter;
+use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -61,10 +64,10 @@ class LeaveRequestService
     private function logBulkApproveFailure(string $stage, int $id, \Throwable $e): void
     {
         Log::error('Bulk leave approval failed unexpectedly.', [
-            'stage'           => $stage,
+            'stage' => $stage,
             'leave_request_id' => $id,
-            'exception'       => $e::class,
-            'message'         => $e->getMessage(),
+            'exception' => $e::class,
+            'message' => $e->getMessage(),
         ]);
     }
 
@@ -117,13 +120,15 @@ class LeaveRequestService
 
         TrashedFilter::apply($q, $filters);
 
-        if (!empty($filters['employee_id'])) {
-            $empId = \App\Common\Support\HashIdFilter::decode(
-                $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
+        if (! empty($filters['employee_id'])) {
+            $empId = HashIdFilter::decode(
+                $filters['employee_id'], Employee::class,
             );
-            if ($empId) $q->where('employee_id', $empId);
+            if ($empId) {
+                $q->where('employee_id', $empId);
+            }
         }
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $term = trim((string) $filters['search']);
             $q->where(fn ($qq) => $qq
                 ->where('leave_request_no', SearchOperator::like(), SearchOperator::contains($term))
@@ -132,15 +137,19 @@ class LeaveRequestService
                     ->orWhere('middle_name', SearchOperator::like(), SearchOperator::contains($term))
                     ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))));
         }
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             if ($filters['status'] === 'pending') {
                 $q->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value]);
             } else {
                 $q->where('status', $filters['status']);
             }
         }
-        if (!empty($filters['from'])) $q->where('start_date', '>=', $filters['from']);
-        if (!empty($filters['to'])) $q->where('end_date', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->where('start_date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->where('end_date', '<=', $filters['to']);
+        }
 
         /*
          * Row-level filtering, delegated to the shared three-tier scope:
@@ -181,7 +190,7 @@ class LeaveRequestService
                 Employee::query()->lockForUpdate()->findOrFail($employeeId);
 
                 $start = CarbonImmutable::parse($data['start_date']);
-                $end   = CarbonImmutable::parse($data['end_date']);
+                $end = CarbonImmutable::parse($data['end_date']);
                 if ($end->lt($start)) {
                     throw new \InvalidArgumentException('End date must be on or after start date.');
                 }
@@ -230,7 +239,7 @@ class LeaveRequestService
                 // keeps a maternity leave spanning Dec/Jan from charging all
                 // days to its start-year ledger.
                 foreach ($daysByYear as $year => $yearDays) {
-                    $balance = \App\Modules\Leave\Models\EmployeeLeaveBalance::query()
+                    $balance = EmployeeLeaveBalance::query()
                         ->where('employee_id', $employeeId)
                         ->where('leave_type_id', $type->id)
                         ->where('year', $year)
@@ -260,18 +269,18 @@ class LeaveRequestService
                     ->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value, LeaveRequestStatus::Approved->value])
                     ->where(function ($q) use ($start, $end) {
                         $q->whereBetween('start_date', [$start->toDateString(), $end->toDateString()])
-                          ->orWhereBetween('end_date', [$start->toDateString(), $end->toDateString()])
-                          ->orWhere(function ($qq) use ($start, $end) {
-                              $qq->where('start_date', '<=', $start->toDateString())
-                                 ->where('end_date', '>=', $end->toDateString());
-                          });
+                            ->orWhereBetween('end_date', [$start->toDateString(), $end->toDateString()])
+                            ->orWhere(function ($qq) use ($start, $end) {
+                                $qq->where('start_date', '<=', $start->toDateString())
+                                    ->where('end_date', '>=', $end->toDateString());
+                            });
                     })
                     ->when($halfDayPeriod !== null, function ($q) use ($halfDayPeriod) {
                         // Single-day half-day request: collides ONLY with rows that
                         // are full-day (half_day_period IS NULL) OR same half.
                         $q->where(function ($qq) use ($halfDayPeriod) {
                             $qq->whereNull('half_day_period')
-                               ->orWhere('half_day_period', $halfDayPeriod);
+                                ->orWhere('half_day_period', $halfDayPeriod);
                         });
                     })
                     ->lockForUpdate()
@@ -282,15 +291,15 @@ class LeaveRequestService
 
                 $req = LeaveRequest::create([
                     'leave_request_no' => $this->sequences->generate('leave_request'),
-                    'employee_id'      => $employeeId,
-                    'leave_type_id'    => $type->id,
-                    'start_date'       => $start->toDateString(),
-                    'end_date'         => $end->toDateString(),
-                    'days'             => $days,
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => $type->id,
+                    'start_date' => $start->toDateString(),
+                    'end_date' => $end->toDateString(),
+                    'days' => $days,
                     'balance_allocations' => $daysByYear,
-                    'half_day_period'  => $halfDayPeriod,
-                    'reason'           => $data['reason'] ?? null,
-                    'document_path'    => $storedDocumentPath,
+                    'half_day_period' => $halfDayPeriod,
+                    'reason' => $data['reason'] ?? null,
+                    'document_path' => $storedDocumentPath,
                 ]);
                 // status + approval fields are non-fillable; service-only writes.
                 $req->forceFill(['status' => LeaveRequestStatus::PendingDept->value])->save();
@@ -322,7 +331,7 @@ class LeaveRequestService
             $this->approvals->approve($req, $approver, $remarks);
 
             $req->forceFill([
-                'status'           => LeaveRequestStatus::PendingHr->value,
+                'status' => LeaveRequestStatus::PendingHr->value,
                 'dept_approver_id' => $approver->id,
                 'dept_approved_at' => now(),
             ])->save();
@@ -345,7 +354,7 @@ class LeaveRequestService
             $this->approvals->approve($req, $approver, $remarks);
 
             $req->forceFill([
-                'status'         => LeaveRequestStatus::Approved->value,
+                'status' => LeaveRequestStatus::Approved->value,
                 'hr_approver_id' => $approver->id,
                 'hr_approved_at' => now(),
             ])->save();
@@ -372,19 +381,20 @@ class LeaveRequestService
      *
      * `failed[].reason` reaches the user verbatim — see UNEXPECTED_FAILURE_REASON.
      *
-     * @param array<int, int> $ids raw integer IDs (post HashID decode)
+     * @param  array<int, int>  $ids  raw integer IDs (post HashID decode)
      * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
      */
     public function bulkApproveDept(array $ids, User $approver, ?string $remarks = null): array
     {
         $approved = [];
-        $failed   = [];
+        $failed = [];
 
         foreach ($ids as $id) {
             try {
                 $req = LeaveRequest::query()->find($id);
                 if (! $req) {
                     $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+
                     continue;
                 }
                 $approved[] = $this->approveDept($req, $approver, $remarks);
@@ -392,6 +402,7 @@ class LeaveRequestService
                 $failed[] = ['id' => $id, 'reason' => $this->bulkFailureReason('dept', $id, $e)];
             }
         }
+
         return ['approved' => $approved, 'failed' => $failed];
     }
 
@@ -401,19 +412,20 @@ class LeaveRequestService
      *
      * `failed[].reason` reaches the user verbatim — see UNEXPECTED_FAILURE_REASON.
      *
-     * @param array<int, int> $ids
+     * @param  array<int, int>  $ids
      * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
      */
     public function bulkApproveHR(array $ids, User $approver, ?string $remarks = null): array
     {
         $approved = [];
-        $failed   = [];
+        $failed = [];
 
         foreach ($ids as $id) {
             try {
                 $req = LeaveRequest::query()->find($id);
                 if (! $req) {
                     $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+
                     continue;
                 }
                 $approved[] = $this->approveHR($req, $approver, $remarks);
@@ -421,6 +433,7 @@ class LeaveRequestService
                 $failed[] = ['id' => $id, 'reason' => $this->bulkFailureReason('hr', $id, $e)];
             }
         }
+
         return ['approved' => $approved, 'failed' => $failed];
     }
 
@@ -438,7 +451,7 @@ class LeaveRequestService
             }
             $this->approvals->reject($req, $approver, $reason);
             $req->forceFill([
-                'status'           => LeaveRequestStatus::Rejected->value,
+                'status' => LeaveRequestStatus::Rejected->value,
                 'rejection_reason' => $reason,
             ])->save();
 
@@ -464,7 +477,7 @@ class LeaveRequestService
             $wasApproved = $req->status === LeaveRequestStatus::Approved;
             $wasPending = in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true);
             $req->forceFill([
-                'status'       => LeaveRequestStatus::Cancelled->value,
+                'status' => LeaveRequestStatus::Cancelled->value,
                 'cancelled_by' => $user->id,
                 'cancelled_at' => now(),
             ])->save();
@@ -496,7 +509,7 @@ class LeaveRequestService
     {
         $counts = [];
         for ($d = $start; $d->lte($end); $d = $d->addDay()) {
-            if ($d->dayOfWeek !== \Carbon\Carbon::SUNDAY
+            if ($d->dayOfWeek !== Carbon::SUNDAY
                 && ! isset($holidayDates[$d->toDateString()])) {
                 $counts[$d->year] = ($counts[$d->year] ?? 0.0) + 1.0;
             }
@@ -558,12 +571,18 @@ class LeaveRequestService
                 ->lockForUpdate()
                 ->first();
 
+            if ($attendance?->trashed()) {
+                throw new BusinessRuleException(
+                    "Attendance for {$date} is archived. Restore it before approving leave.",
+                );
+            }
+
             $isHalfDay = $req->half_day_period !== null;
-            $mutated = ! $isHalfDay && ! $attendance?->trashed();
+            $mutated = ! $isHalfDay;
             $snapshot[$date] = [
-                'id'        => $attendance?->id,
-                'mutated'   => $mutated,
-                'attributes'=> $attendance && ! $attendance->trashed()
+                'id' => $attendance?->id,
+                'mutated' => $mutated,
+                'attributes' => $attendance
                     ? $this->attendanceSnapshotAttributes($attendance)
                     : null,
             ];
@@ -573,22 +592,22 @@ class LeaveRequestService
             // and relies on the leave request itself as the half-day record. This
             // avoids turning AM/PM leave into a full-day absence and avoids
             // inventing a second row that the unique (employee,date) key forbids.
-            if ($isHalfDay || $attendance?->trashed()) {
+            if ($isHalfDay) {
                 continue;
             }
 
             $values = [
-                'status'            => AttendanceStatus::OnLeave->value,
-                'is_manual_entry'   => false,
-                'remarks'           => "leave:{$req->leave_request_no}",
+                'status' => AttendanceStatus::OnLeave->value,
+                'is_manual_entry' => false,
+                'remarks' => "leave:{$req->leave_request_no}",
                 // Keep computed numeric fields zero — payroll uses the leave
                 // request and flat-cutoff rules for paid-leave treatment.
-                'regular_hours'     => 0,
-                'overtime_hours'    => 0,
-                'night_diff_hours'  => 0,
+                'regular_hours' => 0,
+                'overtime_hours' => 0,
+                'night_diff_hours' => 0,
                 'tardiness_minutes' => 0,
                 'undertime_minutes' => 0,
-                'day_type_rate'     => 1.00,
+                'day_type_rate' => 1.00,
             ];
 
             if ($attendance) {
@@ -596,7 +615,7 @@ class LeaveRequestService
             } else {
                 Attendance::create($values + [
                     'employee_id' => $req->employee_id,
-                    'date'        => $date,
+                    'date' => $date,
                 ]);
             }
         }
@@ -700,6 +719,8 @@ class LeaveRequestService
 
     private function lockRequest(LeaveRequest $request): LeaveRequest
     {
+        Employee::whereKey($request->employee_id)->lockForUpdate()->firstOrFail();
+
         return LeaveRequest::query()
             ->lockForUpdate()
             ->with('employee')

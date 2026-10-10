@@ -48,14 +48,15 @@ class DocumentAccessTest extends TestCase
     public function test_delivery_proof_upload_writes_to_local_disk_not_public(): void
     {
         $user = $this->seedUserWithPerms(['supply_chain.view', 'supply_chain.deliveries.create']);
-        $delivery = $this->seedDelivery($user);
+        $delivery = $this->seedDelivery($user, status: 'in_transit');
+        $driver = User::factory()->withRole('driver')->create(['is_active' => true]);
+        $delivery->forceFill(['driver_id' => $driver->id])->save();
 
-        $this->actingAs($user)
-            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/proofs", [
-                'proof_type' => 'photo',
-                'file' => UploadedFile::fake()->image('photo.jpg'),
+        $this->actingAs($driver)
+            ->postJson("/api/v1/driver/deliveries/{$delivery->hash_id}/receipt", [
+                'photo' => UploadedFile::fake()->image('photo.jpg'),
             ])
-            ->assertStatus(201);
+            ->assertOk();
 
         // File must exist on local disk.
         $proof = DeliveryProof::query()->where('delivery_id', $delivery->id)->firstOrFail();
@@ -63,6 +64,24 @@ class DocumentAccessTest extends TestCase
 
         // File must NOT exist on the public disk.
         Storage::disk('public')->assertDirectoryEmpty('/');
+    }
+
+    public function test_delivery_proof_upload_is_rejected_before_dispatch_without_side_effects(): void
+    {
+        $user = $this->seedUserWithPerms(['supply_chain.view', 'supply_chain.deliveries.create']);
+        $delivery = $this->seedDelivery($user);
+        $driver = User::factory()->withRole('driver')->create(['is_active' => true]);
+        $delivery->forceFill(['driver_id' => $driver->id])->save();
+
+        $this->actingAs($driver)
+            ->postJson("/api/v1/driver/deliveries/{$delivery->hash_id}/receipt", [
+                'photo' => UploadedFile::fake()->image('photo.jpg'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Customer receipt evidence can only be uploaded after dispatch.');
+
+        $this->assertDatabaseMissing('delivery_proofs', ['delivery_id' => $delivery->id]);
+        Storage::disk('local')->assertDirectoryEmpty("deliveries/{$delivery->id}/proofs");
     }
 
     public function test_delivery_proof_view_requires_authentication(): void
@@ -225,10 +244,12 @@ class DocumentAccessTest extends TestCase
     {
         $user = $this->seedUserWithPerms(['supply_chain.view', 'supply_chain.deliveries.create']);
         $delivery = $this->seedDelivery($user, status: 'delivered');
+        $driver = User::factory()->withRole('driver')->create(['is_active' => true]);
+        $delivery->forceFill(['driver_id' => $driver->id])->save();
 
-        $this->actingAs($user)
-            ->post("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/receipt", [
-                'file' => UploadedFile::fake()->image('receipt.jpg'),
+        $this->actingAs($driver)
+            ->post("/api/v1/driver/deliveries/{$delivery->hash_id}/receipt", [
+                'photo' => UploadedFile::fake()->image('receipt.jpg'),
             ])
             ->assertOk();
 

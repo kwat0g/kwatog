@@ -234,6 +234,44 @@ class UserPermissionOverrideTest extends TestCase
             ->assertJsonValidationErrorFor('reason');
     }
 
+    public function test_retired_journal_self_post_permission_cannot_be_granted_as_user_override(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('finance_officer');
+
+        foreach ([
+            'accounting.journal.self_post_override',
+            'accounting.journal.self_post_override.retired',
+        ] as $slug) {
+            Permission::create([
+                'name' => 'Retired journal self-post override',
+                'slug' => $slug,
+                'module' => 'accounting',
+                'description' => 'Legacy permission retained for regression coverage.',
+            ]);
+        }
+
+        foreach ([
+            'accounting.journal.self_post_override',
+            'accounting.journal.self_post_override.retired',
+        ] as $slug) {
+            $this->actingAs($admin)
+                ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                    'permission_slug' => $slug,
+                    'type' => 'grant',
+                    'reason' => 'Regression test for retired SoD override.',
+                ])
+                ->assertStatus(422)
+                ->assertJsonValidationErrorFor('permission_slug');
+        }
+
+        $this->assertDatabaseMissing('user_permission_overrides', [
+            'user_id' => $target->id,
+            'permission_id' => Permission::where('slug', 'accounting.journal.self_post_override.retired')->value('id'),
+        ]);
+        $this->assertFalse($target->fresh()->hasPermission('accounting.journal.self_post_override.retired'));
+    }
+
     public function test_upsert_replaces_existing_override(): void
     {
         $admin = $this->seedAdmin();

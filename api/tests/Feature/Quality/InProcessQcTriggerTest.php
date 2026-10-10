@@ -111,6 +111,20 @@ class InProcessQcTriggerTest extends TestCase
 
     public function test_qc_required_operation_completion_creates_or_reuses_in_process_inspection(): void
     {
+        $this->listener->handle($this->event());
+        $rootQc = Inspection::query()
+            ->where('stage', InspectionStage::InProcess->value)
+            ->where('entity_id', $this->wo->id)
+            ->whereNull('wo_operation_id')
+            ->firstOrFail();
+        $rootQc->forceFill([
+            'startup_trial_required' => false,
+            'status' => 'passed',
+            'reviewed_by' => User::factory()->create()->id,
+            'reviewed_at' => now(),
+            'completed_at' => now(),
+        ])->save();
+
         $routing = ProductRouting::create([
             'product_id' => $this->product->id,
             'version' => 1,
@@ -131,16 +145,39 @@ class InProcessQcTriggerTest extends TestCase
             'operation_name' => 'Injection QC gate',
             'status' => WoOperationStatus::InProgress->value,
             'qty_planned' => '100.0000',
-            'qty_completed' => '0.0000',
+            'qty_completed' => '100.0000',
             'qty_scrapped' => '0.0000',
         ]);
 
-        app(WoOperationService::class)->completeOperation($operation);
+        \App\Modules\Production\Models\WorkOrderOutput::create([
+            'work_order_id' => $this->wo->id, 'recorded_by' => $this->user->id,
+            'recorded_at' => now(), 'good_count' => 100, 'reject_count' => 0,
+            'batch_code' => 'IP-CANONICAL-OUTPUT',
+        ]);
+        $this->wo->forceFill(['quantity_produced' => 100, 'quantity_good' => 100])->save();
+
+        try {
+            app(WoOperationService::class)->completeOperation($operation);
+            $this->fail('Required operation QC must block completion until approved.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('QC', $e->getMessage());
+        }
+        $gate = Inspection::query()->where('wo_operation_id', $operation->id)->firstOrFail();
+        $this->assertSame('in_progress', $operation->fresh()->status->value);
+        $gate->forceFill([
+            'status' => 'passed',
+            'reviewed_by' => User::factory()->create()->id,
+            'reviewed_at' => now(),
+            'completed_at' => now(),
+        ])->save();
+        app(WoOperationService::class)->completeOperation($operation->fresh());
 
         $this->assertSame(1, Inspection::query()
             ->where('stage', InspectionStage::InProcess->value)
             ->where('entity_id', $this->wo->id)
+            ->whereNull('wo_operation_id')
             ->count());
+        $this->assertSame(1, Inspection::query()->where('wo_operation_id', $operation->id)->count());
         $this->assertSame('completed', $operation->fresh()->status->value);
     }
 

@@ -6,6 +6,7 @@ namespace App\Modules\Production\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Production\Models\DefectType;
+use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -15,22 +16,35 @@ class RecordOutputRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('production.wo.record') ?? false;
+        if ($this->user()?->hasPermission('production.wo.record')) { return true; }
+        if (! $this->user()) { return false; }
+        app(\App\Modules\Production\Services\WorkOrderAssignmentService::class)->internal($this->user());
+        return true;
     }
 
     protected function hashIdFields(): array
     {
-        return ['defects.*.defect_type_id' => DefectType::class];
+        return ['defects.*.defect_type_id' => DefectType::class, 'crew_id' => \App\Modules\Production\Models\WorkOrderCrew::class];
     }
 
     public function rules(): array
     {
+        $workOrder = $this->route('workOrder');
+        $finishFirst = $workOrder instanceof WorkOrder && $workOrder->usesFinishFirstQc() && $this->route('ncr') === null;
+
         return [
-            'good_count' => ['required', 'integer', 'min:0'],
-            'reject_count' => ['required', 'integer', 'min:0'],
+            // The shared service requires a crew for new writes; legacy exact retries may omit it.
+            'crew_id' => ['nullable', 'integer', 'exists:work_order_crews,id'],
+            'recording_reason' => ['nullable', 'string', 'max:500'],
+            'material_handover_acknowledged' => ['sometimes', 'boolean'],
+            'material_handover_reason' => ['nullable', 'required_if:material_handover_acknowledged,true', 'string', 'max:500'],
+            'qc_workflow' => ['prohibited'],
+            'produced_count' => $finishFirst ? ['required', 'integer', 'min:1'] : ['prohibited'],
+            'good_count' => $finishFirst ? ['prohibited'] : ['required', 'integer', 'min:0'],
+            'reject_count' => $finishFirst ? ['prohibited'] : ['required', 'integer', 'min:0'],
             'shift' => ['nullable', 'string', 'max:20'],
             'remarks' => ['nullable', 'string', 'max:500'],
-            'defects' => ['nullable', 'array'],
+            'defects' => $finishFirst ? ['prohibited'] : ['nullable', 'array'],
             'defects.*.defect_type_id' => ['required_with:defects', 'integer', 'exists:defect_types,id'],
             'defects.*.count' => ['required_with:defects', 'integer', 'min:1'],
         ];
@@ -39,6 +53,11 @@ class RecordOutputRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function ($v) {
+            $workOrder = $this->route('workOrder');
+            if ($workOrder instanceof WorkOrder && $workOrder->usesFinishFirstQc() && $this->route('ncr') === null) {
+                return;
+            }
+
             $good = (int) $this->input('good_count');
             $reject = (int) $this->input('reject_count');
 

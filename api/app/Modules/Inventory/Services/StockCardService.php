@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Support\Money;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Common\Support\Money;
 
 /**
  * Series F — Task F3. Stock Card.
@@ -35,7 +35,7 @@ class StockCardService
      *   closing: array<string, string>,
      * }
      */
-    public function card(Item $item, Carbon $from, Carbon $to, ?int $locationId = null): array
+    public function card(Item $item, Carbon $from, Carbon $to, ?int $locationId = null, ?int $page = null, int $perPage = 50): array
     {
         // Rebuild each location's ledger state so the card follows the same
         // four-decimal WAC rounding as StockMovementService.
@@ -44,7 +44,7 @@ class StockCardService
 
         // 2) In-range movements in ASC order.
         $q = StockMovement::query()
-            ->with(['fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'creator:id,name'])
+            ->with(['fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'creator:id,name', 'referenceWorkOrder', 'referenceOutput.workOrder', 'referenceSlip.workOrder', 'referenceSource.referenceWorkOrder', 'referenceSource.referenceSlip.workOrder', 'referenceGoodsReceiptNote', 'referenceDeliveryItem.delivery'])
             ->where('item_id', $item->id)
             ->whereBetween('created_at', [$from, $to])
             ->orderBy('created_at')
@@ -53,11 +53,16 @@ class StockCardService
         if ($locationId !== null) {
             $q->where(function ($qq) use ($locationId) {
                 $qq->where('from_location_id', $locationId)
-                   ->orWhere('to_location_id', $locationId);
+                    ->orWhere('to_location_id', $locationId);
             });
         }
 
-        $movements = $q->get();
+        $total = $page === null ? null : (clone $q)->count();
+        $page = $page === null ? null : max(1, $page);
+        $perPage = min(100, max(1, $perPage));
+        $offset = $page === null ? 0 : ($page - 1) * $perPage;
+        $movements = $q->lazy(200);
+        $position = 0;
 
         $rows = [];
         foreach ($movements as $m) {
@@ -68,23 +73,31 @@ class StockCardService
                 ? $current['weighted_avg']
                 : $this->round4((string) $m->unit_cost);
 
+            // Earlier rows still establish this page's running balance; later rows establish the period closing.
+            $include = $page === null || ($position >= $offset && $position < $offset + $perPage);
+            $position++;
+            if (! $include) {
+                continue;
+            }
+
             $rows[] = [
-                'id'             => $m->hash_id,
-                'date'           => $m->created_at?->toIso8601String(),
-                'movement_type'  => $m->movement_type?->value ?? '',
+                'id' => $m->hash_id,
+                'date' => $m->created_at?->toIso8601String(),
+                'movement_type' => $m->movement_type?->value ?? '',
                 'movement_type_label' => Str::headline($m->movement_type?->value ?? ''),
                 'reference_type' => (string) ($m->reference_type ?? ''),
-                'reference_id'   => $m->reference_id !== null
+                'reference_id' => $m->reference_id !== null
                     ? app('hashids')->encode((int) $m->reference_id)
                     : null,
-                'reference_url'  => $this->resolveReferenceUrl($m),
-                'in'             => in_array($direction, ['in', 'transfer'], true)  ? (string) $m->quantity : '0',
-                'out'            => in_array($direction, ['out', 'transfer'], true) ? (string) $m->quantity : '0',
-                'unit_cost'      => (string) $m->unit_cost,
-                'balance'        => $current['balance'],
-                'weighted_avg'   => $weightedAvg,
-                'created_by'     => $m->creator?->name,
-                'remarks'        => (string) ($m->remarks ?? ''),
+                'reference_label' => $m->workOrderReference()['reference_label'],
+                'reference_url' => $m->workOrderReference()['reference_url'] ?? $this->resolveReferenceUrl($m),
+                'in' => in_array($direction, ['in', 'transfer'], true) ? (string) $m->quantity : '0',
+                'out' => in_array($direction, ['out', 'transfer'], true) ? (string) $m->quantity : '0',
+                'unit_cost' => (string) $m->unit_cost,
+                'balance' => $current['balance'],
+                'weighted_avg' => $weightedAvg,
+                'created_by' => $m->creator?->name,
+                'remarks' => (string) ($m->remarks ?? ''),
             ];
         }
 
@@ -92,23 +105,29 @@ class StockCardService
 
         return [
             'item' => [
-                'id'   => $item->hash_id,
+                'id' => $item->hash_id,
                 'code' => $item->code,
                 'name' => $item->name,
                 'unit_of_measure' => $item->unit_of_measure,
             ],
-            'from'    => $from->toDateString(),
-            'to'      => $to->toDateString(),
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
             'opening' => [
-                'balance'      => $opening['balance'],
+                'balance' => $opening['balance'],
                 'weighted_avg' => $opening['weighted_avg'],
-                'value'        => Money::round2($opening['value']),
+                'value' => Money::round2($opening['value']),
             ],
-            'rows'    => $rows,
+            'rows' => $rows,
+            'meta' => $page === null ? null : [
+                'current_page' => $page, 'last_page' => max(1, (int) ceil($total / $perPage)),
+                'per_page' => $perPage, 'total' => $total,
+                'from' => count($rows) ? $offset + 1 : null,
+                'to' => count($rows) ? $offset + count($rows) : null,
+            ],
             'closing' => [
-                'balance'      => $closing['balance'],
+                'balance' => $closing['balance'],
                 'weighted_avg' => $closing['weighted_avg'],
-                'value'        => Money::round2($closing['value']),
+                'value' => Money::round2($closing['value']),
             ],
         ];
     }
@@ -128,12 +147,12 @@ class StockCardService
         if ($locationId !== null) {
             $q->where(function ($qq) use ($locationId) {
                 $qq->where('from_location_id', $locationId)
-                   ->orWhere('to_location_id', $locationId);
+                    ->orWhere('to_location_id', $locationId);
             });
         }
 
         $levels = [];
-        foreach ($q->get() as $r) {
+        foreach ($q->cursor() as $r) {
             $this->applyMovement($levels, $r, $locationId);
         }
 
@@ -145,7 +164,7 @@ class StockCardService
      * ledger stores the issue cost at the source's already-rounded WAC, so
      * each location must retain that WAC across issues and transfers out.
      *
-     * @param array<int, array{quantity: string, weighted_avg_cost: string}> $levels
+     * @param  array<int, array{quantity: string, weighted_avg_cost: string}>  $levels
      */
     private function applyMovement(array &$levels, object $movement, ?int $locationId): void
     {
@@ -177,7 +196,7 @@ class StockCardService
     }
 
     /** @param array<int, array{quantity: string, weighted_avg_cost: string}> $levels
-     *  @return array{balance: string, weighted_avg: string, value: string}
+     * @return array{balance: string, weighted_avg: string, value: string}
      */
     private function summarize(array $levels): array
     {
@@ -205,28 +224,41 @@ class StockCardService
     private function direction(StockMovement $m, ?int $locationId): string
     {
         if ($locationId !== null) {
-            if ((int) ($m->to_location_id ?? 0) === $locationId) return 'in';
-            if ((int) ($m->from_location_id ?? 0) === $locationId) return 'out';
+            if ((int) ($m->to_location_id ?? 0) === $locationId) {
+                return 'in';
+            }
+            if ((int) ($m->from_location_id ?? 0) === $locationId) {
+                return 'out';
+            }
         }
-        if ($m->to_location_id !== null && $m->from_location_id === null) return 'in';
-        if ($m->from_location_id !== null && $m->to_location_id === null) return 'out';
+        if ($m->to_location_id !== null && $m->from_location_id === null) {
+            return 'in';
+        }
+        if ($m->from_location_id !== null && $m->to_location_id === null) {
+            return 'out';
+        }
         // Unfiltered transfer between two locations: an internal move that nets
         // to zero at item level.
-        if ($m->to_location_id !== null && $m->from_location_id !== null) return 'transfer';
+        if ($m->to_location_id !== null && $m->from_location_id !== null) {
+            return 'transfer';
+        }
+
         return 'in';
     }
 
     private function resolveReferenceUrl(StockMovement $m): ?string
     {
-        if ($m->reference_type === null || $m->reference_id === null) return null;
+        if ($m->reference_type === null || $m->reference_id === null) {
+            return null;
+        }
         $hash = app('hashids')->encode((int) $m->reference_id);
 
         return match ($m->reference_type) {
             'goods_receipt_note', 'GoodsReceiptNote' => "/inventory/grn/{$hash}",
             'material_issue_slip', 'MaterialIssueSlip' => "/inventory/material-issues/{$hash}",
-            'stock_movement' => "/inventory/movements?movement_id={$hash}",
+            'stock_movement' => "/inventory/stock-levels?view=movements&movement_id={$hash}",
             'work_order', 'WorkOrder' => "/production/work-orders/{$hash}",
-            'stock_adjustment', 'StockAdjustment' => "/inventory/movements?adjustment={$hash}",
+            'stock_adjustment', 'StockAdjustment' => "/inventory/stock-levels?view=movements&movement_id={$m->hash_id}",
             default => null,
         };
     }

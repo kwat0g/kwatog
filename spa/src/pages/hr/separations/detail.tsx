@@ -97,14 +97,14 @@ export default function SeparationDetailPage() {
     {
       key: 'items_cleared',
       label: 'Items cleared',
-      state: data.cleared_count === data.items_total ? 'done' : 'active',
+      state: ['completed', 'finalized'].includes(data.status) ? 'done' : 'active',
     },
     {
       key: 'final_pay',
       label: 'Final pay computed',
       state: data.final_pay_computed
         ? 'done'
-        : data.cleared_count === data.items_total
+        : ['completed', 'finalized'].includes(data.status)
           ? 'active'
           : 'pending',
     },
@@ -115,7 +115,7 @@ export default function SeparationDetailPage() {
     },
   ];
 
-  const allItemsCleared = data.cleared_count === data.items_total;
+  const allItemsCleared = ['completed', 'finalized'].includes(data.status);
   const breakdownEntries = data.final_pay_breakdown ? Object.entries(data.final_pay_breakdown) : [];
   const grouped: Record<string, typeof data.clearance_items> = {};
   for (const item of data.clearance_items) (grouped[item.department] ??= []).push(item);
@@ -163,10 +163,10 @@ export default function SeparationDetailPage() {
         <StatCard label="Progress" value={`${data.progress_pct}%`} />
         <StatCard label="Cleared" value={`${data.cleared_count} / ${data.items_total}`} />
         <StatCard label="Reason" value={reasonLabel ?? data.separation_reason} />
-        <StatCard
+        {data.can_view_final_pay && <StatCard
           label="Final pay"
           value={data.final_pay_amount ? formatPeso(data.final_pay_amount) : '—'}
-        />
+        />}
       </div>
 
       <div className="px-5 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -191,7 +191,7 @@ export default function SeparationDetailPage() {
                     </div>
                     {item.status === 'pending' &&
                       data.status !== 'finalized' &&
-                      can('hr.clearance.sign') && (
+                      can('hr.clearance.sign') && item.can_sign === true && (
                         <Button
                           variant="secondary"
                           size="sm"
@@ -208,7 +208,7 @@ export default function SeparationDetailPage() {
           ))}
         </div>
 
-        <aside className="space-y-3">
+        {data.can_view_final_pay && <aside className="space-y-3">
           <Panel title="Final pay breakdown">
             {breakdownEntries.length === 0 ? (
               <p className="text-sm text-muted">Compute final pay to see the breakdown.</p>
@@ -230,7 +230,7 @@ export default function SeparationDetailPage() {
               </div>
             )}
           </Panel>
-        </aside>
+        </aside>}
       </div>
 
       <ConfirmDialog

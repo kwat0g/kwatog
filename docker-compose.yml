@@ -42,7 +42,8 @@ services:
     environment:
       # Forwarded so vite.config.ts can rewire HMR through the Nginx proxy.
       - VITE_HMR_HOST=${VITE_HMR_HOST:-localhost}
-      - VITE_HMR_PORT=${NGINX_PORT:-80}
+      - VITE_HMR_PORT=${VITE_HMR_PORT:-${NGINX_PORT:-80}}
+      - VITE_HMR_PROTOCOL=${VITE_HMR_PROTOCOL:-ws}
       - NGINX_PORT=${NGINX_PORT:-80}
       # Reverb / WebSocket — must match REVERB_APP_KEY in the API .env.
       # Host blank => browser uses its own hostname; port must match
@@ -74,6 +75,7 @@ services:
   db:
     image: postgres:16-alpine
     container_name: ogami-db
+    command: ["postgres", "-c", "max_locks_per_transaction=512"]
     environment:
       POSTGRES_DB: ${DB_DATABASE:-ogami}
       POSTGRES_USER: ${DB_USERNAME:-ogami}
@@ -82,11 +84,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-ogami}"]
-      # Crash-recovery after an abrupt VM shutdown can fsync the data dir for
-      # several minutes while connections are rejected. start_period keeps that
-      # window from counting against retries (else `make up` fails with
-      # "container ogami-db is unhealthy" mid-recovery).
-      start_period: 5m
+      # Crash-recovery after an abrupt VM shutdown can fsync a large data dir
+      # for several minutes while connections are rejected. A 15-minute grace
+      # period keeps that window from counting against retries (otherwise
+      # `make up` can fail with "container ogami-db is unhealthy" mid-recovery).
+      start_period: 15m
       interval: 5s
       timeout: 3s
       retries: 10

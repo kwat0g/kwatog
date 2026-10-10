@@ -17,7 +17,7 @@ enum LandedCostAllocationMethod: string
             self::ByValue => 'By value',
             self::ByWeight => 'By weight',
             self::ByQuantity => 'By quantity',
-            self::Manual => 'Manual',
+            self::Manual => 'Equal split',
         };
     }
 

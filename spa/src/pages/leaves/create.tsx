@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { manilaIsoDate, tomorrowIsoDate } from '@/lib/formatDate';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -45,6 +46,11 @@ const schema = z.object({
  half_day_period: z.string().min(1).default('none'),
  reason: z.string().max(2000, 'Max 2000 characters').optional().or(z.literal('')),
  document: z.any().optional(),
+}).superRefine((d, context) => {
+ const halfDay = d.half_day_period === 'am' || d.half_day_period === 'pm';
+ if (d.start_date && d.start_date < (halfDay ? manilaIsoDate() : tomorrowIsoDate())) {
+  context.addIssue({ code: z.ZodIssueCode.custom, path: ['start_date'], message: halfDay ? 'Choose today or a later date.' : 'Choose tomorrow or a later date.' });
+ }
 }).refine((d) => !d.start_date || !d.end_date || new Date(d.end_date) >= new Date(d.start_date),
  { message: 'End date must be on or after start date', path: ['end_date'] })
  .refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date,
@@ -68,25 +74,30 @@ export default function CreateLeavePage() {
  const { can } = usePermission();
  const isAdmin = can('leave.view') && (user?.role.slug === 'system_admin' || user?.role.slug === 'hr_officer');
 
- const { data: typesResp } = useQuery({ queryKey: ['leaves', 'types', 'active'], queryFn: () => leaveTypesApi.list({ is_active: 'true' }) });
- const { data: leaveOptions } = useQuery({
+ const typesQuery = useQuery({ queryKey: ['leaves', 'types', 'active'], queryFn: () => leaveTypesApi.list({ is_active: 'true' }) });
+ const optionsQuery = useQuery({
  queryKey: ['leaves', 'request-options'],
  queryFn: () => leaveRequestsApi.options(),
  staleTime: 300_000,
  });
- const types = typesResp?.data ?? [];
+ const leaveOptions = optionsQuery.data;
+ const types = typesQuery.data?.data ?? [];
 
- const { data: employeesResp } = useQuery({
+ const employeesQuery = useQuery({
  queryKey: ['hr', 'employees', 'all-active'],
  queryFn: () => employeesApi.list({ per_page: 100, status: 'active' }),
  enabled: isAdmin,
  });
- const employees = employeesResp?.data ?? [];
+ const employees = employeesQuery.data?.data ?? [];
+ const lookups = [typesQuery, optionsQuery, ...(isAdmin ? [employeesQuery] : [])];
+ const lookupFailed = lookups.some(query => query.isError);
+ const lookupPending = lookups.some(query => query.isFetching);
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  employee_id: user?.employee?.id ?? '',
+ half_day_period: 'none',
  },
  });
  const {
@@ -100,17 +111,19 @@ export default function CreateLeavePage() {
  const endDate = watch('end_date');
  const selectedType = types.find((t) => t.id === leaveTypeId);
 
- const { data: balances = [] } = useQuery({
+ const balancesQuery = useQuery({
  queryKey: ['leaves', 'balances', employeeId],
  queryFn: () => isAdmin && employeeId
  ? leaveBalancesApi.forEmployee(employeeId)
  : leaveBalancesApi.me(),
  enabled: !!employeeId || !isAdmin,
  });
+ const balances = balancesQuery.data ?? [];
 
  const selectedBalance = balances.find((b) => b.leave_type?.id === leaveTypeId);
 
  const halfDay = watch('half_day_period');
+ const minimumDate = halfDay === 'am' || halfDay === 'pm' ? manilaIsoDate() : tomorrowIsoDate();
 
  // Auto-compute estimated days (excluding Sundays). M-18 — half-day = 0.5.
  let estimatedDays = 0;
@@ -145,11 +158,19 @@ export default function CreateLeavePage() {
  <div>
  <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" />
       <FormDraftBanner safety={safety} />
- <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4 space-y-4">
+ {lookupFailed && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+ Leave options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+ lookups.forEach(query => { if (query.isError) void query.refetch(); });
+ }}>Retry options</Button>
+ </div>}
+ {balancesQuery.isError && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+ Leave balance could not be loaded. The server will check eligibility when you submit. <Button variant="secondary" size="sm" onClick={() => void balancesQuery.refetch()}>Retry balance</Button>
+ </div>}
+ <form onSubmit={handleSubmit((d) => { if (!lookupFailed && !lookupPending) mutation.mutate(d); }, onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Leave details">
  <div className="grid grid-cols-2 gap-3">
  {isAdmin && (
- <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
+ <Select searchable label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
  <option value="">— Select —</option>
  {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name} ({e.employee_no})</option>)}
  </Select>
@@ -157,13 +178,14 @@ export default function CreateLeavePage() {
  {!isAdmin && (
  <input type="hidden" {...register('employee_id')} />
  )}
- <Select label="Leave type" required {...register('leave_type_id')} error={errors.leave_type_id?.message}>
+ <Select searchable label="Leave type" required {...register('leave_type_id')} error={errors.leave_type_id?.message}>
  <option value="">— Select —</option>
  {types.map((t) => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
  </Select>
- <Input label="Start date" type="date" required {...register('start_date')} error={errors.start_date?.message} />
- <Input label="End date" type="date" required {...register('end_date')} error={errors.end_date?.message} />
+ <Input label="Start date" type="date" min={minimumDate} required {...register('start_date')} error={errors.start_date?.message} />
+ <Input label="End date" type="date" min={startDate && startDate > minimumDate ? startDate : minimumDate} required {...register('end_date')} error={errors.end_date?.message} />
  <Select label="Half-day" {...register('half_day_period')} error={errors.half_day_period?.message}>
+ <option value="none">Full day</option>
  {(leaveOptions?.half_day_periods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
  </div>
@@ -202,7 +224,7 @@ export default function CreateLeavePage() {
  </Panel>
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate('/hr/leaves')}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || lookupFailed || lookupPending} loading={mutation.isPending}>
  {mutation.isPending ? 'Submitting…' : 'Submit request'}
  </Button>
  </FormActions>

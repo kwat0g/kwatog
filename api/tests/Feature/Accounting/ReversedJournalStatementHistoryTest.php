@@ -72,6 +72,7 @@ class ReversedJournalStatementHistoryTest extends TestCase
     private function postJuneSaleReversedInAugust(User $user): JournalEntry
     {
         $svc = app(JournalEntryService::class);
+        $checker = $this->admin();
         $je = $svc->create([
             'date' => '2026-06-10',
             'description' => 'June cash sale',
@@ -80,8 +81,8 @@ class ReversedJournalStatementHistoryTest extends TestCase
                 ['account_id' => $this->id('4010'), 'debit' => '0',       'credit' => '8000.00'],
             ],
         ], $user);
-        $je = $svc->post($je, $user);
-        $svc->reverse($je, $user, Carbon::parse('2026-08-05'), 'Customer order cancelled.');
+        $je = $svc->post($je, $checker);
+        $svc->reverse($je, $checker, Carbon::parse('2026-08-05'), 'Customer order cancelled.');
 
         return $je->fresh();
     }
@@ -172,7 +173,13 @@ class ReversedJournalStatementHistoryTest extends TestCase
     public function test_invoice_cancellation_keeps_historical_ar_consistent_with_aging(): void
     {
         $user = $this->admin();
-        $customer = Customer::create(['name' => 'Toyota PH', 'payment_terms_days' => 30]);
+        $approver = $this->admin();
+        $poster = $this->admin();
+        $customer = Customer::create([
+            'name' => 'Toyota PH',
+            'email' => 'history-'.uniqid().'@example.test',
+            'payment_terms_days' => 30,
+        ]);
         $svc = app(InvoiceService::class);
 
         $invoice = $svc->create([
@@ -189,7 +196,8 @@ class ReversedJournalStatementHistoryTest extends TestCase
                 'unit_price' => '1000.00',
             ]],
         ], $user);
-        $invoice = $svc->finalize($invoice, $user);
+        $svc->approvePrebill($invoice, $approver);
+        $invoice = $svc->finalize($invoice, $poster);
 
         $bs = app(BalanceSheetService::class);
         $juneBs = $bs->generate(Carbon::parse('2026-06-30'));
@@ -252,6 +260,7 @@ class ReversedJournalStatementHistoryTest extends TestCase
     public function test_budget_posted_actuals_net_reversed_entries(): void
     {
         $user = $this->admin();
+        $checker = $this->admin();
         $fiscalYear = FiscalYear::factory()->create([
             'status' => 'active',
             'start_date' => '2026-01-01',
@@ -283,12 +292,12 @@ class ReversedJournalStatementHistoryTest extends TestCase
                 ['account_id' => $this->id('1010'),  'debit' => '0',     'credit' => '40.00'],
             ],
         ], $user);
-        $svc->post($je, $user);
+        $svc->post($je, $checker);
 
         $overview = app(BudgetService::class)->overview($fiscalYear->id);
         $this->assertSame('40.00', $overview['total_spent']);
 
-        $svc->reverse($je, $user, Carbon::parse('2026-08-01'), 'Duplicate posting.');
+        $svc->reverse($je, $checker, Carbon::parse('2026-08-01'), 'Duplicate posting.');
 
         $overview = app(BudgetService::class)->overview($fiscalYear->id);
         $this->assertSame('0.00', $overview['total_spent']);

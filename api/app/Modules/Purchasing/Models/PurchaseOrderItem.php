@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Common\Support\Money;
 use App\Common\Traits\HasHashId;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -65,16 +66,23 @@ class PurchaseOrderItem extends Model
     {
         // Operationally remaining means accepted/usable quantity; physical
         // receipts pending QC must not close or satisfy a PO line.
-        $diff = bcsub((string) $this->quantity, (string) $this->quantity_accepted, 3);
+        $diff = bcsub($this->baseOrderedQuantity(), (string) $this->quantity_accepted, 3);
 
         return $this->formatQuantity(bccomp($diff, '0', 3) > 0 ? $diff : '0');
     }
 
     public function getPhysicalQuantityRemainingAttribute(): string
     {
-        $diff = bcsub((string) $this->quantity, (string) $this->quantity_received, 3);
+        $diff = bcsub($this->baseOrderedQuantity(), (string) $this->quantity_received, 3);
 
         return $this->formatQuantity(bccomp($diff, '0', 3) > 0 ? $diff : '0');
+    }
+
+    public function baseOrderedQuantity(): string
+    {
+        $item = $this->relationLoaded('item') ? $this->item : $this->item()->withTrashed()->first();
+
+        return $item ? $item->convertToBase((string) $this->quantity, $this->unit) : (string) $this->quantity;
     }
 
     /** Convert base-unit receipt totals to the agreed purchase unit for supplier documents. */
@@ -101,11 +109,8 @@ class PurchaseOrderItem extends Model
      * cost (landed cost). This method prorates them: line charges apply directly,
      * header charges are split by each line's proportional value.
      *
-     * Formula (all bcmath, scale 8):
-     *   lineValue = quantity × unit_price + rfq_line_freight + rfq_line_other
-     *   totalValue = SUM(lineValue) across the PO
-     *   headerShare = (po.rfq_freight + po.rfq_other) × (lineValue / totalValue)
-     *   deliveredUnitCost = (lineValue + headerShare) / quantity
+     * Header charges are allocated to whole cents before deriving the unit cost.
+     * Billing uses deliveredLineTotal() to avoid multiplying a rounded unit cost.
      *
      * Returns string rounded to 4 dp (matching GrnItem.unit_cost cast) using half-up.
      * When all charges are null/zero, returns exactly unit_price (non-RFQ POs byte-for-byte unchanged).
@@ -134,40 +139,40 @@ class PurchaseOrderItem extends Model
             return bcadd((string) $this->unit_price, '0', 4);
         }
 
-        // Compute this line's value before header allocation.
-        $lineValue = bcmul($qty, (string) $this->unit_price, 8);
-        $lineValue = bcadd($lineValue, $lineFreight, 8);
-        $lineValue = bcadd($lineValue, $lineOther, 8);
-
-        // Compute header share: PO charges × (this line value / total PO value).
-        $headerShare = '0';
-        $headerCharges = bcadd($poFreight, $poOther, 8);
-        if (bccomp($headerCharges, '0', 8) !== 0) {
-            // Compute total PO value (sum of all line values).
-            $totalValue = '0';
-            foreach ($this->purchaseOrder?->items ?? [] as $item) {
-                $iQty = bcadd((string) $item->quantity, '0', 8);
-                $iValue = bcmul($iQty, (string) $item->unit_price, 8);
-                $iValue = bcadd($iValue, (string) ($item->rfq_line_freight_amount ?? '0'), 8);
-                $iValue = bcadd($iValue, (string) ($item->rfq_line_other_charges ?? '0'), 8);
-                $totalValue = bcadd($totalValue, $iValue, 8);
-            }
-
-            if (bccomp($totalValue, '0', 8) !== 0) {
-                $shareRatio = bcdiv($lineValue, $totalValue, 8);
-                $headerShare = bcmul($headerCharges, $shareRatio, 8);
-            }
-        }
-
-        // Delivered unit cost = (line value + header share) / quantity.
-        $totalLineValue = bcadd($lineValue, $headerShare, 8);
-        $delivered = bcdiv($totalLineValue, $qty, 8);
+        $delivered = bcdiv($this->deliveredLineTotal(), $qty, 8);
 
         // Round to 4 decimal places (GrnItem.unit_cost scale) using half-up.
         // bcmath defaults to truncation; we add 0.00005 and truncate to achieve half-up.
         $sign = bccomp($delivered, '0', 8) < 0 ? '-' : '';
         $abs = $sign === '-' ? ltrim($delivered, '-') : $delivered;
         $rounded = bcadd($abs, '0.00005', 4);
-        return $sign === '-' ? '-' . $rounded : $rounded;
+
+        return $sign === '-' ? '-'.$rounded : $rounded;
+    }
+
+    /** The agreed net amount, allocating every header charge cent exactly once. */
+    public function deliveredLineTotal(): string
+    {
+        $lineValue = Money::add(
+            bcmul((string) $this->quantity, (string) $this->unit_price, 8),
+            (string) ($this->rfq_line_freight_amount ?? '0'),
+            (string) ($this->rfq_line_other_charges ?? '0'),
+        );
+        $po = $this->purchaseOrder;
+        $headerCharges = Money::add((string) ($po?->rfq_freight_amount ?? '0'), (string) ($po?->rfq_other_charges ?? '0'));
+        if (Money::isZero($headerCharges)) {
+            return $lineValue;
+        }
+
+        $weights = [];
+        foreach ($po->items->sortBy('id') as $item) {
+            $weights[$item->id] = Money::add(
+                bcmul((string) $item->quantity, (string) $item->unit_price, 8),
+                (string) ($item->rfq_line_freight_amount ?? '0'),
+                (string) ($item->rfq_line_other_charges ?? '0'),
+            );
+        }
+
+        return Money::add($lineValue, Money::allocate($headerCharges, $weights)[$this->id] ?? '0');
     }
 }

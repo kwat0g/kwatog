@@ -107,7 +107,7 @@ export default function CustomerCreateReturnPage() {
 
   return <div>
     <PageHeader title="New return request" backTo="/portal/customer/returns" backLabel="Returns & RMAs" />
-    <div className="px-5 py-4 max-w-3xl space-y-4">
+    <div className="min-w-0 w-full px-5 py-4 space-y-4">
       {lines.length === 0 && <EmptyState icon="package" title="No returnable lines found" description="Only delivered invoice, order, or delivery quantities can be returned. Contact sales if you need help." />}
       {lines.length > 0 && <>
         <Panel title="Return details">

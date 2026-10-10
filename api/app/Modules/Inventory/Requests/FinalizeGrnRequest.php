@@ -25,6 +25,7 @@ class FinalizeGrnRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'supplier_shipment_id' => ['required', 'string'],
             'items'                              => ['required', 'array', 'min:1'],
             'items.*.purchase_order_item_id'     => ['required', 'string'],
             'items.*.location_id'                => ['required', 'string'],

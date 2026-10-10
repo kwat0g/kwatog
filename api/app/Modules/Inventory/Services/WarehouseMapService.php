@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
-use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -81,6 +80,7 @@ class WarehouseMapService
                     'id' => $summary['current_item']->hash_id,
                     'code' => $summary['current_item']->code,
                     'name' => $summary['current_item']->name,
+                    'unit_of_measure' => $summary['current_item']->unit_of_measure,
                 ] : null,
                 'current_quantity' => $summary['current_quantity'],
                 'current_lot_number' => $summary['current_lot_number'],
@@ -104,6 +104,8 @@ class WarehouseMapService
                 'quantity' => $sl->quantity,
                 'reserved' => $sl->reserved_quantity,
                 'available' => $sl->available,
+                'unit_of_measure' => $sl->item?->unit_of_measure,
+                'usable_quantity' => $this->locationSummary->availability(collect([$sl]))['usable_quantity'],
                 'unit_cost' => $sl->weighted_avg_cost,
                 'total_value' => $sl->total_value,
             ]),

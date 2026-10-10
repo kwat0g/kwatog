@@ -7,6 +7,8 @@ namespace App\Modules\MRP\Services;
 use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
+use App\Common\Services\NotificationService;
+use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Models\MrpPlan;
@@ -62,6 +64,17 @@ class MrpAutomationService
         $run->forceFill(['summary' => $summary])->save();
 
         $this->raiseAlerts($run->fresh(), $scheduling);
+        $recipients = User::query()->where('is_active', true)
+            ->whereHas('role', fn ($role) => $role->whereIn('slug', ['ppc_head', 'sales_officer']))->with('role')->get();
+        $notice = [
+            'title' => $run->status === MrpRunStatus::Completed ? 'MRP planning completed' : 'MRP planning needs attention',
+            'message' => "{$run->plans_generated} plan(s) generated; {$run->failed_sales_orders} order(s) failed. "
+                .'PPC: open MRP Plans to review material shortages, planning errors, and scheduling conflicts.',
+            'link_to' => '/mrp/plans', 'entity_type' => 'mrp_run', 'entity_id' => $run->hash_id,
+        ];
+        foreach ($recipients->groupBy(fn (User $user): string => $user->role->slug === 'ppc_head' ? '/mrp/plans' : '/crm/sales-orders') as $link => $audience) {
+            app(NotificationService::class)->sendInApp($audience, 'mrp_run_completed', [...$notice, 'link_to' => $link], 'mrp-outcome-'.$run->hash_id);
+        }
 
         return $run->fresh();
     }

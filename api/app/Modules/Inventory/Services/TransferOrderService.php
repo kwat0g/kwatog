@@ -19,12 +19,10 @@ class TransferOrderService
         private readonly StockTransferService $transfers,
     ) {}
 
-    public function list(): Collection
+    public function list(?int $perPage = null): Collection|\Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
-        return TransferOrder::query()
-            ->with(['fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'item', 'creator'])
-            ->orderByDesc('created_at')
-            ->get();
+        $query = TransferOrder::query()->with(['fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'item', 'creator', 'transferrer'])->orderByDesc('created_at')->orderByDesc('id');
+        return $perPage === null ? $query->get() : $query->paginate($perPage);
     }
 
     public function get(int $id): TransferOrder
@@ -62,6 +60,9 @@ class TransferOrderService
             $order = TransferOrder::query()->lockForUpdate()->findOrFail($id);
             if ($order->status !== TransferOrderStatus::Pending) {
                 throw new BusinessRuleException('Transfer order is not pending.');
+            }
+            if ((int) $order->created_by === (int) $user->id) {
+                throw new BusinessRuleException('A transfer order creator cannot execute their own transfer.');
             }
 
             // Execute via existing StockTransferService; backfill the movement

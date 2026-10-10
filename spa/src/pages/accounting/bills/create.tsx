@@ -266,7 +266,9 @@ export default function CreateBillPage() {
       }),
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
-      toast.success(`Bill ${b.bill_number} recorded.`);
+      toast.success(b.status === 'draft'
+        ? `Bill ${b.bill_number} staged. Supplier invoice required before posting.`
+        : `Bill ${b.bill_number} recorded.`);
       navigate(`/accounting/bills/${b.id}`);
     },
     onError: (e) => {
@@ -281,7 +283,7 @@ export default function CreateBillPage() {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-5xl mx-auto px-5 py-4 space-y-4"
+        className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Header">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -296,7 +298,7 @@ export default function CreateBillPage() {
             </Select>
             {provenanceType === 'stock' ? (
               <>
-                <Select
+                <Select searchable
                   label="Purchase order"
                   required
                   {...register('purchase_order_id')}
@@ -311,7 +313,7 @@ export default function CreateBillPage() {
                     </option>
                   ))}
                 </Select>
-                <Select
+                <Select searchable
                   label="Accepted GRN"
                   required
                   {...register('goods_receipt_note_id')}
@@ -346,7 +348,7 @@ export default function CreateBillPage() {
                 </div>
               </>
             )}
-            <Select
+            <Select searchable
               label="Vendor"
               required
               {...register('vendor_id')}
@@ -422,7 +424,7 @@ export default function CreateBillPage() {
                     <Input {...register(`items.${idx}.description` as const)} />
                   </div>
                   <div className="col-span-3">
-                    <Select {...register(`items.${idx}.expense_account_id` as const)}>
+                    <Select aria-label={`Expense account for line ${idx + 1}`} searchable {...register(`items.${idx}.expense_account_id` as const)}>
                       <option value="">— Account —</option>
                       {accounts.map((a) => (
                         <option key={a.id} value={a.id}>
@@ -433,10 +435,10 @@ export default function CreateBillPage() {
                   </div>
                   <div className="col-span-1">
                     <Input
-                      step="0.01"
                       min="0.01"
                       className="font-mono tabular-nums text-right"
                       {...numberInputProps()}
+                      step="0.01"
                       {...register(`items.${idx}.quantity` as const)}
                     />
                   </div>
@@ -452,10 +454,10 @@ export default function CreateBillPage() {
                   </div>
                   <div className="col-span-2">
                     <Input
-                      step="0.01"
                       min="0"
                       className="font-mono tabular-nums text-right"
                       {...numberInputProps()}
+                      step="0.01"
                       {...register(`items.${idx}.unit_price` as const)}
                     />
                   </div>

@@ -26,6 +26,7 @@ const BOOTSTRAP = process.env.RETURN_TEST_BOOTSTRAP === '1';
 const RESUME = process.env.RETURN_TEST_RESUME === '1';
 const RUN = (process.env.RETURN_RUN_ID || `RET${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_return_browser_${RUN.toLowerCase()}`;
+const TEST_STORAGE = `/tmp/ogami-audit-storage/return-management-${RUN.toLowerCase()}`;
 const API_PORT = Number(process.env.RETURN_API_PORT || 8210);
 const SPA_PORT = Number(process.env.RETURN_SPA_PORT || 5210);
 const BASE = process.env.RETURN_TEST_URL || `http://127.0.0.1:${SPA_PORT}`;
@@ -39,6 +40,7 @@ const API_LOG_IN_CONTAINER = `/tmp/return-case-headless-${RUN}.api.log`;
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', SESSION_DOMAIN: new URL(BASE).hostname,
+  LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SESSION_SECURE_COOKIE: 'false', SESSION_SAME_SITE: 'lax', APP_URL: BASE,
   COMPANY_VAT_STATUS: 'VAT Registered', TAX_PH_VAT_RATE: '0.12',
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
@@ -50,6 +52,11 @@ const databaseUser = () => process.env.RETURN_TEST_DB_USERNAME || compose(['exec
 const psql = (query, db = 'postgres') => {
   return compose(['exec', '-T', 'db', 'psql', '-U', databaseUser(), '-d', db, '-At', '-c', query]).trim();
 };
+function assertIsolatedStorage() {
+  compose(['exec', '-T', 'api', 'mkdir', '-p', `${TEST_STORAGE}/app`, `${TEST_STORAGE}/app/public`, `${TEST_STORAGE}/framework/cache/data`, `${TEST_STORAGE}/framework/sessions`, `${TEST_STORAGE}/framework/views`, `${TEST_STORAGE}/logs`]);
+  const actualStorage = artisan('tinker', '--execute', 'echo storage_path();').trim();
+  if (actualStorage !== TEST_STORAGE) throw new Error(`Expected isolated Laravel storage ${TEST_STORAGE}; got ${actualStorage}.`);
+}
 const apiIp = () => {
   const container = compose(['ps', '-q', 'api']).trim();
   return execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', container], { encoding: 'utf8' }).trim();
@@ -65,6 +72,7 @@ function stopApiServer() {
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
   stopApiServer();
+  assertIsolatedStorage();
   if (RESUME) {
     if (!DB.startsWith('ogami_test_return_browser_')) throw new Error('Resume requires a dedicated return-browser test database.');
     if (psql(`SELECT 1 FROM pg_database WHERE datname='${DB}';`) !== '1') throw new Error(`Resume database ${DB} does not exist.`);
@@ -125,6 +133,7 @@ async function tearDown(server) {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
     psql(`DROP DATABASE IF EXISTS ${DB};`);
   } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+  try { compose(['exec', '-T', 'api', 'rm', '-rf', TEST_STORAGE]); } catch (e) { console.log(`Could not remove ${TEST_STORAGE}: ${e.message}`); }
 }
 fs.mkdirSync(OUT, { recursive: true });
 const stateFile = path.join(OUT, 'state.json');

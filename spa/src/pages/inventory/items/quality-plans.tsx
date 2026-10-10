@@ -1,10 +1,12 @@
+import { z } from 'zod';
+import type { AxiosError } from 'axios';
+import { Textarea } from '@/components/ui/Textarea';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { itemQualityPlansApi, itemsApi } from '@/api/inventory/items';
-import { uomsApi } from '@/api/inventory/uoms';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -17,21 +19,15 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { formatDate } from '@/lib/formatDate';
 import { reportMutationError } from '@/lib/formErrors';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { QualityPlanParameter } from '@/types/inventory';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
-type DraftParameter = QualityPlanParameter & {
- nominal_value: number | null;
- tolerance_min: number | null;
- tolerance_max: number | null;
-};
-
-const blankParameter = (parameterType = ''): DraftParameter => ({
- parameter_name: '', parameter_type: parameterType as QualityPlanParameter['parameter_type'], unit_of_measure: '',
- nominal_value: null, tolerance_min: null, tolerance_max: null, is_critical: false, notes: '',
-});
+type DraftParameter = QualityPlanParameter & { key: string; acceptance_criterion: string };
+const blankParameter = (): DraftParameter => ({ key: crypto.randomUUID(), parameter_name: '', parameter_type: null, acceptance_criterion: '', is_critical: false });
+const checksSchema = z.array(z.object({ parameter_name: z.string().trim().min(1).max(150), acceptance_criterion: z.string().trim().min(1).max(500), is_critical: z.boolean().optional() })).min(1).max(100);
 
 export default function ItemQualityPlansPage() {
  const { id = '' } = useParams<{ id: string }>();
@@ -47,37 +43,43 @@ export default function ItemQualityPlansPage() {
  const item = useQuery({ queryKey: ['inventory', 'items', id], queryFn: () => itemsApi.show(id), enabled: !!id });
  const plans = useQuery({ queryKey: ['inventory', 'quality-plans', id], queryFn: () => itemQualityPlansApi.list(id), enabled: !!id });
  const vendors = useQuery({ queryKey: ['vendors', 'quality-plan-picker'], queryFn: () => vendorsApi.list({ per_page: 100, is_active: true }) });
- const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
  const planOptions = useQuery({ queryKey: ['inventory', 'quality-plans', 'options'], queryFn: () => itemQualityPlansApi.options() });
  const samplingOptions = planOptions.data?.sampling_methods ?? [];
- const parameterOptions = planOptions.data?.parameter_types ?? [];
+ const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+ const captureEnabled = planOptions.data?.checklist_capture_enabled === true;
+ const normalizedNames = parameters.map(p => p.parameter_name.trim().replace(/\s+/g, ' ').toLocaleLowerCase());
+ const valid = checksSchema.safeParse(parameters).success && new Set(normalizedNames).size === parameters.length && !!sampling && (sampling !== 'fixed' || (Number.isInteger(Number(fixedSize)) && Number(fixedSize) >= 1 && Number(fixedSize) <= 1000));
 
  const save = useMutation({
  mutationFn: () => itemQualityPlansApi.createRevision(id, {
+ capture_method: 'checklist',
  vendor_id: vendorId || null,
  sampling_method: sampling as Parameters<typeof itemQualityPlansApi.createRevision>[1]['sampling_method'],
  fixed_sample_size: sampling === 'fixed' ? Number(fixedSize) : null,
  aql_level: sampling === 'aql' ? (planOptions.data?.default_aql_level || null) : null,
  notes: notes || null,
- parameters,
+ parameters: parameters.map(p => ({ parameter_name: p.parameter_name.trim(), acceptance_criterion: p.acceptance_criterion.trim(), parameter_type: p.parameter_type, is_critical: p.is_critical })),
  }),
  onSuccess: () => {
  toast.success('Quality-plan revision published.');
- setNotes(''); setParameters([blankParameter(parameterOptions[0]?.value ?? '')]);
+ setNotes(''); setParameters([blankParameter()]); setFieldErrors({});
  queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
  queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
  },
- onError: (error) => reportMutationError(error, 'Could not publish the quality-plan revision.'),
+ onError: (error: AxiosError<{ errors?: Record<string, string[]> }>) => { setFieldErrors(error.response?.data?.errors ?? {}); reportMutationError(error, 'Could not publish the quality-plan revision.'); },
  });
 
  const deactivate = useMutation({
  mutationFn: itemQualityPlansApi.deactivate,
+ onError: (error: AxiosError) => reportMutationError(error, 'Could not deactivate the quality plan.'),
  onSuccess: () => {
  toast.success('Quality plan deactivated.');
  queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
  queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
  },
  });
+
+ useUnsavedChangesGuard(!!notes || parameters.some(check => !!check.parameter_name || !!check.acceptance_criterion || check.is_critical));
 
  const updateParameter = (index: number, patch: Partial<DraftParameter>) =>
  setParameters((current) => current.map((parameter, i) => i === index ? { ...parameter, ...patch } : parameter));
@@ -88,11 +90,15 @@ export default function ItemQualityPlansPage() {
  if (!item.data) return <EmptyState icon="alert-circle" title="Item not found" />;
 
  return (
- <div>
+ <div className="min-w-0">
  <PageHeader title={`Quality Plans · ${item.data.code}`} backTo={`/inventory/items/${id}`} backLabel="Item" subtitle="Versioned incoming inspection rules, optionally specific to a supplier." />
- <div className="p-5 grid grid-cols-1 xl:grid-cols-5 gap-4">
+ <div className="p-4 sm:p-5 grid min-w-0 grid-cols-1 xl:grid-cols-5 gap-4">
  {canManage && <Panel title="Publish a revision" className="xl:col-span-3">
- <div className="space-y-3">
+ <form className="space-y-3" onSubmit={event => { event.preventDefault(); if (valid && captureEnabled && !save.isPending && !vendors.isError && !planOptions.isError && !vendors.isLoading && !planOptions.isLoading) save.mutate(); }}>
+ <fieldset disabled={save.isPending} className="space-y-3">
+ {!captureEnabled && <p role="alert" className="text-warning-fg">PASS/FAIL publication is paused until the compatible workflow is enabled.</p>}
+ {planOptions.isError && <QueryErrorState subject="quality-plan options" onRetry={() => void planOptions.refetch()} />}
+ {vendors.isError && <QueryErrorState subject="suppliers" onRetry={() => void vendors.refetch()} />}
  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
  <Select label="Supplier scope" value={vendorId} onChange={(event) => setVendorId(event.target.value)}>
  <option value="">All suppliers (default)</option>
@@ -106,39 +112,35 @@ export default function ItemQualityPlansPage() {
  </div>
 
  <div className="space-y-2">
- <div className="flex items-center justify-between"><h3 className="text-sm font-medium">Inspection parameters</h3><Button size="sm" variant="secondary" onClick={() => setParameters((p) => [...p, blankParameter()])}><LuPlus size={12} /> Add parameter</Button></div>
+ <div className="flex items-center justify-between"><h3 className="text-sm font-medium">Inspection checklist</h3><Button type="button" size="sm" variant="secondary" disabled={parameters.length >= 100 || save.isPending} onClick={() => setParameters((p) => [...p, blankParameter()])}><LuPlus size={12} /> Add check</Button></div>
  {parameters.map((parameter, index) => (
- <div key={index} className="rounded-md border border-subtle p-3 grid grid-cols-2 md:grid-cols-6 gap-2">
- <Input containerClassName="col-span-2" placeholder="Parameter name" value={parameter.parameter_name} onChange={(e) => updateParameter(index, { parameter_name: e.target.value })} />
- <Select value={parameter.parameter_type} onChange={(e) => updateParameter(index, { parameter_type: e.target.value as DraftParameter['parameter_type'] })}>
- {parameterOptions.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
- </Select>
- <Select value={parameter.unit_of_measure ?? ''} onChange={(e) => updateParameter(index, { unit_of_measure: e.target.value })}>
-   <option value="">Unit</option>
-   {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
- </Select>
- <Input type="number" step="any" placeholder="Min" value={parameter.tolerance_min ?? ''} onChange={(e) => updateParameter(index, { tolerance_min: e.target.value === '' ? null : Number(e.target.value) })} />
- <div className="flex gap-1"><Input type="number" step="any" placeholder="Max" value={parameter.tolerance_max ?? ''} onChange={(e) => updateParameter(index, { tolerance_max: e.target.value === '' ? null : Number(e.target.value) })} /><Button type="button" variant="ghost" size="sm" iconOnly icon={<LuTrash2 size={14} />} aria-label="Remove parameter" disabled={parameters.length === 1} onClick={() => setParameters((p) => p.filter((_, i) => i !== index))} className="text-muted hover:text-danger-fg" /></div>
- <Checkbox className="col-span-2" label="Critical characteristic" checked={parameter.is_critical} onChange={(e) => updateParameter(index, { is_critical: e.target.checked })} />
+ <div key={parameter.key} className="grid min-w-0 gap-3 border-b border-default py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+ <Input label={`Check ${index + 1}`} maxLength={150} required value={parameter.parameter_name} error={fieldErrors[`parameters.${index}.parameter_name`]?.[0]} onChange={e => updateParameter(index, { parameter_name: e.target.value })} />
+ <Textarea label={`Acceptance criterion / reference ${index + 1}`} maxLength={500} rows={2} required value={parameter.acceptance_criterion} error={fieldErrors[`parameters.${index}.acceptance_criterion`]?.[0]} onChange={e => updateParameter(index, { acceptance_criterion: e.target.value })} />
+ <div className="flex items-center gap-2"><Checkbox label="Critical" checked={parameter.is_critical} onChange={e => updateParameter(index, { is_critical: e.target.checked })} />
+ <Button type="button" variant="ghost" size="sm" iconOnly icon={<LuTrash2 size={14} />} aria-label={`Remove check ${index + 1}`} disabled={parameters.length === 1} onClick={() => setParameters(p => p.filter((_, i) => i !== index))} className="text-danger-fg" /></div>
  </div>
  ))}
  </div>
  <Input label="Revision notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
- <Button variant="primary" disabled={save.isPending || parameters.some((p) => !p.parameter_name.trim())} onClick={() => save.mutate()}>Publish revision</Button>
- </div>
+ <div className="flex justify-end border-t border-default pt-3"><Button type="submit" variant="primary" loading={save.isPending} disabled={save.isPending || !valid || !captureEnabled || vendors.isError || planOptions.isError || vendors.isLoading || planOptions.isLoading}>Publish revision</Button></div>
+ </fieldset>
+ </form>
  </Panel>}
 
  <Panel title="Revision history" className={cn(canManage ? 'xl:col-span-2' : 'xl:col-span-5')}>
  <div className="space-y-2">
+ {plans.isError && <QueryErrorState subject="quality-plan history" onRetry={() => void plans.refetch()} />}
  {(plans.data ?? []).map((plan) => (
  <div key={plan.id} className="rounded-md border border-subtle p-3">
  <div className="flex items-center gap-2"><span className="font-mono text-sm">v{plan.version}</span><Chip variant={plan.is_active ? 'success' : 'neutral'}>{plan.is_active ? 'active' : 'retired'}</Chip><Chip variant="info">{plan.sampling_method}</Chip></div>
- <p className="text-xs text-muted mt-1">{plan.vendor?.name ?? 'All suppliers'} · {plan.parameters.length} parameters · effective {formatDate(plan.effective_from)}</p>
+ <p className="text-xs text-muted mt-1">{plan.vendor?.name ?? 'All suppliers'} · {plan.parameters.length} checks · effective {formatDate(plan.effective_from)}</p>
+ <ul className="mt-2 space-y-1 break-words">{plan.parameters.map((check, index) => <li key={index} className="text-sm"><span className="font-medium">{check.parameter_name}</span>{check.acceptance_criterion && <span className="text-muted"> · {check.acceptance_criterion}</span>}{plan.capture_method !== 'checklist' && <span className="block text-xs text-muted">Historical measurements · Nominal: {check.nominal_value ?? '—'} · Min: {check.tolerance_min ?? '—'} · Max: {check.tolerance_max ?? '—'} {check.unit_of_measure ?? ''}</span>}</li>)}</ul>
  {plan.notes && <p className="text-xs mt-1">{plan.notes}</p>}
- {plan.is_active && <Button className="mt-2" size="sm" variant="secondary" onClick={() => deactivate.mutate(plan.id)}>Deactivate</Button>}
+ {canManage && plan.is_active && <Button className="mt-2" size="sm" variant="secondary" onClick={() => deactivate.mutate(plan.id)}>Deactivate</Button>}
  </div>
  ))}
- {(plans.data ?? []).length === 0 && <p className="text-sm text-muted">No quality-plan revisions yet.</p>}
+ {!plans.isError && (plans.data ?? []).length === 0 && <p className="text-sm text-muted">No quality-plan revisions yet.</p>}
  </div>
  </Panel>
  </div>

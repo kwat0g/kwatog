@@ -1,12 +1,5 @@
-/**
- * Sprint 7 — Task 60 — Open a new inspection.
- *
- * Picks product + stage + batch quantity. For outgoing batches the
- * configured sample plan is shown live as the user types the batch size.
- * On submit, the backend seeds (sample × spec_item) measurement rows and
- * the user is redirected to the detail page to record values.
- */
-import { useEffect, useState } from 'react';
+/** Identify the batch for a manual inspection; record its result on the next page. */
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import type { CreateInspectionData, InspectionStage, AqlPlan } from '@/types/quality';
+import type { CreateInspectionData, InspectionStage } from '@/types/quality';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -50,7 +43,6 @@ type FormValues = z.infer<typeof schema>;
 
 export default function CreateInspectionPage() {
   const navigate = useNavigate();
-  const [aqlPlan, setAqlPlan] = useState<AqlPlan | null>(null);
   const inspectionOptions = useQuery({
     queryKey: ['quality', 'inspections', 'options'],
     queryFn: () => inspectionsApi.options(),
@@ -72,10 +64,6 @@ export default function CreateInspectionPage() {
 
   const stage = watch('stage');
   const productId = watch('product_id');
-  const batchQty = watch('batch_quantity');
-  const samplingMethod = inspectionOptions.data?.sampling_methods?.find(
-    (method) => method.stage === stage,
-  );
 
   const workOrderOutputs = useQuery({
     queryKey: ['quality', 'inspection-output-options', productId],
@@ -85,6 +73,19 @@ export default function CreateInspectionPage() {
   const outputId = watch('work_order_output_id');
   const selectedOutput = workOrderOutputs.data?.find((output) => output.id === outputId);
   const selectedGoodCount = selectedOutput?.good_count;
+  const samplingMethod = inspectionOptions.data?.sampling_methods.find(
+    (method) => method.stage === stage,
+  );
+
+  const aqlPreview = useQuery({
+    queryKey: ['quality', 'aql-preview', selectedGoodCount],
+    queryFn: () => inspectionsApi.aqlPreview(selectedGoodCount ?? 0),
+    enabled:
+      stage === 'outgoing' &&
+      samplingMethod?.value === 'aql' &&
+      selectedGoodCount !== undefined &&
+      selectedGoodCount > 0,
+  });
 
   useEffect(() => {
     if (stage === 'outgoing' && selectedGoodCount) {
@@ -92,25 +93,17 @@ export default function CreateInspectionPage() {
     }
   }, [selectedGoodCount, setValue, stage]);
 
-  // Live preview AQL sample plan only for outgoing.
-  useQuery({
-    queryKey: ['quality', 'aql-preview', stage, batchQty],
-    queryFn: async () => {
-      if (stage !== 'outgoing' || !batchQty || batchQty < 1) {
-        setAqlPlan(null);
-        return null;
-      }
-      const plan = await inspectionsApi.aqlPreview(Number(batchQty));
-      setAqlPlan(plan);
-      return plan;
-    },
-    enabled: stage === 'outgoing' && Number(batchQty) > 0,
-  });
-
   const products = useQuery({
     queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
     queryFn: () => productsApi.options({ is_active: true, per_page: 200 }),
   });
+  const lookups = [
+    inspectionOptions,
+    products,
+    ...(stage === 'outgoing' && productId ? [workOrderOutputs] : []),
+  ];
+  const lookupFailed = lookups.some((query) => query.isError);
+  const lookupPending = lookups.some((query) => query.isFetching);
 
   const submit = useMutation({
     mutationFn: (data: CreateInspectionData) => inspectionsApi.create(data),
@@ -132,23 +125,42 @@ export default function CreateInspectionPage() {
         title="Open inspection"
       />
       <FormDraftBanner safety={safety} />
+      {lookupFailed && (
+        <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+          Inspection options could not be loaded.{' '}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              lookups.forEach((query) => {
+                if (query.isError) void query.refetch();
+              });
+            }}
+          >
+            Retry options
+          </Button>
+        </div>
+      )}
       <form
-        onSubmit={handleSubmit(
-          (v) =>
-            submit.mutate({
-              stage: v.stage as InspectionStage,
-              product_id: v.product_id,
-              batch_quantity: Number(v.batch_quantity),
-              work_order_output_id: v.stage === 'outgoing' ? v.work_order_output_id : undefined,
-              notes: v.notes,
-            }),
-          onFormInvalid<FormValues>(),
-        )}
-        className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        onSubmit={handleSubmit((v) => {
+          if (lookupFailed || lookupPending) return;
+          submit.mutate({
+            stage: v.stage as InspectionStage,
+            product_id: v.product_id,
+            batch_quantity: Number(v.batch_quantity),
+            work_order_output_id: v.stage === 'outgoing' ? v.work_order_output_id : undefined,
+            notes: v.notes,
+          });
+        }, onFormInvalid<FormValues>())}
+        className="px-5 py-4 grid grid-cols-1 lg:grid-cols-3 gap-4"
       >
-        <div className="col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
+          <p className="text-sm text-muted">
+            Inspections from receipts, production and returns already appear in your inspection
+            list. Open one here only when you need a manual inspection.
+          </p>
           <Panel title="Inspection details">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Select label="Stage" required {...register('stage')} error={errors.stage?.message}>
                 <option value="">— Select —</option>
                 {stages.map((stage) => (
@@ -158,6 +170,7 @@ export default function CreateInspectionPage() {
                 ))}
               </Select>
               <Select
+                searchable
                 label="Product"
                 required
                 {...register('product_id')}
@@ -182,6 +195,7 @@ export default function CreateInspectionPage() {
               />
               {stage === 'outgoing' && (
                 <Select
+                  searchable
                   label="Output batch"
                   required
                   {...register('work_order_output_id')}
@@ -204,46 +218,112 @@ export default function CreateInspectionPage() {
                 </Select>
               )}
             </div>
-            <Textarea label="Notes" rows={3} {...register('notes')} error={errors.notes?.message} />
           </Panel>
+          <Textarea
+            label="Notes (optional)"
+            rows={3}
+            {...register('notes')}
+            error={errors.notes?.message}
+          />
         </div>
 
-        <div>
-          <Panel title="Sample plan" meta={samplingMethod?.label ?? '—'}>
-            {stage === 'outgoing' ? (
-              aqlPlan ? (
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-muted">Code letter</dt>
-                    <dd className="font-mono tabular-nums">{aqlPlan.code}</dd>
+        <Panel title="Inspection coverage">
+          {stage === 'outgoing' ? (
+            samplingMethod?.value === 'aql' ? (
+              <>
+                <p className="text-sm">
+                  The selected output batch uses the configured AQL sample and acceptance limits.
+                </p>
+                <details className="mt-3 rounded-md border border-default px-3 py-2">
+                  <summary className="cursor-pointer text-sm font-medium">Sample plan</summary>
+                  <div className="pt-3">
+                    {selectedGoodCount === undefined ? (
+                      <p role="status" className="text-sm text-muted">
+                        Select an output batch to preview its sample plan.
+                      </p>
+                    ) : aqlPreview.isFetching ? (
+                      <p role="status" className="text-sm text-muted">
+                        Loading sample plan…
+                      </p>
+                    ) : aqlPreview.isError ? (
+                      <div role="alert" className="text-sm text-danger-fg">
+                        Sample plan could not be loaded.{' '}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void aqlPreview.refetch()}
+                        >
+                          Retry sample plan
+                        </Button>
+                      </div>
+                    ) : aqlPreview.data ? (
+                      <dl className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <dt className="text-muted">Code letter</dt>
+                          <dd className="font-mono tabular-nums">{aqlPreview.data.code}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-muted">Sample size</dt>
+                          <dd className="font-mono tabular-nums">{aqlPreview.data.sample_size}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-muted">Accept (Ac)</dt>
+                          <dd className="font-mono tabular-nums">{aqlPreview.data.accept}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-muted">Reject (Re)</dt>
+                          <dd className="font-mono tabular-nums">{aqlPreview.data.reject}</dd>
+                        </div>
+                      </dl>
+                    ) : null}
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted">Sample size</dt>
-                    <dd className="font-mono tabular-nums">{aqlPlan.sample_size}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted">Accept (Ac)</dt>
-                    <dd className="font-mono tabular-nums">{aqlPlan.accept}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted">Reject (Re)</dt>
-                    <dd className="font-mono tabular-nums">{aqlPlan.reject}</dd>
-                  </div>
-                </dl>
-              ) : (
-                <p className="text-xs text-muted">No plan computed</p>
-              )
+                </details>
+              </>
             ) : (
-              <p className="text-xs text-muted">{samplingMethod?.label ?? '—'}</p>
-            )}
-          </Panel>
-        </div>
+              <p className="text-sm">
+                Inspect all {selectedGoodCount ?? 'output'} pieces against the approved checklist.
+                Every check must pass; any observed defect fails inspection.
+              </p>
+            )
+          ) : stage === 'in_process' ? (
+            <p className="text-sm">
+              The saved production inspection sets its planned sample. Open the inspection created
+              from the work order to follow its approved plan.
+            </p>
+          ) : (
+            <p className="text-sm">
+              Receipts and returns create their own inspections with the correct item, quantity,
+              unit, and approved plan. Use those records for acceptance and recovery.
+            </p>
+          )}
+          {stage && stage !== 'outgoing' && (
+            <p role="status" className="mt-3 text-sm text-warning-fg">
+              This form creates standalone product evidence. It does not authorize receipt, return,
+              or stock release.
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="mt-3"
+            onClick={() => navigate(`/quality/inspections?stage=${stage}&work_queue=to_inspect`)}
+          >
+            Find source inspections
+          </Button>
+        </Panel>
 
         <FormActions>
           <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
             Cancel
           </Button>
-          <Button variant="primary" type="submit" loading={submit.isPending}>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={lookupFailed || lookupPending}
+            loading={submit.isPending}
+          >
             Open inspection
           </Button>
         </FormActions>

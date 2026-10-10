@@ -16,13 +16,13 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-import { localIsoDate } from '@/lib/formatDate';
+import { localIsoDate, manilaIsoDate } from '@/lib/formatDate';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 function todayIso(): string {
-  return localIsoDate();
+  return manilaIsoDate();
 }
 
 function addDaysIso(dateStr: string, days: number): string {
@@ -65,19 +65,16 @@ export default function OvertimeCreatePage() {
   const schema = useMemo(() => {
     const base = z.object({
       employee_id: z.string().min(1, 'Employee is required'),
-      date: z.string().min(1, 'Date is required'),
+      date: z.string().min(1, 'Date is required').refine((date) => date >= manilaIsoDate(), 'Choose today or a later date.'),
       hours_requested: z.coerce.number({ invalid_type_error: 'Enter a number' }),
       reason: z.string().trim().min(5, 'Provide at least 5 characters').max(2000),
     });
     if (!options) return base;
 
-    // Mirrors StoreOvertimeRequestRequest: after_or_equal(today - past) and
-    // before_or_equal(today + future), using only values returned by the API.
-    const dateMin = addDaysIso(todayIso(), -options.request_past_days);
+    // Preserve the configured future window while preventing backdating.
     const dateMax = addDaysIso(todayIso(), options.request_future_days);
     return base.extend({
       date: base.shape.date
-        .refine((v) => v >= dateMin, 'Date is outside the configured request window.')
         .refine((v) => v <= dateMax, 'Date is outside the configured request window.'),
       hours_requested: base.shape.hours_requested
         .min(options.request_min_hours, `Minimum ${options.request_min_hours} hours`)
@@ -89,7 +86,7 @@ export default function OvertimeCreatePage() {
     resolver: zodResolver(schema),
     defaultValues: {
       employee_id: user?.employee?.id ?? '',
-      date: todayIso(),
+      date: manilaIsoDate(),
     },
   });
   const {
@@ -118,7 +115,7 @@ export default function OvertimeCreatePage() {
   });
   const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
-  const dateMin = options ? addDaysIso(todayIso(), -options.request_past_days) : undefined;
+  const dateMin = manilaIsoDate();
   const dateMax = options ? addDaysIso(todayIso(), options.request_future_days) : undefined;
 
   return (
@@ -131,7 +128,7 @@ export default function OvertimeCreatePage() {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-2xl mx-auto px-5 py-4"
+        className="min-w-0 w-full px-5 py-4"
       >
         {optionsLoading ? (
           <Panel title="Request details">
@@ -143,7 +140,7 @@ export default function OvertimeCreatePage() {
             meta={options ? `Max ${options.maximum_hours} hours/day` : undefined}
           >
             <div className="grid grid-cols-2 gap-3">
-              <Select
+              <Select searchable
                 label="Employee"
                 required
                 {...register('employee_id')}
@@ -179,8 +176,7 @@ export default function OvertimeCreatePage() {
             </div>
             {options && (
               <p className="text-xs text-muted mt-2">
-                Requests must fall within the configured window (past {options.request_past_days}d ·
-                future {options.request_future_days}d). Maximum {options.maximum_hours} hours per
+                Request from today through {options.request_future_days} days ahead. Maximum {options.maximum_hours} hours per
                 day.
               </p>
             )}

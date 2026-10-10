@@ -22,6 +22,7 @@ use App\Modules\Production\Models\ProductRouting;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Sprint P10 — Task 10. Product routing CRUD + duplicate-as-new-version.
@@ -533,12 +534,9 @@ class ProductionRoutingService
             return;
         }
 
-        // `event_outbox.dedupe_key` is unique and rows are never pruned, so a
-        // key of (routing id, reason) alone let the SAME routing be edited
-        // twice with the same reason and silently dropped the second replan
-        // forever. Version the key by the change timestamp: a replay of the
-        // same write still dedupes, but a later edit is a distinct event.
-        $version = $routing->updated_at?->getTimestamp() ?? (int) microtime(true);
+        // Each committed write gets one durable event, including same-second
+        // reactivations. Worker retries reuse the stored outbox event.
+        $version = (string) Str::uuid();
 
         app(OutboxService::class)->record(
             new MrpReplanRequested($salesOrderIds, $reason, auth()->id()),

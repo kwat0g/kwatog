@@ -11,9 +11,10 @@ namespace App\Modules\CRM\Enums;
  */
 enum SalesOrderResponseType: string
 {
-    case Accept  = 'accept';
+    case Accept = 'accept';
     case Propose = 'propose';
     case Decline = 'decline';
+    case DeliveryDate = 'delivery_date';
 
     public static function values(): array
     {
@@ -23,9 +24,10 @@ enum SalesOrderResponseType: string
     public function label(): string
     {
         return match ($this) {
-            self::Accept  => 'Accepted as ordered',
+            self::Accept => 'Accepted as ordered',
             self::Propose => 'Proposed changes',
             self::Decline => 'Declined',
+            self::DeliveryDate => 'Delivery date proposal',
         };
     }
 }

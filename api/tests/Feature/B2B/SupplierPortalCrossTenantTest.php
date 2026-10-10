@@ -454,30 +454,15 @@ class SupplierPortalCrossTenantTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_supplier_cannot_schedule_against_another_tenants_purchase_order_or_line(): void
+    public function test_supplier_delivery_plan_writes_are_gone_for_every_tenant(): void
     {
         ['a' => $a, 'b' => $b] = $this->twoTenants();
         $this->actAs($a['user']);
 
-        // (a) another tenant's PO in the body
         $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
             'purchase_order_id' => $b['po']->hash_id,
-            'month' => '2026-10',
-            'lines' => [['purchase_order_item_id' => $b['poItem']->hash_id, 'quantity' => 5]],
-        ])->assertStatus(422)->assertJsonValidationErrors(['purchase_order_id']);
-
-        // (b) own PO, but a line belonging to another tenant's PO
-        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
-            'purchase_order_id' => $a['po']->hash_id,
-            'month' => '2026-10',
-            'lines' => [['purchase_order_item_id' => $b['poItem']->hash_id, 'quantity' => 5]],
-        ])->assertStatus(422);
-
-        $this->assertSame(
-            2,
-            DeliverySchedule::withoutGlobalScope('b2b_tenancy')->count(),
-            'a cross-tenant schedule was persisted',
-        );
+        ])->assertStatus(410);
+        $this->assertSame(2, DeliverySchedule::withoutGlobalScope('b2b_tenancy')->count());
     }
 
     /* ─── 3. File handling ───────────────────────────────────────── */

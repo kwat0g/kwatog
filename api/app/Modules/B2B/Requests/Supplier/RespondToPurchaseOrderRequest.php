@@ -20,10 +20,9 @@ class RespondToPurchaseOrderRequest extends FormRequest
     {
         return [
             'type'                        => ['required', Rule::in(['accept', 'propose', 'decline'])],
-            'proposed_delivery_date'      => ['nullable', 'date'],
+            'proposed_delivery_date'      => ['prohibited_unless:type,propose', 'nullable', 'date'],
             'notes'                       => ['nullable', 'string', 'max:2000'],
-            // A counter-offer must name at least one line to be meaningful.
-            'items'                       => ['required_if:type,propose', 'array', 'min:1'],
+            'items'                       => [Rule::requiredIf(fn () => $this->input('type') === 'propose' && ! $this->filled('proposed_delivery_date')), 'array'],
             'items.*.purchase_order_item_id' => ['required', 'string'],
             'items.*.proposed_quantity'   => ['nullable', 'numeric', 'min:0.01'],
             'items.*.proposed_unit_price' => ['nullable', 'numeric', 'min:0.01'],

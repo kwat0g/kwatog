@@ -37,6 +37,30 @@ class SettingsGovernanceTest extends TestCase
         $this->assertDatabaseMissing('settings', ['key' => 'attacker.injected_flag']);
     }
 
+    public function test_retired_journal_self_post_setting_is_hidden_and_read_only(): void
+    {
+        $admin = $this->systemAdmin();
+        $response = $this->actingAs($admin)->getJson('/api/v1/admin/settings')->assertOk();
+        $keys = collect($response->json('data'))->flatten(1)->pluck('key')->all();
+
+        $this->assertNotContains('accounting.je_self_post_limit', $keys);
+        $this->assertNotContains('accounting.je_self_post_limit.retired', $keys);
+
+        $this->actingAs($admin)
+            ->putJson('/api/v1/admin/settings/accounting.je_self_post_limit', ['value' => 10000])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('value');
+        $this->actingAs($admin)
+            ->putJson('/api/v1/admin/settings/accounting.je_self_post_limit.retired', ['value' => 10000])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('value');
+
+        $retiredValue = DB::table('settings')
+            ->where('key', 'accounting.je_self_post_limit.retired')
+            ->value('value');
+        $this->assertSame(0, json_decode((string) $retiredValue, true));
+    }
+
     /**
      * json_encode(0.0) emits "0", which decodes as an int. An int/float split in
      * the stored-type guard therefore froze every whole-number decimal setting

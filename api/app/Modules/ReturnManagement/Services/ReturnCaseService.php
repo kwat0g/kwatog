@@ -37,6 +37,7 @@ class ReturnCaseService
         return ReturnCase::query()->with(['customer', 'vendor', 'owner', 'delivery', 'purchaseOrder', 'goodsReceiptNote', 'returnRequest'])
             ->when($customerId !== null, fn ($q) => $q->where('type', 'customer')->where('customer_id', $customerId))
             ->when($vendorId !== null, fn ($q) => $q->where('type', 'supplier')->where('vendor_id', $vendorId))
+            ->when($vendorId !== null, fn ($q) => $q->whereHas('events', fn ($event) => $event->where('is_public', true)))
             ->when(! empty($filters['status']), fn ($q) => $q->where('status', $filters['status']))
             ->when(! empty($filters['type']), fn ($q) => $q->where('type', $filters['type']))
             ->when(! empty($filters['search']), fn ($q) => $q->where(fn ($s) => $s->where('case_number', 'ilike', '%'.$filters['search'].'%')
@@ -53,7 +54,7 @@ class ReturnCaseService
             'customer', 'vendor', 'owner', 'delivery', 'purchaseOrder', 'goodsReceiptNote',
             'lines.product', 'lines.item', 'events', 'attachments.event',
             'returnRequest.items', 'returnRequest.creditNote', 'creditNote',
-            'replacementSalesOrder', 'replacementPurchaseOrder', 'replacementDelivery', 'resolutionGoodsReceiptNote',
+            'replacementSalesOrder.deliveries.items.salesOrderItem', 'replacementPurchaseOrder', 'replacementDelivery', 'resolutionGoodsReceiptNote',
             'receiptAllocations.goodsReceiptNote', 'receiptAllocations.caseLine',
         ]);
     }
@@ -78,7 +79,8 @@ class ReturnCaseService
             if ($duplicate) {
                 return $duplicate;
             }
-            $lines = $this->sources->prepareLines($source, $data['lines']);
+            $warehouseReport = ! $portalUser && ! $by->hasPermission('return_management.manage');
+            $lines = $this->sources->prepareLines($source, $data['lines'], $warehouseReport, $portalUser !== null);
             $customer = $source instanceof Delivery;
             $role = $customer ? 'customer_service_officer' : 'purchasing_officer';
             $owner = User::query()->where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', $role))->orderBy('id')->first();
@@ -100,8 +102,10 @@ class ReturnCaseService
                 $record->forceFill(array_merge($line, ['return_case_id' => $case->id]))->save();
             }
             $actor = $portalUser ? ['type' => 'customer', 'id' => $portalUser->id, 'name' => $portalUser->name] : $this->internalActor($by);
-            $this->event($case, 'submitted', 'Report submitted. '.($customer ? 'Customer Service' : 'Purchasing').' will review the quantities and next action.', $actor);
-            DB::afterCommit(fn () => $this->notify($case, 'New problem report awaiting review'));
+            $notifySupplier = $portalUser !== null || $by->hasPermission('return_management.manage');
+            $this->event($case, 'submitted', 'Report submitted. '.($customer ? 'Customer Service' : 'Purchasing').' will review the quantities and next action.', $actor, $notifySupplier);
+            // Warehouse reports stay internal until Purchasing takes a public case action.
+            DB::afterCommit(fn () => $this->notify($case, 'New problem report awaiting review', $notifySupplier));
 
             return $case;
         }, 3);
@@ -288,6 +292,18 @@ class ReturnCaseService
     public function act(ReturnCase $case, array $data, User $by, array $actor): ReturnCase
     {
         $result = DB::transaction(function () use ($case, $data, $by, $actor): ReturnCase {
+            if ($case->type->value === 'customer' && $case->delivery_id && $case->intake_kind?->value !== 'delivery_trace') {
+                // Receipt confirmation locks orders before the case; settlement actions use the same order.
+                $sourceOrderId = Delivery::whereKey($case->delivery_id)->value('sales_order_id');
+                $replacementOrderIds = \App\Modules\CRM\Models\SalesOrder::where('return_case_id', $case->id)->pluck('id');
+                \App\Modules\CRM\Models\SalesOrder::whereIn('id', $replacementOrderIds->push($sourceOrderId)->filter()->unique())
+                    ->orderBy('id')->lockForUpdate()->get();
+                Delivery::whereIn('sales_order_id', $replacementOrderIds)->orderBy('id')->lockForUpdate()->get();
+                $currentReplacementId = ReturnCase::whereKey($case->id)->value('replacement_sales_order_id');
+                if ($currentReplacementId && ! $replacementOrderIds->contains((int) $currentReplacementId)) {
+                    throw new BusinessRuleException('Replacement documents changed. Reload the case before continuing.');
+                }
+            }
             if ($case->intake_kind?->value === 'delivery_trace' && $case->delivery_id) {
                 Delivery::query()->lockForUpdate()->findOrFail($case->delivery_id);
             }
@@ -403,8 +419,11 @@ class ReturnCaseService
                         throw new BusinessRuleException('The linked return already has a credit. Review Finance settlement before authorizing replacement.');
                     }
                     $order = app(\App\Modules\CRM\Services\SalesOrderService::class)->createNoChargeReplacement($case, (int) $by->id);
+                    if ($order->status->isBeforeConfirmation()) {
+                        $order = app(\App\Modules\CRM\Services\SalesOrderService::class)->confirm($order);
+                    }
                     $patch = ['replacement_sales_order_id' => $order->id, 'status' => 'in_progress'];
-                    $message = 'No-charge replacement authorized. The replacement order follows normal confirmation, Quality and delivery controls.';
+                    $message = 'No-charge replacement approved and confirmed. Automatic production planning is queued; Quality, dispatch and customer receipt are still required.';
                     break;
                 case 'create_return':
                     $this->requireState($case, ['action_agreed', 'in_progress']);
@@ -460,6 +479,33 @@ class ReturnCaseService
         });
 
         return $this->show($result);
+    }
+
+    /** Complete customer replacements only when their real delivery and any linked return are complete. */
+    public function synchronizeReplacement(int $caseId): void
+    {
+        DB::transaction(function () use ($caseId): void {
+            $case = ReturnCase::query()->lockForUpdate()->find($caseId);
+            if (! $case || $case->type->value !== 'customer' || $case->resolution?->value !== 'redelivery'
+                || $case->status->value !== 'in_progress' || ! $case->replacement_sales_order_id) {
+                return;
+            }
+            $delivery = Delivery::query()->where('sales_order_id', $case->replacement_sales_order_id)
+                ->where('status', 'confirmed')->latest('id')->first();
+            if (! $delivery) {
+                return;
+            }
+            $case->forceFill(['replacement_delivery_id' => $delivery->id])->save();
+            try {
+                $this->settlements->assertComplete($case, User::query()->findOrFail($case->created_by));
+            } catch (BusinessRuleException) {
+                return;
+            }
+            $case->forceFill(['status' => 'resolved', 'resolved_at' => now()])->save();
+            $this->event($case, 'resolve', 'Replacement receipt confirmed and all agreed work completed. Case closed automatically.',
+                ['type' => 'system', 'id' => null, 'name' => 'Automatic workflow']);
+            DB::afterCommit(fn () => $this->notify($case, 'Problem report resolved'));
+        });
     }
 
     public function attach(ReturnCase $case, UploadedFile $file, array $actor): ReturnCaseAttachment

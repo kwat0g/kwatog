@@ -140,20 +140,20 @@ export default function PostingCreatePage() {
  />
       <FormDraftBanner safety={safety} />
 
- <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
+ <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Job Details">
  <div className="space-y-4">
  <Input label="Job Title" required {...register('title')} placeholder="Position title" error={errors.title?.message} />
 
  <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
- <Select label="Department" required {...register('department_id')} error={errors.department_id?.message}>
+ <Select searchable label="Department" required {...register('department_id')} error={errors.department_id?.message}>
  <option value="">Select department</option>
  {departments?.map((d) => (
  <option key={d.id} value={d.id}>{d.name}</option>
  ))}
  </Select>
 
- <Select label="Position" {...register('position_id')} disabled={!departmentId} error={errors.position_id?.message}>
+ <Select searchable label="Position" {...register('position_id')} disabled={!departmentId} error={errors.position_id?.message}>
  <option value="">{departmentId ? 'Select position' : 'Select department first'}</option>
  {positions.map((p) => (
  <option key={p.id} value={p.id}>{p.title}</option>

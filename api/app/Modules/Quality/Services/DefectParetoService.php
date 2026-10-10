@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\SettingsService;
-use Carbon\Carbon;
 use App\Modules\Quality\Enums\InspectionStatus;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Sprint 7 — Task 63. Defect Pareto analytics.
  *
- * Aggregates inspection_measurements rows with is_pass=false over a date
+ * Aggregates failed checklist decisions and legacy measured failures over a date
  * window, grouped by parameter_name. Returned shape feeds the dashboard
  * bar chart in Task 64 directly.
  */
@@ -62,7 +62,6 @@ class DefectParetoService
      *   stage?: string|null,
      *   limit?: int|null
      * } $filters
-     *
      * @return array{
      *   from: string,
      *   to: string,
@@ -79,12 +78,15 @@ class DefectParetoService
     public function run(array $filters): array
     {
         $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : $this->defaultFrom();
-        $to   = isset($filters['to'])   ? Carbon::parse($filters['to'])->endOfDay()     : now()->endOfDay();
+        $to = isset($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
         $limit = (int) ($filters['limit'] ?? 10);
 
         $q = DB::table('inspection_measurements as m')
             ->join('inspections as i', 'i.id', '=', 'm.inspection_id')
-            ->where('m.is_pass', false)
+            ->whereNull('i.counted_capture')
+            ->where(fn ($failed) => $failed
+                ->where(fn ($checklist) => $checklist->where('i.capture_method', 'checklist')->where('m.item_result', 'failed'))
+                ->orWhere(fn ($legacy) => $legacy->where(fn ($capture) => $capture->whereNull('i.capture_method')->orWhere('i.capture_method', '!=', 'checklist'))->where('m.is_pass', false)))
             ->whereIn('i.status', $this->completedInspectionStatuses())
             ->whereBetween('i.completed_at', [$from, $to]);
 
@@ -110,27 +112,37 @@ class DefectParetoService
             ->get();
 
         $total = (int) (clone $q)->count();
+        $counted = DB::table('inspections')->whereNotNull('counted_capture')
+            ->whereIn('status', $this->completedInspectionStatuses())->whereBetween('completed_at', [$from, $to])
+            ->when(! empty($filters['product_id']), fn ($query) => $query->where('product_id', (int) $filters['product_id']))
+            ->when(! empty($filters['stage']), fn ($query) => $query->where('stage', $filters['stage']));
+        $countedTotal = (int) $counted->sum('sample_defect_count');
+        if ($countedTotal > 0) {
+            $rows->push((object) ['parameter_name' => 'Counted batch defects', 'is_critical' => (clone $counted)->where('critical_defect', true)->exists(), 'defect_count' => $countedTotal]);
+            $rows = $rows->sortByDesc('defect_count')->take(max(1, $limit));
+            $total += $countedTotal;
+        }
 
         $cum = 0;
         $out = [];
         foreach ($rows as $row) {
             $count = (int) $row->defect_count;
-            $pct   = $total > 0 ? round(($count / $total) * 100, 2) : 0.0;
-            $cum  += $pct;
+            $pct = $total > 0 ? round(($count / $total) * 100, 2) : 0.0;
+            $cum += $pct;
             $out[] = [
-                'parameter_name'        => (string) $row->parameter_name,
-                'defect_count'          => $count,
-                'percentage'            => $pct,
+                'parameter_name' => (string) $row->parameter_name,
+                'defect_count' => $count,
+                'percentage' => $pct,
                 'cumulative_percentage' => round($cum, 2),
-                'is_critical'           => (bool) $row->is_critical,
+                'is_critical' => (bool) $row->is_critical,
             ];
         }
 
         return [
-            'from'           => $from->toDateString(),
-            'to'             => $to->toDateString(),
-            'total_defects'  => $total,
-            'rows'           => $out,
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'total_defects' => $total,
+            'rows' => $out,
         ];
     }
 
@@ -146,13 +158,16 @@ class DefectParetoService
     public function inspectionsWithDefect(string $parameterName, array $filters): array
     {
         $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : $this->defaultFrom();
-        $to   = isset($filters['to'])   ? Carbon::parse($filters['to'])->endOfDay()     : now()->endOfDay();
+        $to = isset($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
 
         $q = DB::table('inspections as i')
             ->join('inspection_measurements as m', 'm.inspection_id', '=', 'i.id')
             ->leftJoin('products as p', 'p.id', '=', 'i.product_id')
             ->where('m.parameter_name', $parameterName)
-            ->where('m.is_pass', false)
+            ->whereNull('i.counted_capture')
+            ->where(fn ($failed) => $failed
+                ->where(fn ($checklist) => $checklist->where('i.capture_method', 'checklist')->where('m.item_result', 'failed'))
+                ->orWhere(fn ($legacy) => $legacy->where(fn ($capture) => $capture->whereNull('i.capture_method')->orWhere('i.capture_method', '!=', 'checklist'))->where('m.is_pass', false)))
             ->whereIn('i.status', $this->completedInspectionStatuses())
             ->whereBetween('i.completed_at', [$from, $to])
             ->select(
@@ -166,22 +181,35 @@ class DefectParetoService
             ->orderByDesc('i.completed_at')
             ->limit(50);
 
-        if (! empty($filters['product_id'])) $q->where('i.product_id', (int) $filters['product_id']);
-        if (! empty($filters['stage']))      $q->where('i.stage', (string) $filters['stage']);
+        if (! empty($filters['product_id'])) {
+            $q->where('i.product_id', (int) $filters['product_id']);
+        }
+        if (! empty($filters['stage'])) {
+            $q->where('i.stage', (string) $filters['stage']);
+        }
+
+        if ($parameterName === 'Counted batch defects') {
+            $q = DB::table('inspections as i')->leftJoin('products as p', 'p.id', '=', 'i.product_id')->whereNotNull('i.counted_capture')
+                ->where('i.sample_defect_count', '>', 0)->whereIn('i.status', $this->completedInspectionStatuses())->whereBetween('i.completed_at', [$from, $to])
+                ->when(! empty($filters['product_id']), fn ($query) => $query->where('i.product_id', (int) $filters['product_id']))
+                ->when(! empty($filters['stage']), fn ($query) => $query->where('i.stage', $filters['stage']))
+                ->select('i.id', 'i.inspection_number', 'i.stage', 'i.status', 'i.completed_at', 'i.defect_count', 'p.id as product_id', 'p.part_number', 'p.name')->orderByDesc('i.completed_at')->limit(50);
+        }
 
         $hashids = app('hashids');
+
         return $q->get()->map(fn ($r) => [
-            'id'                => $hashids->encode((int) $r->id),
+            'id' => $hashids->encode((int) $r->id),
             'inspection_number' => $r->inspection_number,
-            'stage'             => $r->stage,
-            'status'            => $r->status,
-            'product'           => $r->product_id ? [
-                'id'          => $hashids->encode((int) $r->product_id),
+            'stage' => $r->stage,
+            'status' => $r->status,
+            'product' => $r->product_id ? [
+                'id' => $hashids->encode((int) $r->product_id),
                 'part_number' => $r->part_number,
-                'name'        => $r->name,
+                'name' => $r->name,
             ] : null,
-            'defect_count'      => (int) $r->defect_count,
-            'completed_at'      => $r->completed_at,
+            'defect_count' => (int) $r->defect_count,
+            'completed_at' => $r->completed_at,
         ])->all();
     }
 

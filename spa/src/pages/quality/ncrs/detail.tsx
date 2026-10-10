@@ -8,9 +8,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { LuCheck, LuBan, LuPlus } from '@/lib/icons';
+import { LuCheck, LuBan, LuPlus, LuArrowLeft, LuArrowRight } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
+import { client } from '@/api/client';
+import type { DefectType } from '@/types/production';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -21,6 +23,7 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
@@ -29,6 +32,7 @@ import { ChainHeader } from '@/components/chain';
 import { buildNcrChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
+import { formatQuantity } from '@/lib/formatNumber';
 import type {
   NcrActionType,
   NcrDisposition,
@@ -56,12 +60,23 @@ export default function NcrDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const canManageNcr = can('quality.ncr.manage');
   const [actionType, setActionType] = useState<NcrActionType>('containment');
   const [actionDesc, setActionDesc] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [disposition, setDisposition] = useState<NcrDisposition | ''>('');
-  const [mrbAcceptedQuantity, setMrbAcceptedQuantity] = useState('');
+  const [enteredAcceptedQuantity, setMrbAcceptedQuantity] = useState<string | null>(null);
+  const [trialScrap, setTrialScrap] = useState('');
+  const [trialDefects, setTrialDefects] = useState<
+    Array<{ defect_type_id: string; count: string }>
+  >([]);
+  const [sortingQuantity, setSortingQuantity] = useState('');
+  const [sortingReference, setSortingReference] = useState('');
+  const [concessionReference, setConcessionReference] = useState('');
+  const [enteredSortingPerformer, setSortingPerformer] = useState<string | null>(null);
+  const [recoveryPassed, setRecoveryPassed] = useState(false);
+  const [defectsSegregated, setDefectsSegregated] = useState(false);
   const [rootCause, setRootCause] = useState('');
   const [correctiveAction, setCorrectiveAction] = useState('');
   const [confirmClose, setConfirmClose] = useState(false);
@@ -80,8 +95,21 @@ export default function NcrDetailPage() {
   const { data: assignees = [] } = useQuery({
     queryKey: ['quality', 'ncr-assignees'],
     queryFn: ncrsApi.assignees,
-    enabled: can('quality.ncr.manage'),
+    enabled:
+      canManageNcr ||
+      Boolean(data?.is_incoming_mrb && !data?.mrb_decided_at && can('quality.inspections.review')),
     staleTime: 5 * 60 * 1000,
+  });
+  const trialRecovery = Boolean(
+    data?.inspection?.stage === 'in_process' && (data.startup_trial || data.historical_held),
+  );
+  const trialDefectOptions = useQuery({
+    queryKey: ['quality', 'defect-types'],
+    queryFn: () =>
+      client
+        .get<{ data: DefectType[] }>('/quality/defect-types')
+        .then((response) => response.data.data),
+    enabled: trialRecovery && can('quality.ncr.manage'),
   });
   const labelFor = (
     items: Array<{ value: string; label: string }> | undefined,
@@ -90,6 +118,18 @@ export default function NcrDetailPage() {
     (value && items?.find((item) => item.value === value)?.label) ??
     value?.replace('_', ' ') ??
     '—';
+
+  const retryQuarantine = useMutation({
+    mutationFn: () => ncrsApi.retryQuarantine(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quality', 'ncrs'] });
+      qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
+      qc.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] });
+      toast.success('Missing quarantine holds recovered.');
+    },
+    onError: (error: AxiosError<{ message?: string }>) =>
+      toast.error(error.response?.data?.message ?? 'Quarantine recovery failed.'),
+  });
 
   const addAction = useMutation({
     mutationFn: () =>
@@ -107,13 +147,88 @@ export default function NcrDetailPage() {
       qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed'),
+      toast.error(e.response?.data?.message ?? 'Could not add action. Try again.'),
   });
 
   // Once the MRB decision settled the receipt, the disposition is fixed; only
   // root cause / corrective action remain editable (the API enforces this).
   const mrbLocked = Boolean(data?.mrb_decided_at);
   const effectiveDisposition = mrbLocked ? (data?.disposition ?? '') : disposition;
+  const fullBatch = Boolean(data?.full_piece_inspection && data.inspection?.stage === 'outgoing');
+  const reportedDefects = data?.inspection?.sample_defect_count;
+  const conformingQuantity = fullBatch && reportedDefects != null
+    ? Math.max(0, Number(data?.inspection?.batch_quantity ?? 0) - reportedDefects)
+    : null;
+  const repairBatch = fullBatch && effectiveDisposition === 'rework' && !mrbLocked;
+  const repairNotes = fullBatch && effectiveDisposition === 'rework';
+
+  const recoveryQuantity = Number(
+    data?.process_recovery_quantity ??
+      data?.sorting_required_quantity ??
+      data?.inspection?.batch_quantity ??
+      data?.affected_quantity ??
+      0,
+  );
+  const mrbAcceptedQuantity = enteredAcceptedQuantity ??
+    (fullBatch && conformingQuantity !== null ? String(Math.min(conformingQuantity, recoveryQuantity)) : '');
+  const sortingPerformer = enteredSortingPerformer ??
+    (fullBatch ? assignees.find((person) => person.id === data?.inspection?.inspector?.id)?.id ?? '' : '');
+  const countable = Boolean(
+    data?.startup_trial ||
+    data?.historical_held ||
+    data?.is_outgoing_recovery ||
+    data?.inspection?.sampling_basis === 'piece' ||
+    data?.inspection?.source_uom_code?.trim().toUpperCase() === 'PCS',
+  );
+  const canKeepGood =
+    Boolean(data?.is_incoming_mrb || data?.is_outgoing_recovery || data?.is_process_recovery) &&
+    (effectiveDisposition === 'scrap' ||
+      effectiveDisposition === 'return_to_supplier' ||
+      ((data?.is_outgoing_recovery || data?.is_process_recovery) &&
+        effectiveDisposition === 'rework'));
+  const positiveGood = canKeepGood && Number(mrbAcceptedQuantity) > 0;
+  const coveredQuantity = fullBatch ? String(recoveryQuantity) : sortingQuantity;
+  const needsSortingEvidence =
+    !mrbLocked &&
+    Boolean(data?.is_incoming_mrb || data?.is_outgoing_recovery || data?.is_process_recovery) &&
+    (positiveGood ||
+      (data?.is_outgoing_recovery && effectiveDisposition === 'rework') ||
+      data?.is_process_recovery ||
+      (data?.is_incoming_mrb && effectiveDisposition === 'use_as_is'));
+  const goodQuantityValid =
+    mrbLocked ||
+    !canKeepGood ||
+    (!repairBatch && !trialRecovery && mrbAcceptedQuantity === '') ||
+    (/^\d+(?:\.\d{1,3})?$/.test(mrbAcceptedQuantity) &&
+      Number(mrbAcceptedQuantity) >= 0 &&
+      (conformingQuantity === null || Number(mrbAcceptedQuantity) <= conformingQuantity) &&
+      (!countable || Number.isInteger(Number(mrbAcceptedQuantity))) &&
+      ((data?.is_outgoing_recovery || data?.is_process_recovery) &&
+      effectiveDisposition === 'rework'
+        ? Number(mrbAcceptedQuantity) <= recoveryQuantity
+        : Number(mrbAcceptedQuantity) < recoveryQuantity));
+  const trialDispositionValid =
+    mrbLocked ||
+    !trialRecovery ||
+    (/^\d+$/.test(mrbAcceptedQuantity) &&
+      /^\d+$/.test(trialScrap) &&
+      Number(mrbAcceptedQuantity) + Number(trialScrap) === recoveryQuantity &&
+      trialDefects.every(
+        (row) => row.defect_type_id && /^\d+$/.test(row.count) && Number(row.count) > 0,
+      ) &&
+      trialDefects.reduce((total, row) => total + Number(row.count), 0) === Number(trialScrap));
+  const sortingValid =
+    !needsSortingEvidence ||
+    (Number(coveredQuantity) === recoveryQuantity &&
+      Number(coveredQuantity) > 0 &&
+      Boolean(sortingReference.trim()) &&
+      Boolean(sortingPerformer) &&
+      recoveryPassed && (!data?.full_piece_inspection || defectsSegregated));
+  const needsConcession = needsSortingEvidence && effectiveDisposition === 'use_as_is';
+  const concessionValid =
+    !needsConcession ||
+    (Boolean(concessionReference.trim()) && concessionReference.trim() !== sortingReference.trim());
+  const criticalConcession = data?.severity === 'critical' && effectiveDisposition === 'use_as_is';
 
   const setDispositionMut = useMutation({
     mutationFn: () =>
@@ -121,14 +236,42 @@ export default function NcrDetailPage() {
         disposition: effectiveDisposition as NcrDisposition,
         root_cause: rootCause || undefined,
         corrective_action: correctiveAction || undefined,
-        mrb_accepted_quantity: (!mrbLocked && mrbAcceptedQuantity) || undefined,
+        mrb_accepted_quantity:
+          !mrbLocked &&
+          canKeepGood &&
+          (!data?.is_outgoing_recovery || positiveGood || effectiveDisposition === 'rework')
+            ? mrbAcceptedQuantity || undefined
+            : undefined,
+        ...(needsSortingEvidence
+          ? {
+              sorting_evidence: {
+                inspected_quantity: coveredQuantity,
+                evidence_reference: sortingReference.trim(),
+                concession_approval_reference: needsConcession
+                  ? concessionReference.trim()
+                  : undefined,
+                performed_by: sortingPerformer,
+                recovery_passed: recoveryPassed,
+                ...(data?.full_piece_inspection ? { defects_segregated: defectsSegregated } : {}),
+                ...(trialRecovery
+                  ? {
+                      trial_scrapped_quantity: Number(trialScrap),
+                      trial_defects: trialDefects.map((row) => ({
+                        defect_type_id: row.defect_type_id,
+                        count: Number(row.count),
+                      })),
+                    }
+                  : {}),
+              },
+            }
+          : {}),
       }),
     onSuccess: () => {
       toast.success('Disposition saved');
       qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed'),
+      toast.error(e.response?.data?.message ?? 'Could not save disposition. Try again.'),
   });
 
   const close = useMutation({
@@ -173,8 +316,18 @@ export default function NcrDetailPage() {
   }
 
   const isTerminal = ['closed', 'cancelled'].includes(data.status);
+  const reviewerOnly =
+    !canManageNcr &&
+    can('quality.inspections.review') &&
+    data.is_incoming_mrb &&
+    !mrbLocked &&
+    !isTerminal;
 
-  const ncrChain = buildNcrChain(data);
+  const ncrChain = buildNcrChain(data).map((step) => fullBatch && step.key === 'actions' ? {
+    ...step,
+    label: repairNotes ? 'Repair and QC' : 'Defect handling',
+    state: data.status === 'closed' ? 'done' as const : data.disposition ? 'active' as const : 'pending' as const,
+  } : step);
 
   // Build LinkedRecords groups
   const linkedGroups: import('@/types/chain').LinkedGroup[] = [];
@@ -197,6 +350,18 @@ export default function NcrDetailPage() {
           id: data.inspection.inspection_number,
           href: `/quality/inspections/${data.inspection.id}`,
           meta: `${data.inspection.stage_label ?? data.inspection.stage} · ${data.inspection.status_label ?? data.inspection.status}`,
+        },
+      ],
+    });
+  }
+  if (data.rework_work_order) {
+    linkedGroups.push({
+      label: data.is_inline_rework ? 'Rework in source work order' : 'Repair work order',
+      items: [
+        {
+          id: data.rework_work_order.wo_number,
+          href: `/production/work-orders/${data.rework_work_order.id}`,
+          meta: `${data.is_inline_rework ? data.confirmed_rework_quantity : data.rework_work_order.quantity_target} pcs · ${data.rework_work_order.status_label ?? data.rework_work_order.status}`,
         },
       ],
     });
@@ -239,6 +404,8 @@ export default function NcrDetailPage() {
   return (
     <div>
       <PageHeader
+        backTo="/quality/ncrs"
+        backLabel="Back to NCRs"
         title={
           <span>
             {data.ncr_number}
@@ -286,24 +453,77 @@ export default function NcrDetailPage() {
         }
       />
 
-      <div className="px-5 pt-4">
+      <div className="px-5 py-4">
         <Panel title="Quality flow">
           <ChainHeader steps={ncrChain} />
         </Panel>
       </div>
 
-      <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
+      <div className="grid grid-cols-1 gap-4 px-5 pb-5 lg:grid-cols-3">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
+          {fullBatch && !isTerminal && (
+            <div className="rounded-md border border-default bg-surface px-4 py-3 text-sm">
+              <p className="font-medium">
+                {mrbLocked ? 'Release decision recorded.' : 'Next: separate defective pieces and approve stock release.'}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {mrbLocked
+                  ? 'Complete defect handling and approved QC before closing this NCR.'
+                  : 'After inspection review, QC can confirm separation and release conforming pieces.'}
+              </p>
+            </div>
+          )}
+          {(data.is_outgoing_recovery || fullBatch) &&
+            data.sorting_approved_at &&
+            Number(data.inspection?.accepted_quantity ?? 0) > 0 && (
+              <Panel title="Approved stock release">
+                <p className="text-sm">
+                  {formatQuantity(data.inspection?.accepted_quantity ?? 0)} pieces are approved for
+                  release. The failed inspection remains part of the history.
+                </p>
+                {can('supply_chain.deliveries.view') && (
+                  <Link
+                    className="mt-2 inline-block text-sm text-accent hover:underline"
+                    to="/supply-chain/deliveries"
+                  >
+                    Review delivery drafts
+                  </Link>
+                )}
+              </Panel>
+            )}
           <Panel title="Details">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm [&>div]:min-w-0 [&_dd]:break-words">
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
                 <dd>{labelFor(options?.sources, data.source)}</dd>
               </div>
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Affected qty</dt>
-                <dd className="font-mono tabular-nums">{data.affected_quantity}</dd>
+                <dt className="text-2xs uppercase tracking-wider text-muted">
+                  {fullBatch ? 'Batch quantity' : data.is_process_recovery ? 'Required process sample' : 'Held quantity'}
+                </dt>
+                <dd className="font-mono tabular-nums">
+                  {formatQuantity(recoveryQuantity)}
+                  {countable ? ' pcs' : data.inspection?.source_uom_code ? ` ${data.inspection.source_uom_code}` : ''}
+                </dd>
               </div>
+              {fullBatch && reportedDefects != null && (
+                <>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Defective pieces</dt>
+                    <dd className="font-mono tabular-nums text-danger-fg">{formatQuantity(reportedDefects)} pcs</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">
+                      {mrbLocked ? 'Conforming pieces' : 'Conforming · awaiting release'}
+                    </dt>
+                    <dd className="font-mono tabular-nums">{formatQuantity(conformingQuantity ?? 0)} pcs</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Stock hold</dt>
+                    <dd>{mrbLocked ? 'Release decision recorded' : 'Entire batch held'}</dd>
+                  </div>
+                </>
+              )}
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Disposition</dt>
                 <dd>{labelFor(options?.dispositions, data.disposition)}</dd>
@@ -316,24 +536,56 @@ export default function NcrDetailPage() {
                   </dd>
                 </div>
               )}
-              {data.mrb_accepted_quantity && (
+              {data.mrb_accepted_quantity != null && (
                 <div>
-                  <dt className="text-2xs uppercase tracking-wider text-muted">Good pieces kept</dt>
+                  <dt className="text-2xs uppercase tracking-wider text-muted">
+                    Verified good quantity
+                  </dt>
                   <dd className="font-mono tabular-nums">{data.mrb_accepted_quantity}</dd>
                 </div>
               )}
-              <div className="col-span-3">
+              {data.mrb_accepted_quantity != null && (
+                <div>
+                  <dt className="text-2xs uppercase tracking-wider text-muted">
+                    Remainder for disposition
+                  </dt>
+                  <dd className="font-mono tabular-nums">
+                    {formatQuantity(recoveryQuantity - Number(data.mrb_accepted_quantity))}
+                  </dd>
+                </div>
+              )}
+              {data.sorting_evidence_reference && (
+                <div className="col-span-full">
+                  <dt className="text-2xs uppercase tracking-wider text-muted">
+                    Sorting / reinspection evidence
+                  </dt>
+                  <dd className="break-words">{data.sorting_evidence_reference}</dd>
+                  <dd className="text-muted">
+                    Inspected: {data.sorting_inspected_quantity ?? 'Unknown'} · Approved:{' '}
+                    {formatDateTime(data.sorting_approved_at)}
+                  </dd>
+                </div>
+              )}
+              <div className="col-span-full">
                 <dt className="text-2xs uppercase tracking-wider text-muted">Defect description</dt>
                 <dd className="whitespace-pre-line">{data.defect_description}</dd>
               </div>
+              {data.concession_approval_reference && (
+                <div className="col-span-full">
+                  <dt className="text-2xs uppercase tracking-wider text-muted">
+                    Concession approval
+                  </dt>
+                  <dd className="break-words">{data.concession_approval_reference}</dd>
+                </div>
+              )}
               {data.root_cause && (
-                <div className="col-span-3">
+                <div className="col-span-full">
                   <dt className="text-2xs uppercase tracking-wider text-muted">Root cause</dt>
                   <dd className="whitespace-pre-line">{data.root_cause}</dd>
                 </div>
               )}
               {data.corrective_action && (
-                <div className="col-span-3">
+                <div className="col-span-full">
                   <dt className="text-2xs uppercase tracking-wider text-muted">
                     Corrective action
                   </dt>
@@ -343,125 +595,555 @@ export default function NcrDetailPage() {
             </dl>
           </Panel>
 
-          {!isTerminal && can('quality.ncr.manage') && (
+          {data.late_incoming && (
+            <Panel title="Accepted material review">
+              <p className="text-sm text-muted">
+                Suspect remaining quantity: {formatQuantity(data.late_hold_quantity ?? 0)}. Complete
+                every hold before closing. If a physical hold is missing, restore quarantine setup
+                and release reservations first. Review consumed material through downstream
+                traceability.
+              </p>
+              {!isTerminal &&
+                can('inventory.mrb.manage') &&
+                Number(data.late_hold_quantity ?? 0) >
+                  (data.material_review_records ?? []).reduce(
+                    (total, record) => total + Number(record.quantity),
+                    0,
+                  ) && (
+                  <Button
+                    className="mt-3"
+                    variant="secondary"
+                    onClick={() => retryQuarantine.mutate()}
+                    loading={retryQuarantine.isPending}
+                    disabled={retryQuarantine.isPending}
+                  >
+                    Retry missing quarantine holds
+                  </Button>
+                )}
+              {data.material_review_records?.map((record) => (
+                <p key={record.id} className="mt-2 text-sm">
+                  {can('inventory.mrb.view') ? (
+                    <Link
+                      className="font-mono text-accent hover:underline"
+                      to={`/inventory/mrb/${record.id}`}
+                    >
+                      {record.mrb_number}
+                    </Link>
+                  ) : (
+                    record.mrb_number
+                  )}{' '}
+                  · {record.status} · {formatQuantity(record.quantity)}
+                </p>
+              ))}
+            </Panel>
+          )}
+          {!isTerminal && (canManageNcr || reviewerOnly) && (
             <Panel title={mrbLocked ? 'Root cause & corrective action' : 'Set disposition'}>
-              {data.is_incoming_mrb && (
-                <div className="mb-3 rounded-md border border-info/40 bg-info-bg/20 px-3 py-2 text-sm text-info-fg">
-                  This lot is held at receiving until the Material Review Board decides. Use as-is /
-                  Rework accept the lot; Return to supplier / Scrap reject it.
+              <div className="space-y-4">
+                {data.is_incoming_mrb && (
+                  <div className="mb-3 rounded-md border border-info/40 bg-info-bg/20 px-3 py-2 text-sm text-info-fg">
+                    This supplier receipt remains on hold. Return defective pieces to the supplier.
+                    Record any verified good pieces separately for acceptance, with sorting and
+                    reinspection evidence. Leave the good quantity blank to return the whole lot.
+                  </div>
+                )}
+                {data.is_process_recovery && !trialRecovery && (
+                  <p className="mb-3 text-sm text-muted">
+                    Production remains held. Correct the process and verify the required process
+                    sample, then obtain independent approval before continuing. Account for affected
+                    material separately; outgoing inspection checks the produced batch.
+                  </p>
+                )}
+                {data.is_outgoing_recovery && !repairBatch && (
+                  <p className="mb-3 text-sm text-muted">
+                    {fullBatch
+                      ? 'Choose what happens to defective pieces. Enter the conforming quantity to release after physical separation.'
+                      : 'Choose a disposition for the remaining defects. Release verified good pieces only after full-batch sorting and reinspection.'}
+                  </p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <Select
+                    label="Disposition"
+                    aria-label="Disposition"
+                    required={!mrbLocked}
+                    value={effectiveDisposition}
+                    disabled={mrbLocked || setDispositionMut.isPending}
+                    helper={
+                      mrbLocked
+                        ? 'Fixed by the MRB decision — the receipt was settled against it.'
+                        : fullBatch && !repairBatch
+                          ? 'Applies to defective pieces; conforming stock is handled separately.'
+                          : undefined
+                    }
+                    onChange={(e) => setDisposition(e.target.value as NcrDisposition | '')}
+                  >
+                    <option value="">Choose how to handle defects</option>
+                    {(options?.dispositions ?? [])
+                      .filter(
+                        (option) =>
+                          (!data.is_incoming_mrb || option.value === 'return_to_supplier') &&
+                          (data.severity !== 'critical' || option.value !== 'use_as_is') &&
+                          (!data.is_incoming_mrb || option.value !== 'scrap') &&
+                          (!data.is_outgoing_recovery ||
+                            ['scrap', 'rework'].includes(option.value)) &&
+                          (!data.is_process_recovery || option.value === 'rework'),
+                      )
+                      .map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {fullBatch && option.value === 'rework'
+                            ? 'Repair defective pieces'
+                            : fullBatch && option.value === 'scrap'
+                              ? 'Scrap defective pieces'
+                              : option.label}
+                        </option>
+                      ))}
+                  </Select>
                 </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <Select
-                  label="Disposition"
-                  value={effectiveDisposition}
-                  disabled={mrbLocked}
-                  helper={
-                    mrbLocked
-                      ? 'Fixed by the MRB decision — the receipt was settled against it.'
-                      : undefined
-                  }
-                  onChange={(e) => setDisposition(e.target.value as NcrDisposition | '')}
-                >
-                  <option value="">— Select —</option>
-                  {(options?.dispositions ?? []).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              {data.is_incoming_mrb &&
-                (disposition === 'return_to_supplier' || disposition === 'scrap') && (
+                {canKeepGood && !mrbLocked && (
                   <Input
-                    label="Good pieces kept after sorting"
-                    helper="Leave blank to reject the whole lot. Must be fewer than the quantity received."
+                    label={repairBatch ? 'Good pieces to release' : 'Verified good quantity after sorting'}
+                    required={repairBatch}
+                    helper={
+                      repairBatch ? 'From QC results. Change only if fewer good pieces can release.' : fullBatch
+                        ? `Enter physically separated conforming pieces${conformingQuantity !== null ? `, up to ${conformingQuantity}` : ''}. Enter 0 if none can release.`
+                        : trialRecovery
+                          ? 'Enter actual trial pieces kept good, including 0. Good plus scrap must equal the affected batch.'
+                          : data.is_outgoing_recovery && effectiveDisposition === 'rework'
+                            ? 'Enter verified good pieces, including 0 if all need repair. A repair work order covers the remainder.'
+                            : 'Leave blank to hold or dispose of the whole lot. Enter only segregated, reinspected good material; must be less than the held quantity.'
+                    }
                     type="number"
-                    step="0.001"
+                    step={countable ? '1' : '0.001'}
                     min="0"
-                    inputMode="decimal"
+                    max={conformingQuantity ?? recoveryQuantity}
+                    containerClassName="sm:max-w-sm"
+                    inputMode={countable ? 'numeric' : 'decimal'}
                     value={mrbAcceptedQuantity}
+                    disabled={setDispositionMut.isPending}
+                    error={
+                      !goodQuantityValid && mrbAcceptedQuantity !== ''
+                        ? fullBatch && conformingQuantity !== null
+                          ? `Enter a whole number from 0 to ${conformingQuantity}.`
+                          : data.is_outgoing_recovery && effectiveDisposition === 'rework'
+                            ? 'Enter a whole number no greater than the held batch.'
+                            : 'Enter a valid quantity smaller than the held quantity.'
+                        : undefined
+                    }
                     onChange={(e) => setMrbAcceptedQuantity(e.target.value)}
                   />
                 )}
-              <Textarea
-                label="Root cause"
-                rows={3}
-                value={rootCause}
-                onChange={(e) => setRootCause(e.target.value)}
-              />
-              <Textarea
-                label="Corrective action"
-                rows={3}
-                value={correctiveAction}
-                onChange={(e) => setCorrectiveAction(e.target.value)}
-              />
-              <div className="flex justify-end mt-3">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!effectiveDisposition}
-                  loading={setDispositionMut.isPending}
-                  onClick={() => setDispositionMut.mutate()}
-                >
-                  {mrbLocked ? 'Save' : 'Save disposition'}
-                </Button>
+                {trialRecovery && !mrbLocked && canKeepGood && (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-sm text-muted">
+                      These counts cover only the {recoveryQuantity} recorded trial pieces. Normal
+                      production stays blocked until an independent authorized reviewer approves
+                      recovery.
+                    </p>
+                    <Input
+                      label="Pieces scrapped"
+                      required
+                      type="number"
+                      min={0}
+                      max={recoveryQuantity}
+                      step={1}
+                      value={trialScrap}
+                      disabled={setDispositionMut.isPending}
+                      onChange={(event) => setTrialScrap(event.target.value)}
+                    />
+                    {(Number(trialScrap) > 0 || trialDefects.length > 0) && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={setDispositionMut.isPending}
+                          onClick={() =>
+                            setTrialDefects([...trialDefects, { defect_type_id: '', count: '' }])
+                          }
+                        >
+                          Add trial defect
+                        </Button>
+                        {trialDefectOptions.isError && (
+                          <p role="alert">
+                            Defect types failed to load.{' '}
+                            <Button onClick={() => trialDefectOptions.refetch()}>
+                              Retry defect types
+                            </Button>
+                          </p>
+                        )}
+                        {trialDefects.map((row, index) => (
+                          <div key={index} className="grid gap-2 sm:grid-cols-[1fr_6rem_auto]">
+                            <Select
+                              label={`Trial defect type ${index + 1}`}
+                              value={row.defect_type_id}
+                              disabled={setDispositionMut.isPending}
+                              onChange={(event) =>
+                                setTrialDefects(
+                                  trialDefects.map((item, i) =>
+                                    i === index
+                                      ? { ...item, defect_type_id: event.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="">Choose defect</option>
+                              {trialDefectOptions.data?.map((type) => (
+                                <option key={type.id} value={type.id}>
+                                  {type.code} · {type.name}
+                                </option>
+                              ))}
+                            </Select>
+                            <Input
+                              label={`Trial defect count ${index + 1}`}
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={row.count}
+                              disabled={setDispositionMut.isPending}
+                              onChange={(event) =>
+                                setTrialDefects(
+                                  trialDefects.map((item, i) =>
+                                    i === index ? { ...item, count: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              disabled={setDispositionMut.isPending}
+                              onClick={() =>
+                                setTrialDefects(trialDefects.filter((_, i) => i !== index))
+                              }
+                            >
+                              Remove trial defect {index + 1}
+                            </Button>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {!trialDispositionValid && (
+                      <p className="text-sm text-warning-fg">
+                        Good plus scrap must equal {recoveryQuantity}; defect counts must equal
+                        scrap.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {needsSortingEvidence && (
+                  <div className="mt-3 space-y-3 border-t border-default pt-3">
+                    <h3 className="text-sm font-medium">
+                      {fullBatch
+                        ? 'Confirm physical separation'
+                        : 'Sorting and verification evidence'}
+                    </h3>
+                    {!repairBatch && <p className="text-xs text-muted">
+                      {data.is_process_recovery ? 'Required process sample' : 'Full held quantity'}:{' '}
+                      <span className="font-mono">{recoveryQuantity}</span>.
+                      {data.full_piece_inspection
+                        ? 'Full inspection is already recorded. Confirm defects were separated; no repeat inspection is required.'
+                        : data.is_process_recovery
+                          ? 'Record verification of the corrected process.'
+                          : 'Record completed sorting and reinspection, not the original sample result.'}
+                    </p>}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        label={
+                          data.full_piece_inspection
+                            ? 'Quantity covered by final inspection'
+                            : data.is_process_recovery
+                              ? 'Process sample verified after correction'
+                              : 'Quantity inspected after full-batch sorting'
+                        }
+                        required
+                        type="number"
+                        min={countable ? '1' : '0.001'}
+                        step={countable ? '1' : '0.001'}
+                        value={coveredQuantity}
+                        readOnly={fullBatch}
+                        disabled={setDispositionMut.isPending}
+                        helper={
+                          repairBatch ? undefined : fullBatch
+                            ? 'From the completed final inspection.'
+                            : data.is_process_recovery
+                              ? 'Must equal the required process sample.'
+                              : 'Must equal the full held quantity.'
+                        }
+                        error={
+                          coveredQuantity !== '' && Number(coveredQuantity) !== recoveryQuantity
+                            ? data.is_process_recovery
+                              ? 'Verify the required process sample before continuing.'
+                              : 'Inspect the full held quantity before releasing good material.'
+                            : undefined
+                        }
+                        onChange={(event) => setSortingQuantity(event.target.value)}
+                      />
+                      <Select
+                        label={
+                          data.full_piece_inspection
+                            ? 'Defects separated by'
+                            : 'Sorting and reinspection performed by'
+                        }
+                        aria-label={
+                          data.full_piece_inspection
+                            ? 'Defects separated by'
+                            : 'Sorting and reinspection performed by'
+                        }
+                        helper={
+                          repairBatch ? 'Defaults to QC inspector; change if someone else separated defects.' : fullBatch
+                            ? 'Select the person who physically separated the pieces.'
+                            : 'Select the QC performer. A different authorized user must approve.'
+                        }
+                        required
+                        value={sortingPerformer}
+                        disabled={setDispositionMut.isPending}
+                        onChange={(event) => setSortingPerformer(event.target.value)}
+                      >
+                        <option value="">Choose performer</option>
+                        {assignees.map((assignee) => (
+                          <option key={assignee.id} value={assignee.id}>
+                            {assignee.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <Input
+                      label={
+                        repairBatch ? 'Separation reference' : data.full_piece_inspection
+                          ? 'Segregation evidence reference'
+                          : 'Sorting / reinspection evidence reference'
+                      }
+                      required
+                      maxLength={500}
+                      value={sortingReference}
+                      disabled={setDispositionMut.isPending}
+                      helper={
+                        repairBatch ? undefined : data.full_piece_inspection
+                          ? 'Reference the segregation record or held-lot label.'
+                          : 'Reference the external sorting and reinspection document and segregated good-lot label.'
+                      }
+                      placeholder={
+                        fullBatch ? 'Held-lot label or log reference' : undefined
+                      }
+                      onChange={(event) => setSortingReference(event.target.value)}
+                    />
+                    {needsConcession && (
+                      <Input
+                        label="Concession approval / customer sign-off reference"
+                        required
+                        maxLength={500}
+                        value={concessionReference}
+                        disabled={setDispositionMut.isPending}
+                        helper="Reference authorized acceptance of the known deviation, separate from reinspection."
+                        onChange={(event) => setConcessionReference(event.target.value)}
+                      />
+                    )}
+                    <div className="flex flex-wrap gap-x-5 gap-y-3">
+                    <Checkbox
+                      id={`ncr-recovery-${id}`}
+                      className="min-h-11"
+                      checked={recoveryPassed}
+                      disabled={setDispositionMut.isPending}
+                      label={
+                        repairBatch ? 'Good pieces match inspection results.' : data.full_piece_inspection
+                          ? 'Conforming pieces match the completed inspection evidence.'
+                          : data.is_process_recovery
+                            ? 'The corrected process passed all required checks.'
+                            : needsConcession
+                              ? 'Every held piece was reinspected and meets the approved concession.'
+                              : 'Remaining good pieces were segregated, reinspected and passed all requirements.'
+                      }
+                      onChange={(event) => setRecoveryPassed(event.target.checked)}
+                    />
+                    {data.full_piece_inspection && (
+                      <Checkbox
+                        label={repairBatch ? 'Defective pieces physically separated.' : 'Defective pieces are physically separated from conforming pieces.'}
+                        checked={defectsSegregated}
+                        disabled={setDispositionMut.isPending}
+                        onChange={(event) => setDefectsSegregated(event.target.checked)}
+                      />
+                    )}
+                    </div>
+                    {repairBatch ? (
+                      <p className="text-sm font-medium" aria-live="polite">
+                        {mrbAcceptedQuantity !== '' && goodQuantityValid
+                          ? `${formatQuantity(Number(mrbAcceptedQuantity))} to release · ${formatQuantity(recoveryQuantity - Number(mrbAcceptedQuantity))} held for repair`
+                          : `${formatQuantity(recoveryQuantity)} pieces on hold`}
+                      </p>
+                    ) : <p className="text-sm">
+                      Verified good:{' '}
+                      {effectiveDisposition === 'use_as_is'
+                        ? recoveryQuantity
+                        : mrbAcceptedQuantity}{' '}
+                      · Remainder:{' '}
+                      {effectiveDisposition === 'use_as_is'
+                        ? 0
+                        : formatQuantity(recoveryQuantity - Number(mrbAcceptedQuantity))}
+                    </p>}
+                    <p className="text-xs text-muted">
+                      {fullBatch ? 'QC can confirm separation after inspection review. Repaired pieces need QC before release.'
+                        : 'Saving release requires a different authorized user from the original inspector and separation performer.'}
+                    </p>
+                  </div>
+                )}
+                {canManageNcr && (
+                  <div className="grid gap-3 border-t border-default pt-4 sm:grid-cols-2">
+                    <Textarea
+                      label="Root cause"
+                      required={trialRecovery}
+                      helper={
+                        trialRecovery
+                          ? data.root_cause || 'Describe the verified cause of the failed trial.'
+                          : undefined
+                      }
+                      rows={3}
+                      maxLength={5000}
+                      showCounter={false}
+                      placeholder="What caused this defect?"
+                      value={rootCause}
+                      onChange={(e) => setRootCause(e.target.value)}
+                    />
+                    {!repairNotes && <Textarea
+                      label="Corrective action"
+                      required={trialRecovery}
+                      helper={
+                        trialRecovery
+                          ? data.corrective_action ||
+                            'Describe the correction verified during reinspection.'
+                          : undefined
+                      }
+                      rows={3}
+                      maxLength={5000}
+                      showCounter={false}
+                      placeholder="How will the cause be corrected?"
+                      value={correctiveAction}
+                      onChange={(e) => setCorrectiveAction(e.target.value)}
+                    />}
+                  </div>
+                )}
+                {setDispositionMut.isError && (
+                  <p role="alert" className="text-sm text-danger-fg">
+                    {(setDispositionMut.error as AxiosError<{ message?: string }>).response?.data
+                      ?.message ?? 'Could not save disposition. Your entries are still here.'}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center justify-end gap-3 border-t border-default pt-4">
+                  <p className="text-xs text-muted">
+                    {!effectiveDisposition
+                      ? 'Choose a disposition to continue.'
+                      : repairBatch ? (!goodQuantityValid || !sortingValid ? 'Complete required fields and confirmations.' : '')
+                      : !goodQuantityValid
+                        ? 'Check the verified good quantity.'
+                        : !sortingValid
+                          ? 'Complete evidence and confirmations before saving.'
+                          : needsSortingEvidence
+                            ? fullBatch ? 'QC may release conforming pieces after reviewed inspection and confirmed separation.' : 'Only an authorized, independent approver can release stock.'
+                            : 'Save the disposition and corrective notes.'}
+                  </p>
+                  <Button
+                    variant="primary"
+                    disabled={
+                      !effectiveDisposition ||
+                      !goodQuantityValid ||
+                      !trialDispositionValid ||
+                      (trialRecovery &&
+                        !mrbLocked &&
+                        (!(rootCause.trim() || data.root_cause) ||
+                          !(correctiveAction.trim() || data.corrective_action))) ||
+                      !sortingValid ||
+                      !concessionValid ||
+                      (reviewerOnly && !positiveGood) ||
+                      criticalConcession
+                    }
+                    loading={setDispositionMut.isPending}
+                    onClick={() => setDispositionMut.mutate()}
+                  >
+                    {mrbLocked ? 'Save' : repairBatch ? 'Approve release and repair' : 'Save disposition'}
+                  </Button>
+                </div>
+                {data.is_outgoing_recovery && (
+                  <details className="border-t border-default pt-3 text-xs text-muted">
+                    <summary className="cursor-pointer focus-visible:outline-accent">
+                      Warehouse handling requirements
+                    </summary>
+                    <p className="mt-2">
+                      Scrap and repair require affected stock in one held lot bin. If it spans bins,
+                      ask Warehouse to consolidate the held pieces first.
+                    </p>
+                  </details>
+                )}
               </div>
             </Panel>
           )}
 
-          {!isTerminal && can('quality.ncr.manage') && (
+          {!fullBatch && !isTerminal && can('quality.ncr.manage') && (
             <Panel title="Add action">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <Select
-                  label="Type"
-                  value={actionType}
-                  onChange={(e) => setActionType(e.target.value as NcrActionType)}
-                >
-                  {(options?.actions ?? []).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <Textarea
-                label="Description"
-                rows={3}
-                value={actionDesc}
-                onChange={(e) => setActionDesc(e.target.value)}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Select
-                  label="CAPA owner (optional)"
-                  value={ownerId}
-                  onChange={(e) => setOwnerId(e.target.value)}
-                >
-                  <option value="">Actor (default)</option>
-                  {assignees.map((assignee) => (
-                    <option key={assignee.id} value={assignee.id}>
-                      {assignee.name}
-                    </option>
-                  ))}
-                </Select>
-                <Input
-                  label="Due date (optional)"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
+              <div className="space-y-3">
+                <p className="text-xs text-muted">
+                  Record containment, corrective, or preventive work. Each action stays in the NCR
+                  history.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <Select
+                    label="Type"
+                    value={actionType}
+                    onChange={(e) => setActionType(e.target.value as NcrActionType)}
+                  >
+                    {(options?.actions ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Textarea
+                  label="Description"
+                  required
+                  maxLength={5000}
+                  showCounter={false}
+                  placeholder="Describe what was done or what needs to happen."
+                  rows={3}
+                  value={actionDesc}
+                  onChange={(e) => setActionDesc(e.target.value)}
                 />
-              </div>
-              <div className="flex justify-end mt-3">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<LuPlus size={14} />}
-                  disabled={!actionDesc}
-                  loading={addAction.isPending}
-                  onClick={() => addAction.mutate()}
-                >
-                  Add action
-                </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Select
+                    label="CAPA owner (optional)"
+                    value={ownerId}
+                    onChange={(e) => setOwnerId(e.target.value)}
+                  >
+                    <option value="">Actor (default)</option>
+                    {assignees.map((assignee) => (
+                      <option key={assignee.id} value={assignee.id}>
+                        {assignee.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    label="Due date (optional)"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex justify-end mt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<LuPlus size={14} />}
+                    disabled={!actionDesc.trim()}
+                    loading={addAction.isPending}
+                    onClick={() => addAction.mutate()}
+                  >
+                    Add action
+                  </Button>
+                </div>
+                {addAction.isError && (
+                  <p role="alert" className="text-sm text-danger-fg">
+                    {(addAction.error as AxiosError<{ message?: string }>).response?.data
+                      ?.message ?? 'Could not add action. Your entries are still here.'}
+                  </p>
+                )}
               </div>
             </Panel>
           )}
@@ -476,7 +1158,7 @@ export default function NcrDetailPage() {
             ))}
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {linkedGroups.length > 0 && (
             <Panel title="Linked records">
               <LinkedRecords groups={linkedGroups} />
@@ -488,14 +1170,14 @@ export default function NcrDetailPage() {
             </Panel>
           )}
           <Panel title="Navigation">
-            <Link to="/quality/ncrs" className="text-xs text-accent hover:underline">
-              ← Back to NCRs
+            <Link to="/quality/ncrs" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+              <LuArrowLeft size={14} aria-hidden="true" /> Back to NCRs
             </Link>
             <Link
               to="/quality/ncrs/effectiveness"
-              className="block text-xs text-accent hover:underline mt-2"
+              className="mt-2 flex items-center gap-1 text-xs text-accent hover:underline"
             >
-              CAPA due queue →
+              CAPA due queue <LuArrowRight size={14} aria-hidden="true" />
             </Link>
           </Panel>
         </div>

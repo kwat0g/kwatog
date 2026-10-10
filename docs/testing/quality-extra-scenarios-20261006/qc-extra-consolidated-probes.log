@@ -1,0 +1,45 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+FF.FFF                                                              6 / 6 (100%)
+
+Time: 00:39.799, Memory: 80.50 MB
+
+There were 5 failures:
+
+1) QcAdditionalIncomingProbeTest::test_extra_piece_quarantine_hold_rejects_fractional_quantity
+Half a physical piece was accepted into quarantine.
+
+/tmp/QcAdditionalIncomingProbeTest.php:41
+
+2) QcAdditionalIncomingProbeTest::test_extra_partial_acceptance_rejects_fractional_physical_piece
+Partial acceptance posted half a physical piece.
+
+/tmp/QcAdditionalIncomingProbeTest.php:55
+
+3) QcAdditionalIncomingProbeTest::test_extra_untracked_late_hold_survives_transfer_to_another_bin
+Suspect stock became usable simply by changing bins.
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'100.000'
++'0.000'
+
+/tmp/QcAdditionalIncomingProbeTest.php:102
+
+4) QcAdditionalIncomingProbeTest::test_extra_late_incident_remains_selectable_after_missing_quarantine_setup
+Late NCR must be selectable for recovery.
+Failed asserting that an array contains 'jnVYkWYkvp'.
+
+/tmp/QcAdditionalIncomingProbeTest.php:123
+
+5) QcAdditionalIncomingProbeTest::test_extra_late_reported_defect_cannot_release_entire_lot_without_repair
+Known defect was released with the full lot without repair.
+
+/tmp/QcAdditionalIncomingProbeTest.php:140
+
+FAILURES!
+Tests: 6, Assertions: 9, Failures: 5.

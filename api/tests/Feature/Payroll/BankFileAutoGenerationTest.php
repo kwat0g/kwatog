@@ -62,6 +62,9 @@ class BankFileAutoGenerationTest extends TestCase
     /** Approved period with one banked employee + one valid payroll. */
     private function makeApprovedPeriodWithBankedPayroll(): PayrollPeriod
     {
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]);
         $period = PayrollPeriod::factory()->create([
             'period_start'  => '2026-04-01',
             'period_end'    => '2026-04-15',
@@ -69,6 +72,7 @@ class BankFileAutoGenerationTest extends TestCase
             'is_first_half' => true,
             'status'        => PayrollPeriodStatus::Approved->value,
         ]);
+        $period->forceFill(['approved_by' => $approver->id, 'approved_at' => now()])->save();
 
         $employee = Employee::factory()->create([
             'bank_name'        => 'BPI',

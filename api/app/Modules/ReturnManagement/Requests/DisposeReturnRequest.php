@@ -21,6 +21,12 @@ class DisposeReturnRequest extends FormRequest
 
     public function authorize(): bool
     {
+        $rma = $this->route('returnRequest');
+        if ($rma instanceof ReturnRequest && str_starts_with((string) $rma->source_key, 'grn-rejection:')
+            && ! in_array($this->user()->role?->slug, ['purchasing_officer', 'system_admin'], true)) {
+            return false;
+        }
+
         return $this->user()->can('return_management.dispose')
             || $this->user()->can('return_management.manage');
     }
@@ -33,20 +39,26 @@ class DisposeReturnRequest extends FormRequest
     public function rules(): array
     {
         $rma = $this->route('returnRequest');
+        $replacementRequired = $rma instanceof ReturnRequest
+            && $rma->type === ReturnRequestType::SupplierReturn
+            && $this->boolean('create_replacement_po');
         $allowedDispositions = $rma instanceof ReturnRequest
-            ? array_map(
-                static fn (DispositionType $disposition): string => $disposition->value,
-                DispositionType::allowedFor($rma->type, (bool) $rma->finance_only),
-            )
+            ? (str_starts_with((string) $rma->source_key, 'grn-rejection:')
+                ? [DispositionType::ReturnToSupplier->value]
+                : array_map(
+                    static fn (DispositionType $disposition): string => $disposition->value,
+                    DispositionType::allowedFor($rma->type, (bool) $rma->finance_only),
+                ))
             : array_map(static fn (DispositionType $disposition): string => $disposition->value, DispositionType::cases());
 
         return [
-            'dispositions'               => ['required', 'array', 'min:1'],
-            'dispositions.*.item_id'     => ['required', 'string'],
+            'dispositions' => ['required', 'array', 'min:1'],
+            'dispositions.*.item_id' => ['required', 'string'],
             'dispositions.*.disposition' => ['required', Rule::in($allowedDispositions)],
-            'dispositions.*.notes'       => ['nullable', 'string', 'max:500'],
-            'create_replacement_po'      => ['sometimes', 'boolean'],
-            'location_id'                => ['sometimes', 'integer', 'exists:warehouse_locations,id'],
+            'dispositions.*.notes' => ['nullable', 'string', 'max:500'],
+            'create_replacement_po' => ['sometimes', 'boolean'],
+            'required_delivery_date' => [Rule::requiredIf($replacementRequired), 'nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'location_id' => ['sometimes', 'integer', 'exists:warehouse_locations,id'],
         ];
     }
 
@@ -72,16 +84,18 @@ class DisposeReturnRequest extends FormRequest
             }
 
             $lineIds = $rma->items()->pluck('id');
-            $given   = [];
+            $given = [];
 
             foreach ((array) $this->input('dispositions', []) as $idx => $row) {
                 $id = HashIdFilter::decode((string) ($row['item_id'] ?? ''), ReturnRequestItem::class);
                 if (! $id || ! $lineIds->contains($id)) {
                     $v->errors()->add("dispositions.{$idx}.item_id", 'This line does not belong to the return request.');
+
                     continue;
                 }
                 if (in_array($id, $given, true)) {
                     $v->errors()->add("dispositions.{$idx}.item_id", 'This line appears more than once.');
+
                     continue;
                 }
                 $given[] = $id;
@@ -95,26 +109,24 @@ class DisposeReturnRequest extends FormRequest
                 );
             }
 
-            // 2026-08-08 — stock movement happens at disposition time on both
-            // sides: customer restock/rework lines are received back into
-            // stock, supplier return_to_supplier lines ship out. Either way the
-            // warehouse location is mandatory when a movement line exists.
+            // Customer restock/rework waits for a separate MRB release, which
+            // chooses its own destination. Supplier returns still ship at
+            // disposition and need a source location here.
             $dispositions = (array) $this->input('dispositions', []);
-            $hasMovement = collect($dispositions)->contains(fn (array $row) =>
-                $rma->type === ReturnRequestType::SupplierReturn
-                    ? ($row['disposition'] ?? null) === DispositionType::ReturnToSupplier->value
-                    : in_array(
-                        $row['disposition'] ?? null,
-                        [DispositionType::Restock->value, DispositionType::Rework->value],
-                        true,
-                    )
-            );
+            $rma->loadMissing('items');
+            $hasMovement = $rma->type === ReturnRequestType::SupplierReturn
+                && collect($dispositions)->contains(function (array $row) use ($rma): bool {
+                    if (($row['disposition'] ?? null) !== DispositionType::ReturnToSupplier->value) {
+                        return false;
+                    }
+                    $line = $rma->items->firstWhere('id', HashIdFilter::decode((string) ($row['item_id'] ?? ''), ReturnRequestItem::class));
+
+                    return $line && bccomp((string) $line->stock_movement_quantity, '0', 3) <= 0;
+                });
             if ($hasMovement && ! $this->input('location_id')) {
                 $v->errors()->add(
                     'location_id',
-                    $rma->type === ReturnRequestType::SupplierReturn
-                        ? 'Select the warehouse location the returned goods ship out from.'
-                        : 'Select the warehouse location returned restock lines are received back into.',
+                    'Select the warehouse location the returned goods ship out from.',
                 );
             }
         });

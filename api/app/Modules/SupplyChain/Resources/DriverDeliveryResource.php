@@ -38,6 +38,8 @@ class DriverDeliveryResource extends JsonResource
                 ? DeliveryStatus::from($next)->label()
                 : null,
             'scheduled_date' => optional($this->scheduled_date)?->toDateString(),
+            'expected_delivery_date' => optional($this->expected_delivery_date)?->toDateString(),
+            'carrier' => $this->carrier,
             'departed_at' => optional($this->departed_at)?->toISOString(),
             'delivered_at' => optional($this->delivered_at)?->toISOString(),
             'confirmed_at' => optional($this->confirmed_at)?->toISOString(),
@@ -62,7 +64,7 @@ class DriverDeliveryResource extends JsonResource
                 'file_name' => $proof->file_name,
                 'uploaded_at' => optional($proof->created_at)?->toISOString(),
             ])->all()),
-            'proof_count' => $this->whenLoaded('proofs', fn () => $this->proofs->count()),
+            'proof_count' => $this->whenLoaded('proofs', fn () => $this->proofs->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count()),
             'can_report_attempt_outcome' => $canReportAttempt,
             'attempt_outcome_reasons' => ($canReportAttempt || ($hasAttemptOutcome && ! $this->attemptOutcome->reconciled_at)) ? DeliveryAttemptReason::options() : [],
             'attempt_outcome' => $hasAttemptOutcome

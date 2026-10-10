@@ -10,9 +10,10 @@ use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
-use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,7 +24,7 @@ class BudgetTransferTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        $this->seed(RolePermissionSeeder::class);
     }
 
     public function test_request_then_approve_moves_the_month_bucket(): void
@@ -216,18 +217,26 @@ class BudgetTransferTest extends TestCase
         // Show resolves the same hash (route-model binding).
         $this->actingAs($maker)->getJson("/api/v1/budget-transfers/{$hash}")
             ->assertOk()
-            ->assertJsonPath('data.status', 'pending');
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.can_approve', false);
 
         // Same-role checker is refused over HTTP with the sentence.
         $sameRole = User::factory()->withRole('finance_officer')->create();
+        $this->actingAs($sameRole)->getJson('/api/v1/budget-transfers?per_page=100')
+            ->assertOk()
+            ->assertJsonPath('data.0.can_approve', false);
         $this->actingAs($sameRole)->postJson("/api/v1/budget-transfers/{$hash}/approve")
             ->assertStatus(422)
             ->assertJsonPath('errors.error.0', 'Transfer approval requires a different role than the requesting role.');
 
         // Cross-role checker applies.
+        $this->actingAs($checker)->getJson('/api/v1/budget-transfers?per_page=100')
+            ->assertOk()
+            ->assertJsonPath('data.0.can_approve', true);
         $this->actingAs($checker)->postJson("/api/v1/budget-transfers/{$hash}/approve")
             ->assertOk()
-            ->assertJsonPath('data.status', 'approved');
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.can_approve', false);
         $this->assertSame('975.00', $from->fresh()->jan);
 
         // A role without the grant cannot even list.

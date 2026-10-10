@@ -372,7 +372,7 @@ class DepreciationService
                 ['account_id' => $accumulatedDepreciationAccountId, 'debit' => Money::zero(), 'credit' => $row['amount'], 'description' => 'Monthly depreciation'],
             ],
         ], $by);
-        $this->journals->post($je, $by);
+        $this->journals->postSystem($je, (int) $by->id);
 
         AssetDepreciation::query()
             ->where('asset_id', $asset->getKey())
@@ -556,7 +556,7 @@ class DepreciationService
                     ['account_id' => $accumulatedDepreciationAccountId, 'debit' => Money::zero(), 'credit' => $totalAmount, 'description' => 'Monthly depreciation'],
                 ],
             ], $by);
-            $this->journals->post($je, $by);
+            $this->journals->postSystem($je, (int) $by->id);
         }
 
         foreach ($rows as $row) {

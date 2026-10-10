@@ -22,6 +22,7 @@ const { chromium, expect } = spaRequire('@playwright/test');
 const BOOTSTRAP = process.env.PRODUCTION_WORKORDERS_TEST_BOOTSTRAP === '1';
 const RUN_KEY = (process.env.PRODUCTION_WORKORDERS_RUN_ID || `PWO${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_production_workorders_browser_${RUN_KEY.toLowerCase()}`;
+const TEST_STORAGE = `/tmp/ogami-audit-storage/material-recovery-${RUN_KEY.toLowerCase()}`;
 const API_PORT = Number(process.env.PRODUCTION_WORKORDERS_TEST_API_PORT || 8210);
 const SPA_PORT = Number(process.env.PRODUCTION_WORKORDERS_TEST_SPA_PORT || 5210);
 const BASE = process.env.PRODUCTION_WORKORDERS_TEST_URL || (BOOTSTRAP ? `http://127.0.0.1:${SPA_PORT}` : 'http://127.0.0.1:5210');
@@ -30,12 +31,14 @@ const FIXTURE_IN_CONTAINER = `/tmp/pwo-${RUN_KEY.toLowerCase()}-fixture.json`;
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
   PRODUCTION_WORKORDERS_BROWSER_DB: DB, PRODUCTION_WORKORDERS_RUN_ID: RUN_KEY,
   PRODUCTION_WORKORDERS_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
 const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 const envFlags = () => Object.entries(ENV).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', 'artisan', ...args]);
 const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
 const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
 const sleep = (ms) => { try { execFileSync('sleep', [String(ms / 1000)]); } catch { /* ignored */ } };
@@ -55,9 +58,12 @@ function prepare() {
   fs.mkdirSync(OUT_ROOT, { recursive: true });
   stopApiServer();
   psql(`CREATE DATABASE ${DB} OWNER ogami;`);
-  compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'migrate', '--force']);
+  compose(['exec', '-T', 'api', 'mkdir', '-p', `${TEST_STORAGE}/app`, `${TEST_STORAGE}/app/public`, `${TEST_STORAGE}/framework/cache/data`, `${TEST_STORAGE}/framework/sessions`, `${TEST_STORAGE}/framework/views`, `${TEST_STORAGE}/logs`]);
+  const actualStorage = artisan('tinker', '--execute', 'echo storage_path();').trim();
+  if (actualStorage !== TEST_STORAGE) throw new Error(`Expected isolated Laravel storage ${TEST_STORAGE}; got ${actualStorage}.`);
+  artisan('migrate', '--force');
   compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
-  compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'tinker', '--execute', "require 'tests/Browser/material_recovery_fixture.php';"]);
+  artisan('tinker', '--execute', "require 'tests/Browser/material_recovery_fixture.php';");
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT_ROOT, 'fixture.json')]);
   compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
@@ -79,7 +85,6 @@ async function startVite() {
   const target = `http://${apiIp()}:${API_PORT}`;
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -102,6 +107,7 @@ async function tearDown(server) {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
     psql(`DROP DATABASE IF EXISTS ${DB};`);
   } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+  try { compose(['exec', '-T', 'api', 'rm', '-rf', TEST_STORAGE]); } catch (e) { console.log(`Could not remove ${TEST_STORAGE}: ${e.message}`); }
 }
 
 if (BOOTSTRAP) prepare();

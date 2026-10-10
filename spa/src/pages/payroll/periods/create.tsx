@@ -154,7 +154,7 @@ export default function CreatePayrollPeriodPage() {
  <div>
  <PageHeader title="New Payroll Period" backTo="/payroll/periods" backLabel="Payroll" />
       <FormDraftBanner safety={safety} />
- <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
+ <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
  <div className="grid grid-cols-2 gap-3">

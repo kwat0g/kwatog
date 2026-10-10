@@ -18,14 +18,20 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { PriceAgreement } from '@/types/crm';
+import { localIsoDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { PricingNavigation } from './PricingNavigation';
 
 export default function PriceAgreementsListPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const canManage = can('crm.price_agreements.manage');
-  const [filters, setFilters] = useUrlFilters<PriceAgreementListParams>({ search: '', page: 1, per_page: 25 });
+  const canManage = can('crm.price_agreements.propose');
+  const [filters, setFilters] = useUrlFilters<PriceAgreementListParams>({
+    search: '',
+    page: 1,
+    per_page: 25,
+  });
   const [scope, setScope] = useState<ArchiveScope>('active');
   const [confirmDelete, setConfirmDelete] = useState<PriceAgreement | null>(null);
 
@@ -60,102 +66,251 @@ export default function PriceAgreementsListPage() {
 
   const columns: Column<PriceAgreement>[] = [
     {
-      key: 'product', header: 'Product',
-      cell: (r) => r.product
-        ? <div><span className="font-mono">{r.product.part_number}</span> — {r.product.name}</div>
-        : <span className="text-muted">—</span>,
+      key: 'product',
+      header: 'Product',
+      className: 'min-w-44',
+      cell: (r) =>
+        r.product ? (
+          <div>
+            <span className="font-mono">{r.product.part_number}</span> — {r.product.name}
+          </div>
+        ) : (
+          <span className="text-muted">—</span>
+        ),
     },
-    { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
     {
-      key: 'price', header: 'Price', align: 'right',
-      cell: (r) => <NumCell>{r.pricing_method === 'tiered' ? `${r.pricing_method_label} · ${formatPeso(r.price)}` : formatPeso(r.price)}</NumCell>,
+      key: 'customer',
+      header: 'Customer',
+      className: 'min-w-36',
+      cell: (r) => r.customer?.name ?? '—',
     },
     {
-      key: 'effective_from', header: 'From', align: 'right',
+      key: 'price',
+      header: 'Price',
+      className: 'min-w-32',
+      align: 'right',
+      cell: (r) => (
+        <NumCell>
+          {formatPeso(r.price)}
+          <span className="block text-xs text-muted">
+            {r.pricing_method === 'tiered' ? 'Saved fallback price' : 'Any quantity'} · VAT excluded
+          </span>
+        </NumCell>
+      ),
+    },
+    {
+      key: 'quantity',
+      header: 'Quantity and unit price',
+      className: 'min-w-44',
+      cell: (r) =>
+        r.pricing_method === 'tiered' && r.tiers?.length ? (
+          <div className="space-y-1 text-sm">
+            <div>
+              Below {r.tiers[0].min_qty}: {formatPeso(r.price)}
+            </div>
+            {r.tiers.map((tier) => (
+              <div key={tier.min_qty} className="tabular-nums">
+                {tier.min_qty}+ {r.product?.unit_of_measure}: {formatPeso(tier.unit_price)}
+              </div>
+            ))}
+            <div className="text-xs text-muted">
+              Per product, per order. Highest eligible tier applies.
+            </div>
+          </div>
+        ) : (
+          <span className="text-muted">No minimum quantity</span>
+        ),
+    },
+    {
+      key: 'review',
+      header: 'Price review',
+      className: 'min-w-48',
+      cell: (r) => (
+        <div className="max-w-64 space-y-1.5 text-xs">
+          {r.pricing_warnings?.length ? (
+            <>
+              <Chip
+                variant={
+                  r.pricing_warnings.some((warning) =>
+                    warning.includes('new quotes at this price are blocked'),
+                  )
+                    ? 'danger'
+                    : 'warning'
+                }
+              >
+                {r.pricing_warnings.some((warning) =>
+                  warning.includes('new quotes at this price are blocked'),
+                )
+                  ? 'New quotes blocked'
+                  : 'Review needed'}
+              </Chip>
+              <details>
+                <summary className="cursor-pointer text-muted hover:text-primary focus-visible:outline-accent">
+                  {r.pricing_warnings.length} {r.pricing_warnings.length === 1 ? 'issue' : 'issues'}{' '}
+                  · Price details
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <div className="text-muted">
+                    Base: {formatPeso(r.product?.base_selling_price, 'Not configured')}
+                    <br />
+                    Minimum: {formatPeso(r.product?.minimum_selling_price, 'Not configured')}
+                  </div>
+                  <ul className="list-disc space-y-1 pl-4 text-warning-fg">
+                    {r.pricing_warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            </>
+          ) : (
+            <>
+              <span className="text-muted">No price warnings</span>
+              <div className="text-muted">
+                Base {formatPeso(r.product?.base_selling_price, 'Not configured')} · Min.{' '}
+                {formatPeso(r.product?.minimum_selling_price, 'Not configured')}
+              </div>
+            </>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'effective_from',
+      header: 'From',
+      className: 'whitespace-nowrap',
+      align: 'right',
       cell: (r) => <NumCell>{r.effective_from}</NumCell>,
     },
     {
-      key: 'effective_to', header: 'To', align: 'right',
+      key: 'effective_to',
+      header: 'To',
+      className: 'whitespace-nowrap',
+      align: 'right',
       cell: (r) => <NumCell>{r.effective_to}</NumCell>,
     },
     {
-      key: 'status', header: 'Status',
-      cell: (r) => r.deleted_at
-        ? <Chip variant="neutral">Archived</Chip>
-        : r.is_currently_active
-          ? <Chip variant="success">Active</Chip>
-          : <Chip variant="neutral">Expired</Chip>,
+      key: 'status',
+      header: 'Status',
+      cell: (r) =>
+        r.deleted_at ? (
+          <Chip variant="neutral">Archived</Chip>
+        ) : r.is_currently_active ? (
+          <Chip variant="success">Active</Chip>
+        ) : r.effective_from >
+          new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Manila',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date()) ? (
+          <Chip variant="info">Scheduled</Chip>
+        ) : (
+          <Chip variant="neutral">Expired</Chip>
+        ),
     },
-    ...(canManage ? [{
-      key: 'actions', header: '', align: 'right' as const,
-      cell: (r: PriceAgreement) => r.deleted_at ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          iconOnly
-          icon={<LuArchiveRestore size={14} />}
-          aria-label={`Restore agreement for ${r.customer?.name ?? 'customer'}`}
-          onClick={() => restore.mutate(r.id)}
-          className="text-muted hover:text-primary"
-        />
-      ) : (
-        <div className="flex justify-end gap-1">
-          <Link
-            to={`/crm/price-agreements/${r.id}/edit`}
-            className="p-1 rounded text-muted hover:text-primary hover:bg-elevated transition-colors inline-flex items-center justify-center"
-            aria-label="Edit agreement"
-          >
-            <LuPencil size={14} />
-          </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            icon={<LuTrash2 size={14} />}
-            aria-label="Archive agreement"
-            onClick={() => setConfirmDelete(r)}
-            className="text-muted hover:text-danger-fg"
-          />
-        </div>
-      ),
-    }] : []),
+    ...(canManage
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            align: 'right' as const,
+            cell: (r: PriceAgreement) =>
+              r.deleted_at ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  iconOnly
+                  icon={<LuArchiveRestore size={14} />}
+                  aria-label={`Restore agreement for ${r.customer?.name ?? 'customer'}`}
+                  onClick={() => restore.mutate(r.id)}
+                  className="text-muted hover:text-primary"
+                />
+              ) : (
+                <div className="flex justify-end gap-1">
+                  <Link
+                    to={`/crm/price-agreements/${r.id}/edit`}
+                    className="p-1 rounded text-muted hover:text-primary hover:bg-elevated transition-colors inline-flex items-center justify-center"
+                    aria-label="Propose replacement agreement"
+                  >
+                    <LuPencil size={14} />
+                  </Link>
+                  {r.effective_to < localIsoDate() && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<LuTrash2 size={14} />}
+                      aria-label="Archive agreement"
+                      onClick={() => setConfirmDelete(r)}
+                      className="text-muted hover:text-danger-fg"
+                    />
+                  )}
+                </div>
+              ),
+          },
+        ]
+      : []),
   ];
 
   return (
     <div>
       <PageHeader
         title="Price agreements"
-        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'agreement' : 'agreements'}` : undefined}
-        actions={canManage ? (
-          <Button variant="primary" icon={<LuPlus size={14} />} onClick={() => navigate('/crm/price-agreements/create')}>
-            New price agreement
-          </Button>
-        ) : null}
+        subtitle={
+          data
+            ? `${data.meta.total} ${data.meta.total === 1 ? 'agreement' : 'agreements'}`
+            : undefined
+        }
+        actions={
+          canManage ? (
+            <Button
+              variant="primary"
+              icon={<LuPlus size={14} />}
+              onClick={() => navigate('/crm/price-agreements/create')}
+            >
+              Propose agreement
+            </Button>
+          ) : null
+        }
       />
+      <PricingNavigation current="agreements" />
       <FilterBar
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         searchPlaceholder="Search product or customer…"
         actions={<ArchiveFilter value={scope} onChange={setScope} />}
       />
-      {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={8} />}
+      {isLoading && !data && <SkeletonTable columns={canManage ? 9 : 8} rows={8} />}
       {isError && (
         <EmptyState
           icon="alert-circle"
           title="Failed to load price agreements"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          action={
+            <Button variant="secondary" onClick={() => refetch()}>
+              Retry
+            </Button>
+          }
         />
       )}
       {data && data.data.length === 0 && (
         <EmptyState
           icon="dollar-sign"
           title={scope === 'only' ? 'No archived price agreements' : 'No price agreements yet'}
-          description={canManage ? 'Create a price agreement to set customer-specific pricing.' : 'Nothing here yet.'}
-          action={canManage && scope !== 'only' ? (
-            <Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>New price agreement</Button>
-          ) : undefined}
+          description={
+            canManage
+              ? 'Create a price agreement to set customer-specific pricing.'
+              : 'Nothing here yet.'
+          }
+          action={
+            canManage && scope !== 'only' ? (
+              <Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>
+                Propose agreement
+              </Button>
+            ) : undefined
+          }
         />
       )}
       {data && data.data.length > 0 && (
@@ -172,11 +327,21 @@ export default function PriceAgreementsListPage() {
       <ConfirmDialog
         isOpen={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
-        onConfirm={() => { if (confirmDelete) del.mutate(confirmDelete.id); }}
+        onConfirm={() => {
+          if (confirmDelete) del.mutate(confirmDelete.id);
+        }}
         title="Archive price agreement?"
-        description={confirmDelete ? (
-          <>This will archive the agreement for <span className="font-medium text-primary">{confirmDelete.customer?.name ?? 'the selected customer'}</span> and it can be restored later.</>
-        ) : null}
+        description={
+          confirmDelete ? (
+            <>
+              This will archive the agreement for{' '}
+              <span className="font-medium text-primary">
+                {confirmDelete.customer?.name ?? 'the selected customer'}
+              </span>{' '}
+              and it can be restored later.
+            </>
+          ) : null
+        }
         confirmLabel="Archive"
         variant="danger"
         pending={del.isPending}

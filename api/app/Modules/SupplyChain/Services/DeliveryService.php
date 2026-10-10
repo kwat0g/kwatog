@@ -19,6 +19,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -28,11 +29,13 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\CoCService;
-use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
-use App\Modules\SupplyChain\Enums\DeliveryDiscrepancyStatus;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryProofType;
+use App\Modules\SupplyChain\Enums\DeliveryStockReservationStatus;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
 use App\Modules\SupplyChain\Exceptions\DeliveryInvoiceHandoffException;
@@ -40,17 +43,16 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Models\DeliveryReschedule;
-use App\Modules\SupplyChain\Models\DeliveryStockReservationBatch;
 use App\Modules\SupplyChain\Models\Vehicle;
-use App\Modules\SupplyChain\Services\ShipmentLotService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -161,6 +163,7 @@ class DeliveryService
                 ])->all(),
             ];
         }
+
         return [
             'sales_orders' => $orders->getCollection()->map($mapOrder)->all(),
             'selected_sales_order' => $selectedData,
@@ -184,9 +187,11 @@ class DeliveryService
                 ->where('sales_order_id', $salesOrderId)
                 ->whereNotNull('sales_order_item_id'))
             ->with([
+                'ncr',
                 'product:id,part_number,name',
-                'workOrderOutput:id,work_order_id,good_count',
-                'workOrderOutput.workOrder:id,sales_order_id,sales_order_item_id,product_id,wo_number',
+                'resultAuthors',
+                'workOrderOutput',
+                'workOrderOutput.workOrder',
                 'workOrderOutput.workOrder.salesOrderItem:id,sales_order_id,product_id',
             ])
             ->orderByDesc('completed_at')
@@ -247,13 +252,15 @@ class DeliveryService
             'items.salesOrderItem.product:id,part_number,name,unit_of_measure',
             'items.stockMovement',
             'items.stockMovements.fromLocation.zone.warehouse',
+            'items.inspection.ncr',
+            'items.inspection.resultAuthors',
             'items.inspection.workOrderOutput.workOrder',
             'items.inspection.workOrderOutput.productionReceiptMovement',
             // ADV3 — surface the shipment lot for the detail page.
             'shipmentLot.product:id,part_number,name',
             'shipmentLot.customer:id,name',
             // ADV7 — Proof of Delivery files for the detail page.
-            'proofs' => fn ($q) => $q->orderByDesc('created_at'),
+            'proofs' => fn ($q) => $q->withTrashed()->orderByDesc('created_at'),
             'proofs.uploader:id,name',
             // Reschedule history for the detail page.
             'reschedules' => fn ($q) => $q->orderByDesc('created_at'),
@@ -275,6 +282,7 @@ class DeliveryService
         if (in_array($d->status, [DeliveryStatus::Scheduled, DeliveryStatus::Loading], true)) {
             $d->setRelation('preparation', collect($this->stock->preparation($d)));
         }
+
         return $d;
     }
 
@@ -327,64 +335,75 @@ class DeliveryService
                     }
                 }
 
-            // The SO is the serialization point for all delivery reservations.
-            // This prevents two dispatch requests from both observing the same
-            // remaining quantity and creating an over-delivery.
-            $so = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
-            if (! $so) {
-                throw new BusinessRuleException('Sales order not found.');
-            }
+                // The SO is the serialization point for all delivery reservations.
+                // This prevents two dispatch requests from both observing the same
+                // remaining quantity and creating an over-delivery.
+                $so = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+                if (! $so) {
+                    throw new BusinessRuleException('Sales order not found.');
+                }
 
-            $requestedByItem = $this->normaliseRequestedQuantities($data['items']);
-            $this->assertDeliveryQuantitiesAvailable($so, $requestedByItem);
+                $requestedByItem = $this->normaliseRequestedQuantities($data['items']);
+                $this->assertDeliveryQuantitiesAvailable($so, $requestedByItem);
 
-            $this->assertDispatchAssignmentAvailable(
-                isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
-                isset($data['driver_id']) ? (int) $data['driver_id'] : null,
-            );
-
-            $delivery = Delivery::create([
-                'delivery_number' => $this->sequences->generate('delivery'),
-                'sales_order_id' => $so->id,
-                'vehicle_id' => $data['vehicle_id'] ?? null,
-                'driver_id' => $data['driver_id'] ?? null,
-                'status' => DeliveryStatus::Scheduled->value,
-                'cost_recognition_mode' => DeliveryCostingMode::Transit->value,
-                'scheduled_date' => $data['scheduled_date'],
-                'notes' => $data['notes'] ?? null,
-                'created_by' => $by->id,
-                'idempotency_key' => $idempotencyKey,
-                'idempotency_fingerprint' => $fingerprint,
-            ]);
-
-            foreach ($data['items'] as $row) {
-                $soItem = SalesOrderItem::query()
-                    ->where('id', (int) $row['sales_order_item_id'])
-                    ->where('sales_order_id', $so->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                $inspectionId = $this->resolveAndValidateInspection(
-                    productId: (int) $soItem->product_id,
-                    salesOrderId: (int) $so->id,
-                    salesOrderItemId: (int) $soItem->id,
-                    quantity: (string) $row['quantity'],
-                    suppliedInspectionId: $row['inspection_id'] ?? null,
+                $this->assertDispatchAssignmentAvailable(
+                    isset($data['vehicle_id']) ? (int) $data['vehicle_id'] : null,
+                    isset($data['driver_id']) ? (int) $data['driver_id'] : null,
+                    (string) $data['scheduled_date'],
                 );
 
-                DeliveryItem::create([
-                    'delivery_id' => $delivery->id,
-                    'sales_order_item_id' => $soItem->id,
-                    'inspection_id' => $inspectionId,
-                    'quantity' => (string) $row['quantity'],
-                    'unit_price' => (string) $soItem->unit_price,
+                $delivery = Delivery::create([
+                    'delivery_number' => $this->sequences->generate('delivery'),
+                    'sales_order_id' => $so->id,
+                    'vehicle_id' => $data['vehicle_id'] ?? null,
+                    'driver_id' => $data['driver_id'] ?? null,
+                    'status' => DeliveryStatus::Scheduled->value,
+                    'cost_recognition_mode' => DeliveryCostingMode::Transit->value,
+                    'scheduled_date' => $data['scheduled_date'],
+                    'automatic_supply_key' => $data['automatic_supply_key'] ?? null,
+                    'notes' => $data['notes'] ?? null,
+                    'created_by' => $by->id,
+                    'idempotency_key' => $idempotencyKey,
+                    'idempotency_fingerprint' => $fingerprint,
                 ]);
-            }
 
-            $reservationKey = \Illuminate\Support\Str::uuid()->toString();
-            $this->stockReservations->reserveForDelivery($delivery, $by, $reservationKey);
+                foreach ($data['items'] as $row) {
+                    $soItem = SalesOrderItem::query()
+                        ->where('id', (int) $row['sales_order_item_id'])
+                        ->where('sales_order_id', $so->id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
 
-            return $this->show($delivery);
+                    $allocation = ! empty($row['sales_order_stock_allocation_id'])
+                        ? \App\Modules\CRM\Models\SalesOrderStockAllocation::query()->lockForUpdate()->findOrFail($row['sales_order_stock_allocation_id']) : null;
+                    if ($allocation) {
+                        $inspection = Inspection::query()->lockForUpdate()->findOrFail($row['inspection_id']);
+                        app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->assertAllocationForDelivery($allocation, $soItem, $inspection, (string) $row['quantity']);
+                        $inspectionId = $inspection->id;
+                    } else {
+                    $inspectionId = $this->resolveAndValidateInspection(
+                        productId: (int) $soItem->product_id,
+                        salesOrderId: (int) $so->id,
+                        salesOrderItemId: (int) $soItem->id,
+                        quantity: (string) $row['quantity'],
+                        suppliedInspectionId: $row['inspection_id'] ?? null,
+                    );
+                    }
+
+                    DeliveryItem::create([
+                        'delivery_id' => $delivery->id,
+                        'sales_order_item_id' => $soItem->id,
+                        'inspection_id' => $inspectionId,
+                        'sales_order_stock_allocation_id' => $allocation?->id,
+                        'quantity' => (string) $row['quantity'],
+                        'unit_price' => (string) $soItem->unit_price,
+                    ]);
+                }
+
+                $reservationKey = Str::uuid()->toString();
+                $this->stockReservations->reserveForDelivery($delivery, $by, $reservationKey);
+
+                return $this->show($delivery);
             });
         } catch (QueryException $e) {
             if ($idempotencyKey === null
@@ -405,6 +424,152 @@ class DeliveryService
         }
     }
 
+    /** Identify automatic drafts which have no operational or financial commitment. */
+    public function isUntouchedAutomaticSupply(Delivery $delivery): bool
+    {
+        return $delivery->automatic_supply_key === 'order:'.$delivery->sales_order_id
+            && $delivery->status === DeliveryStatus::Scheduled && ! $delivery->driver_id && ! $delivery->vehicle_id
+            && ! $delivery->departed_at && ! $delivery->delivered_at && ! $delivery->confirmed_at
+            && ! $delivery->invoice()->exists() && ! $delivery->items()->whereNotNull('stock_movement_id')->exists();
+    }
+
+    public function reconcileAutomaticSupply(SalesOrder $order, User $actor): array
+    {
+        return DB::transaction(function () use ($order, $actor): array {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
+            $order = SalesOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $retired = []; $blockers = [];
+            $supply = app(\App\Modules\CRM\Services\SalesOrderSupplyService::class);
+            foreach (Delivery::where('sales_order_id', $order->id)->whereIn('status', ['scheduled', 'loading'])->lockForUpdate()->get() as $delivery) {
+                $invalid = false;
+                foreach ($delivery->items()->with(['stockAllocation', 'inspection.ncr', 'inspection.resultAuthors', 'inspection.workOrderOutput.workOrder'])->get() as $line) {
+                    if ($line->stockAllocation ? ! $supply->validAllocation($line->stockAllocation) : ! $line->inspection?->canReleaseOutgoing()) $invalid = true;
+                }
+                if (! $invalid) continue;
+                if (! $this->isUntouchedAutomaticSupply($delivery)) {
+                    $blockers[] = "ImpEx and Quality must review invalid source stock on {$delivery->delivery_number}.";
+                    $audience = User::where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->whereIn('slug', ['mrp.plans.run', 'quality.inspections.review', 'supply_chain.deliveries.create']))->get();
+                    $this->notifications->sendInApp($audience, 'mrp_run_completed', [
+                        'title' => "Shipment source needs review: {$delivery->delivery_number}", 'message' => end($blockers),
+                        'link_to' => "/supply-chain/deliveries/{$delivery->hash_id}", 'entity_type' => 'delivery', 'entity_id' => $delivery->hash_id,
+                    ], 'invalid-shipment-source-'.$delivery->id.'-'.$delivery->updated_at->getTimestamp());
+                    continue;
+                }
+                $this->updateStatus($delivery, DeliveryStatus::Cancelled);
+                $retired[] = $delivery->id;
+            }
+            foreach ($order->items()->get() as $line) {
+                foreach ($line->stockAllocations()->get() as $allocation) {
+                    if (bccomp($allocation->untransferredQuantity(), '0', 3) > 0 && ! $supply->validAllocation($allocation)) {
+                        app(\App\Modules\Inventory\Services\StockMovementService::class)->release($allocation->item_id, $allocation->location_id, $allocation->untransferredQuantity());
+                        $allocation->forceFill(['released_quantity' => bcadd((string) $allocation->released_quantity, $allocation->untransferredQuantity(), 3), 'status' => 'released'])->save();
+                    }
+                }
+            }
+            return ['retired_delivery_ids' => $retired, 'blockers' => $blockers];
+        }, 3);
+    }
+
+    /** Draft one complete shipment from independently approved production and stock allocations. */
+    public function draftOrderSupply(SalesOrder $order, User $actor): ?Delivery
+    {
+        return DB::transaction(function () use ($order, $actor): ?Delivery {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
+            $order = SalesOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $supply = app(\App\Modules\CRM\Services\SalesOrderSupplyService::class);
+            $lines = $order->items()->orderBy('id')->lockForUpdate()->get();
+            foreach ($lines as $line) {
+                $coverage = $supply->lineCoverage($line);
+                if (bccomp($coverage['ready_quantity'], (string) $line->quantity, 3) < 0) return null;
+            }
+            $rows = [];
+            foreach ($lines as $line) {
+                $reservedLine = $this->deliveryQuantitiesByItem($order->id, self::QUANTITY_RESERVING_STATUSES)[$line->id] ?? '0';
+                $remaining = bcsub((string) $line->quantity, $reservedLine, 3);
+                foreach ($line->stockAllocations()->orderBy('id')->lockForUpdate()->get() as $allocation) {
+                    if (! $supply->validAllocation($allocation)) continue;
+                    $quantity = bccomp($remaining, $allocation->untransferredQuantity(), 3) < 0 ? $remaining : $allocation->untransferredQuantity();
+                    if (bccomp($quantity, '0', 3) <= 0) continue;
+                    $rows[] = ['sales_order_item_id' => $line->id, 'inspection_id' => $allocation->inspection_id,
+                        'sales_order_stock_allocation_id' => $allocation->id, 'quantity' => bcadd($quantity, '0', 2)];
+                    $remaining = bcsub($remaining, $quantity, 3);
+                }
+                $inspections = Inspection::query()->where('stage', 'outgoing')->where('status', '!=', 'cancelled')
+                    ->whereHas('workOrderOutput.workOrder', fn ($q) => $q->where('sales_order_item_id', $line->id)->whereNull('parent_wo_id'))
+                    ->with(['ncr', 'resultAuthors', 'workOrderOutput.workOrder'])->orderByDesc('id')->lockForUpdate()->get()->unique('work_order_output_id');
+                $used = $this->inspectionReservedByInspection($inspections->pluck('id')->all());
+                foreach ($inspections as $inspection) {
+                    if (! $inspection->canReleaseOutgoing()) continue;
+                    $free = bcsub((string) $inspection->accepted_quantity, $used[$inspection->id] ?? '0', 3);
+                    $quantity = bccomp($free, $remaining, 3) < 0 ? $free : $remaining;
+                    if (bccomp($quantity, '0', 3) <= 0) continue;
+                    $rows[] = ['sales_order_item_id' => $line->id, 'inspection_id' => $inspection->id, 'quantity' => bcadd($quantity, '0', 2)];
+                    $remaining = bcsub($remaining, $quantity, 3);
+                }
+                if (bccomp($remaining, '0', 3) > 0) return null;
+            }
+            if ($rows === []) return null;
+            return $this->create(['sales_order_id' => $order->id,
+                'scheduled_date' => $lines->min(fn ($line) => $line->delivery_date?->toDateString()) ?? today()->toDateString(),
+                'automatic_supply_key' => 'order:'.$order->id,
+                'notes' => "Auto-drafted from approved supply for {$order->so_number}.", 'items' => $rows], $actor);
+        }, 3);
+    }
+
+    /** Reconcile released output lots into an unassigned draft without changing dispatched shipments. */
+    public function draftReleasedWorkOrder(\App\Modules\Production\Models\WorkOrder $workOrder): ?Delivery
+    {
+        if ($workOrder->sales_order_id && SalesOrderItem::where('sales_order_id', $workOrder->sales_order_id)->where('fulfillment_policy', 'stock_first')->exists()) {
+            return $this->draftOrderSupply(SalesOrder::findOrFail($workOrder->sales_order_id), User::findOrFail($workOrder->created_by));
+        }
+        return DB::transaction(function () use ($workOrder): ?Delivery {
+            $so = SalesOrder::query()->lockForUpdate()->find($workOrder->sales_order_id);
+            $wo = \App\Modules\Production\Models\WorkOrder::query()->lockForUpdate()->find($workOrder->id);
+            if (! $so || ! $wo || (int) $wo->sales_order_id !== (int) $so->id) return null;
+            $soItem = SalesOrderItem::query()->whereKey($wo->sales_order_item_id)
+                ->where('sales_order_id', $so->id)->lockForUpdate()->first();
+            if (! $soItem) {
+                throw new BusinessRuleException("Work order {$wo->wo_number} has no valid sales-order line.");
+            }
+            $inspections = Inspection::query()->outgoingReleaseCandidates()
+                ->whereHas('workOrderOutput', fn (Builder $q) => $q->where('work_order_id', $wo->id))
+                ->with(['ncr', 'resultAuthors', 'workOrderOutput.workOrder'])->orderBy('id')->lockForUpdate()->get();
+            $reserved = $this->inspectionReservedByInspection($inspections->pluck('id')->all());
+            $rows = [];
+            foreach ($inspections as $inspection) {
+                if (! $inspection->canReleaseOutgoing()) continue;
+                $quantity = bcsub((string) $inspection->accepted_quantity, $reserved[$inspection->id] ?? '0', 2);
+                if (bccomp($quantity, '0', 3) <= 0) continue;
+                $rows[] = ['sales_order_item_id' => $soItem->id, 'inspection_id' => $inspection->id, 'quantity' => $quantity];
+            }
+            $draft = Delivery::query()->where('sales_order_id', $so->id)->where('status', DeliveryStatus::Scheduled->value)
+                ->whereNull('vehicle_id')->whereNull('driver_id')
+                ->where('notes', 'like', "Auto-drafted from WO {$wo->wo_number} %")
+                ->whereDoesntHave('items', fn (Builder $q) => $q->whereNotNull('stock_movement_id'))
+                ->orderBy('id')->lockForUpdate()->first();
+            if ($rows === []) {
+                if (! $draft || $draft->stockReservationBatch()->exists()) return null;
+                $this->stockReservations->ensureForDelivery($draft, User::findOrFail($wo->created_by));
+                return $draft;
+            }
+            $by = User::findOrFail($wo->created_by);
+            if (! $draft) {
+                return $this->create([
+                    'sales_order_id' => $so->id, 'scheduled_date' => Carbon::now()->addDay()->toDateString(),
+                    'notes' => "Auto-drafted from WO {$wo->wo_number} on outgoing QC release.", 'items' => $rows,
+                ], $by);
+            }
+            $this->assertDeliveryQuantitiesAvailable($so, $this->normaliseRequestedQuantities($rows));
+            foreach ($rows as $row) {
+                $this->lockAndValidateInspectionForDelivery((int) $row['inspection_id'], (int) $so->id,
+                    (int) $soItem->id, (int) $soItem->product_id, $row['quantity']);
+                DeliveryItem::create($row + ['delivery_id' => $draft->id, 'unit_price' => (string) $soItem->unit_price]);
+            }
+            $this->stockReservations->ensureForDelivery($draft, $by);
+            return $this->show($draft);
+        }, 3);
+    }
+
     /**
      * Assign the operational driver and vehicle after a delivery draft exists.
      *
@@ -412,11 +577,81 @@ class DeliveryService
      * repeated operator request cannot race a dispatch transition or book a
      * vehicle that became unavailable while the form was open.
      *
-     * @param array{vehicle_id:int,driver_id:int,reason:string} $data
+     * @param  array{vehicle_id:int,driver_id:int,reason:string}  $data
      */
+    public function saveShipmentPlan(Delivery $delivery, array $data, User $by, ?UploadedFile $photo = null): Delivery
+    {
+        $path = $photo?->store("deliveries/{$delivery->id}/proofs", 'local');
+        if ($path === false) throw new BusinessRuleException('Unable to store loading photo.');
+        try {
+            return DB::transaction(function () use ($delivery, $data, $by, $photo, $path): Delivery {
+                $salesOrderId = Delivery::query()->whereKey($delivery->id)->value('sales_order_id');
+                if ($salesOrderId) SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+                $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
+                if (! $locked) throw new BusinessRuleException('Delivery not found.');
+                if (! in_array($locked->status, [DeliveryStatus::Scheduled, DeliveryStatus::Loading], true)) {
+                    throw new BusinessRuleException('Shipment details cannot change after dispatch.');
+                }
+                $reason = trim((string) $data['reason']);
+                $newDate = Carbon::parse($data['scheduled_date'])->toDateString();
+                if ($locked->status === DeliveryStatus::Loading) {
+                    if ((int) $locked->vehicle_id !== (int) $data['vehicle_id'] || (int) $locked->driver_id !== (int) $data['driver_id']) {
+                        throw new BusinessRuleException('A shipment already loading must retain its assigned driver and vehicle.');
+                    }
+                } else {
+                    // Validate the new assignment on the new date, not an obsolete booking.
+                    $this->assertDispatchAssignmentAvailable((int) $data['vehicle_id'], (int) $data['driver_id'], $newDate, $locked->id);
+                }
+                if ($newDate !== $locked->scheduled_date?->toDateString()) {
+                    DeliveryReschedule::create([
+                        'delivery_id' => $locked->id, 'from_date' => $locked->scheduled_date?->toDateString(),
+                        'to_date' => $newDate, 'reason' => $reason, 'rescheduled_by' => $by->id,
+                    ]);
+                    $locked->forceFill([
+                        'original_scheduled_date' => $locked->original_scheduled_date ?? $locked->scheduled_date,
+                        'reschedule_count' => (int) $locked->reschedule_count + 1,
+                    ]);
+                }
+                $locked->forceFill([
+                    'scheduled_date' => $newDate, 'expected_delivery_date' => $data['expected_delivery_date'],
+                    'carrier' => trim((string) $data['carrier']),
+                ])->save();
+                if ($locked->status === DeliveryStatus::Scheduled) {
+                    $locked = $this->assign($locked, $data, $by);
+                }
+                if ($photo && $path) $this->registerProof($locked, $photo, $path, DeliveryProofType::LoadingPhoto, $by, 'Goods loaded before dispatch');
+                if ((bool) $data['dispatch']) {
+                    $this->assertShipmentReady($locked);
+                    if ($locked->status === DeliveryStatus::Scheduled) $locked = $this->updateStatus($locked, DeliveryStatus::Loading);
+                    return $this->updateStatus($locked, DeliveryStatus::InTransit);
+                }
+                return $this->show($locked);
+            });
+        } catch (\Throwable $e) {
+            if ($path) Storage::disk('local')->delete($path);
+            throw $e;
+        }
+    }
+
+    private function assertShipmentReady(Delivery $delivery): void
+    {
+        $errors = [];
+        if (! $delivery->vehicle_id) $errors['vehicle_id'] = ['Assign a vehicle before dispatch.'];
+        if (! $delivery->driver_id) $errors['driver_id'] = ['Assign a driver before dispatch.'];
+        if (! trim((string) $delivery->carrier)) $errors['carrier'] = ['Enter the carrier before dispatch.'];
+        if (! $delivery->expected_delivery_date) $errors['expected_delivery_date'] = ['Enter the expected arrival date.'];
+        if (! $delivery->scheduled_date || $delivery->scheduled_date->isAfter(today())) $errors['scheduled_date'] = ['Dispatch is available on the shipment date. Save the plan for a future shipment.'];
+        if ($delivery->expected_delivery_date && $delivery->scheduled_date && $delivery->expected_delivery_date->isBefore($delivery->scheduled_date)) $errors['expected_delivery_date'] = ['Expected arrival cannot precede the shipment date.'];
+        $photo = $delivery->proofs()->where('proof_type', DeliveryProofType::LoadingPhoto->value)->get();
+        if (! $photo->contains(fn ($proof) => Storage::disk('local')->exists($proof->file_path))) $errors['loading_photo'] = ['Attach a loading photo before dispatch.'];
+        if ($errors) throw \Illuminate\Validation\ValidationException::withMessages($errors);
+    }
+
     public function assign(Delivery $delivery, array $data, User $by): Delivery
     {
         return DB::transaction(function () use ($delivery, $data, $by): Delivery {
+            $salesOrderId = Delivery::query()->whereKey($delivery->id)->value('sales_order_id');
+            if ($salesOrderId) SalesOrder::query()->lockForUpdate()->find($salesOrderId);
             $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
             if (! $locked) {
                 throw new BusinessRuleException('Delivery not found.');
@@ -428,10 +663,14 @@ class DeliveryService
             if ($status !== DeliveryStatus::Scheduled) {
                 throw new BusinessRuleException('Only scheduled deliveries can be assigned or reassigned.');
             }
+            if ((int) $locked->sales_order_id !== (int) $salesOrderId) {
+                throw new BusinessRuleException('The delivery order changed. Reload before assigning the shipment.');
+            }
 
             $this->assertDispatchAssignmentAvailable(
                 (int) $data['vehicle_id'],
                 (int) $data['driver_id'],
+                $locked->scheduled_date->toDateString(),
                 $locked->id,
             );
 
@@ -447,6 +686,8 @@ class DeliveryService
                 'driver_id' => (int) $data['driver_id'],
                 'notes' => trim(($locked->notes ? $locked->notes."\n" : '').$assignmentNote),
             ])->save();
+
+            $this->stockReservations->ensureForDelivery($locked, $by);
 
             return $this->show($locked);
         });
@@ -480,7 +721,12 @@ class DeliveryService
             if ($currentDate === $newDate) {
                 throw new BusinessRuleException('The new scheduled date must differ from the current scheduled date.');
             }
-
+            $this->assertDispatchAssignmentAvailable(
+                $locked->vehicle_id,
+                $locked->driver_id,
+                $newDate,
+                $locked->id,
+            );
             $reason = trim($reason);
             $note = sprintf('[Reschedule %s] %s', now()->toIso8601String(), $reason);
 
@@ -518,6 +764,7 @@ class DeliveryService
     private function assertDispatchAssignmentAvailable(
         ?int $vehicleId,
         ?int $driverId,
+        string $scheduledDate,
         ?int $deliveryId = null,
     ): void {
         if ($vehicleId !== null) {
@@ -543,6 +790,17 @@ class DeliveryService
                     "Vehicle {$vehicle->plate_number} is already assigned to another active delivery."
                 );
             }
+            $hasScheduledDelivery = Delivery::query()
+                ->where('vehicle_id', $vehicle->id)
+                ->when($deliveryId !== null, fn (Builder $query) => $query->whereKeyNot($deliveryId))
+                ->where('status', DeliveryStatus::Scheduled->value)
+                ->whereDate('scheduled_date', $scheduledDate)
+                ->exists();
+            if ($hasScheduledDelivery) {
+                throw new BusinessRuleException(
+                    "Vehicle {$vehicle->plate_number} is already assigned to another scheduled delivery on that date."
+                );
+            }
         }
 
         if ($driverId !== null) {
@@ -557,6 +815,15 @@ class DeliveryService
             }
 
             $this->assertDriverAvailable($driver->id, $deliveryId);
+            $hasScheduledDelivery = Delivery::query()
+                ->where('driver_id', $driver->id)
+                ->when($deliveryId !== null, fn (Builder $query) => $query->whereKeyNot($deliveryId))
+                ->where('status', DeliveryStatus::Scheduled->value)
+                ->whereDate('scheduled_date', $scheduledDate)
+                ->exists();
+            if ($hasScheduledDelivery) {
+                throw new BusinessRuleException('Driver is already assigned to another scheduled delivery on that date.');
+            }
         }
     }
 
@@ -658,15 +925,26 @@ class DeliveryService
         return $inspection;
     }
 
-    public function updateStatus(Delivery $d, DeliveryStatus $next, ?string $note = null): Delivery
+    public function updateStatus(Delivery $d, DeliveryStatus $next, ?string $note = null, ?User $driver = null): Delivery
     {
-        return DB::transaction(function () use ($d, $next, $note) {
+        return DB::transaction(function () use ($d, $next, $note, $driver) {
             // Match confirmation and customer intake: SO before delivery.
             $salesOrderId = Delivery::query()->whereKey($d->id)->value('sales_order_id');
             $so = $salesOrderId ? SalesOrder::query()->lockForUpdate()->find($salesOrderId) : null;
             $locked = Delivery::query()->lockForUpdate()->find($d->id);
             if (! $locked) {
                 throw new BusinessRuleException('Delivery not found.');
+            }
+
+            if ($driver !== null) {
+                if ((int) $locked->driver_id !== (int) $driver->id) {
+                    abort(404);
+                }
+                if ($next === DeliveryStatus::Loading && $locked->scheduled_date?->isAfter(today())) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'status' => ['A future delivery cannot enter loading before its scheduled date.'],
+                    ]);
+                }
             }
 
             $current = $locked->status instanceof DeliveryStatus
@@ -690,7 +968,12 @@ class DeliveryService
             }
 
             if ($next === DeliveryStatus::InTransit) {
+                $this->assertShipmentReady($locked);
                 $this->stockReservations->assertReadyForDeparture($locked);
+            }
+
+            if ($next === DeliveryStatus::Delivered && ! $locked->proofs()->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->exists()) {
+                throw new BusinessRuleException('Upload customer receipt evidence to record delivery.');
             }
 
             if ($next === DeliveryStatus::Cancelled) {
@@ -817,6 +1100,17 @@ class DeliveryService
             // lifecycle write; outbox delivery still waits for commit.
             app(ChainBroadcaster::class)
                 ->broadcastFor($delivery, $next->value, auth()->user());
+            if ($so && in_array($next, [DeliveryStatus::InTransit, DeliveryStatus::Delivered, DeliveryStatus::Cancelled], true)) {
+                app(NotificationService::class)->sendPortalInApp(CustomerPortalUser::where('customer_id', $so->customer_id)->where('is_active', true)->get(), 'delivery.'.$next->value, [
+                    'title' => $delivery->delivery_number.': '.$next->label(),
+                    'message' => match ($next) {
+                        DeliveryStatus::InTransit => 'Your order is on its way. Check the delivery details for its schedule.',
+                        DeliveryStatus::Delivered => 'Delivery was reported complete. Review received quantities and confirm receipt in your portal.',
+                        default => 'This delivery was cancelled. Contact Sales to review the replacement schedule.',
+                    },
+                    'link_to' => '/portal/customer/deliveries/'.$delivery->hash_id, 'entity_type' => 'delivery', 'entity_id' => $delivery->hash_id,
+                ], 'delivery:'.$delivery->id.':'.$next->value);
+            }
 
             return $delivery;
         });
@@ -1043,7 +1337,7 @@ class DeliveryService
      * them from quarantine back to good stock. A driver declaration or a depot
      * count alone never restores outgoing-QC capacity.
      *
-     * @param list<int> $inspectionIds
+     * @param  list<int>  $inspectionIds
      * @return array<int, string>
      */
     private function inspectionReservedByInspection(array $inspectionIds): array
@@ -1083,8 +1377,19 @@ class DeliveryService
             ->where('rri.quarantine_status', 'released')
             ->whereNotNull('rri.quarantine_release_movement_id')
             ->where('release_movement.movement_type', 'transfer')
-            ->where('release_movement.reference_type', 'return_request')
-            ->whereColumn('release_movement.reference_id', 'rr.id')
+            ->where(fn ($query) => $query
+                ->where(fn ($legacy) => $legacy
+                    ->where('release_movement.reference_type', 'return_request')
+                    ->whereColumn('release_movement.reference_id', 'rr.id'))
+                ->orWhere(fn ($mrbRelease) => $mrbRelease
+                    ->where('release_movement.reference_type', 'material_review_record')
+                    ->whereExists(fn ($mrb) => $mrb->selectRaw('1')
+                        ->from('material_review_records as mrb')
+                        ->whereColumn('mrb.id', 'release_movement.reference_id')
+                        ->whereColumn('mrb.return_request_item_id', 'rri.id')
+                        ->whereColumn('mrb.release_movement_id', 'release_movement.id')
+                        ->whereIn('mrb.disposition', ['rework', 'use_as_is'])
+                        ->where('mrb.status', 'released'))))
             ->whereColumn('release_movement.item_id', 'rri.item_id')
             ->whereColumn('release_movement.from_location_id', 'rri.quarantine_location_id')
             ->whereNotNull('release_movement.to_location_id')
@@ -1130,55 +1435,55 @@ class DeliveryService
      */
     public function uploadReceiptPhoto(Delivery $d, UploadedFile $file, ?User $by = null): Delivery
     {
-        // P3.2 — Store the file BEFORE opening the transaction so that a DB
-        // rollback cannot orphan a file that was written inside the transaction.
-        // If the transaction fails we delete the file and re-throw.
-        $path = $file->store("deliveries/{$d->id}", 'local');
-        if ($path === false) {
-            throw new BusinessRuleException('Unable to store receipt photo.');
-        }
+        $this->uploadProof($d, $file, DeliveryProofType::Photo, $by, 'Customer receipt photo');
+        return $this->show($d->fresh());
+    }
 
+    public function uploadProof(Delivery $delivery, UploadedFile $file, DeliveryProofType $type, ?User $by, ?string $notes = null): DeliveryProof
+    {
+        $path = $file->store("deliveries/{$delivery->id}/proofs", 'local');
+        if ($path === false) throw new BusinessRuleException('Unable to store delivery proof.');
         try {
-            return DB::transaction(function () use ($d, $file, $path, $by) {
-                // Re-read the delivery under the same lock used by status
-                // transitions. The route-bound model may be stale (for example,
-                // the shipment could have been cancelled while the upload was
-                // being prepared).
-                $locked = Delivery::query()->lockForUpdate()->find($d->id);
-                if (! $locked) {
-                    throw new BusinessRuleException('Delivery not found.');
+            return DB::transaction(function () use ($delivery, $file, $type, $by, $notes, $path): DeliveryProof {
+                $salesOrderId = Delivery::query()->whereKey($delivery->id)->value('sales_order_id');
+                if ($salesOrderId) SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+                $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
+                if (! $locked) throw new BusinessRuleException('Delivery not found.');
+                if (in_array($type, [DeliveryProofType::Photo, DeliveryProofType::SignedDeliveryReceipt, DeliveryProofType::CustomerPoConfirmation], true)
+                    && (! $by || (int) $locked->driver_id !== (int) $by->id || ! $by->is_active || $by->role?->slug !== 'driver')) {
+                    abort(403, 'Only the assigned driver can upload customer receipt evidence.');
                 }
-
-                $current = $locked->status instanceof DeliveryStatus
-                    ? $locked->status
-                    : DeliveryStatus::from((string) $locked->status);
-                if (! in_array($current, [DeliveryStatus::Delivered, DeliveryStatus::Confirmed], true)) {
-                    throw new BusinessRuleException('Receipt photo can only be uploaded after delivery is marked delivered.');
+                $allowed = $type === DeliveryProofType::LoadingPhoto
+                    ? [DeliveryStatus::Scheduled, DeliveryStatus::Loading]
+                    : [DeliveryStatus::InTransit, DeliveryStatus::Delivered, DeliveryStatus::Confirmed];
+                if (! in_array($locked->status, $allowed, true)) {
+                    throw new BusinessRuleException($type === DeliveryProofType::LoadingPhoto
+                        ? 'Loading photos must be captured before dispatch.' : 'Customer receipt evidence can only be uploaded after dispatch.');
                 }
-
-                $locked->forceFill(['receipt_photo_path' => $path])->save();
-
-                // ADV7 — also register the legacy upload as a DeliveryProof so the
-                // confirmation guard sees it. Falls back to the delivery creator
-                // if no user is supplied.
-                DeliveryProof::create([
-                    'delivery_id' => $locked->id,
-                    'proof_type' => 'photo',
-                    'file_name' => $file->getClientOriginalName() ?: basename($path),
-                    'file_path' => $path,
-                    'file_size' => $file->getSize() ?: null,
-                    'mime_type' => $file->getMimeType(),
-                    'uploaded_by' => $by?->id ?? $locked->created_by,
-                    'notes' => 'Quick receipt photo',
-                ]);
-
-                return $this->show($locked);
+                if ($locked->status === DeliveryStatus::Confirmed && $type === DeliveryProofType::CertificateOfConformance) {
+                    throw new BusinessRuleException('A Certificate of Conformance cannot be replaced after delivery confirmation.');
+                }
+                $proof = $this->registerProof($locked, $file, $path, $type, $by, $notes);
+                if ($type === DeliveryProofType::Photo) $locked->forceFill(['receipt_photo_path' => $path])->save();
+                if ($locked->status === DeliveryStatus::InTransit && in_array($type, [DeliveryProofType::Photo, DeliveryProofType::SignedDeliveryReceipt, DeliveryProofType::CustomerPoConfirmation], true)) {
+                    $this->updateStatus($locked, DeliveryStatus::Delivered);
+                }
+                return $proof->load('uploader')->setRelation('delivery', $locked);
             });
         } catch (\Throwable $e) {
-            // Clean up the already-stored file so we don't leave orphans.
             Storage::disk('local')->delete($path);
             throw $e;
         }
+    }
+
+    private function registerProof(Delivery $delivery, UploadedFile $file, string $path, DeliveryProofType $type, ?User $by, ?string $notes): DeliveryProof
+    {
+        return DeliveryProof::create([
+            'delivery_id' => $delivery->id, 'proof_type' => $type->value,
+            'file_name' => $file->getClientOriginalName(), 'file_path' => $path,
+            'file_size' => $file->getSize(), 'mime_type' => $file->getMimeType(),
+            'uploaded_by' => $by?->id ?? $delivery->created_by, 'notes' => $notes,
+        ]);
     }
 
     /**
@@ -1235,7 +1540,7 @@ class DeliveryService
 
             // ADV7 — Block confirmation without proof. This is the legally
             // defensible record for any future customer dispute.
-            if ($locked->proofs()->count() === 0) {
+            if ($locked->proofs()->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count() === 0) {
                 throw new BusinessRuleException('At least one proof of delivery (signed DR or photo) must be uploaded before confirming.');
             }
 
@@ -1433,6 +1738,7 @@ class DeliveryService
                     $locked->forceFill(['invoice_handoff_status' => DeliveryInvoiceHandoffStatus::NotRequired->value,
                         'invoice_handoff_message' => 'Approved no-charge replacement; no customer invoice is due.',
                         'invoice_handoff_at' => now()])->save();
+
                     return $this->show($locked);
                 }
 
@@ -1576,6 +1882,7 @@ class DeliveryService
                 ->exists();
             if ($alreadyAttached) {
                 $attachedCount++;
+
                 continue;
             }
 
@@ -1723,7 +2030,7 @@ class DeliveryService
 
     private function assertInvoiceQuantityClear(Delivery $delivery): void
     {
-        app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
+        app(ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
     }
 
     /**
@@ -1780,19 +2087,52 @@ class DeliveryService
                 throw new BusinessRuleException('Cannot delete an active delivery after loading; cancel it instead.');
             }
 
+            if ($locked->proofs()->withTrashed()->exists() || $locked->receipt_photo_path) {
+                throw new BusinessRuleException('Cannot archive a delivery with proof documents; preserve its evidence.');
+            }
+            if ($current === DeliveryStatus::Scheduled && $locked->stockReservationBatch()->exists()) {
+                throw new BusinessRuleException('Cannot archive a scheduled delivery with stock reservation history; cancel it instead.');
+            }
+
             $this->stockReservations->releaseForDelivery($locked);
-
-            $paths = DeliveryProof::query()
-                ->where('delivery_id', $locked->id)
-                ->pluck('file_path')
-                ->push($locked->receipt_photo_path)
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-
             $locked->delete();
-            DB::afterCommit(fn () => Storage::disk('local')->delete($paths));
+        });
+    }
+
+    public function restore(Delivery $delivery): void
+    {
+        DB::transaction(function () use ($delivery): void {
+            $locked = Delivery::withTrashed()->lockForUpdate()->find($delivery->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Archived delivery not found.');
+            }
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Only archived deliveries can be restored.');
+            }
+
+            $proofPaths = DeliveryProof::withTrashed()
+                ->where('delivery_id', $locked->id)
+                ->pluck('file_path');
+            if ($locked->receipt_photo_path) {
+                $proofPaths->push($locked->receipt_photo_path);
+            }
+            foreach ($proofPaths->filter()->unique() as $path) {
+                if (! Storage::disk('local')->exists($path)) {
+                    throw new BusinessRuleException('Cannot restore a delivery while one or more proof files are missing.');
+                }
+            }
+
+            $status = $locked->status instanceof DeliveryStatus
+                ? $locked->status
+                : DeliveryStatus::from((string) $locked->status);
+            $reservation = $locked->stockReservationBatch;
+            if ($status === DeliveryStatus::Scheduled
+                && $reservation
+                && $reservation->status !== DeliveryStockReservationStatus::Reserved) {
+                throw new BusinessRuleException('Cannot restore this scheduled delivery because its stock reservation was released; create a new delivery.');
+            }
+
+            $locked->restore();
         });
     }
 

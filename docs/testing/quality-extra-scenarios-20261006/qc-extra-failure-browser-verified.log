@@ -1,0 +1,9 @@
+
+Running 2 tests using 1 worker
+
+(node:2954097) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+  ✓  1 [real-chromium] › e2e-real/quality-failure-scenarios.spec.ts:13:3 › outgoing: failure persists, cannot be overridden to PASS, and requires independent review (15.7s)
+  ✓  2 [real-chromium] › e2e-real/quality-failure-scenarios.spec.ts:13:3 › incoming: failure persists, cannot be overridden to PASS, and requires independent review (13.9s)
+
+  2 passed (32.5s)

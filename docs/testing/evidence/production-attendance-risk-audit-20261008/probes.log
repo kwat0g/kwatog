@@ -1,0 +1,16 @@
+\nAUDIT {"scenario":"Night shift ends during day-shift reassignment","clock_out_rejected":"too_early_in","attendance_open":true}
+\nAUDIT {"scenario":"Accepted re-entry before shift ends","latest_punch":"in","time_out_retained":"3:45 PM","production_presence":{"state":"blocked","reason":"Worker has clocked out.","work_date":"2026-10-06"}}
+\nAUDIT {"scenario":"Future punch is rejected","presence":{"state":"blocked","reason":"Punch-in does not match this shift and work date. Ask HR to review it.","work_date":"2026-10-06"}}
+\nAUDIT {"scenario":"Required non-recorder clocks out while running","required_workers":2,"one_clocked_out":true,"recorder_access_retained":true,"work_order_status":"in_progress"}
+\nAUDIT {"scenario":"HR edits shift hours after WO approval","before_ready":true,"after_ready":false,"status_unchanged":"confirmed","blockers":[{"code":"presence","message":"Gilda Friesen: Worker is outside configured HR working days or shift hours."},{"code":"crew","message":"Crew does not cover this time. Check HR shifts, leave, or other assignments."}]}
+
+   PASS  Tests\Feature\Production\ProductionAttendanceRiskProbeTest
+  ✓ probe overnight rotation clock out                                  32.47s  
+  ✓ probe clock back in during shift                                     2.53s  
+  ✓ probe future attendance does not count as presence                   3.62s  
+  ✓ probe running non recorder clock out                                 4.54s  
+  ✓ probe shift edit invalidates approved work order                     3.66s  
+
+  Tests:    5 passed (10 assertions)
+  Duration: 46.93s
+

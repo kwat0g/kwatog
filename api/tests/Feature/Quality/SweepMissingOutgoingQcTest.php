@@ -16,6 +16,7 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
+use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -65,6 +66,19 @@ class SweepMissingOutgoingQcTest extends TestCase
             'tolerance_max' => '10.1000',
             'is_critical' => true,
         ]);
+    }
+
+    public function test_closed_work_order_is_escalated_without_creating_or_reopening(): void
+    {
+        $wo = $this->completedWoWithOutput();
+        $wo->update(['status' => 'closed']);
+
+        $this->artisan(SweepMissingOutgoingQc::class)
+            ->expectsOutputToContain('Controlled reconciliation required')
+            ->assertSuccessful();
+
+        $this->assertSame('closed', $wo->fresh()->status->value);
+        $this->assertSame(0, $wo->outputs()->firstOrFail()->inspections()->count());
     }
 
     private function completedWoWithOutput(): WorkOrder
@@ -154,6 +168,48 @@ class SweepMissingOutgoingQcTest extends TestCase
             'type' => 'chain.outgoing_qc_missing',
             'notifiable_id' => $this->user->id,
         ]);
+    }
+
+    public function test_repairs_a_missing_output_even_when_another_output_already_has_qc(): void
+    {
+        $wo = $this->completedWoWithOutput();
+        $coveredOutput = $wo->outputs()->firstOrFail();
+        $coveredInspection = app(InspectionService::class)->createForOutput($coveredOutput, $wo, $this->user);
+        $missingOutput = WorkOrderOutput::create([
+            'work_order_id' => $wo->id,
+            'recorded_by' => $this->user->id,
+            'recorded_at' => now(),
+            'good_count' => 25,
+            'reject_count' => 0,
+        ]);
+        $wo->forceFill(['quantity_target' => 125, 'quantity_good' => 125, 'quantity_produced' => 125])->save();
+
+        $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
+
+        $this->assertSame(1, $coveredOutput->inspections()->count(), 'Covered output must not receive duplicate QC.');
+        $this->assertSame($coveredInspection->id, $coveredOutput->inspections()->firstOrFail()->id);
+        $repaired = $missingOutput->inspections()->first();
+        $this->assertNotNull($repaired, 'Every uncovered good output must be repaired independently.');
+        $this->assertSame(25, (int) $repaired->batch_quantity);
+        $this->assertSame('draft', $repaired->status->value);
+    }
+
+    public function test_replaces_cancelled_output_qc_without_removing_its_audit_record(): void
+    {
+        $wo = $this->completedWoWithOutput();
+        $output = $wo->outputs()->firstOrFail();
+        $service = app(InspectionService::class);
+        $cancelled = $service->createForOutput($output, $wo, $this->user);
+        $service->cancel($cancelled, 'Inspection cancelled before work began.', $this->user, (int) $cancelled->result_version);
+
+        $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
+
+        $this->assertSame('cancelled', $cancelled->fresh()->status->value);
+        $this->assertSame(2, $output->inspections()->count(), 'Cancelled QC must remain alongside its replacement.');
+        $replacement = $output->inspections()->where('status', '!=', 'cancelled')->first();
+        $this->assertNotNull($replacement, 'A cancelled inspection does not cover an output batch.');
+        $this->assertNotSame($cancelled->id, $replacement->id);
+        $this->assertSame('draft', $replacement->status->value);
     }
 
     public function test_in_progress_work_orders_are_out_of_scope(): void

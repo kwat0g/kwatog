@@ -126,6 +126,15 @@ final class LoanWriteOffPolicyTest extends TestCase
         $this->assertSame(2, JournalEntry::query()->where('reference_type', 'loan_write_off')->where('reference_id', $loan->id)->first()->lines()->count());
     }
 
+    public function test_hr_cannot_request_or_approve_financial_write_offs(): void
+    {
+        $hr = User::factory()->create(['role_id' => Role::where('slug', 'hr_officer')->value('id')]);
+        $loan = $this->loan();
+        $this->actingAs($hr)->postJson("/api/v1/loans/{$loan->hash_id}/write-off", ['reason' => 'Case', 'evidence' => 'Case'])
+            ->assertForbidden();
+        $this->patchJson("/api/v1/loans/{$loan->hash_id}/write-off/approve", [])->assertForbidden();
+    }
+
     public function test_non_finance_cannot_request_a_write_off(): void
     {
         $loan = $this->loan();

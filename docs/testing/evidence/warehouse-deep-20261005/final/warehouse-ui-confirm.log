@@ -1,0 +1,23 @@
+[WebServer] (node:1659233) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node-24 --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:1659344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 6 tests using 1 worker
+
+(node:1659446) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+
+
+[1/6] [desktop-chromium] › e2e/warehouse-chain-integrity.spec.ts:4:1 › warehouse map fits phone with many warehouses and mixed bin units
+[WebServer] 
+[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+
+[2/6] [desktop-chromium] › e2e/warehouse-chain-integrity.spec.ts:47:1 › count-only user does not load restricted warehouse map or navigate into it
+[3/6] [desktop-chromium] › e2e/warehouse-operational-followup.spec.ts:4:1 › warehouse can review a WO allocation and record handover on an existing issue
+[4/6] [desktop-chromium] › e2e/warehouse-operational-followup.spec.ts:110:1 › scanner context uses searchable document numbers
+[5/6] [desktop-chromium] › e2e/warehouse-reference-polish.spec.ts:4:1 › movements show readable WO references and debounce item/WO search
+[6/6] [desktop-chromium] › e2e/warehouse-reference-polish.spec.ts:59:1 › stock levels warn about QC holds and submit debounced item search
+  6 passed (36.4s)

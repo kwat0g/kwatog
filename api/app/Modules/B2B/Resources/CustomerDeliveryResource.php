@@ -21,16 +21,20 @@ class CustomerDeliveryResource extends JsonResource
                 ? $this->status
                 : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
             'scheduled_date' => optional($this->scheduled_date)?->toDateString(),
+            'expected_delivery_date' => optional($this->expected_delivery_date)?->toDateString(),
+            'carrier' => $this->carrier,
             'delivered_at' => optional($this->delivered_at)?->toISOString(),
             'confirmed_at' => optional($this->confirmed_at)?->toISOString(),
             'receiver_name' => $this->receiver_name,
+            'receiver_position' => $this->receiver_position,
+            'delivery_remarks' => $this->delivery_remarks,
             'can_report_not_arrived' => app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->canReportNotArrived($this->resource),
             // Mirrors DeliveryService::confirm(): a delivered shipment needs a
             // proof of delivery before it can be confirmed. Only the detail
             // loads proofs, so the flag is absent from the list.
             'can_confirm' => $this->whenLoaded('proofs', fn () => (
                 $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status)
-            ) === DeliveryStatus::Delivered && $this->proofs->isNotEmpty() && $this->blockingReturnCase === null),
+            ) === DeliveryStatus::Delivered && $this->proofs->contains(fn ($proof) => in_array($proof->proof_type, ['photo', 'signed_dr', 'customer_po_confirmation'], true)) && $this->blockingReturnCase === null),
             'billing_hold' => $this->whenLoaded('blockingReturnCase', fn () => $this->blockingReturnCase ? [
                 'case_id' => $this->blockingReturnCase->hash_id,
                 'case_number' => $this->blockingReturnCase->case_number,
@@ -56,11 +60,12 @@ class CustomerDeliveryResource extends JsonResource
                     'id' => $item->hash_id,
                     'part_number' => $product?->part_number ?? '—',
                     'name' => $product?->name ?? '—',
+                    'unit_of_measure' => $product?->unit_of_measure ?? 'pcs',
                     'quantity_dispatched' => (string) $item->quantity,
                     'quantity_delivered' => (string) ($item->customer_received_quantity ?? $item->quantity),
                 ];
             })->all()),
-            'proofs' => $this->whenLoaded('proofs', fn () => $this->proofs->map(fn ($proof) => [
+            'proofs' => $this->whenLoaded('proofs', fn () => $this->proofs->where('proof_type', '!=', 'loading_photo')->map(fn ($proof) => [
                 'id' => $proof->hash_id,
                 'proof_type' => $proof->proof_type,
                 'file_name' => $proof->file_name,

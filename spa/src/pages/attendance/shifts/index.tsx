@@ -27,14 +27,15 @@ import type { ApiValidationError, ListParams } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Shift } from '@/types/attendance';
 
+import { formatTime } from '@/lib/formatDate';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { showUndoToast } from '@/lib/undoToast';
 import { useSavedFeedback } from '@/hooks/useSavedFeedback';
 const schema = z.object({
  name: z.string().trim().min(1, 'Name is required').max(50)
  .regex(/^[A-Za-z0-9\s\-_().]+$/, 'Letters, digits, spaces, and -_().'),
- start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM (24-hour)'),
- end_time: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM (24-hour)'),
+ start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Choose a valid start time'),
+ end_time: z.string().regex(/^\d{2}:\d{2}$/, 'Choose a valid end time'),
  break_minutes: z.coerce.number().int('Whole minutes only').min(0).max(240, 'Max 240 minutes'),
  is_night_shift: z.boolean(),
  is_extended: z.boolean(),
@@ -101,8 +102,8 @@ export default function ShiftsPage() {
 
  const columns: Column<Shift>[] = [
  { key: 'name', header: 'Name', cell: (r) => <span className="font-medium flex items-center gap-2">{r.name}{r.is_default && <Chip variant="info">Default</Chip>}</span> },
- { key: 'start_time', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_time}</NumCell> },
- { key: 'end_time', header: 'End', align: 'left', cell: (r) => <NumCell>{r.end_time}</NumCell> },
+ { key: 'start_time', header: 'Start', align: 'left', cell: (r) => <NumCell>{formatTime(r.start_time)}</NumCell> },
+ { key: 'end_time', header: 'End', align: 'left', cell: (r) => <NumCell>{formatTime(r.end_time)}</NumCell> },
  { key: 'break_minutes', header: 'Break (m)', align: 'right', cell: (r) => <NumCell>{r.break_minutes}</NumCell> },
  { key: 'is_night_shift', header: 'Night', cell: (r) => r.is_night_shift ? <Chip variant="info">Night</Chip> : <span className="text-text-subtle">—</span> },
  { key: 'is_extended', header: 'Extended', cell: (r) => r.is_extended ? <Chip variant="warning">Auto-OT {r.auto_ot_hours}h</Chip> : <span className="text-text-subtle">—</span> },
@@ -172,11 +173,11 @@ export default function ShiftsPage() {
  <div className="flex gap-4">
  <div>
  <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Start</div>
- <div className="font-mono tabular-nums">{selected.start_time}</div>
+ <div className="font-mono tabular-nums">{formatTime(selected.start_time)}</div>
  </div>
  <div>
  <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">End</div>
- <div className="font-mono tabular-nums">{selected.end_time}</div>
+ <div className="font-mono tabular-nums">{formatTime(selected.end_time)}</div>
  </div>
  <div>
  <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Break</div>

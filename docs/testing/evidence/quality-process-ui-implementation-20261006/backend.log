@@ -1,0 +1,542 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+...................................................E..EEEE.E...  63 / 406 ( 15%)
+.............................................E................. 126 / 406 ( 31%)
+......................FF.................E..................... 189 / 406 ( 46%)
+............................................................... 252 / 406 ( 62%)
+......................................................EEEFEEEEE 315 / 406 ( 77%)
+EEEF...........E.EEF................................EEEEEEEEEEE 378 / 406 ( 93%)
+EEEEE.........F.............                                    406 / 406 (100%)
+
+Time: 07:24.565, Memory: 141.00 MB
+
+There were 38 errors:
+
+1) Tests\Feature\Quality\CoCEvidenceIntegrityTest::test_a_properly_inspected_lot_still_receives_its_certificate
+App\Common\Exceptions\BusinessRuleException: Enter the actual size for Shaft OD with up to 4 decimal places.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1225
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1186
+/var/www/app/Modules/Quality/Services/InspectionService.php:1305
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:499
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:118
+
+2) Tests\Feature\Quality\CoCEvidenceIntegrityTest::test_certificate_is_refused_when_the_evidence_contradicts_the_verdict
+App\Common\Exceptions\BusinessRuleException: Enter the actual size for Shaft OD with up to 4 decimal places.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1225
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1186
+/var/www/app/Modules/Quality/Services/InspectionService.php:1305
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:499
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:153
+
+3) Tests\Feature\Quality\CoCEvidenceIntegrityTest::test_certificate_is_refused_when_a_passed_check_is_changed_to_failed
+App\Common\Exceptions\BusinessRuleException: Enter the actual size for Shaft OD with up to 4 decimal places.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1225
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1186
+/var/www/app/Modules/Quality/Services/InspectionService.php:1305
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:499
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:166
+
+4) Tests\Feature\Quality\CoCEvidenceIntegrityTest::test_coc_endpoint_rechecks_changed_checklist_evidence_without_storing_a_certificate
+App\Common\Exceptions\BusinessRuleException: Enter the actual size for Shaft OD with up to 4 decimal places.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1225
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1186
+/var/www/app/Modules/Quality/Services/InspectionService.php:1305
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:499
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:177
+
+5) Tests\Feature\Quality\CoCEvidenceIntegrityTest::test_certificate_is_refused_when_the_evidence_rows_are_deleted
+App\Common\Exceptions\BusinessRuleException: Enter the actual size for Shaft OD with up to 4 decimal places.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1225
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1186
+/var/www/app/Modules/Quality/Services/InspectionService.php:1305
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:499
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:200
+
+6) Tests\Feature\Quality\CoCEvidenceIntegrityTest::test_reissuing_a_certificate_does_not_fork_the_vault_copy
+App\Common\Exceptions\BusinessRuleException: Enter the actual size for Shaft OD with up to 4 decimal places.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1225
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1186
+/var/www/app/Modules/Quality/Services/InspectionService.php:1305
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:499
+/var/www/tests/Feature/Quality/CoCEvidenceIntegrityTest.php:229
+
+7) Tests\Feature\Quality\IncomingMrbDispositionTest::test_cancelled_incoming_retry_creates_active_replacement
+Illuminate\Validation\ValidationException: This inspection changed. Reload before submitting.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Services/InspectionService.php:1090
+/var/www/app/Modules/Quality/Services/InspectionService.php:1830
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:1814
+/var/www/tests/Feature/Quality/IncomingMrbDispositionTest.php:259
+
+8) Tests\Feature\Quality\InspectionCalibrationEvidenceTest::test_completion_is_blocked_if_linked_equipment_became_overdue
+App\Common\Exceptions\BusinessRuleException: Use checklist submission with confirmed coverage for this inspection.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:813
+/var/www/tests/Feature/Quality/InspectionCalibrationEvidenceTest.php:131
+
+9) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_outgoing_uses_lot_checklist_with_a_small_measured_set
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:110
+
+10) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_outgoing_lot_passes_and_fails_on_the_reported_defect_count
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:133
+
+11) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_in_process_uses_lot_checklist
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:153
+
+12) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_non_critical_piece_row_is_resolved_by_an_attribute_claim
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:194
+
+13) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_ticked_dimension_survives_the_request_validation
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:219
+
+14) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_an_attribute_ng_claim_counts_as_a_defect
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:241
+
+15) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_reading_decides_over_a_contradicting_client_claim
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:258
+
+16) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_claim_cannot_erase_an_out_of_tolerance_reading
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:284
+
+17) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_claim_cannot_erase_an_in_tolerance_reading
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:322
+
+18) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_critical_reading_still_refuses_a_contradicting_claim
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:351
+
+19) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_an_unanswered_row_still_blocks_completion
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:588
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:366
+
+20) Tests\Feature\Quality\QualityPlanRolloutCommandTest::test_rollout_is_dry_run_by_default_and_apply_is_idempotent
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/ItemQualityPlanService.php:39
+/var/www/app/Console/Commands/RolloutBaselineQualityPlans.php:65
+/var/www/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:36
+/var/www/vendor/laravel/framework/src/Illuminate/Container/Util.php:43
+/var/www/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:96
+/var/www/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Container/Container.php:799
+/var/www/vendor/laravel/framework/src/Illuminate/Console/Command.php:211
+/var/www/vendor/symfony/console/Command/Command.php:341
+/var/www/vendor/laravel/framework/src/Illuminate/Console/Command.php:180
+/var/www/vendor/symfony/console/Application.php:1094
+/var/www/vendor/symfony/console/Application.php:356
+/var/www/vendor/symfony/console/Application.php:195
+/var/www/vendor/laravel/framework/src/Illuminate/Console/Application.php:165
+/var/www/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php:447
+/var/www/vendor/laravel/framework/src/Illuminate/Testing/PendingCommand.php:451
+/var/www/vendor/laravel/framework/src/Illuminate/Testing/PendingCommand.php:675
+/var/www/tests/Feature/Quality/QualityPlanRolloutCommandTest.php:34
+
+21) Tests\Feature\Quality\QualityReworkReinspectionTest::test_completed_rework_wo_triggers_outgoing_reinspection
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/app/Modules/Quality/Services/InspectionService.php:495
+/var/www/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:114
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:53
+/var/www/tests/Feature/Quality/QualityReworkReinspectionTest.php:108
+
+22) Tests\Feature\Quality\QualityReworkReinspectionTest::test_internal_stock_output_also_requires_outgoing_qc
+App\Common\Exceptions\BusinessRuleException: Every approved checklist check needs an acceptance criterion.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:1939
+/var/www/app/Modules/Quality/Services/InspectionService.php:749
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:699
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:526
+/var/www/app/Modules/Quality/Services/InspectionService.php:495
+/var/www/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:114
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:53
+/var/www/tests/Feature/Quality/QualityReworkReinspectionTest.php:141
+
+23) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_open_wo_keeps_rework_on_same_order
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+24) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_http_repair_crew_assignment_returns_the_committed_repair_context
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+25) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_closed_wo_keeps_separate_repair_path
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+26) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_inline_repair_conserves_stock_and_original_production_totals
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+27) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_repair_output_requires_explicit_production_start
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+28) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_repair_output_cannot_exceed_confirmed_quantity
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+29) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_ncr_requires_finished_rework_and_checked_repair_qc
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+30) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_resolved_wo_closes_automatically_once_with_notification
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+31) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_auto_close_refuses_unchecked_qc_or_missing_stock_receipt
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+32) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_auto_close_waits_for_finished_repair_checked_qc_and_ncr_resolution
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+33) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_inline_repair_is_a_commitment_without_extra_mrp_demand
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+34) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_all_source_pieces_can_be_repaired_and_wo_closed
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+35) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_rejected_inline_piece_is_scrapped_and_replacement_handed_off
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+36) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_nested_repair_qc_resolves_parent_without_inflating_stock
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+37) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_machine_repair_uses_confirmed_quantity_and_tracks_mold_shots
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+38) Tests\Feature\Quality\WorkOrderInlineReworkTest::test_delayed_duplicate_quality_event_rechecks_latest_state
+Illuminate\Validation\ValidationException: Every inspection check needs an acceptance criterion or approved reference.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Quality/Support/ChecklistDefinition.php:62
+/var/www/app/Modules/Quality/Services/InspectionSpecService.php:139
+/var/www/tests/Feature/Quality/WorkOrderInlineReworkTest.php:75
+
+--
+
+There were 6 failures:
+
+1) Tests\Feature\Quality\IncomingQcTriggerTest::test_effective_item_plan_builds_versioned_measurement_scaffold
+Failed asserting that a row in the table [inspections] matches the attributes {
+    "grn_item_id": 76,
+    "item_quality_plan_id": 10,
+    "sample_size": 2,
+    "item_id": 78
+}.
+
+Found similar results: [
+    {
+        "grn_item_id": 76,
+        "item_quality_plan_id": 10,
+        "sample_size": 10,
+        "item_id": 78
+    }
+].
+
+/var/www/vendor/laravel/framework/src/Illuminate/Foundation/Testing/Concerns/InteractsWithDatabase.php:43
+/var/www/tests/Feature/Quality/IncomingQcTriggerTest.php:119
+
+2) Tests\Feature\Quality\IncomingQcTriggerTest::test_incoming_qc_scaffolds_inspection_for_fractional_and_archived_items
+Archived item must still have an incoming inspection generated.
+Failed asserting that null is not null.
+
+/var/www/tests/Feature/Quality/IncomingQcTriggerTest.php:173
+
+3) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_spec_with_only_toleranced_parameters_scaffolds_no_checklist_rows
+Failed asserting that actual size 1 matches expected size 5.
+
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:171
+
+4) Tests\Feature\Quality\OutgoingQcLotChecklistTest::test_a_one_bound_piece_row_is_capturable
+A one-bound parameter still scaffolds the measured pieces, not a one-row matrix.
+Failed asserting that 1 is greater than 1.
+
+/var/www/tests/Feature/Quality/OutgoingQcLotChecklistTest.php:428
+
+5) Tests\Feature\Quality\QualitySamplingBoundsTest::test_full_sampling_rejects_a_batch_above_the_operational_bound
+Failed asserting that 'Every approved checklist check needs an acceptance criterion.' [ASCII](length: 61) contains "Full sampling is limited to 2 unit(s)" [ASCII](length: 37).
+
+/var/www/tests/Feature/Quality/QualitySamplingBoundsTest.php:86
+
+6) Tests\Feature\Quality\WorkOrderQcConnectionTest::test_required_operation_persists_qc_and_waits_for_its_pass
+Failed asserting that 'Every approved checklist check needs an acceptance criterion.' [ASCII](length: 61) contains "QC" [ASCII](length: 2).
+
+/var/www/tests/Feature/Quality/WorkOrderQcConnectionTest.php:247
+
+ERRORS!
+Tests: 406, Assertions: 1602, Errors: 38, Failures: 6.

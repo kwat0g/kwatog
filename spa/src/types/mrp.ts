@@ -5,235 +5,308 @@ export type MoldStatus = 'available' | 'in_use' | 'maintenance' | 'retired';
 export type MrpPlanStatus = 'active' | 'superseded' | 'cancelled';
 
 export interface CreateMachineData {
- machine_code: string;
- name: string;
- tonnage?: number | null;
- machine_type?: string | null;
- operators_required?: string | null;
- available_hours_per_day?: string | null;
+  machine_code: string;
+  name: string;
+  tonnage?: number | null;
+  machine_type?: string | null;
+  operators_required?: string | null;
+  available_hours_per_day?: string | null;
 }
 export type UpdateMachineData = Partial<CreateMachineData>;
 
 export interface CreateMoldData {
- mold_code: string;
- name: string;
- product_id: string;
- cavity_count: number;
- cycle_time_seconds: number;
- output_rate_per_hour: number;
- setup_time_minutes?: number | null;
- max_shots_before_maintenance: number;
- lifetime_max_shots: number;
- location?: string | null;
+  mold_code: string;
+  name: string;
+  product_id: string;
+  cavity_count: number;
+  cycle_time_seconds: number;
+  output_rate_per_hour: number;
+  setup_time_minutes?: number | null;
+  max_shots_before_maintenance: number;
+  lifetime_max_shots: number;
+  location?: string | null;
 }
 export type UpdateMoldData = Partial<CreateMoldData>;
 
 export interface BomItem {
- id: string;
- item: { id: string; code: string; name: string; unit_of_measure: string; item_type: string } | null;
- quantity_per_unit: string;
- unit: string;
- waste_factor: string;
- effective_quantity: string;
- cost_quantity: string | null;
- unit_cost: string | null;
- extended_cost: string | null;
- cost_source: 'standard_cost' | 'bom_rollup' | null;
- sort_order: number;
+  id: string;
+  item: {
+    id: string;
+    code: string;
+    name: string;
+    unit_of_measure: string;
+    item_type: string;
+  } | null;
+  quantity_per_unit: string;
+  unit: string;
+  waste_factor: string;
+  effective_quantity: string;
+  cost_quantity: string | null;
+  unit_cost: string | null;
+  extended_cost: string | null;
+  cost_source: 'standard_cost' | 'bom_rollup' | null;
+  sort_order: number;
 }
 
 export interface BomCostWarning {
- type: string;
- item_code: string;
- message: string;
+  type: string;
+  item_code: string;
+  message: string;
 }
 
 export interface Bom {
- id: string;
- product?: { id: string; part_number: string; name: string; unit_of_measure: string };
- version: number;
- is_active: boolean;
- cost_batch_size: string;
- item_count: number;
- material_cost: string | null;
- labor_cost: string | null;
- machine_cost: string | null;
- overhead_cost: string | null;
- total_cost: string | null;
- cost_basis: string | null;
- costed_at: string | null;
- cost_warnings: BomCostWarning[];
- items?: BomItem[];
- deleted_at?: string | null;
- created_at: string;
- updated_at: string;
+  id: string;
+  product?: {
+    id: string;
+    part_number: string;
+    name: string;
+    unit_of_measure: string;
+    standard_cost?: string;
+    base_selling_price?: string | null;
+    minimum_selling_price?: string | null;
+    finished_good_readiness?: {
+      ready: boolean;
+      reason: string | null;
+      item_id: string | null;
+      item_code: string | null;
+    } | null;
+  };
+  version: number;
+  is_active: boolean;
+  cost_batch_size: string;
+  item_count: number;
+  material_cost: string | null;
+  labor_cost: string | null;
+  machine_cost: string | null;
+  overhead_cost: string | null;
+  total_cost: string | null;
+  cost_basis: string | null;
+  costed_at: string | null;
+  cost_warnings: BomCostWarning[];
+  cost_completeness?: 'not_costed' | 'materials_only' | 'incomplete' | 'manufacturing_estimate';
+  estimated_margin?: {
+    label: string;
+    selling_price: string | null;
+    profit_per_unit: string | null;
+    margin_percent: string | null;
+    markup_percent: string | null;
+  };
+  items?: BomItem[];
+  deleted_at?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Machine {
- id: string;
- machine_code: string;
- name: string;
- tonnage: number | null;
- machine_type: string;
- operators_required: string;
- available_hours_per_day: string;
- status: MachineStatus;
- status_label: string;
- is_available_now: boolean;
- compatible_molds_count: number;
- compatible_molds?: Array<{ id: string; mold_code: string; name: string }>;
- created_at: string;
- updated_at: string;
+  id: string;
+  machine_code: string;
+  name: string;
+  tonnage: number | null;
+  machine_type: string;
+  operators_required: string;
+  available_hours_per_day: string;
+  status: MachineStatus;
+  status_label: string;
+  is_available_now: boolean;
+  compatible_molds_count: number;
+  compatible_molds?: Array<{ id: string; mold_code: string; name: string }>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Mold {
- id: string;
- mold_code: string;
- name: string;
- product?: { id: string; part_number: string; name: string; unit_of_measure: string } | null;
- cavity_count: number;
- cycle_time_seconds: number;
- output_rate_per_hour: number;
- setup_time_minutes: number;
- current_shot_count: number;
- max_shots_before_maintenance: number;
- shot_percentage: number;
- nearing_limit: boolean;
- lifetime_total_shots: number;
- lifetime_max_shots: number;
- status: MoldStatus;
- status_label: string;
- location: string | null;
- compatible_machines_count: number;
- compatible_machines?: Array<{ id: string; machine_code: string; name: string; tonnage: number | null }>;
- created_at: string;
- updated_at: string;
+  id: string;
+  mold_code: string;
+  name: string;
+  product?: { id: string; part_number: string; name: string; unit_of_measure: string } | null;
+  cavity_count: number;
+  cycle_time_seconds: number;
+  output_rate_per_hour: number;
+  setup_time_minutes: number;
+  current_shot_count: number;
+  max_shots_before_maintenance: number;
+  shot_percentage: number;
+  nearing_limit: boolean;
+  lifetime_total_shots: number;
+  lifetime_max_shots: number;
+  status: MoldStatus;
+  status_label: string;
+  location: string | null;
+  compatible_machines_count: number;
+  compatible_machines?: Array<{
+    id: string;
+    machine_code: string;
+    name: string;
+    tonnage: number | null;
+  }>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MrpMaterialDiagnostic {
- item_id: string;
- item_code: string;
- gross: number;
- on_hand: number;
- reserved: number;
+  item_id: string;
+  item_code: string;
+  gross: number;
+  on_hand: number;
+  usable?: number;
+  quality_held?: number;
+  unusable_zone?: number;
+  reserved: number;
   in_transit: number;
   linked_purchase_orders?: number;
   work_order_material?: number;
   awaiting_qc?: number;
   pending_purchase_orders?: number;
- standard_unit_cost?: string;
- gross_cost?: string;
- net_cost?: string;
- net: number;
+  standard_unit_cost?: string;
+  gross_cost?: string;
+  net_cost?: string;
+  net: number;
   action: 'sufficient' | 'pr_created' | 'awaiting_qc' | 'awaiting_po_approval';
- order_by?: string;
- priority?: string;
- lead_time_days?: number;
+  order_by?: string;
+  priority?: string;
+  lead_time_days?: number;
 }
 
 export interface MrpPlanWarningDiagnostic {
- kind: 'warning';
- type: string;
- product_id: string;
- sales_order_line_id: string;
- message: string;
+  kind: 'warning';
+  type: string;
+  product_id: string;
+  sales_order_line_id: string;
+  message: string;
 }
 
 export type MrpPlanDiagnostic = MrpMaterialDiagnostic | MrpPlanWarningDiagnostic;
 
 export interface MrpPlanCostSummary {
- material_cost: string;
- labor_cost: string;
- machine_cost: string;
- overhead_cost: string;
- planned_production_cost: string;
- products?: Array<{
-  product_id: string;
-  part_number: string;
-  name: string;
-  quantity: number;
-  unit_cost: string;
-  extended_cost: string;
- }>;
+  material_cost: string;
+  labor_cost: string;
+  machine_cost: string;
+  overhead_cost: string;
+  planned_production_cost: string;
+  products?: Array<{
+    product_id: string;
+    part_number: string;
+    name: string;
+    quantity: number;
+    unit_cost: string;
+    extended_cost: string;
+  }>;
 }
 
 export interface MrpPlan {
- id: string;
- mrp_plan_no: string;
- sales_order?: { id: string; so_number: string; customer?: { id: string; name: string } | null };
- version: number;
- status: MrpPlanStatus;
- status_label?: string;
- total_lines: number;
- shortages_found: number;
- auto_pr_count: number;
- draft_wo_count: number;
- diagnostics: MrpPlanDiagnostic[];
- cost_summary: MrpPlanCostSummary | null;
- generator?: { id: string; name: string };
- work_orders?: Array<{
   id: string;
-  wo_number: string;
-  product_id: string;
-  quantity_target: number;
-  status: string;
+  mrp_plan_no: string;
+  sales_order?: { id: string; so_number: string; status?: string; customer?: { id: string; name: string } | null };
+  version: number;
+  status: MrpPlanStatus;
   status_label?: string;
-  planned_start: string;
-  parent?: { id: string; wo_number: string } | null;
- }>;
-  purchase_requests?: Array<{ id: string; pr_number: string; priority: string; priority_label?: string; status: string; status_label?: string; is_auto_generated: boolean; date: string; purchase_orders?: Array<{ id: string; po_number: string; status: string; status_label?: string }> }>;
- generated_at: string;
- created_at: string;
- updated_at: string;
+  total_lines: number;
+  shortages_found: number;
+  auto_pr_count: number;
+  draft_wo_count: number;
+  diagnostics: MrpPlanDiagnostic[];
+  cost_summary: MrpPlanCostSummary | null;
+  generator?: { id: string; name: string };
+  work_orders?: Array<{
+    id: string;
+    wo_number: string;
+    product_id: string;
+    quantity_target: number;
+    status: string;
+    status_label?: string;
+    planned_start: string;
+    planned_end?: string | null;
+    preferred_production_date?: string | null;
+    schedule?: { scheduled_start: string; scheduled_end: string } | null;
+    parent?: { id: string; wo_number: string } | null;
+  }>;
+  purchase_requests?: Array<{
+    id: string;
+    pr_number: string;
+    priority: string;
+    priority_label?: string;
+    status: string;
+    status_label?: string;
+    is_auto_generated: boolean;
+    date: string;
+    purchase_orders?: Array<{
+      id: string;
+      po_number: string;
+      status: string;
+      status_label?: string;
+    }>;
+  }>;
+  generated_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Scheduler payloads
 export interface SchedulerProposalRow {
- id: string;
- work_order_id: string;
- wo_number: string;
- machine_id: number;
- mold_id: number;
- scheduled_start: string;
- scheduled_end: string;
- priority_order: number;
- status: string;
+  id: string;
+  work_order_id: string;
+  wo_number: string;
+  machine_id: number;
+  mold_id: number;
+  scheduled_start: string;
+  scheduled_end: string;
+  priority_order: number;
+  status: string;
 }
 
 export interface SchedulerConflict {
- work_order_id: string;
- wo_number: string;
- reasons: string[];
+  work_order_id: string;
+  wo_number: string;
+  reasons: string[];
+  checked_at?: string;
 }
 
 export interface SchedulerRunResult {
- scheduled: SchedulerProposalRow[];
- conflicts: SchedulerConflict[];
+  scheduled: SchedulerProposalRow[];
+  conflicts: SchedulerConflict[];
 }
 
 export interface GanttBar {
- id: string;
- wo_id: string | null;
- wo_number: string | null;
- product_name: string | null;
- mold_code: string | null;
- start: string;
- end: string;
- status: string;
- wo_status: string | null;
+  id: string;
+  updated_at?: string;
+  wo_id: string | null;
+  wo_number: string | null;
+  product_name: string | null;
+  product_part_number?: string | null;
+  quantity_target?: number;
+  sales_order?: { id: string; so_number: string } | null;
+  mold_code: string | null;
+  start: string;
+  end: string;
+  status: string;
+  wo_status: string | null;
+  reserves_capacity?: boolean;
+  staffing?: {
+    execution_blockers?: string[];
+    worker_names: string[];
+    worker_count: number;
+    minimum_workers: number;
+    recorder_name: string | null;
+    blockers: string[];
+    expected_crew_id?: string | null;
+    approval_blockers?: string[];
+  } | null;
 }
 
 export interface GanttRow {
- machine_id: string;
- machine_code: string;
- name: string;
- tonnage: number | null;
- status: MachineStatus;
- bars: GanttBar[];
+  current_owner?: { id: string; wo_number: string } | null;
+  machine_id: string;
+  machine_code: string;
+  name: string;
+  tonnage: number | null;
+  status: MachineStatus;
+  bars: GanttBar[];
 }
 
 export interface GanttSnapshot {
- from: string;
- to: string;
- rows: GanttRow[];
+  from: string;
+  to: string;
+  timezone?: string;
+  rows: GanttRow[];
+  conflicts?: SchedulerConflict[];
 }

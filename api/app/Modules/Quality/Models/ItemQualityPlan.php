@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Models;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Vendor;
@@ -17,7 +18,17 @@ class ItemQualityPlan extends Model
 {
     use HasAuditLog, HasHashId;
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $plan): void {
+            if ($plan->isDirty(['parameters', 'capture_method', 'item_id', 'vendor_id', 'version', 'stage', 'sampling_method', 'fixed_sample_size', 'aql_level'])) {
+                throw new BusinessRuleException('Quality-plan definitions are immutable. Publish a new revision.');
+            }
+        });
+    }
+
     protected $fillable = [
+        'capture_method',
         'item_id', 'vendor_id', 'version', 'stage', 'sampling_method',
         'fixed_sample_size', 'aql_level', 'parameters', 'effective_from',
         'effective_to', 'is_active', 'notes', 'created_by',

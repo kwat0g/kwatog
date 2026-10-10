@@ -1,0 +1,1553 @@
+[
+  {
+    "role": "maintenance",
+    "route": "/maintenance/work-orders",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/maintenance/work-orders",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Maintenance work orders"
+    ],
+    "unnamedInputs": [],
+    "text": "Maintenance work orders\n7 orders\nMobile view\nNew work order\nStatus: All\nOpen\nAssigned\nIn progress\nCompleted\nCancelled\nType: All\nPreventive\nCorrective\nPriority: All\nCritical\nHigh\nMedium\nLow\nPREVENTIVE\n0\nin current view\nCORRECTIVE\n7\nin current view\nHIGH PRIORITY\n7\nin current view\nTOTAL COST\n₱0.00\nin current view\nShowing 7 of 7 results, page 1\nWO\tTARGET\tTYPE\tPRIORITY\tASSIGNED TO\tCOST\tSTATUS\nMWO-202610-0007\tMOWN-I-m1s2Idle maintenance machine m1s2\tCorrective\tHigh\t—\t₱0.00\tCompleted\nMWO-202610-0006\tMOWN-D-m1s2Maintenance ownership mold m1s2\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0005\tMOWN-I-m1s2Idle maintenance machine m1s2\tCorrective\tHigh\t—\t₱0.00\tCompleted\nMWO-202610-0004\tMOWN-D-m1s2Maintenance ownership mold m1s2\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0003\tMOWN-D-m1r20Maintenance ownership mold m1r20\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0002\tMOWN-D-m1r20Maintenance ownership mold m1r20\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0001\tMOWN-D-m1r20Maintenance ownership m"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/work-orders",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/maintenance/work-orders",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Maintenance work orders"
+    ],
+    "unnamedInputs": [],
+    "text": "Maintenance work orders\n7 orders\nMobile view\nNew work order\nStatus: All\nOpen\nAssigned\nIn progress\nCompleted\nCancelled\nType: All\nPreventive\nCorrective\nPriority: All\nCritical\nHigh\nMedium\nLow\nPREVENTIVE\n0\nin current view\nCORRECTIVE\n7\nin current view\nHIGH PRIORITY\n7\nin current view\nTOTAL COST\n₱0.00\nin current view\nShowing 7 of 7 results, page 1\nWO\tTARGET\tTYPE\tPRIORITY\tASSIGNED TO\tCOST\tSTATUS\nMWO-202610-0007\tMOWN-I-m1s2Idle maintenance machine m1s2\tCorrective\tHigh\t—\t₱0.00\tCompleted\nMWO-202610-0006\tMOWN-D-m1s2Maintenance ownership mold m1s2\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0005\tMOWN-I-m1s2Idle maintenance machine m1s2\tCorrective\tHigh\t—\t₱0.00\tCompleted\nMWO-202610-0004\tMOWN-D-m1s2Maintenance ownership mold m1s2\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0003\tMOWN-D-m1r20Maintenance ownership mold m1r20\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0002\tMOWN-D-m1r20Maintenance ownership mold m1r20\tCorrective\tHigh\t—\t₱0.00\tCancelled\nMWO-202610-0001\tMOWN-D-m1r20Maintenance ownership m"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/work-orders/create",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/maintenance/work-orders/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "New maintenance work order"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Work orders\nNew maintenance work order\nTARGET\nType*\n— Select —\nMachine\nMold\n— Select Target —\nTarget*\nWORK ORDER\nType*\n— Select —\nPreventive\nCorrective\nPriority*\n— Select —\nCritical\nHigh\nMedium\nLow\nDescription*\nCancel\nCreate work order"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/work-orders/create",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/maintenance/work-orders/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "New maintenance work order"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Work orders\nNew maintenance work order\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\nTARGET\nType*\n— Select —\nMachine\nMold\n— Select Target —\nTarget*\nWORK ORDER\nType*\n— Select —\nPreventive\nCorrective\nPriority*\n— Select —\nCritical\nHigh\nMedium\nLow\nDescription*\nCancel\nCreate work order"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/schedules",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/maintenance/schedules",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Maintenance schedules"
+    ],
+    "unnamedInputs": [],
+    "text": "Maintenance schedules\n0 schedules\nTarget: All\nMachine\nMold\nInterval: All\nHours (engine time)\nDays (calendar)\nShots (mold only)\nActive\nAll\nArchived\nNo maintenance schedules\n\nCreate a preventive schedule for a machine or mold; the system materialises a WO when due."
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/schedules",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/maintenance/schedules",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Maintenance schedules"
+    ],
+    "unnamedInputs": [],
+    "text": "Maintenance schedules\n0 schedules\nTarget: All\nMachine\nMold\nInterval: All\nHours (engine time)\nDays (calendar)\nShots (mold only)\nActive\nAll\nArchived\nNo maintenance schedules\n\nCreate a preventive schedule for a machine or mold; the system materialises a WO when due."
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/downtime",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/maintenance/downtime",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Downtime analytics"
+    ],
+    "unnamedInputs": [],
+    "text": "Downtime analytics\nMTBF, MTTR, availability, and breakdown trends\n\nTOTAL DOWNTIME\n\n1h 29m\n\nBetter than avg\n\nMTBF\n\n—\n\nHigher than avg\n\nMTTR\n\n—\n\nHigher than avg\n\nAVAILABILITY\n\n99.8%\n\nBetter than avg\nDaily downtime trend\n10-05\n10-06\nTotal downtime\nBreakdown\nTop machines by downtime\n2 results\nMACHINE\tNAME\tDOWNTIME\tBREAKDOWNS\nCREW-858223-A\test ullam ipsam Injection Molder\t\n19h 18m\n\t0\nMOWN-I-m1s2\tIdle maintenance machine m1s2\t\n0m\n\t0\nMachine availability summary\n20 results\nMACHINE\tNAME\tAVAILABILITY\tMTBF\tMTTR\tDOWNTIME\tBREAKDOWNS\nCREW-858223-A\test ullam ipsam Injection Molder\t97.4%\t—\t—\t19h 18m\t0\nCREW-858223-B\tsit eligendi nam Injection Molder\t100.0%\t—\t—\t0m\t0\nCREW-858223-C\tautem numquam eaque Injection Molder\t100.0%\t—\t—\t0m\t0\nE2E-qc118\trepudiandae possimus laudantium Injection Molder\t100.0%\t—\t—\t0m\t0\nIMM-01\tToshiba EC100SX\t100.0%\t—\t—\t0m\t0\nIMM-02\tToshiba EC100SX\t100.0%\t—\t—\t0m\t0\nIMM-03\tSumitomo SE130\t100.0%\t—\t—\t0m\t0\nIMM-04\tSumitomo SE130\t100.0%\t—\t—\t0m\t0\nIMM-05\tNissei NEX180\t100.0%\t—\t—\t0m\t0\nIMM-06\tNi"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/downtime",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/maintenance/downtime",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Downtime analytics"
+    ],
+    "unnamedInputs": [],
+    "text": "Downtime analytics\nMTBF, MTTR, availability, and breakdown trends\n\nTOTAL DOWNTIME\n\n1h 29m\n\nBetter than avg\n\nMTBF\n\n—\n\nHigher than avg\n\nMTTR\n\n—\n\nHigher than avg\n\nAVAILABILITY\n\n99.8%\n\nBetter than avg\nDaily downtime trend\nTotal downtime\nBreakdown\nTop machines by downtime\n2 results\nMACHINE\tNAME\tDOWNTIME\tBREAKDOWNS\nCREW-858223-A\test ullam ipsam Injection Molder\t\n19h 18m\n\t0\nMOWN-I-m1s2\tIdle maintenance machine m1s2\t\n0m\n\t0\nMachine availability summary\n20 results\nMACHINE\tNAME\tAVAILABILITY\tMTBF\tMTTR\tDOWNTIME\tBREAKDOWNS\nCREW-858223-A\test ullam ipsam Injection Molder\t97.4%\t—\t—\t19h 18m\t0\nCREW-858223-B\tsit eligendi nam Injection Molder\t100.0%\t—\t—\t0m\t0\nCREW-858223-C\tautem numquam eaque Injection Molder\t100.0%\t—\t—\t0m\t0\nE2E-qc118\trepudiandae possimus laudantium Injection Molder\t100.0%\t—\t—\t0m\t0\nIMM-01\tToshiba EC100SX\t100.0%\t—\t—\t0m\t0\nIMM-02\tToshiba EC100SX\t100.0%\t—\t—\t0m\t0\nIMM-03\tSumitomo SE130\t100.0%\t—\t—\t0m\t0\nIMM-04\tSumitomo SE130\t100.0%\t—\t—\t0m\t0\nIMM-05\tNissei NEX180\t100.0%\t—\t—\t0m\t0\nIMM-06\tNissei NEX180\t"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/work-orders/Jr0VdeN743",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/maintenance/work-orders/Jr0VdeN743",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "MWO-202610-0007"
+    ],
+    "unnamedInputs": [],
+    "text": "Work orders\nMWO-202610-0007\nmachine · Idle maintenance machine m1s2\nCompleted\nOpen\nAssigned\nIn progress\nCompleted\nDescription\n\nSuccessful maintenance start m1s2\n\nREMARKS\nMaintenance work completed and checked.\nLogs\n2\nMaintenance started.\nOct 5, 2026 · 9:28 PM · Juan Bautista\nMaintenance completed.\nOct 5, 2026 · 9:28 PM · Juan Bautista\nSpare parts\n\nNo spare parts consumed.\n\nDetails\nTYPE\nCorrective\nPRIORITY\nHigh\nASSIGNEE\n—\nSTARTED\nOct 5, 2026 · 9:28 PM\nCOMPLETED\nOct 5, 2026 · 9:28 PM\nDOWNTIME\n0 min\nCOST\n₱0.00"
+  },
+  {
+    "role": "maintenance",
+    "route": "/maintenance/work-orders/Jr0VdeN743",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/maintenance/work-orders/Jr0VdeN743",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "MWO-202610-0007"
+    ],
+    "unnamedInputs": [],
+    "text": "Work orders\nMWO-202610-0007\nmachine · Idle maintenance machine m1s2\nCompleted\nOpen\nAssigned\nIn progress\nCompleted\nDescription\n\nSuccessful maintenance start m1s2\n\nREMARKS\nMaintenance work completed and checked.\nLogs\n2\nMaintenance started.\nOct 5, 2026 · 9:28 PM · Juan Bautista\nMaintenance completed.\nOct 5, 2026 · 9:28 PM · Juan Bautista\nSpare parts\n\nNo spare parts consumed.\n\nDetails\nTYPE\nCorrective\nPRIORITY\nHigh\nASSIGNEE\n—\nSTARTED\nOct 5, 2026 · 9:28 PM\nCOMPLETED\nOct 5, 2026 · 9:28 PM\nDOWNTIME\n0 min\nCOST\n₱0.00"
+  },
+  {
+    "role": "maintenance",
+    "deniedEndpoint": "/inventory/items",
+    "status": 403
+  },
+  {
+    "role": "maintenance",
+    "deniedEndpoint": "/mrp/molds",
+    "status": 403
+  },
+  {
+    "role": "impex",
+    "route": "/supply-chain/shipments",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/shipments",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Inbound shipments"
+    ],
+    "unnamedInputs": [],
+    "text": "Inbound shipments\n1 shipment\nNew shipment\nStatus: All\nOrdered\nShipped\nIn transit\nCustoms\nCleared\nReceived\nCancelled\nShowing 1 of 1 results, page 1\nSHIPMENT\tPO\tCARRIER\tCONTAINER\tETA\tSTATUS\nSHP-202610-0001\tPO-SHIP-sh620\t—\tCMAUSH62022\t—\tReceived\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "impex",
+    "route": "/supply-chain/shipments",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/shipments",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Inbound shipments"
+    ],
+    "unnamedInputs": [],
+    "text": "Inbound shipments\n1 shipment\nNew shipment\nStatus: All\nOrdered\nShipped\nIn transit\nCustoms\nCleared\nReceived\nCancelled\nShowing 1 of 1 results, page 1\nSHIPMENT\tPO\tCARRIER\tCONTAINER\tETA\tSTATUS\nSHP-202610-0001\tPO-SHIP-sh620\t—\tCMAUSH62022\t—\tReceived\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "impex",
+    "route": "/supply-chain/shipments/create",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/shipments/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "New shipment"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Shipments\nNew shipment\nPURCHASE ORDER\n— Select shipment-ready PO —\nPO-202610-0002 — Audit E2E Resin Supplier\nPO-SHIP-sh620 — Shipment E2E sh620 supplier\nPurchase order*\nCARRIER & VESSEL\nCarrier\nVessel\nIncoterm\nUses the purchase order term printed on customs documents.\nContainer number\nBill of lading number\nSCHEDULE\nEstimated departure (ETD)\nEstimated arrival (ETA)\nLANDED COSTS\nFreight cost\nPHP\nInsurance cost\nPHP\nDuties\nPHP\nBrokerage fee\nPHP\nOther charges\nPHP\nNOTES\nNotes\nCancel\nCreate shipment"
+  },
+  {
+    "role": "impex",
+    "route": "/supply-chain/shipments/create",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/shipments/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "New shipment"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Shipments\nNew shipment\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\nPURCHASE ORDER\n— Select shipment-ready PO —\nPO-202610-0002 — Audit E2E Resin Supplier\nPO-SHIP-sh620 — Shipment E2E sh620 supplier\nPurchase order*\nCARRIER & VESSEL\nCarrier\nVessel\nIncoterm\nUses the purchase order term printed on customs documents.\nContainer number\nBill of lading number\nSCHEDULE\nEstimated departure (ETD)\nEstimated arrival (ETA)\nLANDED COSTS\nFreight cost\nPHP\nInsurance cost\nPHP\nDuties\nPHP\nBrokerage fee\nPHP\nOther charges\nPHP\nNOTES\nNotes\nCancel\nCreate shipment"
+  },
+  {
+    "role": "impex",
+    "route": "/supply-chain/shipments/j16KyzV0Xl",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/shipments/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "SHP-202610-0001Received"
+    ],
+    "unnamedInputs": [],
+    "text": "Shipments\nSHP-202610-0001Received\nPO PO-SHIP-sh620\nOrdered\nShipped\nIn Transit\nCustoms\nCleared\n6\nReceived\nShipment details\nCARRIER\n—\nVESSEL\n—\nCONTAINER\nCMAUSH62022\nINCOTERM\nFOB\nB/L NUMBER\n—\nETD\n—\nATD\n2026-10-06\nETA\n—\nATA\n2026-10-06\nCUSTOMS CLEARED\n2026-10-06\nLanded costs\n₱22.00\nEdit landed costs\nFREIGHT COST\n₱10.00\nINSURANCE COST\n₱2.00\nDUTIES\n₱4.00\nBROKERAGE FEE\n₱1.00\nOTHER CHARGES\n₱5.00\nAllocation method\nBy value\nBy quantity\nEqual split\nCalculate landed costs\nPurchase order item\tFreight\tInsurance\tDuties\tBrokerage\tOther\tTotal\nShipment E2E sh620 resin\t₱10.00\t₱2.00\t₱4.00\t₱1.00\t₱5.00\t₱22.00\n\nCalculated Oct 5, 2026 · 8:38 PM · By value\n\nReceiving handoff\nGRN-202610-0003\n\nStatus: draft\n\nWarehouse must record received quantities and storage locations. Stock stays unchanged until receipt approval.\n\nShipment containers\n2 active\nCMAUSH62022\n\n40Ft · Dry\n\nFCIUSH62011\n\nSeal SEAL-SH620 · 40Ft · Dry · Gross 25,400 kg\n\nContainer records are frozen after customs clearance or shipment cancellation.\n\nShi"
+  },
+  {
+    "role": "impex",
+    "route": "/supply-chain/shipments/j16KyzV0Xl",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/shipments/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 455,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "SHP-202610-0001Received"
+    ],
+    "unnamedInputs": [],
+    "text": "Shipments\nSHP-202610-0001Received\nPO PO-SHIP-sh620\nOrdered\nShipped\nIn Transit\nCustoms\nCleared\n6\nReceived\nShipment details\nCARRIER\n—\nVESSEL\n—\nCONTAINER\nCMAUSH62022\nINCOTERM\nFOB\nB/L NUMBER\n—\nETD\n—\nATD\n2026-10-06\nETA\n—\nATA\n2026-10-06\nCUSTOMS CLEARED\n2026-10-06\nLanded costs\n₱22.00\nEdit landed costs\nFREIGHT COST\n₱10.00\nINSURANCE COST\n₱2.00\nDUTIES\n₱4.00\nBROKERAGE FEE\n₱1.00\nOTHER CHARGES\n₱5.00\nAllocation method\nBy value\nBy quantity\nEqual split\nCalculate landed costs\nPurchase order item\tFreight\tInsurance\tDuties\tBrokerage\tOther\tTotal\nShipment E2E sh620 resin\t₱10.00\t₱2.00\t₱4.00\t₱1.00\t₱5.00\t₱22.00\n\nCalculated Oct 5, 2026 · 8:38 PM · By value\n\nReceiving handoff\nGRN-202610-0003\n\nStatus: draft\n\nWarehouse must record received quantities and storage locations. Stock stays unchanged until receipt approval.\n\nShipment containers\n2 active\nCMAUSH62022\n\n40Ft · Dry\n\nFCIUSH62011\n\nSeal SEAL-SH620 · 40Ft · Dry · Gross 25,400 kg\n\nContainer records are frozen after customs clearance or shipment cancellation.\n\nShi"
+  },
+  {
+    "role": "impex",
+    "deniedEndpoint": "/supply-chain/vehicles",
+    "status": 200
+  },
+  {
+    "role": "warehouse",
+    "route": "/supply-chain/deliveries",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/deliveries",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Outbound deliveries"
+    ],
+    "unnamedInputs": [],
+    "text": "Outbound deliveries\n1 delivery\nStatus: All\nScheduled\nLoading\nIn transit\nReturn pending\nDelivered\nConfirmed\nReturned\nCancelled\nShowing 1 of 1 results, page 1\nDELIVERY\tSALES ORDER\tVEHICLE\tDRIVER\tSCHEDULED\tSTATUS\nDR-202610-0001\tSO-DP-dp118\tDelivery precision truck dp118 (DP-dp118)\tDelivery precision driver dp118\t2026-10-05\tReturn pending\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "warehouse",
+    "route": "/supply-chain/deliveries",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/deliveries",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Outbound deliveries"
+    ],
+    "unnamedInputs": [],
+    "text": "Outbound deliveries\n1 delivery\nStatus: All\nScheduled\nLoading\nIn transit\nReturn pending\nDelivered\nConfirmed\nReturned\nCancelled\nShowing 1 of 1 results, page 1\nDELIVERY\tSALES ORDER\tVEHICLE\tDRIVER\tSCHEDULED\tSTATUS\nDR-202610-0001\tSO-DP-dp118\tDelivery precision truck dp118 (DP-dp118)\tDelivery precision driver dp118\t2026-10-05\tReturn pending\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "warehouse",
+    "route": "/supply-chain/deliveries/j16KyzV0Xl",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/deliveries/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "DR-202610-0001Return pending"
+    ],
+    "unnamedInputs": [],
+    "text": "Deliveries\nDR-202610-0001Return pending\nSO SO-DP-dp118\nSO SO-DP-dp118\nDelivery\nInvoice\nPayment\n\nDelivery in progress — awaiting shipment & customer confirmation\n\nAwaiting delivery\n\nAwaiting invoice\n\nDelivery outcome\n\nCustomer refused delivery\n\nCustomer refused the load; depot count will verify the returning goods.\n\nDP-dp118-KG\n\nCustomer received 0.000 · Returning 0.999 · Unaccounted 0.001\n\nReported damaged: 0.000 with customer · 0.001 on truck.\n\nWarehouse truck return\n\nCount all goods arriving back from this delivery. Only the actual count enters quarantine; missing goods remain recorded as a variance.\n\nRecord depot count\nStock and accounting\nShipment stock\nconsumed\nReserved lots and locations\nCustomer cost\npending\n\n₱0.00\n\nSchedule\nSCHEDULED\n2026-10-05\nDEPARTED\nOct 5, 2026 · 8:23 PM\nDELIVERED\n—\nVEHICLE\nDelivery precision truck dp118 (DP-dp118)\nDRIVER\nDelivery precision driver dp118\nCONFIRMED\n—\nItems\n1 line\nINSPECTION / DISPATCHED STOCK\tDISPATCHED QTY\tCUSTOMER RECEIVED\tUNIT PRICE\nQC-DP-"
+  },
+  {
+    "role": "warehouse",
+    "route": "/supply-chain/deliveries/j16KyzV0Xl",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/deliveries/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "DR-202610-0001Return pending"
+    ],
+    "unnamedInputs": [],
+    "text": "Deliveries\nDR-202610-0001Return pending\nSO SO-DP-dp118\nSO SO-DP-dp118\nDelivery\nInvoice\nPayment\n\nDelivery in progress — awaiting shipment & customer confirmation\n\nAwaiting delivery\n\nAwaiting invoice\n\nDelivery outcome\n\nCustomer refused delivery\n\nCustomer refused the load; depot count will verify the returning goods.\n\nDP-dp118-KG\n\nCustomer received 0.000 · Returning 0.999 · Unaccounted 0.001\n\nReported damaged: 0.000 with customer · 0.001 on truck.\n\nWarehouse truck return\n\nCount all goods arriving back from this delivery. Only the actual count enters quarantine; missing goods remain recorded as a variance.\n\nRecord depot count\nStock and accounting\nShipment stock\nconsumed\nReserved lots and locations\nCustomer cost\npending\n\n₱0.00\n\nSchedule\nSCHEDULED\n2026-10-05\nDEPARTED\nOct 5, 2026 · 8:23 PM\nDELIVERED\n—\nVEHICLE\nDelivery precision truck dp118 (DP-dp118)\nDRIVER\nDelivery precision driver dp118\nCONFIRMED\n—\nItems\n1 line\nINSPECTION / DISPATCHED STOCK\tDISPATCHED QTY\tCUSTOMER RECEIVED\tUNIT PRICE\nQC-DP-"
+  },
+  {
+    "role": "warehouse",
+    "deniedEndpoint": "/accounting/journal-entries",
+    "status": 404
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/journal-entries",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/journal-entries",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Journal Entries"
+    ],
+    "unnamedInputs": [],
+    "text": "Journal Entries\n21 entries\nCOA\nVendors\nTrial Balance\nBudgets\nNew entry\nStatus: All\nDraft\nPosted\nReversed\nActive\nAll\nArchived\nShowing 21 of 21 results, page 1\nENTRY NO\tDATE\tDESCRIPTION\tREFERENCE\tTOTAL\tSTATUS\nJE-203608-0001\tAug 25, 2036\tSoD Admin API 6b2158f5-8421-4fd8-bad7-a067c3de97f1\t—\t₱1.00\tDraft\nJE-203311-0001\tNov 14, 2033\tSoD Finance API a73a84de-13ef-4b57-8517-72f9fc8d6d31\t—\t₱1.00\tDraft\nJE-203208-0001\tAug 14, 2032\tSoD Admin UI a3b4b377-34dc-4ab9-a61a-affd6ffc7b74\t—\t₱1.00\tDraft\nJE-203201-0001\tJan 31, 2032\tSoD checker path 735cd295-ffc1-4fec-8cae-f28179ac4b5f\t—\t₱1.00\tPosted\nJE-202704-0002\tApr 14, 2027\tREVERSAL of JE-202704-0001: Invoice INV-202704-0001 to Customer Return E2E rma118\tReversal of JE kAmPX1KB3w\t₱224.00\tPosted\nJE-202704-0001\tApr 14, 2027\tInvoice INV-202704-0001 to Customer Return E2E rma118\tInvoice l5aKLMVdy3\t₱224.00\tReversed\nJE-202610-0014\tOct 6, 2026\tStock movement #19\tStock movement M3qNekKZ1e\t₱56.26\tPosted\nJE-202610-0013\tOct 6, 2026\tREVERSAL of JE-202610-0012: Bill B"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/journal-entries",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/journal-entries",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Journal Entries"
+    ],
+    "unnamedInputs": [],
+    "text": "Journal Entries\n21 entries\nCOA\nVendors\nTrial Balance\nBudgets\nNew entry\nStatus: All\nDraft\nPosted\nReversed\nActive\nAll\nArchived\nShowing 21 of 21 results, page 1\nENTRY NO\tDATE\tDESCRIPTION\tREFERENCE\tTOTAL\tSTATUS\nJE-203608-0001\tAug 25, 2036\tSoD Admin API 6b2158f5-8421-4fd8-bad7-a067c3de97f1\t—\t₱1.00\tDraft\nJE-203311-0001\tNov 14, 2033\tSoD Finance API a73a84de-13ef-4b57-8517-72f9fc8d6d31\t—\t₱1.00\tDraft\nJE-203208-0001\tAug 14, 2032\tSoD Admin UI a3b4b377-34dc-4ab9-a61a-affd6ffc7b74\t—\t₱1.00\tDraft\nJE-203201-0001\tJan 31, 2032\tSoD checker path 735cd295-ffc1-4fec-8cae-f28179ac4b5f\t—\t₱1.00\tPosted\nJE-202704-0002\tApr 14, 2027\tREVERSAL of JE-202704-0001: Invoice INV-202704-0001 to Customer Return E2E rma118\tReversal of JE kAmPX1KB3w\t₱224.00\tPosted\nJE-202704-0001\tApr 14, 2027\tInvoice INV-202704-0001 to Customer Return E2E rma118\tInvoice l5aKLMVdy3\t₱224.00\tReversed\nJE-202610-0014\tOct 6, 2026\tStock movement #19\tStock movement M3qNekKZ1e\t₱56.26\tPosted\nJE-202610-0013\tOct 6, 2026\tREVERSAL of JE-202610-0012: Bill B"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/journal-entries/create",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/journal-entries/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "New journal entry"
+    ],
+    "unnamedInputs": [],
+    "text": "Journal Entries\nNew journal entry\nHeader\nDate*\nDescription*\n0 / 500\nLines\nACCOUNT\nDESCRIPTION\nDEBIT\nCREDIT\n— Select account —\n1000 — Assets\n1010 — Cash in Bank\n1020 — Cash in Bank\n1030 — Petty Cash\n1100 — Accounts Receivable\n1110 — Employee Loans Receivable\n1200 — Inventory - Raw Materials\n1210 — Inventory - Finished Goods\n1220 — Inventory - Packaging\n1230 — Inventory - Spare Parts\n1240 — Inventory - Delivery Transit\n1300 — Prepaid Expenses\n1310 — VAT Input\n1400 — Property Plant & Equipment\n1410 — Accumulated Depreciation\n2000 — Liabilities\n2010 — Accounts Payable\n2020 — SSS Payable\n2030 — PhilHealth Payable\n2040 — Pag-IBIG Payable\n2050 — Withholding Tax Payable\n2051 — Expanded Withholding Tax Payable\n2060 — VAT Output\n2070 — Accrued Expenses\n2080 — 13th Month Pay Payable\n2100 — Loans Payable\n2110 — Goods Received Not Invoiced\n2120 — Landed Cost Clearing\n3000 — Equity\n3010 — Capital Stock\n3020 — Retained Earnings\n4000 — Revenue\n4010 — Sales Revenue\n4020 — Other Income\n4030 — Gain on Di"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/journal-entries/create",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/journal-entries/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "New journal entry"
+    ],
+    "unnamedInputs": [],
+    "text": "Journal Entries\nNew journal entry\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\nHeader\nDate*\nDescription*\n0 / 500\nLines\n— Select account —\n1000 — Assets\n1010 — Cash in Bank\n1020 — Cash in Bank\n1030 — Petty Cash\n1100 — Accounts Receivable\n1110 — Employee Loans Receivable\n1200 — Inventory - Raw Materials\n1210 — Inventory - Finished Goods\n1220 — Inventory - Packaging\n1230 — Inventory - Spare Parts\n1240 — Inventory - Delivery Transit\n1300 — Prepaid Expenses\n1310 — VAT Input\n1400 — Property Plant & Equipment\n1410 — Accumulated Depreciation\n2000 — Liabilities\n2010 — Accounts Payable\n2020 — SSS Payable\n2030 — PhilHealth Payable\n2040 — Pag-IBIG Payable\n2050 — Withholding Tax Payable\n2051 — Expanded Withholding Tax Payable\n2060 — VAT Output\n2070 — Accrued Expenses\n2080 — 13th Month Pay Payable\n2100 — Loans Payable\n2110 — Goods Received Not Invoiced\n2120 — Landed Cost Clearing\n3000 — Equity\n3010 — Capital Stock\n3020 — Retained Earnings\n4000 — Reven"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/invoices",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/invoices",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Invoices (AR)"
+    ],
+    "unnamedInputs": [],
+    "text": "Invoices (AR)\n3 invoices\nNew invoice\nStatus: All\nDraft\nFinalized\nPartial\nPaid\nCancelled\nOverdue: All\nOverdue only\nDRAFT\n0\nin current view\nUNPAID\n2\nin current view\nOVERDUE\n0\nin current view\nOUTSTANDING BALANCE\n₱200.00\nin current view\nShowing 3 of 3 results, page 1\nINVOICE NO\tCUSTOMER\tDATE\tDUE\tTOTAL\tBALANCE\tSTATUS\nINV-202704-0001\tCustomer Return E2E rma118\tApr 14, 2027\tMay 14, 2027\t₱224.00\t₱0.00\tCancelled\nINV-RMA-r5x9q\tCustomer Return E2E r5x9q\tOct 6, 2026\tNov 5, 2026\t₱100.00\t₱100.00\tunpaid\nINV-RMA-rma118\tCustomer Return E2E rma118\tOct 6, 2026\tNov 5, 2026\t₱100.00\t₱100.00\tunpaid\n1–3 of 3\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/invoices",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/invoices",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Invoices (AR)"
+    ],
+    "unnamedInputs": [],
+    "text": "Invoices (AR)\n3 invoices\nNew invoice\nStatus: All\nDraft\nFinalized\nPartial\nPaid\nCancelled\nOverdue: All\nOverdue only\nDRAFT\n0\nin current view\nUNPAID\n2\nin current view\nOVERDUE\n0\nin current view\nOUTSTANDING BALANCE\n₱200.00\nin current view\nShowing 3 of 3 results, page 1\nINVOICE NO\tCUSTOMER\tDATE\tDUE\tTOTAL\tBALANCE\tSTATUS\nINV-202704-0001\tCustomer Return E2E rma118\tApr 14, 2027\tMay 14, 2027\t₱224.00\t₱0.00\tCancelled\nINV-RMA-r5x9q\tCustomer Return E2E r5x9q\tOct 6, 2026\tNov 5, 2026\t₱100.00\t₱100.00\tunpaid\nINV-RMA-rma118\tCustomer Return E2E rma118\tOct 6, 2026\tNov 5, 2026\t₱100.00\t₱100.00\tunpaid\n1–3 of 3\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/bills",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/bills",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Bills (AP)"
+    ],
+    "unnamedInputs": [],
+    "text": "Bills (AP)\n2 bills\nNew bill\nStatus: All\nDraft\nUnpaid\nPartial\nPaid\nCancelled\nOverdue: All\nOverdue only\nUNPAID\n1\nin current view\nOVERDUE\n0\nin current view\nOUTSTANDING BALANCE\n₱672.00\nin current view\nShowing 2 of 2 results, page 1\nBILL NO\tVENDOR\tDATE\tDUE\tTOTAL\tBALANCE\tSTATUS\nBILL-202610-0002\tAudit E2E Resin Supplier\tOct 6, 2026\tNov 5, 2026\t₱672.00\t₱0.00\tCancelled\nBILL-202610-0001\tAudit E2E Resin Supplier\tOct 6, 2026\tNov 5, 2026\t₱672.00\t₱672.00\tUnpaid\n1–2 of 2\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/bills",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/bills",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Bills (AP)"
+    ],
+    "unnamedInputs": [],
+    "text": "Bills (AP)\n2 bills\nNew bill\nStatus: All\nDraft\nUnpaid\nPartial\nPaid\nCancelled\nOverdue: All\nOverdue only\nUNPAID\n1\nin current view\nOVERDUE\n0\nin current view\nOUTSTANDING BALANCE\n₱672.00\nin current view\nShowing 2 of 2 results, page 1\nBILL NO\tVENDOR\tDATE\tDUE\tTOTAL\tBALANCE\tSTATUS\nBILL-202610-0002\tAudit E2E Resin Supplier\tOct 6, 2026\tNov 5, 2026\t₱672.00\t₱0.00\tCancelled\nBILL-202610-0001\tAudit E2E Resin Supplier\tOct 6, 2026\tNov 5, 2026\t₱672.00\t₱672.00\tUnpaid\n1–2 of 2\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/credit-notes",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/credit-notes",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Credit Notes"
+    ],
+    "unnamedInputs": [],
+    "text": "Credit Notes\n1 credit notes\nNew credit note\nType: All\nCustomer Credit\nSupplier Credit\nStatus: All\nDraft\nFinalized\nApplied\nVoid\nShowing 1 of 1 results, page 1\nCN NO\tTYPE\tPARTY\tDATE\tTOTAL\tUNAPPLIED\tSTATUS\nDRAFT\tCustomer Credit\tCustomer Return E2E r5x9q\tOct 6, 2026\t₱112.00\t₱112.00\tDraft\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/credit-notes",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/credit-notes",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Credit Notes"
+    ],
+    "unnamedInputs": [],
+    "text": "Credit Notes\n1 credit notes\nNew credit note\nType: All\nCustomer Credit\nSupplier Credit\nStatus: All\nDraft\nFinalized\nApplied\nVoid\nShowing 1 of 1 results, page 1\nCN NO\tTYPE\tPARTY\tDATE\tTOTAL\tUNAPPLIED\tSTATUS\nDRAFT\tCustomer Credit\tCustomer Return E2E r5x9q\tOct 6, 2026\t₱112.00\t₱112.00\tDraft\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/balance-sheet",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/balance-sheet",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Balance Sheet"
+    ],
+    "unnamedInputs": [],
+    "text": "Journal Entries\nBalance Sheet\nCurrency: PHP\nCSV\nPDF\nAs of\nBalanced\nASSETS\nACCOUNT\tAMOUNT\n1010 Cash in Bank\t-₱33,751.00\nTotal\t-₱33,751.00\nLIABILITIES\nACCOUNT\tAMOUNT\n2010 Accounts Payable\t-₱1.00\nTotal\t-₱1.00\nEQUITY\nACCOUNT\tAMOUNT\n3099 Current Period Net Income\t-₱33,750.00\nTotal\t-₱33,750.00\nTotal Assets: -₱33,751.00\nTotal Liabilities + Equity: -₱33,751.00"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/balance-sheet",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/balance-sheet",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Balance Sheet"
+    ],
+    "unnamedInputs": [],
+    "text": "Journal Entries\nBalance Sheet\nCurrency: PHP\nCSV\nPDF\nAs of\nBalanced\nASSETS\nACCOUNT\tAMOUNT\n1010 Cash in Bank\t-₱33,751.00\nTotal\t-₱33,751.00\nLIABILITIES\nACCOUNT\tAMOUNT\n2010 Accounts Payable\t-₱1.00\nTotal\t-₱1.00\nEQUITY\nACCOUNT\tAMOUNT\n3099 Current Period Net Income\t-₱33,750.00\nTotal\t-₱33,750.00\nTotal Assets: -₱33,751.00\nTotal Liabilities + Equity: -₱33,751.00"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/periods",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/periods",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Accounting Periods"
+    ],
+    "unnamedInputs": [],
+    "text": "Accounting Periods\nClose a month to lock its entries; reopening requires a reason and is recorded.\nStatus: All\nOpen\nClosed\nReopened\nYear\nPeriods\nNo accounting periods yet\n\nNo period rows exist yet. Close the current month to create the first accounting lock.\n\nClose current month"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/periods",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/periods",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Accounting Periods"
+    ],
+    "unnamedInputs": [],
+    "text": "Accounting Periods\nClose a month to lock its entries; reopening requires a reason and is recorded.\nStatus: All\nOpen\nClosed\nReopened\nYear\nPeriods\nNo accounting periods yet\n\nNo period rows exist yet. Close the current month to create the first accounting lock.\n\nClose current month"
+  },
+  {
+    "role": "finance",
+    "route": "/assets",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/assets",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Assets"
+    ],
+    "unnamedInputs": [],
+    "text": "Assets\n1 asset\nRun depreciation\nNew asset\nCategory: All\nMachine\nMold\nVehicle\nEquipment\nFurniture\nOther\nStatus: All\nActive\nUnder Maintenance\nDisposed\nShowing 1 of 1 results, page 1\nCODE\tNAME\tCATEGORY\tACQUISITION\tACC. DEP.\tBOOK VALUE\tSTATUS\nAST-2026-0001\tAsset audit asset MUVNVVNN\tVehicle\t₱100.00\t₱0.00\t₱100.00\tActive\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/assets",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/assets",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Assets"
+    ],
+    "unnamedInputs": [],
+    "text": "Assets\n1 asset\nRun depreciation\nNew asset\nCategory: All\nMachine\nMold\nVehicle\nEquipment\nFurniture\nOther\nStatus: All\nActive\nUnder Maintenance\nDisposed\nShowing 1 of 1 results, page 1\nCODE\tNAME\tCATEGORY\tACQUISITION\tACC. DEP.\tBOOK VALUE\tSTATUS\nAST-2026-0001\tAsset audit asset MUVNVVNN\tVehicle\t₱100.00\t₱0.00\t₱100.00\tActive\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/assets/create",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/assets/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "New asset"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Assets\nNew asset\nIDENTIFICATION\nName*\nCategory*\nMachine\nMold\nVehicle\nEquipment\nFurniture\nOther\n— None —\nAdmin & General Affairs\nCustomer Service\nE2E non-production crew-858223\nExecutive\nFinance & Accounting\nHuman Resources\nImport/Export\nInformation Technology\nMaintenance & Engineering\nMold Department\nProduction\nProduction Planning\nPurchasing & Procurement\nQuality Control\nSales & Marketing\nWarehouse & Logistics\nalias eum\naut maxime\ncumque quidem\net sequi\nfugiat enim\nlibero tempora\nminima expedita\nrerum aut\nsequi deleniti\nvoluptas et\nDepartment\nLocation\nDescription\nACQUISITION & DEPRECIATION\nAcquisition date*\nAcquisition cost*\nUseful life (years)*\nDepreciation method*\nStraight Line\nDeclining Balance (200%)\nSalvage value\nINSURANCE (OPTIONAL)\nPolicy number\nProvider\nExpiry\nInsured value\nCancel\nCreate asset"
+  },
+  {
+    "role": "finance",
+    "route": "/assets/create",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/assets/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "New asset"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Assets\nNew asset\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\nIDENTIFICATION\nName*\nCategory*\nMachine\nMold\nVehicle\nEquipment\nFurniture\nOther\n— None —\nAdmin & General Affairs\nCustomer Service\nE2E non-production crew-858223\nExecutive\nFinance & Accounting\nHuman Resources\nImport/Export\nInformation Technology\nMaintenance & Engineering\nMold Department\nProduction\nProduction Planning\nPurchasing & Procurement\nQuality Control\nSales & Marketing\nWarehouse & Logistics\nalias eum\naut maxime\ncumque quidem\net sequi\nfugiat enim\nlibero tempora\nminima expedita\nrerum aut\nsequi deleniti\nvoluptas et\nDepartment\nLocation\nDescription\nACQUISITION & DEPRECIATION\nAcquisition date*\nAcquisition cost*\nUseful life (years)*\nDepreciation method*\nStraight Line\nDeclining Balance (200%)\nSalvage value\nINSURANCE (OPTIONAL)\nPolicy number\nProvider\nExpiry\nInsured value\nCancel\nCreate asset"
+  },
+  {
+    "role": "finance",
+    "route": "/budgeting",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/budgeting",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Budget Overview"
+    ],
+    "unnamedInputs": [],
+    "text": "Budget Overview\nFY 2026 — Department Budget Summary\nFY 2026\nCreate Budget\nTransfers\nTOTAL ALLOCATED\nPHP 0.00M\nTOTAL SPENT\nPHP -0.00M\nCOMMITTED (POS)\nPHP 0.00M\nAVAILABLE\nPHP 0.00M\nOverall Budget Utilization\n-206.8% consumed\n-₱268.78 / ₱130.00\nBy Department\n-206.8% overall\nDEPARTMENT\tALLOCATED\tSPENT\t%\tSTATUS\nCompany-wide\tPHP 0.00M\tPHP -0.00M\t-206.8%\t\nOn track\nBudgets\nAll\nDraft\nSubmitted\nApproved\nActive\nClosed\nNAME\tTYPE\tALLOCATED\tSPENT\tAVAILABLE\t%\tSTATUS\nAudit Operating 1791231975660\toperating\tPHP 0.13K\tPHP -0.27K\tPHP 0.40K\t-206.8%\tActive\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/budgeting",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/budgeting",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Budget Overview"
+    ],
+    "unnamedInputs": [],
+    "text": "Budget Overview\nFY 2026 — Department Budget Summary\nFY 2026\nCreate Budget\nTransfers\nTOTAL ALLOCATED\nPHP 0.00M\nTOTAL SPENT\nPHP -0.00M\nCOMMITTED (POS)\nPHP 0.00M\nAVAILABLE\nPHP 0.00M\nOverall Budget Utilization\n-206.8% consumed\n-₱268.78 / ₱130.00\nBy Department\n-206.8% overall\nDEPARTMENT\tALLOCATED\tSPENT\t%\tSTATUS\nCompany-wide\tPHP 0.00M\tPHP -0.00M\t-206.8%\t\nOn track\nBudgets\nAll\nDraft\nSubmitted\nApproved\nActive\nClosed\nNAME\tTYPE\tALLOCATED\tSPENT\tAVAILABLE\t%\tSTATUS\nAudit Operating 1791231975660\toperating\tPHP 0.13K\tPHP -0.27K\tPHP 0.40K\t-206.8%\tActive\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/budgeting/transfers",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/budgeting/transfers",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Budget Transfers"
+    ],
+    "unnamedInputs": [],
+    "text": "Budgeting\nBudget Transfers\nLine-to-line virement inside one fiscal year — requested by Finance, applied on VP approval\nRequest Transfer\nTransfers\nAll\nPending\nApproved\nRejected\nNUMBER\tFROM → TO\tMONTH\tAMOUNT\tREASON\tSTATUS\tACTIONS\nBT-202610-0001Oct 5, 2026\t5010 → 5020\tJAN\t₱10.00\tLive E2E virement 1791231942731\tApproved\tby Kenji Watanabe\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/budgeting/transfers",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/budgeting/transfers",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Budget Transfers"
+    ],
+    "unnamedInputs": [],
+    "text": "Budgeting\nBudget Transfers\nLine-to-line virement inside one fiscal year — requested by Finance, applied on VP approval\nRequest Transfer\nTransfers\nAll\nPending\nApproved\nRejected\nNUMBER\tFROM → TO\tMONTH\tAMOUNT\tREASON\tSTATUS\tACTIONS\nBT-202610-0001Oct 5, 2026\t5010 → 5020\tJAN\t₱10.00\tLive E2E virement 1791231942731\tApproved\tby Kenji Watanabe\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "finance",
+    "route": "/assets/j16KyzV0Xl",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/assets/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "AST-2026-0001"
+    ],
+    "unnamedInputs": [],
+    "text": "Assets\nAST-2026-0001\nAsset audit asset MUVNVVNN\nActive\nEdit\nDispose\nACQUISITION\n₱100.00\nACCUMULATED DEP.\n₱0.00\nBOOK VALUE\n₱100.00\nMONTHLY DEP.\n₱1.67\nDepreciation history\n\nNo depreciation posted yet.\n\nOperational association\n\nNo operational record linked.\n\nAssociate vehicle\nDetails\nCATEGORY\nVehicle\nACQUIRED\n2026-10-05\nUSEFUL LIFE\n5 years\nSALVAGE\n₱0.00\nLOCATION\n—\nDEPARTMENT\n—\nQR code\n\nAST-2026-0001\n\nDownload QR"
+  },
+  {
+    "role": "finance",
+    "route": "/assets/j16KyzV0Xl",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/assets/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "AST-2026-0001"
+    ],
+    "unnamedInputs": [],
+    "text": "Assets\nAST-2026-0001\nAsset audit asset MUVNVVNN\nActive\nEdit\nDispose\nACQUISITION\n₱100.00\nACCUMULATED DEP.\n₱0.00\nBOOK VALUE\n₱100.00\nMONTHLY DEP.\n₱1.67\nDepreciation history\n\nNo depreciation posted yet.\n\nOperational association\n\nNo operational record linked.\n\nAssociate vehicle\nDetails\nCATEGORY\nVehicle\nACQUIRED\n2026-10-05\nUSEFUL LIFE\n5 years\nSALVAGE\n₱0.00\nLOCATION\n—\nDEPARTMENT\n—\nQR code\n\nAST-2026-0001\n\nDownload QR"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/credit-notes/j16KyzV0Xl",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/accounting/credit-notes/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Draft credit note"
+    ],
+    "unnamedInputs": [],
+    "text": "Credit Notes\nDraft credit note\nDraft\nFinalize + post\nTYPE\nCustomer Credit\nTOTAL\n₱112.00\nAPPLIED\n₱0.00\nBALANCE\n₱112.00\nDetails\nDate\nOct 6, 2026\nCustomer\nCustomer Return E2E r5x9q\nSource invoice\nINV-RMA-r5x9q\nVAT\n₱12.00\nReason\nCustomer return — RMA RMA-202610-0003\nLines\nDESCRIPTION\tAMOUNT\nCustomer return finished good r5x9q — RMA RMA-202610-0003\t₱100.00"
+  },
+  {
+    "role": "finance",
+    "route": "/accounting/credit-notes/j16KyzV0Xl",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/accounting/credit-notes/j16KyzV0Xl",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Draft credit note"
+    ],
+    "unnamedInputs": [],
+    "text": "Credit Notes\nDraft credit note\nDraft\nFinalize + post\nTYPE\nCustomer Credit\nTOTAL\n₱112.00\nAPPLIED\n₱0.00\nBALANCE\n₱112.00\nDetails\nDate\nOct 6, 2026\nCustomer\nCustomer Return E2E r5x9q\nSource invoice\nINV-RMA-r5x9q\nVAT\n₱12.00\nReason\nCustomer return — RMA RMA-202610-0003\nLines\nDESCRIPTION\tAMOUNT\nCustomer return finished good r5x9q — RMA RMA-202610-0003\t₱100.00"
+  },
+  {
+    "role": "finance",
+    "deniedEndpoint": "/hr/employees",
+    "status": 403
+  },
+  {
+    "role": "hr",
+    "route": "/hr/employees",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/hr/employees",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Employees"
+    ],
+    "unnamedInputs": [],
+    "text": "Employees\n28 employees\nSalary Adjustments\nExport\nSchedule\nAdd employee\nAll departments\nAdmin & General Affairs\nCustomer Service\nE2E non-production crew-858223\nExecutive\nFinance & Accounting\nHuman Resources\nImport/Export\nInformation Technology\nMaintenance & Engineering\nMold Department\nProduction\nProduction Planning\nPurchasing & Procurement\nQuality Control\nSales & Marketing\nWarehouse & Logistics\nalias eum\naut maxime\ncumque quidem\net sequi\nfugiat enim\nlibero tempora\nminima expedita\nrerum aut\nsequi deleniti\nvoluptas et\nAll statuses\nActive\nOn leave\nSuspended\nResigned\nTerminated\nRetired\nAll types\nRegular\nProbationary\nContractual\nProject-Based\nPay type: All\nMonthly\nSemi-monthly\n1 active filter\nClear all\nACTIVE\n28\nall matching employees\nON LEAVE\n0\nall matching employees\nRESIGNED\n0\nall matching employees\nTERMINATED\n0\nall matching employees\nSUSPENDED\n0\nall matching employees\nRETIRED\n0\nall matching employees\nShowing 25 of 28 results, page 1\n\tEmployee no\n\tName\n\tDEPARTMENT\tPAY TYPE\tHired\n\tSTATUS\n\n\t"
+  },
+  {
+    "role": "hr",
+    "route": "/hr/employees",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/hr/employees",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Employees"
+    ],
+    "unnamedInputs": [],
+    "text": "Employees\n28 employees\nSalary Adjustments\nExport\nSchedule\nAdd employee\nAll departments\nAdmin & General Affairs\nCustomer Service\nE2E non-production crew-858223\nExecutive\nFinance & Accounting\nHuman Resources\nImport/Export\nInformation Technology\nMaintenance & Engineering\nMold Department\nProduction\nProduction Planning\nPurchasing & Procurement\nQuality Control\nSales & Marketing\nWarehouse & Logistics\nalias eum\naut maxime\ncumque quidem\net sequi\nfugiat enim\nlibero tempora\nminima expedita\nrerum aut\nsequi deleniti\nvoluptas et\nAll statuses\nActive\nOn leave\nSuspended\nResigned\nTerminated\nRetired\nAll types\nRegular\nProbationary\nContractual\nProject-Based\nPay type: All\nMonthly\nSemi-monthly\n1 active filter\nClear all\nACTIVE\n28\nall matching employees\nON LEAVE\n0\nall matching employees\nRESIGNED\n0\nall matching employees\nTERMINATED\n0\nall matching employees\nSUSPENDED\n0\nall matching employees\nRETIRED\n0\nall matching employees\nShowing 25 of 28 results, page 1\n\tEmployee no\n\tName\n\tDEPARTMENT\tPAY TYPE\tHired\n\tSTATUS\n\n\t"
+  },
+  {
+    "role": "hr",
+    "route": "/hr/attendance/shifts",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/hr/attendance/shifts",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Shifts"
+    ],
+    "unnamedInputs": [],
+    "text": "Shifts\n7 shifts\nBulk assign\nAdd shift\nActive\nAll\nArchived\nShowing 7 of 7 results, page 1\nNAME\tSTART\tEND\tBREAK (M)\tNIGHT\tEXTENDED\tSTATUS\n\nDay Shift\nDefault\n\t06:00\t14:00\t30\t—\t—\tActive\n\nExtended Day\n\t06:00\t18:00\t30\t—\tAuto-OT 4.0h\tActive\n\nHR night shift crew-858223\n\t02:00\t08:00\t0\tNight\t—\tActive\n\nNight Shift\n\t18:00\t06:00\t30\tNight\t—\tActive\n\nOffice Hours\n\t08:00\t17:00\t60\t—\t—\tActive\n\nQC E2E full-day shift qc118\n\t00:00\t23:59\t0\t—\t—\tActive\n\nStart QC full-day shift st118\n\t00:00\t23:59\t0\t—\t—\tActive\n1–7 of 7\nRows\n25\n50\n100\nPage 1 of 1\nDetails\n\nSelect a shift to view its details."
+  },
+  {
+    "role": "hr",
+    "route": "/hr/attendance/shifts",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/hr/attendance/shifts",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Shifts"
+    ],
+    "unnamedInputs": [],
+    "text": "Shifts\n7 shifts\nBulk assign\nAdd shift\nActive\nAll\nArchived\nShowing 7 of 7 results, page 1\nNAME\tSTART\tEND\tBREAK (M)\tNIGHT\tEXTENDED\tSTATUS\n\nDay Shift\nDefault\n\t06:00\t14:00\t30\t—\t—\tActive\n\nExtended Day\n\t06:00\t18:00\t30\t—\tAuto-OT 4.0h\tActive\n\nHR night shift crew-858223\n\t02:00\t08:00\t0\tNight\t—\tActive\n\nNight Shift\n\t18:00\t06:00\t30\tNight\t—\tActive\n\nOffice Hours\n\t08:00\t17:00\t60\t—\t—\tActive\n\nQC E2E full-day shift qc118\n\t00:00\t23:59\t0\t—\t—\tActive\n\nStart QC full-day shift st118\n\t00:00\t23:59\t0\t—\t—\tActive\n1–7 of 7\nRows\n25\n50\n100\nPage 1 of 1\nDetails\n\nSelect a shift to view its details."
+  },
+  {
+    "role": "hr",
+    "route": "/hr/leaves",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/hr/leaves",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Leave requests"
+    ],
+    "unnamedInputs": [],
+    "text": "Leave requests\n1 total · 0 awaiting approval\nKanban view\nManage Types\nYear-End Leave\nRequest leave\nStatus: All\nPending dept\nPending hr\nApproved\nRejected\nCancelled\nDATE\n→\nPENDING DEPT\n0\nin current view\nPENDING HR\n0\nin current view\nAPPROVED\n0\nin current view\nREJECTED / CANCELLED\n1\nin current view\nShowing 1 of 1 results, page 1\n\tNO\tEMPLOYEE\tTYPE\tDATES\tDAYS\tSTATUS\t\n\n\tLR-202610-0001\t\nManuel Cruz\nDEMO-0009\n\tVL\tOct 19, 2026 → Oct 19, 2026\t1.0\tCancelled\t\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "hr",
+    "route": "/hr/leaves",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/hr/leaves",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Leave requests"
+    ],
+    "unnamedInputs": [],
+    "text": "Leave requests\n1 total · 0 awaiting approval\nKanban view\nManage Types\nYear-End Leave\nRequest leave\nStatus: All\nPending dept\nPending hr\nApproved\nRejected\nCancelled\nDATE\n→\nPENDING DEPT\n0\nin current view\nPENDING HR\n0\nin current view\nAPPROVED\n0\nin current view\nREJECTED / CANCELLED\n1\nin current view\nShowing 1 of 1 results, page 1\n\tNO\tEMPLOYEE\tTYPE\tDATES\tDAYS\tSTATUS\t\n\n\tLR-202610-0001\t\nManuel Cruz\nDEMO-0009\n\tVL\tOct 19, 2026 → Oct 19, 2026\t1.0\tCancelled\t\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "hr",
+    "route": "/payroll/periods",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/payroll/periods",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Payroll Periods"
+    ],
+    "unnamedInputs": [],
+    "text": "Payroll Periods\n1 periods\nDe Minimis\nRun 13th Month\nNew Period\nStatus: All\nDraft\nProcessing\nComputed\nApproved\nFinalized\nDisbursed\nVoided\nAll types\nRegular\n13th Month\nShowing 1 of 1 results, page 1\nPERIOD\tHALF\tPAYROLL DATE\tEMPLOYEES\tTOTAL NET\tSTATUS\n\nSep 16, 2026 – Sep 30, 2026\nSep 16–Sep 30, 2026 · 2nd half · Finance & Accounting\n\t2nd\tSep 30, 2026\t2\t₱33,750.00\tVoided\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "hr",
+    "route": "/payroll/periods",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/payroll/periods",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Payroll Periods"
+    ],
+    "unnamedInputs": [],
+    "text": "Payroll Periods\n1 periods\nDe Minimis\nRun 13th Month\nNew Period\nStatus: All\nDraft\nProcessing\nComputed\nApproved\nFinalized\nDisbursed\nVoided\nAll types\nRegular\n13th Month\nShowing 1 of 1 results, page 1\nPERIOD\tHALF\tPAYROLL DATE\tEMPLOYEES\tTOTAL NET\tSTATUS\n\nSep 16, 2026 – Sep 30, 2026\nSep 16–Sep 30, 2026 · 2nd half · Finance & Accounting\n\t2nd\tSep 30, 2026\t2\t₱33,750.00\tVoided\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "hr",
+    "route": "/hr/loans",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/hr/loans",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Loans & Cash Advance"
+    ],
+    "unnamedInputs": [],
+    "text": "Loans & Cash Advance\n0 records\nNew request\nAll types\nCompany Loan\nCash Advance\nStatus: All\nPending\nActive\nPaid\nCancelled\nRejected\nWrite-off pending\nWritten off\nNo loan records\n\nSubmit a request to get started.\n\nNew request"
+  },
+  {
+    "role": "hr",
+    "route": "/hr/loans",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/hr/loans",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Loans & Cash Advance"
+    ],
+    "unnamedInputs": [],
+    "text": "Loans & Cash Advance\n0 records\nNew request\nAll types\nCompany Loan\nCash Advance\nStatus: All\nPending\nActive\nPaid\nCancelled\nRejected\nWrite-off pending\nWritten off\nNo loan records\n\nSubmit a request to get started.\n\nNew request"
+  },
+  {
+    "role": "hr",
+    "deniedEndpoint": "/supply-chain/shipments",
+    "status": 403
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/purchase-requests",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/purchasing/purchase-requests",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Purchase requests"
+    ],
+    "unnamedInputs": [],
+    "text": "Purchase requests\n9 requests\nNew PR\nStatus: All\nDraft\nPending\nApproved\nRejected\nConverted\nCancelled\nPriority: All\nNormal\nUrgent\nCritical\nSource: All\nAuto-generated\nManual\nShowing 9 of 9 results, page 1\nPR #\tDATE\tNEEDED BY\tREQUESTER\tDEPT\tPRIORITY\tSTATUS\tESTIMATED\t\n\nPR-202610-0009AUTO\nURGENT\n\tOct 6, 2026\tOct 20, 2026\tSystem Administrator\t—\t\nUrgent\n\t\nDraft\n\t₱90,000.00\t\n\nPR-202610-0008\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nConverted\n\t₱600.00\t\n\nPR-202610-0007AUTO\n\tOct 6, 2026\tNov 2, 2026\tSara Sales\tSALES\t\nNormal\n\t\nApproved\npartial PO\n\t₱22,500.00\t\nConvert to PO\n\nPR-202610-0006\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nConverted\n\t₱600.00\t\n\nPR-202610-0005\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nConverted\n\t₱600.00\t\n\nPR-202610-0004\nURGENT\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nUrgent\n\t\nRejected\n\t₱600.00\t\n\nPR-202610-0003\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nApproved\nmanual PO\n\t₱50,000.00\t\nConvert to PO\n\nPR-202610-0002\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nApproved\nmanual PO\n\t₱600.00\t\nConvert t"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/purchase-requests",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/purchasing/purchase-requests",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Purchase requests"
+    ],
+    "unnamedInputs": [],
+    "text": "Purchase requests\n9 requests\nNew PR\nStatus: All\nDraft\nPending\nApproved\nRejected\nConverted\nCancelled\nPriority: All\nNormal\nUrgent\nCritical\nSource: All\nAuto-generated\nManual\nShowing 9 of 9 results, page 1\nPR #\tDATE\tNEEDED BY\tREQUESTER\tDEPT\tPRIORITY\tSTATUS\tESTIMATED\t\n\nPR-202610-0009AUTO\nURGENT\n\tOct 6, 2026\tOct 20, 2026\tSystem Administrator\t—\t\nUrgent\n\t\nDraft\n\t₱90,000.00\t\n\nPR-202610-0008\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nConverted\n\t₱600.00\t\n\nPR-202610-0007AUTO\n\tOct 6, 2026\tNov 2, 2026\tSara Sales\tSALES\t\nNormal\n\t\nApproved\npartial PO\n\t₱22,500.00\t\nConvert to PO\n\nPR-202610-0006\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nConverted\n\t₱600.00\t\n\nPR-202610-0005\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nConverted\n\t₱600.00\t\n\nPR-202610-0004\nURGENT\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nUrgent\n\t\nRejected\n\t₱600.00\t\n\nPR-202610-0003\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nApproved\nmanual PO\n\t₱50,000.00\t\nConvert to PO\n\nPR-202610-0002\n\tOct 6, 2026\t—\tElena Cruz\tPROD\t\nNormal\n\t\nApproved\nmanual PO\n\t₱600.00\t\nConvert t"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/rfqs",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/purchasing/rfqs",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Supplier RFQs"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "placeholder": "Search RFQ # or title…"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Supplier RFQs\n1 total\nNew RFQ\nAll statuses\nDraft\nOpen\nClosed\nAwarded\nCancelled\nShowing 1 of 1 results, page 1\nRFQ #\tTITLE\tSOURCE PR\tDEADLINE\tRESPONSES\tSTATUS\nRFQ-202610-0001\tLive RFQ chain 1791232416945\tPR-202610-0007\tOct 5, 2026 · 9:04 PM\t1/1\tAwarded\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/rfqs",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/purchasing/rfqs",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Supplier RFQs"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "placeholder": "Search RFQ # or title…"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Supplier RFQs\n1 total\nNew RFQ\nAll statuses\nDraft\nOpen\nClosed\nAwarded\nCancelled\nShowing 1 of 1 results, page 1\nRFQ #\tTITLE\tSOURCE PR\tDEADLINE\tRESPONSES\tSTATUS\nRFQ-202610-0001\tLive RFQ chain 1791232416945\tPR-202610-0007\tOct 5, 2026 · 9:04 PM\t1/1\tAwarded\n1–1 of 1\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/purchase-orders",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/purchasing/purchase-orders",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Purchase orders",
+      "Needs action"
+    ],
+    "unnamedInputs": [],
+    "text": "Purchase orders\n5 POs\nNew PO\nStatus: All\nDraft\nPending approval\nApproved\nSent\nAcknowledged\nSupplier proposed\nSupplier declined\nPartially received\nReceived\nClosed\nCancelled\nVendor: All\nAudit E2E Resin Supplier\nShipment E2E sh620 supplier\nVP threshold: All\nYes\nNo\nDelivery: All\nOverdue only\nPO DATE\n→\nNeeds action\nscoped to this page\nWAITING ON APPROVAL\n0\n\nnothing here\n\nAPPROVED, NOT SENT\n1\n₱56,001.34\n\nSupplier has not been told yet · oldest 0d\n\nOVERDUE DELIVERY\n0\n\nnothing here\n\nShowing 5 of 5 results, page 1\nPO #\tDATE\tVENDOR\tEXPECTED\tTOTAL\tSTATUS\tRECEIVED\n\nPO-202610-0004\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\t—\t₱672.00\t\nReceived\n\t100%\n\nPO-202610-0003\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\tNov 2, 2026\t₱56,001.34\t\nApproved\n\t0%\n\nPO-202610-0002\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\t—\t₱672.00\t\nPartially received\n\t100%\n\nPO-202610-0001\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\t—\t₱672.00\t\nReceived\n\t100%\n\nPO-SHIP-sh620\n\tMay 14, 2026\tShipment E2E sh620 supplier\tNov 27, 2026\t₱0.00\t\nSen"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/purchase-orders",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/purchasing/purchase-orders",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Purchase orders",
+      "Needs action"
+    ],
+    "unnamedInputs": [],
+    "text": "Purchase orders\n5 POs\nNew PO\nStatus: All\nDraft\nPending approval\nApproved\nSent\nAcknowledged\nSupplier proposed\nSupplier declined\nPartially received\nReceived\nClosed\nCancelled\nVendor: All\nAudit E2E Resin Supplier\nShipment E2E sh620 supplier\nVP threshold: All\nYes\nNo\nDelivery: All\nOverdue only\nPO DATE\n→\nNeeds action\nscoped to this page\nWAITING ON APPROVAL\n0\n\nnothing here\n\nAPPROVED, NOT SENT\n1\n₱56,001.34\n\nSupplier has not been told yet · oldest 0d\n\nOVERDUE DELIVERY\n0\n\nnothing here\n\nShowing 5 of 5 results, page 1\nPO #\tDATE\tVENDOR\tEXPECTED\tTOTAL\tSTATUS\tRECEIVED\n\nPO-202610-0004\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\t—\t₱672.00\t\nReceived\n\t100%\n\nPO-202610-0003\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\tNov 2, 2026\t₱56,001.34\t\nApproved\n\t0%\n\nPO-202610-0002\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\t—\t₱672.00\t\nPartially received\n\t100%\n\nPO-202610-0001\nAuto\n\tOct 6, 2026\tAudit E2E Resin Supplier\t—\t₱672.00\t\nReceived\n\t100%\n\nPO-SHIP-sh620\n\tMay 14, 2026\tShipment E2E sh620 supplier\tNov 27, 2026\t₱0.00\t\nSen"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/approved-suppliers",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/purchasing/approved-suppliers",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Approved suppliers"
+    ],
+    "unnamedInputs": [],
+    "text": "Approved suppliers\n2 links\nLink supplier\nVendor: All\nAudit E2E Resin Supplier\nItem: All\nRM-001 — Plastic Resin Type A (ABS)\nRM-010 — Black Colorant\nPreferred: All\nYes\nNo\nQualification: All\nApproved\nProvisional\nActive\nAll\nArchived\nShowing 2 of 2 results, page 1\nITEM\tNAME\tVENDOR\tTHEIR PART NO.\tPREFERRED\tLEAD TIME\tLAST PRICE\tPERFORMANCE\t\nRM-001\tPlastic Resin Type A (ABS)\t\nAudit E2E Resin Supplier\n\t—\t\n\t14d\t\n₱120.00\n\tView scorecard\t\n\nRM-010\tBlack Colorant\t\nAudit E2E Resin Supplier\nprovisional\n\t—\t\n\t0d\t\n₱2,500.06\n\tView scorecard\t\n1–2 of 2\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "buyer",
+    "route": "/purchasing/approved-suppliers",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/purchasing/approved-suppliers",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Approved suppliers"
+    ],
+    "unnamedInputs": [],
+    "text": "Approved suppliers\n2 links\nLink supplier\nVendor: All\nAudit E2E Resin Supplier\nItem: All\nRM-001 — Plastic Resin Type A (ABS)\nRM-010 — Black Colorant\nPreferred: All\nYes\nNo\nQualification: All\nApproved\nProvisional\nActive\nAll\nArchived\nShowing 2 of 2 results, page 1\nITEM\tNAME\tVENDOR\tTHEIR PART NO.\tPREFERRED\tLEAD TIME\tLAST PRICE\tPERFORMANCE\t\nRM-001\tPlastic Resin Type A (ABS)\t\nAudit E2E Resin Supplier\n\t—\t\n\t14d\t\n₱120.00\n\tView scorecard\t\n\nRM-010\tBlack Colorant\t\nAudit E2E Resin Supplier\nprovisional\n\t—\t\n\t0d\t\n₱2,500.06\n\tView scorecard\t\n1–2 of 2\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "buyer",
+    "deniedEndpoint": "/assets",
+    "status": 403
+  },
+  {
+    "role": "admin",
+    "route": "/supply-chain/fleet",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/fleet",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Fleet"
+    ],
+    "unnamedInputs": [],
+    "text": "Fleet\n6 vehicles\nShow archived\nNew vehicle\nShowing 6 of 6 results, page 1\nPLATE\tNAME\tTYPE\tCAPACITY (KG)\tSTATUS\tACTIONS\nAUD-MUVNVVNN\tAsset audit vehicle MUVNVVNN\tTruck\t1000\tAvailable\t\nEdit\nArchive\n\nDP-dp118\tDelivery precision truck dp118\tTruck\t—\tIn use\t\nEdit\nArchive\n\nAUD-MUVP5WMR\tFleet audit MUVP5WMR\tTruck\t1000\tAvailable\t\nEdit\nArchive\n\nVAN-001\tL300 Van\tVan\t1500\tAvailable\t\nEdit\nArchive\n\nTRK-001\tTruck 1\tTruck\t5000\tAvailable\t\nEdit\nArchive\n\nTRK-002\tTruck 2\tTruck\t5000\tAvailable\t\nEdit\nArchive\n1–6 of 6\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/supply-chain/fleet",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/fleet",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Fleet"
+    ],
+    "unnamedInputs": [],
+    "text": "Fleet\n6 vehicles\nShow archived\nNew vehicle\nShowing 6 of 6 results, page 1\nPLATE\tNAME\tTYPE\tCAPACITY (KG)\tSTATUS\tACTIONS\nAUD-MUVNVVNN\tAsset audit vehicle MUVNVVNN\tTruck\t1000\tAvailable\t\nEdit\nArchive\n\nDP-dp118\tDelivery precision truck dp118\tTruck\t—\tIn use\t\nEdit\nArchive\n\nAUD-MUVP5WMR\tFleet audit MUVP5WMR\tTruck\t1000\tAvailable\t\nEdit\nArchive\n\nVAN-001\tL300 Van\tVan\t1500\tAvailable\t\nEdit\nArchive\n\nTRK-001\tTruck 1\tTruck\t5000\tAvailable\t\nEdit\nArchive\n\nTRK-002\tTruck 2\tTruck\t5000\tAvailable\t\nEdit\nArchive\n1–6 of 6\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/supply-chain/deliveries/create",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/supply-chain/deliveries/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "New delivery"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Deliveries\nNew delivery\nSALES ORDER\n— Select deliverable sales order —\nSO-202610-0002 — Honda Philippines, Inc.\nSO-202610-0001 — Honda Philippines, Inc.\nSO-DP-dp118 — Delivery precision E2E dp118\nSales order*\nSCHEDULE\nScheduled delivery date*\nVEHICLE (OPTIONAL)\n— No vehicle assigned —\nAsset audit vehicle MUVNVVNN (AUD-MUVNVVNN)\nFleet audit MUVP5WMR (AUD-MUVP5WMR)\nL300 Van (VAN-001)\nTruck 1 (TRK-001)\nTruck 2 (TRK-002)\nVehicle\nDELIVERY ITEMS\n\nSelect a sales order above to populate line item choices.\n\nSelect SO first\nSales order line*\nSelect item first\nPassed outgoing inspection*\nQty*\nAdd delivery line\nNOTES\nNotes\nCancel\nCreate delivery"
+  },
+  {
+    "role": "admin",
+    "route": "/supply-chain/deliveries/create",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/supply-chain/deliveries/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "New delivery"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Deliveries\nNew delivery\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\nSALES ORDER\n— Select deliverable sales order —\nSO-202610-0002 — Honda Philippines, Inc.\nSO-202610-0001 — Honda Philippines, Inc.\nSO-DP-dp118 — Delivery precision E2E dp118\nSales order*\nSCHEDULE\nScheduled delivery date*\nVEHICLE (OPTIONAL)\n— No vehicle assigned —\nAsset audit vehicle MUVNVVNN (AUD-MUVNVVNN)\nFleet audit MUVP5WMR (AUD-MUVP5WMR)\nL300 Van (VAN-001)\nTruck 1 (TRK-001)\nTruck 2 (TRK-002)\nVehicle\nDELIVERY ITEMS\n\nSelect a sales order above to populate line item choices.\n\nSelect SO first\nSales order line*\nSelect item first\nPassed outgoing inspection*\nQty*\nAdd delivery line\nNOTES\nNotes\nCancel\nCreate delivery"
+  },
+  {
+    "role": "admin",
+    "route": "/maintenance/schedules/create",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/maintenance/schedules/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "New maintenance schedule"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Schedules\nNew maintenance schedule\nTARGET\nType*\n— Select —\nMachine\nMold\n— Select Target —\nTarget*\nSCHEDULE\nDescription*\nInterval type*\n— Select —\nHours (engine time)\nDays (calendar)\nShots (mold only)\nInterval value*\nCancel\nCreate schedule"
+  },
+  {
+    "role": "admin",
+    "route": "/maintenance/schedules/create",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/maintenance/schedules/create",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "New maintenance schedule"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      }
+    ],
+    "text": "Schedules\nNew maintenance schedule\n\nYou have an unsaved draft from just now. Sensitive fields are not restored.\n\nRestore\nDiscard\nTARGET\nType*\n— Select —\nMachine\nMold\n— Select Target —\nTarget*\nSCHEDULE\nDescription*\nInterval type*\n— Select —\nHours (engine time)\nDays (calendar)\nShots (mold only)\nInterval value*\nCancel\nCreate schedule"
+  },
+  {
+    "role": "admin",
+    "route": "/admin/sessions",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/admin/sessions",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Active Sessions"
+    ],
+    "unnamedInputs": [],
+    "text": "Active Sessions\nView and manage active user sessions across the system\nNo active sessions"
+  },
+  {
+    "role": "admin",
+    "route": "/admin/sessions",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/admin/sessions",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Active Sessions"
+    ],
+    "unnamedInputs": [],
+    "text": "Active Sessions\nView and manage active user sessions across the system\nNo active sessions"
+  },
+  {
+    "role": "admin",
+    "route": "/admin/backups",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/admin/backups",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Backup & Restore"
+    ],
+    "unnamedInputs": [],
+    "text": "Backup & Restore\nValidated database and private-file recovery artifacts\nCreate full backup\nRecovery posture\nAwaiting first snapshot\nNo restorable snapshot yet\nCreate a full backup to establish a recovery point.\nDatabase + files\nChecksummed\nS3 not configured\n0\nrestorable\n0\nneed attention\nNewest first\nBackup history\n2 loaded\nNewest first\nBackup and restore operation history\nCREATED\tARTIFACTS\tSTATUS\tREQUESTED BY\tACTION\nOct 5, 2026 · 7:17 PM\nabout 3 hours ago\n\t\nPostgreSQL database\n2.2 MB\nLocal · matches manifest\n\t\nLegacy archive\nLegacy archive; no committed restore manifest\n\t\nSystem / legacy backup\nFull backup\t\nOct 4, 2026 · 7:17 PM\n1 day ago\n\t\nPostgreSQL database\n1.8 MB\nLocal · matches manifest\n\t\nLegacy archive\nLegacy archive; no committed restore manifest\n\t\nSystem / legacy backup\nFull backup\t"
+  },
+  {
+    "role": "admin",
+    "route": "/admin/backups",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/admin/backups",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Backup & Restore"
+    ],
+    "unnamedInputs": [],
+    "text": "Backup & Restore\nValidated database and private-file recovery artifacts\nCreate full backup\nRecovery posture\nAwaiting first snapshot\nNo restorable snapshot yet\nCreate a full backup to establish a recovery point.\nDatabase + files\nChecksummed\nS3 not configured\n0\nrestorable\n0\nneed attention\nNewest first\nBackup history\n2 loaded\nNewest first\nOct 5, 2026 · 7:17 PM\nabout 3 hours ago\nLegacy archive\nLegacy archive; no committed restore manifest\nPostgreSQL database\n2.2 MB\nLocal · matches manifest\nRequested by\nSystem / legacy backup\nFull backup\nOct 4, 2026 · 7:17 PM\n1 day ago\nLegacy archive\nLegacy archive; no committed restore manifest\nPostgreSQL database\n1.8 MB\nLocal · matches manifest\nRequested by\nSystem / legacy backup\nFull backup"
+  },
+  {
+    "role": "admin",
+    "route": "/admin/scheduled-exports",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/admin/scheduled-exports",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Scheduled exports"
+    ],
+    "unnamedInputs": [],
+    "text": "Scheduled exports\n0 schedules\nNew schedule\nActive\nAll\nArchived\nNo scheduled exports yet\n\nSchedule a recurring export from any list page that supports configurable columns. The recipients will get the file by email at the chosen frequency."
+  },
+  {
+    "role": "admin",
+    "route": "/admin/scheduled-exports",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/admin/scheduled-exports",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Scheduled exports"
+    ],
+    "unnamedInputs": [],
+    "text": "Scheduled exports\n0 schedules\nNew schedule\nActive\nAll\nArchived\nNo scheduled exports yet\n\nSchedule a recurring export from any list page that supports configurable columns. The recipients will get the file by email at the chosen frequency."
+  },
+  {
+    "role": "admin",
+    "route": "/forecasting/demand",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/forecasting/demand",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Demand & Sales Forecasting"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "placeholder": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "placeholder": null
+      }
+    ],
+    "text": "Demand & Sales Forecasting\nProject future demand using sales history. Recompute monthly or override per period.\nForecast scope\nPRODUCT\n— Select a product —\nBB-001 — Wiper Motor Bobbin\nBU-001 — Windshield Wiper Bushing\nCREW-858223 — Crew assignment test product\nDP-dp118-KG — Delivery precision finished good dp118\nE2E-QC-qc118 — 100-piece QC browser test qc118\nMOWN-P-m1r20 — Maintenance ownership product m1r20\nMOWN-P-m1s2 — Maintenance ownership product m1s2\nPC-001 — Pivot Cap Cover Type A\nPC-002 — Pivot Cap Cover Type B\nRC-001 — Relay Cover Standard\nRC-002 — Relay Cover Large\nRMA-r5x9q-FG — Customer return finished good r5x9q\nRMA-rma118-FG — Customer return finished good rma118\nSTART-QC-st118 — Work-order start QC test st118\nWB-001 — Wiper Bushing (Standard)\nWB-002 — Wiper Bushing (Heavy Duty)\nCUSTOMER (OPTIONAL)\nAll customers (total)\nCustomer Return E2E r5x9q\nCustomer Return E2E rma118\nDelivery precision E2E dp118\nHonda Philippines, Inc.\nNissan Philippines, Inc.\nSuzuki Philippines, Inc"
+  },
+  {
+    "role": "admin",
+    "route": "/forecasting/demand",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/forecasting/demand",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Demand & Sales Forecasting"
+    ],
+    "unnamedInputs": [
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "placeholder": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "placeholder": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "placeholder": null
+      }
+    ],
+    "text": "Demand & Sales Forecasting\nProject future demand using sales history. Recompute monthly or override per period.\nForecast scope\nPRODUCT\n— Select a product —\nBB-001 — Wiper Motor Bobbin\nBU-001 — Windshield Wiper Bushing\nCREW-858223 — Crew assignment test product\nDP-dp118-KG — Delivery precision finished good dp118\nE2E-QC-qc118 — 100-piece QC browser test qc118\nMOWN-P-m1r20 — Maintenance ownership product m1r20\nMOWN-P-m1s2 — Maintenance ownership product m1s2\nPC-001 — Pivot Cap Cover Type A\nPC-002 — Pivot Cap Cover Type B\nRC-001 — Relay Cover Standard\nRC-002 — Relay Cover Large\nRMA-r5x9q-FG — Customer return finished good r5x9q\nRMA-rma118-FG — Customer return finished good rma118\nSTART-QC-st118 — Work-order start QC test st118\nWB-001 — Wiper Bushing (Standard)\nWB-002 — Wiper Bushing (Heavy Duty)\nCUSTOMER (OPTIONAL)\nAll customers (total)\nCustomer Return E2E r5x9q\nCustomer Return E2E rma118\nDelivery precision E2E dp118\nHonda Philippines, Inc.\nNissan Philippines, Inc.\nSuzuki Philippines, Inc"
+  },
+  {
+    "role": "admin",
+    "route": "/return-management",
+    "viewport": 1440,
+    "finalUrl": "http://localhost:18080/return-management",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 1440,
+    "viewportWidth": 1440,
+    "mainWidth": 1200,
+    "headings": [
+      "Return Management (RMA)"
+    ],
+    "unnamedInputs": [],
+    "text": "Return Management (RMA)\n3 return requests\nProblem reports\nNew RMA\nAll types\nCustomer Return\nSupplier Return\nAll statuses\nDraft\nPending Approval\nApproved\nReceived\nInspected\nCompleted\nRejected\nCancelled\nShowing 3 of 3 results, page 1\nRMA #\tTYPE\tSOURCE\tSTATUS\tREASON\tITEMS\tDATE\nRMA-202610-0003\tCustomer Return\tCustomer Return E2E r5x9q\tCompleted\t\nIndependent MRB release audit r5x9q.\n\t1\tOct 5, 2026\nRMA-202610-0002\tCustomer Return\tHonda Philippines, Inc.\tRejected\t\ndefective\n\t1\tOct 5, 2026\nRMA-202610-0001\tCustomer Return\tCustomer Return E2E rma118\tReceived\t\nIndependent MRB release audit rma118.\n\t1\tOct 5, 2026\n1–3 of 3\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/return-management",
+    "viewport": 390,
+    "finalUrl": "http://localhost:18080/return-management",
+    "status": 200,
+    "apiErrors": [],
+    "exceptions": [],
+    "documentWidth": 390,
+    "viewportWidth": 390,
+    "mainWidth": 390,
+    "headings": [
+      "Return Management (RMA)"
+    ],
+    "unnamedInputs": [],
+    "text": "Return Management (RMA)\n3 return requests\nProblem reports\nNew RMA\nAll types\nCustomer Return\nSupplier Return\nAll statuses\nDraft\nPending Approval\nApproved\nReceived\nInspected\nCompleted\nRejected\nCancelled\nShowing 3 of 3 results, page 1\nRMA #\tTYPE\tSOURCE\tSTATUS\tREASON\tITEMS\tDATE\nRMA-202610-0003\tCustomer Return\tCustomer Return E2E r5x9q\tCompleted\t\nIndependent MRB release audit r5x9q.\n\t1\tOct 5, 2026\nRMA-202610-0002\tCustomer Return\tHonda Philippines, Inc.\tRejected\t\ndefective\n\t1\tOct 5, 2026\nRMA-202610-0001\tCustomer Return\tCustomer Return E2E rma118\tReceived\t\nIndependent MRB release audit rma118.\n\t1\tOct 5, 2026\n1–3 of 3\nPage 1 of 1"
+  }
+]

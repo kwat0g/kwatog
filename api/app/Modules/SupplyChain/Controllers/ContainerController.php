@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Controllers;
 
+use App\Modules\SupplyChain\Enums\ContainerSize;
+use App\Modules\SupplyChain\Enums\ContainerType;
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Resources\ContainerResource;
@@ -46,7 +48,7 @@ class ContainerController
     public function index(Request $request, Shipment $shipment): AnonymousResourceCollection
     {
         return ContainerResource::collection(
-            $this->service->listByShipment($shipment, $request->only(['search', 'per_page']))
+            $this->service->listByShipment($shipment, $request->only(['search', 'per_page', 'trashed']))
         );
     }
 
@@ -54,13 +56,13 @@ class ContainerController
     {
         $data = $request->validate([
             'container_number' => ['required', 'string', 'max:50'],
-            'seal_number'      => ['nullable', 'string', 'max:50'],
-            'size'             => ['nullable', Rule::in(\App\Modules\SupplyChain\Enums\ContainerSize::values())],
-            'type'             => ['nullable', Rule::in(\App\Modules\SupplyChain\Enums\ContainerType::values())],
-            'gross_weight_kg'  => self::weightRules(),
-            'net_weight_kg'    => self::weightRules(),
-            'volume_cbm'       => self::volumeRules(),
-            'notes'            => ['nullable', 'string', 'max:1000'],
+            'seal_number' => ['nullable', 'string', 'max:50'],
+            'size' => ['nullable', Rule::in(ContainerSize::values())],
+            'type' => ['nullable', Rule::in(ContainerType::values())],
+            'gross_weight_kg' => self::weightRules(),
+            'net_weight_kg' => self::weightRules(),
+            'volume_cbm' => self::volumeRules(),
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         return new ContainerResource($this->service->create($shipment, $data));
@@ -75,13 +77,13 @@ class ContainerController
     {
         $data = $request->validate([
             'container_number' => ['nullable', 'string', 'max:50'],
-            'seal_number'      => ['nullable', 'string', 'max:50'],
-            'size'             => ['nullable', Rule::in(\App\Modules\SupplyChain\Enums\ContainerSize::values())],
-            'type'             => ['nullable', Rule::in(\App\Modules\SupplyChain\Enums\ContainerType::values())],
-            'gross_weight_kg'  => self::weightRules(),
-            'net_weight_kg'    => self::weightRules(),
-            'volume_cbm'       => self::volumeRules(),
-            'notes'            => ['nullable', 'string', 'max:1000'],
+            'seal_number' => ['nullable', 'string', 'max:50'],
+            'size' => ['nullable', Rule::in(ContainerSize::values())],
+            'type' => ['nullable', Rule::in(ContainerType::values())],
+            'gross_weight_kg' => self::weightRules(),
+            'net_weight_kg' => self::weightRules(),
+            'volume_cbm' => self::volumeRules(),
+            'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         return new ContainerResource($this->service->update($container, $data));
@@ -90,12 +92,14 @@ class ContainerController
     public function destroy(Container $container): JsonResponse
     {
         $this->service->delete($container);
+
         return response()->json([], 204);
     }
 
     public function restore(Container $container): JsonResponse
     {
         $this->service->restore($container);
+
         return response()->json(['message' => 'Container restored.']);
     }
 }

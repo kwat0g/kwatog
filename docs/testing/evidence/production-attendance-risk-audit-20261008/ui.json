@@ -1,0 +1,12 @@
+{
+  "viewport": "390x844",
+  "requests": 2,
+  "mutations": 0,
+  "beforeStartEnabled": true,
+  "afterErrorStartVisible": 0,
+  "afterErrorStartEnabled": false,
+  "errors": [
+    "Readiness could not be checked. Production has not started.Retry checks"
+  ],
+  "dialogHorizontalOverflow": false
+}

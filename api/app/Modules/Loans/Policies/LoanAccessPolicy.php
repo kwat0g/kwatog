@@ -25,9 +25,9 @@ use Illuminate\Support\Collection;
  *     operators);
  *   - department_head                             → own + their department's;
  *   - chain participants                          → loans waiting on a
- *     plant-wide step that names one of the caller's roles (production_manager
- *     is step 2 of company_loan; vice_president closes cash_advance step 3 and
- *     company_loan step 4) — the departmental step is deliberately excluded
+ *     plant-wide step that names one of the caller's roles (including managers
+ *     on older submitted company loans and vice_president on executive steps)
+ *     — the departmental step is deliberately excluded
  *     here so a head's reach stays their own department. Without this branch
  *     those steps stalled invisibly: the board hid the card while the badge
  *     still counted it;

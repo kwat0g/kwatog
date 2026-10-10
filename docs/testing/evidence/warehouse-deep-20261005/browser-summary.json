@@ -1,0 +1,18 @@
+{
+  "pages": 40,
+  "apiErrors": [],
+  "overflow": [
+    {
+      "route": "/inventory/warehouse-map",
+      "width": 390,
+      "elapsedMs": 2353,
+      "errors": [],
+      "title": "Warehouse Map\n12 warehouses\nMap\nStock Count\nLEGEND\nStocked\nEmpty\nMW — Main Warehouse\nWH-AF — accusamus quam Warehouse\nWH-SE — assumenda eos Warehouse\nWH-ZY — consequatur aliquam Warehouse\nWH-QF — earum eum Warehouse\nWH-ET — eligendi illo Warehouse\nWH-RJ — enim voluptate Warehouse\nWH-ZL — et aspernatur Warehouse\nWH-RE — fugiat harum Warehouse\nWH-DS — libero aliquam Warehouse\nWH-XG — praesentium unde Warehouse\nWH-CO — rem assumenda Warehouse\nZONES\nA\nZone A — Raw Materials · Raw Materials\n20 bins\nB\nZone B — Staging · Staging\n8 bins\nC\nZone C — Finished Goods · Finished Goods\n30 bins\nD\nZone D — Spare Parts · Spare Parts\n10 bins\nQ\nZone Q — Quarantine · Quarantine\n4 bins\nSelect a zone to view bins\nClick a bin to see details.",
+      "documentWidth": 968,
+      "viewport": 390,
+      "smallTargets": [],
+      "unlabelled": []
+    }
+  ],
+  "consoleErrors": []
+}

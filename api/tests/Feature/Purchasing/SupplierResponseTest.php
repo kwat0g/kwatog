@@ -91,19 +91,16 @@ class SupplierResponseTest extends TestCase
 
         $response = $this->svc->respond($po, (int) $vendor->id, null, [
             'type'                   => 'accept',
-            'proposed_delivery_date' => '2026-10-15',
             'notes'                  => 'We can deliver on time.',
         ]);
 
         $this->assertSame(PurchaseOrderResponseType::Accept, $response->response_type);
         $this->assertSame(PurchaseOrderResponseStatus::Accepted, $response->status);
-        $this->assertSame('2026-10-15', $response->proposed_delivery_date->toDateString());
+        $this->assertNull($response->proposed_delivery_date);
 
         $fresh = $po->fresh();
         $this->assertSame(PurchaseOrderStatus::Acknowledged, $fresh->status);
-        // The supplier's agreed date is confirmed_delivery_date; OGAMI's
-        // required date must never be overwritten by the supplier.
-        $this->assertSame('2026-10-15', $fresh->confirmed_delivery_date->toDateString());
+        $this->assertSame($po->expected_delivery_date->toDateString(), $fresh->confirmed_delivery_date->toDateString());
         $this->assertSame($po->expected_delivery_date->toDateString(), $fresh->expected_delivery_date->toDateString());
     }
 
@@ -139,6 +136,34 @@ class SupplierResponseTest extends TestCase
         $item->refresh();
         $this->assertSame('100.00', (string) $item->quantity);
         $this->assertSame('10.00', (string) $item->unit_price);
+    }
+
+    public function test_accepting_date_only_proposal_preserves_po_amounts(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id' => $vendor->id,
+            'is_vatable' => false,
+            'subtotal' => '1000.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '1000.00',
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '10.00');
+        $proposedDate = $po->expected_delivery_date->copy()->addDay()->toDateString();
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type' => 'propose',
+            'proposed_delivery_date' => $proposedDate,
+        ]);
+
+        $this->assertSame('1000.00', $this->svc->computeProposalTotals($response, $po)['total_amount']);
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
+
+        $fresh = $po->fresh();
+        $this->assertSame(PurchaseOrderStatus::Acknowledged, $fresh->status);
+        $this->assertSame($proposedDate, $fresh->confirmed_delivery_date->toDateString());
+        $this->assertSame('1000.00', (string) $fresh->total_amount);
+        $this->assertSame('10.00', (string) $item->fresh()->unit_price);
     }
 
     public function test_decline_response_moves_po_to_supplier_declined(): void
@@ -219,18 +244,34 @@ class SupplierResponseTest extends TestCase
         );
     }
 
-    public function test_supplier_response_notifies_purchasing_approvers(): void
+    public function test_supplier_response_notifies_only_effective_operators_with_row_visibility(): void
     {
-        $approver = $this->userWithRole('vice_president'); // holds purchasing.po.approve
+        $buyer = $this->userWithRole('purchasing_officer');
+        $revoked = $this->userWithRole('purchasing_officer');
+        \App\Modules\Admin\Models\UserPermissionOverride::create([
+            'user_id' => $revoked->id,
+            'permission_id' => \App\Modules\Auth\Models\Permission::where('slug', 'purchasing.po.responses.resolve')->value('id'),
+            'type' => 'revoke', 'reason' => 'Restricted negotiation', 'granted_by' => $buyer->id,
+        ]);
+        $hidden = $this->userWithRole('employee');
+        \App\Modules\Admin\Models\UserPermissionOverride::create([
+            'user_id' => $hidden->id,
+            'permission_id' => \App\Modules\Auth\Models\Permission::where('slug', 'purchasing.po.responses.resolve')->value('id'),
+            'type' => 'grant', 'reason' => 'Own orders only', 'granted_by' => $buyer->id,
+        ]);
         $vendor = Vendor::factory()->create();
         $po = $this->makePo($vendor, 'sent');
-
-        $this->svc->respond($po, (int) $vendor->id, null, ['type' => 'decline']);
-
-        $this->assertDatabaseHas('notifications', [
-            'notifiable_id' => $approver->id,
-            'type'          => 'supplier.po_responded',
-        ]);
+        $response = $this->svc->respond($po, (int) $vendor->id, null, ['type' => 'decline']);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $buyer->id, 'type' => 'supplier.po_responded']);
+        foreach ([$revoked, $hidden] as $outsider) {
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outsider->id, 'type' => 'supplier.po_responded']);
+        }
+        try {
+            $this->svc->resolve($response, $hidden, 'accept');
+            $this->fail('A narrow negotiation permission must not bypass PO scope.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $error) {
+            $this->assertSame('You do not have permission to resolve this supplier response.', $error->getMessage());
+        }
     }
 
     /* ─── resolve(): purchasing side ─────────────────────────────── */
@@ -265,7 +306,7 @@ class SupplierResponseTest extends TestCase
             ],
         ]);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         Mail::fake();
 
         $resolved = $this->svc->resolve($response, $approver, 'accept', 'Agreed.');
@@ -317,7 +358,7 @@ class SupplierResponseTest extends TestCase
             ]],
         ]);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         Mail::fake();
 
         $this->svc->resolve($response, $approver, 'accept');
@@ -338,7 +379,7 @@ class SupplierResponseTest extends TestCase
         $response = $this->svc->respond($po, (int) $vendor->id, null, ['type' => 'decline']);
         $this->assertSame(PurchaseOrderStatus::SupplierDeclined, $po->fresh()->status);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         Mail::fake();
 
         $resolved = $this->svc->resolve($response, $approver, 'accept');
@@ -363,7 +404,7 @@ class SupplierResponseTest extends TestCase
         ]);
         $this->assertSame(PurchaseOrderStatus::SupplierProposed, $po->fresh()->status);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         Mail::fake();
 
         $resolved = $this->svc->resolve($response, $approver, 'reject', 'Price is not competitive.');
@@ -384,7 +425,7 @@ class SupplierResponseTest extends TestCase
         $response = $this->svc->respond($po, (int) $vendor->id, null, ['type' => 'decline']);
         $this->assertSame(PurchaseOrderStatus::SupplierDeclined, $po->fresh()->status);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         Mail::fake();
 
         $this->svc->resolve($response, $approver, 'reject', 'Reconsider — we can adjust the terms.');
@@ -400,7 +441,7 @@ class SupplierResponseTest extends TestCase
         // An accept resolves immediately, so it can never be resolved again.
         $this->assertSame(PurchaseOrderResponseStatus::Accepted, $response->status);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
 
         $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
         $this->expectExceptionMessage('Only a pending supplier response can be resolved.');
@@ -530,7 +571,7 @@ class SupplierResponseTest extends TestCase
 
     public function test_internal_accept_endpoint_resolves_a_proposal(): void
     {
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         $vendor = Vendor::factory()->create();
         // Use a price decrease so the proposal applies immediately
         $po = PurchaseOrder::factory()->create([
@@ -568,10 +609,13 @@ class SupplierResponseTest extends TestCase
 
     public function test_internal_reject_endpoint_returns_po_to_sent(): void
     {
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         $vendor = Vendor::factory()->create();
         $po = $this->makePo($vendor, 'sent');
-        $response = $this->svc->respond($po, (int) $vendor->id, null, ['type' => 'propose']);
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type' => 'propose',
+            'proposed_delivery_date' => $po->expected_delivery_date->copy()->addDay()->toDateString(),
+        ]);
         Mail::fake();
 
         $this->actingAs($approver, 'sanctum')
@@ -582,7 +626,7 @@ class SupplierResponseTest extends TestCase
         $this->assertSame('sent', $po->fresh()->status->value);
     }
 
-    public function test_internal_accept_endpoint_requires_purchasing_po_approve(): void
+    public function test_internal_accept_endpoint_requires_purchase_order_operations(): void
     {
         $outsider = $this->userWithRole('employee');
         $vendor = Vendor::factory()->create();
@@ -669,7 +713,7 @@ class SupplierResponseTest extends TestCase
         Mail::fake();
 
         // Accepting the proposal should send it to re-approval, not apply it
-        $resolved = $this->svc->resolve($response, $vp, 'accept', 'For review by Finance.');
+        $resolved = $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept', 'For review by Finance.');
 
         // Response moves to pending_approval (not accepted yet)
         $this->assertSame(PurchaseOrderResponseStatus::PendingApproval, $resolved->status);
@@ -724,7 +768,7 @@ class SupplierResponseTest extends TestCase
         ]);
 
         Mail::fake();
-        $this->svc->resolve($response, $vp, 'accept');
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
 
         // PO now in pending_approval with pending_change_response_id
         $fresh = $po->fresh();
@@ -777,7 +821,7 @@ class SupplierResponseTest extends TestCase
         ]);
 
         Mail::fake();
-        $this->svc->resolve($response, $vp, 'accept');
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
 
         $fresh = $po->fresh();
         $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
@@ -822,7 +866,7 @@ class SupplierResponseTest extends TestCase
         ]);
 
         Mail::fake();
-        $this->svc->resolve($response, $this->userWithRole('vice_president'), 'accept');
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
 
         $fresh = $po->fresh();
         // Immediately acknowledged (no re-approval needed)
@@ -856,7 +900,7 @@ class SupplierResponseTest extends TestCase
         ]);
 
         Mail::fake();
-        $this->svc->resolve($response, $this->userWithRole('vice_president'), 'accept');
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
 
         $fresh = $po->fresh();
         $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
@@ -899,7 +943,7 @@ class SupplierResponseTest extends TestCase
             ]],
         ]);
 
-        $approver = $this->userWithRole('vice_president');
+        $approver = $this->userWithRole('purchasing_officer');
         Mail::fake();
 
         // Accepting the proposal must throw BusinessRuleException
@@ -945,7 +989,7 @@ class SupplierResponseTest extends TestCase
         ]);
 
         Mail::fake();
-        $this->svc->resolve($response, $vp, 'accept');
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
 
         $fresh = $po->fresh();
         // Enters pending_approval even though both below/above threshold
@@ -982,7 +1026,7 @@ class SupplierResponseTest extends TestCase
         ]);
 
         Mail::fake();
-        $this->svc->resolve($response, $vp, 'accept');
+        $this->svc->resolve($response, $this->userWithRole('purchasing_officer'), 'accept');
 
         $fresh = $po->fresh();
         // Still enters pending_approval even for small increase

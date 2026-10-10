@@ -146,6 +146,7 @@ class FinancialStatementBoundaryTest extends TestCase
         $maker = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
+        $checker = User::factory()->create(['role_id' => $maker->role_id]);
         $journalEntries = app(JournalEntryService::class);
 
         $code = static fn (string $code): string => Account::query()->where('code', $code)->firstOrFail()->hash_id;
@@ -158,7 +159,7 @@ class FinancialStatementBoundaryTest extends TestCase
                 ['account_id' => $code('3010'), 'debit' => '0', 'credit' => '12345678.90'],
             ],
         ], $maker);
-        $journalEntries->post($capital, $maker);
+        $journalEntries->post($capital, $checker);
 
         $sale = $journalEntries->create([
             'date' => '2026-04-10',
@@ -168,7 +169,7 @@ class FinancialStatementBoundaryTest extends TestCase
                 ['account_id' => $code('4010'), 'debit' => '0', 'credit' => '5000.00'],
             ],
         ], $maker);
-        $journalEntries->post($sale, $maker);
+        $journalEntries->post($sale, $checker);
     }
 
     /**

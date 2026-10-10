@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Support\HashIdFilter;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockCardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Series F — Task F3. Per-item stock card.
@@ -22,12 +25,14 @@ class StockCardController
     public function show(Request $request, Item $item): JsonResponse
     {
         $request->validate([
-            'from'        => ['nullable', 'date'],
-            'to'          => ['nullable', 'date', 'after_or_equal:from'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
             'location_id' => ['nullable', 'string'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $to   = $request->filled('to')
+        $to = $request->filled('to')
             ? Carbon::parse((string) $request->query('to'))->endOfDay()
             : Carbon::now()->endOfDay();
         $from = $request->filled('from')
@@ -36,12 +41,14 @@ class StockCardController
 
         $locationId = null;
         if ($request->filled('location_id')) {
-            $decoded = app('hashids')->decode((string) $request->query('location_id'));
-            $locationId = isset($decoded[0]) ? (int) $decoded[0] : null;
+            $locationId = HashIdFilter::decode($request->query('location_id'), WarehouseLocation::class);
+            if (! $locationId || ! WarehouseLocation::query()->whereKey($locationId)->exists()) {
+                throw ValidationException::withMessages(['location_id' => 'Choose a valid location.']);
+            }
         }
 
         return response()->json([
-            'data' => $this->service->card($item, $from, $to, $locationId),
+            'data' => $this->service->card($item, $from, $to, $locationId, (int) $request->input('page', 1), (int) $request->input('per_page', 50)),
         ]);
     }
 }

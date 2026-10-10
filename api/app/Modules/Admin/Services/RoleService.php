@@ -6,24 +6,33 @@ namespace App\Modules\Admin\Services;
 
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
-use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Services\BadgeService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class RoleService
 {
+    private const RETIRED_PERMISSION_SLUGS = [
+        'accounting.journal.self_post_override',
+        'accounting.journal.self_post_override.retired',
+    ];
+
     public function __construct(private readonly RbacAuditService $audit) {}
 
     public function list(array $filters): LengthAwarePaginator
     {
         $query = Role::query()
-            ->withCount(['users', 'permissions']);
+            ->withCount([
+                'users',
+                'permissions' => fn ($query) => $query->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS),
+            ]);
 
         TrashedFilter::apply($query, $filters);
 
@@ -63,7 +72,7 @@ class RoleService
 
     public function show(Role $role): Role
     {
-        $role->load('permissions');
+        $role->load(['permissions' => fn ($query) => $query->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS)]);
 
         // ADV4 — attach last-modified audit metadata for the detail view.
         $meta = $this->lastModifiedFor([$role->id]);
@@ -142,11 +151,8 @@ class RoleService
      */
     public function compare(Role $a, Role $b): array
     {
-        $a->loadMissing('permissions');
-        $b->loadMissing('permissions');
-
-        $byA = $a->permissions->keyBy('slug');
-        $byB = $b->permissions->keyBy('slug');
+        $byA = $a->permissions()->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS)->get()->keyBy('slug');
+        $byB = $b->permissions()->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS)->get()->keyBy('slug');
 
         $allSlugs = array_unique(array_merge($byA->keys()->all(), $byB->keys()->all()));
         $common = [];
@@ -176,17 +182,17 @@ class RoleService
         usort($onlyB, $sortByMod);
         ksort($modules);
 
-        $card = fn (Role $r) => [
+        $card = fn (Role $r, $permissions) => [
             'id' => $r->hash_id,
             'name' => $r->name,
             'slug' => $r->slug,
             'is_system' => (bool) $r->is_system,
-            'permissions_count' => $r->permissions->count(),
+            'permissions_count' => $permissions->count(),
         ];
 
         return [
-            'role_a' => $card($a),
-            'role_b' => $card($b),
+            'role_a' => $card($a, $byA),
+            'role_b' => $card($b, $byB),
             'common' => $common,
             'only_in_a' => $onlyA,
             'only_in_b' => $onlyB,
@@ -263,7 +269,10 @@ class RoleService
     public function clone(Role $source, array $data): Role
     {
         return DB::transaction(function () use ($source, $data) {
-            $permissionSlugs = $source->permissions()->pluck('permissions.slug')->all();
+            $permissionSlugs = $source->permissions()
+                ->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS)
+                ->pluck('permissions.slug')
+                ->all();
             $this->assertPermissionAuthority($permissionSlugs);
 
             $clone = Role::create([
@@ -313,6 +322,11 @@ class RoleService
             $requested = array_values(array_unique($slugs));
             sort($existing);
             sort($requested);
+            if (array_intersect($requested, self::RETIRED_PERMISSION_SLUGS) !== []) {
+                throw ValidationException::withMessages([
+                    'permission_slugs' => ['Retired permissions cannot be granted.'],
+                ]);
+            }
             $this->assertPermissionAuthority($requested);
             $ids = Permission::whereIn('slug', $requested)->pluck('id')->all();
             abort_if(count($ids) !== count($requested), 422, 'One or more permissions do not exist.');
@@ -344,6 +358,7 @@ class RoleService
     public function permissionMatrix(): array
     {
         return Permission::query()
+            ->whereNotIn('slug', self::RETIRED_PERMISSION_SLUGS)
             ->orderBy('module')
             ->orderBy('slug')
             ->get()

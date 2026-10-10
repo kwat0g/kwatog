@@ -13,11 +13,12 @@ use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
-use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -64,30 +65,56 @@ class StockAdjustmentService
                 ->value('weighted_avg_cost') ?? '0.00');
             $reason = 'Cycle count adjustment — session '.$session->session_number;
 
-            $mvmt = $this->applyMovement(
-                $direction,
-                (int) $item->item_id,
-                (int) $item->location_id,
-                $qty,
-                $direction === 'in' ? $unitCost : null,
-                $reason,
-                $by,
-                true,
-                'stock_count_session',
-                (int) $session->id,
-            );
-            $this->recordAdjustment(
-                $direction,
-                (int) $item->item_id,
-                (int) $item->location_id,
-                $qty,
-                (string) $mvmt->unit_cost,
-                $reason,
-                null,
-                $by,
-                $mvmt,
-                StockAdjustmentStatus::Approved,
-            );
+            $lots = app(StockLocationSummaryService::class)->lots((int) $item->item_id, (int) $item->location_id);
+            $allocations = $item->variance_allocations;
+            if (! $allocations) {
+                if ($item->lot_number) {
+                    $allocations = [['lot_number' => $item->lot_number, 'quantity' => $qty]];
+                } elseif (count($lots) <= 1) {
+                    $allocations = [['lot_number' => $lots[0]['lot_number'] ?? null, 'quantity' => $qty]];
+                } else {
+                    throw new BusinessRuleException('Allocate the count difference to its actual lots before completing this count.');
+                }
+            }
+            $allocated = '0.000';
+            $seen = [];
+            foreach ($allocations as $allocation) {
+                $lotNumber = $allocation['lot_number'] ?? null;
+                $amount = (string) ($allocation['quantity'] ?? '0');
+                if (! preg_match('/^\d{1,12}(\.\d{1,3})?$/', $amount) || bccomp($amount, '0', 3) <= 0) {
+                    throw new BusinessRuleException('Every count variance allocation requires a positive quantity.');
+                }
+                $key = $lotNumber ?? '';
+                if (isset($seen[$key])) {
+                    throw new BusinessRuleException('Allocate each lot only once.');
+                }
+                $seen[$key] = true;
+                if ($lotNumber === null && $lots !== []) {
+                    throw new BusinessRuleException('Untracked count variance requires lot reconciliation before completion.');
+                }
+                if ($lotNumber !== null && ! collect($lots)->contains('lot_number', $lotNumber)) {
+                    throw new BusinessRuleException('Choose an existing source lot for this count difference.');
+                }
+                $allocated = bcadd($allocated, $amount, 3);
+            }
+            if (bccomp($allocated, $qty, 3) !== 0) {
+                throw new BusinessRuleException('Allocated lot quantities must equal the absolute count difference.');
+            }
+            $mvmt = null;
+            foreach ($allocations as $allocation) {
+                $lot = collect($lots)->firstWhere('lot_number', $allocation['lot_number'] ?? null);
+                $mvmt = $this->applyMovement(
+                    $direction, (int) $item->item_id, (int) $item->location_id,
+                    (string) $allocation['quantity'], $direction === 'in' ? $unitCost : null,
+                    $reason, $by, true, 'stock_count_session', (int) $session->id,
+                    $allocation['lot_number'] ?? null, $lot['expiry_date'] ?? null,
+                );
+                $this->recordAdjustment(
+                    $direction, (int) $item->item_id, (int) $item->location_id,
+                    (string) $allocation['quantity'], (string) $mvmt->unit_cost,
+                    $reason, null, $by, $mvmt, StockAdjustmentStatus::Approved,
+                );
+            }
             $item->update(['status' => StockCountItemStatus::Adjusted->value]);
 
             return $mvmt;
@@ -114,18 +141,46 @@ class StockAdjustmentService
         string $reason,
         User $by,
         StockAdjustmentReason|string|null $reasonCode = null,
+        ?string $idempotencyKey = null,
     ): StockAdjustment {
         if (! in_array($direction, ['in', 'out'], true)) {
             throw new BusinessRuleException("Invalid adjustment direction '{$direction}'.");
         }
         $reasonCode = $this->normalizeReason($reasonCode);
+        $fingerprint = $idempotencyKey === null ? null : hash('sha256', json_encode([
+            $itemId, $locationId, $direction, bcadd($qty, '0', 3),
+            $direction === 'in' && $unitCost !== null ? bcadd($unitCost, '0', 4) : null,
+            trim($reason), $reasonCode?->value,
+        ], JSON_THROW_ON_ERROR));
 
-        return DB::transaction(function () use ($itemId, $locationId, $direction, $qty, $unitCost, $reason, $by, $reasonCode) {
+        return DB::transaction(function () use ($itemId, $locationId, $direction, $qty, $unitCost, $reason, $by, $reasonCode, $idempotencyKey, $fingerprint) {
+            if ($idempotencyKey !== null) {
+                // Serialize this requester's retries before checking stock or posting a movement.
+                User::query()->whereKey($by->id)->lockForUpdate()->firstOrFail();
+                $existing = StockAdjustment::query()->where('requested_by', $by->id)->where('idempotency_key', $idempotencyKey)->first();
+                if ($existing) {
+                    if ($existing->idempotency_fingerprint !== $fingerprint) {
+                        throw new BusinessRuleException('This request key was already used for a different stock adjustment.');
+                    }
+                    return $existing;
+                }
+            }
             $item = Item::query()->lockForUpdate()->find($itemId);
             if ($item === null) {
                 throw new BusinessRuleException('Cannot adjust a missing or deleted item.');
             }
+            if (! $item->is_active) {
+                throw new BusinessRuleException('Cannot adjust an inactive item.');
+            }
             app(UomConversionService::class)->assertBaseQuantity($item, $qty);
+            $this->movements->assertActiveLocation($locationId, lockForUpdate: true);
+            if ($direction === 'in' && WarehouseLocation::findOrFail($locationId)->is_blocked) {
+                throw new BusinessRuleException('The selected warehouse location is blocked for receiving.');
+            }
+            if ($direction === 'out') {
+                $this->movements->assertCustomerReturnQuarantineCanBeAdjusted($itemId, $locationId);
+                $this->movements->assertAdjustmentOutCapacity($itemId, $locationId, $qty);
+            }
 
             $cost = $direction === 'out'
                 ? $this->currentWac($itemId, $locationId)
@@ -135,16 +190,18 @@ class StockAdjustmentService
             $gated = $this->exceedsThreshold($value);
 
             $adj = new StockAdjustment([
-                'item_id'      => $itemId,
-                'location_id'  => $locationId,
-                'direction'    => $direction,
-                'quantity'     => $qty,
-                'unit_cost'    => $cost,
-                'value'        => $value,
-                'reason_code'  => $reasonCode,
-                'reason'       => $reason,
+                'item_id' => $itemId,
+                'location_id' => $locationId,
+                'direction' => $direction,
+                'quantity' => $qty,
+                'unit_cost' => $cost,
+                'value' => $value,
+                'reason_code' => $reasonCode,
+                'reason' => $reason,
                 'requested_by' => $by->id,
             ]);
+            $adj->idempotency_key = $idempotencyKey;
+            $adj->idempotency_fingerprint = $fingerprint;
 
             if ($gated) {
                 // Above threshold — hold for approval; no ledger movement yet.
@@ -201,8 +258,11 @@ class StockAdjustmentService
             // so a concurrent approval holding a stale model cannot slip past
             // the status check and post the stock movement twice (P37).
             $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
-            if ($locked->status === StockAdjustmentStatus::Approved || $locked->stock_movement_id) {
+            if ($locked->status === StockAdjustmentStatus::Approved) {
                 throw new BusinessRuleException('Adjustment is already approved.');
+            }
+            if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
+                throw new BusinessRuleException('Adjustment is no longer pending.');
             }
             if ((int) $locked->requested_by === (int) $by->id) {
                 throw new BusinessRuleException('The requester cannot approve their own adjustment.');
@@ -309,6 +369,8 @@ class StockAdjustmentService
         bool $bypassCountFreeze = false,
         string $referenceType = 'stock_adjustment',
         ?int $referenceId = null,
+        ?string $lotNumber = null,
+        ?string $expiryDate = null,
     ): StockMovement {
         return $this->movements->move(new StockMovementInput(
             type: $direction === 'in' ? StockMovementType::AdjustmentIn : StockMovementType::AdjustmentOut,
@@ -322,6 +384,8 @@ class StockAdjustmentService
             remarks: $reason,
             createdBy: $by->id,
             bypassCountFreeze: $bypassCountFreeze,
+            lotNumber: $lotNumber,
+            expiryDate: $expiryDate,
         ));
     }
 
@@ -339,18 +403,18 @@ class StockAdjustmentService
         StockAdjustmentStatus $status,
     ): StockAdjustment {
         $adj = new StockAdjustment([
-            'item_id'           => $itemId,
-            'location_id'       => $locationId,
-            'direction'         => $direction,
-            'quantity'          => $qty,
-            'unit_cost'         => $unitCost,
-            'value'             => $this->absValue($qty, $unitCost),
-            'reason_code'       => $this->normalizeReason($reasonCode),
-            'reason'            => $reason,
+            'item_id' => $itemId,
+            'location_id' => $locationId,
+            'direction' => $direction,
+            'quantity' => $qty,
+            'unit_cost' => $unitCost,
+            'value' => $this->absValue($qty, $unitCost),
+            'reason_code' => $this->normalizeReason($reasonCode),
+            'reason' => $reason,
             'stock_movement_id' => $mvmt->id,
-            'requested_by'      => $by->id,
-            'approved_by'       => $by->id,
-            'approved_at'       => now(),
+            'requested_by' => $by->id,
+            'approved_by' => $by->id,
+            'approved_at' => now(),
         ]);
         $adj->forceFill(['status' => $status->value])->save();
 
@@ -367,6 +431,7 @@ class StockAdjustmentService
         if ($level === null || $level->weighted_avg_cost === null) {
             throw new BusinessRuleException('No authoritative weighted-average cost exists for this stock level.');
         }
+
         return (string) $level->weighted_avg_cost;
     }
 
@@ -382,6 +447,7 @@ class StockAdjustmentService
     private function absValue(string $qty, string $unitCost): string
     {
         $v = bcmul($qty, $unitCost, 2);
+
         return ltrim($v, '-');
     }
 
@@ -391,6 +457,7 @@ class StockAdjustmentService
         if (bccomp($threshold, '0', 2) <= 0) {
             return false; // gate disabled
         }
+
         return bccomp($value, $threshold, 2) > 0;
     }
 
@@ -410,6 +477,7 @@ class StockAdjustmentService
             // unknown code therefore means a caller bug, not operator input.
             throw new RuntimeException("Invalid stock adjustment reason code '{$reasonCode}'.");
         }
+
         return $enum;
     }
 }

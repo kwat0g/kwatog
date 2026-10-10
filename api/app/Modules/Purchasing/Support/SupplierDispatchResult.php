@@ -24,7 +24,7 @@ final readonly class SupplierDispatchResult
             SupplierDispatchStatus::PortalAvailable,
             'supplier_portal',
             $recipientCount,
-            'The approved PO is available to active supplier portal users. Confirm transmission after the supplier is actually notified.',
+            'The approved PO was published to active supplier portal users.',
             $metadata,
         );
     }

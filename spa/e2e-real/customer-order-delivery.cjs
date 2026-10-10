@@ -1,0 +1,102 @@
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+(async()=>{
+ const browser=await chromium.launch({headless:true});
+ const base=process.env.CUSTOMER_ORDER_E2E_URL || 'http://localhost:18080';
+ const errors=[];
+ async function session(email){
+  const context=await browser.newContext({baseURL:base});
+  await context.request.get('/sanctum/csrf-cookie',{headers:{Origin:base,Referer:base+'/'}});
+  const csrf=(await context.cookies()).find(c=>c.name==='XSRF-TOKEN');
+  const response=await context.request.post('/api/v1/auth/sign-in',{headers:{Origin:base,Referer:base+'/','X-XSRF-TOKEN':decodeURIComponent(csrf.value)},data:{email,password:'password'}});
+  assert(response.ok(),await response.text());
+  const page=await context.newPage(); page.on('pageerror',e=>errors.push(e.message));
+  async function api(method,path,data){
+   const token=(await context.cookies()).find(c=>c.name==='XSRF-TOKEN');
+   return context.request.fetch('/api/v1'+path,{method,data,headers:{Origin:base,Referer:base+'/','X-XSRF-TOKEN':decodeURIComponent(token.value)}});
+  }
+  return {context,page,api};
+ }
+ const customer=await session('portal@cust.test');
+ await customer.page.goto('/portal/customer/orders/new');
+ const requestedInput=customer.page.getByLabel('Requested delivery date',{exact:true});
+ await requestedInput.waitFor();assert.equal(await requestedInput.inputValue(),'');
+ const earliest=new Date();earliest.setDate(earliest.getDate()+4);assert.equal(await requestedInput.getAttribute('min'),earliest.toISOString().slice(0,10));
+ const sales=await session('crm@ogami.test');
+ const catalogResponse=await customer.api('GET','/b2b/customer/catalog');
+ assert(catalogResponse.ok()); const catalog=(await catalogResponse.json()).data;assert(catalog.length);
+ const date=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+ const csrf=(await customer.context.cookies()).find(c=>c.name==='XSRF-TOKEN');
+ const placed=await customer.context.request.post('/api/v1/b2b/customer/orders',{headers:{Origin:base,Referer:base+'/','X-XSRF-TOKEN':decodeURIComponent(csrf.value),'Idempotency-Key':'ownership-'+Date.now()},data:{notes:'Ownership E2E isolated audit fixture',items:[{product_id:catalog[0].id,quantity:'2',delivery_date:date}]}});
+ assert(placed.ok(),await placed.text());const order=(await placed.json()).data;
+ await customer.page.goto('/portal/customer/orders/'+order.id);
+ await customer.page.getByRole('button',{name:'Edit order',exact:true}).click();
+ await customer.page.waitForFunction(expected=>document.querySelector('input[aria-label="Requested delivery date"]')?.value === expected,date);
+ assert.equal(await customer.page.getByLabel('Requested delivery date',{exact:true}).inputValue(),date);
+ await customer.page.getByLabel('Requested delivery date',{exact:true}).fill(date);
+ await customer.page.getByRole('spinbutton',{name:'Quantity for '+catalog[0].part_number,exact:true}).fill('50');
+ assert(await customer.page.getByLabel('Order date',{exact:true}).getAttribute('readonly')!==null);
+ await customer.page.getByRole('textbox',{name:'Order note (optional)'}).fill('Customer changed quantity to 50.');
+ await customer.page.getByRole('button',{name:'Save changes',exact:true}).click();
+ await customer.page.waitForURL('**/portal/customer/orders/'+order.id);
+ await customer.page.getByText('Customer changed quantity to 50.',{exact:true}).waitFor();
+ const edited=(await(await customer.api('GET','/b2b/customer/orders/'+order.id)).json()).data;
+ assert.equal(edited.items[0].quantity,'50.00'); assert.equal(edited.date,order.date);
+ await sales.page.goto('/crm/sales-orders/'+order.id);
+ await sales.page.getByRole('button',{name:'Confirm order',exact:true}).waitFor();
+ assert.equal(await sales.page.getByRole('button',{name:'Edit',exact:true}).count(),0);
+ assert.equal(await sales.page.getByRole('button',{name:'Cancel',exact:true}).count(),0);
+ for(const [method,path,data]of[['PUT','/crm/sales-orders/'+order.id,{date:order.date,items:[{product_id:catalog[0].id,quantity:'99',delivery_date:date}]}],['POST','/crm/sales-orders/'+order.id+'/cancel',{}],['DELETE','/crm/sales-orders/'+order.id]]){
+  const result=await sales.api(method,path,data);assert.equal(result.status(),422,await result.text());
+ }
+ const proposedDate=new Date(Date.now()+11*86400000).toISOString().slice(0,10);
+ await sales.page.getByText('Required delivery date',{exact:true}).waitFor();
+ await sales.page.getByRole('button',{name:'Propose delivery date',exact:true}).click();
+ await sales.page.getByLabel(/Proposed delivery date/).fill(proposedDate);
+ await sales.page.getByLabel(/Reason for changing delivery date/).fill('Capacity delay: additional production days needed.');
+ await sales.page.getByRole('button',{name:'Send date proposal',exact:true}).click();
+ await sales.page.getByText('Waiting for customer acceptance. Confirmation is blocked.',{exact:true}).waitFor();
+ assert.equal(await sales.page.getByRole('button',{name:'Confirm order',exact:true}).count(),0);
+ const pending=(await(await sales.api('GET','/crm/sales-orders/'+order.id)).json()).data;
+ assert.equal(pending.delivery_dates[0],date);
+ assert.equal((await sales.api('POST','/crm/sales-orders/'+order.id+'/confirm',{})).status(),422);
+ assert.equal((await sales.api('PATCH','/crm/sales-order-responses/'+pending.latest_response.id+'/accept',{})).status(),422);
+ await customer.page.reload();
+ await customer.page.getByRole('button',{name:'Accept proposed date',exact:true}).waitFor();
+ const out=path.resolve(__dirname, '../../.impeccable/review/customer-order-ownership');fs.mkdirSync(out,{recursive:true});
+ await sales.page.screenshot({path:out+'/sales-pending-delivery.png',fullPage:true});
+ await customer.page.setViewportSize({width:390,height:844});
+ await customer.page.screenshot({path:out+'/customer-delivery-proposal-mobile.png',fullPage:true});
+ const acceptedRequest=customer.page.waitForResponse(response=>response.url().includes('/delivery-proposals/') && response.url().endsWith('/respond') && response.request().method()==='POST');
+ await customer.page.getByRole('button',{name:'Accept proposed date',exact:true}).click();
+ const acceptedResponse=await acceptedRequest;assert(acceptedResponse.ok(),await acceptedResponse.text());
+ await customer.page.getByRole('button',{name:'Accept proposed date',exact:true}).waitFor({state:'hidden'});
+ const accepted=(await(await customer.api('GET','/b2b/customer/orders/'+order.id)).json()).data;
+ assert.equal(accepted.delivery_dates[0],proposedDate);assert.equal(accepted.requested_delivery_dates[0],date);
+ assert.equal(accepted.items[0].quantity,edited.items[0].quantity);
+ assert.equal(accepted.items[0].unit_price,edited.items[0].unit_price);
+ assert.equal(accepted.total_amount,edited.total_amount);
+ await sales.page.reload();
+ await sales.page.getByRole('button',{name:'Confirm order',exact:true}).waitFor();
+ await sales.page.screenshot({path:out+'/sales-accepted-delivery.png',fullPage:true});
+
+ await sales.page.screenshot({path:out+'/sales-review.png',fullPage:true});
+ await customer.page.setViewportSize({width:390,height:844});
+ await customer.page.screenshot({path:out+'/customer-draft-mobile.png',fullPage:true});
+ await customer.page.getByRole('button',{name:'Cancel order',exact:true}).click();
+ const dialog=customer.page.getByRole('dialog');
+ await dialog.getByRole('textbox',{name:'Reason (optional)'}).fill('Ownership E2E complete.');
+ await dialog.getByRole('button',{name:'Cancel order',exact:true}).click();
+ await dialog.waitFor({state:'hidden'});
+ const cancelled=(await(await customer.api('GET','/b2b/customer/orders/'+order.id)).json()).data;
+ assert.equal(cancelled.status,'cancelled');
+ assert.equal(cancelled.capabilities.can_edit,false);assert.equal(cancelled.capabilities.can_cancel,false);
+ await customer.page.goto('/portal/customer/orders/'+order.id+'/edit');
+ await customer.page.getByText('This order cannot be edited',{exact:true}).waitFor();
+
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({environment:'isolated audit',order:order.so_number,customerEdit:'passed',salesRestrictions:'passed',salesConfirmVisible:true,customerCancel:'passed',terminalLock:'passed',originalEditDate:'passed',blankNewDate:'passed',fourDayMinimum:'passed',deliveryProposal:'passed',customerDateAcceptance:'passed',requestedDatePreserved:true,pricesAndQuantitiesPreserved:true,browserErrors:errors}));
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

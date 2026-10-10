@@ -1,6 +1,7 @@
 import { lazy } from 'react';
-import { Navigate, Route } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { PortalLoginRedirect } from '@/components/guards/PortalLoginRedirect';
 
 // ADV10 — B2B Portals (Supplier + Customer)
 // SECURITY CONTRACT: All protected portal pages MUST be nested inside their
@@ -8,26 +9,36 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 // Those layouts perform their own auth bootstrap and redirect to login on failure.
 // Public portal recovery pages stay outside the protected portal layouts so
 // they remain reachable. Portal login URLs redirect to the unified sign-in.
+const PortalNotificationsPage = lazy(() => import('@/pages/portal/notifications'));
 const SupplierPortalLayout = lazy(() => import('@/layouts/SupplierPortalLayout'));
 const PortalForgotPasswordPage = lazy(() => import('@/pages/portal/forgot-password'));
 const PortalPasswordResetPage = lazy(() => import('@/pages/portal/password-reset'));
 const PortalChangePasswordPage = lazy(() => import('@/pages/portal/change-password'));
 const SupplierPortalDashboardPage = lazy(() => import('@/pages/portal/supplier/dashboard'));
 const SupplierPurchaseOrdersPage = lazy(() => import('@/pages/portal/supplier/purchase-orders'));
-const SupplierPurchaseOrderDetailPage = lazy(() => import('@/pages/portal/supplier/purchase-orders/detail'));
+const SupplierPurchaseOrderDetailPage = lazy(
+  () => import('@/pages/portal/supplier/purchase-orders/detail'),
+);
 const SupplierInvoicesPage = lazy(() => import('@/pages/portal/supplier/invoices'));
 const SupplierInvoiceDetailPage = lazy(() => import('@/pages/portal/supplier/invoices/detail'));
 const SupplierDeliveriesPage = lazy(() => import('@/pages/portal/supplier/deliveries'));
-const SupplierStatementOfAccountPage = lazy(() => import('@/pages/portal/supplier/statement-of-account'));
-const SupplierDeliverySchedulesPage = lazy(() => import('@/pages/portal/supplier/delivery-schedules'));
+const SupplierStatementOfAccountPage = lazy(
+  () => import('@/pages/portal/supplier/statement-of-account'),
+);
+const SupplierDeliverySchedulesPage = lazy(
+  () => import('@/pages/portal/supplier/delivery-schedules'),
+);
 const SupplierItemListingsPage = lazy(() => import('@/pages/portal/supplier/item-listings'));
 const SupplierRfqsPage = lazy(() => import('@/pages/portal/supplier/rfqs'));
 const SupplierRfqDetailPage = lazy(() => import('@/pages/portal/supplier/rfqs/detail'));
 const SupplierRfqQuotePage = lazy(() => import('@/pages/portal/supplier/rfqs/quote'));
 const SupplierProblemReportsPage = lazy(() => import('@/pages/return-management/cases/list'));
-const SupplierProblemReportDetailPage = lazy(() => import('@/pages/return-management/cases/detail'));
+const SupplierProblemReportDetailPage = lazy(
+  () => import('@/pages/return-management/cases/detail'),
+);
 const CustomerPortalLayout = lazy(() => import('@/layouts/CustomerPortalLayout'));
 const CustomerPortalDashboardPage = lazy(() => import('@/pages/portal/customer/dashboard'));
+const CustomerPricingPage = lazy(() => import('@/pages/portal/customer/pricing'));
 const CustomerOrdersPage = lazy(() => import('@/pages/portal/customer/orders'));
 const CustomerPlaceOrderPage = lazy(() => import('@/pages/portal/customer/orders/new'));
 const CustomerOrderDetailPage = lazy(() => import('@/pages/portal/customer/orders/detail'));
@@ -36,62 +47,107 @@ const CustomerInvoiceDetailPage = lazy(() => import('@/pages/portal/customer/inv
 const CustomerDeliveriesPage = lazy(() => import('@/pages/portal/customer/deliveries'));
 const CustomerDeliveryDetailPage = lazy(() => import('@/pages/portal/customer/deliveries/detail'));
 const CustomerComplaintsPage = lazy(() => import('@/pages/portal/customer/complaints'));
-const CustomerStatementOfAccountPage = lazy(() => import('@/pages/portal/customer/statement-of-account'));
-const CustomerDeliverySchedulesPage = lazy(() => import('@/pages/portal/customer/delivery-schedules'));
+const CustomerStatementOfAccountPage = lazy(
+  () => import('@/pages/portal/customer/statement-of-account'),
+);
+const CustomerDeliverySchedulesPage = lazy(
+  () => import('@/pages/portal/customer/delivery-schedules'),
+);
 const CustomerReturnsPage = lazy(() => import('@/pages/portal/customer/returns'));
 const CustomerCreateReturnPage = lazy(() => import('@/pages/portal/customer/returns/new'));
 const CustomerReturnDetailPage = lazy(() => import('@/pages/portal/customer/returns/detail'));
 const CustomerProblemReportsPage = lazy(() => import('@/pages/return-management/cases/list'));
-const CustomerProblemReportCreatePage = lazy(() => import('@/pages/return-management/cases/create'));
-const CustomerProblemReportDetailPage = lazy(() => import('@/pages/return-management/cases/detail'));
+const CustomerProblemReportCreatePage = lazy(
+  () => import('@/pages/return-management/cases/create'),
+);
+const CustomerProblemReportDetailPage = lazy(
+  () => import('@/pages/return-management/cases/detail'),
+);
 
 export const portalRoutes = (
- <>
- {/* ADV10 — B2B Supplier Portal */}
- <Route element={<AuthLayout />}>
- <Route path="/portal/supplier/login" element={<Navigate to="/sign-in" state={{ realm: 'supplier' }} replace />} />
- <Route path="/portal/supplier/forgot-password" element={<PortalForgotPasswordPage portalType="supplier" />} />
- <Route path="/portal/customer/login" element={<Navigate to="/sign-in" state={{ realm: 'customer' }} replace />} />
- <Route path="/portal/customer/forgot-password" element={<PortalForgotPasswordPage portalType="customer" />} />
-  <Route path="/portal/password-reset" element={<PortalPasswordResetPage />} />
-  <Route path="/portal/:type/change-password" element={<PortalChangePasswordPage />} />
- </Route>
- <Route element={<SupplierPortalLayout />}>
- <Route path="/portal/supplier" element={<SupplierPortalDashboardPage />} />
- <Route path="/portal/supplier/purchase-orders" element={<SupplierPurchaseOrdersPage />} />
- <Route path="/portal/supplier/purchase-orders/:id" element={<SupplierPurchaseOrderDetailPage />} />
- <Route path="/portal/supplier/invoices" element={<SupplierInvoicesPage />} />
- <Route path="/portal/supplier/invoices/:id" element={<SupplierInvoiceDetailPage />} />
- <Route path="/portal/supplier/deliveries" element={<SupplierDeliveriesPage />} />
- <Route path="/portal/supplier/statement-of-account" element={<SupplierStatementOfAccountPage />} />
-  <Route path="/portal/supplier/delivery-schedules" element={<SupplierDeliverySchedulesPage />} />
-  <Route path="/portal/supplier/item-listings" element={<SupplierItemListingsPage />} />
-  <Route path="/portal/supplier/rfqs" element={<SupplierRfqsPage />} />
-  <Route path="/portal/supplier/rfqs/:id" element={<SupplierRfqDetailPage />} />
- <Route path="/portal/supplier/rfqs/:id/quote" element={<SupplierRfqQuotePage />} />
- <Route path="/portal/supplier/problems" element={<SupplierProblemReportsPage />} />
- <Route path="/portal/supplier/problems/:id" element={<SupplierProblemReportDetailPage />} />
-  </Route>
+  <>
+    {/* ADV10 — B2B Supplier Portal */}
+    <Route element={<AuthLayout />}>
+      <Route
+        path="/portal/supplier/login"
+        element={<PortalLoginRedirect realm="supplier" />}
+      />
+      <Route
+        path="/portal/supplier/forgot-password"
+        element={<PortalForgotPasswordPage portalType="supplier" />}
+      />
+      <Route
+        path="/portal/customer/login"
+        element={<PortalLoginRedirect realm="customer" />}
+      />
+      <Route
+        path="/portal/customer/forgot-password"
+        element={<PortalForgotPasswordPage portalType="customer" />}
+      />
+      <Route path="/portal/password-reset" element={<PortalPasswordResetPage />} />
+      <Route path="/portal/:type/change-password" element={<PortalChangePasswordPage />} />
+    </Route>
+    <Route element={<SupplierPortalLayout />}>
+      <Route path="/portal/supplier" element={<SupplierPortalDashboardPage />} />
+      <Route
+        path="/portal/supplier/notifications"
+        element={<PortalNotificationsPage type="supplier" />}
+      />
+      <Route path="/portal/supplier/purchase-orders" element={<SupplierPurchaseOrdersPage />} />
+      <Route
+        path="/portal/supplier/purchase-orders/:id"
+        element={<SupplierPurchaseOrderDetailPage />}
+      />
+      <Route path="/portal/supplier/invoices" element={<SupplierInvoicesPage />} />
+      <Route path="/portal/supplier/invoices/:id" element={<SupplierInvoiceDetailPage />} />
+      <Route path="/portal/supplier/deliveries" element={<SupplierDeliveriesPage />} />
+      <Route
+        path="/portal/supplier/statement-of-account"
+        element={<SupplierStatementOfAccountPage />}
+      />
+      <Route
+        path="/portal/supplier/delivery-schedules"
+        element={<SupplierDeliverySchedulesPage />}
+      />
+      <Route path="/portal/supplier/item-listings" element={<SupplierItemListingsPage />} />
+      <Route path="/portal/supplier/rfqs" element={<SupplierRfqsPage />} />
+      <Route path="/portal/supplier/rfqs/:id" element={<SupplierRfqDetailPage />} />
+      <Route path="/portal/supplier/rfqs/:id/quote" element={<SupplierRfqQuotePage />} />
+      <Route path="/portal/supplier/problems" element={<SupplierProblemReportsPage />} />
+      <Route path="/portal/supplier/problems/:id" element={<SupplierProblemReportDetailPage />} />
+    </Route>
 
- {/* ADV10 — B2B Customer Portal */}
- <Route element={<CustomerPortalLayout />}>
- <Route path="/portal/customer" element={<CustomerPortalDashboardPage />} />
- <Route path="/portal/customer/orders" element={<CustomerOrdersPage />} />
- <Route path="/portal/customer/orders/new" element={<CustomerPlaceOrderPage />} />
- <Route path="/portal/customer/orders/:id" element={<CustomerOrderDetailPage />} />
- <Route path="/portal/customer/invoices" element={<CustomerInvoicesPage />} />
- <Route path="/portal/customer/invoices/:id" element={<CustomerInvoiceDetailPage />} />
- <Route path="/portal/customer/deliveries" element={<CustomerDeliveriesPage />} />
- <Route path="/portal/customer/deliveries/:id" element={<CustomerDeliveryDetailPage />} />
-  <Route path="/portal/customer/complaints" element={<CustomerComplaintsPage />} />
-  <Route path="/portal/customer/returns" element={<CustomerReturnsPage />} />
-  <Route path="/portal/customer/returns/new" element={<CustomerCreateReturnPage />} />
-  <Route path="/portal/customer/returns/:id" element={<CustomerReturnDetailPage />} />
-  <Route path="/portal/customer/problems" element={<CustomerProblemReportsPage />} />
-  <Route path="/portal/customer/problems/new" element={<CustomerProblemReportCreatePage />} />
-  <Route path="/portal/customer/problems/:id" element={<CustomerProblemReportDetailPage />} />
- <Route path="/portal/customer/statement-of-account" element={<CustomerStatementOfAccountPage />} />
- <Route path="/portal/customer/delivery-schedules" element={<CustomerDeliverySchedulesPage />} />
- </Route>
- </>
+    {/* ADV10 — B2B Customer Portal */}
+    <Route element={<CustomerPortalLayout />}>
+      <Route path="/portal/customer" element={<CustomerPortalDashboardPage />} />
+      <Route
+        path="/portal/customer/notifications"
+        element={<PortalNotificationsPage type="customer" />}
+      />
+      <Route path="/portal/customer/pricing" element={<CustomerPricingPage />} />
+      <Route path="/portal/customer/orders" element={<CustomerOrdersPage />} />
+      <Route path="/portal/customer/orders/new" element={<CustomerPlaceOrderPage />} />
+      <Route path="/portal/customer/orders/:id/edit" element={<CustomerPlaceOrderPage />} />
+      <Route path="/portal/customer/orders/:id" element={<CustomerOrderDetailPage />} />
+      <Route path="/portal/customer/invoices" element={<CustomerInvoicesPage />} />
+      <Route path="/portal/customer/invoices/:id" element={<CustomerInvoiceDetailPage />} />
+      <Route path="/portal/customer/deliveries" element={<CustomerDeliveriesPage />} />
+      <Route path="/portal/customer/deliveries/:id" element={<CustomerDeliveryDetailPage />} />
+      <Route path="/portal/customer/complaints" element={<CustomerComplaintsPage />} />
+      <Route path="/portal/customer/returns" element={<CustomerReturnsPage />} />
+      <Route path="/portal/customer/returns/new" element={<CustomerCreateReturnPage />} />
+      <Route path="/portal/customer/returns/:id" element={<CustomerReturnDetailPage />} />
+      <Route path="/portal/customer/problems" element={<CustomerProblemReportsPage />} />
+      <Route path="/portal/customer/problems/new" element={<CustomerProblemReportCreatePage />} />
+      <Route path="/portal/customer/problems/:id" element={<CustomerProblemReportDetailPage />} />
+      <Route
+        path="/portal/customer/statement-of-account"
+        element={<CustomerStatementOfAccountPage />}
+      />
+      <Route
+        path="/portal/customer/delivery-schedules"
+        element={<CustomerDeliverySchedulesPage />}
+      />
+    </Route>
+  </>
 );

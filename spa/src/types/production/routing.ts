@@ -1,3 +1,5 @@
+import type { MaterialHandoverException } from '@/types/production';
+
 // Task 12 — Production routing + WO operation types.
 
 export interface RoutingOperation {
@@ -32,6 +34,7 @@ export type WoOperationStatus =
  | 'pending' | 'setup' | 'in_progress' | 'paused' | 'completed' | 'skipped';
 
 export interface WoOperation {
+ logs?: Array<{ id: string; event_type: string; event_label: string; recorded_at: string | null; material_handover_exception?: MaterialHandoverException | null }>;
  id: string;
  sequence: number;
  operation_name: string;

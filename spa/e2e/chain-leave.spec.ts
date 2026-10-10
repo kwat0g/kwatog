@@ -82,7 +82,7 @@ const OPTIONS_STATUS_LABELS: Record<string, string> = {
 };
 
 async function mockLeaveOptions(page: Page): Promise<void> {
-  await page.route('**/api/v1/leaves/requests/options', async (route) => {
+  await page.route('**/api/v1/leaves/requests/options*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -93,10 +93,10 @@ async function mockLeaveOptions(page: Page): Promise<void> {
             label,
           })),
           half_day_periods: [
-            { value: 'none', label: 'Full day' },
             { value: 'am', label: 'Morning (AM half-day)' },
             { value: 'pm', label: 'Afternoon (PM half-day)' },
           ],
+          holiday_dates: [],
         },
       }),
     });
@@ -162,7 +162,7 @@ test.describe('Leave chain — cross-role workflow', () => {
     // Mock POST create → 201 pending_dept
     await page.route('**/api/v1/leaves/requests', async (route) => {
       if (route.request().method() !== 'POST') {
-        await route.continue();
+        await route.fallback();
         return;
       }
       await route.fulfill({
@@ -221,7 +221,7 @@ test.describe('Leave chain — cross-role workflow', () => {
     });
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}`, async (route) => {
       if (route.request().method() !== 'GET') {
-        await route.continue();
+        await route.fallback();
         return;
       }
       await route.fulfill({
@@ -272,7 +272,7 @@ test.describe('Leave chain — cross-role workflow', () => {
     });
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}`, async (route) => {
       if (route.request().method() !== 'GET') {
-        await route.continue();
+        await route.fallback();
         return;
       }
       await route.fulfill({
@@ -303,6 +303,10 @@ test.describe('Leave chain — cross-role workflow', () => {
   });
 
   test('SoD: depthead cannot approve their own leave (422 error)', async ({ page }) => {
+    test.info().annotations.push({
+      type: 'expected-http-response',
+      description: '422 PATCH /api/v1/leaves/requests/lrTest01/approve-dept',
+    });
     await mockLeaveOptions(page);
     // Mock: the leave was created BY the depthead
     const selfLeave = {
@@ -312,7 +316,7 @@ test.describe('Leave chain — cross-role workflow', () => {
 
     await page.route(`**/api/v1/leaves/requests/${LEAVE_ID}`, async (route) => {
       if (route.request().method() !== 'GET') {
-        await route.continue();
+        await route.fallback();
         return;
       }
       await route.fulfill({

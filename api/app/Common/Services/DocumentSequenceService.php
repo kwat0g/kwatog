@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
-use Illuminate\Support\Facades\DB;
-use App\Common\Services\SettingsService;
-use InvalidArgumentException;
+use App\Common\Exceptions\BusinessRuleException;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Atomic document number generator.
@@ -24,7 +24,8 @@ class DocumentSequenceService
     /** Historical/demo imports can predate the sequence row. */
     private const PERSISTED_SOURCES = [
         'complaint' => ['customer_complaints', 'complaint_number'],
-        'ncr'       => ['non_conformance_reports', 'ncr_number'],
+        'ncr' => ['non_conformance_reports', 'ncr_number'],
+        'work_order' => ['work_orders', 'wo_number'],
     ];
 
     public function __construct(private readonly SettingsService $settings) {}
@@ -34,15 +35,16 @@ class DocumentSequenceService
     {
         $config = $this->settings->get('documents.sequence_config');
         if (! is_array($config) || $config === []) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Document sequence configuration is missing.');
+            throw new BusinessRuleException('Document sequence configuration is missing.');
         }
         foreach ($config as $type => $row) {
             if (! is_string($type) || ! is_array($row) || ! is_string($row['prefix'] ?? null)
                 || ! in_array($row['reset'] ?? null, ['monthly', 'yearly'], true)
                 || ! is_int($row['pad'] ?? null) || $row['pad'] < 1 || $row['pad'] > 12) {
-                throw new \App\Common\Exceptions\BusinessRuleException('Document sequence configuration is invalid.');
+                throw new BusinessRuleException('Document sequence configuration is invalid.');
             }
         }
+
         return $config;
     }
 
@@ -81,10 +83,10 @@ class DocumentSequenceService
                 // below so concurrent callers continue safely.
                 DB::table('document_sequences')->insertOrIgnore([
                     'document_type' => $documentType,
-                    'prefix'        => $prefix,
-                    'year'          => $year,
-                    'month'         => $month,
-                    'last_number'   => 0,
+                    'prefix' => $prefix,
+                    'year' => $year,
+                    'month' => $month,
+                    'last_number' => 0,
                 ]);
                 $row = DB::table('document_sequences')
                     ->where('document_type', $documentType)

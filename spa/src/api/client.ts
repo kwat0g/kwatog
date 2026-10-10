@@ -185,8 +185,12 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  // it is still alive replay the call once so the user never sees it.
  if (requestConfig && !requestConfig._sessionRetried) {
  requestConfig._sessionRetried = true;
- if (await sessionProbe.check()) {
- return retryClient.request(requestConfig);
+ try {
+ if (await sessionProbe.check()) return retryClient.request(requestConfig);
+ } catch {
+ markReported(error);
+ toast.error('Could not verify your session. Wait a moment and retry.', { id: 'session-check' });
+ return Promise.reject(error);
  }
  }
  if (typeof window !== 'undefined' && window.location.pathname !== '/sign-in' && window.location.pathname !== '/login') {
@@ -351,8 +355,9 @@ export const sessionProbe = {
  headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
  });
  return true;
- } catch {
- return false;
+ } catch (error) {
+ if (axios.isAxiosError(error) && [401, 419].includes(error.response?.status ?? 0)) return false;
+ throw error;
  }
  },
 };

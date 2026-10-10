@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Assets;
 
 use App\Common\Models\ApprovalRecord;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\ApprovalService;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -14,6 +15,7 @@ use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Services\AssetService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\SupplyChain\Models\Vehicle;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
@@ -152,6 +154,62 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         $next = app(ApprovalService::class)->nextStep($asset->fresh());
         $this->assertNotNull($next);
         $this->assertSame('vice_president', $next->role_slug);
+    }
+
+    public function test_disposal_request_is_blocked_before_approval_if_archived_vehicle_remains_linked(): void
+    {
+        $asset = $this->asset(['category' => AssetCategory::Vehicle->value]);
+        $vehicle = Vehicle::create([
+            'plate_number' => 'AS-DISP-'.substr(uniqid(), -6),
+            'name' => 'Archived linked vehicle',
+            'vehicle_type' => 'van',
+            'status' => 'available',
+            'asset_id' => $asset->id,
+        ]);
+        $vehicle->delete();
+
+        try {
+            $this->requestDisposal($asset);
+            $this->fail('An archived vehicle association must be cleared before opening disposal approval.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertSame('Disassociate this asset from its machine, mold or vehicle before disposal.', $exception->getMessage());
+        }
+
+        $this->assertSame(AssetStatus::Active, $asset->fresh()->status);
+        $this->assertNull($asset->fresh()->disposal_requested_by);
+        $this->assertDatabaseMissing('approval_records', [
+            'approvable_type' => Asset::class,
+            'approvable_id' => $asset->id,
+        ]);
+        $this->assertSame(0, $this->disposalJeCount($asset));
+    }
+
+    public function test_operational_association_cannot_be_added_while_disposal_is_pending(): void
+    {
+        $asset = $this->asset(['category' => AssetCategory::Vehicle->value]);
+        $requester = $this->user('finance_officer');
+        $this->requestDisposal($asset, [], $requester);
+        $vehicle = Vehicle::create([
+            'plate_number' => 'AS-PEND-'.substr(uniqid(), -6),
+            'name' => 'Pending disposal vehicle',
+            'vehicle_type' => 'van',
+            'status' => 'available',
+        ]);
+        $nextBefore = app(ApprovalService::class)->nextStep($asset->fresh());
+
+        $this->actingAs($requester)
+            ->patchJson('/api/v1/assets/'.$asset->hash_id.'/association', [
+                'target_type' => 'vehicle',
+                'target_id' => $vehicle->hash_id,
+            ])
+            ->assertUnprocessable();
+
+        $nextAfter = app(ApprovalService::class)->nextStep($asset->fresh());
+        $this->assertSame($requester->id, (int) $asset->fresh()->disposal_requested_by);
+        $this->assertSame($nextBefore?->id, $nextAfter?->id);
+        $this->assertSame('pending', $nextAfter?->action);
+        $this->assertDatabaseHas('vehicles', ['id' => $vehicle->id, 'asset_id' => null]);
+        $this->assertSame(0, $this->disposalJeCount($asset));
     }
 
     public function test_rejection_leaves_the_asset_untouched_and_a_new_request_can_be_made(): void

@@ -1,0 +1,239 @@
+{
+  "database": "ogami_test_inventory_browser_invmuvrv1h9",
+  "phase": "grn-qc",
+  "checks": [
+    {
+      "name": "Real cookie login: warehouse@ogami.test"
+    },
+    {
+      "name": "GRN validation failure preserves entered quantity and locked base UOM",
+      "evidence": {
+        "invalidQuantity": "999999",
+        "response": 422,
+        "valuesPreserved": {
+          "quantity": "999999",
+          "uom": "KG"
+        },
+        "correctedQuantity": "5"
+      }
+    },
+    {
+      "name": "Lost GRN response reconciles to the committed handoff without a second submission",
+      "evidence": {
+        "receivedBaseQuantity": "5 KG",
+        "convertedBaseQuantity": "5.000",
+        "pendingQcStatus": "pending_qc",
+        "handoff": "generated",
+        "inspection": "QC-202610-0001",
+        "stockExcludedUntilQcPass": true,
+        "requests": {
+          "normalValidationFailure": 422,
+          "lostResponse": 504,
+          "totalFinalizeAttempts": 2
+        },
+        "qcInspectionId": "5KZYy8gNxw"
+      }
+    },
+    {
+      "name": "Real cookie login: warehouse@ogami.test"
+    },
+    {
+      "name": "Real cookie login: qc@ogami.test"
+    },
+    {
+      "name": "Real cookie login: production@ogami.test"
+    },
+    {
+      "name": "QC actor records pass evidence; a separate Production Manager checker releases accepted stock at converted quantity and cost",
+      "evidence": {
+        "makerRole": "Warehouse receiving actor",
+        "qcRole": "QC result maker",
+        "checkerRole": "Production Manager independent approver",
+        "selfReviewStatus": 403,
+        "actualLinkedInspectionCount": 1,
+        "independentReviewStatus": 200,
+        "grnStatus": "accepted",
+        "opening": {
+          "quantity": "0.000",
+          "value": "0.00"
+        },
+        "accepted": {
+          "quantity": "5.000",
+          "reserved": "0.000",
+          "available": "5.000",
+          "weightedAverageCost": "5.0000"
+        },
+        "stockCard": {
+          "item": {
+            "id": "0D5YxZzXdL",
+            "code": "AUD-RESIN",
+            "name": "Inventory Audit Resin",
+            "unit_of_measure": "KG"
+          },
+          "from": "2026-09-06",
+          "to": "2026-10-06",
+          "opening": {
+            "balance": "0.000",
+            "weighted_avg": "0.0000",
+            "value": "0.00"
+          },
+          "rows": [
+            {
+              "id": "lZQYjvYywx",
+              "date": "2026-10-06T05:40:52+08:00",
+              "movement_type": "grn_receipt",
+              "movement_type_label": "Grn Receipt",
+              "reference_type": "goods_receipt_note",
+              "reference_id": "5KZYy8gNxw",
+              "reference_label": null,
+              "reference_url": "/inventory/grn/5KZYy8gNxw",
+              "in": "5.000",
+              "out": "0",
+              "unit_cost": "5.0000",
+              "balance": "5.000",
+              "weighted_avg": "5.0000",
+              "created_by": "Carlos Mendoza",
+              "remarks": "GRN GRN-202610-0001"
+            }
+          ],
+          "meta": {
+            "current_page": 1,
+            "last_page": 1,
+            "per_page": 50,
+            "total": 1,
+            "from": 1,
+            "to": 1
+          },
+          "closing": {
+            "balance": "5.000",
+            "weighted_avg": "5.0000",
+            "value": "25.00"
+          }
+        }
+      }
+    }
+  ],
+  "findings": [],
+  "artifacts": [
+    "/tmp/warehouse-real-browser-final/grn-qc/success-grn-qc-accepted.png"
+  ],
+  "browserErrors": [],
+  "diagnostics": {
+    "consoleErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 504 (Gateway Timeout)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "qc@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "qc@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "qc@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      },
+      {
+        "email": "production@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "production@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      }
+    ],
+    "failedRequests": [],
+    "httpErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "PATCH",
+        "path": "/api/v1/inventory/grn/5KZYy8gNxw/finalize",
+        "status": 422
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "PATCH",
+        "path": "/api/v1/inventory/grn/5KZYy8gNxw/finalize",
+        "status": 504
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "qc@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "qc@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "qc@ogami.test",
+        "method": "PATCH",
+        "path": "/api/v1/quality/inspections/5KZYy8gNxw/review",
+        "status": 403
+      },
+      {
+        "email": "production@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "production@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      }
+    ]
+  },
+  "serverLog": "/tmp/warehouse-real-browser-final/server.log"
+}

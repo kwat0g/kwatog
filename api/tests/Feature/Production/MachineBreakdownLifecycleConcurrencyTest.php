@@ -50,7 +50,7 @@ class MachineBreakdownLifecycleConcurrencyTest extends TestCase
 
         $this->assertSame(MachineStatus::Breakdown, $machine->fresh()->status);
         $this->assertSame(WorkOrderStatus::Paused, $workOrder->fresh()->status);
-        $this->assertNull($machine->fresh()->current_work_order_id);
+        $this->assertSame($workOrder->id, $machine->fresh()->current_work_order_id);
 
         $downtime = MachineDowntime::query()
             ->where('machine_id', $machine->id)

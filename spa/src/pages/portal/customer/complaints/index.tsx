@@ -338,12 +338,17 @@ export default function CustomerComplaintsPage() {
       </div>
 
       {/* 8D Report Modal */}
-      <Modal isOpen={!!viewing8d} onClose={() => setViewing8d(null)} size="lg">
+      <Modal
+        isOpen={!!viewing8d}
+        onClose={() => setViewing8d(null)}
+        ariaLabelledBy="report-8d-title"
+        size="lg"
+      >
         {viewing8d && (
           <div className="pb-5">
             <div className="flex items-center justify-between -mx-4 px-5 py-3 border-b border-default mb-4">
               <div>
-                <h3 className="text-sm font-medium">
+                <h3 id="report-8d-title" className="text-sm font-medium">
                   8D Report &mdash; {viewing8d.complaint_number}
                 </h3>
                 <p className="text-2xs text-muted mt-0.5">

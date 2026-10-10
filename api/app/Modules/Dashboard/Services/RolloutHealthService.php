@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\OutboxMessage;
+use App\Common\Services\SchedulerExecutionLedger;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\PriceRequest;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\ItemCostReview;
 use App\Modules\Inventory\Models\WarehouseScanEvent;
+use App\Modules\MRP\Events\BomPricingReviewRequested;
+use App\Modules\MRP\Models\Bom;
 use App\Modules\Quality\Models\Inspection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -57,6 +63,14 @@ class RolloutHealthService
             ->where('completed_at', '>=', $since)->count();
         $actionSummary = $this->actions->for($user)['summary'];
         $attention = $missingItems->isNotEmpty() || $missingQc > 0 || $unknownScans > 0 || $actionSummary['overdue'] > 0;
+        $scheduler = app(SchedulerExecutionLedger::class)->health(15);
+        $lastTick = $scheduler['latest_tick'];
+        $pendingPricing = OutboxMessage::where('event_type', BomPricingReviewRequested::class)->whereIn('status', ['pending', 'processing'])->count();
+        $failedPricing = OutboxMessage::where('event_type', BomPricingReviewRequested::class)->where('status', 'failed')->count();
+        $overduePricing = OutboxMessage::where('event_type', BomPricingReviewRequested::class)->whereIn('status', ['pending', 'processing'])
+            ->where('created_at', '<=', now()->subMinutes(15))->count();
+        $staleBoms = Bom::active()->whereHas('product', fn ($q) => $q->where('is_active', true))->whereNull('costed_at')->count();
+        $attention = $attention || $failedPricing > 0 || $overduePricing > 0 || $staleBoms > 0 || ! $scheduler['healthy'];
 
         return [
             'status' => $attention ? 'attention' : 'healthy',
@@ -82,6 +96,8 @@ class RolloutHealthService
                 'top_unrecognized' => $unknownCodes,
             ],
             'actions' => $actionSummary,
+            'automation' => ['scheduler_last_tick' => $lastTick?->started_at?->toISOString(), 'scheduler_status' => $lastTick?->status ?? 'missing', 'pending_pricing' => $pendingPricing, 'failed_pricing' => $failedPricing, 'open_price_requests' => PriceRequest::whereIn('status', ['requested', 'pending_finance', 'offered'])->count(), 'pending_cost_reviews' => ItemCostReview::where('status', 'pending')->count()],
+            'automation_issues' => ['overdue_pricing' => $overduePricing, 'stale_boms' => $staleBoms],
             'generated_at' => now()->toIso8601String(),
         ];
     }

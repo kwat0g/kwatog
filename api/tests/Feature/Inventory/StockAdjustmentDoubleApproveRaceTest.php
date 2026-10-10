@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockAdjustmentService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,6 +43,7 @@ class StockAdjustmentDoubleApproveRaceTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(ChartOfAccountsSeeder::class);
 
         $this->svc = app(StockAdjustmentService::class);
 

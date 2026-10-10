@@ -9,6 +9,61 @@ export type ShipmentDocumentType =
  | 'import_entry' | 'certificate_of_origin' | 'msds' | 'boc_release' | 'insurance_certificate';
 
 export type Incoterm = 'EXW' | 'FCA' | 'FAS' | 'FOB' | 'CFR' | 'CIF' | 'CPT' | 'CIP' | 'DAP' | 'DPU' | 'DDP';
+export type LandedCostAllocationMethod = 'by_value' | 'by_quantity' | 'manual';
+
+export interface ShipmentLandedCost {
+ id: string;
+ shipment_id: string | null;
+ purchase_order_item: { id: string; description: string | null; quantity: string; unit_price: string; total: string } | null;
+ allocated_freight: string;
+ allocated_insurance: string;
+ allocated_duties: string;
+ allocated_brokerage: string;
+ allocated_other: string;
+ total_allocated: string;
+}
+
+export interface ShipmentPurchaseOrderOption {
+ id: string;
+ po_number: string;
+ vendor: { name: string } | null;
+ incoterm: Incoterm | null;
+}
+
+export interface ShipmentPurchaseOrderOptionParams {
+ search?: string;
+ per_page?: number;
+ page?: number;
+}
+
+export type ContainerSize = '20ft' | '40ft' | '40ftHC' | '45ft';
+export type ContainerType = 'dry' | 'reefer' | 'open_top' | 'flat_rack';
+
+export interface ShipmentContainer {
+ id: string;
+ container_number: string;
+ seal_number: string | null;
+ size: ContainerSize | null;
+ size_label: string;
+ type: ContainerType | null;
+ type_label: string;
+ gross_weight_kg: number | null;
+ net_weight_kg: number | null;
+ volume_cbm: number | null;
+ notes: string | null;
+ deleted_at: string | null;
+}
+
+export interface ShipmentContainerData {
+ container_number: string;
+ seal_number?: string | null;
+ size?: ContainerSize;
+ type?: ContainerType;
+ gross_weight_kg?: string | null;
+ net_weight_kg?: string | null;
+ volume_cbm?: string | null;
+ notes?: string | null;
+}
 
 export interface ShipmentDocument {
  id: string;
@@ -19,6 +74,7 @@ export interface ShipmentDocument {
  notes: string | null;
  url: string | null;
  uploaded_at: string | null;
+ deleted_at: string | null;
  uploader?: { id: string; name: string } | null;
 }
 
@@ -31,13 +87,24 @@ export interface Shipment {
  vessel: string | null;
  container_number: string | null;
  bl_number: string | null;
+ incoterm: Incoterm | null;
  etd: string | null;
  atd: string | null;
  eta: string | null;
  ata: string | null;
  customs_clearance_date: string | null;
+ freight_cost: string;
+ insurance_cost: string;
+ duties_amount: string;
+ brokerage_fee: string;
+ other_charges: string;
+ landed_cost_total: string | null;
+ allocation_method: LandedCostAllocationMethod | null;
+ landed_cost_calculated_at: string | null;
+ landed_costs?: ShipmentLandedCost[];
  notes: string | null;
  purchase_order?: { id: string; po_number: string } | null;
+ goods_receipt_note?: { id: string; grn_number: string; status: string; received_date: string | null } | null;
  documents?: ShipmentDocument[];
  created_at: string;
  updated_at: string;
@@ -48,7 +115,7 @@ export type DeliveryStatus =
 
 /** ADV7 — Proof type for delivery proof files. */
 export type DeliveryProofType =
- | 'signed_dr' | 'photo' | 'customer_po_confirmation' | 'coc' | 'other';
+ | 'signed_dr' | 'photo' | 'loading_photo' | 'customer_po_confirmation' | 'coc' | 'other';
 
 export interface DeliveryProof {
  id: string;
@@ -59,6 +126,9 @@ export interface DeliveryProof {
  is_image: boolean;
  notes: string | null;
  view_url: string | null;
+ deleted_at: string | null;
+ can_archive?: boolean;
+ archive_block_reason?: string | null;
  uploader: { id: string; name: string } | null;
  uploaded_at: string | null;
 }
@@ -94,6 +164,8 @@ export interface Delivery extends DeliveryAttemptFields {
  status: DeliveryStatus;
  status_label?: string;
  scheduled_date: string | null;
+ expected_delivery_date?: string | null;
+ carrier?: string | null;
  departed_at: string | null;
  delivered_at: string | null;
  confirmed_at: string | null;

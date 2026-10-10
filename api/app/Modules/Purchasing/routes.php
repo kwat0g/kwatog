@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')->group(function () {
 
     /* ─── ADV5 — Procurement Chain overview ─── */
-    Route::get('/chain', [ProcurementChainController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/chain', [ProcurementChainController::class, 'index'])->middleware('permission:purchasing.chain.view');
 
     /* ─── Purchase Requests ─── */
     Route::get('/purchase-requests', [PurchaseRequestController::class, 'index'])->middleware('permission:purchasing.view');
@@ -87,8 +87,8 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     // segments are declared before any `{purchaseOrder}` wildcard so they can
     // never be param-bound to a PO hash id.
     Route::get('/purchase-orders/{purchaseOrder}/responses', [PurchaseOrderResponseController::class, 'index'])->middleware('permission:purchasing.view');
-    Route::patch('/purchase-order-responses/{response}/accept', [PurchaseOrderResponseController::class, 'accept'])->middleware('permission:purchasing.po.approve');
-    Route::patch('/purchase-order-responses/{response}/reject', [PurchaseOrderResponseController::class, 'reject'])->middleware('permission:purchasing.po.approve');
+    Route::patch('/purchase-order-responses/{response}/accept', [PurchaseOrderResponseController::class, 'accept'])->middleware('permission:purchasing.po.responses.resolve');
+    Route::patch('/purchase-order-responses/{response}/reject', [PurchaseOrderResponseController::class, 'reject'])->middleware('permission:purchasing.po.responses.resolve');
     Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchasing.view');
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');

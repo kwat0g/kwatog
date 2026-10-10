@@ -1,28 +1,9 @@
-import { lazy } from 'react';
-import { Route } from 'react-router-dom';
-import { AuthGuard } from '@/components/guards/AuthGuard';
-import { ModuleGuard } from '@/components/guards/ModuleGuard';
-import { PermissionGuard } from '@/components/guards/PermissionGuard';
-
-// Maintenance Mobile PWA — mobile-first, no sidebar, tech-scoped
-const MaintenanceMobileLayout = lazy(() => import('@/layouts/MaintenanceMobileLayout'));
-const MobileMaintenanceList = lazy(() => import('@/pages/maintenance/mobile'));
-const MobileWorkOrderDetail = lazy(() => import('@/pages/maintenance/mobile/work-order'));
+import { Navigate, Route } from 'react-router-dom';
+import OldWorkOrderDetailRedirect from '@/pages/maintenance/mobile/redirect';
 
 export const maintenanceMobileRoutes = (
- <Route
- element={
- <AuthGuard>
- <ModuleGuard module="maintenance">
- <PermissionGuard permission="maintenance.view" standalone>
- <MaintenanceMobileLayout />
- </PermissionGuard>
- </ModuleGuard>
- </AuthGuard>
- }
- >
- <Route path="/maintenance/mobile" element={<MobileMaintenanceList />} />
- {/* /maintenance/mobile/condition-reading removed 2026-08-08 (scope cut — page file kept) */}
- <Route path="/maintenance/mobile/:mwoId" element={<MobileWorkOrderDetail />} />
- </Route>
+ <>
+  <Route path="/maintenance/mobile" element={<Navigate to="/maintenance/work-orders" replace />} />
+  <Route path="/maintenance/mobile/:mwoId" element={<OldWorkOrderDetailRedirect />} />
+ </>
 );

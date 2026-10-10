@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\SupplyChain\Controllers\ContainerController;
 use App\Modules\SupplyChain\Controllers\DeliveryController;
 use App\Modules\SupplyChain\Controllers\DeliveryProofController;
 use App\Modules\SupplyChain\Controllers\DriverDeliveryController;
@@ -18,21 +19,23 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chain')->group(function () {
 
     /* ─── Shipments (Task 65) ─── */
-    Route::get('/shipments/options',                    [ShipmentController::class, 'options'])
-        ->middleware('permission:supply_chain.view');
-    Route::get('/shipments',                                [ShipmentController::class, 'index'])
-        ->middleware('permission:supply_chain.view');
-    Route::get('/shipments/{shipment}',                     [ShipmentController::class, 'show'])
-        ->middleware('permission:supply_chain.view');
-    Route::post('/shipments',                               [ShipmentController::class, 'store'])
+    Route::get('/shipments/options', [ShipmentController::class, 'options'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::get('/shipments/purchase-order-options', [ShipmentController::class, 'purchaseOrderOptions'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::patch('/shipments/{shipment}/status',            [ShipmentController::class, 'updateStatus'])
+    Route::get('/shipments', [ShipmentController::class, 'index'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::get('/shipments/{shipment}', [ShipmentController::class, 'show'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::post('/shipments', [ShipmentController::class, 'store'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::patch('/shipments/{shipment}',                   [ShipmentController::class, 'updateMeta'])
+    Route::patch('/shipments/{shipment}/status', [ShipmentController::class, 'updateStatus'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::delete('/shipments/{shipment}',                  [ShipmentController::class, 'destroy'])
+    Route::patch('/shipments/{shipment}', [ShipmentController::class, 'updateMeta'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::patch('/shipments/{shipment}/restore',            [ShipmentController::class, 'restore'])
+    Route::delete('/shipments/{shipment}', [ShipmentController::class, 'destroy'])
+        ->middleware('permission:supply_chain.shipments.manage');
+    Route::patch('/shipments/{shipment}/restore', [ShipmentController::class, 'restore'])
         ->middleware('permission:supply_chain.shipments.manage')
         ->withTrashed();
 
@@ -41,19 +44,19 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.shipments.manage');
 
     /* ─── ImpEx document PDF generation (packing list + commercial invoice) ─── */
-    Route::get('/shipments/{shipment}/packing-list',       [ImpexDocumentController::class, 'packingList'])
-        ->middleware('permission:supply_chain.view');
-    Route::get('/shipments/{shipment}/commercial-invoice',  [ImpexDocumentController::class, 'commercialInvoice'])
-        ->middleware('permission:supply_chain.view');
+    Route::get('/shipments/{shipment}/packing-list', [ImpexDocumentController::class, 'packingList'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::get('/shipments/{shipment}/commercial-invoice', [ImpexDocumentController::class, 'commercialInvoice'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
 
     /* ─── Shipment documents ─── */
-    Route::post('/shipments/{shipment}/documents',          [ShipmentController::class, 'uploadDocument'])
+    Route::post('/shipments/{shipment}/documents', [ShipmentController::class, 'uploadDocument'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::get('/shipment-documents/{document}/download',   [ShipmentController::class, 'downloadDocument'])
-        ->middleware('permission:supply_chain.view');
-    Route::delete('/shipment-documents/{document}',         [ShipmentController::class, 'destroyDocument'])
+    Route::get('/shipment-documents/{document}/download', [ShipmentController::class, 'downloadDocument'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::delete('/shipment-documents/{document}', [ShipmentController::class, 'destroyDocument'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::patch('/shipment-documents/{document}/restore',  [ShipmentController::class, 'restoreDocument'])
+    Route::patch('/shipment-documents/{document}/restore', [ShipmentController::class, 'restoreDocument'])
         ->middleware('permission:supply_chain.shipments.manage')
         ->withTrashed();
 
@@ -71,32 +74,32 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
      * "permanent", these routes should be deleted rather than repaired — but
      * while they are advertised they must reach their target.
      */
-    Route::get('/shipments/{shipment}/containers',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'index'])
-        ->middleware('permission:supply_chain.view');
-    Route::post('/shipments/{shipment}/containers',             [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'store'])
+    Route::get('/shipments/{shipment}/containers', [ContainerController::class, 'index'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::post('/shipments/{shipment}/containers', [ContainerController::class, 'store'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::get('/containers/{container}',                        [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'show'])
-        ->middleware('permission:supply_chain.view');
-    Route::put('/containers/{container}',                        [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'update'])
+    Route::get('/containers/{container}', [ContainerController::class, 'show'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.shipments.view');
+    Route::put('/containers/{container}', [ContainerController::class, 'update'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::delete('/containers/{container}',                     [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'destroy'])
+    Route::delete('/containers/{container}', [ContainerController::class, 'destroy'])
         ->middleware('permission:supply_chain.shipments.manage');
-    Route::patch('/containers/{container}/restore',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'restore'])
+    Route::patch('/containers/{container}/restore', [ContainerController::class, 'restore'])
         ->middleware('permission:supply_chain.shipments.manage')
         ->withTrashed();
 
     /* ─── Vehicles (Task 66) ─── */
-    Route::get('/vehicles/options',                          [VehicleController::class, 'options'])
+    Route::get('/vehicles/options', [VehicleController::class, 'options'])
         ->middleware('permission:supply_chain.view');
-    Route::get('/vehicles',                                 [VehicleController::class, 'index'])
+    Route::get('/vehicles', [VehicleController::class, 'index'])
         ->middleware('permission:supply_chain.view');
-    Route::post('/vehicles',                                [VehicleController::class, 'store'])
+    Route::post('/vehicles', [VehicleController::class, 'store'])
         ->middleware('permission:supply_chain.fleet.manage');
-    Route::patch('/vehicles/{vehicle}',                     [VehicleController::class, 'update'])
+    Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update'])
         ->middleware('permission:supply_chain.fleet.manage');
-    Route::delete('/vehicles/{vehicle}',                    [VehicleController::class, 'destroy'])
+    Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
         ->middleware('permission:supply_chain.fleet.manage');
-    Route::patch('/vehicles/{vehicle}/restore',             [VehicleController::class, 'restore'])
+    Route::patch('/vehicles/{vehicle}/restore', [VehicleController::class, 'restore'])
         ->middleware('permission:supply_chain.fleet.manage')
         ->withTrashed();
 
@@ -108,29 +111,31 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
      * than swapping the slug outright: a custom role holding only
      * supply_chain.view must not silently lose the delivery list.
      */
-    Route::get('/deliveries/options',                       [DeliveryController::class, 'options'])
+    Route::get('/deliveries/options', [DeliveryController::class, 'options'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::get('/deliveries/form-options', [DeliveryController::class, 'formOptions'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::get('/deliveries/inspection-options',             [DeliveryController::class, 'inspectionOptions'])
+    Route::get('/deliveries/inspection-options', [DeliveryController::class, 'inspectionOptions'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::get('/deliveries/driver-options',                 [DeliveryController::class, 'driverOptions'])
+    Route::get('/deliveries/driver-options', [DeliveryController::class, 'driverOptions'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::get('/deliveries',                               [DeliveryController::class, 'index'])
+    Route::get('/deliveries', [DeliveryController::class, 'index'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
-    Route::get('/deliveries/{delivery}',                    [DeliveryController::class, 'show'])
+    Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
-    Route::post('/deliveries',                              [DeliveryController::class, 'store'])
+    Route::post('/deliveries', [DeliveryController::class, 'store'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::patch('/deliveries/{delivery}/assignment',        [DeliveryController::class, 'assign'])
+    Route::post('/deliveries/{delivery}/shipment-plan', [DeliveryController::class, 'shipmentPlan'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::patch('/deliveries/{delivery}/reschedule',       [DeliveryController::class, 'reschedule'])
+    Route::patch('/deliveries/{delivery}/assignment', [DeliveryController::class, 'assign'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::patch('/deliveries/{delivery}/status',           [DeliveryController::class, 'updateStatus'])
+    Route::patch('/deliveries/{delivery}/reschedule', [DeliveryController::class, 'reschedule'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::post('/deliveries/{delivery}/receipt',           [DeliveryController::class, 'uploadReceipt'])
+    Route::patch('/deliveries/{delivery}/status', [DeliveryController::class, 'updateStatus'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::post('/deliveries/{delivery}/attempt-outcome',   [DeliveryController::class, 'reportAttemptOutcome'])
+    Route::post('/deliveries/{delivery}/receipt', [DeliveryController::class, 'uploadReceipt'])
+        ->middleware('permission:supply_chain.deliveries.create');
+    Route::post('/deliveries/{delivery}/attempt-outcome', [DeliveryController::class, 'reportAttemptOutcome'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::post('/deliveries/{delivery}/truck-return-receipt', [DeliveryController::class, 'receiveTruckReturn'])
         ->middleware('permission:return_management.receive');
@@ -142,42 +147,45 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission_any:supply_chain.deliveries.create,inventory.adjust');
     Route::post('/deliveries/{delivery}/retry-cost-handoff', [DeliveryController::class, 'retryCost'])
         ->middleware('permission:accounting.journal.post');
-    Route::get('/deliveries/{delivery}/receipt-photo',      [DeliveryController::class, 'receiptPhoto'])
+    Route::get('/deliveries/{delivery}/receipt-photo', [DeliveryController::class, 'receiptPhoto'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
-    Route::post('/deliveries/{delivery}/confirm',           [DeliveryController::class, 'confirm'])
+    Route::post('/deliveries/{delivery}/confirm', [DeliveryController::class, 'confirm'])
         ->middleware('permission:supply_chain.deliveries.confirm');
-    Route::post('/deliveries/{delivery}/retry-coc',          [DeliveryController::class, 'retryCoc'])
+    Route::post('/deliveries/{delivery}/retry-coc', [DeliveryController::class, 'retryCoc'])
         ->middleware('permission:supply_chain.deliveries.confirm');
-    Route::post('/deliveries/{delivery}/retry-invoice',      [DeliveryController::class, 'retryInvoice'])
+    Route::post('/deliveries/{delivery}/retry-invoice', [DeliveryController::class, 'retryInvoice'])
         ->middleware('permission_any:supply_chain.deliveries.confirm,accounting.invoices.create');
-    Route::delete('/deliveries/{delivery}',                 [DeliveryController::class, 'destroy'])
+    Route::delete('/deliveries/{delivery}', [DeliveryController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::patch('/deliveries/{delivery}/restore',          [DeliveryController::class, 'restore'])
-        ->middleware('permission:supply_chain.deliveries.create');
+    Route::patch('/deliveries/{delivery}/restore', [DeliveryController::class, 'restore'])
+        ->middleware('permission:supply_chain.deliveries.create')
+        ->withTrashed();
 
     /* ─── ADV7 — Proof of Delivery (multi-file) ─── */
-    Route::get('/deliveries/proofs/options',                  [DeliveryProofController::class, 'options'])
+    Route::get('/deliveries/proofs/options', [DeliveryProofController::class, 'options'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
-    Route::get('/deliveries/{delivery}/proofs',                       [DeliveryProofController::class, 'index'])
+    Route::get('/deliveries/{delivery}/proofs', [DeliveryProofController::class, 'index'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
-    Route::post('/deliveries/{delivery}/proofs',                      [DeliveryProofController::class, 'store'])
+    Route::post('/deliveries/{delivery}/proofs', [DeliveryProofController::class, 'store'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::get('/deliveries/{delivery}/proofs/{proof}/view',          [DeliveryProofController::class, 'view'])
-        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
-    Route::delete('/deliveries/{delivery}/proofs/{proof}',            [DeliveryProofController::class, 'destroy'])
+    Route::get('/deliveries/{delivery}/proofs/{proof}/view', [DeliveryProofController::class, 'view'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view')
+        ->withTrashed();
+    Route::delete('/deliveries/{delivery}/proofs/{proof}', [DeliveryProofController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
-    Route::patch('/deliveries/{delivery}/proofs/{proof}/restore',     [DeliveryProofController::class, 'restore'])
-        ->middleware('permission:supply_chain.deliveries.create');
+    Route::patch('/deliveries/{delivery}/proofs/{proof}/restore', [DeliveryProofController::class, 'restore'])
+        ->middleware('permission:supply_chain.deliveries.create')
+        ->withTrashed();
 });
 
 /* ─── Driver self-service surface (T2.5) ──────────────────────── */
 Route::prefix('driver')
     ->middleware(['auth:sanctum', 'session.timeout', 'feature:supply_chain', 'permission:supply_chain.driver.access'])
     ->group(function (): void {
-        Route::get('/deliveries',                       [DriverDeliveryController::class, 'index']);
-        Route::get('/deliveries/{delivery}',            [DriverDeliveryController::class, 'show']);
-        Route::patch('/deliveries/{delivery}/status',   [DriverDeliveryController::class, 'updateStatus']);
-        Route::post('/deliveries/{delivery}/receipt',   [DriverDeliveryController::class, 'uploadReceipt']);
+        Route::get('/deliveries', [DriverDeliveryController::class, 'index']);
+        Route::get('/deliveries/{delivery}', [DriverDeliveryController::class, 'show']);
+        Route::patch('/deliveries/{delivery}/status', [DriverDeliveryController::class, 'updateStatus']);
+        Route::post('/deliveries/{delivery}/receipt', [DriverDeliveryController::class, 'uploadReceipt']);
         Route::post('/deliveries/{delivery}/attempt-outcome', [DriverDeliveryController::class, 'reportAttemptOutcome']);
         Route::post('/deliveries/{delivery}/amend-attempt', [DriverDeliveryController::class, 'amendAttemptOutcome']);
     });

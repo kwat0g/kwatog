@@ -9,6 +9,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -33,6 +34,7 @@ class GoodsReceiptNote extends Model
     protected $fillable = [
         'grn_number', 'purchase_order_id', 'vendor_id',
         'shipment_id',
+        'supplier_shipment_id',
         'received_date', 'received_by', 'status',
         'qc_inspection_id', 'accepted_by', 'accepted_at',
         'incoming_qc_handoff_status', 'incoming_qc_handoff_message', 'incoming_qc_handoff_at',
@@ -58,6 +60,11 @@ class GoodsReceiptNote extends Model
     public function shipment(): BelongsTo
     {
         return $this->belongsTo(Shipment::class);
+    }
+
+    public function supplierShipment(): BelongsTo
+    {
+        return $this->belongsTo(SupplierShipment::class);
     }
 
     public function vendor(): BelongsTo

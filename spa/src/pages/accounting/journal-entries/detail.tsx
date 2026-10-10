@@ -105,7 +105,7 @@ export default function JournalEntryDetailPage() {
  Edit
  </Button>
  )}
- {isDraft && !isArchived && can('accounting.journal.post') && (
+ {isDraft && !isArchived && je.reference_type === null && can('accounting.journal.post') && (
  <Button variant="primary" size="sm" onClick={() => setShowPost(true)} disabled={postMut.isPending}>
  Post
  </Button>
@@ -120,7 +120,7 @@ export default function JournalEntryDetailPage() {
   Restore
   </Button>
   )}
- {isPosted && !je.reversed_by_entry_id && can('accounting.journal.reverse') && (
+ {isPosted && !je.reversed_by_entry_id && (je.reference_type === null || je.reference_type === 'journal_entry_reversal') && can('accounting.journal.reverse') && (
  <Button variant="secondary" size="sm" onClick={() => { setReverseReason(''); setShowReverse(true); }} loading={reverseMut.isPending} disabled={reverseMut.isPending}>
  Reverse
  </Button>
@@ -132,6 +132,9 @@ export default function JournalEntryDetailPage() {
  <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
  <div className="col-span-2 space-y-4">
  <Panel title="Header">
+ {(je.reference_type !== null && je.reference_type !== 'journal_entry_reversal') && (
+  <p role="status" className="mb-3 text-sm text-muted">This entry is controlled by its source document. Post or reverse it through that document's workflow.</p>
+ )}
  <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(je.date)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Posted at</dt><dd className="font-mono">{je.posted_at ? formatDate(je.posted_at) : '—'}</dd></div>

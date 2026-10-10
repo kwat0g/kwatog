@@ -155,7 +155,7 @@ export const ROLES: Record<string, MockUser> = {
       'purchasing.rfq.view', 'purchasing.rfq.create', 'purchasing.rfq.publish',
       'purchasing.rfq.evaluate', 'purchasing.rfq.award', 'purchasing.rfq.manage',
       'purchasing.rfq.quality_review',
-      'inventory.view', 'inventory.grn.create',
+      'inventory.view',
       'supply_chain.shipments.manage',
       'accounting.vendors.view', 'accounting.bills.view',
       'forecasting.view', 'return_management.view', 'return_management.manage',
@@ -299,9 +299,9 @@ export async function mockHang(page: Page, urlPattern: string): Promise<void> {
 
 /**
  * Mock auth as the given role then goto a page. Returns once the SPA has
- * authenticated and mounted its application layout. Waiting for network idle
- * is incorrect here because dashboards and self-service pages legitimately
- * poll in the background.
+ * authenticated and rendered route content. Waiting for the app shell alone
+ * lets callers navigate again before a lazy route loads; network idle is also
+ * incorrect because dashboards and self-service pages legitimately poll.
  */
 export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string = '/dashboard/default'): Promise<void> {
   const pageErrors: string[] = [];
@@ -315,10 +315,25 @@ export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string
   await mockAuth(page, ROLES[role]);
   await page.goto(goto, { waitUntil: 'domcontentloaded' });
   // A reused page may already have authenticated Zustand state, in which case
-  // AuthGuard correctly skips a second /auth/user request. The mounted app
-  // shell is therefore the stable readiness signal for both fresh and reused
-  // sessions.
+  // AuthGuard correctly skips a second /auth/user request. Wait for route
+  // content, not the shell: lazy page imports can still be pending after the
+  // shell mounts, and a later navigation cancels them.
   await page.locator('#main-content').waitFor({ state: 'attached', timeout: 10_000 });
+  const routeState = await page.waitForFunction(() => {
+    const visible = (element: Element) => element.getClientRects().length > 0;
+    const headings = [...document.querySelectorAll('#main-content h1, #main-content h2, #main-content h3')].filter(visible);
+    if (headings.some((element) => element.textContent?.trim() === 'Something went wrong')) return 'error';
+    if (headings.length) return 'ready';
+    if ([...document.querySelectorAll('h3')].some((element) => visible(element) && element.textContent?.trim() === 'Page not found')) return 'not-found';
+    return false;
+  }, undefined, { timeout: 10_000 });
+  if (await routeState.jsonValue() === 'error') {
+    throw new Error(`Route ${goto} rendered the application error boundary`);
+  }
+  // Role-matrix tests navigate again as soon as this helper returns. Wait for
+  // the current page's used fonts so the next full navigation cannot abort a
+  // local font request and hide an asset-loading failure inside Firefox.
+  await page.evaluate(async () => { await document.fonts.ready; });
   if (new URL(page.url()).pathname === '/sign-in') {
     throw new Error(`Mock authentication failed (auth responses: ${authResponses.join(', ') || 'none'}; unauthorized: ${unauthorizedUrls.join(', ') || 'none'})${pageErrors.length > 0 ? `: ${pageErrors.join('; ')}` : ''}`);
   }
@@ -330,7 +345,7 @@ export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string
  */
 export function mockList<T>(page: Page, urlPattern: string, items: T[]): void {
   page.route(urlPattern, async (route) => {
-    if (route.request().method() !== 'GET') { await route.continue(); return; }
+    if (route.request().method() !== 'GET') { await route.fallback(); return; }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

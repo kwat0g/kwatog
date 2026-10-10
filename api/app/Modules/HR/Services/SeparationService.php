@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\DepartmentScope;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ClearanceStatus;
@@ -25,6 +26,7 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -51,13 +53,14 @@ class SeparationService
         private readonly PayrollPeriodService $payrollPeriods,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = Clearance::query()->with([
             'employee:id,employee_no,first_name,last_name,department_id,position_id',
             'employee.department:id,name,code',
             'employee.position:id,title',
         ]);
+        $this->scopeClearances($q, $user);
         foreach (['status', 'separation_reason'] as $f) {
             if (! empty($filters[$f])) $q->where($f, $filters[$f]);
         }
@@ -97,8 +100,9 @@ class SeparationService
         return $q->orderByDesc('id')->paginate($perPage);
     }
 
-    public function show(Clearance $clearance): Clearance
+    public function show(Clearance $clearance, ?User $user = null): Clearance
     {
+        $this->scopeClearances(Clearance::query(), $user)->whereKey($clearance->id)->firstOrFail();
         return $clearance->load([
             'employee:id,employee_no,first_name,last_name,department_id,position_id,date_hired,basic_monthly_salary,semi_monthly_rate,pay_type',
             'employee.department:id,name,code',
@@ -106,6 +110,58 @@ class SeparationService
             'initiator:id,name',
             'finalizer:id,name',
         ]);
+    }
+
+    /** Global review and department checklist work are separate capabilities. */
+    private function scopeClearances(Builder $query, ?User $user): Builder
+    {
+        if ($user === null || $user->hasPermission('hr.separation.view_all')) {
+            return $query;
+        }
+        if (! $user->hasPermission('hr.clearance.work_company')) {
+            return DepartmentScope::apply($query, $user,
+                viewAllPermission: 'hr.separation.view_all', deptRelation: 'employee');
+        }
+        $departmentId = DepartmentScope::departmentIdFor($user);
+        $department = $departmentId ? Department::find($departmentId) : null;
+        if (! $department || ! $user->hasPermission('hr.clearance.sign')) {
+            return $query->whereRaw('1 = 0');
+        }
+        // Resolve stored labels through the same rule as signing, including legacy prefixes.
+        $storedLabels = DB::table('clearances')->whereNull('deleted_at')
+            ->selectRaw("DISTINCT trim(item->>'department') AS label")
+            ->crossJoin(DB::raw('jsonb_array_elements(clearance_items::jsonb) AS item'))
+            ->pluck('label');
+        $labels = $storedLabels->filter(fn ($label) =>
+            (int) $this->resolveChecklistDepartment((string) $label)?->id === (int) $departmentId)->all();
+        if ($labels === []) return $query->whereRaw('1 = 0');
+        $labels = array_values(array_unique(array_map('strtolower', $labels)));
+        $placeholders = implode(',', array_fill(0, count($labels), '?'));
+        return $query->whereRaw("EXISTS (SELECT 1 FROM jsonb_array_elements(clearance_items::jsonb) item WHERE lower(trim(item->>'department')) IN ({$placeholders}))", $labels);
+    }
+
+    /** Only checklist owners receive other departments' task details. */
+    public function visibleChecklistItems(array $items, ?User $user): array
+    {
+        if ($user === null || $user->hasPermission('hr.separation.view_all')) {
+            return $items;
+        }
+        $departmentId = DepartmentScope::departmentIdFor($user);
+        return array_values(array_filter($items, fn ($item) => $departmentId !== null
+            && (int) $this->resolveChecklistDepartment((string) ($item['department'] ?? ''))?->id === $departmentId));
+    }
+
+    public function canSignChecklistItem(array $item, ?User $user): bool
+    {
+        if (! $user || ! $user->hasPermission('hr.clearance.sign')) {
+            return false;
+        }
+        if (in_array($user->role?->slug, ['hr_officer', 'system_admin'], true)) {
+            return true;
+        }
+        $departmentId = DepartmentScope::departmentIdFor($user);
+        return $departmentId !== null
+            && (int) $this->resolveChecklistDepartment((string) ($item['department'] ?? ''))?->id === $departmentId;
     }
 
     public function initiate(Employee $employee, array $data, User $by): Clearance
@@ -301,13 +357,10 @@ class SeparationService
             // stale route-bound model would lose a different department's sign
             // when two operators submit at nearly the same time. The row lock
             // serialises the aggregate and makes completion a single transition.
-            $lockedClearance = Clearance::query()
+            $lockedClearance = $this->scopeClearances(Clearance::query(), $by)
                 ->lockForUpdate()
-                ->find($clearance->id);
+                ->findOrFail($clearance->id);
 
-            if (! $lockedClearance) {
-                throw new BusinessRuleException('Clearance not found.');
-            }
 
             if ($lockedClearance->status->isTerminal()) {
                 throw new BusinessRuleException('Clearance is closed.');
@@ -384,15 +437,8 @@ class SeparationService
      */
     private function assertMaySignItem(array $item, User $by): void
     {
-        if (in_array($by->role?->slug, ['hr_officer', 'system_admin'], true)) {
-            return;
-        }
-
         $label = trim((string) ($item['department'] ?? ''));
-        $owner = $this->resolveChecklistDepartment($label);
-        $actorDepartmentId = $by->employee?->department_id;
-
-        if ($owner === null || $actorDepartmentId === null || (int) $owner->id !== (int) $actorDepartmentId) {
+        if (! $this->canSignChecklistItem($item, $by)) {
             throw new BusinessRuleException(
                 "Clearance item '{$item['item_key']}' belongs to the {$label} department. "
                 .'Only a member of that department, an HR Officer, or a System Administrator may sign it.'

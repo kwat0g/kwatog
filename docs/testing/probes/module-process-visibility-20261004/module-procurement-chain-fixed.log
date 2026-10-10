@@ -1,0 +1,55 @@
+
+Running 11 tests using 1 worker
+
+(node:52836) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+  ✓   1 [real-chromium] › e2e-real/live-procurement.spec.ts:828:3 › Live procurement runbook › sign-in retains its authenticated session after clearing guest queries (9.6s)
+  ✓   2 [real-chromium] › e2e-real/live-procurement.spec.ts:902:3 › Live procurement runbook › RBAC denial and Department Head department boundary (22.9s)
+  ✓   3 [real-chromium] › e2e-real/live-procurement.spec.ts:924:3 › Live procurement runbook › Sales Order confirmation creates an MRP plan and auto-PR handoff (29.6s)
+  ✓   4 [real-chromium] › e2e-real/live-procurement.spec.ts:997:3 › Live procurement runbook › manual low-value PR reaches Finance and skips VP (29.2s)
+  ✓   5 [real-chromium] › e2e-real/live-procurement.spec.ts:1014:3 › Live procurement runbook › exact PHP 50,000 PR requires Finance then VP (1.4m)
+  ✓   6 [real-chromium] › e2e-real/live-procurement.spec.ts:1054:3 › Live procurement runbook › Finance rejection terminates the PR chain (57.2s)
+  ✘   7 [real-chromium] › e2e-real/live-procurement.spec.ts:1071:3 › Live procurement runbook › finance-only customer return only offers rejection to Finance (36.9s)
+  -   8 [real-chromium] › e2e-real/live-procurement.spec.ts:1128:3 › Live procurement runbook › PR to accepted GRN recovers one draft bill after automation actor loss
+  -   9 [real-chromium] › e2e-real/live-procurement.spec.ts:1478:3 › Live procurement runbook › post supplier bill and approve its partial payment
+  -  10 [real-chromium] › e2e-real/live-procurement.spec.ts:1768:3 › Live procurement runbook › cancels an unpaid bill and routes its pending payment to rejection
+  -  11 [real-chromium] › e2e-real/live-procurement.spec.ts:2210:3 › Live procurement runbook › return accepted goods through receipt, disposition, and replacement PO
+
+
+  1) [real-chromium] › e2e-real/live-procurement.spec.ts:1071:3 › Live procurement runbook › finance-only customer return only offers rejection to Finance 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1
+    Received:   0
+
+    Call Log:
+    - Timeout 20000ms exceeded while waiting on the predicate
+
+      1089 |       await creator.page.getByRole('button', { name: 'Add Item', exact: true }).click();
+      1090 |       const product = creator.page.getByLabel('Credited product');
+    > 1091 |       await expect.poll(() => product.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+           |                                                                                       ^
+      1092 |       const productOptions = await product.locator('option').evaluateAll((nodes) =>
+      1093 |         nodes.map((node) => ({ value: node.value, text: node.textContent ?? '' })),
+      1094 |       );
+        at /home/ec2-user/kwatog/spa/e2e-real/live-procurement.spec.ts:1091:87
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../tmp/module-procurement-chain-fixed-artifacts/live-procurement-Live-proc-b3fb4-offers-rejection-to-Finance-real-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../tmp/module-procurement-chain-fixed-artifacts/live-procurement-Live-proc-b3fb4-offers-rejection-to-Finance-real-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../tmp/module-procurement-chain-fixed-artifacts/live-procurement-Live-proc-b3fb4-offers-rejection-to-Finance-real-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../tmp/module-procurement-chain-fixed-artifacts/live-procurement-Live-proc-b3fb4-offers-rejection-to-Finance-real-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [real-chromium] › e2e-real/live-procurement.spec.ts:1071:3 › Live procurement runbook › finance-only customer return only offers rejection to Finance 
+  4 did not run
+  6 passed (4.6m)

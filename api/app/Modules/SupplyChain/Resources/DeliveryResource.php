@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Resources;
 
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryProofType;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -24,6 +25,9 @@ class DeliveryResource extends JsonResource
 
         $this->resource->loadMissing(['stockReservationBatch', 'stockReservations.item', 'stockReservations.location', 'stockReservations.deliveryItem', 'costHandoffs']);
         $reservation = $this->stockReservationBatch;
+        $activeProofCount = $this->relationLoaded('proofs')
+            ? $this->proofs->whereNull('deleted_at')->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count()
+            : 0;
         $transit = $this->cost_recognition_mode?->value === 'transit';
         $costSummary = function (string $kind) use ($request): array {
             $handoff = $this->costHandoffs->where('handoff_type', $kind)->sortByDesc('id')->first();
@@ -55,11 +59,13 @@ class DeliveryResource extends JsonResource
             'loss_handoff' => $this->when($transit && $hasAttemptOutcome && $this->attemptOutcome->reconciled_at, fn () => $costSummary('unaccounted_loss')),
             'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
             'status_label'        => ($status = $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
-            'can_confirm' => $this->whenLoaded('proofs', fn () => $status === DeliveryStatus::Delivered && $this->proofs->isNotEmpty() && $this->blockingReturnCase === null),
+            'can_confirm' => $this->whenLoaded('proofs', fn () => $status === DeliveryStatus::Delivered && $this->proofs->contains(fn ($proof) => ! $proof->trashed() && in_array($proof->proof_type, ['photo', 'signed_dr', 'customer_po_confirmation'], true)) && $this->blockingReturnCase === null),
             'can_cancel' => $status?->canTransitionTo(DeliveryStatus::Cancelled) ?? false,
             'next_status'         => $nextStatus = $this->nextStatus($status),
             'next_status_label'   => $nextStatus ? DeliveryStatus::from($nextStatus)->label() : null,
             'scheduled_date'      => optional($this->scheduled_date)?->toDateString(),
+            'expected_delivery_date' => optional($this->expected_delivery_date)?->toDateString(),
+            'carrier' => $this->carrier,
             'original_scheduled_date' => optional($this->original_scheduled_date)?->toDateString(),
             'reschedule_count'    => (int) ($this->reschedule_count ?? 0),
             'reschedules'         => $this->whenLoaded('reschedules', fn () => $this->reschedules->map(fn ($r) => [
@@ -120,22 +126,37 @@ class DeliveryResource extends JsonResource
                 : null,
             'quantity_discrepancy' => $this->whenLoaded('quantityDiscrepancy', fn () => $this->quantityDiscrepancy
                 ? new DeliveryQuantityDiscrepancyResource($this->quantityDiscrepancy) : null),
-            'proofs'              => $this->whenLoaded('proofs', fn () => $this->proofs->map(fn ($p) => [
-                'id'          => $p->hash_id,
-                'proof_type'  => $p->proof_type,
-                'file_name'   => $p->file_name,
-                'file_size'   => $p->file_size,
-                'mime_type'   => $p->mime_type,
-                'is_image'    => $p->mime_type ? str_starts_with((string) $p->mime_type, 'image/') : false,
-                'notes'       => $p->notes,
-                'view_url'    => "/api/v1/supply-chain/deliveries/{$this->hash_id}/proofs/{$p->hash_id}/view",
-                'uploader'    => $p->relationLoaded('uploader') && $p->uploader ? [
-                    'id'   => $p->uploader->hash_id,
-                    'name' => $p->uploader->name,
-                ] : null,
-                'uploaded_at' => optional($p->created_at)?->toISOString(),
-            ])->all()),
-            'proof_count'         => $this->whenLoaded('proofs', fn () => $this->proofs->count()),
+            'proofs'              => $this->whenLoaded('proofs', fn () => $this->proofs->map(function ($p) use ($status, $activeProofCount): array {
+                $archiveBlockReason = ! $p->trashed() && $p->proof_type === DeliveryProofType::LoadingPhoto->value && ! in_array($status, [DeliveryStatus::Scheduled, DeliveryStatus::Loading, DeliveryStatus::Cancelled], true)
+                    ? 'Loading evidence cannot be archived after dispatch.' : null;
+                if (! $p->trashed() && $status === DeliveryStatus::Confirmed && $archiveBlockReason === null) {
+                    $archiveBlockReason = match (true) {
+                        $p->proof_type === DeliveryProofType::CertificateOfConformance->value => 'The Certificate of Conformance cannot be deleted from a confirmed delivery.',
+                        $activeProofCount <= 1 => 'Cannot delete the only proof of a confirmed delivery.',
+                        default => null,
+                    };
+                }
+
+                return [
+                    'id'          => $p->hash_id,
+                    'proof_type'  => $p->proof_type,
+                    'file_name'   => $p->file_name,
+                    'file_size'   => $p->file_size,
+                    'mime_type'   => $p->mime_type,
+                    'is_image'    => $p->mime_type ? str_starts_with((string) $p->mime_type, 'image/') : false,
+                    'notes'       => $p->notes,
+                    'view_url'    => "/api/v1/supply-chain/deliveries/{$this->hash_id}/proofs/{$p->hash_id}/view",
+                    'deleted_at'  => optional($p->deleted_at)?->toISOString(),
+                    'can_archive' => ! $p->trashed() && $archiveBlockReason === null,
+                    'archive_block_reason' => $archiveBlockReason,
+                    'uploader'    => $p->relationLoaded('uploader') && $p->uploader ? [
+                        'id'   => $p->uploader->hash_id,
+                        'name' => $p->uploader->name,
+                    ] : null,
+                    'uploaded_at' => optional($p->created_at)?->toISOString(),
+                ];
+            })->all()),
+            'proof_count'         => $this->whenLoaded('proofs', fn () => $activeProofCount),
             'sales_order'         => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id'        => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,

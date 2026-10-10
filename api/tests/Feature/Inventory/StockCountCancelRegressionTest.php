@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Services\StockAdjustmentService;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockCountService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -45,6 +46,7 @@ class StockCountCancelRegressionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(ChartOfAccountsSeeder::class);
 
         Event::fake([StockMovementCompleted::class]);
 

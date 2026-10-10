@@ -19,7 +19,6 @@ import type { ApiValidationError } from '@/types';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
-import { useDebounce } from '@/hooks/useDebounce';
 const schema = z.object({
  original_payroll_id: z.string().min(1, 'Source payroll is required'),
  type: z.string().min(1, 'Adjustment type is required'),
@@ -35,14 +34,13 @@ export default function CreatePayrollAdjustmentPage() {
  const location = useLocation() as { state?: { original_payroll_id?: string; employee?: { full_name?: string; employee_no?: string } } };
  const [submitting, setSubmitting] = useState(false);
  const [payrollSearch, setPayrollSearch] = useState('');
- const debouncedPayrollSearch = useDebounce(payrollSearch, 300);
  const { data: adjustmentOptions } = useQuery({
  queryKey: ['payroll-adjustments', 'options'],
  queryFn: () => adjustmentsApi.options(),
  });
  const { data: payrolls } = useQuery({
- queryKey: ['payrolls', 'adjustment-source', debouncedPayrollSearch],
- queryFn: () => payrollsApi.list({ per_page: 25, search: debouncedPayrollSearch || undefined }),
+ queryKey: ['payrolls', 'adjustment-source', payrollSearch],
+ queryFn: () => payrollsApi.list({ per_page: 25, search: payrollSearch || undefined }),
  });
 
   const form = useForm<FormValues>({
@@ -81,7 +79,7 @@ export default function CreatePayrollAdjustmentPage() {
  <div>
  <PageHeader title="Raise Payroll Adjustment" backTo="/payroll/adjustments" backLabel="Adjustments" />
       <FormDraftBanner safety={safety} />
- <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
+ <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
  {empName && (
  <div className="mb-4 p-3 bg-surface border border-default rounded-md text-xs">
  <div className="text-muted uppercase tracking-wider mb-1">Source payroll</div>
@@ -93,14 +91,8 @@ export default function CreatePayrollAdjustmentPage() {
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Adjustment</legend>
  <div className="grid grid-cols-2 gap-3">
- <Input
- label="Find source payroll"
- value={payrollSearch}
- onChange={(event) => setPayrollSearch(event.target.value)}
- placeholder="Search employee name or number"
- disabled={!!location.state?.original_payroll_id}
- />
- <Select
+
+ <Select searchable onSearch={(value) => setPayrollSearch(value)} title="Search employee name or number"
  label="Source payroll"
  required
  {...register('original_payroll_id')}

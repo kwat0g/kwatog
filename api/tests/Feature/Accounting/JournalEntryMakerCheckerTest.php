@@ -15,7 +15,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Symfony\Component\HttpKernel\Exception\HttpException;
+use App\Common\Exceptions\ForbiddenActionException;
 use Tests\TestCase;
 
 /**
@@ -30,8 +30,6 @@ class JournalEntryMakerCheckerTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
-        // Default behaviour: maker !== checker always required.
-        app(SettingsService::class)->set('accounting.je_self_post_limit', 0);
     }
 
     /** Non-admin user so hasPermission() does not short-circuit the override. */
@@ -70,9 +68,15 @@ class JournalEntryMakerCheckerTest extends TestCase
 
         $je = $this->draftJe($svc, $maker);
 
-        $this->expectException(HttpException::class);
-        $this->expectExceptionMessage('segregation of duties');
-        $svc->post($je, $maker);
+        try {
+            $svc->post($je, $maker);
+            $this->fail('The journal entry creator posted their own draft.');
+        } catch (ForbiddenActionException $exception) {
+            $this->assertStringContainsString('segregation of duties', $exception->getMessage());
+        }
+
+        $this->assertSame(JournalEntryStatus::Draft, $je->fresh()->status);
+        $this->assertNull($je->fresh()->posted_by);
     }
 
     public function test_different_user_can_post(): void
@@ -88,7 +92,7 @@ class JournalEntryMakerCheckerTest extends TestCase
         $this->assertSame((int) $checker->id, (int) $posted->posted_by);
     }
 
-    public function test_override_permission_allows_self_post(): void
+    public function test_self_post_override_permission_does_not_allow_self_post(): void
     {
         $svc = app(JournalEntryService::class);
         $maker = $this->financeUser();
@@ -108,22 +112,33 @@ class JournalEntryMakerCheckerTest extends TestCase
         $maker->flushPermissionsCache();
 
         $je = $this->draftJe($svc, $maker);
-        $posted = $svc->post($je, $maker->fresh());
+        try {
+            $svc->post($je, $maker->fresh());
+            $this->fail('The self-post override bypassed maker-checker.');
+        } catch (ForbiddenActionException $exception) {
+            $this->assertStringContainsString('segregation of duties', $exception->getMessage());
+        }
 
-        $this->assertSame(JournalEntryStatus::Posted, $posted->status);
+        $this->assertSame(JournalEntryStatus::Draft, $je->fresh()->status);
+        $this->assertNull($je->fresh()->posted_by);
     }
 
-    public function test_self_post_allowed_below_configured_limit(): void
+    public function test_configured_self_post_limit_does_not_bypass_maker_checker(): void
     {
-        // Below-threshold self-post escape hatch.
+        // A stale or configured legacy value must not weaken maker-checker.
         app(SettingsService::class)->set('accounting.je_self_post_limit', 10000.00);
         $svc = app(JournalEntryService::class);
         $maker = $this->financeUser();
 
-        // Total is 5000.00 < 10000.00 → permitted.
         $je = $this->draftJe($svc, $maker);
-        $posted = $svc->post($je, $maker);
+        try {
+            $svc->post($je, $maker);
+            $this->fail('A configured self-post limit bypassed maker-checker.');
+        } catch (ForbiddenActionException $exception) {
+            $this->assertStringContainsString('segregation of duties', $exception->getMessage());
+        }
 
-        $this->assertSame(JournalEntryStatus::Posted, $posted->status);
+        $this->assertSame(JournalEntryStatus::Draft, $je->fresh()->status);
+        $this->assertNull($je->fresh()->posted_by);
     }
 }

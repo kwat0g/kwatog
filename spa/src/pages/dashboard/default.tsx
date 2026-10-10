@@ -93,6 +93,9 @@ export default function DashboardDefaultPage() {
  const widgets = snapshot.items;
  return (
  <>
+ {widgetData.isError && <div role="alert" className="text-sm text-danger-fg">
+ Dashboard values could not be refreshed. Displayed values may be outdated. <Button variant="secondary" size="sm" onClick={() => void widgetData.refetch()}>Retry dashboard values</Button>
+ </div>}
  {widgets.length === 0 ? (
  <Panel title="No widgets configured">
  <EmptyState

@@ -1,0 +1,19 @@
+in_process pass: PASS
+outgoing pass: PASS
+customer_return pass: PASS
+supplier_return pass: PASS
+incoming pass: PASS
+in_process size_fail: PASS
+outgoing size_fail: PASS
+customer_return size_fail: PASS
+supplier_return size_fail: PASS
+incoming size_fail: PASS
+in_process document_fail: PASS
+outgoing document_fail: PASS
+customer_return document_fail: PASS
+supplier_return document_fail: PASS
+incoming document_fail: PASS
+employee: all five stage writes and reviews denied
+warehouse_staff: all five stage writes and reviews denied
+ppc_head: all five stage writes and reviews denied
+Real headless browser checks passed. No mocked API routes. No production business writes.

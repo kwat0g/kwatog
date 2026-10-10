@@ -96,3 +96,17 @@ test('live Playwright config requires an isolated base URL and selects its real 
   assert.equal(isolatedBase.status, 0, isolatedBase.stderr);
   assert.match(isolatedBase.stdout, /live-procurement\.spec\.ts/);
 });
+
+test('mocked Playwright uses a test Reverb key instead of inheriting local credentials', () => {
+  const config = fs.readFileSync(path.join(root, 'spa', 'playwright.config.ts'), 'utf8');
+
+  assert.match(config, /VITE_REVERB_APP_KEY:\s*['"]ogami_reverb['"]/);
+});
+
+test('mocked Playwright cannot proxy API calls to a developer or production server', () => {
+  const playwright = fs.readFileSync(path.join(root, 'spa', 'playwright.config.ts'), 'utf8');
+  const vite = fs.readFileSync(path.join(root, 'spa', 'vite.config.ts'), 'utf8');
+
+  assert.match(playwright, /VITE_DISABLE_API_PROXY:\s*['"]true['"]/);
+  assert.match(vite, /process\.env\.VITE_DISABLE_API_PROXY\s*===\s*['"]true['"]\s*\?\s*\{\}\s*:/);
+});

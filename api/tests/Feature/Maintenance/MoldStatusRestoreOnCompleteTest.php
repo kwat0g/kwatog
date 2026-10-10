@@ -6,6 +6,7 @@ namespace Tests\Feature\Maintenance;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\MRP\Enums\MoldStatus;
@@ -49,7 +50,7 @@ class MoldStatusRestoreOnCompleteTest extends TestCase
 
     private function inProgressWorkOrder(Mold $mold, User $by): MaintenanceWorkOrder
     {
-        return MaintenanceWorkOrder::create([
+        $order = MaintenanceWorkOrder::create([
             'mwo_number'        => 'MWO-' . substr(uniqid(), -8),
             'maintainable_type' => 'mold',
             'maintainable_id'   => $mold->id,
@@ -58,6 +59,16 @@ class MoldStatusRestoreOnCompleteTest extends TestCase
             'status'            => 'in_progress',
             'created_by'        => $by->id,
         ]);
+        MaintenanceLog::create([
+            'work_order_id' => $order->id,
+            'description' => 'Passing maintenance work result',
+            'finding' => 'Mold inspected',
+            'action_taken' => 'Serviced mold',
+            'result' => 'passed',
+            'logged_by' => $by->id,
+        ]);
+
+        return $order;
     }
 
     public function test_completing_mwo_restores_mold_at_shot_limit_to_available(): void

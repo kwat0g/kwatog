@@ -40,7 +40,7 @@ class ExpandedWithholdingTaxTest extends TestCase
         $roleId = Role::query()->where('slug', $role)->value('id');
         return User::create([
             'name' => 'Test User', 'email' => 'user_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
-            'role_id' => $roleId,
+            'role_id' => $roleId, 'is_active' => true,
         ]);
     }
 
@@ -55,8 +55,9 @@ class ExpandedWithholdingTaxTest extends TestCase
 
     private function approvePayment(BillService $service, Bill $bill, BillPayment $payment): BillPayment
     {
-        $financeChecker = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
-        $service->approvePayment($bill->fresh(), $payment->fresh(), $financeChecker);
+        if ($payment->status === BillPaymentStatus::Posted) {
+            return $payment;
+        }
 
         $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
 
@@ -349,7 +350,7 @@ class ExpandedWithholdingTaxTest extends TestCase
             'date' => '2026-04-10',
             'is_vatable' => false,
             'items' => [
-                ['expense_account_id' => $expenseId, 'description' => 'Item', 'quantity' => '1', 'unit_price' => '10000.00'],
+                ['expense_account_id' => $expenseId, 'description' => 'Item', 'quantity' => '1', 'unit_price' => '100000.00'],
             ],
         ], $user);
 
@@ -357,7 +358,7 @@ class ExpandedWithholdingTaxTest extends TestCase
         $svc->recordPayment($bill->fresh(), [
             'cash_account_id' => $cashId,
             'payment_date' => '2026-04-12',
-            'amount' => '10000.00',
+            'amount' => '100000.00',
             'payment_method' => PaymentMethod::BankTransfer->value,
             'idempotency_key' => 'payment-1',
         ], $user);
@@ -368,7 +369,7 @@ class ExpandedWithholdingTaxTest extends TestCase
         $svc->recordPayment($bill->fresh(), [
             'cash_account_id' => $cashId,
             'payment_date' => '2026-04-15',
-            'amount' => '10000.00',
+            'amount' => '100000.00',
             'payment_method' => PaymentMethod::BankTransfer->value,
             'idempotency_key' => 'payment-2',
         ], $user);

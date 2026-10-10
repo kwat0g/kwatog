@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\CRM;
 
 use App\Common\Services\SettingsService;
-use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -14,17 +14,17 @@ use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
-use App\Modules\CRM\Services\PriceAgreementService;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Services\PriceAgreementService;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Inventory\Models\Uom;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
-use Database\Seeders\ChartOfAccountsSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -55,61 +55,23 @@ class CustomerProductPricingTest extends TestCase
     public function test_archived_price_agreement_can_be_restored_and_overlap_is_rejected(): void
     {
         [$customer, $product] = $this->references();
-        $active = $this->agreement($customer, $product);
         $archived = $this->agreement($customer, $product, price: '110.00');
         $archived->delete();
-
-        $response = $this->actingAs($this->actor('crm.price_agreements.manage'))
-            ->patchJson("/api/v1/crm/price-agreements/{$archived->hash_id}/restore");
-
-        $response->assertUnprocessable();
-        $response->assertJsonFragment(['message' => 'A price agreement already exists for this customer/product in the selected date range.']);
+        $this->actingAs($this->actor('crm.price_agreements.manage'))
+            ->patchJson("/api/v1/crm/price-agreements/{$archived->hash_id}/restore")
+            ->assertUnprocessable();
         $this->assertNotNull(PriceAgreement::withTrashed()->findOrFail($archived->id)->deleted_at);
-
-        $active->delete();
-        $response = $this->actingAs($this->actor('crm.price_agreements.manage'))
-            ->patchJson("/api/v1/crm/price-agreements/{$archived->hash_id}/restore");
-
-        $response->assertOk();
-        $this->assertNull(PriceAgreement::withTrashed()->findOrFail($archived->id)->deleted_at);
     }
 
-    public function test_price_agreement_api_crud_requires_manage_permission_and_exposes_tiers(): void
+    public function test_price_agreement_api_requires_proposal_permission(): void
     {
         [$customer, $product] = $this->references();
-        $payload = [
-            'customer_id' => $customer->hash_id,
-            'product_id' => $product->hash_id,
-            'price' => '99.99',
-            'effective_from' => now()->toDateString(),
-            'effective_to' => now()->addMonth()->toDateString(),
-            'pricing_method' => PricingMethod::Tiered->value,
-            'tiers' => [
-                ['min_qty' => 1, 'unit_price' => '12.34'],
-                ['min_qty' => 100, 'unit_price' => '10.00'],
-            ],
-        ];
-
-        $this->actingAs($this->actor('crm.price_agreements.view'))
-            ->postJson('/api/v1/crm/price-agreements', $payload)
-            ->assertForbidden();
-
-        $response = $this->actingAs($this->actor('crm.price_agreements.manage'))
-            ->postJson('/api/v1/crm/price-agreements', $payload);
-
-        $response->assertCreated()
-            ->assertJsonPath('data.pricing_method', PricingMethod::Tiered->value)
-            ->assertJsonPath('data.tiers.0.unit_price', '12.34');
-
-        $id = $response->json('data.id');
         $this->actingAs($this->actor('crm.price_agreements.manage'))
-            ->putJson("/api/v1/crm/price-agreements/{$id}", [...$payload, 'price' => '98.99'])
-            ->assertOk()
-            ->assertJsonPath('data.price', '98.99');
-
-        $this->actingAs($this->actor('crm.price_agreements.manage'))
-            ->deleteJson("/api/v1/crm/price-agreements/{$id}")
-            ->assertNoContent();
+            ->postJson('/api/v1/crm/price-agreements', [
+                'customer_id' => $customer->hash_id, 'product_id' => $product->hash_id,
+                'price' => '99.99', 'effective_from' => today()->toDateString(),
+                'effective_to' => today()->addMonth()->toDateString(),
+            ])->assertForbidden();
     }
 
     public function test_inactive_or_archived_references_cannot_create_an_agreement(): void
@@ -118,11 +80,12 @@ class CustomerProductPricingTest extends TestCase
         $customer->update(['is_active' => false]);
         $product->delete();
 
-        $response = $this->actingAs($this->actor('crm.price_agreements.manage'))
+        $response = $this->actingAs($this->actor('crm.price_agreements.propose'))
             ->postJson('/api/v1/crm/price-agreements', [
                 'customer_id' => $customer->hash_id,
                 'product_id' => $product->hash_id,
                 'price' => '10.00',
+                'pricing_method' => 'flat', 'notes' => 'Pricing proposal',
                 'effective_from' => now()->toDateString(),
                 'effective_to' => now()->addMonth()->toDateString(),
             ]);
@@ -276,6 +239,7 @@ class CustomerProductPricingTest extends TestCase
         $catalog->assertCreated();
 
         [$customer, $product] = $this->references();
+        $product->portalCustomers()->sync([$customer->id]);
         $customerService = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
         ]);
@@ -286,6 +250,7 @@ class CustomerProductPricingTest extends TestCase
                 'price' => '99.99',
                 'effective_from' => now()->toDateString(),
                 'effective_to' => now()->addMonth()->toDateString(),
+                'pricing_method' => 'flat', 'notes' => 'Proposed customer terms',
             ])
             ->assertCreated();
     }
@@ -415,7 +380,7 @@ class CustomerProductPricingTest extends TestCase
             $this->assertTrue(
                 $stored->effective_from->lessThanOrEqualTo($stored->effective_to),
                 "Format {$format} persisted an inverted window: "
-                    . $stored->effective_from->toDateString() . ' .. ' . $stored->effective_to->toDateString(),
+                    .$stored->effective_from->toDateString().' .. '.$stored->effective_to->toDateString(),
             );
 
             $agreement->forceDelete();
@@ -480,8 +445,8 @@ class CustomerProductPricingTest extends TestCase
     private function references(?string $customerName = null, ?string $productName = null): array
     {
         return [
-            Customer::factory()->create(['name' => $customerName ?? 'Customer ' . uniqid()]),
-            Product::factory()->create(['name' => $productName ?? 'Product ' . uniqid()]),
+            Customer::factory()->create(['name' => $customerName ?? 'Customer '.uniqid()]),
+            Product::factory()->create(['name' => $productName ?? 'Product '.uniqid()]),
         ];
     }
 
@@ -500,8 +465,8 @@ class CustomerProductPricingTest extends TestCase
     private function actor(string $permissionSlug): User
     {
         $role = Role::create([
-            'name' => 'M032 Test ' . uniqid(),
-            'slug' => 'm032_test_' . uniqid(),
+            'name' => 'M032 Test '.uniqid(),
+            'slug' => 'm032_test_'.uniqid(),
         ]);
         $permission = Permission::firstOrCreate(
             ['slug' => $permissionSlug],

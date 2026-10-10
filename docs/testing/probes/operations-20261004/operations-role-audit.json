@@ -1,0 +1,59 @@
+[
+  {
+    "role": "maintenance_tech",
+    "route": "/maintenance/work-orders/create",
+    "finalUrl": "http://localhost:18080/maintenance/work-orders/create",
+    "failures": [
+      {
+        "path": "/api/v1/mrp/molds",
+        "status": 403
+      }
+    ],
+    "responses": [
+      {
+        "path": "/inventory/items?item_type=spare_part",
+        "status": 403
+      },
+      {
+        "path": "/inventory/stock-levels",
+        "status": 403
+      },
+      {
+        "path": "/mrp/molds",
+        "status": 403
+      }
+    ]
+  },
+  {
+    "role": "warehouse_staff",
+    "route": "/inventory/grn/create",
+    "finalUrl": "http://localhost:18080/inventory/grn/create",
+    "failures": [],
+    "responses": [
+      {
+        "path": "/inventory/grn/receivable-purchase-orders",
+        "status": 200
+      },
+      {
+        "path": "/supply-chain/deliveries",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "role": "impex_officer",
+    "route": "/supply-chain/shipments",
+    "finalUrl": "http://localhost:18080/supply-chain/shipments",
+    "failures": [],
+    "responses": [
+      {
+        "path": "/supply-chain/shipments",
+        "status": 200
+      },
+      {
+        "path": "/supply-chain/vehicles",
+        "status": 200
+      }
+    ]
+  }
+]

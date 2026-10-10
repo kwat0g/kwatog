@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\InspectionSpec;
@@ -63,8 +64,9 @@ class SpcService
         $ongoing = $this->settings()->requiredFloat('quality.spc.cpk_ongoing_threshold', 0, 10);
         $action = $this->settings()->requiredFloat('quality.spc.cpk_action_threshold', 0, 10);
         if (! ($launch > $ongoing && $ongoing > $action)) {
-            throw new \App\Common\Exceptions\BusinessRuleException('SPC Cpk thresholds must be strictly descending.');
+            throw new BusinessRuleException('SPC Cpk thresholds must be strictly descending.');
         }
+
         return [
             'launch' => $launch,
             'ongoing' => $ongoing,
@@ -88,28 +90,28 @@ class SpcService
             return null;
         }
 
-        $mean     = array_sum($measurements) / $n;
+        $mean = array_sum($measurements) / $n;
         $variance = array_sum(array_map(fn ($v) => ($v - $mean) ** 2, $measurements)) / ($n - 1);
-        $sigma    = sqrt($variance);
+        $sigma = sqrt($variance);
         if ($sigma < 1e-10) {
             return null;
         }
 
-        $cp  = ($usl - $lsl) / (6 * $sigma);
+        $cp = ($usl - $lsl) / (6 * $sigma);
         $cpu = ($usl - $mean) / (3 * $sigma);
         $cpl = ($mean - $lsl) / (3 * $sigma);
         $cpk = min($cpu, $cpl);
 
         return [
-            'cp'           => round($cp, 3),
-            'cpk'          => round($cpk, 3),
-            'cpu'          => round($cpu, 3),
-            'cpl'          => round($cpl, 3),
-            'mean'         => round($mean, 4),
-            'std_dev'      => round($sigma, 4),
+            'cp' => round($cp, 3),
+            'cpk' => round($cpk, 3),
+            'cpu' => round($cpu, 3),
+            'cpl' => round($cpl, 3),
+            'mean' => round($mean, 4),
+            'std_dev' => round($sigma, 4),
             'sample_count' => $n,
-            'usl'          => $usl,
-            'lsl'          => $lsl,
+            'usl' => $usl,
+            'lsl' => $lsl,
         ];
     }
 
@@ -125,13 +127,13 @@ class SpcService
      * reading is a quality signal and is intentionally included. Draft,
      * in-progress, and cancelled inspections are excluded.
      *
-     * @return array<string, array>  Keyed by inspection_spec_item hash_id
+     * @return array<string, array> Keyed by inspection_spec_item hash_id
      */
     public function computeForSpec(int $inspectionSpecId): array
     {
         $spec = InspectionSpec::withTrashed()->with('currentRevision')->find($inspectionSpecId);
         $currentRevisionId = $spec?->currentRevision?->id;
-        if (! $currentRevisionId) {
+        if (! $currentRevisionId || $spec->currentRevision->capture_method === 'checklist') {
             return [];
         }
 
@@ -161,7 +163,7 @@ class SpcService
             if ($spc !== null) {
                 $results[$item->hash_id] = array_merge($spc, [
                     'parameter_name' => $item->parameter_name,
-                    'unit'           => $item->unit_of_measure,
+                    'unit' => $item->unit_of_measure,
                 ]);
             }
         }
@@ -223,12 +225,16 @@ class SpcService
 
     private function buildHistogram(array $values, float $lsl, float $usl, int $bins = 20): array
     {
-        if (empty($values)) return [];
+        if (empty($values)) {
+            return [];
+        }
 
         $min = min(min($values), $lsl);
         $max = max(max($values), $usl);
         $range = $max - $min;
-        if ($range <= 0) return [];
+        if ($range <= 0) {
+            return [];
+        }
 
         $binWidth = $range / $bins;
         $histogram = array_fill(0, $bins, 0);
@@ -244,10 +250,10 @@ class SpcService
         }
 
         return [
-            'bins'      => $histogram,
+            'bins' => $histogram,
             'bin_edges' => $binEdges,
-            'lsl'       => $lsl,
-            'usl'       => $usl,
+            'lsl' => $lsl,
+            'usl' => $usl,
         ];
     }
 }

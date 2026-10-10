@@ -194,7 +194,7 @@ class RequestForQuoteService
                 return $active;
             }
             if (! $this->purchaseRequestAccess->canStartRfq($by, $locked)) {
-                throw new BusinessRuleException('This purchase request cannot start an RFQ. It must be approved, still have unordered quantity, and be marked for RFQ or need manual sourcing.');
+                throw new BusinessRuleException('This purchase request cannot start an RFQ. It must be approved, still have unordered quantity, and be marked for RFQ sourcing.');
             }
 
             $remaining = $this->purchaseOrders->remainingQuantitiesByPrLine($locked);

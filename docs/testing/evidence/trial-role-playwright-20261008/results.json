@@ -1,0 +1,115 @@
+{
+  "results": [
+    {
+      "name": "Warehouse, manager and assigned workers sign in through real UI",
+      "status": "passed"
+    },
+    {
+      "name": "Start creates one issue; receipt remains pending",
+      "status": "passed"
+    },
+    {
+      "name": "QC and ordinary output blocked before physical samples",
+      "status": "passed"
+    },
+    {
+      "name": "Warehouse grouped queue prefills original source and recorder; confirms through UI",
+      "status": "passed"
+    },
+    {
+      "name": "Receipt replay stays single; mobile history readable",
+      "status": "passed"
+    },
+    {
+      "name": "Assigned recorder captures pinned trial on mobile",
+      "status": "passed"
+    },
+    {
+      "name": "QC inspector completes auto-created in-process PASS checklist",
+      "status": "passed",
+      "detail": "In-process PASS becomes final; separate review is required for outgoing/incoming release"
+    },
+    {
+      "name": "QC PASS classifies same five pieces once and receives good stock",
+      "status": "passed"
+    },
+    {
+      "name": "Ordinary production resumes after sample PASS",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/5KZYy8gNxw/outputs",
+      "status": 422,
+      "message": "A submission key is required."
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/material-handovers/sources?work_order_id=5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/inventory/material-handovers/group",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/quality/inspections/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/quality/inspections/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/5KZYy8gNxw/outputs",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { NotificationBell } from '@/components/layout/NotificationBell';
+import { portalNotificationsApi } from '@/api/b2b/notifications';
 import { Link, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -18,8 +20,7 @@ import {
   OrderIcon,
   InvoiceIcon,
   DeliveryIcon,
-  ScheduleIcon,
-  ComplaintIcon,
+  LuBell,
   LuLogOut,
   LuMenu,
   LuX,
@@ -34,7 +35,7 @@ type PortalType = 'supplier' | 'customer';
 
 interface PortalLayoutProps {
   type: PortalType;
-  user: { name: string; email: string } | null;
+  user: { id: string; name: string; email: string } | null;
   onLogout: () => void;
   title: string;
   subtitle: string;
@@ -55,7 +56,10 @@ interface PortalNavSection {
 const SUPPLIER_NAV: PortalNavSection[] = [
   {
     label: 'Overview',
-    items: [{ to: '/portal/supplier', label: 'Dashboard', icon: DashboardIcon }],
+    items: [
+      { to: '/portal/supplier', label: 'Dashboard', icon: DashboardIcon },
+      { to: '/portal/supplier/notifications', label: 'Notifications', icon: LuBell },
+    ],
   },
   {
     label: 'Orders',
@@ -76,7 +80,6 @@ const SUPPLIER_NAV: PortalNavSection[] = [
     label: 'Logistics',
     items: [
       { to: '/portal/supplier/deliveries', label: 'Deliveries', icon: DeliveryIcon },
-      { to: '/portal/supplier/delivery-schedules', label: 'Delivery Schedules', icon: ScheduleIcon },
       { to: '/portal/supplier/problems', label: 'Problem reports', icon: LuMessageSquare },
     ],
   },
@@ -85,13 +88,17 @@ const SUPPLIER_NAV: PortalNavSection[] = [
 const CUSTOMER_NAV: PortalNavSection[] = [
   {
     label: 'Overview',
-    items: [{ to: '/portal/customer', label: 'Dashboard', icon: DashboardIcon }],
+    items: [
+      { to: '/portal/customer', label: 'Dashboard', icon: DashboardIcon },
+      { to: '/portal/customer/notifications', label: 'Notifications', icon: LuBell },
+    ],
   },
   {
     label: 'Orders',
     items: [
       { to: '/portal/customer/orders', label: 'Orders', icon: OrderIcon },
       { to: '/portal/customer/orders/new', label: 'Place Order', icon: LuPlus },
+      { to: '/portal/customer/pricing', label: 'Pricing agreements', icon: InvoiceIcon },
     ],
   },
   {
@@ -105,16 +112,14 @@ const CUSTOMER_NAV: PortalNavSection[] = [
     label: 'Logistics',
     items: [
       { to: '/portal/customer/deliveries', label: 'Deliveries', icon: DeliveryIcon },
-      { to: '/portal/customer/delivery-schedules', label: 'Delivery Schedules', icon: ScheduleIcon },
     ],
   },
   {
-   label: 'Quality',
-   items: [
-     { to: '/portal/customer/complaints', label: 'Quality Complaints', icon: ComplaintIcon },
-     { to: '/portal/customer/returns', label: 'Returns', icon: LuPackageCheck },
-     { to: '/portal/customer/problems', label: 'Problem reports', icon: LuMessageSquare },
-   ],
+    label: 'Quality',
+    items: [
+      { to: '/portal/customer/returns', label: 'Returns', icon: LuPackageCheck },
+      { to: '/portal/customer/problems', label: 'Problem reports', icon: LuMessageSquare },
+    ],
   },
 ];
 
@@ -142,7 +147,10 @@ function PortalNavLink({
       )}
     >
       {active && (
-        <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-accent" aria-hidden />
+        <span
+          className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-accent"
+          aria-hidden
+        />
       )}
       <Icon size={16} className={cn('shrink-0', active ? 'text-accent' : 'text-muted')} />
       <span className="truncate flex-1">{item.label}</span>
@@ -180,9 +188,7 @@ function PortalSidebar({
   const isActive = (to: string) => matched?.to === to;
   const activeSectionLabel = useMemo(
     () =>
-      matched
-        ? sections.find((s) => s.items.some((it) => it.to === matched.to))?.label
-        : undefined,
+      matched ? sections.find((s) => s.items.some((it) => it.to === matched.to))?.label : undefined,
     [matched, sections],
   );
 
@@ -280,108 +286,160 @@ function PortalSidebar({
   );
 }
 
-export default function PortalLayout({ type, user, onLogout, title, subtitle, children }: PortalLayoutProps) {
+export default function PortalLayout({
+  type,
+  user,
+  onLogout,
+  title,
+  subtitle,
+  children,
+}: PortalLayoutProps) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const sections = type === 'supplier' ? SUPPLIER_NAV : CUSTOMER_NAV;
   const brand = type === 'supplier' ? 'Supplier Portal' : 'Customer Portal';
- const { data: contact } = useQuery({
- queryKey: ['landing', 'contact'],
- queryFn: landingApi.contact,
- staleTime: 300_000,
- });
- const { data: businessPolicies, isFetched: policiesFetched } = useQuery({
- queryKey: ['portal', type, 'business-policies'],
- queryFn: () => type === 'supplier' ? supplierPortalApi.businessPolicies() : customerPortalApi.businessPolicies(),
- });
- // Same first-paint race as AppLayout: formatPeso reads a module variable.
- const [currencyApplied, setCurrencyApplied] = useState(false);
- const loadingPortalPage = <div role="status" className="px-5 py-4 text-sm text-muted">Loading portal page…</div>;
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
+  const {
+    data: businessPolicies,
+    isFetched: policiesFetched,
+    isError: policiesError,
+    isFetching: policiesFetching,
+    refetch: refetchPolicies,
+  } = useQuery({
+    queryKey: ['portal', type, 'business-policies'],
+    queryFn: () =>
+      type === 'supplier'
+        ? supplierPortalApi.businessPolicies()
+        : customerPortalApi.businessPolicies(),
+  });
+  const functionalCurrencyCode = businessPolicies?.functional_currency_code;
+  const policiesLoaded = policiesFetched && businessPolicies !== undefined;
+  // Same first-paint race as AppLayout: formatPeso reads a module variable.
+  const [currencyApplied, setCurrencyApplied] = useState(false);
+  const loadingPortalPage = <div role="status" className="px-5 py-4 text-sm text-muted">Loading portal page…</div>;
 
- useEffect(() => {
- setFunctionalCurrency(businessPolicies?.functional_currency_code);
- if (policiesFetched) setCurrencyApplied(true);
- }, [businessPolicies?.functional_currency_code, policiesFetched]);
+  useEffect(() => {
+    if (policiesError) {
+      setCurrencyApplied(false);
+      return;
+    }
+    setFunctionalCurrency(functionalCurrencyCode);
+    if (policiesLoaded) setCurrencyApplied(true);
+  }, [functionalCurrencyCode, policiesLoaded, policiesError]);
 
- useEffect(() => {
- setMobileOpen(false);
- }, [location.pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
- return (
- <div className="flex min-h-screen bg-canvas text-primary">
- <a
- href="#portal-main-content"
- className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-3 focus:py-1.5 focus:text-sm focus:text-accent-fg"
- >
- Skip to portal content
- </a>
- {mobileOpen && (
- <button
- type="button"
- aria-label="Close portal navigation"
- onClick={() => setMobileOpen(false)}
- className="fixed inset-0 z-40 bg-primary/20 md:hidden"
- />
- )}
-  <PortalSidebar
-  type={type}
-  sections={sections}
-  pathname={location.pathname}
-  onLogout={onLogout}
-  mobileOpen={mobileOpen}
-  onNavigate={() => setMobileOpen(false)}
-  />
+  return (
+    <div className="flex min-h-screen bg-canvas text-primary">
+      <a
+        href="#portal-main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-3 focus:py-1.5 focus:text-sm focus:text-accent-fg"
+      >
+        Skip to portal content
+      </a>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close portal navigation"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-primary/20 md:hidden"
+        />
+      )}
+      <PortalSidebar
+        type={type}
+        sections={sections}
+        pathname={location.pathname}
+        onLogout={onLogout}
+        mobileOpen={mobileOpen}
+        onNavigate={() => setMobileOpen(false)}
+      />
 
- <main id="portal-main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col overflow-auto focus:outline-none">
- {/* Top bar */}
- <header aria-label={`${brand} header`} className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3 border-b border-default bg-canvas px-4">
- <Button
- variant="ghost"
- size="sm"
- iconOnly
- icon={<LuMenu size={14} />}
- aria-label="Open portal navigation"
- aria-expanded={mobileOpen}
- aria-controls="portal-navigation"
- onClick={() => setMobileOpen(true)}
- className="text-muted hover:text-primary md:hidden"
- />
- <Link to={`/portal/${type}`} className="flex shrink-0 items-center gap-2 md:hidden">
- <BrandLogo alt="Ogami ERP" className="h-7" />
- </Link>
- <div className="hidden min-w-0 items-center gap-3 md:flex">
- <span className="truncate text-sm font-medium">{contact?.legal_name ?? '—'}</span>
- <span className="border-l border-default pl-3 text-sm text-muted">{brand}</span>
- </div>
- <div className="min-w-0 flex-1 md:hidden">
- <h1 className="truncate text-sm font-medium">{title}</h1>
- <p className="truncate text-2xs text-muted">{subtitle}</p>
- </div>
- <div className="ml-auto flex items-center gap-2">
- <div className="hidden text-right sm:block">
- <p className="text-xs font-medium">{user?.name}</p>
- <p className="text-2xs text-muted">{user?.email}</p>
- </div>
- <Avatar size="md" name={user?.name} />
- </div>
- </header>
- <OfflineBanner placement="in-header" />
+      <main
+        id="portal-main-content"
+        tabIndex={-1}
+        className="flex min-w-0 flex-1 flex-col overflow-auto focus:outline-none"
+      >
+        {/* Top bar */}
+        <header
+          aria-label={`${brand} header`}
+          className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3 border-b border-default bg-canvas px-4"
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<LuMenu size={14} />}
+            aria-label="Open portal navigation"
+            aria-expanded={mobileOpen}
+            aria-controls="portal-navigation"
+            onClick={() => setMobileOpen(true)}
+            className="text-muted hover:text-primary md:hidden"
+          />
+          <Link to={`/portal/${type}`} className="flex shrink-0 items-center gap-2 md:hidden">
+            <BrandLogo alt="Ogami ERP" className="h-7" />
+          </Link>
+          <div className="hidden min-w-0 items-center gap-3 md:flex">
+            <span className="truncate text-sm font-medium">{contact?.legal_name ?? '—'}</span>
+            <span className="border-l border-default pl-3 text-sm text-muted">{brand}</span>
+          </div>
+          <div className="min-w-0 flex-1 md:hidden">
+            <h1 className="truncate text-sm font-medium">{title}</h1>
+            <p className="truncate text-2xs text-muted">{subtitle}</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <div className="hidden text-right sm:block">
+              <p className="text-xs font-medium">{user?.name}</p>
+              <p className="text-2xs text-muted">{user?.email}</p>
+            </div>
+            {user && (
+              <NotificationBell
+                api={portalNotificationsApi[type]}
+                queryKey={['portal', type, user.id, 'notifications']}
+                inboxPath={`/portal/${type}/notifications`}
+                realtime={false}
+                linkPrefix={`/portal/${type}`}
+              />
+            )}
+            <Avatar size="md" name={user?.name} />
+          </div>
+        </header>
+        <OfflineBanner placement="in-header" />
 
- {/* Content — no padding here. Portal pages own the same anatomy as app
+        {/* Content — no padding here. Portal pages own the same anatomy as app
  pages: a full-bleed <PageHeader /> followed by a `px-5 py-4` body. */}
- <div className="flex-1 min-w-0">
- {/* A supplier or customer who crashes a portal page has no sidebar to fall
- back on; keep the failure inside the content column so the portal nav
+        <div className="flex-1 min-w-0">
+          {/* A supplier or customer who crashes a portal page has no sidebar to fall
+          back on; keep the failure inside the content column so the portal nav
  and sign-out survive. */}
- <ErrorBoundary>
- <Suspense fallback={loadingPortalPage}>
- {currencyApplied ? children : loadingPortalPage}
- </Suspense>
- </ErrorBoundary>
- </div>
- </main>
- </div>
- );
+          <ErrorBoundary>
+            <Suspense fallback={loadingPortalPage}>
+              {policiesError ? (
+                <div role="alert" className="px-5 py-4 text-sm text-danger-fg">
+                  <p>Business currency settings are unavailable. Financial values are hidden until settings load.</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    loading={policiesFetching}
+                    onClick={() => void refetchPolicies()}
+                    className="mt-3"
+                  >
+                    Retry business settings
+                  </Button>
+                </div>
+              ) : currencyApplied ? children : loadingPortalPage}
+            </Suspense>
+          </ErrorBoundary>
+        </div>
+      </main>
+    </div>
+  );
 }
 
 export { SUPPLIER_NAV, CUSTOMER_NAV };

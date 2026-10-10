@@ -5,25 +5,40 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
+use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\MaterialIssueService;
+use App\Modules\Inventory\Services\MovementGlPostingService;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\Mold;
+use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionMode;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\SupplyChain\Models\Delivery;
-use App\Modules\SupplyChain\Services\DeliveryService;
+use App\Modules\SupplyChain\Models\DeliveryItem;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Illuminate\Support\Str;
 
 /**
  * Records the finished-goods receipt a work-order output needs before its lots
@@ -39,8 +54,11 @@ use App\Modules\SupplyChain\Services\DeliveryService;
  */
 trait ReceivesProductionOutput
 {
+    use HasAssignedProductionCrew;
+
     protected function receiveProductionOutput(WorkOrderOutput $output, User $actor, ?Product $product = null): WorkOrderOutput
     {
+        $this->prepareProductionLedgerSetup();
         $product ??= $output->workOrder()->first()?->product()->first();
         if (! $product) {
             throw new \RuntimeException('A production output needs its work-order product before it can be received.');
@@ -49,7 +67,16 @@ trait ReceivesProductionOutput
         $this->finishedGoodsItemFor($product);
         $this->finishedGoodsLocation();
 
-        return app(WorkOrderOutputService::class)->retryProductionReceipt($output, $actor);
+        $received = app(WorkOrderOutputService::class)->retryProductionReceipt($output, $actor);
+        $movement = $received->productionReceiptMovement()->first();
+        if ($movement && ! in_array($movement->gl_handoff_status, [
+            MovementGlHandoffStatus::Generated,
+            MovementGlHandoffStatus::NotRequired,
+        ], true)) {
+            app(MovementGlPostingService::class)->retry($movement);
+        }
+
+        return $received->fresh();
     }
 
     /** The finished-goods inventory item for a product, created once per code. */
@@ -91,6 +118,26 @@ trait ReceivesProductionOutput
             ]);
     }
 
+    protected function reserveDeliveryStock(Delivery $delivery, User $warehouse): void
+    {
+        $this->actingAs($warehouse)
+            ->postJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id.'/reserve-stock', [
+                'request_key' => (string) Str::uuid(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'scheduled');
+
+        $this->assertDatabaseHas('delivery_stock_reservation_batches', [
+            'delivery_id' => $delivery->id,
+            'status' => 'reserved',
+            'reserved_by' => $warehouse->id,
+        ]);
+        $this->assertDatabaseHas('delivery_stock_reservations', [
+            'delivery_id' => $delivery->id,
+            'status' => 'reserved',
+        ]);
+    }
+
     /**
      * A delivery that is genuinely ready to depart: produced stock received into
      * a finished-goods bin, an independently reviewed outgoing inspection, and
@@ -103,67 +150,251 @@ trait ReceivesProductionOutput
     protected function dispatchableDelivery(
         User $creator,
         string $quantity = '3.00',
-        ?User $driver = null,
-        ?\App\Modules\SupplyChain\Models\Vehicle $vehicle = null,
+        ?SalesOrder $salesOrder = null,
     ): array {
-        $customer = Customer::create(['name' => 'Dispatchable customer '.uniqid(), 'is_active' => true]);
-        $product = Product::create([
-            'part_number' => 'FG-'.strtoupper(substr(uniqid(), -8)),
-            'name' => 'Dispatchable product '.uniqid(),
-            'unit_of_measure' => 'pcs',
-            'standard_cost' => '4.50',
-            'is_active' => true,
+        $this->prepareProductionLedgerSetup();
+
+        if ($salesOrder) {
+            $order = $salesOrder;
+            $line = SalesOrderItem::query()->where('sales_order_id', $order->id)->orderBy('id')->firstOrFail();
+            $product = Product::query()->findOrFail($line->product_id);
+            $outputQuantity = (int) ceil((float) $line->quantity);
+        } else {
+            $customer = Customer::create(['name' => 'Dispatchable customer '.uniqid(), 'is_active' => true]);
+            $product = Product::create([
+                'part_number' => 'FG-'.strtoupper(substr(uniqid(), -8)),
+                'name' => 'Dispatchable product '.uniqid(),
+                'unit_of_measure' => 'pcs',
+                'standard_cost' => '4.50',
+                'is_active' => true,
+            ]);
+            $subtotal = bcmul($quantity, '15.00', 2);
+            $vat = bcmul($subtotal, '0.12', 2);
+            $order = SalesOrder::create([
+                'so_number' => 'SO-DISP-'.strtoupper(substr(uniqid(), -8)),
+                'customer_id' => $customer->id,
+                'date' => now()->toDateString(),
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => bcadd($subtotal, $vat, 2),
+                'status' => 'confirmed', 'created_by' => $creator->id,
+            ]);
+            $line = SalesOrderItem::create([
+                'sales_order_id' => $order->id, 'product_id' => $product->id,
+                'quantity' => $quantity, 'unit_price' => '15.00', 'total' => $subtotal,
+                'quantity_delivered' => '0.00', 'delivery_date' => now()->addDay()->toDateString(),
+            ]);
+            $outputQuantity = (int) ceil((float) $line->quantity);
+        }
+
+        if ($outputQuantity < 1) {
+            throw new \RuntimeException('Dispatchable fixture needs a positive sales-order quantity.');
+        }
+
+        $production = User::factory()->withRole('production_manager')->create(['is_active' => true]);
+        $qcMaker = User::factory()->withRole('qc_inspector')->create(['is_active' => true]);
+        $qcChecker = User::factory()->withRole('production_manager')->create(['is_active' => true]);
+        app(InspectionSpecService::class)->upsertForProduct($product->id, [[
+            'parameter_name' => 'Surface condition',
+            'parameter_type' => 'visual',
+            'acceptance_criterion' => 'No cracks, contamination, or visible surface damage.',
+            'is_critical' => false,
+        ]], $production->id);
+
+        $machine = Machine::factory()->create(['status' => 'idle']);
+        $mold = Mold::create([
+            'mold_code' => 'DISP-'.strtoupper(substr(uniqid(), -6)), 'name' => 'Dispatch fixture mold',
+            'product_id' => $product->id, 'cavity_count' => 1, 'cycle_time_seconds' => 25,
+            'output_rate_per_hour' => 120, 'setup_time_minutes' => 10,
+            'current_shot_count' => 0, 'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000, 'status' => 'available',
         ]);
-        $order = SalesOrder::create([
-            'so_number' => 'SO-DISP-'.strtoupper(substr(uniqid(), -8)),
-            'customer_id' => $customer->id,
-            'date' => now()->toDateString(),
-            'subtotal' => '150.00', 'vat_amount' => '18.00', 'total_amount' => '168.00',
-            'status' => 'confirmed', 'created_by' => $creator->id,
-        ]);
-        $line = SalesOrderItem::create([
-            'sales_order_id' => $order->id, 'product_id' => $product->id,
-            'quantity' => '10.00', 'unit_price' => '15.00', 'total' => '150.00',
-            'quantity_delivered' => '0.00', 'delivery_date' => now()->addDay()->toDateString(),
-        ]);
+        $mold->compatibleMachines()->sync([$machine->id]);
         $workOrder = WorkOrder::create([
+            'machine_id' => $machine->id, 'mold_id' => $mold->id,
             'wo_number' => 'WO-DISP-'.strtoupper(substr(uniqid(), -6)),
             'product_id' => $product->id, 'sales_order_id' => $order->id,
-            'sales_order_item_id' => $line->id, 'quantity_target' => 10,
-            'quantity_good' => 10, 'quantity_produced' => 10,
-            'planned_start' => now()->subDay(), 'planned_end' => now(),
-            'status' => 'completed', 'created_by' => $creator->id,
-        ]);
-        $output = WorkOrderOutput::create([
-            'work_order_id' => $workOrder->id, 'recorded_by' => $creator->id, 'recorded_at' => now(),
-            'good_count' => 10, 'reject_count' => 0,
-            'batch_code' => 'DISP-'.strtoupper(substr(uniqid(), -8)),
-        ]);
-        $output = $this->receiveProductionOutput($output, $creator, $product);
-
-        $inspection = Inspection::create([
-            'inspection_number' => 'QC-DISP-'.strtoupper(substr(uniqid(), -6)),
-            'stage' => InspectionStage::Outgoing->value, 'status' => InspectionStatus::Passed->value,
-            'inspector_id' => $creator->id, 'reviewed_by' => User::factory()->create()->id,
-            'reviewed_at' => now(), 'product_id' => $product->id,
-            'entity_type' => InspectionEntityType::WorkOrder->value, 'entity_id' => $workOrder->id,
-            'work_order_output_id' => $output->id, 'batch_quantity' => 10, 'accepted_quantity' => 10,
-            'sample_size' => 1, 'accept_count' => 1, 'reject_count' => 0, 'defect_count' => 0,
-            'completed_at' => now(),
+            'sales_order_item_id' => $line->id, 'quantity_target' => $outputQuantity,
+            'quantity_good' => 0, 'quantity_produced' => 0,
+            'planned_start' => now()->startOfMinute(), 'planned_end' => now()->addHours(4),
+            'material_plan_source' => 'bom', 'status' => 'confirmed', 'created_by' => $production->id,
         ]);
 
-        $delivery = app(DeliveryService::class)->create([
-            'sales_order_id' => $order->id,
-            'scheduled_date' => now()->toDateString(),
-            'driver_id' => $driver?->id,
-            'vehicle_id' => $vehicle?->id,
-            'items' => [[
-                'sales_order_item_id' => $line->id,
-                'quantity' => $quantity,
-                'inspection_id' => $inspection->id,
-            ]],
-        ], $creator);
+        $raw = Item::factory()->create(['standard_cost' => '1.0000', 'reorder_point' => 0]);
+        $rawLocation = WarehouseLocation::factory()->create();
+        app(StockMovementService::class)->move(
+            new StockMovementInput(
+                type: StockMovementType::AdjustmentIn,
+                itemId: $raw->id, toLocationId: $rawLocation->id, quantity: '1.000', unitCost: '1.0000',
+            )
+        );
+        WorkOrderMaterial::create([
+            'work_order_id' => $workOrder->id, 'item_id' => $raw->id, 'bom_quantity' => '1.000',
+            'standard_unit_cost' => '1.0000', 'standard_cost' => '1.00',
+        ]);
+        $warehouse = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        app(MaterialIssueService::class)->create([
+            'work_order_id' => $workOrder->id, 'issued_date' => now()->toDateString(),
+            'items' => [['item_id' => $raw->id, 'location_id' => $rawLocation->id, 'quantity_issued' => '1.000']],
+        ], $warehouse);
+        $processInspection = $this->createInspectionThroughApi($workOrder, $product, $qcMaker, InspectionStage::InProcess, $outputQuantity);
+        $processInspection = $this->submitInspectionPassThroughApi($processInspection, $qcMaker);
+        $this->assertSame(InspectionStatus::Passed, $processInspection->fresh()->status);
+        $workOrder->fresh()->assertProcessQualityReleased();
+
+        $this->finishedGoodsItemFor($product);
+        $this->finishedGoodsLocation();
+        $crew = $this->assignProductionCrew($workOrder, $production);
+        ProductionSchedule::create([
+            'work_order_id' => $workOrder->id, 'machine_id' => $machine->id, 'mold_id' => $mold->id,
+            'scheduled_start' => now()->startOfMinute(), 'scheduled_end' => $workOrder->planned_end,
+            'is_confirmed' => true, 'status' => 'confirmed', 'reserves_capacity' => true, 'priority_order' => 1,
+        ]);
+        $startResponse = $this->actingAs($production)->postJson("/api/v1/production/work-orders/{$workOrder->hash_id}/start", [
+            'expected_crew_id' => $crew->hash_id,
+        ]);
+        $this->assertTrue($startResponse->isSuccessful(), $startResponse->getContent());
+        $outputResponse = $this->actingAs($production)
+            ->postJson("/api/v1/production/work-orders/{$workOrder->hash_id}/outputs", [
+                'crew_id' => $crew->hash_id,
+                'recording_reason' => 'Production manager records output for the assigned crew in this test.',
+                'good_count' => $outputQuantity,
+                'reject_count' => 0,
+            ]);
+        $this->assertTrue($outputResponse->isSuccessful(), $outputResponse->getContent());
+        $outputResponse->assertJsonPath('data.good_count', $outputQuantity);
+
+        $output = WorkOrderOutput::query()->where('work_order_id', $workOrder->id)->sole();
+        $this->assertSame($outputQuantity, (int) $workOrder->fresh()->quantity_good);
+        $this->assertNotNull($output->production_receipt_movement_id, 'Recorded good output must create its finished-goods receipt before completion.');
+
+        $this->actingAs($production)
+            ->postJson("/api/v1/production/work-orders/{$workOrder->hash_id}/complete")
+            ->assertSuccessful()
+            ->assertJsonPath('data.status', 'completed');
+        $this->assertSame('completed', $workOrder->fresh()->status->value);
+
+        $inspection = Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('work_order_output_id', $output->id)
+            ->sole();
+        $this->assertSame(InspectionStatus::Draft, $inspection->status, 'Completion must open outgoing QC without pre-approving it.');
+        $inspection = $this->submitInspectionPassThroughApi($inspection, $qcMaker, $qcChecker);
+        $this->assertSame(InspectionStatus::Passed, $inspection->fresh()->status);
+        $this->assertSame($qcChecker->id, (int) $inspection->fresh()->reviewed_by);
+        $this->actingAs($creator);
+
+        $delivery = Delivery::query()
+            ->where('sales_order_id', $order->id)
+            ->whereHas('items', fn ($query) => $query
+                ->where('sales_order_item_id', $line->id)
+                ->where('inspection_id', $inspection->id))
+            ->sole();
+        $deliveryItem = DeliveryItem::query()->where('delivery_id', $delivery->id)->sole();
+        $this->assertSame('scheduled', $delivery->status->value);
+        $this->assertNull($delivery->driver_id);
+        $this->assertSame($line->id, $deliveryItem->sales_order_item_id);
+        $this->assertSame($inspection->id, $deliveryItem->inspection_id);
+        $this->assertSame(0, bccomp((string) $deliveryItem->quantity, $quantity, 2));
 
         return [$delivery, $this->finishedGoodsItemFor($product), $this->finishedGoodsLocation()];
+    }
+
+    private function prepareProductionLedgerSetup(): void
+    {
+        $this->seed(ChartOfAccountsSeeder::class);
+
+        $settings = app(SettingsService::class);
+        $settings->set('accounting.accounts.inventory_raw_material_code', '1200', 'accounting');
+        $settings->set('accounting.accounts.inventory_finished_goods_code', '1210', 'accounting');
+        $settings->set('accounting.accounts.inventory_adjustment_code', '5010', 'accounting');
+        $settings->set('accounting.accounts.material_consumption_code', '5010', 'accounting');
+        $settings->set('accounting.accounts.inventory_delivery_transit_code', '1240', 'accounting');
+        $settings->set('accounting.accounts.delivery_cogs_code', '5010', 'accounting');
+    }
+
+    private function createInspectionThroughApi(
+        WorkOrder $workOrder,
+        Product $product,
+        User $maker,
+        InspectionStage $stage,
+        int $quantity,
+    ): Inspection {
+        $data = [
+            'stage' => $stage->value,
+            'product_id' => $product->hash_id,
+            'batch_quantity' => $quantity,
+            'entity_type' => InspectionEntityType::WorkOrder->value,
+            'entity_id' => $workOrder->hash_id,
+        ];
+        $response = $this->actingAs($maker)
+            ->postJson('/api/v1/quality/inspections', $data)
+            ->assertCreated()
+            ->assertJsonPath('data.status', InspectionStatus::Draft->value);
+
+        return Inspection::query()->where('inspection_number', $response->json('data.inspection_number'))->firstOrFail();
+    }
+
+    private function submitInspectionPassThroughApi(Inspection $inspection, User $maker, ?User $checker = null): Inspection
+    {
+        $items = $inspection->measurements()
+            ->orderBy('sample_index')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(static fn ($measurement): string => $measurement->checklistKey())
+            ->map(static fn ($group): array => ['id' => $group->first()->hash_id, 'result' => 'passed'])
+            ->values()
+            ->all();
+
+        $url = '/api/v1/quality/inspections/'.$inspection->hash_id;
+        if ($inspection->usesChecklistCapture()) {
+            $response = $this->actingAs($maker)->postJson($url.'/batch-result', [
+                'expected_result_version' => (int) $inspection->result_version,
+                'items' => $items,
+                'coverage_confirmed' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
+                ...($inspection->sampling_basis === 'lot' ? [] : ['sample_defect_count' => 0]),
+            ])->assertSuccessful();
+        } else {
+            $response = $this->actingAs($maker)->postJson($url.'/item-results', [
+                'items' => $items,
+                'submit' => $inspection->inspection_mode !== InspectionMode::LotChecklist,
+            ])->assertSuccessful();
+
+            if ($inspection->inspection_mode === InspectionMode::LotChecklist) {
+                $response = $this->postJson($url.'/batch-result', [
+                    'coverage_confirmed' => true,
+                    'inspected_quantity' => (int) $inspection->sample_size,
+                    'sample_defect_count' => 0,
+                    'result' => 'passed',
+                    'critical_defect' => false,
+                    'defects_removed_confirmed' => false,
+                ])->assertSuccessful();
+            }
+        }
+
+        $expectedStatus = $checker ? InspectionStatus::AwaitingReview : InspectionStatus::Passed;
+        $response->assertJsonPath('data.status', $expectedStatus->value);
+        $inspection->refresh();
+        $this->assertSame($expectedStatus, $inspection->status);
+        $this->assertDatabaseHas('inspection_result_authors', [
+            'inspection_id' => $inspection->id,
+            'user_id' => $maker->id,
+        ]);
+
+        if ($checker) {
+            $this->assertSame(0, (int) $inspection->accepted_quantity, 'An unchecked inspection cannot authorize any output.');
+            $this->actingAs($checker)
+                ->patchJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/review', [
+                    'decision' => 'passed',
+                    'expected_result_version' => (int) $inspection->result_version,
+                ])
+                ->assertSuccessful()
+                ->assertJsonPath('data.status', InspectionStatus::Passed->value)
+                ->assertJsonPath('data.accepted_quantity', $inspection->batch_quantity);
+            $inspection->refresh();
+        }
+
+        return $inspection;
     }
 }

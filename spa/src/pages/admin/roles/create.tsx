@@ -133,7 +133,7 @@ export default function CreateRolePage() {
 
  <form
  onSubmit={handleSubmit((v) => submit.mutate(v))}
- className="max-w-2xl px-5 py-4"
+ className="min-w-0 w-full px-5 py-4"
  >
  {/* ─── Basic info ────────────────────────────────── */}
  <fieldset className="mb-8">
@@ -183,7 +183,7 @@ export default function CreateRolePage() {
  </div>
 
  {cloneMode && (
- <Select
+ <Select searchable
  label="Source role"
  {...register('source_role_id')}
  error={errors.source_role_id?.message}

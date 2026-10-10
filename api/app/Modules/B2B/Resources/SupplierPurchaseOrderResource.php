@@ -7,6 +7,7 @@ namespace App\Modules\B2B\Resources;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\B2B\Policies\SupplierPoCapabilities;
+use App\Modules\Inventory\Enums\GrnStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,6 +32,9 @@ class SupplierPurchaseOrderResource extends JsonResource
         $schedulable = $isDetail && $this->relationLoaded('items')
             ? SupplierPoCapabilities::schedulableQuantities($this->resource)
             : null;
+        $rejectedDispatchAllowance = $isDetail && $this->relationLoaded('items')
+            ? SupplierPoCapabilities::rejectedDispatchAllowance($this->resource)
+            : [];
         $invoiceableGrnIds = $isDetail && $capabilities['can_submit_invoice']
             ? SupplierPoCapabilities::invoiceableReceipts($this->resource)->pluck('id')->map(static fn ($id): int => (int) $id)->all()
             : [];
@@ -50,18 +54,10 @@ class SupplierPurchaseOrderResource extends JsonResource
             // The API owns action availability. The SPA must not infer a
             // mutation policy from a stale status label or from hidden fields.
             'capabilities' => $capabilities,
-            'shipment' => $this->whenLoaded('supplierShipment', fn () => $this->supplierShipment ? [
-                'id' => $this->supplierShipment->hash_id,
-                'shipped_date' => optional($this->supplierShipment->shipped_date)->toDateString(),
-                'carrier' => $this->supplierShipment->carrier,
-                'tracking_number' => $this->supplierShipment->tracking_number,
-                'estimated_arrival' => optional($this->supplierShipment->estimated_arrival)->toDateString(),
-                'notes' => $this->supplierShipment->notes,
-                'updated_at' => optional($this->supplierShipment->updated_at)->toIso8601String(),
-            ] : null),
-            'items' => $this->whenLoaded('items', fn () => $this->items->map(function ($item) use ($schedulable): array {
+            'shipment' => $this->whenLoaded('supplierShipment', fn () => $this->supplierShipment ? (new SupplierShipmentResource($this->supplierShipment))->resolve($request) : null),
+            'items' => $this->whenLoaded('items', fn () => $this->items->map(function ($item) use ($schedulable, $rejectedDispatchAllowance): array {
                 $ordered = (string) $item->quantity;
-                $received = (string) $item->quantity_received;
+                $received = $item->purchaseQuantity((string) $item->quantity_received);
                 $remaining = Money::clampMin(Money::sub($ordered, $received), '0');
 
                 return [
@@ -69,8 +65,10 @@ class SupplierPurchaseOrderResource extends JsonResource
                     'part_number' => $item->item?->code ?? '—',
                     'name' => $item->item?->name ?? $item->description,
                     'quantity_ordered' => $ordered,
+                    'quantity_dispatch_limit' => Money::add($ordered, $rejectedDispatchAllowance[(int) $item->id] ?? '0'),
+                    'unit' => $item->unit,
                     'quantity_received' => $received,
-                    'quantity_accepted' => (string) $item->quantity_accepted,
+                    'quantity_accepted' => $item->purchaseQuantity((string) $item->quantity_accepted),
                     'quantity_remaining' => $remaining,
                     'quantity_schedulable' => $schedulable === null ? null : ($schedulable[(int) $item->id] ?? '0.00'),
                     'unit_price' => (string) $item->unit_price,
@@ -79,10 +77,11 @@ class SupplierPurchaseOrderResource extends JsonResource
             })->values()->all()),
             'goods_receipt_notes' => $this->whenLoaded('goodsReceiptNotes', fn () => $this->goodsReceiptNotes->map(static function ($grn) use ($invoiceableGrnIds): array {
                 // The supplier invoice this receipt was billed under, if any.
-                $supplierInvoiceNumber = $grn->relationLoaded('bills')
+                $invoicedBill = $grn->relationLoaded('bills')
                     ? $grn->bills->first(static fn ($bill): bool => $bill->status !== BillStatus::Cancelled
-                        && $bill->supplier_invoice_number !== null)?->supplier_invoice_number
+                        && ($bill->supplierInvoice !== null || $bill->supplier_invoice_number !== null))
                     : null;
+                $supplierInvoiceNumber = $invoicedBill?->supplierInvoice?->number ?? $invoicedBill?->supplier_invoice_number;
 
                 return [
                     'id' => $grn->hash_id,
@@ -94,15 +93,41 @@ class SupplierPurchaseOrderResource extends JsonResource
                     'can_invoice' => in_array((int) $grn->id, $invoiceableGrnIds, true),
                 ];
             })->values()->all()),
-            'shipments' => $this->whenLoaded('supplierShipments', fn () => $this->supplierShipments->map(static fn ($shipment): array => [
-                'id' => $shipment->hash_id,
-                'shipped_date' => optional($shipment->shipped_date)->toDateString(),
-                'carrier' => $shipment->carrier,
-                'tracking_number' => $shipment->tracking_number,
-                'estimated_arrival' => optional($shipment->estimated_arrival)->toDateString(),
-                'notes' => $shipment->notes,
-                'updated_at' => optional($shipment->updated_at)->toIso8601String(),
+            'supplier_returns' => $this->whenLoaded('supplierReturns', fn () => $this->supplierReturns->map(static fn ($return): array => [
+                'id' => $return->hash_id,
+                'rma_number' => $return->rma_number,
+                'status' => $return->status?->value,
+                'status_label' => $return->status?->label(),
+                'problem' => $return->reason_description,
+                'replacement_due_date' => optional($return->replacement_due_date)->toDateString(),
+                'replacement_pending' => SupplierPoCapabilities::qcReplacementPending($return),
+                'replacement_purchase_order' => $return->replacementPurchaseOrder ? ['po_number' => $return->replacementPurchaseOrder->po_number] : null,
+                'defect_photo_name' => $return->defect_photo_path ? $return->defect_photo_name : null,
+                'items' => $return->items->map(static fn ($line): array => [
+                    'part_number' => $line->item?->code,
+                    'quantity' => (string) $line->quantity,
+                    'unit' => $line->item?->unit_of_measure,
+                ])->values()->all(),
             ])->values()->all()),
+            'invoiceable_bill_portions' => $this->whenLoaded('goodsReceiptNotes', fn () => $this->goodsReceiptNotes
+                ->filter(static fn ($grn): bool => in_array($grn->status, GrnStatus::billable(), true))
+                ->flatMap(static fn ($grn) => $grn->bills
+                    ->filter(static fn ($bill): bool => $bill->provenance_type === 'stock'
+                        && ($bill->status === BillStatus::Draft
+                            || ($bill->status === BillStatus::Unpaid && (int) $bill->payments_count === 0))
+                        && $bill->supplier_invoice_id === null
+                        && $bill->supplier_invoice_number === null)
+                    ->map(static fn ($bill): array => [
+                        'id' => $bill->hash_id,
+                        'grn_id' => $grn->hash_id,
+                        'grn_number' => $grn->grn_number,
+                        'quantity' => $bill->items->reduce(
+                            static fn (string $sum, $item): string => Money::add($sum, (string) $item->quantity),
+                            Money::zero(),
+                        ),
+                        'gross_total' => (string) $bill->total_amount,
+                    ]))->values()->all()),
+            'shipments' => $this->whenLoaded('supplierShipments', fn () => $this->supplierShipments->map(static fn ($shipment): array => (new SupplierShipmentResource($shipment))->resolve($request))->values()->all()),
             'bills' => $this->whenLoaded('bills', fn () => $this->bills->map(static fn ($bill): array => [
                 'id' => $bill->hash_id,
                 'bill_number' => $bill->bill_number,
@@ -111,7 +136,7 @@ class SupplierPurchaseOrderResource extends JsonResource
                 'balance' => (string) $bill->balance,
                 'status' => (string) $bill->status?->value,
                 'status_label' => $bill->status?->label() ?? (string) $bill->status,
-                'supplier_invoice_number' => $bill->supplier_invoice_number,
+                'supplier_invoice_number' => $bill->supplierInvoice?->number ?? $bill->supplier_invoice_number,
                 'due_date' => optional($bill->due_date)->toDateString(),
             ])->values()->all()),
         ];

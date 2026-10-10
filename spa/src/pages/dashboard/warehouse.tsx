@@ -48,9 +48,15 @@ interface LowStockItem {
 }
 
 interface ZoneItem {
+ warehouse_code: string;
+ warehouse_name: string;
  zone: string;
  name: string;
  percent: number;
+}
+
+function zoneLabel(zone: ZoneItem): string {
+ return `${zone.warehouse_code}/${zone.zone} — ${zone.name}`;
 }
 
 interface WarehouseDashboardData {
@@ -192,9 +198,9 @@ function ZoneUtilizationPanel({ items, warningPct, criticalPct }: { items: ZoneI
  <Panel title="Zone Utilisation">
  <ul className="space-y-2">
  {items.map((z) => (
- <li key={z.zone}>
+ <li key={`${z.warehouse_code}/${z.zone}`}>
  <div className="flex items-center justify-between text-sm mb-1">
- <span>{z.name}</span>
+ <span>{zoneLabel(z)}</span>
  <span className="font-mono tabular-nums">{z.percent}%</span>
  </div>
  <div
@@ -202,7 +208,7 @@ function ZoneUtilizationPanel({ items, warningPct, criticalPct }: { items: ZoneI
  aria-valuenow={z.percent}
  aria-valuemin={0}
  aria-valuemax={100}
- aria-label={`${z.name}: ${z.percent}% occupied`}
+ aria-label={`${z.warehouse_name} (${z.warehouse_code}), ${z.name} (${z.zone}): ${z.percent}% occupied`}
  className="h-2 bg-subtle rounded-full overflow-hidden"
  >
  <div
@@ -243,7 +249,7 @@ export default function WarehouseDashboard() {
  {({ kpis, panels }) => {
  const zoneUtilChartData =
  panels?.zone_utilization?.map((z) => ({
- name: z.name,
+ name: zoneLabel(z),
  value: z.percent,
  color: z.percent >= (panels?.zone_utilization_critical_pct ?? Number.POSITIVE_INFINITY) ? 'var(--danger)' : z.percent >= (panels?.zone_utilization_warning_pct ?? Number.POSITIVE_INFINITY) ? 'var(--warning)' : 'var(--success)',
  })) ?? [];

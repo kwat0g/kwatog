@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Resources\SupplierBillResource;
+use App\Modules\B2B\Resources\SupplierInvoiceResource;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Requests\Supplier\AcknowledgePoRequest;
 use App\Modules\B2B\Requests\Supplier\RespondToPurchaseOrderRequest;
@@ -14,12 +15,15 @@ use App\Modules\B2B\Resources\SupplierPpapSubmissionResource;
 use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\B2B\Services\SupplierPortalPdfService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\B2B\Resources\SupplierPurchaseOrderResource;
 use App\Modules\Purchasing\Resources\PurchaseOrderResponseResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupplierPortalController extends Controller
 {
@@ -45,7 +49,7 @@ class SupplierPortalController extends Controller
 
         // Wrap collection fields in API Resources for consistent serialization.
         $data['recent_pos']      = SupplierPurchaseOrderResource::collection($data['recent_pos']);
-        $data['recent_invoices'] = SupplierBillResource::collection($data['recent_invoices']);
+        $data['recent_invoices'] = SupplierInvoiceResource::collection($data['recent_invoices']);
 
         return response()->json(['data' => $data]);
     }
@@ -77,6 +81,22 @@ class SupplierPortalController extends Controller
         $purchaseOrder = $this->service->purchaseOrderDetail($user->vendor_id, $purchaseOrder);
 
         return new SupplierPurchaseOrderResource($purchaseOrder);
+    }
+
+    public function returnDefectPhoto(PurchaseOrder $purchaseOrder, ReturnRequest $returnRequest, Request $request): StreamedResponse
+    {
+        abort_unless($purchaseOrder->vendor_id === $this->user($request)->vendor_id, 404);
+        $this->service->purchaseOrderDetail($this->user($request)->vendor_id, $purchaseOrder);
+        abort_unless(
+            $returnRequest->purchase_order_id === $purchaseOrder->id
+                && $returnRequest->vendor_id === $purchaseOrder->vendor_id
+                && in_array($returnRequest->status?->value, ['approved', 'received', 'inspected', 'completed'], true)
+                && $returnRequest->defect_photo_path
+                && Storage::disk('local')->exists($returnRequest->defect_photo_path),
+            404,
+        );
+
+        return Storage::disk('local')->download($returnRequest->defect_photo_path, $returnRequest->defect_photo_name);
     }
 
     /**

@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /** Immutable inspection-spec revision metadata and item lineage. */
 class InspectionSpecRevision extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected static function booted(): void
     {
@@ -32,6 +32,7 @@ class InspectionSpecRevision extends Model
     }
 
     protected $fillable = [
+        'capture_method',
         'inspection_spec_id', 'version', 'created_by', 'notes',
     ];
 

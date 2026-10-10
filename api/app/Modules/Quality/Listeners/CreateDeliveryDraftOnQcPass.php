@@ -4,26 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
-use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Models\SalesOrder;
-use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionStage;
-use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Events\OutgoingQuantityReleased;
 use App\Modules\Quality\Models\Inspection;
-use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Models\Delivery;
-use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -33,7 +25,7 @@ use Illuminate\Support\Facades\Log;
  * the invoice (existing DeliveryConfirmed listener path).
  *
  * Stage filter: only acts on outgoing inspections linked to a WO.
- * Idempotent: skips if a delivery already exists for the SO+WO pair.
+ * Idempotent: only unallocated released quantities are added to the draft.
  * Stateful failures are rethrown for queue retry; notifications are
  * best-effort.
  */
@@ -44,16 +36,14 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
         private readonly ?SettingsService $settings = null,
     ) {}
 
-    public function handle(InspectionPassed $event): void
+    public function handle(InspectionPassed|OutgoingQuantityReleased $event): void
     {
         try {
-            // InspectionPassed is queued through the outbox. Re-read the
-            // terminal source row so a stale serialized payload cannot draft
-            // a delivery for an inspection that is no longer passed.
+            // Re-read current release evidence before acting on an outbox event.
+            // A late incident may have revoked a previously approved quantity.
             $inspection = Inspection::query()->find($event->inspection->id);
-            if (! $inspection || $inspection->status !== InspectionStatus::Passed
-                || ! $inspection->isMakerChecked()) {
-                app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_passed_inspection');
+            if (! $inspection || ! $inspection->canReleaseOutgoing()) {
+                app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_released_inspection');
 
                 return;
             }
@@ -75,111 +65,21 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
             }
 
             $wo = WorkOrder::find($inspection->entity_id);
+            if ($wo?->production_purpose === 'stock' && ! $wo->sales_order_id) {
+                foreach (\App\Modules\CRM\Models\SalesOrder::whereIn('status', ['confirmed', 'in_production', 'partially_delivered'])
+                    ->whereHas('items', fn ($q) => $q->where('product_id', $wo->product_id)->where('fulfillment_policy', 'stock_first'))->orderBy('id')->get() as $order) {
+                    app(\App\Modules\MRP\Services\MrpEngineService::class)->runForSalesOrder($order);
+                }
+                app(ChainListenerRunService::class)->recordOutcome('completed', 'stock_supply_replanned');
+                return;
+            }
             if (! $wo || ! $wo->sales_order_id) {
                 app(ChainListenerRunService::class)->recordOutcome('skipped', 'work_order_missing_or_not_customer_linked');
 
                 return;
             }
 
-            // Idempotent — one delivery per (SO, WO) pair. The DeliveryItem
-            // table tracks the WO via its inspection link; querying for an
-            // existing delivery that already references this WO is the
-            // simplest dedup.
-            $alreadyExists = Delivery::query()
-                ->where('sales_order_id', $wo->sales_order_id)
-                ->whereHas('items', fn ($q) => $q->where('inspection_id', $inspection->id))
-                ->exists();
-            if ($alreadyExists) {
-                app(ChainListenerRunService::class)->recordOutcome('skipped', 'delivery_already_present');
-
-                return;
-            }
-
-            $delivery = DB::transaction(function () use ($wo, $inspection): ?Delivery {
-                // Serialize auto-drafts with manual delivery creation and
-                // re-check idempotency after acquiring the SO lock. The first
-                // existence check above is only a fast path.
-                $lockedWo = WorkOrder::query()->lockForUpdate()->find($wo->id);
-                if (! $lockedWo || ! $lockedWo->sales_order_id) {
-                    return null;
-                }
-
-                $so = SalesOrder::query()->lockForUpdate()->find($lockedWo->sales_order_id);
-                if (! $so) {
-                    return null;
-                }
-
-                $alreadyExists = Delivery::query()
-                    ->where('sales_order_id', $so->id)
-                    ->whereHas('items', fn ($q) => $q->where('inspection_id', $inspection->id))
-                    ->exists();
-                if ($alreadyExists) {
-                    return null;
-                }
-
-                if (! $lockedWo->sales_order_item_id) {
-                    throw new BusinessRuleException(
-                        "Work order {$lockedWo->wo_number} is linked to sales order {$so->so_number} without a sales-order line."
-                    );
-                }
-
-                $soItem = SalesOrderItem::query()
-                    ->whereKey($lockedWo->sales_order_item_id)
-                    ->lockForUpdate()
-                    ->first();
-                if (! $soItem || (int) $soItem->sales_order_id !== (int) $so->id) {
-                    throw new BusinessRuleException(
-                        "Work order {$lockedWo->wo_number} references an invalid sales-order line."
-                    );
-                }
-
-                // A passed output inspection releases its recorded accepted
-                // quantity; do not reconstruct a WO aggregate here.
-                $quantity = (string) ($inspection->accepted_quantity ?: 0);
-                if (bccomp($quantity, '0', 2) <= 0) {
-                    throw new BusinessRuleException(
-                        "Outgoing inspection {$inspection->inspection_number} has no accepted output quantity available for delivery."
-                    );
-                }
-
-                app(DeliveryService::class)->assertDeliveryQuantitiesAvailable(
-                    $so,
-                    [$soItem->id => $quantity],
-                );
-                app(DeliveryService::class)->lockAndValidateInspectionForDelivery(
-                    inspectionId: (int) $inspection->id,
-                    salesOrderId: (int) $so->id,
-                    salesOrderItemId: (int) $soItem->id,
-                    productId: (int) $soItem->product_id,
-                    quantity: $quantity,
-                );
-
-                // Validate the complete delivery payload before inserting its
-                // header. This prevents an empty delivery from committing when
-                // a stale or malformed WO loses its SO-line reference.
-                $delivery = Delivery::create([
-                    'delivery_number' => $this->sequences->generate('delivery'),
-                    'sales_order_id' => $so->id,
-                    'status' => DeliveryStatus::Scheduled->value,
-                    'scheduled_date' => Carbon::now()->addDay()->toDateString(),
-                    'notes' => "Auto-drafted from WO {$lockedWo->wo_number} on outgoing QC pass.",
-                    // System-initiated draft — attribute to the WO creator so
-                    // the NOT NULL constraint on deliveries.created_by holds.
-                    'created_by' => $lockedWo->created_by,
-                ]);
-
-                // L-7 — inherit unit_price from the parent SO line so the
-                // auto-invoice path (C-1) produces a real-amount invoice.
-                DeliveryItem::create([
-                    'delivery_id' => $delivery->id,
-                    'sales_order_item_id' => $soItem->id,
-                    'inspection_id' => $inspection->id,
-                    'quantity' => $quantity,
-                    'unit_price' => $soItem->unit_price !== null ? (string) $soItem->unit_price : '0.00',
-                ]);
-
-                return $delivery;
-            });
+            $delivery = app(DeliveryService::class)->draftReleasedWorkOrder($wo);
 
             if (! $delivery) {
                 app(ChainListenerRunService::class)->recordOutcome('skipped', 'delivery_already_present_or_source_not_actionable');

@@ -1,81 +1,36 @@
-/**
- * Sprint P1 — centralized chain-step builder for Deliveries.
- *
- * Order-to-Cash chain (Delivery scope):
- * Scheduled → Loading → In Transit → Delivered → Confirmed
- *
- * @deprecated 2026-08-08 — superseded on the Delivery detail page by the
- * compact cross-document `buildO2cChain` (SO → Delivery → Invoice → Payment).
- * Kept as dead code per the keep-code policy; re-enable if a lifecycle-detail
- * stepper is wanted again.
- */
 import type { ChainStep } from '@/types/chain';
-import type { Delivery, DeliveryStatus } from '@/types/supplyChain';
-import { formatDateIso } from '@/lib/formatDate';
+import type { Delivery } from '@/types/supplyChain';
 
-const ORDER: DeliveryStatus[] = ['scheduled', 'loading', 'in_transit', 'delivered', 'confirmed'];
-
-function isAtOrPast(status: DeliveryStatus, target: DeliveryStatus): boolean {
-  if (status === 'cancelled') return false;
-  return ORDER.indexOf(status) >= ORDER.indexOf(target);
-}
-
-/** Narrow chain showing only the Delivery lifecycle. */
-export function buildDeliveryChain(delivery: Delivery): ChainStep[] {
-  const status = delivery.status;
+/** Shipment progress follows departure, driver receipt and office confirmation. */
+export function buildDeliveryChain(delivery: Pick<Delivery, 'status' | 'scheduled_date' | 'departed_at' | 'received_at' | 'confirmed_at' | 'updated_at' | 'proofs' | 'receipt_photo_url'>): ChainStep[] {
+  const { status } = delivery;
+  const planned = status === 'scheduled' || status === 'loading';
+  const hasReceipt = Boolean(delivery.receipt_photo_url) || Boolean(delivery.proofs?.some((proof) =>
+    !proof.deleted_at && ['signed_dr', 'photo', 'customer_po_confirmation'].includes(proof.proof_type),
+  ));
+  const plan: ChainStep = {
+    key: 'shipment_plan', label: 'Shipment plan', state: planned ? 'active' : 'done', date: delivery.scheduled_date,
+  };
+  const dispatched: ChainStep = {
+    key: 'dispatched', label: 'Dispatched', state: planned ? 'pending' : status === 'in_transit' ? 'active' : 'done', date: delivery.departed_at,
+  };
   if (status === 'cancelled') {
-    return [
-      {
-        key: 'scheduled',
-        label: 'Scheduled',
-        state: 'done',
-        date: delivery.scheduled_date ?? undefined,
-      },
-      {
-        key: 'cancelled',
-        label: 'Cancelled',
-        state: 'done',
-        date: delivery.updated_at ? formatDateIso(delivery.updated_at) : undefined,
-      },
-    ];
+    return [plan, { ...dispatched, state: delivery.departed_at ? 'done' : 'skipped' }, {
+      key: 'cancelled', label: 'Cancelled', state: 'done', date: delivery.updated_at,
+    }];
   }
-  return [
-    {
-      key: 'scheduled',
-      label: 'Scheduled',
-      state: 'done',
-      date: delivery.scheduled_date ?? undefined,
-    },
-    {
-      key: 'loading',
-      label: 'Loading',
-      state: isAtOrPast(status, 'loading') ? (status === 'loading' ? 'active' : 'done') : 'pending',
-    },
-    {
-      key: 'in_transit',
-      label: 'In Transit',
-      state: isAtOrPast(status, 'in_transit')
-        ? status === 'in_transit'
-          ? 'active'
-          : 'done'
-        : 'pending',
-      date: delivery.departed_at ? formatDateIso(delivery.departed_at) : undefined,
-    },
-    {
-      key: 'delivered',
-      label: 'Delivered',
-      state: isAtOrPast(status, 'delivered')
-        ? status === 'delivered'
-          ? 'active'
-          : 'done'
-        : 'pending',
-      date: delivery.delivered_at ? formatDateIso(delivery.delivered_at) : undefined,
-    },
-    {
-      key: 'confirmed',
-      label: 'Confirmed',
-      state: status === 'confirmed' ? 'done' : 'pending',
-      date: delivery.confirmed_at ? formatDateIso(delivery.confirmed_at) : undefined,
-    },
-  ];
+  if (status === 'return_pending' || status === 'returned') {
+    return [plan, dispatched, {
+      key: status, label: status === 'return_pending' ? 'Return pending' : 'Returned', state: status === 'return_pending' ? 'active' : 'done',
+    }];
+  }
+  return [plan, dispatched, {
+    key: 'customer_receipt', label: 'Customer receipt',
+    state: status === 'confirmed' || (status === 'delivered' && hasReceipt) ? 'done' : status === 'delivered' ? 'active' : 'pending',
+    date: hasReceipt ? delivery.received_at : undefined,
+  }, {
+    key: 'confirmed', label: 'Confirmed',
+    state: status === 'confirmed' ? 'done' : status === 'delivered' && hasReceipt ? 'active' : 'pending',
+    date: delivery.confirmed_at,
+  }];
 }

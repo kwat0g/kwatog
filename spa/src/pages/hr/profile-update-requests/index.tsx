@@ -51,7 +51,9 @@ export default function ProfileUpdateRequestsPage() {
  const queryClient = useQueryClient();
  const { can } = usePermission();
  const canFinance = can('hr.profile_updates.finance_review');
- const [status, setStatus] = useState<ProfileUpdateRequestStatus>('pending');
+ const canViewEmployees = can('hr.employees.view');
+ const canReviewHr = can('hr.employees.edit');
+ const [status, setStatus] = useState<ProfileUpdateRequestStatus>(canFinance && !canViewEmployees ? 'pending_finance' : 'pending');
  const [confirm, setConfirm] = useState<
  | null
  | { kind: 'approve' | 'reject'; stage: 'hr' | 'finance'; row: ProfileUpdateReviewItem }
@@ -96,7 +98,7 @@ export default function ProfileUpdateRequestsPage() {
  return (
  <div>
  <PageHeader
- title="Profile Change Requests"
+ title={canFinance && !canViewEmployees ? "Bank Account Changes" : "Profile Change Requests"}
  subtitle={data ? `${data.meta.total} requests` : undefined}
  />
 
@@ -138,14 +140,14 @@ export default function ProfileUpdateRequestsPage() {
  >
  <header className="flex items-center justify-between px-4 py-2 border-b border-default">
  <div className="flex items-center gap-3 text-sm">
- {row.employee && (
+ {row.employee && (canViewEmployees ? (
  <Link
  to={`/hr/employees/${row.employee.id}`}
  className="font-medium hover:underline"
  >
  {row.employee.full_name}
  </Link>
- )}
+ ) : <span className="font-medium">{row.employee.full_name}</span>)}
  <span className="font-mono tabular-nums text-muted text-xs">
  {row.employee?.employee_no}
  </span>
@@ -197,7 +199,7 @@ export default function ProfileUpdateRequestsPage() {
  </div>
 
  {/* HR leg */}
- {row.status === 'pending' && (
+ {row.status === 'pending' && canReviewHr && (
  <footer className="px-4 py-2 border-t border-default flex justify-end gap-2">
  <Button
  variant="danger"

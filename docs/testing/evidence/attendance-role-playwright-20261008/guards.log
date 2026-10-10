@@ -1,0 +1,11 @@
+PASS Restored crew can start operation after QC and attendance checks Operation setup succeeds; no additional material issue
+PASS HR cannot rewrite a shift with punch history HR change would break WO-BROWSER-1008. Change its crew or reschedule before saving.
+PASS HR cannot remove working-day coverage from active committed crew Recorded punch history uses these working days. Create a future shift assignment instead.
+PASS Recorded absence cannot be overridden when assigning workers Worker availability changed: HR recorded this worker as absent or on leave.
+PASS Employee cannot edit HR attendance; warehouse cannot open management WO UI { attendance_write: 403, management_controls: 'hidden' }
+PASS Final browser run contains no unexpected exceptions or API 500 responses []
+{
+  "passed": 22,
+  "failed": 0,
+  "errors": []
+}

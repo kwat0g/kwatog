@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate} from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,6 +15,8 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { useDebounce } from '@/hooks/useDebounce';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -28,426 +30,555 @@ import { numberInputProps } from '@/lib/numberInput';
 import type { MrbRecord, MrbStatus } from '@/types/inventory';
 
 const mrbStatusVariant = (s: MrbStatus): ChipVariant => {
- if (s === 'held') return 'warning';
- if (s === 'released') return 'success';
- if (s === 'scrapped') return 'danger';
- return 'info'; // returned
+  if (s === 'held') return 'warning';
+  if (s === 'released') return 'success';
+  if (s === 'scrapped') return 'danger';
+  return 'info'; // returned
 };
 
 const holdSchema = z.object({
- item_id: z.string().min(1, 'Item is required.'),
- source_location_id: z.string().min(1, 'Source location is required.'),
- quantity: z
- .string()
- .regex(/^\d+(\.\d{1,3})?$/, 'Up to 3 decimals.')
- .refine((v) => Number(v) > 0, 'Must be greater than zero.'),
- quarantine_location_id: z.string().optional().or(z.literal('')),
- ncr_id: z.string().optional().or(z.literal('')),
- inspection_id: z.string().optional().or(z.literal('')),
- notes: z.string().max(1000).optional().or(z.literal('')) });
+  item_id: z.string().min(1, 'Item is required.'),
+  source_location_id: z.string().min(1, 'Source location is required.'),
+  lot_number: z.string().max(50).optional(),
+  quantity: z
+    .string()
+    .regex(/^\d+(\.\d{1,3})?$/, 'Up to 3 decimals.')
+    .refine((v) => Number(v) > 0, 'Must be greater than zero.'),
+  quarantine_location_id: z.string().optional().or(z.literal('')),
+  ncr_id: z.string().optional().or(z.literal('')),
+  inspection_id: z.string().optional().or(z.literal('')),
+  notes: z.string().max(1000).optional().or(z.literal('')),
+});
 type HoldValues = z.infer<typeof holdSchema>;
 
 export default function MrbListPage() {
- const navigate = useNavigate();
- const qc = useQueryClient();
- const { can } = usePermission();
- const canManage = can('inventory.mrb.manage');
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { can } = usePermission();
+  const canManage = can('inventory.mrb.manage');
 
- const [holdOpen, setHoldOpen] = useState(false);
- const [filters, setFilters] = useUrlFilters({ search: '', status: '', page: 1, per_page: 25 });
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [filters, setFilters] = useUrlFilters({ search: '', status: '', page: 1, per_page: 25 });
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'mrb', filters],
- queryFn: () => mrbApi.list(filters),
- placeholderData: (prev) => prev });
- const { data: options } = useQuery({
- queryKey: ['inventory', 'mrb', 'options'],
- queryFn: () => mrbApi.options(),
- staleTime: 5 * 60 * 1000 });
- const statusFilters = [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])];
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['inventory', 'mrb', filters],
+    queryFn: () => mrbApi.list(filters),
+    placeholderData: (prev) => prev,
+  });
+  const { data: options } = useQuery({
+    queryKey: ['inventory', 'mrb', 'options'],
+    queryFn: () => mrbApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusFilters = [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])];
 
- const columns: Column<MrbRecord>[] = [
- {
- key: 'mrb',
- header: 'MRB #',
- cell: (r) => (
- <span className="font-mono">
- {r.mrb_number}
- </span>
- ) },
- {
- key: 'item',
- header: 'Item',
- cell: (r) => (
- <div>
- <div className="font-mono">{r.item?.code ?? '—'}</div>
- <div className="text-muted">{r.item?.name ?? '—'}</div>
- </div>
- ) },
- {
- key: 'qty',
- header: 'Qty',
- align: 'right',
- cell: (r) => (
- <span className="font-mono tabular-nums">
- {r.quantity} {r.item?.unit_of_measure ?? ''}
- </span>
- ) },
- {
- key: 'status',
- header: 'Status',
- cell: (r) => <Chip variant={mrbStatusVariant(r.status)}>{r.status_label}</Chip> },
- {
- key: 'location',
- header: 'Location',
- cell: (r) => (
- <span className="font-mono text-xs">
- {r.source_location?.full_code ?? '—'} → {r.quarantine_location?.full_code ?? '—'}
- </span>
- ) },
- {
- key: 'held',
- header: 'Held',
- cell: (r) => (
- <div>
- <div>{r.held_by ?? '—'}</div>
- <div className="text-muted font-mono">{formatDate(r.held_at)}</div>
- </div>
- ) },
- {
- key: 'ncr',
- header: 'NCR',
- cell: (r) =>
- r.ncr ? (
- <span className="font-mono">
- {r.ncr.ncr_number}
- </span>
- ) : (
- <span className="text-muted">—</span>
- ) },
- ];
+  const columns: Column<MrbRecord>[] = [
+    {
+      key: 'mrb',
+      header: 'MRB #',
+      cell: (r) => <span className="font-mono">{r.mrb_number}</span>,
+    },
+    {
+      key: 'item',
+      header: 'Item',
+      cell: (r) => (
+        <div>
+          <div className="font-mono">{r.item?.code ?? '—'}</div>
+          <div className="text-muted">{r.item?.name ?? '—'}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'qty',
+      header: 'Qty',
+      align: 'right',
+      cell: (r) => (
+        <span className="font-mono tabular-nums">
+          {r.quantity} {r.item?.unit_of_measure ?? ''}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => <Chip variant={mrbStatusVariant(r.status)}>{r.status_label}</Chip>,
+    },
+    {
+      key: 'location',
+      header: 'Location',
+      cell: (r) => (
+        <span className="font-mono text-xs">
+          {r.source_location?.full_code ?? '—'} → {r.quarantine_location?.full_code ?? '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'held',
+      header: 'Held',
+      cell: (r) => (
+        <div>
+          <div>{r.held_by ?? '—'}</div>
+          <div className="text-muted font-mono">{formatDate(r.held_at)}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'ncr',
+      header: 'NCR',
+      cell: (r) =>
+        r.ncr ? (
+          <span className="font-mono">{r.ncr.ncr_number}</span>
+        ) : (
+          <span className="text-muted">—</span>
+        ),
+    },
+  ];
 
- return (
- <div>
- <PageHeader
- title="MRB / Quarantine"
- subtitle={data ? `${data.meta.total} records` : undefined}
- actions={
- canManage ? (
- <Button variant="primary" icon={<LuShieldAlert size={14} />} onClick={() => setHoldOpen(true)}>
- Raise hold
- </Button>
- ) : undefined
- }
- />
+  return (
+    <div>
+      <PageHeader
+        title="MRB / Quarantine"
+        subtitle={data ? `${data.meta.total} records` : undefined}
+        actions={
+          canManage ? (
+            <Button
+              variant="primary"
+              icon={<LuShieldAlert size={14} />}
+              onClick={() => setHoldOpen(true)}
+            >
+              Raise hold
+            </Button>
+          ) : undefined
+        }
+      />
 
- <div className="px-5 pt-3 flex gap-3">
- <FilterBar values={filters} onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MRB ticket..." />
- <Select
- className="max-w-xs"
- value={filters.status ?? ''}
- onChange={(e) => {
- setFilters((f) => ({ ...f, status: e.target.value, page: 1 }));
- }}
- >
- {statusFilters.map((s) => (
- <option key={s.value} value={s.value}>
- {s.label}
- </option>
- ))}
- </Select>
- </div>
+      <div className="px-5 pt-3 flex flex-wrap items-end gap-3">
+        <FilterBar
+          values={filters}
+          onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+          searchPlaceholder="Search MRB ticket..."
+        />
+        <Select
+          label="Status"
+          className="max-w-xs"
+          value={filters.status ?? ''}
+          onChange={(e) => {
+            setFilters((f) => ({ ...f, status: e.target.value, page: 1 }));
+          }}
+        >
+          {statusFilters.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+      </div>
 
- {isLoading && !data && (
- <div className="px-5 py-4">
- <SkeletonTable rows={6} columns={7} />
- </div>
- )}
- {isError && (
- <EmptyState
- icon="alert-circle"
- title="Failed to load MRB records"
- action={<Button onClick={() => refetch()}>Retry</Button>}
- />
- )}
- {data && data.data.length === 0 && (
- <EmptyState
- icon="inbox"
- title="No MRB records"
- description="Place nonconforming stock on hold to move it into a quarantine location."
- action={
- canManage ? (
- <Button variant="primary" onClick={() => setHoldOpen(true)}>
- Raise hold
- </Button>
- ) : undefined
- }
- />
- )}
- {data && data.data.length > 0 && (
- <div className="px-5 py-4">
- <DataTable onRowClick={(r) => navigate(`/inventory/mrb/${r.id}`)}
- columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
- onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))} />
- </div>
- )}
+      {isLoading && !data && (
+        <div className="px-5 py-4">
+          <SkeletonTable rows={6} columns={7} />
+        </div>
+      )}
+      {isError && (
+        <EmptyState
+          icon="alert-circle"
+          title="Failed to load MRB records"
+          action={<Button onClick={() => refetch()}>Retry</Button>}
+        />
+      )}
+      {!isError && data && data.data.length === 0 && (
+        <EmptyState
+          icon="inbox"
+          title={
+            filters.search || filters.status
+              ? 'No MRB records match these filters'
+              : 'No MRB records'
+          }
+          description={
+            filters.search || filters.status
+              ? 'Try a different search or clear the filters.'
+              : 'Place nonconforming stock on hold to move it into a quarantine location.'
+          }
+          action={
+            canManage ? (
+              <Button variant="primary" onClick={() => setHoldOpen(true)}>
+                Raise hold
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+      {data && data.data.length > 0 && (
+        <div className="px-5 py-4">
+          <DataTable
+            onRowClick={(r) => navigate(`/inventory/mrb/${r.id}`)}
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+          />
+        </div>
+      )}
 
- {canManage && (
- <HoldModal
- isOpen={holdOpen}
- onClose={() => setHoldOpen(false)}
- onSuccess={() => {
- qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
- setHoldOpen(false);
- }}
- />
- )}
- </div>
- );
+      {canManage && (
+        <HoldModal
+          isOpen={holdOpen}
+          onClose={() => setHoldOpen(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['inventory', 'mrb'] });
+            setHoldOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
 function HoldModal({
- isOpen,
- onClose,
- onSuccess }: {
- isOpen: boolean;
- onClose: () => void;
- onSuccess: () => void;
+  isOpen,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
 }) {
- const { register, handleSubmit, reset, setError, watch, formState: { errors, isSubmitting } } =
- useForm<HoldValues>({
- resolver: zodResolver(holdSchema),
- defaultValues: {
- item_id: '',
- source_location_id: '',
- quantity: '',
- quarantine_location_id: '',
- ncr_id: '',
- inspection_id: '',
- notes: '' } });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<HoldValues>({
+    resolver: zodResolver(holdSchema),
+    defaultValues: {
+      item_id: '',
+      source_location_id: '',
+      quantity: '',
+      quarantine_location_id: '',
+      ncr_id: '',
+      inspection_id: '',
+      notes: '',
+    },
+  });
 
- const [itemSearch, setItemSearch] = useState('');
- const [qualitySearch, setQualitySearch] = useState('');
- const requestKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
- const selectedItemId = watch('item_id');
- const selectedSourceId = watch('source_location_id');
+  const [itemSearch, setItemSearch] = useState('');
+  const [selectedItemLabel, setSelectedItemLabel] = useState('');
+  const [selectedInspectionLabel, setSelectedInspectionLabel] = useState('');
+  const [selectedNcrLabel, setSelectedNcrLabel] = useState('');
+  const [qualitySearch, setQualitySearch] = useState('');
+  const itemQuery = useDebounce(itemSearch, 300);
+  const qualityQuery = useDebounce(qualitySearch, 300);
+  const requestKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const selectedItemId = watch('item_id');
+  const selectedSourceId = watch('source_location_id');
 
- const { data: itemsResp, isError: itemsError, refetch: refetchItems } = useQuery({
- queryKey: ['inventory', 'items', 'for-mrb', itemSearch],
- queryFn: () => itemsApi.list({ per_page: 100, search: itemSearch || undefined, is_active: 'true' }),
- enabled: isOpen });
- const itemOpts = itemsResp?.data ?? [];
+  const {
+    data: itemsResp,
+    isError: itemsError,
+    refetch: refetchItems,
+  } = useQuery({
+    queryKey: ['inventory', 'items', 'for-mrb', itemQuery],
+    queryFn: () =>
+      itemsApi.list({ per_page: 100, search: itemQuery || undefined, is_active: 'true' }),
+    enabled: isOpen,
+  });
+  const itemOpts = itemsResp?.data ?? [];
 
- const { data: warehouses } = useQuery({
- queryKey: ['inventory', 'warehouse', 'tree'],
- queryFn: () => warehouseApi.tree(),
- enabled: isOpen });
+  const {
+    data: warehouses,
+    isError: locationsError,
+    refetch: refetchLocations,
+  } = useQuery({
+    queryKey: ['inventory', 'warehouse', 'tree'],
+    queryFn: () => warehouseApi.tree(),
+    enabled: isOpen,
+  });
 
- // Only active locations in active warehouses are offered. The API repeats
- // these checks because a stale tree cannot authorize a movement.
- const allLocations = useMemo(
-   () =>
-   (warehouses ?? []).flatMap((w) =>
-   w.is_active ?
-   (w.zones ?? []).flatMap((z) =>
-   (z.locations ?? []).filter((l) => l.is_active).map((l) => ({
-   id: l.id,
-   label: `${w.code}-${z.code}-${l.code}`,
-   zoneType: z.zone_type,
-   warehouseId: w.id }))
-   )
-   : [],
-   ),
-   [warehouses],
- );
- const sourceLocations = allLocations.filter((l) => !['quarantine', 'scrap'].includes(l.zoneType));
- const sourceWarehouseId = allLocations.find((l) => l.id === selectedSourceId)?.warehouseId;
- const quarantineLocations = allLocations.filter(
-   (l) => l.zoneType === 'quarantine' && (!sourceWarehouseId || l.warehouseId === sourceWarehouseId),
- );
+  // Only active locations in active warehouses are offered. The API repeats
+  // these checks because a stale tree cannot authorize a movement.
+  const allLocations = useMemo(
+    () =>
+      (warehouses ?? []).flatMap((w) =>
+        w.is_active
+          ? (w.zones ?? []).flatMap((z) =>
+              (z.locations ?? [])
+                .filter((l) => l.is_active)
+                .map((l) => ({
+                  id: l.id,
+                  label: `${w.code}-${z.code}-${l.code}`,
+                  zoneType: z.zone_type,
+                  warehouseId: w.id,
+                })),
+            )
+          : [],
+      ),
+    [warehouses],
+  );
+  const sourceLocations = allLocations.filter((l) => !['quarantine', 'scrap'].includes(l.zoneType));
+  const sourceWarehouseId = allLocations.find((l) => l.id === selectedSourceId)?.warehouseId;
+  const quarantineLocations = allLocations.filter(
+    (l) =>
+      l.zoneType === 'quarantine' && (!sourceWarehouseId || l.warehouseId === sourceWarehouseId),
+  );
 
- const {
-   data: qualityOptions,
-   isLoading: qualityLoading,
-   isError: qualityError,
-   refetch: refetchQuality,
- } = useQuery({
-   queryKey: ['inventory', 'mrb', 'quality-options', selectedItemId, qualitySearch],
-   queryFn: () => mrbApi.qualityOptions(selectedItemId, qualitySearch || undefined),
-   enabled: isOpen && !!selectedItemId,
- });
+  const {
+    data: qualityOptions,
+    isLoading: qualityLoading,
+    isError: qualityError,
+    refetch: refetchQuality,
+  } = useQuery({
+    queryKey: ['inventory', 'mrb', 'quality-options', selectedItemId, qualityQuery],
+    queryFn: () => mrbApi.qualityOptions(selectedItemId, qualityQuery || undefined),
+    enabled: isOpen && !!selectedItemId,
+  });
 
- const mutation = useMutation({
- mutationFn: (v: HoldValues) => {
- const payload = {
- item_id: v.item_id,
- quantity: v.quantity,
- source_location_id: v.source_location_id,
- quarantine_location_id: v.quarantine_location_id || undefined,
- ncr_id: v.ncr_id || undefined,
- inspection_id: v.inspection_id || undefined,
- notes: v.notes || undefined,
- };
- const fingerprint = JSON.stringify(payload);
- const existing = requestKeyRef.current;
- const key = existing?.fingerprint === fingerprint
- ? existing.key
- : (globalThis.crypto?.randomUUID?.() ?? `mrb-${Date.now()}-${Math.random().toString(36).slice(2)}`);
- requestKeyRef.current = { fingerprint, key };
- return mrbApi.hold(payload, key);
- },
- onSuccess: (rec) => {
- toast.success(`MRB ${rec.mrb_number} raised — stock moved to quarantine.`);
- requestKeyRef.current = null;
- reset();
- onSuccess();
- },
- onError: (e) => applyServerValidationErrors(e, setError, 'Failed to raise MRB hold.') });
+  const sourceLots = useQuery({
+    queryKey: ['inventory', 'mrb', 'source-lots', selectedItemId, selectedSourceId],
+    queryFn: () => mrbApi.sourceLots(selectedItemId, selectedSourceId),
+    enabled: isOpen && !!selectedItemId && !!selectedSourceId,
+  });
 
- return (
- <Modal
- isOpen={isOpen}
- onClose={() => {
- reset();
- requestKeyRef.current = null;
- onClose();
- }}
- title="Raise MRB hold"
- size="lg"
- >
- <form
- onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<HoldValues>())}
- className="py-4 space-y-3"
- >
- <Input
- label="Find item"
- value={itemSearch}
- onChange={(e) => setItemSearch(e.target.value)}
- placeholder="Search by item code or name…"
- />
- {itemsError && (
- <div className="flex items-center justify-between gap-2 text-sm text-danger-fg" role="alert">
- <span>Could not load items.</span>
- <Button type="button" variant="secondary" onClick={() => refetchItems()}>Retry</Button>
- </div>
- )}
- <Select label="Item" required {...register('item_id')} error={errors.item_id?.message}>
- <option value="">Select item…</option>
- {itemOpts.map((it) => (
- <option key={it.id} value={it.id}>
- {it.code} — {it.name}
- </option>
- ))}
- </Select>
+  const mutation = useMutation({
+    mutationFn: (v: HoldValues) => {
+      const payload = {
+        item_id: v.item_id,
+        quantity: v.quantity,
+        source_location_id: v.source_location_id,
+        lot_number: v.lot_number || undefined,
+        quarantine_location_id: v.quarantine_location_id || undefined,
+        ncr_id: v.ncr_id || undefined,
+        inspection_id: v.inspection_id || undefined,
+        notes: v.notes || undefined,
+      };
+      const fingerprint = JSON.stringify(payload);
+      const existing = requestKeyRef.current;
+      const key =
+        existing?.fingerprint === fingerprint
+          ? existing.key
+          : (globalThis.crypto?.randomUUID?.() ??
+            `mrb-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      requestKeyRef.current = { fingerprint, key };
+      return mrbApi.hold(payload, key);
+    },
+    onSuccess: (rec) => {
+      toast.success(`MRB ${rec.mrb_number} raised — stock moved to quarantine.`);
+      requestKeyRef.current = null;
+      reset();
+      onSuccess();
+    },
+    onError: (e) => applyServerValidationErrors(e, setError, 'Failed to raise MRB hold.'),
+  });
 
- <div className="grid grid-cols-2 gap-3">
- <Select
- label="Source location"
- required
- {...register('source_location_id')}
- error={errors.source_location_id?.message}
- >
- <option value="">Select location…</option>
- {sourceLocations.map((l) => (
- <option key={l.id} value={l.id}>
- {l.label}
- </option>
- ))}
- </Select>
- <Input
- label="Quantity"
- required
- placeholder="0"
- className="font-mono tabular-nums text-right"
- {...numberInputProps()}
- {...register('quantity')}
- error={errors.quantity?.message}
- />
- </div>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={() => {
+        reset();
+        requestKeyRef.current = null;
+        onClose();
+      }}
+      title="Raise MRB hold"
+      size="lg"
+    >
+      <form
+        onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<HoldValues>())}
+        className="py-4 space-y-3"
+      >
+        <SearchableSelect
+          label="Item"
+          required
+          value={selectedItemId}
+          selectedLabel={selectedItemLabel}
+          onChange={(value) => {
+            const selected = itemOpts.find((item) => item.id === value);
+            setSelectedItemLabel(selected ? `${selected.code} — ${selected.name}` : '');
+            setValue('item_id', value, { shouldValidate: true });
+            setValue('lot_number', '');
+            setValue('inspection_id', '');
+            setValue('ncr_id', '');
+            setSelectedInspectionLabel('');
+            setSelectedNcrLabel('');
+          }}
+          onSearch={setItemSearch}
+          options={itemOpts.map((it) => ({ value: it.id, label: `${it.code} — ${it.name}` }))}
+          error={errors.item_id?.message}
+        />
+        {itemsError && (
+          <div role="alert" className="text-sm text-danger-fg">
+            Could not load items.{' '}
+            <Button type="button" onClick={() => refetchItems()}>
+              Retry
+            </Button>
+          </div>
+        )}
 
- <Select
- label="Quarantine location"
- helper="Leave blank to auto-select the warehouse's quarantine location."
- {...register('quarantine_location_id')}
- error={errors.quarantine_location_id?.message}
- >
- <option value="">Auto-select quarantine location</option>
- {quarantineLocations.map((l) => (
- <option key={l.id} value={l.id}>
- {l.label}
- </option>
- ))}
- </Select>
+        {locationsError && (
+          <div role="alert" className="text-sm text-danger-fg">
+            Warehouse locations could not be loaded.{' '}
+            <Button type="button" variant="secondary" onClick={() => refetchLocations()}>
+              Retry locations
+            </Button>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <Select
+            label="Source location"
+            required
+            {...register('source_location_id')}
+            error={errors.source_location_id?.message}
+          >
+            <option value="">Select location…</option>
+            {sourceLocations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Quantity"
+            required
+            placeholder="0"
+            className="font-mono tabular-nums text-right"
+            {...numberInputProps()}
+            step="0.001"
+            {...register('quantity')}
+            error={errors.quantity?.message}
+          />
+        </div>
 
- {selectedItemId && (
- <div className="space-y-2 rounded-md border border-default bg-elevated/40 p-3">
- <Input
- label="Find linked quality records"
- value={qualitySearch}
- onChange={(e) => setQualitySearch(e.target.value)}
- placeholder="Search inspection or NCR number…"
- helper="Only failed inspections and open/in-progress NCRs for this item are listed."
- />
- {qualityError && (
- <div className="flex items-center justify-between gap-2 text-sm text-danger-fg" role="alert">
- <span>Could not load quality records.</span>
- <Button type="button" variant="secondary" onClick={() => refetchQuality()}>Retry</Button>
- </div>
- )}
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <Select label="Linked inspection (optional)" {...register('inspection_id')} error={errors.inspection_id?.message}>
- <option value="">— None —</option>
- {qualityLoading && <option disabled>Loading failed inspections…</option>}
- {(qualityOptions?.inspections ?? []).map((inspection) => (
- <option key={inspection.id} value={inspection.id}>
- {inspection.inspection_number} — {inspection.stage_label ?? inspection.stage}
- </option>
- ))}
- </Select>
- <Select label="Linked NCR (optional)" {...register('ncr_id')} error={errors.ncr_id?.message}>
- <option value="">— None —</option>
- {(qualityOptions?.ncrs ?? []).map((ncr) => (
- <option key={ncr.id} value={ncr.id}>
- {ncr.ncr_number} — {ncr.status_label ?? ncr.status}
- </option>
- ))}
- </Select>
- </div>
- </div>
- )}
+        {selectedItemId && selectedSourceId && (
+          <SearchableSelect
+            label="Suspect lot"
+            value={watch('lot_number') ?? ''}
+            onChange={(value) => setValue('lot_number', value)}
+            options={(sourceLots.data ?? []).map((lot) => ({
+              value: lot.lot_number,
+              label: `${lot.lot_number} · ${lot.net} on hand`,
+            }))}
+            loading={sourceLots.isFetching}
+            required={(sourceLots.data?.length ?? 0) > 1}
+            helper="Choose the lot physically identified as suspect. Expiry comes from its source record."
+          />
+        )}
+        {sourceLots.isError && (
+          <div role="alert" className="text-sm text-danger-fg">
+            Source lots could not be loaded.{' '}
+            <Button type="button" onClick={() => sourceLots.refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
 
- <Textarea
- label="Notes"
- rows={2}
- maxLength={1000}
- placeholder="Optional — reason for the hold"
- {...register('notes')}
- error={errors.notes?.message}
- />
+        <Select
+          label="Quarantine location"
+          helper="Leave blank to auto-select the warehouse's quarantine location."
+          {...register('quarantine_location_id')}
+          error={errors.quarantine_location_id?.message}
+        >
+          <option value="">Auto-select quarantine location</option>
+          {quarantineLocations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </Select>
 
- <div className="flex justify-end gap-2 pt-2">
- <Button
- type="button"
- variant="secondary"
- onClick={() => {
- reset();
- requestKeyRef.current = null;
- onClose();
- }}
- disabled={mutation.isPending}
- >
- Cancel
- </Button>
- <Button
- type="submit"
- variant="primary"
- disabled={isSubmitting || mutation.isPending}
- loading={mutation.isPending}
- >
- {mutation.isPending ? 'Placing hold…' : 'Raise hold'}
- </Button>
- </div>
- </form>
- </Modal>
- );
+        {selectedItemId && (
+          <div className="space-y-2 rounded-md border border-default bg-elevated/40 p-3">
+            {qualityError && (
+              <div
+                className="flex items-center justify-between gap-2 text-sm text-danger-fg"
+                role="alert"
+              >
+                <span>Could not load quality records.</span>
+                <Button type="button" variant="secondary" onClick={() => refetchQuality()}>
+                  Retry
+                </Button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <SearchableSelect
+                label="Linked inspection (optional)"
+                value={watch('inspection_id') ?? ''}
+                selectedLabel={selectedInspectionLabel}
+                onChange={(value) => {
+                  const selected = qualityOptions?.inspections.find(
+                    (record) => record.id === value,
+                  );
+                  setSelectedInspectionLabel(selected?.inspection_number ?? '');
+                  setValue('inspection_id', value);
+                }}
+                onSearch={setQualitySearch}
+                loading={qualityLoading}
+                options={[
+                  { value: '', label: 'None' },
+                  ...(qualityOptions?.inspections ?? []).map((inspection) => ({
+                    value: inspection.id,
+                    label: `${inspection.inspection_number} — ${inspection.stage_label ?? inspection.stage}`,
+                  })),
+                ]}
+                error={errors.inspection_id?.message}
+              />
+              <SearchableSelect
+                label="Linked NCR (optional)"
+                value={watch('ncr_id') ?? ''}
+                selectedLabel={selectedNcrLabel}
+                onChange={(value) => {
+                  const selected = qualityOptions?.ncrs.find((record) => record.id === value);
+                  setSelectedNcrLabel(selected?.ncr_number ?? '');
+                  setValue('ncr_id', value);
+                }}
+                onSearch={setQualitySearch}
+                loading={qualityLoading}
+                options={[
+                  { value: '', label: 'None' },
+                  ...(qualityOptions?.ncrs ?? []).map((ncr) => ({
+                    value: ncr.id,
+                    label: `${ncr.ncr_number} — ${ncr.status_label ?? ncr.status}`,
+                  })),
+                ]}
+                error={errors.ncr_id?.message}
+              />
+            </div>
+          </div>
+        )}
+
+        <Textarea
+          label="Notes"
+          rows={2}
+          maxLength={1000}
+          placeholder="Optional — reason for the hold"
+          {...register('notes')}
+          error={errors.notes?.message}
+        />
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              reset();
+              requestKeyRef.current = null;
+              onClose();
+            }}
+            disabled={mutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={isSubmitting || mutation.isPending || locationsError || itemsError}
+            loading={mutation.isPending}
+          >
+            {mutation.isPending ? 'Placing hold…' : 'Raise hold'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
 }

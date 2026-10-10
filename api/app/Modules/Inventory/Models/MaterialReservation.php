@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasHashId;
 use App\Modules\Inventory\Enums\ReservationStatus;
+use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,10 +21,10 @@ class MaterialReservation extends Model
     ];
 
     protected $casts = [
-        'quantity'    => 'decimal:3',
+        'quantity' => 'decimal:3',
         'reserved_at' => 'datetime',
         'released_at' => 'datetime',
-        'status'      => ReservationStatus::class,
+        'status' => ReservationStatus::class,
     ];
 
     public function item(): BelongsTo
@@ -34,5 +35,10 @@ class MaterialReservation extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(WarehouseLocation::class, 'location_id');
+    }
+
+    public function workOrder(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrder::class);
     }
 }

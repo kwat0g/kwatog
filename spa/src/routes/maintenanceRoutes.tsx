@@ -7,7 +7,7 @@ import { PermissionGuard } from '@/components/guards/PermissionGuard';
 const MaintenanceHomePage = lazy(() => import('@/pages/maintenance'));
 const MaintenanceWorkOrdersListPage = lazy(() => import('@/pages/maintenance/work-orders'));
 const CreateMaintenanceWorkOrderPage = lazy(() => import('@/pages/maintenance/work-orders/create'));
-const MaintenanceWorkOrderDetailPage = lazy(() => import('@/pages/maintenance/work-orders/detail'));
+const MaintenanceWorkOrderDetailPage = lazy(() => import('@/pages/maintenance/work-orders/responsive-detail'));
 const MaintenanceSchedulesListPage = lazy(() => import('@/pages/maintenance/schedules'));
 const CreateMaintenanceSchedulePage = lazy(() => import('@/pages/maintenance/schedules/create'));
 const MaintenanceScheduleDetailPage = lazy(() => import('@/pages/maintenance/schedules/detail'));
@@ -28,7 +28,7 @@ export const maintenanceRoutes = (
  <Route path="/maintenance/work-orders/create"
  element={<PermissionGuard permission="maintenance.wo.create"><CreateMaintenanceWorkOrderPage /></PermissionGuard>} />
  <Route path="/maintenance/work-orders/:id"
- element={<PermissionGuard permission="maintenance.view"><MaintenanceWorkOrderDetailPage /></PermissionGuard>} />
+ element={<PermissionGuard anyOf={["maintenance.view", "maintenance.work.assigned"]}><MaintenanceWorkOrderDetailPage /></PermissionGuard>} />
  <Route path="/maintenance/schedules"
  element={<PermissionGuard permission="maintenance.view"><MaintenanceSchedulesListPage /></PermissionGuard>} />
  <Route path="/maintenance/schedules/create"

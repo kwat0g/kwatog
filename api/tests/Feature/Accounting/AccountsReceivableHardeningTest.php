@@ -57,6 +57,7 @@ class AccountsReceivableHardeningTest extends TestCase
             'email' => 'ar_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'is_active' => true,
         ]);
     }
 
@@ -65,6 +66,7 @@ class AccountsReceivableHardeningTest extends TestCase
         return Customer::create(array_merge([
             'name' => 'Acme '.substr(uniqid(), -5),
             'code' => 'C-T-'.substr(uniqid(), -5),
+            'email' => 'ar-'.uniqid().'@example.test',
             'payment_terms_days' => 30,
         ], $attrs));
     }
@@ -116,7 +118,8 @@ class AccountsReceivableHardeningTest extends TestCase
             ]],
         ], $by);
 
-        return $service->finalize($draft, $by);
+        $service->approvePrebill($draft, $this->admin());
+        return $service->finalize($draft, $this->admin());
     }
 
     /**
@@ -145,8 +148,15 @@ class AccountsReceivableHardeningTest extends TestCase
         $customer = $this->customer(['credit_limit' => '0.00']);
         $this->finalizedInvoice($user, $customer, '500.00');
 
-        $this->actingAs($user)->getJson('/api/v1/customers?per_page=5')->assertOk();
-        $this->actingAs($user)->getJson('/api/v1/customers/'.$customer->hash_id)->assertOk();
+        $this->assertTrue((bool) $user->fresh()->is_active, 'Invoice processing must not deactivate its caller.');
+        $this->actingAs($user);
+        $this->assertSame($user->id, auth('sanctum')->id(), 'The request guard must use the active test actor.');
+        $this->assertTrue((bool) $user->is_active, 'The in-memory actor passed to actingAs must remain active.');
+        $this->assertTrue((bool) auth('sanctum')->user()->is_active, 'The Sanctum principal must retain the active flag.');
+        $list = $this->getJson('/api/v1/customers?per_page=5');
+        $this->assertSame(200, $list->status(), $list->getContent());
+        $show = $this->getJson('/api/v1/customers/'.$customer->hash_id);
+        $this->assertSame(200, $show->status(), $show->getContent());
     }
 
     /**
@@ -281,12 +291,13 @@ class AccountsReceivableHardeningTest extends TestCase
             ]],
         ], $user);
 
+        $service->approvePrebill($draft, $this->admin());
         $customer->forceFill(['is_active' => false])->save();
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('not active');
 
-        $service->finalize($draft, $user);
+        $service->finalize($draft, $this->admin());
     }
 
     public function test_collection_amount_rejects_the_same_shapes(): void
@@ -298,7 +309,8 @@ class AccountsReceivableHardeningTest extends TestCase
         foreach (['1.999', '1e3', '1e17'] as $amount) {
             $this->actingAs($user)
                 ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', [
-                    'cash_account_id' => $cashAccount,
+                    'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashAccount,
                     'collection_date' => '2026-04-05',
                     'amount' => $amount,
                     'payment_method' => 'cash',
@@ -309,6 +321,64 @@ class AccountsReceivableHardeningTest extends TestCase
 
         $this->assertSame(0, DB::table('collections')->count());
         $this->assertSame(0, Money::cmp('1000.00', (string) $invoice->fresh()->balance));
+    }
+
+    public function test_collection_requires_an_idempotency_key_before_any_writes(): void
+    {
+        $user = $this->admin();
+        $invoice = $this->finalizedInvoice($user, $this->customer());
+        $cashAccount = Account::query()->where('code', '1010')->firstOrFail()->hash_id;
+
+        $this->actingAs($user)->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', [
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashAccount,
+            'collection_date' => '2026-04-05',
+            'amount' => '400.00',
+            'payment_method' => 'cash',
+        ])->assertUnprocessable()->assertJsonValidationErrors('idempotency_key');
+
+        $this->assertSame(0, DB::table('collections')->count());
+        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'collection')->count());
+        $this->assertSame(0, DB::table('official_receipts')->count());
+        $this->assertSame(0, Money::cmp('1000.00', (string) $invoice->fresh()->balance));
+    }
+
+    public function test_collection_retry_rejects_a_changed_reference_number_for_the_same_key(): void
+    {
+        $user = $this->admin();
+        $invoice = $this->finalizedInvoice($user, $this->customer());
+        $cashAccount = Account::query()->where('code', '1010')->firstOrFail()->hash_id;
+        $payload = [
+            'manual_reason' => 'Verified collection test exception',
+                'cash_account_id' => $cashAccount,
+            'collection_date' => '2026-04-05',
+            'amount' => '400.00',
+            'payment_method' => 'cash',
+            'reference_number' => 'BANK-REF-100',
+            'idempotency_key' => 'collection-payload-reference-100',
+        ];
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', $payload)
+            ->assertCreated();
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/collections', [
+                ...$payload,
+                'reference_number' => 'BANK-REF-101',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The idempotency key was already used with a different collection payload.');
+
+        $this->assertSame(1, DB::table('collections')->count());
+        $this->assertDatabaseHas('collections', [
+            'invoice_id' => $invoice->id,
+            'reference_number' => 'BANK-REF-100',
+            'amount' => '400.00',
+        ]);
+        $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'collection')->count());
+        $this->assertSame(1, DB::table('official_receipts')->count());
+        $this->assertSame(0, Money::cmp('600.00', (string) $invoice->fresh()->balance));
     }
 
     public function test_credit_note_line_amount_rejects_the_same_shapes(): void
@@ -382,13 +452,19 @@ class AccountsReceivableHardeningTest extends TestCase
         $user = $this->admin();
         $invoice = $this->finalizedInvoice($user, $this->customer());
         $cashAccount = Account::query()->where('code', '1010')->firstOrFail()->hash_id;
-        $collect = fn (string $amount) => $this->actingAs($user)
+        $attempt = 0;
+        $collect = function (string $amount) use ($user, $invoice, $cashAccount, &$attempt) {
+            $attempt++;
+            return $this->actingAs($user)
             ->postJson('/api/v1/invoices/'.$invoice->fresh()->hash_id.'/collections', [
+                'manual_reason' => 'Verified collection test exception',
                 'cash_account_id' => $cashAccount,
                 'collection_date' => '2026-04-05',
                 'amount' => $amount,
                 'payment_method' => 'cash',
+                'idempotency_key' => 'ar-payment-application-'.$attempt,
             ]);
+        };
 
         $collect('1500.00')->assertStatus(422);
         $collect('600.00')->assertStatus(201);

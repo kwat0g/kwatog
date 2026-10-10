@@ -51,6 +51,7 @@ class InspectionResultAuthorsTest extends TestCase
             'checklist' => [['id' => $measurement->hash_id, 'is_pass' => true]],
             'measurements' => [],
             'sample_defect_count' => 0,
+            'coverage_confirmed' => true,
             'complete' => true,
         ], $qcAuthor);
 
@@ -92,7 +93,7 @@ class InspectionResultAuthorsTest extends TestCase
             'sample_defect_count' => 0,
             'complete' => false,
         ], $firstEditor);
-        $inspection = $this->service->recordLotResult($inspection, [
+        $awaitingReview = $this->service->recordLotResult($inspection, [
             'checklist' => [[
                 'id' => $measurement->hash_id,
                 'is_pass' => true,
@@ -100,9 +101,9 @@ class InspectionResultAuthorsTest extends TestCase
             ]],
             'measurements' => [],
             'sample_defect_count' => 0,
-            'complete' => false,
+            'coverage_confirmed' => true,
+            'complete' => true,
         ], $secondEditor);
-        $awaitingReview = $this->service->complete($inspection, $secondEditor);
 
         $this->assertSame(InspectionStatus::AwaitingReview, $awaitingReview->status);
         $this->assertDatabaseHas('inspection_result_authors', [
@@ -136,6 +137,7 @@ class InspectionResultAuthorsTest extends TestCase
             'checklist' => [['id' => $measurement->hash_id, 'is_pass' => true]],
             'measurements' => [],
             'sample_defect_count' => 0,
+            'coverage_confirmed' => true,
             'complete' => true,
         ], $qcInspector);
         $data = (new InspectionResource($this->service->show($awaitingReview)))
@@ -172,6 +174,7 @@ class InspectionResultAuthorsTest extends TestCase
             'checklist' => [['id' => $measurement->hash_id, 'is_pass' => true]],
             'measurements' => [],
             'sample_defect_count' => 0,
+            'coverage_confirmed' => true,
             'complete' => true,
         ], $qcInspector);
 

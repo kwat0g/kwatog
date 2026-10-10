@@ -43,6 +43,7 @@ class StoreMrbRequest extends FormRequest
             'quarantine_location_id' => ['nullable', 'integer', 'exists:warehouse_locations,id', 'different:source_location_id'],
             'ncr_id'                 => ['nullable', 'integer', 'exists:non_conformance_reports,id'],
             'inspection_id'          => ['nullable', 'integer', 'exists:inspections,id'],
+            'lot_number'             => ['nullable', 'string', 'max:50'],
             'notes'                  => ['nullable', 'string', 'max:1000'],
         ];
     }

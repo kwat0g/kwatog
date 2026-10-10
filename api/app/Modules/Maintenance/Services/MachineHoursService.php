@@ -10,6 +10,7 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /** Recompute machine runtime from production intervals minus linked downtime. */
 class MachineHoursService
@@ -19,16 +20,23 @@ class MachineHoursService
         $count = 0;
         Machine::query()->orderBy('id')->chunk(50, function ($machines) use (&$count): void {
             foreach ($machines as $machine) {
-                $hours = $this->computeForMachine((int) $machine->id);
-                $machine->forceFill([
-                    'running_hours_total' => round($hours, 2),
-                    'running_hours_updated_at' => now(),
-                ])->save();
+                $this->recomputeForMachine((int) $machine->id);
                 $count++;
             }
         });
 
         return $count;
+    }
+
+    public function recomputeForMachine(int $machineId): void
+    {
+        DB::transaction(function () use ($machineId): void {
+            $machine = Machine::query()->lockForUpdate()->findOrFail($machineId);
+            $machine->forceFill([
+                'running_hours_total' => round($this->computeForMachine($machineId), 2),
+                'running_hours_updated_at' => now(),
+            ])->save();
+        });
     }
 
     private function computeForMachine(int $machineId): float
@@ -64,6 +72,9 @@ class MachineHoursService
                 $openDowntime = $orderDowntime->first(static fn (MachineDowntime $row): bool => $row->end_time === null);
                 if ($openDowntime) {
                     $end = Carbon::parse($openDowntime->start_time)->getTimestamp();
+                } elseif ($order->status === WorkOrderStatus::Paused && $orderDowntime->isNotEmpty()) {
+                    // Repair closure ends downtime, not the production pause.
+                    $end = Carbon::parse($orderDowntime->last()->start_time)->getTimestamp();
                 } elseif ($order->status === WorkOrderStatus::InProgress
                     && (int) $machine->current_work_order_id === (int) $order->id
                     && $machine->status === MachineStatus::Running) {

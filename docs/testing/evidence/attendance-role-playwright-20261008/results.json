@@ -1,0 +1,489 @@
+{
+  "results": [
+    {
+      "name": "Production manager and employee sign in through real UI",
+      "status": "passed",
+      "detail": "Four separate cookie sessions"
+    },
+    {
+      "name": "Employee clocks in before HR shift through GPS punch button",
+      "status": "passed",
+      "detail": "Accepted 8:50 AM punches for 9:00 AM shift"
+    },
+    {
+      "name": "Early clock-in does not allow production before shift",
+      "status": "passed",
+      "detail": [
+        {
+          "code": "presence",
+          "message": "Worker Browser Test: Clocked in, but HR shift hours do not cover this time."
+        },
+        {
+          "code": "presence",
+          "message": "Support Browser Test: Clocked in, but HR shift hours do not cover this time."
+        }
+      ]
+    },
+    {
+      "name": "Refresh workers detects clock-in inside HR shift without rescheduling",
+      "status": "passed",
+      "detail": "Ready at 9:05 AM for approved 9:15 AM schedule"
+    },
+    {
+      "name": "Start production through manager UI issues materials once",
+      "status": "passed",
+      "detail": {
+        "status": "in_progress",
+        "actual_start": "2026-10-08T09:05:00+08:00",
+        "stock": "90.000|0.000"
+      }
+    },
+    {
+      "name": "Duplicate Start rejected without duplicate stock issue",
+      "status": "passed",
+      "detail": "Illegal work-order lifecycle transition: in_progress → in_progress."
+    },
+    {
+      "name": "QC inspector completes auto-created in-process PASS checklist",
+      "status": "passed",
+      "detail": "In-process PASS becomes final; separate review is required for outgoing/incoming release"
+    },
+    {
+      "name": "Worker clocks out through UI during active production",
+      "status": "passed",
+      "detail": [
+        {
+          "direction": "in",
+          "punched_at": "2026-10-08T08:50:00+08:00"
+        },
+        {
+          "direction": "out",
+          "punched_at": "2026-10-08T10:45:00+08:00"
+        }
+      ]
+    },
+    {
+      "name": "Manager and PPC receive staffing notice; WO remains running",
+      "status": "passed",
+      "detail": [
+        "Support Browser Test: Worker has clocked out."
+      ]
+    },
+    {
+      "name": "New operation blocked when support worker has clocked out",
+      "status": "passed",
+      "detail": "Support Browser Test: Worker has clocked out. Ask Production management to review attendance."
+    },
+    {
+      "name": "Manager replaces clocked-out support through mobile Change workers form",
+      "status": "passed",
+      "detail": "Backup assigned; old crew retained in history; staffing warning clears"
+    },
+    {
+      "name": "Clocked-out worker re-enters through actual punch and restores presence",
+      "status": "passed",
+      "detail": {
+        "latest_in": "10:47",
+        "payroll": "08:50|10:45"
+      }
+    },
+    {
+      "name": "Role restrictions reject management access for employee, warehouse, HR and sales",
+      "status": "passed",
+      "detail": [
+        "worker",
+        "warehouse",
+        "hr",
+        "sales",
+        "outsider"
+      ]
+    },
+    {
+      "name": "Warehouse Stock Levels page works with warehouse role",
+      "status": "passed",
+      "detail": "GET stock-levels 200; page rendered"
+    },
+    {
+      "name": "Assigned employee sees own WO; unrelated employee cannot retrieve it",
+      "status": "passed",
+      "detail": {
+        "assigned": 200,
+        "unassigned": 404
+      }
+    },
+    {
+      "name": "No unexpected browser exceptions or API 500 responses",
+      "status": "passed",
+      "detail": []
+    },
+    {
+      "name": "Restored crew can start operation after QC and attendance checks",
+      "status": "passed",
+      "detail": "Operation setup succeeds; no additional material issue"
+    },
+    {
+      "name": "HR cannot rewrite a shift with punch history",
+      "status": "passed",
+      "detail": "HR change would break WO-BROWSER-1008. Change its crew or reschedule before saving."
+    },
+    {
+      "name": "HR cannot remove working-day coverage from active committed crew",
+      "status": "passed",
+      "detail": "Recorded punch history uses these working days. Create a future shift assignment instead."
+    },
+    {
+      "name": "Recorded absence cannot be overridden when assigning workers",
+      "status": "passed",
+      "detail": "Worker availability changed: HR recorded this worker as absent or on leave."
+    },
+    {
+      "name": "Employee cannot edit HR attendance; warehouse cannot open management WO UI",
+      "status": "passed",
+      "detail": {
+        "attendance_write": 403,
+        "management_controls": "hidden"
+      }
+    },
+    {
+      "name": "Final browser run contains no unexpected exceptions or API 500 responses",
+      "status": "passed",
+      "detail": []
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/attendance/punch/status",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 422,
+      "message": "Worker availability changed: HR shift hours or working days do not cover this schedule. Overtime hours alone do not extend shift coverage."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 409,
+      "message": "Illegal work-order lifecycle transition: in_progress → in_progress."
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/quality/inspections/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/quality/inspections/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/attendance/punch/status",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/notifications",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/operations/l49YDNXb3e/start-setup",
+      "status": 409,
+      "message": "Support Browser Test: Worker has clocked out. Ask Production management to review attendance."
+    },
+    {
+      "method": "GET",
+      "path": "/production/operations/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/execution-readiness",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/start",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/stock-levels",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/my-work-orders/lZQYjvYywx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/my-work-orders/lZQYjvYywx",
+      "status": 404,
+      "message": "The requested resource was not found."
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sign-in",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/operations/l49YDNXb3e/start-setup",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/operations/l49YDNXb3e",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/attendance/shifts",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/attendance/shifts/DqpX79YWv2",
+      "status": 422,
+      "message": "HR change would break WO-BROWSER-1008. Change its crew or reschedule before saving."
+    },
+    {
+      "method": "GET",
+      "path": "/attendance/shifts/DqpX79YWv2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/attendance/shift-assignments",
+      "status": 200
+    },
+    {
+      "method": "PATCH",
+      "path": "/attendance/shift-assignments/DqpX79YWv2/working-days",
+      "status": 422,
+      "message": "Recorded punch history uses these working days. Create a future shift assignment instead."
+    },
+    {
+      "method": "GET",
+      "path": "/attendance/shifts",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/attendance/attendances",
+      "status": 201
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew-options",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/production/work-orders/lZQYjvYywx/crew",
+      "status": 422,
+      "message": "Worker availability changed: HR recorded this worker as absent or on leave."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/lZQYjvYywx/crew",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/attendance/attendances",
+      "status": 403,
+      "message": "You do not have permission to perform this action."
+    }
+  ]
+}

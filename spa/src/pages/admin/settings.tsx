@@ -33,6 +33,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonForm } from '@/components/ui/Skeleton';
+import { Textarea } from '@/components/ui/Textarea';
 import { Switch } from '@/components/ui/Switch';
 import { Chip } from '@/components/ui/Chip';
 import { PlantLocationPicker, PLANT_LOCATION_KEYS } from '@/components/admin/PlantLocationPicker';
@@ -96,7 +97,7 @@ interface GroupMeta {
   label: string;
   description: string;
   icon: React.ReactNode;
-  category: 'general' | 'operations' | 'security' | 'modules';
+  category: 'general' | 'operations' | 'security' | 'modules' | 'other';
 }
 
 const GROUP_META: Record<string, GroupMeta> = {
@@ -161,6 +162,12 @@ const GROUP_META: Record<string, GroupMeta> = {
     icon: <LuSlidersHorizontal size={16} />,
     category: 'operations',
   },
+  alerts: {
+    label: 'Alerts',
+    description: 'Alert thresholds and critical notification routing',
+    icon: <LuSlidersHorizontal size={16} />,
+    category: 'other',
+  },
   security: {
     label: 'Security & Auth',
     description: 'Login policies, session timeouts, and password rules',
@@ -190,7 +197,7 @@ const GROUP_ORDER = [
   'modules',
 ];
 
-type CategoryTab = 'all' | 'general' | 'operations' | 'security' | 'modules' | 'system';
+type CategoryTab = 'all' | 'general' | 'operations' | 'security' | 'modules' | 'other' | 'system';
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -226,11 +233,16 @@ export default function SettingsPage() {
     if (!data) return [] as Array<[string, SettingRow[]]>;
     const q = search.toLowerCase().trim();
 
-    return GROUP_ORDER.filter((g) => Array.isArray(data[g]) && data[g].length > 0)
+    const groupOrder = [
+      ...GROUP_ORDER,
+      ...Object.keys(data).filter((group) => !GROUP_ORDER.includes(group)).sort(),
+    ];
+
+    return groupOrder.filter((g) => Array.isArray(data[g]) && data[g].length > 0)
       .map((g) => {
         const meta = GROUP_META[g];
         // Apply tab filter (unless on 'all' or 'system')
-        if (activeTab !== 'all' && activeTab !== 'system' && meta?.category !== activeTab) {
+        if (activeTab !== 'all' && activeTab !== 'system' && (meta?.category ?? 'other') !== activeTab) {
           return [g, []] as [string, SettingRow[]];
         }
 
@@ -271,7 +283,7 @@ export default function SettingsPage() {
         }
       />
 
-      <div className="px-5 py-4 max-w-5xl space-y-6">
+      <div className="min-w-0 w-full px-5 py-4 space-y-6">
         {/* Category Navigation Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto border-b border-default pb-3 scrollbar-none">
           {(
@@ -279,6 +291,7 @@ export default function SettingsPage() {
               { id: 'all', label: 'All Settings', icon: <LuSlidersHorizontal size={14} /> },
               { id: 'general', label: 'Company & Fiscal', icon: <LuBuilding2 size={14} /> },
               { id: 'operations', label: 'Operations & HR', icon: <LuBanknote size={14} /> },
+              { id: 'other', label: 'Other Settings', icon: <LuSlidersHorizontal size={14} /> },
               { id: 'security', label: 'Security & Auth', icon: <LuShield size={14} /> },
               { id: 'modules', label: 'Feature Flags', icon: <LuPuzzle size={14} /> },
               { id: 'system', label: 'System Info', icon: <LuServer size={14} /> },
@@ -543,6 +556,18 @@ function SettingRowEditor({
     );
   }
 
+  if (Array.isArray(row.value) || (row.value !== null && typeof row.value === 'object')) {
+    return (
+      <JsonRow
+        row={row}
+        label={label}
+        isEditMode={isEditMode}
+        saving={isSaving}
+        onSave={onSave}
+      />
+    );
+  }
+
   return (
     <ScalarRow
       row={row}
@@ -553,6 +578,67 @@ function SettingRowEditor({
       saving={isSaving}
       onSave={(s) => onSave(s)}
     />
+  );
+}
+
+function JsonRow({
+  row,
+  label,
+  isEditMode,
+  saving,
+  onSave,
+}: Pick<RowEditorProps, 'row' | 'isEditMode' | 'onSave'> & { label: string; saving: boolean }) {
+  const savedValue = JSON.stringify(row.value, null, 2) ?? 'null';
+  const [value, setValue] = useState(savedValue);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    setValue(savedValue);
+    setError(undefined);
+  }, [savedValue]);
+
+  const save = () => {
+    if (value === savedValue) return;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      setError('Enter valid JSON before saving.');
+      return;
+    }
+
+    const expectsArray = Array.isArray(row.value);
+    if (Array.isArray(parsed) !== expectsArray
+      || (!expectsArray && (parsed === null || typeof parsed !== 'object'))) {
+      setError(`Value must remain a JSON ${expectsArray ? 'array' : 'object'}.`);
+      return;
+    }
+
+    setError(undefined);
+    onSave(parsed as SettingValue);
+  };
+
+  return (
+    <div className="px-2 py-3.5 first:pt-0 last:pb-0">
+      {row.description && <p className="mb-2 text-xs leading-relaxed text-muted">{row.description}</p>}
+      <Textarea
+        id={`setting-${row.key.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+        label={`${label} JSON`}
+        value={value}
+        onChange={(event) => {
+          setValue(event.target.value);
+          setError(undefined);
+        }}
+        onBlur={save}
+        disabled={!isEditMode || saving}
+        error={error}
+        helper={!isEditMode ? 'Unlock settings to edit.' : saving ? 'Saving…' : 'Valid JSON saves when you leave this field.'}
+        containerClassName="w-full"
+        className="min-h-36 font-mono text-sm"
+      />
+      <ChangeAttribution row={row} />
+    </div>
   );
 }
 

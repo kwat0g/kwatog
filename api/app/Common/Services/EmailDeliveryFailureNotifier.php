@@ -29,7 +29,7 @@ class EmailDeliveryFailureNotifier
         string $message,
         array $context = [],
     ): void {
-        if ($recipients === null) {
+        if ($recipients === null || $recipients === [] || ($recipients instanceof Collection && $recipients->isEmpty())) {
             return;
         }
 

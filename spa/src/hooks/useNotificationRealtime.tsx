@@ -13,12 +13,12 @@ interface NotificationPayload {
   created_at: string;
 }
 
-export function useNotificationRealtime(): void {
+export function useNotificationRealtime(enabled = true): void {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!enabled || !user?.id) return;
 
     // Echo loads on demand (see `@/lib/echo`); subscribe once it resolves and
     // skip entirely if we unmounted while the import was in flight.
@@ -55,5 +55,5 @@ export function useNotificationRealtime(): void {
       disposed = true;
       teardown?.();
     };
-  }, [user?.id, qc]);
+  }, [enabled, user?.id, qc]);
 }

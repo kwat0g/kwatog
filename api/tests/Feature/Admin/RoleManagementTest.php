@@ -135,6 +135,33 @@ class RoleManagementTest extends TestCase
         $this->assertEqualsCanonicalizing([], $audit->new_values['removed'] ?? []);
     }
 
+    public function test_retired_journal_self_post_override_is_hidden_and_cannot_be_granted(): void
+    {
+        $admin = $this->seedAdmin();
+        $custom = $this->makeCustomRole('retired_je_override', ['hr.employees.view']);
+        $before = $custom->permissions()->pluck('permissions.slug')->sort()->values()->all();
+
+        $matrix = $this->actingAs($admin)
+            ->getJson('/api/v1/admin/permissions/matrix')
+            ->assertOk()
+            ->json('data');
+        $slugs = collect($matrix)->flatten(1)->pluck('slug')->all();
+        $this->assertNotContains('accounting.journal.self_post_override', $slugs);
+        $this->assertNotContains('accounting.journal.self_post_override.retired', $slugs);
+
+        foreach ([
+            'accounting.journal.self_post_override',
+            'accounting.journal.self_post_override.retired',
+        ] as $retiredSlug) {
+            $this->actingAs($admin)
+                ->putJson("/api/v1/admin/roles/{$custom->hash_id}/permissions", [
+                    'permission_slugs' => ['hr.employees.view', $retiredSlug],
+                ])
+                ->assertStatus(422);
+            $this->assertSame($before, $custom->fresh()->permissions()->pluck('permissions.slug')->sort()->values()->all());
+        }
+    }
+
     public function test_permission_sync_blocked_on_system_admin(): void
     {
         $admin = $this->seedAdmin();

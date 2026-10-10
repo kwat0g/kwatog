@@ -115,13 +115,13 @@ export default function EditAssetPage() {
     <div>
       <PageHeader title={`Edit ${data.asset_code}`} subtitle={data.name} backTo={`/assets/${id}`} backLabel={data.asset_code} />
       <FormDraftBanner safety={safety} />
-      <form onSubmit={handleSubmit((values) => mutation.mutate(values), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
+      <form onSubmit={handleSubmit((values) => mutation.mutate(values), onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identity & custody</legend>
           <Input label="Name" {...register('name')} error={errors.name?.message} required />
           <div className="grid grid-cols-2 gap-3 mt-3">
             <Input label="Category" value={data.category_label ?? data.category} disabled helper="Category is fixed at acquisition." />
-            <Select label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
+            <Select searchable label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
               <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
               {deptData?.data?.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </Select>

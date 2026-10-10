@@ -103,6 +103,7 @@ class CancelledInspectionSlotReuseTest extends TestCase
             $created,
             'Opened against the wrong spec revision.',
             $this->user,
+            (int) $created->result_version,
         );
     }
 

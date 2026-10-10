@@ -64,6 +64,7 @@ class QualityGateChainTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['inspection.checklist_capture_enabled' => true]);
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
@@ -140,7 +141,6 @@ class QualityGateChainTest extends TestCase
         $this->assertNotNull($po->hash_id, 'PO must carry a HashID for API calls');
         $submit = $this->actingAs($this->buyer)
             ->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/submit");
-        fwrite(STDERR, "\nDEBUG submit: ".$submit->getContent()."\n");
         $submit->assertOk();
         $this->actingAs($this->finance)
             ->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve")
@@ -204,25 +204,26 @@ class QualityGateChainTest extends TestCase
             ->where('inspection_id', $inspection->id)
             ->get();
 
-        $checklist = $rows->map(fn ($r, $i) => [
-            'id' => $r->hash_id,
-            'is_pass' => ! in_array($i, $failIndexes, true),
+        $items = $rows->map(fn ($row, $i) => [
+            'id' => $row->hash_id,
+            'result' => in_array($i, $failIndexes, true) ? 'failed' : 'passed',
+            ...(in_array($i, $failIndexes, true) ? ['problem_description' => 'Incoming requirement failed.'] : []),
         ])->all();
 
         $defects = count($failIndexes);
         $this->actingAs($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/lot-result", [
-                'checklist' => $checklist,
-                'measurements' => [],
-                'sample_defect_count' => $defects,
+            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/batch-result", [
+                'expected_result_version' => (int) $inspection->result_version,
+                'items' => $items,
                 'coverage_confirmed' => true,
-                'complete' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
+                'physical_defects_confirmed' => false,
             ])
             ->assertOk();
 
         $inspection->refresh();
 
-        // GRN incoming QC is maker-checker gated: the lot-result lands the
+        // GRN incoming QC is maker-checker gated: batch evidence lands the
         // inspection at awaiting_review with the maker's proposed result.
         if ($inspection->status?->value === 'awaiting_review') {
             $decision = $defects === 0 ? 'passed' : 'failed';
@@ -230,6 +231,7 @@ class QualityGateChainTest extends TestCase
                 ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", array_filter([
                     'decision' => $decision,
                     'remarks' => $defects > 0 ? 'Checker concurs: lot fails the incoming checklist.' : null,
+                    'expected_result_version' => (int) $inspection->result_version,
                 ]));
             $review->assertOk();
         }
@@ -263,12 +265,11 @@ class QualityGateChainTest extends TestCase
         // QC verdict (terminal results need quality.inspections.manage).
         $rows = InspectionMeasurement::query()->where('inspection_id', $inspection->id)->get();
         $this->actingAs($this->warehouse)
-            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/lot-result", [
-                'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
-                'measurements' => [],
-                'sample_defect_count' => 0,
+            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/batch-result", [
+                'expected_result_version' => (int) $inspection->result_version,
+                'items' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'result' => 'passed'])->all(),
                 'coverage_confirmed' => true,
-                'complete' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
             ])
             ->assertStatus(403);
 
@@ -320,15 +321,16 @@ class QualityGateChainTest extends TestCase
         $failedRequirement = $rows->first(static fn (InspectionMeasurement $row): bool => ! $row->is_critical);
         $this->assertNotNull($failedRequirement, 'Use-as-is test must fail only a non-critical requirement.');
         $this->actingAs($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/lot-result", [
-                'checklist' => $rows->map(fn (InspectionMeasurement $row) => [
+            ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/batch-result", [
+                'expected_result_version' => (int) $inspection->result_version,
+                'items' => $rows->map(fn (InspectionMeasurement $row) => [
                     'id' => $row->hash_id,
-                    'is_pass' => $row->id !== $failedRequirement->id,
+                    'result' => $row->id === $failedRequirement->id ? 'failed' : 'passed',
+                    ...($row->id === $failedRequirement->id ? ['problem_description' => 'Packaging label is smudged.'] : []),
                 ])->all(),
-                'measurements' => [],
-                'sample_defect_count' => 1,
                 'coverage_confirmed' => true,
-                'complete' => true,
+                'inspected_quantity' => (int) $inspection->sample_size,
+                'physical_defects_confirmed' => false,
             ])
             ->assertOk();
         $inspection->refresh();
@@ -338,6 +340,7 @@ class QualityGateChainTest extends TestCase
             ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", [
                 'decision' => 'failed',
                 'remarks' => 'Self-review attempt.',
+                'expected_result_version' => (int) $inspection->result_version,
             ]);
         $selfReview->assertStatus(403);
 
@@ -346,6 +349,7 @@ class QualityGateChainTest extends TestCase
             ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", [
                 'decision' => 'failed',
                 'remarks' => 'Non-critical packaging label is smudged; material identity passed.',
+                'expected_result_version' => (int) $inspection->result_version,
             ])
             ->assertOk();
         $inspection->refresh();
@@ -400,6 +404,7 @@ class QualityGateChainTest extends TestCase
                     'evidence_reference' => 'SORT-INCOMING-100',
                     'performed_by' => $this->warehouse->hash_id,
                     'recovery_passed' => true,
+                    'concession_approval_reference' => 'SUPPLIER-CONCESSION-QUALITY-20261006',
                 ],
             ])
             ->assertOk();

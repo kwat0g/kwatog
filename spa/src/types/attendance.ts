@@ -29,8 +29,19 @@ export interface CreateShiftData {
 
 export type UpdateShiftData = Partial<CreateShiftData>;
 
+export interface EmployeeShiftAssignment {
+ id: string;
+ employee_id: string;
+ employee_name: string;
+ shift: Shift;
+ effective_date: string;
+ end_date: string | null;
+ working_days: number[] | null;
+}
+
 export interface BulkAssignShiftData {
  department_id: string;
+ working_days: number[];
  shift_id: string;
  effective_date: string;
  end_date?: string | null;

@@ -6,26 +6,33 @@ namespace App\Modules\HR\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\CivilStatus;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\Gender;
 use App\Modules\HR\Enums\PayType;
+use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Production\Models\WorkOrderCrew;
+use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Employee extends Model
 {
-    use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\EmployeeFactory
+    protected static function newFactory(): EmployeeFactory
     {
-        return \Database\Factories\EmployeeFactory::new();
+        return EmployeeFactory::new();
     }
 
     protected $fillable = [
@@ -44,24 +51,24 @@ class Employee extends Model
     ];
 
     protected $casts = [
-        'birth_date'           => 'date',
-        'date_hired'           => 'date',
-        'date_regularized'     => 'date',
+        'birth_date' => 'date',
+        'date_hired' => 'date',
+        'date_regularized' => 'date',
         'basic_monthly_salary' => 'decimal:2',
-        'semi_monthly_rate'           => 'decimal:2',
+        'semi_monthly_rate' => 'decimal:2',
         // Encrypted at rest
-        'sss_no'               => 'encrypted',
-        'philhealth_no'        => 'encrypted',
-        'pagibig_no'           => 'encrypted',
-        'tin'                  => 'encrypted',
-        'bank_account_no'      => 'encrypted',
+        'sss_no' => 'encrypted',
+        'philhealth_no' => 'encrypted',
+        'pagibig_no' => 'encrypted',
+        'tin' => 'encrypted',
+        'bank_account_no' => 'encrypted',
         // Enums
-        'status'               => EmployeeStatus::class,
+        'status' => EmployeeStatus::class,
         'account_deactivated_by_archive' => 'boolean',
-        'employment_type'      => EmploymentType::class,
-        'pay_type'             => PayType::class,
-        'gender'               => Gender::class,
-        'civil_status'         => CivilStatus::class,
+        'employment_type' => EmploymentType::class,
+        'pay_type' => PayType::class,
+        'gender' => Gender::class,
+        'civil_status' => CivilStatus::class,
     ];
 
     // ─── Accessors ─────────────────────────────────
@@ -73,6 +80,7 @@ class Employee extends Model
             $this->last_name,
             $this->suffix,
         ]);
+
         return implode(' ', $parts);
     }
 
@@ -114,7 +122,7 @@ class Employee extends Model
 
     public function user(): HasOne
     {
-        return $this->hasOne(\App\Modules\Auth\Models\User::class, 'employee_id');
+        return $this->hasOne(User::class, 'employee_id');
     }
 
     public function onboarding(): HasOne
@@ -135,6 +143,26 @@ class Employee extends Model
     public function skills(): HasMany
     {
         return $this->hasMany(EmployeeSkill::class);
+    }
+
+    public function shiftAssignments(): HasMany
+    {
+        return $this->hasMany(EmployeeShiftAssignment::class);
+    }
+
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class)->withTrashed();
+    }
+
+    public function approvedLeaves(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class)->where('status', 'approved');
+    }
+
+    public function productionCrews(): BelongsToMany
+    {
+        return $this->belongsToMany(WorkOrderCrew::class, 'work_order_crew_members')->whereNull('ended_at');
     }
 
     // ─── Scopes ────────────────────────────────────

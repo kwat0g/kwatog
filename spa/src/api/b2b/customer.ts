@@ -5,10 +5,13 @@ import type {
  PortalSoSummary,
  PortalSoDetail,
  PortalCatalogItem,
+ PortalOrderQuote,
  PortalInvoiceSummary,
  PortalInvoiceDetail,
  PortalDeliverySummary,
  PortalDeliveryDetail,
+ PortalReceiptGroup,
+ PortalReceiptGroupSubmission,
  PortalComplaint,
  EightDReportData,
  StatementOfAccount,
@@ -17,6 +20,7 @@ import type {
  PortalReturnRequest,
  PortalReturnSourceOptions,
 } from '@/types/b2b';
+import type { PriceRequest } from '@/types/pricing';
 import type { ChainStep } from '@/types/chain';
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
@@ -31,6 +35,9 @@ type CustomerLoginResponse = {
 };
 
 export const customerPortalApi = {
+  priceRequests: (page = 1) => portalClient.get<PaginatedResponse<PriceRequest>>('/b2b/customer/price-requests', { params: { page } }).then(r => r.data),
+  requestPrice: (data: { product_id: string; quantity: number; requested_price?: string; notes: string }) => portalClient.post('/b2b/customer/price-requests', data),
+  respondPrice: (id: string, decision: 'accept' | 'reject', version: number) => portalClient.post(`/b2b/customer/price-requests/${id}/respond`, { decision, version }),
  // ── Auth ──────────────────────────────────────────
  login: async (email: string, password: string) => {
  await getPortalCsrf();
@@ -95,7 +102,13 @@ export const customerPortalApi = {
  return data;
  },
 
+ quoteOrder: async (form: { sales_order_id?: string; items: Array<{ product_id: string; quantity: string; delivery_date: string }> }) => {
+  const { data } = await portalClient.post<{ data: PortalOrderQuote }>('/b2b/customer/orders/quote', form);
+  return data.data;
+ },
+
   createOrder: async (form: {
+  quote_signature?: string;
   date?: string;
   notes?: string;
   items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
@@ -104,6 +117,25 @@ export const customerPortalApi = {
    headers: { 'Idempotency-Key': idempotencyKey },
   });
  return data;
+ },
+
+ updateOrder: async (id: string, form: {
+  quote_signature?: string;
+  notes?: string;
+  items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
+ }) => {
+  const { data } = await portalClient.put<{ data: PortalSoDetail; message?: string }>(`/b2b/customer/orders/${id}`, form);
+  return data;
+ },
+
+ cancelOrder: async (id: string, reason?: string) => {
+  const { data } = await portalClient.post<{ data: PortalSoDetail }>(`/b2b/customer/orders/${id}/cancel`, { reason });
+  return data;
+ },
+
+ respondToDeliveryProposal: async (id: string, responseId: string, decision: 'accept' | 'reject') => {
+  const { data } = await portalClient.post<{ data: unknown }>(`/b2b/customer/orders/${id}/delivery-proposals/${responseId}/respond`, { decision });
+  return data;
  },
 
  getOrder: async (id: string) => {
@@ -137,6 +169,15 @@ export const customerPortalApi = {
  return data.data;
  },
 
+ submitInvoicePayment: async (id: string, form: FormData) => {
+   const { data } = await portalClient.post<{ data: import('@/types/invoice-payments').InvoicePaymentSubmission }>(`/b2b/customer/invoices/${id}/payment-submissions`, form);
+   return data.data;
+ },
+ downloadInvoicePaymentProof: async (id: string, submissionId: string) => {
+   const { data } = await portalClient.get<Blob>(`/b2b/customer/invoices/${id}/payment-submissions/${submissionId}/proof`, { responseType: 'blob' });
+   return data;
+ },
+
  downloadInvoicePdf: async (id: string) => {
  const { data } = await portalClient.get<Blob>(`/b2b/customer/invoices/${id}/pdf`, {
  responseType: 'blob',
@@ -155,8 +196,18 @@ export const customerPortalApi = {
   return data.data;
  },
 
- confirmDelivery: async (id: string, form: { receiver_name?: string; receiver_position?: string; delivery_remarks?: string }) => {
+ confirmDelivery: async (id: string, form: { receiver_name: string; receiver_position?: string; delivery_remarks?: string; lines: Array<{ delivery_item_id: string; received_quantity: string }> }) => {
   const { data } = await portalClient.post<{ data: PortalDeliveryDetail; message: string }>(`/b2b/customer/deliveries/${id}/confirm`, form);
+  return data;
+ },
+
+ getReceiptGroup: async (id: string) => {
+  const { data } = await portalClient.get<{ data: PortalReceiptGroup | null }>(`/b2b/customer/deliveries/${id}/receipt-group`);
+  return data.data;
+ },
+
+ confirmReceiptGroup: async (id: string, form: PortalReceiptGroupSubmission) => {
+  const { data } = await portalClient.post<{ data: PortalReceiptGroup; message: string }>(`/b2b/customer/deliveries/${id}/confirm-group`, form);
   return data;
  },
 

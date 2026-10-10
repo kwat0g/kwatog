@@ -8,6 +8,8 @@ const ProductsListPage = lazy(() => import('@/pages/crm/products'));
 const CreateProductPage = lazy(() => import('@/pages/crm/products/create'));
 const EditProductPage = lazy(() => import('@/pages/crm/products/edit'));
 const ProductDetailPage = lazy(() => import('@/pages/crm/products/detail'));
+const PricingRequestsPage = lazy(() => import('@/pages/crm/price-agreements/requests'));
+const PricingOfferPage = lazy(() => import('@/pages/crm/price-agreements/offer'));
 const PriceAgreementsListPage = lazy(() => import('@/pages/crm/price-agreements'));
 const CreatePriceAgreementPage = lazy(() => import('@/pages/crm/price-agreements/create'));
 const EditPriceAgreementPage = lazy(() => import('@/pages/crm/price-agreements/edit'));
@@ -32,60 +34,202 @@ const InquiryListPage = lazy(() => import('@/pages/crm/inquiries'));
 const InquiryDetailPage = lazy(() => import('@/pages/crm/inquiries/detail'));
 
 export const crmRoutes = (
- <>
- {/* CRM module (Sprint 6 — Tasks 47, 48) */}
- <Route element={<ModuleGuard module="crm" />}>
- <Route path="/crm" element={<Navigate to="/crm/products" replace />} />
+  <>
+    {/* CRM module (Sprint 6 — Tasks 47, 48) */}
+    <Route element={<ModuleGuard module="crm" />}>
+      <Route path="/crm" element={<Navigate to="/crm/products" replace />} />
 
- {/* Public contact-form inbox — ERP-side reader for /landing/contact-inquiry */}
- <Route path="/crm/inquiries"
- element={<PermissionGuard permission="crm.inquiries.view"><InquiryListPage /></PermissionGuard>} />
- <Route path="/crm/inquiries/:id"
- element={<PermissionGuard permission="crm.inquiries.view"><InquiryDetailPage /></PermissionGuard>} />
+      {/* Public contact-form inbox — ERP-side reader for /landing/contact-inquiry */}
+      <Route
+        path="/crm/inquiries"
+        element={
+          <PermissionGuard permission="crm.inquiries.view">
+            <InquiryListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/inquiries/:id"
+        element={
+          <PermissionGuard permission="crm.inquiries.view">
+            <InquiryDetailPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/crm/products"
- element={<PermissionGuard permission="crm.products.view"><ProductsListPage /></PermissionGuard>} />
- <Route path="/crm/products/create"
- element={<PermissionGuard permission="crm.products.manage"><CreateProductPage /></PermissionGuard>} />
- <Route path="/crm/products/:id"
- element={<PermissionGuard permission="crm.products.view"><ProductDetailPage /></PermissionGuard>} />
- <Route path="/crm/products/:id/edit"
- element={<PermissionGuard permission="crm.products.manage"><EditProductPage /></PermissionGuard>} />
+      <Route
+        path="/crm/products"
+        element={
+          <PermissionGuard permission="crm.products.view">
+            <ProductsListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/products/create"
+        element={
+          <PermissionGuard permission="crm.products.manage">
+            <CreateProductPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/products/:id"
+        element={
+          <PermissionGuard anyOf={['crm.products.view', 'inventory.costs.approve']}>
+            <ProductDetailPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/products/:id/edit"
+        element={
+          <PermissionGuard permission="crm.products.manage">
+            <EditProductPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/crm/customers"
- element={<PermissionGuard permission="accounting.customers.view"><CrmCustomersListPage /></PermissionGuard>} />
- <Route path="/crm/customers/create"
- element={<PermissionGuard permission="accounting.customers.manage"><CrmCustomerCreatePage /></PermissionGuard>} />
- <Route path="/crm/customers/:id"
- element={<PermissionGuard permission="accounting.customers.view"><CrmCustomerDetailPage /></PermissionGuard>} />
- <Route path="/crm/customers/:id/edit"
- element={<PermissionGuard permission="accounting.customers.manage"><CrmCustomerEditPage /></PermissionGuard>} />
+      <Route
+        path="/crm/customers"
+        element={
+          <PermissionGuard permission="accounting.customers.view">
+            <CrmCustomersListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/customers/create"
+        element={
+          <PermissionGuard permission="accounting.customers.manage">
+            <CrmCustomerCreatePage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/customers/:id"
+        element={
+          <PermissionGuard permission="accounting.customers.view">
+            <CrmCustomerDetailPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/customers/:id/edit"
+        element={
+          <PermissionGuard permission="accounting.customers.manage">
+            <CrmCustomerEditPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/crm/price-agreements"
- element={<PermissionGuard permission="crm.price_agreements.view"><PriceAgreementsListPage /></PermissionGuard>} />
- <Route path="/crm/price-agreements/create"
- element={<PermissionGuard permission="crm.price_agreements.manage"><CreatePriceAgreementPage /></PermissionGuard>} />
- <Route path="/crm/price-agreements/:id/edit"
- element={<PermissionGuard permission="crm.price_agreements.manage"><EditPriceAgreementPage /></PermissionGuard>} />
+      <Route
+        path="/crm/price-agreements/requests"
+        element={
+          <PermissionGuard
+            anyOf={[
+              'crm.price_agreements.view',
+              'crm.price_agreements.approve',
+              'crm.price_agreements.propose',
+            ]}
+          >
+            <PricingRequestsPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/price-agreements/requests/:id/offer"
+        element={
+          <PermissionGuard permission="crm.price_agreements.propose">
+            <PricingOfferPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/price-agreements"
+        element={
+          <PermissionGuard permission="crm.price_agreements.view">
+            <PriceAgreementsListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/price-agreements/create"
+        element={
+          <PermissionGuard permission="crm.price_agreements.propose">
+            <CreatePriceAgreementPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/price-agreements/:id/edit"
+        element={
+          <PermissionGuard permission="crm.price_agreements.propose">
+            <EditPriceAgreementPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/crm/sales-orders"
- element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrdersListPage /></PermissionGuard>} />
- <Route path="/crm/sales-orders/create"
- element={<PermissionGuard permission="crm.sales_orders.create"><CreateSalesOrderPage /></PermissionGuard>} />
- <Route path="/crm/sales-orders/:id"
- element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrderDetailPage /></PermissionGuard>} />
- <Route path="/crm/sales-orders/:id/edit"
- element={<PermissionGuard permission="crm.sales_orders.update"><EditSalesOrderPage /></PermissionGuard>} />
+      <Route
+        path="/crm/sales-orders"
+        element={
+          <PermissionGuard permission="crm.sales_orders.view">
+            <SalesOrdersListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/sales-orders/create"
+        element={
+          <PermissionGuard permission="crm.sales_orders.create">
+            <CreateSalesOrderPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/sales-orders/:id"
+        element={
+          <PermissionGuard permission="crm.sales_orders.view">
+            <SalesOrderDetailPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/sales-orders/:id/edit"
+        element={
+          <PermissionGuard permission="crm.sales_orders.update">
+            <EditSalesOrderPage />
+          </PermissionGuard>
+        }
+      />
 
- {/* Sprint 7 Task 68 — customer complaints + 8D */}
- <Route path="/crm/complaints"
- element={<PermissionGuard permission="crm.complaints.manage"><ComplaintsListPage /></PermissionGuard>} />
- <Route path="/crm/complaints/new"
- element={<PermissionGuard permission="crm.complaints.manage"><ComplaintCreatePage /></PermissionGuard>} />
- <Route path="/crm/complaints/:id"
- element={<PermissionGuard permission="crm.complaints.manage"><ComplaintDetailPage /></PermissionGuard>} />
+      {/* Sprint 7 Task 68 — customer complaints + 8D */}
+      <Route
+        path="/crm/complaints"
+        element={
+          <PermissionGuard permission="crm.complaints.view">
+            <ComplaintsListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/complaints/new"
+        element={
+          <PermissionGuard permission="crm.complaints.manage">
+            <ComplaintCreatePage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/crm/complaints/:id"
+        element={
+          <PermissionGuard permission="crm.complaints.view">
+            <ComplaintDetailPage />
+          </PermissionGuard>
+        }
+      />
 
- {/* Commission tracking */}
- </Route>
- </>
+      {/* Commission tracking */}
+    </Route>
+  </>
 );

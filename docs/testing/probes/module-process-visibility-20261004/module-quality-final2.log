@@ -1,0 +1,16 @@
+[WebServer] (node:79387) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node-24 --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:79399) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 3 tests using 1 worker
+
+(node:79422) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+  ✓  1 [desktop-chromium] › e2e/inspection-sampling-race.spec.ts:4:1 › a late sample preview cannot replace the plan for the selected output batch (4.2s)
+  ✓  2 [desktop-chromium] › e2e/quality-maintenance-lookup-recovery.spec.ts:8:3 › /quality/inspections/new names a failed prerequisite and recovers (3.2s)
+  ✓  3 [desktop-chromium] › e2e/quality-maintenance-lookup-recovery.spec.ts:8:3 › /maintenance/work-orders/create names a failed prerequisite and recovers (3.2s)
+
+  3 passed (14.5s)

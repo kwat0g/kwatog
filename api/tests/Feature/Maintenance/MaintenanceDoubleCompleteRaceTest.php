@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
+use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Mold;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -47,13 +48,13 @@ class MaintenanceDoubleCompleteRaceTest extends TestCase
             'max_shots_before_maintenance' => 100000,
             'lifetime_max_shots'       => 1000000,
             'current_shot_count'       => 5000,
-            'status'                   => 'in_use',
+            'status'                   => MoldStatus::Maintenance->value,
         ]);
     }
 
     private function inProgressWorkOrder(Mold $mold, User $by): MaintenanceWorkOrder
     {
-        return MaintenanceWorkOrder::create([
+        $order = MaintenanceWorkOrder::create([
             'mwo_number'        => 'MWO-' . substr(uniqid(), -8),
             'maintainable_type' => 'mold',
             'maintainable_id'   => $mold->id,
@@ -62,6 +63,16 @@ class MaintenanceDoubleCompleteRaceTest extends TestCase
             'status'            => 'in_progress',
             'created_by'        => $by->id,
         ]);
+        $order->logs()->create([
+            'description' => 'Work passed before completion.',
+            'finding' => 'Mold inspected',
+            'action_taken' => 'Completed preventive work',
+            'result' => 'passed',
+            'logged_by' => $by->id,
+            'created_at' => now(),
+        ]);
+
+        return $order;
     }
 
     public function test_second_concurrent_complete_is_blocked_and_counters_bump_once(): void

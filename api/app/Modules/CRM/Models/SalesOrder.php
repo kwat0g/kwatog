@@ -70,6 +70,17 @@ class SalesOrder extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function hasPendingDeliveryProposal(): bool
+    {
+        return $this->responses()->where('response_type', 'delivery_date')->where('status', 'pending')->exists();
+    }
+
+    public function supersedeDeliveryProposals(): void
+    {
+        $this->responses()->where('response_type', 'delivery_date')->where('status', 'pending')
+            ->update(['status' => 'superseded', 'resolved_at' => now()]);
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class);
@@ -106,7 +117,12 @@ class SalesOrder extends Model
         return $this->belongsTo(\App\Modules\ReturnManagement\Models\ReturnCase::class);
     }
 
-    /** Every customer negotiation reply, newest last. */
+    /** Delivery proposals retain every round, newest first. */
+    public function deliveryNegotiations(): HasMany
+    {
+        return $this->responses()->where('response_type', 'delivery_date')->orderByDesc('id');
+    }
+
     public function responses(): HasMany
     {
         return $this->hasMany(SalesOrderResponse::class);
@@ -152,6 +168,8 @@ class SalesOrder extends Model
     {
         return $q->whereNotIn('status', [
             SalesOrderStatus::Draft->value,
+            SalesOrderStatus::AwaitingConfirmation->value,
+            SalesOrderStatus::DeliveryNegotiation->value,
             SalesOrderStatus::Cancelled->value,
             SalesOrderStatus::Closed->value,
         ])->whereHas('items', fn (Builder $items): Builder => $items
@@ -165,7 +183,7 @@ class SalesOrder extends Model
 
     public function getIsCancellableAttribute(): bool
     {
-        if (! in_array($this->status, [SalesOrderStatus::Draft, SalesOrderStatus::Confirmed], true)) {
+        if (! $this->status->isBeforeConfirmation() && $this->status !== SalesOrderStatus::Confirmed) {
             return false;
         }
 

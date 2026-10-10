@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\TrashedFilter;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
-use App\Modules\SupplyChain\Enums\ShipmentStatus;
-use App\Common\Support\TrashedFilter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +43,7 @@ class ContainerService
             $locked = Shipment::query()->lockForUpdate()->findOrFail($shipment->id);
             $this->assertMutable($locked);
             $data['shipment_id'] = $locked->id;
+
             return Container::create($data);
         });
     }
@@ -54,6 +55,7 @@ class ContainerService
             $shipment = Shipment::query()->lockForUpdate()->findOrFail($locked->shipment_id);
             $this->assertMutable($shipment);
             $locked->update($data);
+
             return $locked->fresh('shipment');
         });
     }
@@ -75,6 +77,7 @@ class ContainerService
             $shipment = Shipment::withTrashed()->lockForUpdate()->findOrFail($locked->shipment_id);
             $this->assertMutable($shipment);
             $locked->restore();
+
             return $locked->fresh('shipment');
         });
     }

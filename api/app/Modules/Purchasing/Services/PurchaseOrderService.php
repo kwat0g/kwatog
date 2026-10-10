@@ -40,11 +40,12 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Quality\Services\PpapService;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Shipment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class PurchaseOrderService
 {
@@ -861,8 +862,7 @@ class PurchaseOrderService
             $fresh = $locked->fresh();
 
             if ($becameApproved) {
-                // Series C — Task C2. Domain event for chain listeners
-                // (NotifyOnPurchaseOrderApproved + future SendPOToSupplier).
+                // Queue approval notifications and automatic supplier portal dispatch.
                 // NOT recorded for pending-approval re-approval, so supplier
                 // dispatch listeners don't trigger again.
                 app(OutboxService::class)->recordForChain(
@@ -882,6 +882,59 @@ class PurchaseOrderService
         });
 
         return $result;
+    }
+
+    public function sendSupplierReturnReplacement(ReturnRequest $rma): PurchaseOrder
+    {
+        $po = DB::transaction(function () use ($rma): PurchaseOrder {
+            $return = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            if ($return->type !== ReturnRequestType::SupplierReturn
+                || $return->disposition_status !== 'disposed'
+                || $return->replacement_purchase_order_id === null) {
+                throw new BusinessRuleException('Only an arranged supplier return can send its replacement PO.');
+            }
+
+            $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($return->replacement_purchase_order_id);
+            if (! $po->is_auto_generated || (int) $po->vendor_id !== (int) $return->vendor_id) {
+                throw new BusinessRuleException('The replacement PO does not match this supplier return.');
+            }
+            if ($po->status === PurchaseOrderStatus::Sent) {
+                return $po->fresh();
+            }
+            if (! in_array($po->status, [PurchaseOrderStatus::Draft, PurchaseOrderStatus::Approved], true)) {
+                throw new BusinessRuleException('The replacement PO cannot be sent from its current status.');
+            }
+            if ($po->expected_delivery_date === null || $po->expected_delivery_date->toDateString() < now()->toDateString()) {
+                throw new BusinessRuleException('Set a current or future required delivery date before sending the replacement PO.');
+            }
+            if ($po->status === PurchaseOrderStatus::Draft) {
+                $this->assertVendorPurchasable((int) $po->vendor_id);
+                $po->forceFill([
+                    'status' => PurchaseOrderStatus::Approved,
+                    'requires_vp_approval' => false,
+                    'approved_at' => now(),
+                    'approved_by' => null,
+                ])->save();
+                $this->recordSupplierItemLinks($po);
+                $fresh = $po->fresh();
+                app(OutboxService::class)->recordForChain(
+                    new PurchaseOrderApproved($fresh),
+                    $fresh,
+                    'p2p',
+                    'purchase_order',
+                    PurchaseOrderStatus::Approved->value,
+                );
+                $this->broadcastChain($fresh, null);
+            }
+
+            return $po->fresh();
+        });
+
+        if ($po->status === PurchaseOrderStatus::Approved) {
+            $this->supplierDispatches->prepareForApproved($po);
+        }
+
+        return $po->fresh();
     }
 
     /**

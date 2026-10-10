@@ -8,8 +8,8 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
-use App\Modules\SupplyChain\Enums\VehicleType;
 use App\Modules\SupplyChain\Enums\VehicleStatus;
+use App\Modules\SupplyChain\Enums\VehicleType;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Vehicle;
 use App\Modules\SupplyChain\Resources\VehicleResource;
@@ -31,13 +31,18 @@ class VehicleController
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        $request->validate(['per_page' => ['sometimes', 'integer', 'min:1']]);
+
         $q = Vehicle::query()->with('asset:id,asset_code,name');
         TrashedFilter::apply($q, $request->query());
-        if ($request->filled('status')) $q->where('status', $request->query('status'));
+        if ($request->filled('status')) {
+            $q->where('status', $request->query('status'));
+        }
         if ($request->filled('search')) {
             $term = '%'.trim((string) $request->query('search')).'%';
             $q->where(fn ($b) => $b->where('plate_number', SearchOperator::like(), $term)->orWhere('name', SearchOperator::like(), $term));
         }
+
         return VehicleResource::collection($q->orderBy('name')->paginate(min((int) $request->query('per_page', 50), 100)));
     }
 
@@ -45,12 +50,17 @@ class VehicleController
     {
         $data = $request->validate([
             'plate_number' => ['required', 'string', 'max:20', 'unique:vehicles,plate_number'],
-            'name'         => ['required', 'string', 'max:100'],
+            'name' => ['required', 'string', 'max:100'],
             'vehicle_type' => ['required', Rule::enum(VehicleType::class)],
-            'capacity_kg'  => ['nullable', 'numeric', 'min:0'],
-            'status'       => ['nullable', Rule::enum(VehicleStatus::class)],
-            'notes'        => ['nullable', 'string', 'max:500'],
+            'capacity_kg' => ['nullable', 'numeric', 'min:0', 'max:99999999.99', 'decimal:0,2'],
+            'status' => ['nullable', Rule::enum(VehicleStatus::class)],
+            'notes' => ['nullable', 'string', 'max:500'],
         ]);
+
+        if (($data['status'] ?? null) === VehicleStatus::InUse->value) {
+            throw new BusinessRuleException('Vehicle status is managed by delivery dispatch.');
+        }
+
         return new VehicleResource(DB::transaction(static fn (): Vehicle => Vehicle::create($data)));
     }
 
@@ -58,16 +68,28 @@ class VehicleController
     {
         $data = $request->validate([
             'plate_number' => ['nullable', 'string', 'max:20', Rule::unique('vehicles', 'plate_number')->ignore($vehicle->id)],
-            'name'         => ['nullable', 'string', 'max:100'],
+            'name' => ['nullable', 'string', 'max:100'],
             'vehicle_type' => ['nullable', Rule::enum(VehicleType::class)],
-            'capacity_kg'  => ['nullable', 'numeric', 'min:0'],
-            'status'       => ['nullable', Rule::enum(VehicleStatus::class)],
-            'notes'        => ['nullable', 'string', 'max:500'],
+            'capacity_kg' => ['nullable', 'numeric', 'min:0', 'max:99999999.99', 'decimal:0,2'],
+            'status' => ['nullable', Rule::enum(VehicleStatus::class)],
+            'notes' => ['nullable', 'string', 'max:500'],
         ]);
         $updated = DB::transaction(function () use ($vehicle, $data): Vehicle {
             $locked = Vehicle::query()->lockForUpdate()->find($vehicle->id);
             if (! $locked) {
                 throw new BusinessRuleException('Vehicle not found.');
+            }
+
+            $identityChanged = array_filter(['plate_number', 'name'], fn (string $field): bool => array_key_exists($field, $data) && $data[$field] !== $locked->{$field}
+            ) !== [];
+            if ($identityChanged && Delivery::withTrashed()->where('vehicle_id', $locked->id)->exists()) {
+                throw new BusinessRuleException(
+                    'Vehicle identity cannot be changed after it has been assigned to a delivery.'
+                );
+            }
+            if (($data['status'] ?? null) === VehicleStatus::InUse->value
+                && $locked->status !== VehicleStatus::InUse->value) {
+                throw new BusinessRuleException('Vehicle status is managed by delivery dispatch.');
             }
 
             if (array_key_exists('status', $data) && $data['status'] !== $locked->status) {
@@ -77,6 +99,7 @@ class VehicleController
                         DeliveryStatus::Scheduled->value,
                         DeliveryStatus::Loading->value,
                         DeliveryStatus::InTransit->value,
+                        DeliveryStatus::ReturnPending->value,
                     ])
                     ->exists();
                 if ($hasActiveDelivery) {
@@ -87,6 +110,7 @@ class VehicleController
             }
 
             $locked->update($data);
+
             return $locked;
         });
 
@@ -107,6 +131,7 @@ class VehicleController
                     DeliveryStatus::Scheduled->value,
                     DeliveryStatus::Loading->value,
                     DeliveryStatus::InTransit->value,
+                        DeliveryStatus::ReturnPending->value,
                 ])
                 ->exists();
             if ($hasActiveDelivery) {
@@ -114,9 +139,13 @@ class VehicleController
                     'Vehicle cannot be archived while it has a scheduled or active delivery assignment.'
                 );
             }
+            if ($locked->asset_id !== null) {
+                throw new BusinessRuleException('Disassociate this asset before archiving the vehicle.');
+            }
 
             $locked->delete();
         });
+
         return response()->json([], 204);
     }
 
@@ -129,6 +158,7 @@ class VehicleController
             }
             $locked->restore();
         });
+
         return response()->json(['message' => 'Vehicle restored.']);
     }
 }

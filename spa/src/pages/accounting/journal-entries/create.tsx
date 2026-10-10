@@ -113,7 +113,7 @@ export default function CreateJournalEntryPage() {
  />
       <FormDraftBanner safety={safety} />
 
- <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
+ <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Header">
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
  <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
@@ -133,7 +133,7 @@ export default function CreateJournalEntryPage() {
  {fields.map((field, idx) => (
  <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
  <div className="col-span-4">
- <Select required {...register(`lines.${idx}.account_id` as const)} error={errors.lines?.[idx]?.account_id?.message}>
+ <Select searchable aria-label={`Account for line ${idx + 1}`} required {...register(`lines.${idx}.account_id` as const)} error={errors.lines?.[idx]?.account_id?.message}>
  <option value="">— Select account —</option>
  {accounts.filter((a) => a.is_active).map((a) => (
  <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
@@ -141,18 +141,20 @@ export default function CreateJournalEntryPage() {
  </Select>
  </div>
  <div className="col-span-3">
- <Input placeholder="Memo" {...register(`lines.${idx}.description` as const)} />
+ <Input aria-label={`Memo for line ${idx + 1}`} placeholder="Memo" {...register(`lines.${idx}.description` as const)} />
  </div>
  <div className="col-span-2">
- <Input step="0.01" min="0" placeholder="0.00"
+ <Input aria-label={`Debit for line ${idx + 1}`} min="0" placeholder="0.00"
  className="font-mono tabular-nums text-right"
  {...numberInputProps()}
+ step="0.01"
  {...register(`lines.${idx}.debit` as const)} error={errors.lines?.[idx]?.debit?.message} />
  </div>
  <div className="col-span-2">
- <Input step="0.01" min="0" placeholder="0.00"
+ <Input aria-label={`Credit for line ${idx + 1}`} min="0" placeholder="0.00"
  className="font-mono tabular-nums text-right"
  {...numberInputProps()}
+ step="0.01"
  {...register(`lines.${idx}.credit` as const)} error={errors.lines?.[idx]?.credit?.message} />
  </div>
  <div className="col-span-1 flex justify-end pt-1">

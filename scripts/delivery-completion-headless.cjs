@@ -14,6 +14,7 @@ const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 const { createRequire } = require('node:module');
 const { randomUUID } = require('node:crypto');
+const deliveryReturnMrbFlow = require('./support/delivery-return-mrb-flow.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const SPA = path.join(ROOT, 'spa');
@@ -23,6 +24,7 @@ const { chromium, expect } = spaRequire('@playwright/test');
 const BOOTSTRAP = process.env.DISPATCH_TEST_BOOTSTRAP === '1';
 const RUN_KEY = (process.env.DISPATCH_RUN_ID || `${'D'}${'SP'}${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_dispatch_browser_${RUN_KEY.toLowerCase()}`;
+const TEST_STORAGE = `/tmp/ogami-audit-storage/delivery-completion-${RUN_KEY.toLowerCase()}`;
 const API_PORT = Number(process.env.DISPATCH_TEST_API_PORT || 8210);
 const SPA_PORT = Number(process.env.DISPATCH_TEST_SPA_PORT || 5210);
 const BASE = process.env.DISPATCH_TEST_URL || (BOOTSTRAP ? `http://127.0.0.1:${SPA_PORT}` : 'http://127.0.0.1:5210');
@@ -30,15 +32,38 @@ const OUT_ROOT = path.join('/tmp', `delivery-completion-headless-${RUN_KEY}`);
 const FIXTURE_IN_CONTAINER = `/tmp/dispatch-${RUN_KEY.toLowerCase()}-fixture.json`;
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
-  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE, LOG_CHANNEL: 'single',
+  LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
   DISPATCH_BROWSER_DB: DB, DISPATCH_RUN_ID: RUN_KEY, DISPATCH_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
 const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 const envFlags = () => Object.entries(ENV).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', 'artisan', ...args]);
 const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
 const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
 const sleep = (ms) => { try { execFileSync('sleep', [String(ms / 1000)]); } catch { /* ignored */ } };
+
+function captureServerLogs() {
+  const logPath = path.join(OUT, 'server.log');
+  try {
+    const contents = compose(['exec', '-T', ...envFlags(), 'api', 'php', '-r',
+      `$path = '${TEST_STORAGE}/logs/laravel.log'; if (is_file($path)) { readfile($path); }`]);
+    fs.writeFileSync(logPath, contents);
+    const lines = contents.split(/\r?\n/).filter(Boolean);
+    report.server_logs = {
+      path: logPath,
+      line_count: lines.length,
+      error_lines: lines.filter((line) => /\b(?:ERROR|CRITICAL|ALERT|EMERGENCY|FATAL|SQLSTATE\[)/i.test(line)),
+      warning_lines: lines.filter((line) => /\bWARN(?:ING)?\b/i.test(line)),
+    };
+  } catch (error) {
+    report.server_log_capture_error = error.message;
+    report.success = false;
+    report.failures.push({ message: 'Isolated API server log capture failed.', stack: error.stack });
+    process.exitCode = 1;
+  }
+}
 
 /** Free the port so a run killed before its teardown cannot poison this one. */
 function stopApiServer() {
@@ -55,9 +80,12 @@ function prepare() {
   fs.mkdirSync(OUT_ROOT, { recursive: true });
   stopApiServer();
   psql(`CREATE DATABASE ${DB} OWNER ogami;`);
-  compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'migrate', '--force']);
+  compose(['exec', '-T', 'api', 'mkdir', '-p', `${TEST_STORAGE}/app`, `${TEST_STORAGE}/app/public`, `${TEST_STORAGE}/framework/cache/data`, `${TEST_STORAGE}/framework/sessions`, `${TEST_STORAGE}/framework/views`, `${TEST_STORAGE}/logs`]);
+  const actualStorage = artisan('tinker', '--execute', 'echo storage_path();').trim();
+  if (actualStorage !== TEST_STORAGE) throw new Error(`Expected isolated Laravel storage ${TEST_STORAGE}; got ${actualStorage}.`);
+  artisan('migrate', '--force');
   compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
-  compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'tinker', '--execute', "require 'tests/Browser/delivery_exception_fixture.php';"]);
+  artisan('tinker', '--execute', "require 'tests/Browser/delivery_exception_fixture.php';");
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT_ROOT, 'fixture.json')]);
   compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
@@ -79,7 +107,6 @@ async function startVite() {
   const target = `http://${apiIp()}:${API_PORT}`;
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -102,6 +129,7 @@ async function tearDown(server) {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
     psql(`DROP DATABASE IF EXISTS ${DB};`);
   } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+  try { compose(['exec', '-T', 'api', 'rm', '-rf', TEST_STORAGE]); } catch (e) { console.log(`Could not remove ${TEST_STORAGE}: ${e.message}`); }
 }
 
 if (BOOTSTRAP) prepare();
@@ -132,6 +160,69 @@ let websocketSubscriptionsAcknowledged = 0;
 let websocketPingsAnswered = 0;
 const echoWebsocketUrls = [];
 let sharedBrowser;
+
+const expectedHttpErrors = [
+  [401, 'GET', /^\/api\/v1\/auth\/user$/],
+  [403, 'POST', /^\/api\/v1\/supply-chain\/deliveries\/[^/]+\/truck-return-receipt$/],
+  [403, 'PATCH', /^\/api\/v1\/quality\/inspections\/[^/]+\/review$/],
+  [404, 'GET', /^\/api\/v1\/driver\/deliveries\/[^/]+$/],
+  [404, 'POST', /^\/api\/v1\/driver\/deliveries\/[^/]+\/attempt-outcome$/],
+  [422, 'POST', /^\/api\/v1\/supply-chain\/deliveries$/],
+  [422, 'POST', /^\/api\/v1\/supply-chain\/deliveries\/[^/]+\/confirm$/],
+  [422, 'POST', /^\/api\/v1\/return-management\/return-requests\/[^/]+\/(?:dispose|complete)$/],
+  [422, 'POST', /^\/api\/v1\/inventory\/mrb\/[^/]+\/release$/],
+  [422, 'POST', /^\/api\/v1\/inventory\/transfer-orders\/[^/]+\/execute$/],
+];
+const expectedAbortedRequests = [
+  ['POST', /^\/api\/v1\/driver\/deliveries\/[^/]+\/(?:amend-attempt|attempt-outcome)$/],
+  ['POST', /^\/api\/v1\/supply-chain\/deliveries\/[^/]+\/(?:truck-return-receipt|receive-late-return)$/],
+];
+
+function classifyDiagnostics() {
+  const unclassified = [];
+  let expectedHttpErrorCount = 0;
+  let expectedAbortedRequestCount = 0;
+  const pathOf = (url) => {
+    try { return new URL(url).pathname; } catch { return ''; }
+  };
+  const httpErrorAllowed = ({ status, method, url }) => expectedHttpErrors.some(([code, verb, route]) =>
+    status === code && method === verb && route.test(pathOf(url)));
+  const abortedRequestAllowed = ({ method, url, failure }) => expectedAbortedRequests.some(([verb, route]) =>
+    method === verb && route.test(pathOf(url)) && failure === 'net::ERR_FAILED');
+
+  for (const { email, diagnostics } of live) {
+    for (const pageError of diagnostics.pageErrors) unclassified.push({ email, type: 'page_error', ...pageError });
+    for (const crash of diagnostics.crashes) unclassified.push({ email, type: 'page_crash', ...crash });
+    for (const response of diagnostics.errorResponses) {
+      if (httpErrorAllowed(response)) expectedHttpErrorCount++;
+      else unclassified.push({ email, type: 'http_error', ...response });
+    }
+    for (const request of diagnostics.failedRequests) {
+      if (abortedRequestAllowed(request)) expectedAbortedRequestCount++;
+      else unclassified.push({ email, type: 'failed_request', ...request });
+    }
+    for (const error of diagnostics.consoleErrors) {
+      const status = Number(error.text.match(/status of (\d{3})/)?.[1] ?? 0);
+      const request = { status, method: 'GET', url: error.url };
+      const method = diagnostics.errorResponses.find((response) =>
+        response.url === error.url && response.status === status)?.method ?? request.method;
+      if (status && httpErrorAllowed({ ...request, method })) continue;
+      if (error.text.includes('net::ERR_FAILED') && diagnostics.failedRequests.some((failed) =>
+        failed.url === error.url && abortedRequestAllowed(failed))) continue;
+      unclassified.push({ email, type: 'console_error', ...error });
+    }
+  }
+  report.diagnostic_summary = {
+    expected_http_errors: expectedHttpErrorCount,
+    expected_aborted_requests: expectedAbortedRequestCount,
+    unclassified,
+  };
+  if (unclassified.length > 0) {
+    report.success = false;
+    report.failures.push({ message: 'Browser diagnostics contain unclassified errors.', evidence: unclassified });
+    process.exitCode = 1;
+  }
+}
 
 function passed(name, evidence = {}) {
   report.checks.push({ name, evidence });
@@ -270,16 +361,21 @@ async function fit(page) {
 async function createDelivery(page, batchIndex, lostResponse = false, quantityOverride = null) {
   const batch = fixture.batches[batchIndex];
   await page.goto('/supply-chain/deliveries/create');
-  await page.getByLabel('Find sales order', { exact: true }).fill(fixture.so_number);
-  const orderSelect = page.getByLabel(/^Sales order\s*\*?$/);
-  await expect(orderSelect.locator(`option[value="${fixture.sales_order}"]`)).toHaveCount(1);
-  await orderSelect.selectOption(fixture.sales_order);
-  const lineSelect = page.getByLabel(/^Sales order line/);
-  await expect(lineSelect.locator(`option[value="${fixture.line}"]`)).toHaveCount(1);
-  await lineSelect.selectOption(fixture.line);
-  const inspection = page.getByLabel(/^Passed outgoing inspection/);
-  await expect(inspection.locator(`option[value="${batch.inspection}"]`)).toHaveCount(1);
-  await inspection.selectOption(batch.inspection);
+  const orderSelect = page.getByRole('combobox', { name: 'Sales order', exact: true });
+  await orderSelect.fill(fixture.so_number);
+  const orderOption = page.getByRole('option', { name: new RegExp(fixture.so_number) });
+  await expect(orderOption).toBeVisible();
+  await orderOption.click();
+  const lineSelect = page.getByRole('combobox', { name: 'Sales order line', exact: true });
+  await lineSelect.click();
+  const lineOption = page.getByRole('option', { name: new RegExp(fixture.product_code) });
+  await expect(lineOption).toBeVisible();
+  await lineOption.click();
+  const inspection = page.getByRole('combobox', { name: 'Passed outgoing inspection', exact: true });
+  await inspection.click();
+  const inspectionOption = page.getByRole('option', { name: new RegExp(`QC-${fixture.run_id}-${batchIndex}`) });
+  await expect(inspectionOption).toBeVisible();
+  await inspectionOption.click();
   await page.getByLabel(/^Qty/).fill(String(quantityOverride ?? batch.quantity));
   let savedId;
   const matchCreate = (url) => new URL(url).pathname === '/api/v1/supply-chain/deliveries';
@@ -436,38 +532,8 @@ async function receiveTruck(warehouse, id, quantity, loseResponse = false) {
   return delivery.attempt_outcome.return_request.id;
 }
 
-async function inspectAndRestock(manager, qc, checker, rmaId) {
-  const url = `/return-management/return-requests/${rmaId}`;
-  let rma = await ok(manager, 'GET', url);
-  expect(rma.status).toBe('received');
-  // The existing Quality workflow is exercised with the actual QC role and
-  // independent reviewer cookies; no inspection status is forced in fixtures.
-  rma = await ok(qc, 'POST', `${url}/inspect`, { internal_notes: 'Physically returned unopened goods checked against the original load.' });
-  expect(rma.inspections.length).toBeGreaterThan(0);
-  for (const row of rma.inspections) {
-    const inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
-    expect(inspection.measurements.length).toBeGreaterThan(0);
-    await ok(qc, 'PATCH', `/quality/inspections/${row.id}/measurements`, { measurements: inspection.measurements.map((measurement) => ({ id: measurement.id, is_pass: true, notes: 'Returned unopened goods meet the visual condition specification.' })) });
-    const completed = await ok(qc, 'POST', `/quality/inspections/${row.id}/complete`);
-    expect(completed.status).toBe('awaiting_review');
-    expect((await request(qc, 'PATCH', `/quality/inspections/${row.id}/review`, { decision: 'passed' })).status).toBe(403);
-    await ok(checker, 'PATCH', `/quality/inspections/${row.id}/review`, { decision: 'passed', remarks: 'Independently checked returned-goods measurements.' });
-  }
-  await manager.goto(`/return-management/${rmaId}`);
-  await manager.getByRole('button', { name: 'Dispose Items', exact: true }).click();
-  await expect(manager.getByRole('combobox', { name: 'Disposition', exact: true }).first()).toBeVisible();
-  for (const select of await manager.getByRole('combobox', { name: 'Disposition', exact: true }).all()) await select.selectOption('restock');
-  await manager.getByRole('combobox', { name: 'Restock location', exact: true }).selectOption(fixture.location);
-  const disposed = manager.waitForResponse((response) => response.url().endsWith(`${rmaId}/dispose`) && response.request().method() === 'POST');
-  await manager.getByRole('button', { name: 'Record Disposition', exact: true }).click();
-  const response = await disposed;
-  expect(response.status(), await response.text()).toBe(200);
-  rma = await ok(manager, 'GET', url);
-  for (const item of rma.items) expect(item.quarantine_status).toBe('released');
-  rma = await ok(manager, 'POST', `${url}/complete`, {});
-  expect(rma.status).toBe('completed');
-  expect(rma.credit_note?.id ?? null).toBeNull();
-  passed('Returned stock passes Quality and existing disposition without customer credit', { rmaId });
+async function inspectAndRestock(manager, qc, checker, warehouse, warehouseChecker, rmaId, targetLocationId = fixture.location) {
+  return deliveryReturnMrbFlow({ manager, qc, checker, warehouse, warehouseChecker, rmaId, fixture, targetLocationId, request, ok, psql, expect, passed });
 }
 
 async function deliverAndConfirm(impex, driver, customer, finance, id, expectedQuantity, alreadyArrived = false) {
@@ -596,6 +662,7 @@ async function recoverLate(warehouse, id) {
   try {
     const impex = await login('impex@ogami.test');
     const warehouse = await login('warehouse@ogami.test');
+    const warehouseChecker = await login(fixture.warehouse_checker_email);
     const driver = await login('driver@ogami.test', { width: 390, height: 844 });
     const manager = await login('customerservice@ogami.test');
     const qc = await login('qc@ogami.test');
@@ -643,9 +710,9 @@ async function recoverLate(warehouse, id) {
     await manager.getByRole('button', { name: 'Close shipment tracking', exact: true }).last().click();
     expect((await traceClosed).status()).toBe(200);
     passed('Customer Service closes tracking only after depot reconciliation with a public next step');
-    await inspectAndRestock(manager, qc, checker, rma);
+    await inspectAndRestock(manager, qc, checker, warehouse, warehouseChecker, rma, fixture.staging_location);
     const lateRma = await recoverLate(warehouse, first);
-    await inspectAndRestock(manager, qc, checker, lateRma);
+    await inspectAndRestock(manager, qc, checker, warehouse, warehouseChecker, lateRma);
     const redelivery = await createDelivery(impex, 0);
     const invoice1 = await deliverAndConfirm(impex, driver, customer, finance, redelivery, 6);
     const partial = await createDelivery(impex, 1);
@@ -655,7 +722,7 @@ async function recoverLate(warehouse, id) {
     await driverStep(driver, partial, 'in transit', 'in_transit');
     await reportAttempt(driver, partial, '2', '2');
     const partialRma = await receiveTruck(warehouse, partial, '2');
-    await inspectAndRestock(manager, qc, checker, partialRma);
+    await inspectAndRestock(manager, qc, checker, warehouse, warehouseChecker, partialRma);
     const invoice2 = await deliverAndConfirm(impex, driver, customer, finance, partial, 2, true);
     await screenshot(customer, '03-partial-customer-receipt-mobile.png');
     const last = await createDelivery(impex, 1, false, 2);
@@ -673,6 +740,7 @@ async function recoverLate(warehouse, id) {
     passed('Full and partial redeliveries reconcile ten received/invoiced units and retain five unapproved units');
     expect(jsErrors).toEqual([]);
     report.success = true;
+    classifyDiagnostics();
   } catch (error) {
     report.failures.push({ message: error.message, stack: error.stack });
     report.success = false;
@@ -682,10 +750,11 @@ async function recoverLate(warehouse, id) {
     process.exitCode = 1;
   } finally {
     report.javascript_errors = jsErrors;
-    report.pages = live.map(({ email, page, diagnostics }) => ({ email, url: page.url(), diagnostics }));
-    fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
     for (const { context } of live) await context.close();
     if (sharedBrowser) await sharedBrowser.close();
+    if (BOOTSTRAP) captureServerLogs();
+    report.pages = live.map(({ email, page, diagnostics }) => ({ email, url: page.url(), diagnostics }));
+    fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
     console.log(`Report: ${OUT}/report.json`);
     if (BOOTSTRAP) await tearDown(viteServer);
   }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
+use App\Modules\Accounting\Enums\BillPaymentStatus;
+use App\Modules\Accounting\Enums\BillStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,12 +13,18 @@ class BillResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $pendingPayment = $this->resource->relationLoaded('payments')
+            ? $this->payments->contains(fn ($payment) => $payment->status === BillPaymentStatus::PendingApproval)
+            : (bool) ($this->payment_approval_pending ?? false);
+        $pendingVpApproval = $pendingPayment && in_array($this->status, [BillStatus::Unpaid, BillStatus::Partial], true);
+
         return [
             'id'                      => $this->hash_id,
             'bill_number'             => $this->bill_number,
-            'supplier_invoice_number' => $this->supplier_invoice_number,
-            'supplier_invoice_date'   => optional($this->supplier_invoice_date)->toDateString(),
-            'supplier_invoice_submitted_at' => optional($this->supplier_invoice_submitted_at)->toIso8601String(),
+            'supplier_invoice_number' => $this->supplierInvoice?->number ?? $this->supplier_invoice_number,
+            'supplier_invoice_group_total' => $this->supplierInvoice?->gross_total,
+            'supplier_invoice_date'   => optional($this->supplierInvoice?->date ?? $this->supplier_invoice_date)->toDateString(),
+            'supplier_invoice_submitted_at' => optional($this->supplierInvoice?->submitted_at ?? $this->supplier_invoice_submitted_at)->toIso8601String(),
             'date'                    => optional($this->date)->toDateString(),
             'due_date'                => optional($this->due_date)->toDateString(),
             'is_vatable'     => (bool) $this->is_vatable,
@@ -29,7 +37,8 @@ class BillResource extends JsonResource
             'amount_paid'    => (string) $this->amount_paid,
             'balance'        => (string) $this->balance,
             'status'         => $this->status?->value,
-            'status_label'   => $this->status?->label(),
+            'status_label'   => $pendingVpApproval ? 'Pending VP approval' : $this->status?->label(),
+            'payment_approval_pending' => $pendingVpApproval,
             'cancelled_at'   => optional($this->cancelled_at)->toIso8601String(),
             // 2026-08-08 — source receipt for auto-created draft bills.
             'goods_receipt_note_id' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? $this->goodsReceiptNote->hash_id : null),
@@ -87,7 +96,8 @@ class BillResource extends JsonResource
             'items'          => BillItemResource::collection($this->whenLoaded('items')),
             // Supplier-submitted invoice attachment.
             'supplier_invoice_attachment' => $this->whenLoaded('portalShippingDocuments', function (): ?array {
-                $document = $this->portalShippingDocuments->firstWhere('document_type', 'supplier_invoice');
+                $document = $this->supplierInvoice?->documents->firstWhere('document_type', 'supplier_invoice')
+                    ?? $this->portalShippingDocuments->firstWhere('document_type', 'supplier_invoice');
 
                 return $document ? ['id' => $document->hash_id, 'original_filename' => $document->original_filename] : null;
             }),

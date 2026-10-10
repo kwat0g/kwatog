@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Models\ApprovalRecord;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\BillPaymentStatus;
 use App\Modules\Accounting\Enums\PaymentMethod;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Resources\BillPaymentResource;
+use App\Modules\Accounting\Resources\BillResource;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -16,7 +20,10 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -51,8 +58,9 @@ class BillServiceTest extends TestCase
 
     private function approvePayment(BillService $service, \App\Modules\Accounting\Models\Bill $bill, \App\Modules\Accounting\Models\BillPayment $payment): \App\Modules\Accounting\Models\BillPayment
     {
-        $financeChecker = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
-        $service->approvePayment($bill->fresh(), $payment->fresh(), $financeChecker);
+        if ($payment->status === BillPaymentStatus::Posted) {
+            return $payment;
+        }
 
         $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
 
@@ -92,22 +100,35 @@ class BillServiceTest extends TestCase
         $this->assertSame((string) $je->total_debit, (string) $je->total_credit);
         $this->assertSame('posted', $je->status->value);
 
-        // Request half; approval posts it.
+        try {
+            $svc->recordPayment($bill->fresh(), [
+                'cash_account_id' => $cashId,
+                'payment_date' => '2026-04-12',
+                'amount' => '1000.00',
+                'payment_method' => PaymentMethod::BankTransfer->value,
+            ], $user);
+            $this->fail('A partial payment below half the bill total must be rejected.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+            $this->assertStringContainsString('at least 50%', $exception->getMessage());
+        }
+        $this->assertSame(0, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
+
+        // More than half may be paid first; the smaller final payment clears the bill.
         $payment = $svc->recordPayment($bill->fresh(), [
             'cash_account_id'  => $cashId,
             'payment_date'     => '2026-04-12',
-            'amount'           => '2800.00',
+            'amount'           => '3360.00',
             'payment_method'   => PaymentMethod::BankTransfer->value,
             'reference_number' => 'BANK-001',
             'idempotency_key'  => 'bill-payment-first',
         ], $user);
 
-        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
-        $this->assertSame('0.00', (string) $bill->fresh()->amount_paid);
+        $this->assertSame(BillPaymentStatus::Posted, $payment->status);
+        $this->assertSame('3360.00', (string) $bill->fresh()->amount_paid);
         $payment = $this->approvePayment($svc, $bill, $payment);
         $bill->refresh();
-        $this->assertSame('2800.00', (string) $bill->amount_paid);
-        $this->assertSame('2800.00', (string) $bill->balance);
+        $this->assertSame('3360.00', (string) $bill->amount_paid);
+        $this->assertSame('2240.00', (string) $bill->balance);
         $this->assertSame(BillStatus::Partial, $bill->status);
         $this->assertNotNull($payment->journal_entry_id);
 
@@ -115,7 +136,7 @@ class BillServiceTest extends TestCase
         $svc->recordPayment($bill->fresh(), [
             'cash_account_id'  => $cashId,
             'payment_date'     => '2026-04-15',
-            'amount'           => '2800.00',
+            'amount'           => '2240.00',
             'payment_method'   => PaymentMethod::BankTransfer->value,
             'idempotency_key'  => 'bill-payment-second',
         ], $user);
@@ -145,12 +166,141 @@ class BillServiceTest extends TestCase
         ], $user);
 
         $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('exceeds the unreserved balance');
         $svc->recordPayment($bill->fresh(), [
             'cash_account_id' => $cashId,
             'payment_date'    => '2026-04-11',
             'amount'          => '101.00',
             'payment_method'  => PaymentMethod::Cash->value,
         ], $user);
+    }
+
+    public function test_bill_total_at_50000_requires_only_vp_even_for_smaller_installments(): void
+    {
+        $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
+        $vendor = Vendor::create(['name' => 'VP Threshold Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-VP-THRESHOLD', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '50000.00']],
+        ], $finance);
+
+        $first = $service->recordPayment($bill, [
+            'cash_account_id' => $cashId, 'payment_date' => '2026-04-12',
+            'amount' => '30000.00', 'payment_method' => PaymentMethod::BankTransfer->value,
+        ], $finance);
+        $this->assertSame(BillPaymentStatus::PendingApproval, $first->status);
+        $this->assertSame(['vice_president'], $first->approvalRecords->pluck('role_slug')->all());
+        $this->assertSame('0.00', (string) $bill->fresh()->amount_paid);
+
+        ApprovalRecord::create([
+            'approvable_type' => $first->getMorphClass(),
+            'approvable_id' => $first->id,
+            'step_order' => 1,
+            'role_slug' => 'finance_officer',
+            'action' => 'superseded',
+            'attempt' => 0,
+            'is_current' => false,
+        ]);
+
+        $detail = (new BillResource($service->show($bill)))->resolve(Request::create('/'));
+        $this->assertSame('unpaid', $detail['status']);
+        $this->assertSame('Pending VP approval', $detail['status_label']);
+        $this->assertTrue($detail['payment_approval_pending']);
+        $paymentDetail = (new BillPaymentResource($first->fresh()->load('approvalRecords.approver')))->resolve(Request::create('/'));
+        $this->assertSame(['vice_president'], array_column($paymentDetail['approval_records']->all(), 'role_slug'));
+        $list = (new BillResource($service->list([])->first()))->resolve(Request::create('/'));
+        $this->assertSame('Pending VP approval', $list['status_label']);
+
+        try {
+            $service->recordPayment($bill->fresh(), [
+                'cash_account_id' => $cashId, 'payment_date' => '2026-04-12',
+                'amount' => '20000.00', 'payment_method' => PaymentMethod::BankTransfer->value,
+            ], $finance);
+            $this->fail('A pending payment must not make a smaller installment count as final.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+            $this->assertStringContainsString('at least 50%', $exception->getMessage());
+        }
+
+        $service->approvePayment($bill->fresh(), $first, $vp);
+        $this->assertSame('20000.00', (string) $bill->fresh()->balance);
+        $last = $service->recordPayment($bill->fresh(), [
+            'cash_account_id' => $cashId, 'payment_date' => '2026-04-15',
+            'amount' => '20000.00', 'payment_method' => PaymentMethod::BankTransfer->value,
+        ], $finance);
+        $this->assertSame(BillPaymentStatus::PendingApproval, $last->status);
+        $service->approvePayment($bill->fresh(), $last, $vp);
+        $this->assertSame(BillStatus::Paid, $bill->fresh()->status);
+    }
+
+    public function test_payment_date_before_bill_date_is_rejected(): void
+    {
+        $user = $this->newUser();
+        $vendor = Vendor::create(['name' => 'Date Guard Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-DATE-GUARD', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('Payment date cannot be before the bill date.');
+        $service->recordPayment($bill, [
+            'cash_account_id' => $cashId,
+            'payment_date' => '2026-04-09',
+            'amount' => '50.00',
+            'payment_method' => PaymentMethod::Cash->value,
+            'idempotency_key' => 'bill-payment-before-bill',
+        ], $user);
+    }
+
+    public function test_payment_proof_is_kept_with_the_payment_and_downloadable(): void
+    {
+        Storage::fake('local');
+        $user = $this->newUser();
+        $vendor = Vendor::create(['name' => 'Proof Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-PROOF', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+        $this->actingAs($user->fresh(), 'sanctum')
+            ->withHeader('Idempotency-Key', 'bill-payment-no-reference')
+            ->postJson("/api/v1/bills/{$bill->hash_id}/payments", [
+                'cash_account_id' => $cashId,
+                'payment_date' => '2026-04-10',
+                'amount' => '50.00',
+                'payment_method' => PaymentMethod::BankTransfer->value,
+            ])->assertUnprocessable()->assertJsonValidationErrors('reference_number');
+        $this->actingAs($user->fresh(), 'sanctum')
+            ->withHeader('Idempotency-Key', 'bill-payment-proof')
+            ->post("/api/v1/bills/{$bill->hash_id}/payments", [
+                'cash_account_id' => $cashId,
+                'payment_date' => '2026-04-10',
+                'amount' => '50.00',
+                'payment_method' => PaymentMethod::BankTransfer->value,
+                'reference_number' => 'PROOF-001',
+                'proof_file' => UploadedFile::fake()->createWithContent('bank-receipt.pdf', '%PDF-1.4 payment receipt'),
+            ])->assertCreated();
+        $payment = BillPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+        $this->assertSame('bank-receipt.pdf', $payment->proof_file_name);
+        Storage::disk('local')->assertExists($payment->proof_path);
+        $response = $this->getJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/proof");
+        $response->assertOk();
     }
 
     public function test_service_bill_exception_requires_an_authorized_approver(): void
@@ -247,7 +397,7 @@ class BillServiceTest extends TestCase
             'idempotency_key' => 'bill-payment-locked',
         ], $user);
 
-        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
+        $this->assertSame(BillPaymentStatus::Posted, $payment->status);
         $this->approvePayment($svc, $bill, $payment);
         $row = DB::table('bills')->where('id', $bill->id)->first();
         $this->assertSame('100.00', $row->amount_paid);
@@ -274,7 +424,7 @@ class BillServiceTest extends TestCase
         $data = [
             'cash_account_id' => $cashId,
             'payment_date' => '2026-04-11',
-            'amount' => '40.00',
+            'amount' => '50.00',
             'payment_method' => PaymentMethod::Cash->value,
             'idempotency_key' => 'bill-payment-test-1',
         ];
@@ -284,10 +434,10 @@ class BillServiceTest extends TestCase
 
         $this->assertSame($first->id, $replay->id);
         $this->assertSame(1, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
-        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
+        $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
         $this->approvePayment($service, $bill, $first);
         $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
-        $this->assertSame('40.00', (string) $bill->refresh()->amount_paid);
+        $this->assertSame('50.00', (string) $bill->refresh()->amount_paid);
     }
 
     public function test_bill_payment_replay_with_a_changed_payload_is_rejected(): void
@@ -307,7 +457,7 @@ class BillServiceTest extends TestCase
         $service->recordPayment($bill, [
             'cash_account_id' => $cashId,
             'payment_date' => '2026-04-11',
-            'amount' => '40.00',
+            'amount' => '50.00',
             'payment_method' => PaymentMethod::Cash->value,
             'idempotency_key' => 'bill-payment-test-2',
         ], $user);
@@ -340,7 +490,7 @@ class BillServiceTest extends TestCase
         $payload = [
             'cash_account_id' => $cashId,
             'payment_date' => '2026-04-11',
-            'amount' => '40.00',
+            'amount' => '50.00',
             'payment_method' => PaymentMethod::Cash->value,
             'reference_number' => 'BANK-ORIGINAL',
             'idempotency_key' => 'bill-payment-reference-test',
@@ -357,7 +507,7 @@ class BillServiceTest extends TestCase
 
         $this->assertSame(1, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
         $this->assertSame('BANK-ORIGINAL', $payment->fresh()->reference_number);
-        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
+        $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
     }
 
     public function test_cannot_bill_against_cancelled_po(): void

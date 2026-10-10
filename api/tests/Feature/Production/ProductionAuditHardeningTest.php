@@ -6,9 +6,13 @@ namespace Tests\Feature\Production;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Traits\HasAuditLog;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
@@ -20,7 +24,9 @@ use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\DefectType;
@@ -31,17 +37,28 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderDefect;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WoOperationService;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Services\InspectionSpecService;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Tests\Support\HasAssignedProductionCrew;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\TestCase;
 
 class ProductionAuditHardeningTest extends TestCase
 {
+    use HasAssignedProductionCrew;
+    use HasPassedInProcessQc;
     use RefreshDatabase;
 
     private WorkOrderService $service;
@@ -50,17 +67,25 @@ class ProductionAuditHardeningTest extends TestCase
 
     private User $user;
 
+    private User $productionManager;
+
     private Product $product;
+
+    private Item $finishedGoodItem;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         Event::fake();
+        $this->seed(ChartOfAccountsSeeder::class);
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(SettingsSeeder::class);
 
         $this->service = app(WorkOrderService::class);
         $this->opService = app(WoOperationService::class);
         $this->user = User::factory()->create();
+        $this->productionManager = User::factory()->withRole('production_manager')->create();
         $this->product = Product::create([
             'part_number' => 'HARD-P-'.substr(uniqid(), -5),
             'name' => 'Hardening Product',
@@ -68,6 +93,20 @@ class ProductionAuditHardeningTest extends TestCase
             'standard_cost' => 15.00,
             'is_active' => true,
         ]);
+        $warehouse = Warehouse::factory()->create();
+        $zone = WarehouseZone::factory()->create([
+            'warehouse_id' => $warehouse->id,
+            'zone_type' => WarehouseZoneType::FinishedGoods->value,
+        ]);
+        WarehouseLocation::factory()->create(['zone_id' => $zone->id, 'is_active' => true]);
+        $this->finishedGoodItem = Item::factory()->create([
+            'code' => $this->product->part_number,
+            'item_type' => ItemType::FinishedGood->value,
+            'unit_of_measure' => $this->product->unit_of_measure,
+        ]);
+        app(InspectionSpecService::class)->upsertForProduct($this->product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual'],
+        ], $this->user->id);
     }
 
     private function machine(): Machine
@@ -102,15 +141,21 @@ class ProductionAuditHardeningTest extends TestCase
             'mold_id' => $mold->id,
             'status' => WorkOrderStatus::Planned->value,
             'quantity_target' => 100,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'planned_start' => Carbon::now()->addHour()->toDateTimeString(),
+            'planned_end' => Carbon::now()->addDays(2)->toDateTimeString(),
             'work_order_class' => 'non_stock',
             'exception_reason' => 'Audit hardening non-stock WO',
             'exception_authorized_by' => $this->user->id,
             'created_by' => $this->user->id,
         ]);
 
-        return $this->service->start($this->service->confirm($wo), $this->user->id);
+        $this->assignProductionCrew($wo, $this->user);
+        $confirmed = $this->service->confirm($wo);
+        $this->travelTo($confirmed->planned_start);
+        $started = $this->service->start($confirmed, $this->productionManager->id);
+        $this->passInProcessQc($started);
+
+        return $started;
     }
 
     public function test_resume_refused_when_machine_went_to_breakdown_during_pause(): void
@@ -126,7 +171,7 @@ class ProductionAuditHardeningTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage("Assigned machine {$machine->machine_code} is currently breakdown and cannot resume production. Repair or restore the machine first.");
 
-        $this->service->resume($paused);
+        $this->service->resume($paused, $this->productionManager->id);
     }
 
     public function test_resume_refused_when_machine_went_to_maintenance_during_pause(): void
@@ -142,51 +187,103 @@ class ProductionAuditHardeningTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage("Assigned machine {$machine->machine_code} is currently maintenance and cannot resume production. Repair or restore the machine first.");
 
-        $this->service->resume($paused);
+        $this->service->resume($paused, $this->productionManager->id);
     }
 
-    public function test_pause_does_not_clear_another_work_orders_machine_or_revert_maintenance(): void
+    public function test_pause_does_not_clear_live_machine_ownership_or_revert_maintenance(): void
     {
         $machine = $this->machine();
         $mold = $this->mold();
 
         $wo = $this->startedWo($machine, $mold);
 
-        // Machine is placed under maintenance by technician
-        $machine->update([
-            'status' => MachineStatus::Maintenance->value,
-            'current_work_order_id' => null,
-        ]);
+        try {
+            app(MachineService::class)->transitionStatus($machine->fresh(), MachineStatus::Maintenance);
+            $this->fail('Maintenance must be refused while production owns the machine.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('Pause and explicitly release owned production', $error->getMessage());
+        }
+        $this->assertSame(MachineStatus::Running, $machine->fresh()->status);
+        $this->assertSame($wo->id, (int) $machine->fresh()->current_work_order_id);
+
+        // Simulate a legacy/external status write after the server-side guard.
+        $machine->refresh()->update(['status' => MachineStatus::Maintenance->value]);
 
         $paused = $this->service->pause($wo, 'Parts shortage', MachineDowntimeCategory::MaterialShortage);
 
         $this->assertSame(WorkOrderStatus::Paused, $paused->status);
         $this->assertSame(MachineStatus::Maintenance, $machine->fresh()->status, 'Machine in maintenance must not be reset to idle on pause');
-        $this->assertNull($machine->fresh()->current_work_order_id);
+        $this->assertSame($wo->id, (int) $machine->fresh()->current_work_order_id);
     }
 
-    public function test_complete_does_not_revert_maintenance_or_clear_another_work_order(): void
+    public function test_non_stock_completion_waits_for_an_unresolved_output_receipt(): void
+    {
+        $machine = $this->machine();
+        $mold = $this->mold();
+        $wo = $this->startedWo($machine, $mold);
+        $this->finishedGoodItem->update(['is_active' => false]);
+        $output = app(WorkOrderOutputService::class)->record($wo, $this->outputForCrew($wo, [
+            'good_count' => 100,
+            'reject_count' => 0,
+            'defects' => [],
+        ], $this->user), $this->user->id, 'audit-hardening-unresolved-receipt-'.$wo->id);
+        $this->assertSame(ProductionReceiptHandoffStatus::ManualRequired, $output->fresh()->production_receipt_handoff_status);
+
+        $snapshot = fn (): array => [
+            'work_order' => $wo->fresh()->getRawOriginal(),
+            'machine' => $machine->fresh()->getRawOriginal(),
+            'mold' => $mold->fresh()->getRawOriginal(),
+            'stock_movements' => DB::table('stock_movements')->count(),
+            'audit_logs' => DB::table('audit_logs')->count(),
+            'event_outbox' => DB::table('event_outbox')->count(),
+            'chain_step_runs' => DB::table('chain_step_runs')->count(),
+        ];
+        $before = $snapshot();
+
+        $managerRole = Role::firstOrCreate(['slug' => 'production_manager'], ['name' => 'Production manager', 'is_system' => true]);
+        $viewModule = Permission::firstOrCreate(['slug' => 'production.view'], [
+            'name' => 'View Production module',
+            'module' => 'production',
+        ]);
+        $lifecycle = Permission::firstOrCreate(['slug' => 'production.work_orders.lifecycle'], [
+            'name' => 'Manage work-order lifecycle',
+            'module' => 'production',
+        ]);
+        $managerRole->permissions()->syncWithoutDetaching([$viewModule->id, $lifecycle->id]);
+        Cache::forget("auth:role_perms:{$managerRole->id}");
+        $manager = User::factory()->create(['role_id' => $managerRole->id]);
+        $manager->flushPermissionsCache();
+        $this->assertTrue($manager->hasPermission('production.view'));
+        $this->assertTrue($manager->hasPermission('production.work_orders.lifecycle'));
+        $response = $this->actingAs($manager, 'sanctum')
+            ->postJson('/api/v1/production/work-orders/'.$wo->hash_id.'/complete');
+        $this->assertSame(422, $response->status(), (string) $response->getContent());
+        $this->assertStringContainsString('Stock receipt pending', (string) $response->json('message'));
+        $this->assertStringContainsString('Retry in Recent outputs', (string) $response->json('message'));
+
+        $this->assertSame($before, $snapshot());
+    }
+
+    public function test_complete_releases_its_owner_without_reverting_maintenance(): void
     {
         $machine = $this->machine();
         $mold = $this->mold();
 
         $wo = $this->startedWo($machine, $mold);
-        app(WorkOrderOutputService::class)->record($wo, [
+        app(WorkOrderOutputService::class)->record($wo, $this->outputForCrew($wo, [
             'good_count' => 100,
             'reject_count' => 0,
             'defects' => [],
-        ], $this->user->id, 'audit-hardening-complete-output-'.$wo->id);
+        ], $this->user), $this->user->id, 'audit-hardening-complete-output-'.$wo->id);
 
-        // Machine enters breakdown/maintenance
-        $machine->update([
-            'status' => MachineStatus::Maintenance->value,
-            'current_work_order_id' => null,
-        ]);
+        // Simulate a legacy/external status write after the server-side guard.
+        $machine->refresh()->update(['status' => MachineStatus::Maintenance->value]);
 
         $completed = $this->service->complete($wo);
 
         $this->assertSame(WorkOrderStatus::Completed, $completed->status);
         $this->assertSame(MachineStatus::Maintenance, $machine->fresh()->status, 'Machine in maintenance must not be reset to idle on complete');
+        $this->assertNull($machine->fresh()->current_work_order_id, 'Completion releases this work order ownership.');
     }
 
     public function test_complete_refused_when_routing_operations_are_incomplete(): void
@@ -207,11 +304,11 @@ class ProductionAuditHardeningTest extends TestCase
             'qty_completed' => 0,
             'qty_scrapped' => 0,
         ]);
-        app(WorkOrderOutputService::class)->record($wo, [
+        app(WorkOrderOutputService::class)->record($wo, $this->outputForCrew($wo, [
             'good_count' => 100,
             'reject_count' => 0,
             'defects' => [],
-        ], $this->user->id, 'audit-hardening-routing-output-'.$wo->id);
+        ], $this->user), $this->user->id, 'audit-hardening-routing-output-'.$wo->id);
 
         try {
             $this->service->complete($wo);
@@ -254,12 +351,14 @@ class ProductionAuditHardeningTest extends TestCase
         ]);
 
         // Op 2 is in progress
+        $crew = app(WorkOrderAssignmentService::class)->currentCrew($wo);
         $op2 = WoOperation::create([
             'work_order_id' => $wo->id,
             'sequence' => 20,
             'operation_name' => 'Trimming',
             'machine_id' => $machine->id,
             'mold_id' => $mold->id,
+            'operator_id' => $crew->recorder_employee_id,
             'status' => WoOperationStatus::InProgress,
             'qty_planned' => 100,
             'qty_completed' => 0,
@@ -380,8 +479,11 @@ class ProductionAuditHardeningTest extends TestCase
             'mold_id' => $mold->id,
             'status' => WorkOrderStatus::Planned->value,
             'quantity_target' => 50,
+            'planned_start' => Carbon::now()->addHour()->toDateTimeString(),
+            'planned_end' => Carbon::now()->addDays(2)->toDateTimeString(),
             'created_by' => $this->user->id,
         ]);
+        $this->assignProductionCrew($wo, $this->user);
 
         WorkOrderMaterial::create([
             'work_order_id' => $wo->id,
@@ -394,7 +496,8 @@ class ProductionAuditHardeningTest extends TestCase
         $confirmed = $this->service->confirm($wo);
 
         // Start WO (issues materials and captures lot references)
-        $started = $this->service->start($confirmed, $this->user->id);
+        $this->travelTo($confirmed->planned_start);
+        $started = $this->service->start($confirmed, $this->productionManager->id);
 
         $refs = $started->fresh()->material_lot_references;
         $this->assertNotEmpty($refs);

@@ -6,8 +6,10 @@ namespace Tests\Feature\MRP;
 
 use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\OutboxEventCodec;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
@@ -30,9 +32,11 @@ use App\Modules\MRP\Services\MrpAutomationService;
 use App\Modules\MRP\Services\MrpEngineService;
 use App\Modules\MRP\Services\MrpScopeResolver;
 use App\Modules\Production\Models\WorkOrder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\TestCase;
@@ -40,6 +44,31 @@ use Tests\TestCase;
 class MrpAutomationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_planning_outcome_notifies_sales_and_ppc_once_per_run(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $sales = User::factory()->withRole('sales_officer')->create();
+        $ppc = User::factory()->withRole('ppc_head')->create();
+        $warehouse = User::factory()->withRole('warehouse_staff')->create();
+        $run = MrpRun::create(['run_at' => now(), 'triggered_by' => 'automatic', 'status' => 'partial', 'failed_sales_orders' => 1]);
+        $engine = Mockery::mock(MrpEngineService::class);
+        $engine->shouldReceive('runForActiveSalesOrders')->twice()->andReturn($run);
+        $planner = Mockery::mock(CapacityPlanningService::class);
+        $planner->shouldNotReceive('run');
+        $alerts = Mockery::mock(AlertEngineService::class);
+        $alerts->shouldReceive('raise')->twice();
+        $service = new MrpAutomationService($engine, $planner, $alerts);
+        $service->run([], MrpRunTrigger::Automatic, null, 'sales_order_confirmed');
+        $service->run([], MrpRunTrigger::Automatic, null, 'sales_order_confirmed');
+        $notices = DB::table('notifications')->where('type', 'mrp_run_completed')->get();
+        $this->assertCount(2, $notices);
+        $this->assertEqualsCanonicalizing([$sales->id, $ppc->id], $notices->pluck('notifiable_id')->map(fn ($id) => (int) $id)->all());
+        $this->assertNotContains($warehouse->id, $notices->pluck('notifiable_id')->all());
+        $this->assertStringContainsString('MRP planning needs attention', $notices->first()->data);
+        $this->assertSame('/crm/sales-orders', json_decode($notices->firstWhere('notifiable_id', $sales->id)->data, true)['link_to']);
+        $this->assertSame('/mrp/plans', json_decode($notices->firstWhere('notifiable_id', $ppc->id)->data, true)['link_to']);
+    }
 
     public function test_sales_order_confirmation_queues_scoped_automatic_mrp(): void
     {
@@ -305,7 +334,7 @@ class MrpAutomationTest extends TestCase
         $this->assertTrue($lock->get());
 
         try {
-            $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+            $this->expectException(BusinessRuleException::class);
             $this->expectExceptionMessage('Another MRP run is already in progress');
             app(MrpEngineService::class)->runForActiveSalesOrders(MrpRunTrigger::Scheduled);
         } finally {

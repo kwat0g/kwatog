@@ -19,7 +19,10 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Services\OpenSupplyService;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
+use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class MixedUomPrCoverageTest extends TestCase
@@ -162,5 +165,63 @@ class MixedUomPrCoverageTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('cannot be represented');
         $service->convertFromPr($pr->fresh(), [$line->id => $vendor->id], $user);
+    }
+
+    public function test_invalid_unit_cannot_create_a_request_that_breaks_mrp(): void
+    {
+        $user = User::factory()->create();
+        $item = $this->resin();
+        $before = PurchaseRequest::count();
+        try {
+            app(PurchaseRequestService::class)->create([
+                'priority' => 'normal', 'sourcing_method' => 'direct_po',
+                'items' => [['item_id' => $item->id, 'quantity' => '10', 'unit' => 'PCS']],
+            ], $user);
+            $this->fail('A unit without an item conversion must be rejected.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('items.0.unit', $e->errors());
+        }
+        $this->assertSame($before, PurchaseRequest::count());
+    }
+
+    public function test_invalid_unit_update_preserves_existing_request_lines(): void
+    {
+        $user = User::factory()->create();
+        $item = $this->resin();
+        [$pr, $line] = $this->request($item, $user, '10', 'KG');
+        $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
+        try {
+            app(PurchaseRequestService::class)->update($pr, [
+                'items' => [['item_id' => $item->id, 'quantity' => '25', 'unit' => 'PCS']],
+            ]);
+            $this->fail('Invalid replacement units must be rejected.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('items.0.unit', $e->errors());
+        }
+        $this->assertSame('10.00', $line->fresh()->quantity);
+        $this->assertSame('KG', $line->fresh()->unit);
+    }
+
+    public function test_valid_alternate_unit_and_missing_base_unit_remain_supported(): void
+    {
+        $user = User::factory()->create();
+        $item = $this->resin();
+        $pr = app(PurchaseRequestService::class)->create([
+            'priority' => 'normal', 'sourcing_method' => 'direct_po',
+            'items' => [
+                ['item_id' => $item->id, 'quantity' => '2', 'unit' => 'BAG'],
+                ['item_id' => $item->id, 'quantity' => '3'],
+            ],
+        ], $user);
+        $this->assertSame(['BAG', 'KG'], $pr->items->pluck('unit')->all());
+    }
+
+    public function test_soft_deleted_invalid_pr_line_does_not_block_open_supply(): void
+    {
+        $user = User::factory()->create();
+        $item = $this->resin();
+        [$pr, $line] = $this->request($item, $user, '10', 'UNKNOWN');
+        DB::table('purchase_request_items')->where('id', $line->id)->update(['deleted_at' => now()]);
+        $this->assertSame('0.000', app(OpenSupplyService::class)->openRequestBaseQuantity($item->id));
     }
 }

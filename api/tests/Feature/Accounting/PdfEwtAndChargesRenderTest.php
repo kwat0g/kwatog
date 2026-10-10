@@ -69,8 +69,9 @@ class PdfEwtAndChargesRenderTest extends TestCase
 
     private function approvePayment(BillService $service, Bill $bill, $payment): void
     {
-        $financeChecker = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
-        $service->approvePayment($bill->fresh(), $payment->fresh(), $financeChecker);
+        if ($payment->status === \App\Modules\Accounting\Enums\BillPaymentStatus::Posted) {
+            return;
+        }
 
         $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
         $service->approvePayment($bill->fresh(), $payment->fresh(), $vp);

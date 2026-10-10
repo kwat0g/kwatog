@@ -180,6 +180,27 @@ class MrpRerunSafetyTest extends TestCase
      * exactly ONE draft auto-PR and ONE planned WO per SO line, with one
      * superseded plan per press — not a pile of duplicates.
      */
+    public function test_mrp_plans_from_now_and_keeps_delivery_deadline(): void
+    {
+        Carbon::setTestNow('2026-10-08 10:00:00');
+        try {
+            $this->createBom();
+            $this->setOnHand(100);
+            $so = $this->createConfirmedSo(10, 12);
+            $this->actingAs($this->ppcActor(), 'sanctum');
+            $this->postJson('/api/v1/mrp/runs')->assertAccepted();
+            $wo = WorkOrder::where('sales_order_id', $so->id)->firstOrFail();
+            $this->assertSame('2026-10-08 10:00:00', $wo->planned_start->toDateTimeString());
+            $this->assertSame('2026-10-19 00:00:00', $wo->planned_end->toDateTimeString());
+            $wo->update(['preferred_production_date' => '2026-10-12']);
+            $this->postJson('/api/v1/mrp/runs')->assertAccepted();
+            $this->assertSame('2026-10-12', $wo->fresh()->preferred_production_date->toDateString());
+            $this->assertSame(1, WorkOrder::where('sales_order_id', $so->id)->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_double_run_button_does_not_duplicate_prs_or_wos(): void
     {
         $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);

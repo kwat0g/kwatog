@@ -42,6 +42,17 @@ class InvoiceController
         return new InvoiceResource($this->service->show($invoice));
     }
 
+    public function approvePrebill(Request $request, Invoice $invoice): InvoiceResource|JsonResponse
+    {
+        try {
+            $approved = $this->service->approvePrebill($invoice, $request->user());
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new InvoiceResource($approved);
+    }
+
     public function store(StoreInvoiceRequest $request): JsonResponse
     {
         try {

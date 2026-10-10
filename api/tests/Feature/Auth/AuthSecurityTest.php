@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
@@ -239,6 +240,29 @@ class AuthSecurityTest extends TestCase
             ->assertJsonValidationErrorFor('new_password');
 
         $this->assertSame(0, PasswordHistory::where('user_id', $user->id)->count());
+    }
+
+    public function test_change_password_keeps_the_current_session_authenticated(): void
+    {
+        $password = 'Temporary-1!';
+        $user = $this->makeUser($password, ['must_change_password' => true]);
+
+        $this->clearAuthThrottle($user->email);
+        $this->postLogin($user->email, $password)
+            ->assertOk();
+
+        $this->postJson('/api/v1/auth/change-password', [
+            'current_password' => $password,
+            'new_password' => 'Permanent-2!',
+            'new_password_confirmation' => 'Permanent-2!',
+        ])->assertOk();
+
+        $this->assertFalse((bool) $user->fresh()->must_change_password);
+
+        Auth::forgetGuards();
+        $this->getJson('/api/v1/auth/user')
+            ->assertOk()
+            ->assertJsonPath('data.must_change_password', false);
     }
 
     public function test_zero_password_history_depth_does_not_accumulate_rows(): void

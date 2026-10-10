@@ -1,0 +1,15 @@
+[WebServer] (node:53332) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node-24 --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:53350) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:53472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node-24 --trace-warnings ...` to show where the warning was created)
+[WebServer] 
+[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+  ✓  1 [desktop-chromium] › e2e/inspection-sampling-race.spec.ts:4:1 › a late sample preview cannot replace the plan for the selected output batch (8.6s)
+  ✓  2 [desktop-chromium] › e2e/rma-workflow.spec.ts:4:1 › RMA partial receipt preserves quantities and idempotency key across retry (5.4s)
+
+  2 passed (21.8s)

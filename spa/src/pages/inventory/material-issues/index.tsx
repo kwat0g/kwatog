@@ -63,12 +63,12 @@ export default function MaterialIssuesListPage() {
  <div>
  <PageHeader title="Material issues" subtitle={data ? `${data.meta.total} slips` : undefined} />
  <div className="px-5 pt-3">
-   <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MIS number..." />
+   <FilterBar values={filters} onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search MIS number..." />
  </div>
  {isLoading && !data && <SkeletonTable rows={6} columns={5} />}
- {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button onClick={() => refetch()}>Retry</Button>} />}
- {data && data.data.length === 0 && (
- <ListEmptyState />
+ {isError && <EmptyState icon="alert-circle" title="Failed to load material issues" action={<Button onClick={() => refetch()}>Retry</Button>} />}
+ {!isError && data && data.data.length === 0 && (
+ <ListEmptyState searchTerm={filters.search || (filters.status ? `status: ${filters.status.replaceAll("_", " ")}` : filters.from || filters.to ? "selected dates" : undefined)} />
  )}
  {data && data.data.length > 0 && (
  <div className="px-5 py-4">

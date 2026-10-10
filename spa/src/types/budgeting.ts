@@ -22,6 +22,7 @@ export interface Budget {
  utilization_pct: number;
  status: 'draft' | 'submitted' | 'approved' | 'active' | 'closed';
  status_label?: string;
+ can_approve?: boolean;
  submitted_by?: { id: string; name: string } | null;
  submitted_at?: string | null;
   approved_by?: { id: string; name: string } | null;
@@ -74,6 +75,7 @@ export interface BudgetTransfer {
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   status_label?: string;
+  can_approve?: boolean;
   from_line?: BudgetTransferLine | null;
   to_line?: BudgetTransferLine | null;
   requested_by?: { id: string; name: string } | null;

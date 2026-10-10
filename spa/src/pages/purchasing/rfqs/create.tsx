@@ -258,7 +258,7 @@ export default function CreateRfqPage() {
         backLabel={isEdit ? 'RFQ' : 'Purchase request'}
       />
 
-      <div className="px-5 py-4 space-y-4 max-w-4xl">
+      <div className="min-w-0 w-full px-5 py-4 space-y-4">
         <Panel title="Details">
           <div className="space-y-3">
             <Input

@@ -71,10 +71,14 @@ const draftSO = {
 };
 
 const INV_ID = 'mQ7rN5';
+const DELIVERY_ID = 'dR4mZ8';
 
 const draftInvoice = {
   id: INV_ID,
   invoice_number: 'INV-202606-0001',
+  sales_order: { id: SO_ID, so_number: draftSO.so_number },
+  delivery: { id: DELIVERY_ID, delivery_number: 'DR-202606-0001', status: 'confirmed' },
+  created_by: { id: 'u10', name: 'Sales Manager' },
   status: 'draft',
   display_status: 'Draft',
   amount_paid: '0.00',
@@ -141,7 +145,17 @@ test.describe('Order-to-Cash golden path', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           data: { ...draftSO, status: 'confirmed', status_label: 'Confirmed', is_editable: false },
-          chain_result: {},
+          chain_result: {
+            so_number: draftSO.so_number,
+            planning_status: 'completed',
+            work_orders_created: 0,
+            auto_scheduled: 0,
+            needs_manual: 0,
+            shortages: 0,
+            prs_created: 0,
+            work_orders: [],
+            scheduling_conflicts: [],
+          },
         }),
       });
     });
@@ -210,6 +224,7 @@ test.describe('Order-to-Cash golden path', () => {
   test('finalizes an invoice', async ({ page }) => {
     await mockAuth(page, financeUser);
     let finalized = false;
+    let finalizeCalled = false;
 
     await page.route(`**/api/v1/invoices/${INV_ID}`, async (route) => {
       await route.fulfill({
@@ -225,6 +240,7 @@ test.describe('Order-to-Cash golden path', () => {
 
     await page.route(`**/api/v1/invoices/${INV_ID}/finalize`, async (route) => {
       finalized = true;
+      finalizeCalled = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -239,9 +255,11 @@ test.describe('Order-to-Cash golden path', () => {
 
     await expect(page.getByRole('heading', { name: /INV-202606-0001/ })).toBeVisible();
     await page.getByRole('button', { name: /finalize/i }).click();
+    await page.getByRole('button', { name: /finalize/i }).last().click();
     await page.waitForLoadState('networkidle');
 
     await expect(page.getByText('Finalized').first()).toBeVisible();
+    expect(finalizeCalled).toBe(true);
   });
 
 });

@@ -20,6 +20,7 @@ class BudgetTransferResource extends JsonResource
             'reason' => $this->reason,
             'status' => $this->status,
             'status_label' => BudgetTransferStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
+            'can_approve' => (bool) $this->can_approve,
             'from_line' => $this->whenLoaded('fromLine', fn () => [
                 'id' => $this->fromLine?->hash_id,
                 'account_code' => $this->fromLine?->account?->code,

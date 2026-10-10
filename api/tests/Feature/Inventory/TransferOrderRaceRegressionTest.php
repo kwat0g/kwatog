@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\TransferOrderService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -80,7 +81,9 @@ class TransferOrderRaceRegressionTest extends TestCase
 
     public function test_execute_posts_exactly_one_linked_movement(): void
     {
-        $order = $this->svc->execute($this->pendingOrder()->id, $this->user);
+        $pending = $this->pendingOrder();
+        $checker = User::factory()->create(['is_active' => true]);
+        $order = $this->svc->execute($pending->id, $checker);
 
         $this->assertSame(TransferOrderStatus::Transferred, $order->status);
         $this->assertSame(1, StockMovement::query()
@@ -97,10 +100,51 @@ class TransferOrderRaceRegressionTest extends TestCase
             ->value('quantity'));
     }
 
+    public function test_creator_cannot_execute_own_transfer_order_through_api(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $maker = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
+        $order = $this->svc->create([
+            'from_location_id' => $this->fromLoc->id,
+            'to_location_id' => $this->toLoc->id,
+            'item_id' => $this->item->id,
+            'quantity' => '30',
+            'reason' => 'Maker-checker transfer regression',
+        ], $maker);
+        $sourceBefore = StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->fromLoc->id)
+            ->firstOrFail();
+        $movementCount = StockMovement::query()->count();
+
+        $response = $this->actingAs($maker)
+            ->postJson("/api/v1/inventory/transfer-orders/{$order->hash_id}/execute");
+
+        $this->assertSame([
+            'response_status' => 422,
+            'response_message' => 'A transfer order creator cannot execute their own transfer.',
+            'order_status' => TransferOrderStatus::Pending->value,
+            'movement_count' => $movementCount,
+            'source_quantity' => (string) $sourceBefore->quantity,
+            'destination_quantity' => null,
+        ], [
+            'response_status' => $response->status(),
+            'response_message' => $response->json('message'),
+            'order_status' => $order->fresh()->status->value,
+            'movement_count' => StockMovement::query()->count(),
+            'source_quantity' => (string) $sourceBefore->fresh()->quantity,
+            'destination_quantity' => StockLevel::query()
+                ->where('item_id', $this->item->id)
+                ->where('location_id', $this->toLoc->id)
+                ->value('quantity'),
+        ]);
+    }
+
     public function test_execute_again_is_blocked_after_transfer(): void
     {
         $order = $this->pendingOrder();
-        $this->svc->execute($order->id, $this->user);
+        $checker = User::factory()->create(['is_active' => true]);
+        $this->svc->execute($order->id, $checker);
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('not pending');
@@ -122,7 +166,8 @@ class TransferOrderRaceRegressionTest extends TestCase
     public function test_cancel_after_execute_is_blocked(): void
     {
         $order = $this->pendingOrder();
-        $this->svc->execute($order->id, $this->user);
+        $checker = User::factory()->create(['is_active' => true]);
+        $this->svc->execute($order->id, $checker);
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('Can only cancel pending');

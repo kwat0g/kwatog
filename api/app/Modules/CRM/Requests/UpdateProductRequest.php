@@ -22,7 +22,7 @@ class UpdateProductRequest extends FormRequest
 
     protected function hashIdFields(): array
     {
-        return ['revenue_account_id' => Account::class];
+        return ['revenue_account_id' => Account::class, 'portal_customer_ids.*' => \App\Modules\Accounting\Models\Customer::class];
     }
 
     public function rules(): array
@@ -45,6 +45,11 @@ class UpdateProductRequest extends FormRequest
                     ->where('type', 'revenue')
                     ->where('is_active', true)),
             ],
+            'base_selling_price' => ['sometimes', 'nullable', 'decimal:0,2', 'gt:0'],
+            'minimum_selling_price' => ['sometimes', 'nullable', 'decimal:0,2', 'gt:0'],
+            'portal_visibility' => ['sometimes', 'required', Rule::in(['standard', 'restricted'])],
+            'portal_customer_ids' => ['sometimes', 'array'],
+            'portal_customer_ids.*' => ['integer', 'distinct', Rule::exists('customers', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'is_active'       => ['nullable', 'boolean'],
         ];
     }

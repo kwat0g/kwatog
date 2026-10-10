@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
@@ -26,11 +27,12 @@ use Illuminate\Validation\Rule;
 
 class StockAdjustmentController
 {
-    public function __construct(private readonly StockAdjustmentService $service) {}
+    public function __construct(private readonly StockAdjustmentService $service, private readonly SettingsService $settings) {}
 
     public function options(): JsonResponse
     {
         return response()->json(['data' => [
+            'approval_threshold' => (string) $this->settings->requiredFloat('inventory.adjustment_approval_threshold', 0),
             'statuses' => array_map(
                 static fn (StockAdjustmentStatus $status): array => [
                     'value' => $status->value,
@@ -102,6 +104,7 @@ class StockAdjustmentController
                 reason: $data['reason'],
                 by: $request->user(),
                 reasonCode: $data['reason_code'] ?? null,
+                idempotencyKey: $data['idempotency_key'] ?? null,
             );
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);

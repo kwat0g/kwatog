@@ -9,8 +9,6 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
-use App\Modules\Accounting\Models\JournalEntry;
-use App\Modules\Accounting\Models\JournalEntryLine;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Accounting\Services\BudgetFiscalYearResolver;
 use App\Modules\Accounting\Services\BudgetService;
@@ -20,7 +18,6 @@ use App\Modules\HR\Models\Department;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -42,22 +39,25 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         ]);
         BudgetLineItem::create(['budget_id' => $budget->id, 'account_id' => $account->id, 'jan' => '100.00']);
 
-        $entry = JournalEntry::create([
-            'entry_number' => 'JE-BUDGET-'.uniqid(),
-            'date' => '2026-04-01',
+        $cash = Account::create([
+            'code' => 'B-'.substr(uniqid(), -6),
+            'name' => 'Budget test cash',
+            'type' => 'asset',
+            'normal_balance' => 'debit',
+            'is_active' => true,
+        ]);
+        $maker = User::factory()->create();
+        $checker = User::factory()->create();
+        $journals = app(JournalEntryService::class);
+        $entry = $journals->create([
+            'date' => '2026-01-15',
             'description' => 'Budget source test',
-            'total_debit' => '40.00',
-            'total_credit' => '0.00',
-            'status' => 'draft',
-        ]);
-        JournalEntryLine::create([
-            'journal_entry_id' => $entry->id,
-            'account_id' => $account->id,
-            'line_no' => 1,
-            'debit' => '40.00',
-            'credit' => '0.00',
-        ]);
-        DB::table('journal_entries')->where('id', $entry->id)->update(['status' => 'posted']);
+            'lines' => [
+                ['account_id' => $account->hash_id, 'debit' => '40.00', 'credit' => '0'],
+                ['account_id' => $cash->hash_id, 'debit' => '0', 'credit' => '40.00'],
+            ],
+        ], $maker);
+        $journals->post($entry, $checker);
 
         $overview = app(BudgetService::class)->overview($fiscalYear->id);
         $this->assertSame('100.00', $overview['total_allocated']);

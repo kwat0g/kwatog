@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Resources\BudgetTransferResource;
 use App\Modules\Accounting\Services\BudgetTransferService;
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -39,6 +40,9 @@ class BudgetTransferController extends Controller
 
         $perPage = (int) $request->input('per_page', 20);
         $transfers = $query->paginate($perPage);
+        foreach ($transfers->items() as $transfer) {
+            $this->setCanApprove($transfer, $request);
+        }
 
         return response()->json([
             'success' => true,
@@ -63,9 +67,10 @@ class BudgetTransferController extends Controller
     }
 
     /** Show a single transfer. */
-    public function show(BudgetTransfer $budgetTransfer): JsonResponse
+    public function show(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
         $budgetTransfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver', 'rejecter']);
+        $this->setCanApprove($budgetTransfer, $request);
 
         return response()->json([
             'success' => true,
@@ -95,6 +100,7 @@ class BudgetTransferController extends Controller
             'amount' => (string) $validated['amount'],
             'reason' => $validated['reason'],
         ], (int) auth()->id());
+        $this->setCanApprove($transfer, $request);
 
         return response()->json([
             'success' => true,
@@ -105,17 +111,19 @@ class BudgetTransferController extends Controller
     }
 
     /** Approve a pending transfer and apply the movement (checker). */
-    public function approve(BudgetTransfer $budgetTransfer): JsonResponse
+    public function approve(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
         $transfer = $this->transfers->approve($budgetTransfer, (int) auth()->id());
+        $this->setCanApprove($transfer, $request);
 
         return response()->json(['success' => true, 'data' => new BudgetTransferResource($transfer), 'error' => null, 'meta' => null]);
     }
 
     /** Reject a pending transfer; nothing moves. */
-    public function reject(BudgetTransfer $budgetTransfer): JsonResponse
+    public function reject(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
         $transfer = $this->transfers->reject($budgetTransfer, (int) auth()->id());
+        $this->setCanApprove($transfer, $request);
 
         return response()->json(['success' => true, 'data' => new BudgetTransferResource($transfer), 'error' => null, 'meta' => null]);
     }
@@ -135,5 +143,16 @@ class BudgetTransferController extends Controller
         }
 
         return $id;
+    }
+
+    private function setCanApprove(BudgetTransfer $transfer, Request $request): void
+    {
+        $actor = $request->user();
+        $transfer->setAttribute(
+            'can_approve',
+            $actor instanceof User
+                && $actor->hasPermission('budgeting.approve')
+                && $this->transfers->canApprove($transfer, $actor),
+        );
     }
 }

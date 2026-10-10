@@ -26,6 +26,7 @@ export interface O2cChainInput {
   /** Delivery lifecycle status — only delivered/confirmed satisfy the step. */
   deliveryStatus?: string | null;
   invoices: O2cChainInvoice[];
+  paymentStage?: 'awaiting_invoice' | 'awaiting_submission' | 'pending' | 'verified' | 'rejected';
 }
 
 export function buildO2cChain(input: O2cChainInput): ChainStep[] {
@@ -108,13 +109,21 @@ export function buildO2cChain(input: O2cChainInput): ChainStep[] {
     {
       key: 'payment',
       label: 'Payment',
-      state: isCancelled ? 'skipped' : isPaid ? 'done' : hasInvoices ? 'active' : 'pending',
+      state: isCancelled ? 'skipped' : isPaid ? 'done' : input.paymentStage === 'awaiting_invoice' ? 'pending' : hasInvoices ? 'active' : 'pending',
       href: firstInvoice ? `/accounting/invoices/${firstInvoice.id}` : undefined,
       description: isCancelled
         ? 'Payment skipped because the upstream order or delivery was cancelled'
         : isPaid
           ? 'Invoice settled — the AR collection was posted'
-          : hasInvoices
+          : input.paymentStage === 'awaiting_invoice'
+            ? 'Finalize the invoice before accepting payment'
+            : input.paymentStage === 'pending'
+              ? 'Payment submitted. Finance must verify actual receipt of funds.'
+              : input.paymentStage === 'rejected'
+                ? 'Payment rejected. Await corrected customer submission.'
+                : input.paymentStage === 'awaiting_submission'
+                  ? 'Awaiting customer payment submission'
+                  : hasInvoices
             ? 'Record a collection on the invoice to complete the chain'
             : 'Awaiting invoice',
     },

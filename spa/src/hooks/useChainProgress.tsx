@@ -42,6 +42,15 @@ export function useChainProgress(
   useEffect(() => {
     if (!entityId) return;
     const channelName = `chain.${entityType}.${entityId}`;
+    const refresh = () => {
+      [queryKey, ...additionalQueryKeys].forEach((key) => {
+        void queryClient.invalidateQueries({ queryKey: [...key] });
+      });
+    };
+    // A missed broadcast must not leave a visible record stuck at an old step.
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 30_000);
 
     // Echo loads on demand (see `@/lib/echo`); subscribe once it resolves and
     // skip entirely if we unmounted while the import was in flight.
@@ -55,9 +64,7 @@ export function useChainProgress(
       const handler = (payload: ChainStepEvent) => {
         // Invalidate every view derived from the entity so a page-local
         // detail query and its separate chain query cannot drift apart.
-        [queryKey, ...additionalQueryKeys].forEach((key) => {
-          queryClient.invalidateQueries({ queryKey: [...key] });
-        });
+        refresh();
 
         // Only toast when somebody else triggered the change. We don't
         // know the current user's name here so we just always show it —
@@ -87,6 +94,7 @@ export function useChainProgress(
 
     return () => {
       disposed = true;
+      window.clearInterval(poll);
       teardown?.();
     };
     // The effect body intentionally reads the raw arrays (never the joined
@@ -99,6 +107,7 @@ export function useChainProgress(
     entityId,
     queryKeySignature,
     additionalQueryKeysSignature,
+    queryClient,
   ]);
 }
 

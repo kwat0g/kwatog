@@ -50,6 +50,8 @@ ARG UID=1000
 ARG GID=1000
 RUN addgroup -g ${GID} -S www && adduser -u ${UID} -S www -G www
 
+COPY docker/php/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
+
 WORKDIR /var/www
 
 # The development compose file mounts the repository's API source at

@@ -358,15 +358,13 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->actAs($user);
 
-        $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/acknowledge", [
-            'expected_delivery_date' => '2026-08-01',
-        ]);
+        $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/acknowledge", []);
 
         $response->assertOk();
         // `sent` means OGAMI transmitted the PO; the supplier's acceptance is a
         // distinct transition into `acknowledged`.
         $this->assertSame('acknowledged', $po->fresh()->status->value);
-        $this->assertSame('2026-08-01', $po->fresh()->confirmed_delivery_date->toDateString());
+        $this->assertSame($po->expected_delivery_date->toDateString(), $po->fresh()->confirmed_delivery_date->toDateString());
     }
 
     public function test_acknowledge_requires_sent_and_preserves_internal_remarks(): void
@@ -384,7 +382,6 @@ class SupplierPortalServiceTest extends TestCase
         ])->save();
 
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$unsent->hash_id}/acknowledge", [
-            'expected_delivery_date' => '2026-08-01',
             'notes' => 'We can make this.',
         ])->assertStatus(422);
 
@@ -393,8 +390,7 @@ class SupplierPortalServiceTest extends TestCase
         $this->assertNull($unsent->confirmed_delivery_date);
         $this->assertSame('Internal purchasing note.', $unsent->remarks);
 
-        // (b) A sent PO becomes acknowledged and records the date the supplier
-        //     confirmed — not OGAMI's required `expected_delivery_date`.
+        // (b) A sent PO becomes acknowledged and confirms OGAMI's required date.
         $sent = $this->makePo($vendor, 'sent');
         $sent->forceFill([
             'remarks' => 'Internal purchasing note.',
@@ -403,13 +399,12 @@ class SupplierPortalServiceTest extends TestCase
         ])->save();
 
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$sent->hash_id}/acknowledge", [
-            'expected_delivery_date' => '2026-08-01',
             'notes' => 'Confirmed, will ship on time.',
         ])->assertOk();
 
         $sent->refresh();
         $this->assertSame('acknowledged', $sent->status->value);
-        $this->assertSame('2026-08-01', $sent->confirmed_delivery_date->toDateString());
+        $this->assertSame('2026-07-20', $sent->confirmed_delivery_date->toDateString());
         $this->assertSame('2026-07-20', $sent->expected_delivery_date->toDateString());
 
         // (c) The supplier note is recorded on the accepted response purchasing
@@ -428,9 +423,7 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->actAs($userA);
 
-        $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$poB->hash_id}/acknowledge", [
-            'expected_delivery_date' => '2026-08-01',
-        ]);
+        $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$poB->hash_id}/acknowledge", []);
 
         $response->assertStatus(403);
     }
@@ -445,9 +438,7 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->actAs($user);
 
-        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/acknowledge", [
-            'expected_delivery_date' => '2026-08-01',
-        ])->assertStatus(422);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/acknowledge", [])->assertStatus(422);
 
         $this->assertSame('cancelled', $po->fresh()->status->value);
         $this->assertNull($po->fresh()->confirmed_delivery_date);
@@ -747,6 +738,14 @@ class SupplierPortalServiceTest extends TestCase
         $requiredDate = $po->expected_delivery_date->toDateString();
 
         $this->actAs($user);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [
+            'carrier' => 'No quantity',
+        ])->assertUnprocessable();
+        SupplierShipment::factory()->create([
+            'purchase_order_id' => $po->id,
+            'shipped_date' => now()->subDay()->toDateString(),
+            'estimated_arrival' => now()->addDay()->toDateString(),
+        ]);
 
         $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [
             'shipped_date' => now()->subDay()->toDateString(),
@@ -783,6 +782,11 @@ class SupplierPortalServiceTest extends TestCase
         $po = $this->makeAcceptedPo($vendor);
 
         $this->actAs($user);
+        SupplierShipment::factory()->create([
+            'purchase_order_id' => $po->id,
+            'shipped_date' => now()->subDay()->toDateString(),
+            'estimated_arrival' => now()->addDay()->toDateString(),
+        ]);
         $url = "/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update";
 
         $this->postJson($url, ['carrier' => 'Maersk', 'tracking_number' => 'MAEU1234567'])->assertOk();
@@ -1137,113 +1141,16 @@ class SupplierPortalServiceTest extends TestCase
         $this->assertCount(1, $response->json('data'));
     }
 
-    public function test_store_delivery_schedule_rejects_other_vendors_purchase_order(): void
-    {
-        $vendor = Vendor::factory()->create();
-        $otherVendor = Vendor::factory()->create();
-        $user = $this->makePortalUser($vendor);
-        $otherPo = $this->makePo($otherVendor, 'sent');
-        $otherItem = $this->makePoItem($otherPo);
-
-        $this->actAs($user);
-
-        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
-            'purchase_order_id' => $otherPo->hash_id,
-            'month' => '2026-08',
-            'lines' => [['purchase_order_item_id' => $otherItem->hash_id, 'quantity' => 500]],
-        ])
-            // Assert the vendor check specifically: an otherwise-complete payload
-            // must fail on ownership, not incidentally on a missing field.
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['purchase_order_id']);
-
-        $this->assertDatabaseMissing('delivery_schedules', [
-            'vendor_id' => $vendor->id,
-            'purchase_order_id' => $otherPo->id,
-        ]);
-    }
-
-    public function test_store_delivery_schedule_is_idempotent_for_same_po_and_month(): void
+    public function test_supplier_delivery_plan_writes_are_retired(): void
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'acknowledged');
-        $poItem = $this->makePoItem($po);
-
-        $this->actAs($user);
-
-        $payload = [
-            'purchase_order_id' => $po->hash_id,
-            'month' => now()->format('Y-m'),
-            'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 500]],
-        ];
-
-        $first = $this->postJson('/api/v1/b2b/supplier/delivery-schedules', $payload);
-        $first->assertStatus(201);
-
-        // A double-click or a retried request must not stack a second row.
-        $second = $this->postJson('/api/v1/b2b/supplier/delivery-schedules', $payload);
-        $second->assertStatus(201);
-
-        $this->assertDatabaseCount('delivery_schedules', 1);
-        $this->assertSame($first->json('data.id'), $second->json('data.id'));
-    }
-
-    public function test_store_delivery_schedule_rejects_quantity_beyond_the_remaining_po_quantity(): void
-    {
-        $vendor = Vendor::factory()->create();
-        $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
-        $poItem = $this->makePoItem($po, '100.00');
-
+        $po = $this->makeAcceptedPo($vendor);
         $this->actAs($user);
 
         $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
             'purchase_order_id' => $po->hash_id,
-            'month' => '2026-08',
-            'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 101]],
-        ])->assertStatus(422);
-
-        $this->assertDatabaseCount('delivery_schedules', 0);
-    }
-
-    public function test_store_delivery_schedule_rejects_a_line_from_another_purchase_order(): void
-    {
-        $vendor = Vendor::factory()->create();
-        $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
-        // Same vendor, different PO — the line still does not belong to $po.
-        $foreignItem = $this->makePoItem($this->makePo($vendor, 'sent'));
-
-        $this->actAs($user);
-
-        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
-            'purchase_order_id' => $po->hash_id,
-            'month' => '2026-08',
-            'lines' => [['purchase_order_item_id' => $foreignItem->hash_id, 'quantity' => 10]],
-        ])->assertStatus(422);
-
-        $this->assertDatabaseCount('delivery_schedules', 0);
-    }
-
-    public function test_store_delivery_schedule_rejects_a_pre_dispatch_purchase_order(): void
-    {
-        $vendor = Vendor::factory()->create();
-        $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'approved');
-        $poItem = $this->makePoItem($po);
-
-        $this->actAs($user);
-
-        // Only a sent PO may be scheduled against. An approved-but-unsent PO is
-        // still internal; scheduling deliveries against it would commit the
-        // supplier before the order is transmitted.
-        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
-            'purchase_order_id' => $po->hash_id,
-            'month' => '2026-08',
-            'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 500]],
-        ])->assertStatus(422);
-
+        ])->assertStatus(410);
         $this->assertDatabaseCount('delivery_schedules', 0);
     }
 
@@ -1386,6 +1293,11 @@ class SupplierPortalServiceTest extends TestCase
         $po = $this->makeAcceptedPo($vendor);
 
         $this->actAs($user);
+        SupplierShipment::factory()->create([
+            'purchase_order_id' => $po->id,
+            'shipped_date' => now()->subDay()->toDateString(),
+            'estimated_arrival' => now()->addDay()->toDateString(),
+        ]);
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [
             'carrier' => 'Maersk',
         ])->assertOk();

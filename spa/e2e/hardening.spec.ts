@@ -36,6 +36,10 @@ test.describe('Error pages', () => {
   });
 
   test('500 server error is surfaced from API response', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '500 GET /api/v1/hr/employees' },
+      { type: 'expected-http-response', description: '500 GET /api/v1/hr/employees' },
+    );
     // Mock all employee list calls → 500
     await mock500(page, '**/api/v1/hr/employees*');
     await page.route('**/api/v1/hr/departments/tree', async (route) => {
@@ -61,6 +65,9 @@ test.describe('Error pages', () => {
 test.describe('Auth flow', () => {
 
   test('unauthenticated user is redirected to /sign-in', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '401 GET /api/v1/auth/user' },
+    );
     // No mockAuth — the SPA's AuthGuard should redirect
     await page.route('**/sanctum/csrf-cookie', async (route) => {
       await route.fulfill({ status: 204 });
@@ -77,6 +84,9 @@ test.describe('Auth flow', () => {
   });
 
   test('login page has email and password fields', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '401 GET /api/v1/auth/user' },
+    );
     await page.route('**/sanctum/csrf-cookie', async (route) => {
       await route.fulfill({ status: 204 });
     });
@@ -137,6 +147,10 @@ test.describe('HashID obfuscation', () => {
   });
 
   test('navigating to an integer ID returns a non-200 page (404, 403, or empty)', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '404 GET /api/v1/hr/employees/1' },
+      { type: 'expected-http-response', description: '404 GET /api/v1/hr/employees/1' },
+    );
     // Mock the employee endpoint for integer 1 → 404
     await page.route('**/api/v1/hr/employees/1', async (route) => {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Not found.' }) });
@@ -161,9 +175,6 @@ test.describe('HashID obfuscation', () => {
 test.describe('UI chrome', () => {
 
   test('sidebar is visible on authenticated pages', async ({ page }) => {
-    await page.route('**/api/v1/dashboards/hr', async (route) => {
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Not relevant to chrome test.' }) });
-    });
     await loginAs(page, 'hr', '/dashboard/hr');
     // AppLayout renders a sidebar — it could be <aside>, <nav>, or a component
     const sidebar = page.locator('aside, nav[role="navigation"], [role="complementary"]').first();
@@ -171,9 +182,6 @@ test.describe('UI chrome', () => {
   });
 
   test('topbar or main content area renders on authenticated pages', async ({ page }) => {
-    await page.route('**/api/v1/dashboards/default', async (route) => {
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Not relevant to chrome test.' }) });
-    });
     await loginAs(page, 'employee', '/dashboard/default');
     // The top area may be a <header>, a <nav>, or a top bar div.
     // Instead of asserting on a specific element, assert the sidebar is visible
@@ -186,9 +194,6 @@ test.describe('UI chrome', () => {
   });
 
   test('dark mode toggle exists and persists', async ({ page }) => {
-    await page.route('**/api/v1/dashboards/admin', async (route) => {
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Not relevant to chrome test.' }) });
-    });
     await loginAs(page, 'admin', '/dashboard/admin');
 
     const themeToggle = page.locator('button[aria-label*="theme"], button[aria-label*="dark"], button[aria-label*="light"], [data-testid="theme-toggle"]').first();

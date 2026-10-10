@@ -22,6 +22,92 @@ use Illuminate\Support\Facades\DB;
  */
 class OpenSupplyService
 {
+    /** Incoming supply remains a purchasing budget, never production-ready inventory. */
+    public function stockPlanningSupply(int $itemId, ?int $stockRootId = null): array
+    {
+        $item = Item::findOrFail($itemId);
+        $levels = \App\Modules\Inventory\Models\StockLevel::where('item_id', $itemId)->with('location.zone.warehouse')->get();
+        $physical = app(\App\Modules\Inventory\Services\StockLocationSummaryService::class)->availability($levels)['usable_quantity'];
+        $physical = $this->positive(bcsub($physical, (string) $item->safety_stock, 3));
+        $requests = \App\Modules\Purchasing\Models\PurchaseRequest::whereNotIn('status', ['cancelled', 'rejected'])
+            ->whereHas('items', fn ($q) => $q->where('item_id', $itemId))
+            ->with(['items' => fn ($q) => $q->where('item_id', $itemId), 'mrpPlan'])->get();
+        $ownership = [];
+        foreach ($requests as $request) {
+            $ownership[$request->id] = $request->stock_production_work_order_id
+                ? 'stock:'.$request->stock_production_work_order_id
+                : ($request->mrp_plan_id ? 'order:'.$request->mrpPlan?->sales_order_id : 'free');
+        }
+        $incoming = [];
+        $open = array_map(fn ($status) => $status->value, array_filter(PurchaseOrderStatus::open(), fn ($status) => $status !== PurchaseOrderStatus::SupplierDeclined));
+        $poLines = DB::table('purchase_order_items as poi')->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
+            ->where('poi.item_id', $itemId)->whereNull('po.deleted_at')->where('po.status', '!=', 'cancelled')
+            ->get(['po.id', 'po.purchase_request_id', 'po.status', 'poi.purchase_request_item_id', 'poi.quantity', 'poi.quantity_received', 'poi.unit']);
+        $orderedByRequestLine = [];
+        foreach ($poLines as $line) {
+            $base = $item->convertToBase((string) $line->quantity, $line->unit ?: null);
+            if ($line->purchase_request_item_id) $orderedByRequestLine[$line->purchase_request_item_id] = bcadd($orderedByRequestLine[$line->purchase_request_item_id] ?? '0', $base, 3);
+            // Draft purchasing is committed but does not authorize physical production.
+            if (! in_array($line->status, array_merge($open, ['draft', 'pending_approval']), true)) continue;
+            $owner = $ownership[$line->purchase_request_id] ?? ($line->purchase_request_id ? 'other' : 'free');
+            $incoming[$owner] = bcadd($incoming[$owner] ?? '0', $this->positive(bcsub($base, (string) $line->quantity_received, 3)), 3);
+        }
+        foreach ($requests as $request) {
+            if (! in_array($request->status->value, ['draft', 'pending', 'approved'], true)) continue;
+            if ($stockRootId && $request->stock_production_work_order_id === $stockRootId && $request->status->value === 'draft'
+                && ! $request->purchaseOrders()->exists() && ! $request->rfqs()->exists()) continue;
+            foreach ($request->items as $line) {
+                $base = $item->convertToBase((string) $line->quantity, $line->unit ?: null);
+                $remaining = $this->positive(bcsub($base, $orderedByRequestLine[$line->id] ?? '0', 3));
+                $owner = $ownership[$request->id];
+                $incoming[$owner] = bcadd($incoming[$owner] ?? '0', $remaining, 3);
+            }
+        }
+        $held = DB::table('grn_items as gi')->join('goods_receipt_notes as grn', 'grn.id', '=', 'gi.goods_receipt_note_id')
+            ->join('purchase_orders as po', 'po.id', '=', 'grn.purchase_order_id')->where('gi.item_id', $itemId)
+            ->whereIn('grn.status', ['pending_qc', 'partial_accepted'])->whereNull('grn.remainder_rejected_at')
+            ->whereNull('po.deleted_at')->where('po.status', '!=', 'cancelled')
+            ->get(['po.purchase_request_id', 'gi.quantity_received', 'gi.quantity_accepted']);
+        foreach ($held as $row) {
+            $owner = $ownership[$row->purchase_request_id] ?? ($row->purchase_request_id ? 'other' : 'free');
+            $incoming[$owner] = bcadd($incoming[$owner] ?? '0', $this->positive(bcsub((string) $row->quantity_received, (string) $row->quantity_accepted, 3)), 3);
+        }
+        $workOrders = \App\Modules\Production\Models\WorkOrder::whereNotIn('status', ['cancelled', 'closed', 'completed'])
+            ->whereHas('materials', fn ($q) => $q->where('item_id', $itemId))
+            ->with(['materials' => fn ($q) => $q->where('item_id', $itemId)])->orderByDesc('priority')->orderBy('planned_end')->orderBy('id')->get();
+        $reservations = \App\Modules\Inventory\Models\MaterialReservation::where('item_id', $itemId)->where('status', 'reserved')->get()->groupBy('work_order_id');
+        $allWork = \App\Modules\Production\Models\WorkOrder::get(['id', 'parent_wo_id', 'production_purpose', 'sales_order_id'])->keyBy('id');
+        $demands = [];
+        foreach ($workOrders as $work) {
+            $root = $work;
+            $seen = [];
+            while ($root->parent_wo_id && ! isset($seen[$root->id])) { $seen[$root->id] = true; $root = $allWork->get($root->parent_wo_id) ?? $root; }
+            $owner = $root->production_purpose === 'stock' && ! $root->sales_order_id ? 'stock:'.$root->id : 'order:'.$root->sales_order_id;
+            $gross = '0';
+            foreach ($work->materials as $material) $gross = bcadd($gross, $this->positive(bcsub((string) $material->bom_quantity, (string) $material->actual_quantity_issued, 3)), 3);
+            $reserved = (string) ($reservations->get($work->id)?->sum('quantity') ?? '0');
+            $demands[$owner] = bcadd($demands[$owner] ?? '0', $this->positive(bcsub($gross, $reserved, 3)), 3);
+        }
+        $pool = bcadd($physical, $incoming['free'] ?? '0', 3);
+        $other = '0';
+        foreach ($demands as $owner => $demand) {
+            if ($stockRootId && $owner === 'stock:'.$stockRootId) break;
+            if ($stockRootId === null && ! str_starts_with($owner, 'stock:')) continue;
+            $unmet = $this->positive(bcsub($demand, $incoming[$owner] ?? '0', 3));
+            $take = bccomp($pool, $unmet, 3) < 0 ? $pool : $unmet;
+            $pool = bcsub($pool, $take, 3);
+            $other = bcadd($other, $take, 3);
+        }
+        $owned = $stockRootId ? ($incoming['stock:'.$stockRootId] ?? '0') : '0';
+        return ['uncommitted_incoming' => bcadd($incoming['free'] ?? '0', '0', 3), 'owned_incoming' => bcadd($owned, '0', 3),
+            'other_stock_demand' => $other, 'available_to_root' => bcadd($pool, $owned, 3)];
+    }
+
+    private function positive(string $quantity): string
+    {
+        return bccomp($quantity, '0', 3) < 0 ? '0.000' : bcadd($quantity, '0', 3);
+    }
+
     /** Physically received base-UoM stock held for QC, not yet in inventory or PO transit. */
     public function heldQcBaseQuantity(int $itemId): string
     {
@@ -86,7 +172,7 @@ class OpenSupplyService
 
         if ($unplannedOnly) {
             // Only unplanned PRs (no MRP plan).
-            $prQuery->whereNull('mrp_plan_id');
+            $prQuery->whereNull('mrp_plan_id')->whereNull('stock_production_work_order_id');
         } elseif ($salesOrderId !== null) {
             // Scope to a specific SO via its MRP plan.
             $prQuery->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $salesOrderId));
@@ -101,6 +187,7 @@ class OpenSupplyService
         $lines = DB::table('purchase_request_items as pri')
             ->where('pri.item_id', $itemId)
             ->whereIn('pri.purchase_request_id', $prIds)
+            ->whereNull('pri.deleted_at')
             ->select(['pri.id', 'pri.quantity', 'pri.unit'])
             ->get();
 

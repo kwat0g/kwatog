@@ -10,11 +10,13 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -32,9 +34,12 @@ class RoleResponsibilityAlignmentTest extends TestCase
     public static function responsibilityBoundaries(): array
     {
         return [
+            'Vice President' => ['vice_president',
+                ['purchasing.view', 'purchasing.pr.approve', 'purchasing.po.approve', 'loans.approve', 'hr.salary_adjustments.act', 'accounting.bills.payment_approve', 'assets.dispose.approve'],
+                ['purchasing.chain.view', 'purchasing.rfq.manage', 'purchasing.po.create', 'hr.employees.edit', 'payroll.periods.compute', 'accounting.bills.pay']],
             'HR Officer' => ['hr_officer',
-                ['hr.employees.view_sensitive', 'attendance.edit', 'leave.approve_hr', 'payroll.periods.compute'],
-                ['payroll.periods.approve', 'payroll.periods.request_correction', 'payroll.periods.finalize', 'accounting.journal.post', 'production.wo.record', 'hr.profile_updates.finance_review']],
+                ['hr.employees.view_sensitive', 'attendance.edit', 'leave.approve_hr', 'payroll.periods.compute', 'admin.gov_tables.manage', 'hr.separation.view_all'],
+                ['payroll.periods.approve', 'payroll.periods.request_correction', 'payroll.periods.finalize', 'accounting.journal.post', 'production.wo.record', 'hr.profile_updates.finance_review', 'loans.write_off.request', 'loans.write_off.approve']],
             'Finance Officer' => ['finance_officer',
                 ['accounting.journal.post', 'payroll.periods.approve', 'payroll.periods.request_correction', 'payroll.periods.finalize', 'budgeting.approve', 'loans.approve'],
                 ['payroll.periods.create', 'payroll.periods.compute', 'payroll.periods.void', 'payroll.periods.force_unlock', 'accounting.customers.manage', 'hr.employees.edit', 'production.wo.record', 'quality.inspections.manage']],
@@ -63,8 +68,8 @@ class RoleResponsibilityAlignmentTest extends TestCase
                     'return_management.manage', 'return_management.receive', 'return_management.inspect',
                     'return_management.dispose', 'return_management.complete']],
             'Purchasing Officer' => ['purchasing_officer',
-                ['purchasing.pr.create', 'purchasing.po.approve', 'purchasing.po.send', 'inventory.grn.create'],
-                ['purchasing.po.sod_override', 'accounting.bills.pay', 'production.wo.record', 'attendance.edit', 'inventory.stock_count.view']],
+                ['purchasing.pr.create', 'purchasing.po.create', 'purchasing.po.view_all', 'purchasing.po.responses.resolve', 'purchasing.po.send', 'inventory.view', 'supply_chain.shipments.view'],
+                ['inventory.grn.create', 'supply_chain.view', 'supply_chain.fleet.manage', 'purchasing.po.sod_override', 'purchasing.po.approve', 'purchasing.pr.approve', 'accounting.bills.pay', 'production.wo.record', 'attendance.edit', 'inventory.stock_count.view']],
             'Warehouse Staff' => ['warehouse_staff',
                 ['inventory.grn.create', 'inventory.issue.create', 'inventory.stock_count.manage', 'inventory.picking.view'],
                 ['purchasing.po.approve', 'accounting.view', 'quality.inspections.manage', 'payroll.periods.view']],
@@ -78,8 +83,8 @@ class RoleResponsibilityAlignmentTest extends TestCase
                 ['supply_chain.view', 'supply_chain.shipments.manage', 'supply_chain.fleet.manage', 'purchasing.view'],
                 ['purchasing.pr.create', 'purchasing.po.approve', 'accounting.view', 'hr.employees.view']],
             'Department Head' => ['department_head',
-                ['attendance.ot.approve', 'leave.approve_dept', 'loans.view', 'loans.approve', 'purchasing.pr.approve'],
-                ['leave.approve_hr', 'loans.write_off', 'purchasing.po.approve', 'payroll.periods.finalize', 'hr.employees.create']],
+                ['attendance.ot.approve', 'leave.approve_dept', 'loans.view', 'loans.approve', 'purchasing.pr.create'],
+                ['leave.approve_hr', 'loans.write_off', 'purchasing.pr.approve', 'purchasing.po.approve', 'payroll.periods.finalize', 'hr.employees.create']],
             'Employee' => ['employee',
                 ['attendance.view', 'leave.view', 'leave.create', 'payroll.view'],
                 ['attendance.ot.create', 'loans.view', 'payroll.periods.view', 'hr.employees.view']],
@@ -104,6 +109,84 @@ class RoleResponsibilityAlignmentTest extends TestCase
         foreach ($forbidden as $permission) {
             $this->assertNotContains($permission, $permissions, "$roleSlug is over-granted $permission");
         }
+    }
+
+    public function test_all_roles_have_only_their_specific_cross_module_routes(): void
+    {
+        $request = \App\Modules\Purchasing\Models\PurchaseRequest::factory()->create();
+        $reads = [
+            '/api/v1/loans' => 'loans.view',
+            '/api/v1/supply-chain/shipments' => 'supply_chain.shipments.view',
+            '/api/v1/supply-chain/vehicles' => 'supply_chain.view',
+            '/api/v1/hr/clearances' => 'hr.separation.view',
+            '/api/v1/admin/gov-tables/options' => 'admin.gov_tables.manage',
+            '/api/v1/crm/complaints' => 'crm.complaints.view',
+            '/api/v1/payroll-periods' => 'payroll.periods.view',
+        ];
+        foreach (Role::all() as $role) {
+            $user = User::factory()->create(['role_id' => $role->id]);
+            foreach ($reads as $path => $permission) {
+                $response = $this->actingAs($user)->getJson($path);
+                ($user->hasPermission($permission) || ($permission === 'supply_chain.shipments.view' && $user->hasPermission('supply_chain.view'))) ? $response->assertOk() : $response->assertForbidden();
+            }
+            foreach ([
+                '/api/v1/purchasing/purchase-orders' => 'purchasing.po.create',
+                '/api/v1/purchasing/purchase-requests' => 'purchasing.pr.create',
+                "/api/v1/purchasing/purchase-requests/{$request->hash_id}/rfqs" => 'purchasing.rfq.manage',
+                '/api/v1/hr/employees' => 'hr.employees.create',
+                '/api/v1/production/work-orders' => 'production.wo.create',
+            ] as $path => $permission) {
+                if (! $user->hasPermission($permission)) {
+                    $this->actingAs($user)->postJson($path, [])->assertForbidden();
+                }
+            }
+        }
+    }
+
+    public function test_purchasing_can_read_receipts_but_only_warehouse_can_record_receiving(): void
+    {
+        $buyer = User::factory()->create(['role_id' => Role::where('slug', 'purchasing_officer')->value('id')]);
+        $warehouse = User::factory()->create(['role_id' => Role::where('slug', 'warehouse_staff')->value('id')]);
+        $grn = GoodsReceiptNote::factory()->create();
+
+        $this->actingAs($buyer, 'sanctum')->getJson('/api/v1/inventory/grn')->assertOk();
+        $this->getJson("/api/v1/inventory/grn/{$grn->hash_id}")->assertOk();
+        $this->getJson('/api/v1/inventory/grn/options')->assertOk();
+        $this->getJson('/api/v1/inventory/grn/receivable-purchase-orders')->assertForbidden();
+        $this->postJson('/api/v1/inventory/grn', [])->assertForbidden();
+        $this->postJson('/api/v1/inventory/receive-goods', [])->assertForbidden();
+        foreach (['finalize', 'accept', 'reject', 'reject-remainder'] as $action) {
+            $this->patchJson("/api/v1/inventory/grn/{$grn->hash_id}/{$action}", [])->assertForbidden();
+        }
+
+        $this->actingAs($warehouse, 'sanctum')->getJson('/api/v1/inventory/grn/receivable-purchase-orders')->assertOk();
+        $this->postJson('/api/v1/inventory/grn', [])->assertUnprocessable();
+    }
+
+    public function test_grn_role_upgrade_changes_only_the_buyer_grant_and_clears_cached_permissions(): void
+    {
+        $role = Role::where('slug', 'purchasing_officer')->firstOrFail();
+        $permissionId = Permission::where('slug', 'inventory.grn.create')->value('id');
+        $role->permissions()->syncWithoutDetaching([$permissionId]);
+        $role->update(['description' => 'Custom purchasing description']);
+        $buyer = User::factory()->create(['role_id' => $role->id]);
+        $this->assertTrue($buyer->hasPermission('inventory.grn.create'));
+        $before = DB::table('role_permissions')->orderBy('role_id')->orderBy('permission_id')->get();
+
+        $migration = require database_path('migrations/2026_10_09_060000_restrict_purchasing_grn_receiving.php');
+        $migration->up();
+        $migration->up();
+
+        $expected = $before->reject(fn ($pivot) => $pivot->role_id === $role->id && $pivot->permission_id === $permissionId)->values();
+        $this->assertEquals($expected, DB::table('role_permissions')->orderBy('role_id')->orderBy('permission_id')->get());
+        $this->assertFalse($buyer->fresh()->hasPermission('inventory.grn.create'));
+        $this->assertTrue($buyer->fresh()->hasPermission('inventory.view'));
+        $this->assertSame('Custom purchasing description', $role->fresh()->description);
+
+        $migration->down();
+        $this->assertEquals($before, DB::table('role_permissions')->orderBy('role_id')->orderBy('permission_id')->get());
+        $this->assertTrue($buyer->fresh()->hasPermission('inventory.grn.create'));
+        $this->assertSame('Custom purchasing description', $role->fresh()->description);
     }
 
     public function test_system_admin_has_the_complete_permission_catalog(): void

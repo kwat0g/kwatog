@@ -14,6 +14,7 @@ use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\WithholdingTaxType;
 use App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -117,6 +118,19 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
             'quantity_received' => '80.000',
             'unit_cost' => '12.50',
         ]], ['received_date' => now()->toDateString()], $this->user);
+    }
+
+    private function attachSupplierInvoice(Bill $bill): void
+    {
+        $invoice = SupplierInvoice::create([
+            'vendor_id' => $bill->vendor_id,
+            'purchase_order_id' => $bill->purchase_order_id,
+            'number' => 'SUP-'.$bill->id,
+            'date' => now()->toDateString(),
+            'gross_total' => (string) $bill->total_amount,
+            'submitted_at' => now(),
+        ]);
+        $bill->update(['supplier_invoice_id' => $invoice->id]);
     }
 
     public function test_accepting_a_grn_stages_a_draft_bill_prefilled_from_accepted_lines(): void
@@ -439,6 +453,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
             'role_id' => Role::where('slug', 'finance_officer')->value('id'),
             'is_active' => true,
         ]);
+        $this->attachSupplierInvoice($bill);
         $posted = $this->billSvc->postDraft($bill->fresh(), $fin);
 
         $this->assertSame(BillStatus::Unpaid, $posted->status);
@@ -486,6 +501,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
+        $this->attachSupplierInvoice($bill);
         PurchaseOrder::query()
             ->findOrFail($accepted->purchase_order_id)
             ->items()
@@ -562,6 +578,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
             'role_id' => Role::where('slug', 'finance_officer')->value('id'),
             'is_active' => true,
         ]);
+        $this->attachSupplierInvoice($firstBill);
         $posted = $this->billSvc->postDraft($firstBill->fresh(), $fin, true, 'First 40 accepted');
         $this->assertSame(BillStatus::Unpaid, $posted->status);
 

@@ -13,17 +13,14 @@ const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
-const { createRequire } = require('node:module');
 
 const ROOT = path.resolve(__dirname, '..');
 const SPA = path.join(ROOT, 'spa');
 const { chromium } = require(path.join(SPA, 'node_modules/playwright'));
-// SPA-owned tooling (Tailwind, its Vite plugins) resolves from spa/node_modules,
-// not the repo root the runner starts in.
-const spaRequire = createRequire(path.join(SPA, 'package.json'));
 
 const RUN = (process.env.O2C_RUN_ID || `O2C${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_o2c_browser_${RUN.toLowerCase()}`;
+const TEST_STORAGE = `/tmp/ogami-audit-storage/o2c-${RUN.toLowerCase()}`;
 const API_PORT = Number(process.env.O2C_API_PORT || 8230);
 const SPA_PORT = Number(process.env.O2C_SPA_PORT || 5230);
 const BASE = `http://127.0.0.1:${SPA_PORT}`;
@@ -33,6 +30,7 @@ const FIXTURE_IN_CONTAINER = `/tmp/o2c-fixture-${RUN}.json`;
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
   O2C_BROWSER_DB: DB, O2C_RUN_ID: RUN, O2C_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
@@ -53,7 +51,7 @@ function compose(args) {
   return execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 }
 const envFlags = () => Object.entries(ENV).flatMap(([k, v]) => ['-e', `${k}=${v}`]);
-const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', 'artisan', ...args]);
 const psql = (sql, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-F', '|', '-c', sql]).trim();
 const sql = (query) => psql(query, DB);
 const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
@@ -71,10 +69,17 @@ function stopApiServer() {
   }
 }
 
+function assertIsolatedStorage() {
+  compose(['exec', '-T', 'api', 'mkdir', '-p', `${TEST_STORAGE}/app`, `${TEST_STORAGE}/app/public`, `${TEST_STORAGE}/framework/cache/data`, `${TEST_STORAGE}/framework/sessions`, `${TEST_STORAGE}/framework/views`, `${TEST_STORAGE}/logs`]);
+  const actualStorage = artisan('tinker', '--execute', 'echo storage_path();').trim();
+  if (actualStorage !== TEST_STORAGE) throw new Error(`Expected isolated Laravel storage ${TEST_STORAGE}; got ${actualStorage}.`);
+}
+
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
   stopApiServer();
   psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  assertIsolatedStorage();
   artisan('migrate', '--force');
   artisan('tinker', '--execute', "require 'tests/Browser/o2c_fixture.php';");
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
@@ -85,7 +90,7 @@ async function setUp() {
   for (let i = 0; i < 60; i++) {
     try {
       const csrf = await fetch(`${target}/sanctum/csrf-cookie`);
-      const user = await fetch(`${target}/api/v1/auth/user`, { headers: { Accept: 'application/json' } });
+      const user = await fetch(`${target}/api/v1/auth/user`, { headers: { Accept: 'application/json', Origin: BASE, Referer: `${BASE}/` } });
       if (csrf.status < 500 && user.status < 500) { ready = true; break; }
     } catch { /* booting */ }
     await new Promise((r) => setTimeout(r, 1000));
@@ -97,11 +102,6 @@ async function setUp() {
   process.chdir(SPA);
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    // A programmatic Vite server started from the repo root does not find the
-    // SPA's PostCSS/Tailwind config, so the pages render unstyled and the
-    // screenshots misrepresent the UI. Load the real plugins against an
-    // absolute config path.
-    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -132,6 +132,7 @@ async function tearDown(server) {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
     psql(`DROP DATABASE IF EXISTS ${DB};`);
   } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+  try { compose(['exec', '-T', 'api', 'rm', '-rf', TEST_STORAGE]); } catch (e) { console.log(`Could not remove ${TEST_STORAGE}: ${e.message}`); }
 }
 
 /* ─── Browser helpers ─────────────────────────────────────────────── */
@@ -329,12 +330,16 @@ async function logins() {
 }
 
 async function orderAndPlan(label, quantity) {
-  let r = await api(who.sales, 'POST', '/crm/sales-orders', {
-    customer_id: fixture.customer, date: today(), notes: `O2C browser ${label}`,
+  const payload = {
+    idempotency_key: `${RUN}-${label.replace(/\s/g, '-')}`,
+    notes: `O2C browser ${label}`,
     items: [{ product_id: fixture.product, quantity: String(quantity), delivery_date: inDays(14) }],
-  });
+  };
+  const quoted = await api(who.customer, 'POST', '/b2b/customer/orders/quote', payload);
+  if (!check(`${label}: customer receives a valid quote`, quoted.status === 200, msg(quoted))) throw new Error('Customer quote failed.');
+  let r = await api(who.customer, 'POST', '/b2b/customer/orders', { ...payload, quote_signature: quoted.body?.data?.quote_signature }, { 'Idempotency-Key': payload.idempotency_key });
   const so = r.body?.data;
-  check(`${label}: sales officer creates the order`, r.status === 201, `${msg(r)} ${so?.so_number} total=${so?.total_amount}`);
+  if (!check(`${label}: customer submits the order`, r.status === 201, `${msg(r)} ${so?.so_number} total=${so?.total_amount}`)) throw new Error('Customer order failed.');
   r = await api(who.sales, 'POST', `/crm/sales-orders/${so.id}/confirm`);
   check(`${label}: order confirmed; MRP plans it inline`, r.status === 200 && r.body?.chain_result?.planning_status === 'completed', `${msg(r)} planning=${r.body?.chain_result?.planning_status}`);
   return so;
@@ -372,12 +377,27 @@ async function findInspection(page, number) {
 async function measure(number, label, { fail = false } = {}) {
   const found = await findInspection(who.qc, number);
   const detail = (await api(who.qc, 'GET', `/quality/inspections/${found.id}`)).body?.data;
-  const rows = (detail?.measurements ?? []).map((m, i) => (m.parameter_type === 'dimensional'
-    ? { id: m.id, measured_value: fail && i < 4 ? '10.200' : (i % 2 ? '10.010' : '9.990') }
-    : { id: m.id, is_pass: true }));
-  const saved = await api(who.qc, 'PATCH', `/quality/inspections/${found.id}/measurements`, { measurements: rows });
-  const done = await api(who.qc, 'POST', `/quality/inspections/${found.id}/complete`, {});
-  check(`${label}: ${number} measured (sample ${detail?.sample_size} of ${detail?.batch_quantity}) → ${done.body?.data?.status}`, saved.status === 200 && done.status === 200, `${msg(saved)} / ${msg(done)}`);
+  const criticalReadings = (detail.measurements ?? []).filter((m) => m.is_critical && m.parameter_type === 'dimensional')
+    .map((m) => ({ id: m.id, measured_value: m.nominal_value }));
+  if (criticalReadings.length && !fail) {
+    const evidence = await api(who.qc, 'PATCH', `/quality/inspections/${found.id}/measurements`, { measurements: criticalReadings });
+    if (!check(`${label}: required critical measurement evidence recorded`, evidence.status === 200, msg(evidence))) throw new Error('Critical evidence failed.');
+  }
+  const seen = new Set();
+  const rows = (detail?.measurements ?? []).filter((m) => {
+    const key = m.parameter_name;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  }).map((m, i) => ({ id: m.id, result: fail && i === 0 ? 'failed' : 'passed', ...(fail && i === 0 ? { problem_description: 'Defective sampled piece.' } : {}) }));
+  const saved = await api(who.qc, 'POST', `/quality/inspections/${found.id}/item-results`, { items: rows, submit: detail.inspection_mode !== 'lot_checklist' });
+  const done = detail.inspection_mode === 'lot_checklist'
+    ? await api(who.qc, 'POST', `/quality/inspections/${found.id}/batch-result`, {
+      result: fail ? 'failed' : 'passed', coverage_confirmed: true,
+      inspected_quantity: Number(detail.sample_size), sample_defect_count: fail ? 1 : 0,
+      critical_defect: fail, defects_removed_confirmed: false,
+      ...(fail ? { problem_description: 'Defective sampled piece.' } : {}),
+    }) : saved;
+  if (!check(`${label}: ${number} uses PASS/FAIL (sample ${detail?.sample_size} of ${detail?.batch_quantity})`, saved.status === 200 && done.status === 200, `${msg(saved)} / ${msg(done)}`)) throw new Error('QC submission failed.');
   return { ...detail, status: done.body?.data?.status, proposed: done.body?.data?.proposed_result };
 }
 
@@ -397,6 +417,8 @@ async function produceAndInspect(so, wo, label, outputs, { failOutgoing = false 
   if (inProcess) {
     const done = await measure(inProcess, `${label} in-process`);
     check(`${label}: in-process QC samples a few pieces, not the whole run`, Number(done.sample_size) <= 5, `sample=${done.sample_size}`);
+    if (done.status === 'awaiting_review') await review(inProcess, 'passed', `${label} in-process`);
+    else check(`${label}: in-process result released under the configured review policy`, done.status === 'passed', done.status);
   }
   for (const [index, [good, reject]] of outputs.entries()) {
     const body = { good_count: good, reject_count: reject, shift: 'A' };
@@ -405,7 +427,7 @@ async function produceAndInspect(so, wo, label, outputs, { failOutgoing = false 
     check(`${label}: output ${good} good / ${reject} reject recorded`, r.status === 201, msg(r));
   }
   const complete = await api(who.prod, 'POST', `/production/work-orders/${wo.id}/complete`, {});
-  check(`${label}: work order completed`, complete.status === 200, msg(complete));
+  check(`${label}: production finished; work order awaits QC`, complete.status === 200 && complete.body?.data?.status === 'completed', msg(complete));
   const outgoing = sql(`select i.inspection_number from inspections i join work_order_outputs o on o.id=i.work_order_output_id where o.work_order_id=${woDb} and i.stage='outgoing' order by i.id`).split('\n').filter(Boolean);
   check(`${label}: outgoing QC auto-created per output batch`, outgoing.length === outputs.length, outgoing.join(', '));
   const results = [];
@@ -532,6 +554,7 @@ async function happyPath() {
   const queue = (await api(who.prod, 'GET', '/dashboards/action-center')).body?.data?.items ?? [];
   check(`${label}: the checker sees both reviews in the Action Center`, results.every((x) => queue.some((i) => i.reference === x.inspection_number)), queue.filter((i) => i.kind === 'inspection_review').map((i) => i.reference).join(','));
   for (const x of results) await review(x.inspection_number, 'passed', label);
+  check(`${label}: work order closes automatically after all QC is released`, sql(`select status from work_orders where wo_number='${wo.wo_number}'`) === 'closed');
   const { invoices } = await dispatchAndConfirm(so, label);
   check(`${label}: one draft invoice per confirmed delivery`, invoices.filter(Boolean).length === 2 && invoices.every((i) => i.status === 'draft'), invoices.map((i) => i?.total_amount ?? 'none').join(' + '));
   for (const inv of invoices) {
@@ -680,6 +703,7 @@ async function complaintTo8D(so) {
       console.log(`Injected session loss for ${process.env.O2C_FAULT_SESSION_DROP} (${dropped.split('\n').filter(Boolean).length} row(s))`);
     }
     const happy = await happyPath();
+    if (process.env.O2C_SCENARIO === 'happy') return;
     const { so: failed, invoices } = await failedBatchIsReplacedOnce();
     await billingCorrections(failed, invoices);
     await complaintTo8D(happy);

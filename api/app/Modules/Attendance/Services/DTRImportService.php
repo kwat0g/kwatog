@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Enums\DtrImportRowOutcome;
 use App\Modules\Attendance\Enums\PunchDirection;
-use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\HR\Models\Employee;
@@ -25,7 +25,7 @@ class DTRImportService
         private readonly DTRComputationService $dtr,
         private readonly OvertimeService $overtime,
         private readonly AttendanceDateMutabilityGuard $mutability,
-        private readonly PunchSessionizer $sessionizer = new PunchSessionizer(),
+        private readonly PunchSessionizer $sessionizer = new PunchSessionizer,
     ) {}
 
     /** @return array{total:int, imported:int, skipped:int, skipped_manual:int, errors:array<int, array{row:int, message:string, outcome?:string, employee_no?:string, date?:string}>} */
@@ -39,6 +39,7 @@ class DTRImportService
         $header = fgetcsv($stream);
         if (! $header) {
             fclose($stream);
+
             return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'skipped_manual' => 0, 'errors' => [['row' => 0, 'message' => 'Empty CSV.']]];
         }
         $header = array_map(fn ($h) => strtolower(trim((string) $h)), $header);
@@ -46,6 +47,7 @@ class DTRImportService
         $missing = array_diff($required, $header);
         if ($missing) {
             fclose($stream);
+
             return ['total' => 0, 'imported' => 0, 'skipped' => 0, 'skipped_manual' => 0, 'errors' => [['row' => 1, 'message' => 'Missing column(s): '.implode(', ', $missing)]]];
         }
         $idx = array_flip($header);
@@ -70,7 +72,7 @@ class DTRImportService
             try {
                 $empNo = trim((string) ($row[$idx['employee_no']] ?? ''));
                 $dateStr = trim((string) ($row[$idx['date']] ?? ''));
-                $timeIn  = trim((string) ($row[$idx['time_in']] ?? ''));
+                $timeIn = trim((string) ($row[$idx['time_in']] ?? ''));
                 $timeOut = trim((string) ($row[$idx['time_out']] ?? ''));
 
                 if ($empNo === '' || $dateStr === '') {
@@ -79,13 +81,15 @@ class DTRImportService
 
                 if (! isset($cache[$empNo])) {
                     $emp = Employee::where('employee_no', $empNo)->first();
-                    if (! $emp) throw new \RuntimeException("Unknown employee_no '{$empNo}'.");
+                    if (! $emp) {
+                        throw new \RuntimeException("Unknown employee_no '{$empNo}'.");
+                    }
                     $cache[$empNo] = $emp->id;
                 }
                 $employeeId = $cache[$empNo];
                 $date = Carbon::parse($dateStr)->toDateString();
 
-                $tIn  = $timeIn !== '' ? Carbon::parse($date.' '.$timeIn)->toDateTimeString() : null;
+                $tIn = $timeIn !== '' ? Carbon::parse($date.' '.$timeIn)->toDateTimeString() : null;
                 // `HH:mm` carries no date, so anchor it to the row's own date the
                 // way time_in above is anchored; anything longer is already a full
                 // datetime. This used to read `Carbon::parse($timeOut, $date)`,
@@ -178,6 +182,7 @@ class DTRImportService
         $header = fgetcsv($stream);
         if (! $header) {
             fclose($stream);
+
             return array_merge($empty, ['errors' => [['row' => 0, 'message' => 'Empty CSV.']]]);
         }
         $header = array_map(fn ($h) => strtolower(trim((string) $h)), $header);
@@ -185,6 +190,7 @@ class DTRImportService
         $missing = array_diff($required, $header);
         if ($missing) {
             fclose($stream);
+
             return array_merge($empty, ['errors' => [['row' => 1, 'message' => 'Missing column(s): '.implode(', ', $missing)]]]);
         }
         $idx = array_flip($header);
@@ -204,7 +210,7 @@ class DTRImportService
             try {
                 $empNo = trim((string) ($row[$idx['employee_no']] ?? ''));
                 $tsStr = trim((string) ($row[$idx['timestamp']] ?? ''));
-                $dir   = isset($idx['direction']) ? strtolower(trim((string) ($row[$idx['direction']] ?? ''))) : null;
+                $dir = isset($idx['direction']) ? strtolower(trim((string) ($row[$idx['direction']] ?? ''))) : null;
                 if ($empNo === '' || $tsStr === '') {
                     throw new \RuntimeException('Employee number and timestamp are required.');
                 }
@@ -213,9 +219,9 @@ class DTRImportService
                 }
                 $punches[] = [
                     'employee_no' => $empNo,
-                    'timestamp'   => Carbon::parse($tsStr)->toDateTimeString(),
-                    'direction'   => $dir !== '' ? $dir : null,
-                    'row'         => $rowNum,
+                    'timestamp' => Carbon::parse($tsStr)->toDateTimeString(),
+                    'direction' => $dir !== '' ? $dir : null,
+                    'row' => $rowNum,
                 ];
             } catch (Throwable $e) {
                 $errors[] = ['row' => $rowNum, 'message' => $e->getMessage()];
@@ -224,8 +230,8 @@ class DTRImportService
         fclose($stream);
 
         // ── Sessionize into day records ──
-        $result  = $this->sessionizer->sessionize($punches);
-        $days    = $result['days'];
+        $result = $this->sessionizer->sessionize($punches);
+        $days = $result['days'];
         $deduped = $result['deduped'];
 
         // ── Persist each day record ──
@@ -237,9 +243,9 @@ class DTRImportService
         // affected day instead of importing the other days and naming that one.
         $cache = []; // employee_no => employee_id
         $imported = 0;
-        $skipped  = 0;
+        $skipped = 0;
         $skippedManual = 0;
-        $flagged  = 0;
+        $flagged = 0;
         foreach ($days as $day) {
             try {
                 $empNo = $day['employee_no'];
@@ -302,13 +308,13 @@ class DTRImportService
         }
 
         return [
-            'total'    => $total,
+            'total' => $total,
             'imported' => $imported,
-            'skipped'  => $skipped,
+            'skipped' => $skipped,
             'skipped_manual' => $skippedManual,
-            'deduped'  => $deduped,
-            'flagged'  => $flagged,
-            'errors'   => $errors,
+            'deduped' => $deduped,
+            'flagged' => $flagged,
+            'errors' => $errors,
         ];
     }
 
@@ -337,6 +343,7 @@ class DTRImportService
      */
     private function openDayRecord(int $employeeId, string $date): Attendance
     {
+        Employee::whereKey($employeeId)->lockForUpdate()->firstOrFail();
         $existing = Attendance::withTrashed()
             ->where('employee_id', $employeeId)
             ->where('date', $date)
@@ -408,7 +415,7 @@ class DTRImportService
             return null;
         }
 
-        $storedIn  = $a->time_in?->format('Y-m-d H:i:s');
+        $storedIn = $a->time_in?->format('Y-m-d H:i:s');
         $storedOut = $a->time_out?->format('Y-m-d H:i:s');
 
         if ($storedIn === $tIn && $storedOut === $tOut) {

@@ -1,0 +1,35 @@
+{
+    "accounts": {
+        "maker": "checklist-maker-000828ae65@ogami.test",
+        "checker": "checklist-checker-000828ae65@ogami.test",
+        "employee": "checklist-employee-000828ae65@ogami.test",
+        "warehouse_staff": "checklist-warehouse_staff-000828ae65@ogami.test",
+        "ppc_head": "checklist-ppc_head-000828ae65@ogami.test"
+    },
+    "inspections": {
+        "pass": {
+            "in_process": "QE8V2Q6KYp",
+            "outgoing": "9EBNREoV67",
+            "customer_return": "8kOKonmPmR",
+            "supplier_return": "zx8N4OoVQy",
+            "incoming": "j16KykBN0X"
+        },
+        "size_fail": {
+            "in_process": "l5aKLWYPdy",
+            "outgoing": "bJyPr1lNYe",
+            "customer_return": "k0vVWjnK1B",
+            "supplier_return": "kAmPXoMNB3",
+            "incoming": "W2ePgebVXz"
+        },
+        "document_fail": {
+            "in_process": "Jr0VdmaN74",
+            "outgoing": "Q05KjZJKXw",
+            "customer_return": "AdwVBn9Vqo",
+            "supplier_return": "3aMKpwOPwj",
+            "incoming": "pW0NqnWPMR"
+        }
+    },
+    "spec": "j5WK5nVzO2",
+    "item": "gA2KOJyPYo",
+    "grn": "j5WK5nVzO2"
+}

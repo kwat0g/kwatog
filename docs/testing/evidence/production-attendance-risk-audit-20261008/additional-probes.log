@@ -1,0 +1,10 @@
+\nAUDIT {"scenario":"Default shift accepts clock-in without employee HR calendar","attendance_saved":true,"production_presence":{"state":"blocked","reason":"Worker is outside configured HR working days or shift hours.","work_date":"2026-10-06"}}
+\nAUDIT {"scenario":"Approved overtime after configured shift","overtime_hours":2,"no_clock_out":true,"production_presence":{"state":"blocked","reason":"Worker is outside configured HR working days or shift hours.","work_date":"2026-10-06"}}
+
+   PASS  Tests\Feature\Production\ProductionAttendanceRiskProbeTest
+  ✓ probe default shift without hr calendar                             35.48s  
+  ✓ probe overtime does not extend production shift                      3.80s  
+
+  Tests:    2 passed (3 assertions)
+  Duration: 39.38s
+

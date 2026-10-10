@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Schema;
  * approval board. All three now call this.
  *
  * The ladder, verbatim from the module list:
- *   - system_admin / purchasing.po.approve → every PO;
+ *   - system_admin / purchasing.po.view_all / purchasing.po.approve → every PO;
  *   - department_head                      → own creations + POs whose linked
  *                                            PR belongs to their department;
  *   - approval-chain step roles            → own creations + POs whose current
@@ -52,7 +52,7 @@ final class PurchaseOrderAccessPolicy
 
         // hasPermission() short-circuits for system_admin, so the admin tier
         // needs no role-name branch here.
-        if ($user->hasPermission('purchasing.po.approve')) {
+        if ($user->hasPermission('purchasing.po.approve') || $user->hasPermission('purchasing.po.view_all')) {
             return $query;
         }
 
@@ -144,14 +144,15 @@ final class PurchaseOrderAccessPolicy
     }
 
     /**
-     * The PO creator, or the company-wide tier. `purchasing.po.approve` is
+     * The PO creator, or the company-wide read tier. `purchasing.po.view_all` is
      * this module's global tier — the same office `visibleTo` grants every PO
      * — and hasPermission() short-circuits for system_admin.
      */
     private function isOwner(User $user, PurchaseOrder $po): bool
     {
         return (int) $po->created_by === (int) $user->id
-            || $user->hasPermission('purchasing.po.approve');
+            || $user->hasPermission('purchasing.po.approve')
+            || $user->hasPermission('purchasing.po.view_all');
     }
 
     /**

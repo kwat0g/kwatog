@@ -54,10 +54,12 @@ class PayrollAnomalyPolicyTest extends TestCase
 
     public function test_finalize_refuses_when_anomaly_detection_failed(): void
     {
+        $approver = User::factory()->create();
         $period = PayrollPeriod::factory()->create([
             'status' => 'approved',
             'anomaly_detection_failed' => true,
         ]);
+        $period->forceFill(['approved_by' => $approver->id, 'approved_at' => now()])->save();
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('anomaly detection failed');

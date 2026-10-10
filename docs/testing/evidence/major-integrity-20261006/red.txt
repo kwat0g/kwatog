@@ -1,0 +1,85 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+FFFFFF                                                              6 / 6 (100%)
+
+Time: 00:19.529, Memory: 66.50 MB
+
+There were 6 failures:
+
+1) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_cancel_of_unrepaired_down_machine_marks_it_idle
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'breakdown'
++'idle'
+
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:79
+
+2) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_repeated_spare_part_intent_deducts_twice
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'8.000'
++'6.000'
+
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:108
+
+3) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_contra_asset_increases_reported_assets
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'900.00'
++'1100.00'
+
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:127
+
+4) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_partial_credit_intent_replay_reduces_both_balances_twice
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'900.00'
++'800.00'
+
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:146
+
+5) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_partial_shipment_documents_use_entire_purchase_order
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'10.000'
++'100.000'
+
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:161
+/var/www/vendor/mockery/mockery/library/Mockery/Matcher/MultiArgumentClosure.php:38
+/var/www/vendor/mockery/mockery/library/Mockery/Expectation.php:932
+/var/www/vendor/mockery/mockery/library/Mockery/Expectation.php:563
+/var/www/vendor/mockery/mockery/library/Mockery/ExpectationDirector.php:227
+/var/www/vendor/mockery/mockery/library/Mockery/ExpectationDirector.php:117
+/var/www/vendor/mockery/mockery/library/Mockery/ExpectationDirector.php:85
+/var/www/app/Modules/SupplyChain/Services/ImpexDocumentService.php:40
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:169
+
+6) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_full_approval_disposes_before_latest_depreciation_without_reversing_later_rows
+Failed asserting that exception of type "App\Common\Exceptions\BusinessRuleException" is thrown.
+
+--
+
+There was 1 risky test:
+
+1) Tests\Feature\Operations\MajorIntegrityRegressionTest::test_partial_shipment_documents_use_entire_purchase_order
+* Test code or tested code did not remove its own error handlers
+
+* Test code or tested code did not remove its own exception handlers
+
+/var/www/tests/Feature/Operations/MajorIntegrityRegressionTest.php:151
+
+FAILURES!
+Tests: 6, Assertions: 15, Failures: 6, Risky: 1.

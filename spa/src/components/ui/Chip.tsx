@@ -1,41 +1,35 @@
 import { type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-export type ChipVariant =
- | 'success'
- | 'warning'
- | 'danger'
- | 'info'
- | 'neutral'
- | 'purple';
+export type ChipVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple';
 
 interface ChipProps {
- variant?: ChipVariant;
- className?: string;
- children: ReactNode;
+  variant?: ChipVariant;
+  className?: string;
+  children: ReactNode;
 }
 
 const variants: Record<ChipVariant, string> = {
- success: 'bg-success-bg text-success-fg',
- warning: 'bg-warning-bg text-warning-fg',
- danger: 'bg-danger-bg text-danger-fg',
- info: 'bg-info-bg text-info-fg',
- purple: 'bg-purple-bg text-purple-fg',
- neutral: 'bg-subtle text-muted',
+  success: 'bg-success-bg text-success-fg',
+  warning: 'bg-warning-bg text-warning-fg',
+  danger: 'bg-danger-bg text-danger-fg',
+  info: 'bg-info-bg text-info-fg',
+  purple: 'bg-purple-bg text-purple-fg',
+  neutral: 'bg-subtle text-muted',
 };
 
 export function Chip({ variant = 'neutral', className, children }: ChipProps) {
- return (
- <span
- className={cn(
- 'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium leading-tight whitespace-nowrap transition-colors duration-fast',
- variants[variant],
- className,
- )}
- >
- {children}
- </span>
- );
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium leading-tight whitespace-nowrap transition-colors duration-fast',
+        variants[variant],
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 /**
@@ -44,63 +38,65 @@ export function Chip({ variant = 'neutral', className, children }: ChipProps) {
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function chipVariantForStatus(status: string | null | undefined): ChipVariant {
- switch (status) {
- case 'completed':
- case 'approved':
- case 'active':
- case 'passed':
- case 'running':
- case 'paid':
- case 'delivered':
- case 'confirmed':
- case 'posted':
- case 'present':
- return 'success';
- case 'in_production':
- case 'in_progress':
- case 'processing':
- case 'scheduled':
- case 'on_leave':
- case 'in_transit':
- case 'holiday':
- case 'open':
- case 'issued':
- case 'sent':
- return 'info';
- case 'pending':
- case 'pending_dept':
- case 'pending_hr':
- case 'draft':
- case 'queued':
- case 'idle':
- case 'setup':
- case 'partial':
- case 'partially_received':
- case 'maintenance':
- case 'late':
- case 'halfday':
- case 'awaiting_acknowledgment':
- return 'warning';
- case 'received':
- case 'fully_received':
- return 'success';
- case 'rejected':
- case 'failed':
- case 'breakdown':
- case 'overdue':
- case 'urgent':
- case 'material_short':
- case 'terminated':
- case 'unpaid':
- case 'absent':
- return 'danger';
- case 'cancelled':
- case 'inactive':
- case 'closed':
- case 'resigned':
- case 'retired':
- case 'rest_day':
- default:
- return 'neutral';
- }
+  switch (status) {
+    case 'completed':
+    case 'approved':
+    case 'active':
+    case 'passed':
+    case 'running':
+    case 'paid':
+    case 'delivered':
+    case 'confirmed':
+    case 'posted':
+    case 'present':
+      return 'success';
+    case 'in_production':
+    case 'in_progress':
+    case 'processing':
+    case 'scheduled':
+    case 'on_leave':
+    case 'in_transit':
+    case 'holiday':
+    case 'open':
+    case 'issued':
+    case 'sent':
+      return 'info';
+    case 'awaiting_confirmation':
+    case 'delivery_negotiation':
+    case 'pending':
+    case 'pending_dept':
+    case 'pending_hr':
+    case 'draft':
+    case 'queued':
+    case 'idle':
+    case 'setup':
+    case 'partial':
+    case 'partially_received':
+    case 'maintenance':
+    case 'late':
+    case 'halfday':
+    case 'awaiting_acknowledgment':
+      return 'warning';
+    case 'received':
+    case 'fully_received':
+      return 'success';
+    case 'rejected':
+    case 'failed':
+    case 'breakdown':
+    case 'overdue':
+    case 'urgent':
+    case 'material_short':
+    case 'terminated':
+    case 'unpaid':
+    case 'absent':
+      return 'danger';
+    case 'cancelled':
+    case 'inactive':
+    case 'closed':
+    case 'resigned':
+    case 'retired':
+    case 'rest_day':
+    default:
+      return 'neutral';
+  }
 }

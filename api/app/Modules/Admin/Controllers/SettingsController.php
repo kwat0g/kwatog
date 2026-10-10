@@ -18,6 +18,10 @@ class SettingsController
     {
         $rows = DB::table('settings')
             ->leftJoin('users', 'settings.updated_by', '=', 'users.id')
+            ->whereNotIn('settings.key', [
+                'accounting.je_self_post_limit',
+                'accounting.je_self_post_limit.retired',
+            ])
             ->select('settings.*', 'users.name as updated_by_name')
             ->orderBy('settings.group')
             ->orderBy('settings.key')

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Modules\Inventory\Services\StockLocationSummaryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -30,6 +31,9 @@ class StockCountItemResource extends JsonResource
             'variance' => $this->variance,
             'variance_percent' => $this->variance_percent,
             'lot_number' => $this->lot_number,
+            'variance_allocations' => $this->variance_allocations,
+            'source_lots' => $this->resource->getAttribute('source_lots') ?? ($this->item_id && $this->location_id
+                ? app(StockLocationSummaryService::class)->lots((int) $this->item_id, (int) $this->location_id) : []),
             'status' => $this->status?->value,
             'status_label' => $this->status?->label(),
             'counted_by' => $this->whenLoaded('counter', fn () => $this->counter ? [

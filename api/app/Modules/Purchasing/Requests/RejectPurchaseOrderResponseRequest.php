@@ -10,7 +10,7 @@ class RejectPurchaseOrderResponseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('purchasing.po.approve') ?? false;
+        return $this->user()?->hasPermission('purchasing.po.responses.resolve') ?? false;
     }
 
     public function rules(): array

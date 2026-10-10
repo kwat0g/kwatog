@@ -16,6 +16,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { LuPencil } from '@/lib/icons';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -23,6 +24,17 @@ import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatPeso } from '@/lib/formatNumber';
 import { localIsoDate } from '@/lib/formatDate';
+import type { AssociateAssetData } from '@/types/assets';
+
+const ASSOCIATION_LABELS: Record<AssociateAssetData['target_type'], string> = {
+  machine: 'Machine',
+  mold: 'Mold',
+  vehicle: 'Vehicle',
+};
+
+function isOperationalCategory(value: string): value is AssociateAssetData['target_type'] {
+  return value === 'machine' || value === 'mold' || value === 'vehicle';
+}
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -38,6 +50,11 @@ export default function AssetDetailPage() {
   const [approveDisposalOpen, setApproveDisposalOpen] = useState(false);
   const [rejectDisposalOpen, setRejectDisposalOpen] = useState(false);
   const [cancelDisposalOpen, setCancelDisposalOpen] = useState(false);
+  const [associationOpen, setAssociationOpen] = useState(false);
+  const [clearAssociationOpen, setClearAssociationOpen] = useState(false);
+  const [associationTargetId, setAssociationTargetId] = useState('');
+  const [associationSearch, setAssociationSearch] = useState('');
+  const [associationPage, setAssociationPage] = useState(1);
   const disposalError = !/^\d+(\.\d{1,2})?$/.test(disposalAmount)
     ? disposalAmount === ''
       ? 'Disposal proceeds is required.'
@@ -90,6 +107,20 @@ export default function AssetDetailPage() {
   const categoryLabel = assetOptions?.categories?.find(
     (option) => option.value === data?.category,
   )?.label;
+  const associationType = data && isOperationalCategory(data.category) ? data.category : null;
+  const canUpdateAsset = can('assets.update');
+
+  const associationOptionsQuery = useQuery({
+    queryKey: ['asset', id, 'association-options', associationSearch, associationPage],
+    queryFn: () => assetsApi.associationOptions(id, {
+      search: associationSearch.trim() || undefined,
+      page: associationPage,
+      per_page: 50,
+    }),
+    enabled: Boolean(associationOpen && associationType && canUpdateAsset && data && !data.association && !data.disposal_request && data.status !== 'disposed'),
+    retry: false,
+    staleTime: 30_000,
+  });
 
   const dispose = useMutation({
     mutationFn: () => assetsApi.dispose(id, {
@@ -144,6 +175,25 @@ export default function AssetDetailPage() {
     onError: (error) => toast.error(disposalErrMsg(error, 'Failed to cancel disposal request.')),
   });
 
+  const updateAssociation = useMutation({
+    mutationFn: (targetId: string | null) => {
+      const targetType = data?.association?.type ?? associationType;
+      if (!targetType) throw new Error('This asset category cannot be associated with an operational record.');
+      return assetsApi.associate(id, { target_type: targetType, target_id: targetId });
+    },
+    onSuccess: (asset) => {
+      qc.setQueryData(['asset', id], asset);
+      qc.invalidateQueries({ queryKey: ['asset', id] });
+      qc.invalidateQueries({ queryKey: ['asset', id, 'association-options'] });
+      qc.invalidateQueries({ queryKey: ['assets'] });
+      toast.success(asset.association ? 'Operational record linked.' : 'Operational record unlinked.');
+      setAssociationOpen(false);
+      setClearAssociationOpen(false);
+      setAssociationTargetId('');
+    },
+    onError: (error) => toast.error(disposalErrMsg(error, 'Failed to update the operational association.')),
+  });
+
   if (isLoading) return <SkeletonDetail />;
   if (isError || !data) {
     return (
@@ -184,7 +234,7 @@ export default function AssetDetailPage() {
                 <LuPencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
             )}
-            {data.status !== 'disposed' && !data.disposal_request && can('assets.dispose') && (
+            {data.status !== 'disposed' && !data.disposal_request && !data.association && can('assets.dispose') && (
               <Button variant="danger" size="xs" onClick={() => setDisposeOpen(true)}>
                 Dispose
               </Button>
@@ -291,6 +341,59 @@ export default function AssetDetailPage() {
           </Panel>
         </div>
         <aside className="space-y-4">
+          {(associationType || data.association) && (
+            <Panel title="Operational association">
+              {data.association ? (
+                <div className="space-y-2">
+                  <dl className="text-sm divide-y divide-subtle">
+                    <Row label="Record type">{ASSOCIATION_LABELS[data.association.type]}</Row>
+                    <Row label="Code"><span className="font-mono">{data.association.code}</span></Row>
+                    <Row label="Name">{data.association.name}</Row>
+                  </dl>
+                  {data.association.archived && <p className="text-xs text-muted" role="status">This archived operational record remains linked until you clear the association.</p>}
+                  {can('assets.dispose') && data.status !== 'disposed' && !data.disposal_request && (
+                    <p className="text-xs text-muted" role="status">Clear this operational association before requesting disposal.</p>
+                  )}
+                  {canUpdateAsset && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setClearAssociationOpen(true)}
+                      loading={updateAssociation.isPending}
+                    >
+                      Clear association
+                    </Button>
+                  )}
+                  {data.status === 'disposed' && (
+                    <p className="text-xs text-muted" role="status">Disposed assets cannot be linked to new operational records. Existing links can be cleared.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted">No operational record linked.</p>
+                  {data.disposal_request ? (
+                    <p className="text-xs text-muted" role="status">New operational links are blocked while disposal approval is pending.</p>
+                  ) : data.status === 'disposed' ? (
+                    <p className="text-xs text-muted" role="status">Disposed assets cannot be associated with operational records.</p>
+                  ) : canUpdateAsset && associationType ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setAssociationSearch('');
+                        setAssociationPage(1);
+                        setAssociationTargetId('');
+                        setAssociationOpen(true);
+                      }}
+                    >
+                      Associate {ASSOCIATION_LABELS[associationType].toLowerCase()}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </Panel>
+          )}
+
           <Panel title="Details">
             <dl className="text-sm divide-y divide-subtle">
               <Row label="Category">{data.category_label ?? categoryLabel ?? data.category}</Row>
@@ -350,6 +453,91 @@ export default function AssetDetailPage() {
           )}
         </aside>
       </div>
+
+      {associationType && (
+        <Modal
+          isOpen={associationOpen}
+          onClose={() => { if (!updateAssociation.isPending) setAssociationOpen(false); }}
+          size="sm"
+          title={`Associate ${ASSOCIATION_LABELS[associationType].toLowerCase()}`}
+        >
+          <div className="py-3 space-y-3">
+            <p className="text-sm text-secondary">Choose an unassociated {ASSOCIATION_LABELS[associationType].toLowerCase()} record.</p>
+            <Input
+              label={`Search ${ASSOCIATION_LABELS[associationType].toLowerCase()} records`}
+              value={associationSearch}
+              onChange={(event) => {
+                setAssociationSearch(event.target.value);
+                setAssociationPage(1);
+                setAssociationTargetId('');
+              }}
+            />
+            {associationOptionsQuery.isLoading ? (
+              <p className="text-sm text-muted" role="status">Loading records…</p>
+            ) : associationOptionsQuery.isError ? (
+              <EmptyState
+                icon="alert-circle"
+                title="Could not load operational records"
+                action={<Button variant="secondary" onClick={() => associationOptionsQuery.refetch()}>Retry</Button>}
+              />
+            ) : associationOptionsQuery.data?.data.length ? (
+              <>
+                <Select
+                  label={ASSOCIATION_LABELS[associationType]}
+                  value={associationTargetId}
+                  onChange={(event) => setAssociationTargetId(event.target.value)}
+                >
+                  <option value="">Select a record</option>
+                  {associationOptionsQuery.data.data.map((target) => (
+                    <option key={target.id} value={target.id}>{target.code} · {target.name}</option>
+                  ))}
+                </Select>
+                {associationOptionsQuery.data.meta.last_page > 1 && (
+                  <div className="flex items-center justify-between text-xs text-muted">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={associationPage <= 1}
+                      onClick={() => { setAssociationTargetId(''); setAssociationPage((page) => page - 1); }}
+                    >Previous</Button>
+                    <span>Page {associationOptionsQuery.data.meta.current_page} of {associationOptionsQuery.data.meta.last_page}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={associationPage >= associationOptionsQuery.data.meta.last_page}
+                      onClick={() => { setAssociationTargetId(''); setAssociationPage((page) => page + 1); }}
+                    >Next</Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted" role="status">No unassociated {ASSOCIATION_LABELS[associationType].toLowerCase()} records found.</p>
+            )}
+          </div>
+          <ModalFooter>
+            <Button variant="secondary" onClick={() => setAssociationOpen(false)} disabled={updateAssociation.isPending}>Cancel</Button>
+            <Button
+              variant="primary"
+              onClick={() => updateAssociation.mutate(associationTargetId)}
+              loading={updateAssociation.isPending}
+              disabled={!associationTargetId || updateAssociation.isPending || !associationOptionsQuery.data?.data.length}
+            >
+              Save association
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+
+      <ConfirmDialog
+        isOpen={clearAssociationOpen}
+        onClose={() => { if (!updateAssociation.isPending) setClearAssociationOpen(false); }}
+        onConfirm={() => updateAssociation.mutate(null)}
+        title="Clear operational association?"
+        description={data.association ? `This removes the link to ${data.association.code} · ${data.association.name}. Both records remain.` : 'This removes the operational link. Both records remain.'}
+        confirmLabel="Clear association"
+        variant="warning"
+        pending={updateAssociation.isPending}
+      />
 
       <Modal
         isOpen={disposeOpen}

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 
 use App\Common\Services\DocumentSequenceService;
-use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
@@ -27,13 +27,9 @@ use Illuminate\Support\Facades\DB;
 
 class JournalEntryService
 {
-    /** OGAMI-002 — permission that lets a maker also post (checker) their own JE. */
-    private const SELF_POST_OVERRIDE_PERMISSION = 'accounting.journal.self_post_override';
-
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly AccountingPeriodService $periods,
-        private readonly SettingsService $settings,
         private readonly PostingAccountResolver $accounts,
         private readonly JournalEntryStateMachine $stateMachine,
     ) {}
@@ -319,6 +315,11 @@ class JournalEntryService
             if ($lockedJe->status !== JournalEntryStatus::Draft) {
                 throw new BusinessRuleException('Only draft entries can be posted.');
             }
+            if ($lockedJe->reference_type !== null) {
+                throw new ForbiddenActionException(
+                    'Source-linked journal entries must be posted through their source document workflow.',
+                );
+            }
 
             // Header → lines → accounts: lock and validate the complete
             // aggregate before checking the period or changing its status.
@@ -328,15 +329,7 @@ class JournalEntryService
             $this->periods->assertPostingAllowed($lockedJe->date);
 
             // OGAMI-002 — maker-checker / segregation of duties.
-            // The user who created a draft JE may not also post it. A different
-            // user must act as checker. Two escape hatches:
-            //   1. `accounting.journal.self_post_override` permission (system_admin
-            //      always has it, since hasPermission() short-circuits for admin).
-            //   2. A configurable self-post limit: entries whose total is strictly
-            //      below `accounting.je_self_post_limit` may be self-posted. A limit
-            //      of 0 (the default) means maker !== checker is ALWAYS required.
-            // Mirrors the abort(403, ...) self-action pattern in ApprovalService.
-            $this->assertNotSelfPosting($lockedJe, $by, $td);
+            $this->assertDifferentMaker($lockedJe, $by, 'post');
 
             $lockedJe->forceFill([
                 'posted_by'   => $by->id,
@@ -394,34 +387,17 @@ class JournalEntryService
         );
     }
 
-    /**
-     * OGAMI-002 — enforce maker-checker on posting.
-     *
-     * Blocks the JE creator from posting their own draft unless:
-     *   - they hold `accounting.journal.self_post_override`, OR
-     *   - the entry total is strictly below the configured self-post limit.
-     *
-     * A null `created_by` (legacy / system-generated drafts) cannot trigger the
-     * guard, so those post freely.
-     */
-    private function assertNotSelfPosting(JournalEntry $je, User $by, string $total): void
+    /** Enforce maker-checker on manual journal actions. */
+    private function assertDifferentMaker(JournalEntry $je, User $by, string $action): void
     {
         $creatorId = $je->created_by !== null ? (int) $je->created_by : null;
         if ($creatorId === null || $creatorId !== (int) $by->id) {
             return; // different checker, or unknown maker — allowed.
         }
 
-        if ($by->hasPermission(self::SELF_POST_OVERRIDE_PERMISSION)) {
-            return; // explicit override.
-        }
-
-        // Threshold escape hatch. Default '0' => always require maker !== checker.
-        $limit = (string) $this->settings->requiredFloat('accounting.je_self_post_limit', 0);
-        if (Money::gt($limit, '0') && Money::lt($total, $limit)) {
-            return; // below self-post limit — permitted.
-        }
-
-        abort(403, 'You cannot post a journal entry you created. A different user must post it (segregation of duties).');
+        throw new ForbiddenActionException(
+            "You cannot {$action} a journal entry you created. A different user must {$action} it (segregation of duties).",
+        );
     }
 
     /**
@@ -435,7 +411,31 @@ class JournalEntryService
         ?string $reason = null,
     ): JournalEntry
     {
-        return DB::transaction(function () use ($je, $by, $reverseDate, $reason) {
+        return $this->reverseEntry($je, $by, $reverseDate, $reason, false);
+    }
+
+    /**
+     * Reverse a linked ledger entry from its owning source-document workflow.
+     * Call only after the source service has locked and validated its document.
+     */
+    public function reverseSource(
+        JournalEntry $je,
+        User $by,
+        ?Carbon $reverseDate = null,
+        ?string $reason = null,
+    ): JournalEntry
+    {
+        return $this->reverseEntry($je, $by, $reverseDate, $reason, true);
+    }
+
+    private function reverseEntry(
+        JournalEntry $je,
+        User $by,
+        ?Carbon $reverseDate,
+        ?string $reason,
+        bool $sourceWorkflow,
+    ): JournalEntry {
+        return DB::transaction(function () use ($je, $by, $reverseDate, $reason, $sourceWorkflow) {
             // Re-check the authoritative entry while holding its row lock. A
             // posted model can be stale by the time a reversal is requested.
             $lockedJe = JournalEntry::query()
@@ -448,10 +448,30 @@ class JournalEntryService
                 throw new BusinessRuleException('This entry has already been reversed.');
             }
 
+            $isSourceDocumentEntry = $lockedJe->reference_type !== null
+                && $lockedJe->reference_type !== 'journal_entry_reversal';
+            if ($isSourceDocumentEntry && ! $sourceWorkflow) {
+                throw new ForbiddenActionException(
+                    'Source-linked journal entries must be reversed through their source document workflow.',
+                );
+            }
+            if ($sourceWorkflow && ! $isSourceDocumentEntry) {
+                throw new BusinessRuleException(
+                    'Only source-linked journal entries can be reversed through their source document workflow.',
+                );
+            }
+
             // Header → lines → accounts: the source aggregate is locked and
             // revalidated before a replacement entry can be constructed.
             [$sourceLines, $sourceDebit, $sourceCredit] = $this->lockAndValidateLines($lockedJe->id);
             $effectiveDate = ($reverseDate ?? now())->toDateString();
+            $sourceDate = $lockedJe->date->toDateString();
+            if ($effectiveDate < $sourceDate) {
+                throw new BusinessRuleException(sprintf(
+                    'A journal entry cannot be reversed before its original posting date (%s). Choose a reversal date on or after that date.',
+                    $sourceDate,
+                ));
+            }
             $this->periods->assertPostingAllowed($effectiveDate);
 
             $reason = trim((string) $reason);
@@ -461,10 +481,11 @@ class JournalEntryService
                 // established service contracts.
                 $reason = "Automated reversal of {$lockedJe->entry_number}.";
             }
-            // Source-linked automated entries already have a system posting
-            // boundary. Manual entries still require a different checker.
-            if ($lockedJe->reference_type === null) {
-                $this->assertNotSelfPosting($lockedJe, $by, $sourceDebit);
+            // Domain entries are reversed by their owning workflow. Manual
+            // entries and human-created reversal entries still require a
+            // different actor for each posting action.
+            if (! $sourceWorkflow) {
+                $this->assertDifferentMaker($lockedJe, $by, 'reverse');
             }
             $entryNumber = $this->sequences->generate('journal_entry', Carbon::parse($effectiveDate));
 

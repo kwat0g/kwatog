@@ -46,7 +46,7 @@ class AccountsPayableHardeningTest extends TestCase
         ]);
     }
 
-    private function serviceBill(User $user, string $number = 'AP-HARDEN-1'): Bill
+    private function serviceBill(User $user, string $number = 'AP-HARDEN-1', string $amount = '100.00'): Bill
     {
         $vendor = Vendor::create(['name' => 'AP Hardening Vendor']);
         $expense = Account::query()->where('code', '5010')->firstOrFail();
@@ -63,7 +63,7 @@ class AccountsPayableHardeningTest extends TestCase
                 'expense_account_id' => $expense->hash_id,
                 'description' => 'AP hardening fixture',
                 'quantity' => '1',
-                'unit_price' => '100.00',
+                'unit_price' => $amount,
             ]],
         ], $user);
     }
@@ -133,20 +133,18 @@ class AccountsPayableHardeningTest extends TestCase
         $payment = $service->recordPayment($bill, [
             'cash_account_id' => Account::query()->where('code', '1020')->firstOrFail()->hash_id,
             'payment_date' => now()->toDateString(),
-            'amount' => '40.00',
+            'amount' => '50.00',
             'payment_method' => PaymentMethod::BankTransfer->value,
         ], $maker);
 
-        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
-        $service->approvePayment($bill->fresh(), $payment->fresh(), $checker);
-        $payment = $service->approvePayment($bill->fresh(), $payment->fresh(), $this->user('vice_president'));
+        $this->assertSame(BillPaymentStatus::Posted, $payment->status);
         $this->assertSame(BillPaymentStatus::Posted, $payment->status);
 
         try {
             $service->recordPayment($bill->fresh(), [
                 'cash_account_id' => Account::query()->where('code', '2010')->firstOrFail()->hash_id,
                 'payment_date' => now()->toDateString(),
-                'amount' => '1.00',
+                'amount' => '50.00',
                 'payment_method' => PaymentMethod::Cash->value,
             ], $maker);
             $this->fail('A liability account must not be accepted as a cash account.');
@@ -169,12 +167,12 @@ class AccountsPayableHardeningTest extends TestCase
         $maker = $this->user('finance_officer');
         $checker = $this->user('finance_officer');
         $vp = $this->user('vice_president');
-        $bill = $this->serviceBill($this->user(), 'AP-DECIDE-1');
+        $bill = $this->serviceBill($this->user(), 'AP-DECIDE-1', '50000.00');
         $service = app(BillService::class);
         $payment = $service->recordPayment($bill, [
             'cash_account_id' => Account::query()->where('code', '1020')->firstOrFail()->hash_id,
             'payment_date' => now()->toDateString(),
-            'amount' => '40.00',
+            'amount' => '25000.00',
             'payment_method' => PaymentMethod::BankTransfer->value,
         ], $maker);
 
@@ -185,14 +183,9 @@ class AccountsPayableHardeningTest extends TestCase
             return (new BillPaymentResource($payment->fresh()))->toArray($request)['can_decide'];
         };
 
-        // The requester is refused by the self-approval guard; the VP's step
-        // has not opened yet. Only another finance officer may act.
+        // Finance records the payment; only the VP can approve a bill at the threshold.
         $this->assertFalse($canDecide($payment, $maker));
-        $this->assertTrue($canDecide($payment, $checker));
-        $this->assertFalse($canDecide($payment, $vp));
-
-        $service->approvePayment($bill->fresh(), $payment->fresh(), $checker);
-        $this->assertFalse($canDecide($payment, $checker), 'Finance must not be offered the VP step.');
+        $this->assertFalse($canDecide($payment, $checker));
         $this->assertTrue($canDecide($payment, $vp));
     }
 

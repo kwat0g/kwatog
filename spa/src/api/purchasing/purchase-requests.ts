@@ -26,13 +26,9 @@ export const purchaseRequestsApi = {
  client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/reject`, { reason }).then((r) => r.data),
  cancel: (id: string) =>
  client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/cancel`).then((r) => r.data),
- convert: (id: string, vendor_map: Record<string, string>, expected_delivery_date?: string) =>
+ convert: (id: string, vendor_map: Record<string, string>) =>
  client
- .post<PurchaseOrder[]>(`/purchasing/purchase-requests/${id}/convert`, {
- vendor_map,
- // Omitted when blank so the backend keeps its own default.
- ...(expected_delivery_date ? { expected_delivery_date } : {}),
- })
+ .post<PurchaseOrder[]>(`/purchasing/purchase-requests/${id}/convert`, { vendor_map })
  .then((r) => r.data),
 
  /** Ranked supplier suggestions per PR line for the conversion modal. */

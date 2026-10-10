@@ -8,6 +8,7 @@ use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\InternalSupplierActivityController;
 use App\Modules\B2B\Controllers\PortalAccessController;
+use App\Modules\B2B\Controllers\PortalNotificationController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierDeliveryScheduleController;
@@ -45,9 +46,15 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [SupplierAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
+            Route::get('notifications', [PortalNotificationController::class, 'index']);
+            Route::patch('notifications/read-all', [PortalNotificationController::class, 'markAllRead']);
+            Route::patch('notifications/{id}/read', [PortalNotificationController::class, 'markRead'])->whereUuid('id');
+            Route::delete('notifications/clear-read', [PortalNotificationController::class, 'clearRead']);
+            Route::delete('notifications/{id}', [PortalNotificationController::class, 'destroy'])->whereUuid('id');
             Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
             Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
             Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
+            Route::get('purchase-orders/{purchaseOrder}/returns/{returnRequest}/defect-photo', [SupplierPortalController::class, 'returnDefectPhoto']);
             Route::get('purchase-orders/{purchaseOrder}/pdf', [SupplierPortalController::class, 'poPdf']);
             Route::post('purchase-orders/{purchaseOrder}/acknowledge', [SupplierPortalController::class, 'acknowledgePo'])->middleware('throttle:sensitive');
             Route::post('purchase-orders/{purchaseOrder}/respond', [SupplierPortalController::class, 'respondToPo'])->middleware('throttle:sensitive');
@@ -58,6 +65,8 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierShipmentController::class, 'shippingDocuments']);
             Route::get('purchase-orders/shipping-documents/options', [SupplierShipmentController::class, 'shippingDocumentOptions']);
             Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierInvoiceController::class, 'submitInvoice'])->middleware('throttle:sensitive');
+            Route::get('supplier-invoices', [SupplierInvoiceController::class, 'index']);
+            Route::get('supplier-invoices/{supplierInvoice}', [SupplierInvoiceController::class, 'show']);
             Route::get('shipping-documents/{id}/download', [SupplierShipmentController::class, 'downloadShippingDocument']);
             Route::get('invoices', [SupplierPortalController::class, 'invoices']);
             Route::get('invoices/{invoice}', [SupplierPortalController::class, 'invoiceDetail']);
@@ -65,9 +74,8 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::get('deliveries', [SupplierPortalController::class, 'deliveries']);
             Route::get('statement-of-account', [SupplierPortalController::class, 'statementOfAccount']);
             Route::get('delivery-schedules', [SupplierDeliveryScheduleController::class, 'deliverySchedules']);
-            Route::get('delivery-schedules/purchase-orders', [SupplierDeliveryScheduleController::class, 'eligiblePurchaseOrders']);
-            Route::post('delivery-schedules', [SupplierDeliveryScheduleController::class, 'storeDeliverySchedule'])->middleware('throttle:sensitive');
-            Route::post('delivery-schedules/{deliverySchedule}/cancel', [SupplierDeliveryScheduleController::class, 'cancel'])->middleware('throttle:sensitive');
+            Route::post('delivery-schedules', static fn () => response()->json(['message' => 'Supplier delivery plans are retired. Record actual dispatch as a shipment.'], 410));
+            Route::post('delivery-schedules/{deliverySchedule}/cancel', static fn () => response()->json(['message' => 'Supplier delivery plans are retired. Existing plans are read-only.'], 410));
             // Supplier Item Listings — supplier-submitted offers, reviewed by Purchasing.
             Route::get('item-catalog', [SupplierListingPortalController::class, 'catalog']);
             Route::get('item-listings', [SupplierListingPortalController::class, 'index']);
@@ -140,6 +148,10 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
     ->group(function (): void {
         Route::get('purchase-orders/{purchaseOrder}/supplier-activity', [InternalSupplierActivityController::class, 'purchaseOrderActivity'])
             ->middleware('permission:purchasing.view');
+        Route::post('purchase-orders/{purchaseOrder}/delivery-schedules/{deliverySchedule}/acknowledge', [InternalDeliveryScheduleController::class, 'acknowledgeSupplier'])
+            ->middleware(['permission:purchasing.delivery_schedules.review', 'throttle:sensitive']);
+        Route::post('purchase-orders/{purchaseOrder}/delivery-schedules/{deliverySchedule}/reject', [InternalDeliveryScheduleController::class, 'rejectSupplier'])
+            ->middleware(['permission:purchasing.delivery_schedules.review', 'throttle:sensitive']);
         Route::get('goods-receipt-notes/{goodsReceiptNote}/supplier-documents', [InternalSupplierActivityController::class, 'grnSupplierDocuments'])
             ->middleware('permission:inventory.view');
         // Gated in the controller: purchasing row scope OR inventory receiving.
@@ -165,10 +177,22 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
+            Route::get('notifications', [PortalNotificationController::class, 'index']);
+            Route::patch('notifications/read-all', [PortalNotificationController::class, 'markAllRead']);
+            Route::patch('notifications/{id}/read', [PortalNotificationController::class, 'markRead'])->whereUuid('id');
+            Route::delete('notifications/clear-read', [PortalNotificationController::class, 'clearRead']);
+            Route::delete('notifications/{id}', [PortalNotificationController::class, 'destroy'])->whereUuid('id');
             Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
             Route::get('catalog', [CustomerPortalController::class, 'catalog']);
+            Route::get('price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'portalIndex']);
+            Route::post('price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
+            Route::post('price-requests/{priceRequest}/respond', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');
             Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
+            Route::post('orders/quote', [CustomerPortalController::class, 'quoteOrder']);
             Route::post('orders', [CustomerPortalController::class, 'storeOrder'])->middleware('throttle:sensitive');
+            Route::put('orders/{salesOrder}', [CustomerPortalController::class, 'updateOrder'])->middleware('throttle:sensitive');
+            Route::post('orders/{salesOrder}/delivery-proposals/{response}/respond', [CustomerPortalController::class, 'respondToDeliveryProposal'])->middleware('throttle:sensitive');
+            Route::post('orders/{salesOrder}/cancel', [CustomerPortalController::class, 'cancelOrder'])->middleware('throttle:sensitive');
             Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
             Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
             // Sales-order negotiation — customer accepts / proposes changes / declines.
@@ -176,8 +200,12 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('invoices', [CustomerPortalController::class, 'invoices']);
             Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
             Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
+            Route::post('invoices/{invoice}/payment-submissions', [\App\Modules\B2B\Controllers\CustomerInvoicePaymentController::class, 'store'])->middleware('throttle:sensitive');
+            Route::get('invoices/{invoice}/payment-submissions/{paymentSubmission}/proof', [\App\Modules\B2B\Controllers\CustomerInvoicePaymentController::class, 'proof']);
             Route::get('deliveries', [CustomerPortalController::class, 'deliveries']);
             Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
+            Route::get('deliveries/{delivery}/receipt-group', [CustomerPortalController::class, 'receiptGroup']);
+            Route::post('deliveries/{delivery}/confirm-group', [CustomerPortalController::class, 'confirmReceiptGroup'])->middleware('throttle:sensitive');
             Route::get('deliveries/{delivery}/proofs/{proof}/view', [CustomerPortalController::class, 'deliveryProof']);
             Route::post('deliveries/{delivery}/confirm', [CustomerPortalController::class, 'confirmDelivery'])->middleware('throttle:sensitive');
             Route::get('complaints', [CustomerPortalController::class, 'complaints']);

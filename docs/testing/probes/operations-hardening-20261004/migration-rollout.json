@@ -1,0 +1,1 @@
+{"database":"ogami","migrations":"\n   INFO  Running migrations.  \n\n  2026_10_04_000007_align_maintenance_spare_part_precision ...... 49.50ms DONE\n  2026_10_04_000008_add_maintenance_consumption_account .......... 7.72ms DONE\n\n","business_records_before":{"usage":0,"stock":45,"journal":26},"business_records_after":{"usage":0,"stock":45,"journal":26}}

@@ -67,7 +67,6 @@ test.describe('Time in/out', () => {
   test('shows the server reason when out of range', async ({ page, context }) => {
     test.info().annotations.push(
       { type: 'expected-http-response', description: '422 POST /api/v1/attendance/punch' },
-      { type: 'expected-console-error', description: 'Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)' },
     );
 
     await context.grantPermissions(['geolocation']);

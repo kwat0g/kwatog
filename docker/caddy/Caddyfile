@@ -1,0 +1,16 @@
+{
+	default_sni 47.129.228.44
+}
+
+47.129.228.44 {
+	tls {
+		issuer acme {
+			profile shortlived
+		}
+	}
+
+	@reverb path /app/*
+	reverse_proxy @reverb reverb:8080
+
+	reverse_proxy nginx:80
+}

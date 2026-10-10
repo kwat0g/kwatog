@@ -182,7 +182,7 @@ export default function PostingEditPage() {
 
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())}
-        className="max-w-5xl mx-auto px-5 py-4 space-y-4"
+        className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Job Details">
           <div className="space-y-4">
@@ -194,7 +194,7 @@ export default function PostingEditPage() {
             />
 
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
-              <Select
+              <Select searchable
                 label="Department"
                 required
                 {...register('department_id')}
@@ -208,7 +208,7 @@ export default function PostingEditPage() {
                 ))}
               </Select>
 
-              <Select
+              <Select searchable
                 label="Position"
                 {...register('position_id')}
                 disabled={!departmentId}

@@ -1,0 +1,45 @@
+{
+  "failedChecks": [
+    {
+      "name": "Surface condition",
+      "is_pass": null
+    },
+    {
+      "name": "Fit check",
+      "is_pass": false
+    },
+    {
+      "name": "Identification",
+      "is_pass": null
+    }
+  ],
+  "pareto": {
+    "from": "2026-10-01",
+    "to": "2026-10-10",
+    "total_defects": 12,
+    "rows": [
+      {
+        "parameter_name": "Fit check",
+        "defect_count": 4,
+        "percentage": 33.33,
+        "cumulative_percentage": 33.33,
+        "is_critical": true
+      },
+      {
+        "parameter_name": "Identification",
+        "defect_count": 4,
+        "percentage": 33.33,
+        "cumulative_percentage": 66.66,
+        "is_critical": false
+      },
+      {
+        "parameter_name": "Surface condition",
+        "defect_count": 4,
+        "percentage": 33.33,
+        "cumulative_percentage": 99.99,
+        "is_critical": false
+      }
+    ]
+  },
+  "ncrCount": 1
+}

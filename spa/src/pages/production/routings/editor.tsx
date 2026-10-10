@@ -41,7 +41,6 @@ import { productsApi } from '@/api/crm/products';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
 import { routingsApi } from '@/api/production/routings';
-import { useDebounce } from '@/hooks/useDebounce';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
@@ -109,7 +108,6 @@ export default function RoutingEditorPage() {
  const { can } = usePermission();
  const canManage = can('production.routings.manage');
  const [productSearch, setProductSearch] = useState('');
- const debouncedProductSearch = useDebounce(productSearch, 300);
  const [confirmActivate, setConfirmActivate] = useState(false);
 
  // ── Existing routing (edit / view mode) ──────────────────
@@ -140,11 +138,11 @@ export default function RoutingEditorPage() {
  // Master data is paginated server-side, so the selects search rather than
  // silently showing the first page and hiding the rest.
  const products = useQuery({
- queryKey: ['crm', 'products', 'routing-lookup', debouncedProductSearch],
+ queryKey: ['crm', 'products', 'routing-lookup', productSearch],
  queryFn: ({ signal }) => productsApi.list({
  per_page: LOOKUP_PAGE_SIZE,
  is_active: 'true',
- search: debouncedProductSearch || undefined,
+ search: productSearch || undefined,
  }, signal),
  enabled: !isEdit,
  });
@@ -352,7 +350,7 @@ export default function RoutingEditorPage() {
 
  <form
  onSubmit={handleSubmit((v) => saveMut.mutate(v), onFormInvalid<FormValues>())}
- className="max-w-5xl mx-auto px-5 py-4"
+ className="min-w-0 w-full px-5 py-4"
  >
  {/* Product + notes */}
  <fieldset className="mb-8" disabled={readOnly}>
@@ -373,24 +371,13 @@ export default function RoutingEditorPage() {
  </>
  ) : (
  <>
- <Input
- label="Find product"
- value={productSearch}
- onChange={(e) => setProductSearch(e.target.value)}
- placeholder="Part number or name…"
- helper={
- productsTruncated
- ? `Showing ${products.data?.data.length} of ${products.data?.meta.total} — narrow the search.`
- : undefined
- }
- error={products.isError ? 'Could not load products.' : undefined}
- />
- <Select
+
+ <Select searchable onSearch={(value) => setProductSearch(value)} title="Part number or name…"
  label="Finished good"
  required
  {...register('product_id')}
  error={errors.product_id?.message}
- helper={products.isLoading ? 'Loading products…' : undefined}
+ helper={products.isLoading ? 'Loading products…' : productsTruncated ? `Showing ${products.data?.data.length} of ${products.data?.meta.total} products. Search to narrow the list.` : undefined}
  >
  <option value="">Select product...</option>
  {products.data?.data?.map((p) => (
@@ -484,7 +471,7 @@ export default function RoutingEditorPage() {
  {readOnly ? (
  <span className="font-mono text-xs">{existing.data?.operations[i]?.machine?.machine_code ?? '—'}</span>
  ) : (
- <Select
+ <Select aria-label={`Machine for operation ${i + 1}`} searchable
  {...register(`operations.${i}.machine_id` as const)}
  error={errors.operations?.[i]?.machine_id?.message}
  >
@@ -500,7 +487,7 @@ export default function RoutingEditorPage() {
  <span className="font-mono text-xs">{existing.data?.operations[i]?.mold?.mold_code ?? '—'}</span>
  ) : (
  <>
- <Select
+ <Select aria-label={`Mold for operation ${i + 1}`} searchable
  {...register(`operations.${i}.mold_id` as const)}
  error={errors.operations?.[i]?.mold_id?.message}
  >

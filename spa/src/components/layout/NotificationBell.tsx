@@ -17,7 +17,7 @@ import { LuBell } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { Button } from '@/components/ui/Button';
@@ -30,8 +30,18 @@ import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 const POLL_MS = 30_000;
 const PEEK_COUNT = 8;
 
-export function NotificationBell() {
- useNotificationRealtime();
+const DEFAULT_QUERY_KEY = ['notifications'];
+
+interface NotificationBellProps {
+ api?: typeof notificationsApi;
+ queryKey?: QueryKey;
+ inboxPath?: string;
+ realtime?: boolean;
+ linkPrefix?: string;
+}
+
+export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QUERY_KEY, inboxPath = '/notifications', realtime = true, linkPrefix }: NotificationBellProps = {}) {
+ useNotificationRealtime(realtime);
  const [open, setOpen] = useState(false);
  const navigate = useNavigate();
  const containerRef = useRef<HTMLDivElement | null>(null);
@@ -42,24 +52,24 @@ export function NotificationBell() {
  const qc = useQueryClient();
 
  const { data, isError, refetch } = useQuery({
- queryKey: ['notifications', 'peek'],
- queryFn: () => notificationsApi.list({ per_page: PEEK_COUNT }),
+ queryKey: [...queryKey, 'peek'],
+ queryFn: () => api.list({ per_page: PEEK_COUNT }),
  refetchInterval: POLL_MS,
  refetchIntervalInBackground: false,
  });
 
  const markRead = useMutation({
- mutationFn: (id: string) => notificationsApi.markRead(id),
+ mutationFn: (id: string) => api.markRead(id),
  onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['notifications'] });
+ qc.invalidateQueries({ queryKey });
  },
  onError: () => toast.error('Could not mark this notification as read. Try again.'),
  });
 
  const markAllMutation = useMutation({
- mutationFn: () => notificationsApi.markAllRead(),
+ mutationFn: () => api.markAllRead(),
  onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['notifications'] });
+ qc.invalidateQueries({ queryKey });
  },
  onError: () => toast.error('Could not mark all notifications as read. Try again.'),
  });
@@ -110,7 +120,7 @@ export function NotificationBell() {
  markRead.mutate(n.id);
  }
  const link = (n.data?.link_to as string | undefined) ?? null;
- if (link) navigate(link);
+ if (link && (!linkPrefix || link.startsWith(linkPrefix + '/'))) navigate(link);
  };
 
  return (
@@ -216,7 +226,7 @@ export function NotificationBell() {
 
  <div className="px-3 py-2 border-t border-default text-center">
  <Link
- to="/notifications"
+ to={inboxPath}
  onClick={() => setOpen(false)}
  className="text-xs text-accent hover:underline"
  >

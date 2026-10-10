@@ -7,19 +7,22 @@ namespace Tests\Feature\Production;
 use App\Common\Events\ChainStepAdvanced;
 use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Services\ChainBroadcaster;
-use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Models\Inspection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
+use Tests\Support\HasPassedInProcessQc;
 
 class WorkOrderChainDurabilityTest extends TestCase
 {
     use RefreshDatabase;
+    use HasPassedInProcessQc;
 
     private WorkOrderService $service;
 
@@ -37,6 +40,7 @@ class WorkOrderChainDurabilityTest extends TestCase
         $workOrder = WorkOrder::factory()->create([
             'status' => WorkOrderStatus::Completed->value,
         ]);
+        $this->qualityEvidence($workOrder);
 
         DB::beginTransaction();
         $this->service->close($workOrder);
@@ -53,8 +57,8 @@ class WorkOrderChainDurabilityTest extends TestCase
         $this->assertDatabaseHas('chain_step_runs', [
             'outbox_id' => $chainOutbox->id,
             'entity_id' => $workOrder->id,
-            'step'      => WorkOrderStatus::Closed->value,
-            'status'    => 'pending',
+            'step' => WorkOrderStatus::Closed->value,
+            'status' => 'pending',
         ]);
 
         DB::rollBack();
@@ -67,7 +71,7 @@ class WorkOrderChainDurabilityTest extends TestCase
         ]);
         $this->assertDatabaseMissing('chain_step_runs', [
             'entity_id' => $workOrder->id,
-            'step'      => WorkOrderStatus::Closed->value,
+            'step' => WorkOrderStatus::Closed->value,
         ]);
     }
 
@@ -76,16 +80,17 @@ class WorkOrderChainDurabilityTest extends TestCase
         $workOrder = WorkOrder::factory()->create([
             'status' => WorkOrderStatus::Completed->value,
         ]);
+        $this->qualityEvidence($workOrder);
 
         $this->service->close($workOrder);
 
         $this->assertDatabaseHas('event_outbox', [
             'event_type' => WorkOrderStatusChanged::class,
-            'status'     => 'pending',
+            'status' => 'pending',
         ]);
         $this->assertDatabaseHas('event_outbox', [
             'event_type' => ChainStepAdvanced::class,
-            'status'     => 'pending',
+            'status' => 'pending',
         ]);
         Queue::assertPushed(DispatchOutboxMessage::class, 2);
     }
@@ -95,6 +100,7 @@ class WorkOrderChainDurabilityTest extends TestCase
         $workOrder = WorkOrder::factory()->create([
             'status' => WorkOrderStatus::Completed->value,
         ]);
+        $this->qualityEvidence($workOrder);
 
         $this->mock(ChainBroadcaster::class)
             ->shouldReceive('broadcastFor')
@@ -109,7 +115,7 @@ class WorkOrderChainDurabilityTest extends TestCase
         }
 
         $this->assertDatabaseHas('work_orders', [
-            'id'     => $workOrder->id,
+            'id' => $workOrder->id,
             'status' => WorkOrderStatus::Completed->value,
         ]);
         $this->assertDatabaseMissing('event_outbox', [
@@ -120,7 +126,16 @@ class WorkOrderChainDurabilityTest extends TestCase
         ]);
         $this->assertDatabaseMissing('chain_step_runs', [
             'entity_id' => $workOrder->id,
-            'step'      => WorkOrderStatus::Closed->value,
+            'step' => WorkOrderStatus::Closed->value,
+        ]);
+    }
+
+    private function qualityEvidence(WorkOrder $wo): void
+    {
+        $this->passInProcessQc($wo);
+        Inspection::create([
+            'inspection_number' => 'CHAIN-QC-'.$wo->id, 'product_id' => $wo->product_id, 'stage' => 'outgoing', 'status' => 'passed',
+            'entity_type' => 'work_order', 'entity_id' => $wo->id, 'batch_quantity' => 1, 'sample_size' => 1,
         ]);
     }
 }

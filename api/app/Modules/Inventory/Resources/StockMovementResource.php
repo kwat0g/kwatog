@@ -13,30 +13,39 @@ class StockMovementResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return [
-            'id'             => $this->hash_id,
-            'created_at'     => optional($this->created_at)->toIso8601String(),
-            'movement_type'  => (string) $this->movement_type?->value,
+        return $this->resource->workOrderReference() + [
+            'id' => $this->hash_id,
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'movement_type' => (string) $this->movement_type?->value,
             'movement_type_label' => Str::headline((string) $this->movement_type?->value),
-            'item'           => $this->whenLoaded('item', fn () => [
-                'id'   => $this->item->hash_id,
+            'item' => $this->whenLoaded('item', fn () => [
+                'id' => $this->item->hash_id,
                 'code' => $this->item->code,
                 'name' => $this->item->name,
+                'unit_of_measure' => $this->item->unit_of_measure,
             ]),
-            'from_location'  => $this->whenLoaded('fromLocation', fn () => $this->fromLocation ? [
-                'id'   => $this->fromLocation->hash_id,
+            'from_location' => $this->whenLoaded('fromLocation', fn () => $this->fromLocation ? [
+                'id' => $this->fromLocation->hash_id,
                 'code' => $this->fromLocation->code,
             ] : null),
-            'to_location'    => $this->whenLoaded('toLocation', fn () => $this->toLocation ? [
-                'id'   => $this->toLocation->hash_id,
+            'to_location' => $this->whenLoaded('toLocation', fn () => $this->toLocation ? [
+                'id' => $this->toLocation->hash_id,
                 'code' => $this->toLocation->code,
             ] : null),
-            'quantity'       => (string) $this->quantity,
-            'unit_cost'      => (string) $this->unit_cost,
-            'total_cost'     => (string) $this->total_cost,
-            'lot_number'     => $this->lot_number,
-            'expiry_date'    => optional($this->expiry_date)->toDateString(),
-            'gl_handoff'     => [
+            'quantity' => (string) $this->quantity,
+            'handover_remaining_quantity' => $this->when($this->resource->getAttribute('remaining_quantity') !== null,
+                fn () => (string) $this->remaining_quantity),
+            'handover' => $this->whenLoaded('handover', fn () => $this->handover ? [
+                'recipient_name' => $this->handover->recipient_name,
+                'quantity' => (string) $this->handover->quantity,
+                'handed_over_at' => $this->handover->handed_over_at->toIso8601String(),
+                'recorded_by' => $this->handover->recorder?->name,
+            ] : null),
+            'unit_cost' => (string) $this->unit_cost,
+            'total_cost' => (string) $this->total_cost,
+            'lot_number' => $this->lot_number,
+            'expiry_date' => optional($this->expiry_date)->toDateString(),
+            'gl_handoff' => [
                 'status' => $this->gl_handoff_status instanceof MovementGlHandoffStatus
                     ? $this->gl_handoff_status->value
                     : (string) $this->gl_handoff_status,
@@ -53,12 +62,12 @@ class StockMovementResource extends JsonResource
             'reference_type' => $this->reference_type,
             // References are polymorphic integers internally, but API IDs are
             // always HashIDs even when the target type is not loaded.
-            'reference_id'   => $this->reference_id === null
+            'reference_id' => $this->reference_id === null
                 ? null
                 : app('hashids')->encode((int) $this->reference_id),
-            'remarks'        => $this->remarks,
-            'creator'        => $this->whenLoaded('creator', fn () => $this->creator ? [
-                'id'   => $this->creator->hash_id,
+            'remarks' => $this->remarks,
+            'creator' => $this->whenLoaded('creator', fn () => $this->creator ? [
+                'id' => $this->creator->hash_id,
                 'name' => $this->creator->name,
             ] : null),
         ];

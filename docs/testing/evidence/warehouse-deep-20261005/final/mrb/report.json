@@ -1,0 +1,118 @@
+{
+  "database": "ogami_test_inventory_browser_invmuvs2oiw",
+  "phase": "mrb",
+  "checks": [
+    {
+      "name": "Real cookie login: warehouse@ogami.test"
+    },
+    {
+      "name": "Real cookie login: warehouse-checker@ogami.test"
+    },
+    {
+      "name": "MRB hold moves stock to quarantine; creator is blocked by UI and API; independent checker releases once with audit",
+      "evidence": {
+        "maker": "warehouse@ogami.test",
+        "checker": "warehouse-checker@ogami.test",
+        "mrbNumber": "MRB-202610-0001",
+        "held": {
+          "source": "5.000",
+          "quarantine": "1.000",
+          "movementCount": "1",
+          "auditCount": "2"
+        },
+        "creatorAttempt": {
+          "status": 422,
+          "message": "A different user must release an MRB hold than the one who placed it.",
+          "state": "held",
+          "unchanged": true
+        },
+        "released": {
+          "status": "released",
+          "disposition": "use_as_is",
+          "source": "6.000",
+          "quarantine": "0.000",
+          "movementCount": "2",
+          "auditCount": "1"
+        },
+        "duplicateAttempt": {
+          "status": 422,
+          "message": "MRB MRB-202610-0001 is not held (status: released).",
+          "unchanged": true
+        }
+      }
+    }
+  ],
+  "findings": [],
+  "artifacts": [
+    "/tmp/warehouse-real-browser-final-mrb/mrb/success-mrb-maker-checker.png"
+  ],
+  "browserErrors": [],
+  "diagnostics": {
+    "consoleErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "message": "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)"
+      }
+    ],
+    "failedRequests": [],
+    "httpErrors": [
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/mrb/5KZYy8gNxw/release",
+        "status": 422
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "GET",
+        "path": "/api/v1/auth/user",
+        "status": 401
+      },
+      {
+        "email": "warehouse-checker@ogami.test",
+        "method": "POST",
+        "path": "/api/v1/inventory/mrb/5KZYy8gNxw/release",
+        "status": 422
+      }
+    ]
+  },
+  "serverLog": "/tmp/warehouse-real-browser-final-mrb/server.log"
+}

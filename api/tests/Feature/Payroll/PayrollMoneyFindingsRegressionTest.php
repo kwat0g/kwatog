@@ -95,7 +95,12 @@ class PayrollMoneyFindingsRegressionTest extends TestCase
         ]);
 
         app(PayrollCalculatorService::class)->computeForEmployee($period, $emp);
-        $period->forceFill(['status' => PayrollPeriodStatus::Approved->value])->save();
+        $approver = $this->userWithRole('finance_officer');
+        $period->forceFill([
+            'status' => PayrollPeriodStatus::Approved->value,
+            'approved_by' => $approver->id,
+            'approved_at' => now(),
+        ])->save();
 
         return [$user, $period];
     }
@@ -166,12 +171,13 @@ class PayrollMoneyFindingsRegressionTest extends TestCase
         // recompute → approve, then finalize again.
         $admin = $this->userWithRole('system_admin');
         $finance = $this->userWithRole('finance_officer');
+        $finalizer = $this->userWithRole('finance_officer');
         app(PayrollPeriodService::class)->void($first->fresh(), $admin, 'probe re-finalize');
         $voided = $first->fresh();
         $voided->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
         app(PayrollPeriodService::class)->approve($voided->fresh(), $finance);
 
-        app(PayrollPeriodService::class)->finalize($voided->fresh(), $finance);
+        app(PayrollPeriodService::class)->finalize($voided->fresh(), $finalizer);
 
         $after = DB::table('event_outbox')
             ->where('dedupe_key', 'like', $keyPrefix.'%')

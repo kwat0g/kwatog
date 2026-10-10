@@ -7,32 +7,34 @@ namespace App\Modules\ReturnManagement\Models;
 use App\Common\Traits\HasApprovalWorkflow;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
-use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnInspectionHandoffStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\SupplyChain\Models\DeliveryAttemptOutcome;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ReturnRequest extends Model
 {
-    use HasApprovalWorkflow, HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasApprovalWorkflow, HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'rma_number',
@@ -53,6 +55,8 @@ class ReturnRequest extends Model
         'vendor_id',
         'reason_code',
         'reason_description',
+        'defect_photo_path',
+        'defect_photo_name',
         'customer_notes',
         'internal_notes',
         'resolution',
@@ -60,6 +64,7 @@ class ReturnRequest extends Model
         'credit_memo_id',
         'replacement_wo_id',
         'replacement_purchase_order_id',
+        'replacement_due_date',
         'refund_amount',
         'stock_movement_id',
         'inspection_id',
@@ -82,19 +87,20 @@ class ReturnRequest extends Model
     ];
 
     protected $casts = [
-        'type'         => ReturnRequestType::class,
-        'status'       => ReturnRequestStatus::class,
+        'type' => ReturnRequestType::class,
+        'status' => ReturnRequestStatus::class,
         'finance_only' => 'boolean',
         'reversal_already_applied' => 'boolean',
         'inspection_handoff_status' => ReturnInspectionHandoffStatus::class,
-        'return_date'  => 'date',
+        'return_date' => 'date',
+        'replacement_due_date' => 'date',
         'refund_amount' => 'decimal:2',
-        'approved_at'  => 'datetime',
-        'received_at'  => 'datetime',
+        'approved_at' => 'datetime',
+        'received_at' => 'datetime',
         'inspected_at' => 'datetime',
         'inspection_handoff_at' => 'datetime',
         'completed_at' => 'datetime',
-        'rejected_at'  => 'datetime',
+        'rejected_at' => 'datetime',
         'cancelled_at' => 'datetime',
     ];
 
@@ -115,7 +121,7 @@ class ReturnRequest extends Model
 
     public function deliveryAttemptOutcome(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\SupplyChain\Models\DeliveryAttemptOutcome::class);
+        return $this->belongsTo(DeliveryAttemptOutcome::class);
     }
 
     public function sourceAllocations(): HasManyThrough
@@ -157,7 +163,7 @@ class ReturnRequest extends Model
 
     public function bill(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\Accounting\Models\Bill::class);
+        return $this->belongsTo(Bill::class);
     }
 
     public function customer(): BelongsTo
@@ -178,7 +184,7 @@ class ReturnRequest extends Model
     // REC-13 — the real credit note (replaces the legacy negative-invoice memo).
     public function creditNote(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\Accounting\Models\CreditNote::class, 'credit_note_id');
+        return $this->belongsTo(CreditNote::class, 'credit_note_id');
     }
 
     public function stockMovement(): BelongsTo
@@ -226,7 +232,9 @@ class ReturnRequest extends Model
 
     public function getIsEditableAttribute(): bool
     {
-        return $this->status === ReturnRequestStatus::Draft;
+        return $this->status === ReturnRequestStatus::Draft
+            && ! ($this->type === ReturnRequestType::SupplierReturn
+                && str_starts_with((string) $this->source_key, 'grn-rejection:'));
     }
 
     public function getSourceLabelAttribute(): string
@@ -241,6 +249,7 @@ class ReturnRequest extends Model
             if ($this->relationLoaded('customer') && $this->customer) {
                 return $this->customer->name;
             }
+
             return '—';
         }
         if ($this->relationLoaded('bill') && $this->bill) {
@@ -252,6 +261,7 @@ class ReturnRequest extends Model
         if ($this->relationLoaded('vendor') && $this->vendor) {
             return $this->vendor->name;
         }
+
         return '—';
     }
 }

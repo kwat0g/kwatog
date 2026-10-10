@@ -157,7 +157,7 @@ export default function ManualRfqQuotePage() {
         backLabel="RFQ"
       />
 
-      <div className="px-5 py-4 space-y-4 max-w-4xl">
+      <div className="min-w-0 w-full px-5 py-4 space-y-4">
         <Panel title="Supplier">
           <Select label="Invited supplier" value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
             <option value="">Choose a supplier</option>

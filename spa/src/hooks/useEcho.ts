@@ -16,6 +16,7 @@ export function useEcho<T = unknown>(
   handler: (payload: T) => void,
 ): void {
   useEffect(() => {
+    if (!channel) return;
     // Echo loads on demand (see `@/lib/echo`), so subscribe once it resolves
     // and skip entirely if we unmounted while the import was in flight.
     let disposed = false;

@@ -5,7 +5,8 @@ export default function CreatePriceAgreementPage() {
  return (
  <div>
  <PageHeader
- title="New price agreement"
+ title="Propose price agreement"
+ subtitle="Set customer pricing with clear limits and delivery-date validity."
  backTo="/crm/price-agreements"
  backLabel="Price agreements"
  />

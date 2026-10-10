@@ -18,7 +18,6 @@ import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { localIsoDate } from '@/lib/formatDate';
-import { useDebounce } from '@/hooks/useDebounce';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -72,10 +71,9 @@ export default function CreateDeliveryPage() {
 
  const [search, setSearch] = useState('');
  const [page, setPage] = useState(1);
- const debouncedSearch = useDebounce(search, 300);
  const ordersQuery = useQuery({
-  queryKey: ['supply-chain', 'deliveries', 'form-options', debouncedSearch, page],
-  queryFn: () => deliveriesApi.formOptions({ search: debouncedSearch, page }),
+  queryKey: ['supply-chain', 'deliveries', 'form-options', search, page],
+  queryFn: () => deliveriesApi.formOptions({ search: search, page }),
  });
  const soList = ordersQuery.data?.sales_orders ?? [];
  const soLoading = ordersQuery.isLoading;
@@ -169,14 +167,14 @@ export default function CreateDeliveryPage() {
  backLabel="Deliveries"
  />
       {!submission && <FormDraftBanner safety={safety} />}
- {submission && !mutation.isPending && <div role="alert" className="max-w-3xl mx-auto px-5 py-3 text-sm">
+ {submission && !mutation.isPending && <div role="alert" className="min-w-0 w-full px-5 py-3 text-sm">
   <p>The last save has not been confirmed. Retry that same delivery to recover it safely, including after a page reload.</p>
   <Button type="button" variant="primary" className="mt-2" onClick={() => mutation.mutate(submission.data)}>Retry last save</Button>
  </div>}
 
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
- className="max-w-3xl mx-auto px-5 py-4"
+ className="min-w-0 w-full px-5 py-4"
  >
  <fieldset disabled={Boolean(submission) || mutation.isPending}>
  {/* ── Sales Order ── */}
@@ -184,9 +182,8 @@ export default function CreateDeliveryPage() {
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
  Sales order
  </legend>
- <Input label="Find sales order" value={search} placeholder="Search order number"
-  onChange={(event) => { setSearch(event.target.value); setPage(1); }} containerClassName="mb-3" />
- <Select
+
+ <Select searchable onSearch={(value) => { setSearch(value); setPage(1); }} title="Search order number"
  label="Sales order"
  {...register('sales_order_id', { onChange: () => {
  replace([{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }]);
@@ -245,7 +242,7 @@ export default function CreateDeliveryPage() {
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
  Vehicle (optional)
  </legend>
- <Select
+ <Select searchable
  label="Vehicle"
  {...register('vehicle_id')}
  error={errors.vehicle_id?.message}
@@ -291,7 +288,7 @@ export default function CreateDeliveryPage() {
  className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_auto] gap-2 items-end p-3 bg-subtle rounded-md border border-default"
  >
  {/* SO Item select */}
- <Select
+ <Select searchable
  label="Sales order line"
  required
  {...register(`items.${index}.sales_order_item_id`, { onChange: () => {
@@ -321,7 +318,7 @@ export default function CreateDeliveryPage() {
  </Select>
 
  {/* Passed outgoing inspection select */}
- <Select
+ <Select searchable
  label="Passed outgoing inspection"
  required
  {...register(`items.${index}.inspection_id`)}

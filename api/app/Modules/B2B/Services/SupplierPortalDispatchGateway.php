@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\NotificationService;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Mail\SupplierPurchaseOrderMail;
@@ -16,11 +17,9 @@ use Illuminate\Support\Facades\Mail;
 /**
  * Supplier portal + email dispatch adapter.
  *
- * The portal already lists approved purchase orders for the owning vendor. If
- * the vendor has a usable email address, the same approved PO also receives a
- * queued feature-specific email. Neither queue acceptance nor portal
- * availability claims that a human transmission was confirmed; the internal
- * send action remains the proof boundary for the `sent` PO state.
+ * Publication notifies active supplier portal users. The dispatch service then
+ * marks the PO sent, making it visible in their portal. A usable vendor email
+ * also receives a queued copy; email alone does not prove delivery.
  */
 class SupplierPortalDispatchGateway implements SupplierDispatchGateway
 {
@@ -36,6 +35,10 @@ class SupplierPortalDispatchGateway implements SupplierDispatchGateway
             })
             ->count();
 
+        app(NotificationService::class)->sendPortalInApp(SupplierPortalUser::where('vendor_id', $purchaseOrder->vendor_id)->where('is_active', true)->get(), 'purchase_order.published', [
+            'title' => 'Review purchase order '.$purchaseOrder->po_number, 'message' => 'A purchase order is available. Review it and accept, propose changes, or decline before scheduling delivery.',
+            'link_to' => '/portal/supplier/purchase-orders/'.$purchaseOrder->hash_id, 'entity_type' => 'purchase_order', 'entity_id' => $purchaseOrder->hash_id,
+        ], 'po:'.$purchaseOrder->id.':published:'.$idempotencyKey);
         $emailQueued = false;
         $emailFailure = null;
         $vendorEmail = $purchaseOrder->vendor?->email;

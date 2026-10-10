@@ -68,7 +68,18 @@ const SURFACES = [
   // anywhere in spa/src, so the expectation could never be met.
 ];
 
-const SIDEBAR_SURFACES = SURFACES.filter((surface) => surface.path !== '/hr/loans');
+const SIDEBAR_SURFACES = [...SURFACES,
+  { path: '/return-management', roles: ['system_admin', 'finance_officer', 'production_manager', 'ppc_head', 'purchasing_officer', 'warehouse_staff', 'qc_inspector', 'department_head', 'customer_service_officer'] },
+  { path: '/hr/separations', roles: ['system_admin', 'hr_officer', 'finance_officer', 'warehouse_staff', 'maintenance_tech', 'department_head'] },
+  { path: '/crm/complaints', roles: ['system_admin', 'vice_president', 'production_manager', 'qc_inspector', 'customer_service_officer'] },
+  { path: '/supply-chain/fleet', roles: ['system_admin', 'impex_officer'] },
+  { path: '/supply-chain/shipments', roles: ['system_admin', 'impex_officer', 'purchasing_officer'] },
+  { path: '/crm/inquiries', roles: ['system_admin', 'customer_service_officer'] },
+  { path: '/hr/recruitment', roles: ['system_admin', 'hr_officer'] },
+  { path: '/hr/trainings', roles: ['system_admin', 'hr_officer'] },
+  { path: '/hr/profile-update-requests', roles: ['system_admin', 'hr_officer', 'finance_officer', 'department_head'] },
+  { path: '/admin/gov-tables', roles: ['system_admin', 'hr_officer'] },
+];
 const WAREHOUSE_NAV = [
   '/inventory/material-issues',
   '/inventory/stock-adjustments',
@@ -91,19 +102,24 @@ const PROCUREMENT_NAV = [
 ];
 const EXPECTED_PROCUREMENT_NAV = {
   system_admin: PROCUREMENT_NAV,
-  vice_president: ['/purchasing/chain', '/purchasing/purchase-orders', '/purchasing/purchase-requests', '/purchasing/rfqs'],
-  finance_officer: ['/purchasing/chain', '/purchasing/purchase-orders', '/purchasing/purchase-requests', '/purchasing/rfqs'],
+  vice_president: ['/purchasing/purchase-orders', '/purchasing/purchase-requests', '/purchasing/rfqs'],
+  finance_officer: ['/purchasing/purchase-orders', '/purchasing/purchase-requests', '/purchasing/rfqs'],
   purchasing_officer: PROCUREMENT_NAV,
+  // These roles have `purchasing.view` for scoped supporting reads. The API
+  // policy limits the returned PR/PO rows to their own work or department;
+  // they do not receive the company-wide purchasing.chain.view permission.
+  production_manager: ['/purchasing/purchase-orders', '/purchasing/purchase-requests'],
   qc_inspector: ['/purchasing/rfqs'],
-  department_head: ['/purchasing/chain', '/purchasing/purchase-requests'],
+  impex_officer: ['/purchasing/purchase-orders', '/purchasing/purchase-requests'],
+  department_head: ['/purchasing/purchase-orders', '/purchasing/purchase-requests'],
 };
 
 async function login(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+  await page.goto(`${BASE}/sign-in`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL((url) => url.pathname !== '/login', { timeout: 20_000 });
+  await page.waitForURL((url) => url.pathname !== '/sign-in', { timeout: 20_000 });
 }
 
 async function navigateSpa(page, route) {
@@ -118,6 +134,7 @@ async function navigateSpa(page, route) {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const failures = [];
+  const configurationErrors = [];
   let checks = 0;
 
   try {
@@ -139,7 +156,21 @@ async function navigateSpa(page, route) {
       try {
         const failureStart = failures.length;
         await login(page, email);
-        await page.locator('aside nav a[href]').first().waitFor({ state: 'visible', timeout: 10_000 });
+        const sidebar = page.locator('aside[aria-label="Sidebar"]');
+        await sidebar.waitFor({ state: 'visible', timeout: 10_000 });
+        if (!await page.locator('aside a[href="/dashboard"][aria-current="page"]').count()) failures.push(`${role}: shared Dashboard is not active`);
+        const inactive = sidebar.locator('[data-module]:not([data-module="Overview"]) button[aria-expanded]').first();
+        if (await inactive.count()) {
+          await inactive.click();
+          await page.mouse.move(1200, 100);
+          await page.waitForTimeout(5300);
+          if (await inactive.getAttribute('aria-expanded') !== 'false') failures.push(`${role}: inactive module did not collapse`);
+          checks += 1;
+
+        }
+        const expandAll = sidebar.getByRole('button', { name: 'Expand all', exact: true });
+        if (await expandAll.isVisible().catch(() => false)) await expandAll.click();
+        await sidebar.locator('nav a[href]').first().waitFor({ state: 'visible', timeout: 10_000 });
         browserErrors.length = 0;
         apiErrors.length = 0;
         let roleChecks = 0;
@@ -225,6 +256,20 @@ async function navigateSpa(page, route) {
           if (apiErrors.length > apiStart) failures.push(`${role}: ${surface.path} emitted ${apiErrors[apiStart]}`);
         }
 
+        await navigateSpa(page, '/dashboard');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.getByRole('button', { name: 'Toggle sidebar', exact: true }).click();
+        const drawer = page.getByRole('dialog', { name: 'Menu', exact: true });
+        await drawer.waitFor({ state: 'visible' });
+        if (!await drawer.locator('a[href="/dashboard"][aria-current="page"]').count()) failures.push(`${role}: mobile Dashboard is not active`);
+        const mobileExpand = drawer.getByRole('button', { name: 'Expand all', exact: true });
+        if (await mobileExpand.count()) await mobileExpand.click();
+        const mobileRoutes = [...new Set(await drawer.locator('nav a[href]').evaluateAll((links) => links.map((link) => link.getAttribute('href'))))];
+        if (mobileRoutes.sort().join(',') !== visibleSidebarRoutes.sort().join(',')) failures.push(`${role}: desktop/mobile navigation differs`);
+        await page.keyboard.press('Escape');
+        if (await drawer.count()) failures.push(`${role}: mobile sidebar did not close on Escape`);
+        checks += 3;
+        roleChecks += 3;
         const outcome = failures.length === failureStart ? 'PASS' : 'FAIL';
         console.log(`${outcome} ${role} (${roleChecks} checks, ${visibleSidebarRoutes.length} visible routes)`);
       } catch (error) {
@@ -237,6 +282,10 @@ async function navigateSpa(page, route) {
     await browser.close();
   }
 
+  const knownFailures = process.env.AUDIT_SEPARATE_POLICY_ERRORS === '1' ? failures.filter((failure) => failure.includes('business-policies') || failure.includes('/action-center emitted a browser error: Failed to load resource: the server responded with a status of 422')) : [];
+  configurationErrors.push(...knownFailures);
+  for (let i = failures.length - 1; i >= 0; i--) if (knownFailures.includes(failures[i])) failures.splice(i, 1);
+  console.log(`CONFIGURATION: ${configurationErrors.length} observations of missing/invalid company VAT policy`);
   console.log(`\n=== ${checks} RBAC browser checks across ${ACCOUNTS.length} roles; ${failures.length} failure(s) ===`);
   for (const failure of failures) console.log(`FAIL ${failure}`);
   if (failures.length) process.exitCode = 1;

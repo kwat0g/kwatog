@@ -82,7 +82,7 @@ export default function SupplierRfqDetailPage() {
         backLabel="RFQ Invitations"
       />
 
-      <div className="px-5 py-4 max-w-5xl space-y-4">
+      <div className="min-w-0 w-full px-5 py-4 space-y-4">
         <Panel title="Invitation">
           <p className="text-sm text-muted mb-3">
             {rfq.instructions ||

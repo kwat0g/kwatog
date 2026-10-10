@@ -1,0 +1,13 @@
+
+> ogami-erp-spa@0.1.0 test:run
+> vitest run src/pages/production/work-orders/StartProductionDialog.test.tsx src/pages/production/work-orders/CrewPanel.test.tsx src/hooks/useTimeClock.test.tsx src/pages/portal/supplier/delivery-schedules.test.tsx src/pages/purchasing/purchase-orders/components/SupplierActivityPanel.test.tsx
+
+
+ RUN  v4.1.11 /home/ec2-user/kwatog/spa
+
+
+ Test Files  5 passed (5)
+      Tests  52 passed (52)
+   Start at  13:36:21
+   Duration  13.99s (transform 2.15s, setup 463ms, import 18.69s, tests 14.50s, environment 6.11s)
+

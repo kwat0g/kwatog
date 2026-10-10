@@ -1,0 +1,29 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+......FFF                                                           9 / 9 (100%)
+
+Time: 00:35.346, Memory: 161.00 MB
+
+There were 3 failures:
+
+1) Tests\Feature\Quality\IncomingMrbDispositionTest::test_extra_piece_quarantine_hold_rejects_fractional_quantity
+Half a physical piece was accepted into quarantine.
+
+/var/www/tests/Feature/Quality/IncomingMrbDispositionTest.php:311
+
+2) Tests\Feature\Quality\IncomingMrbDispositionTest::test_extra_late_incident_remains_selectable_after_missing_quarantine_setup
+Late NCR must be selectable for recovery.
+Failed asserting that an array contains '5KZYy8gNxw'.
+
+/var/www/tests/Feature/Quality/IncomingMrbDispositionTest.php:334
+
+3) Tests\Feature\Quality\IncomingMrbDispositionTest::test_extra_late_reported_defect_cannot_release_entire_lot_without_repair
+Known defect was released with the full lot without repair.
+
+/var/www/tests/Feature/Quality/IncomingMrbDispositionTest.php:351
+
+FAILURES!
+Tests: 9, Assertions: 15, Failures: 3.

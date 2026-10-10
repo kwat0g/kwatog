@@ -42,7 +42,7 @@ test.describe('Operational rollout workflows', () => {
       if (route.request().method() === 'POST') {
         plans = [{
           id: 'plan01', version: 1, stage: 'incoming', sampling_method: 'aql', fixed_sample_size: null,
-          aql_level: 'general_ii', parameters: [{ parameter_name: 'Moisture', parameter_type: 'dimensional' }],
+          aql_level: 'general_ii', parameters: [{ parameter_name: 'Moisture', acceptance_criterion: 'No visible moisture contamination.', parameter_type: null }],
           effective_from: '2026-07-28', effective_to: null, is_active: true, notes: null,
           vendor: null, creator: { id: 'qc01', name: 'QC Inspector' }, created_at: '2026-07-28T00:00:00Z',
         }];
@@ -51,6 +51,15 @@ test.describe('Operational rollout workflows', () => {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: plans }) });
       }
     });
+    await page.route('**/api/v1/inventory/quality-plans/options', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ data: {
+        checklist_capture_enabled: true,
+        sampling_methods: [{ value: 'aql', label: 'AQL' }],
+        parameter_types: [{ value: 'dimensional', label: 'Dimensional' }],
+        default_aql_level: 'general_ii',
+      } }),
+    }));
     await page.route('**/api/v1/vendors*', (route) => route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ data: [], meta: { current_page: 1, last_page: 1, per_page: 100, total: 0 } }),
@@ -58,7 +67,9 @@ test.describe('Operational rollout workflows', () => {
 
     await loginAs(page, 'qc', `/inventory/items/${ITEM_ID}/quality-plans`);
     await expect(page.getByRole('heading', { name: /quality plans/i })).toBeVisible();
-    await page.getByPlaceholder('Parameter name').fill('Moisture');
+    await page.getByLabel('Sampling').selectOption('aql');
+    await page.getByRole('textbox', { name: 'Check 1', exact: true }).fill('Moisture');
+    await page.getByLabel('Acceptance criterion / reference 1').fill('No visible moisture contamination.');
     await page.getByRole('button', { name: 'Publish revision' }).click();
     await expect(page.getByText('v1')).toBeVisible();
     await expect(page.getByText('active', { exact: true })).toBeVisible();

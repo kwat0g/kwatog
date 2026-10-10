@@ -2,7 +2,7 @@
  * Sprint 7 — Task 60 — Inspections list page.
  *
  * Filterable by stage and status. Each row links to the inspection detail
- * page where measurements are recorded and the inspection finalised.
+ * page where PASS / FAIL records the result and Details holds the evidence.
  */
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +15,6 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -101,33 +100,46 @@ export default function InspectionsListPage() {
       cell: (r) => <Chip variant="neutral">{labels.get(r.stage) ?? r.stage}</Chip>,
     },
     {
-      key: 'sample',
-      header: 'Sample / Batch',
+      key: 'batch_quantity',
+      header: 'Quantity / coverage',
       align: 'right',
       cell: (r) => (
-        <NumCell>
-          {r.sample_size} / {r.batch_quantity}
-          {r.aql_code ? <span className="ml-2 text-muted">[{r.aql_code}]</span> : null}
-        </NumCell>
+        <div className="text-right">
+          <NumCell>
+            {r.work_order_quality?.produced_quantity ?? r.source_quantity ?? r.batch_quantity} {r.source_uom_code ?? 'pieces'}
+          </NumCell>
+          <p className="text-xs text-muted">
+            {r.work_order_quality
+              ? `${r.work_order_quality.accepted_quantity} approved${r.work_order_quality.repaired_accepted_quantity ? ` · ${r.work_order_quality.repaired_accepted_quantity} repaired` : ''}`
+              : `${r.sample_size} ${r.sampling_basis === 'lot' ? 'lot' : 'pieces'} to inspect`}
+          </p>
+        </div>
       ),
     },
     {
-      key: 'defects',
-      header: 'Defects (Ac)',
-      align: 'right',
+      key: 'problem_description',
+      header: 'Problem',
       cell: (r) => (
-        <NumCell className={r.defect_count > r.accept_count ? 'text-danger-fg' : ''}>
-          {r.defect_count} ({r.accept_count})
-        </NumCell>
+        <span
+          className="block max-w-xs truncate text-sm"
+          title={r.problem_description ?? undefined}
+        >
+          {r.problem_description ?? (r.status === 'failed' ? 'Open inspection for details' : '—')}
+        </span>
       ),
     },
     {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={STATUS_CHIP[r.status]}>
-          {r.status_label ?? labels.get(r.status) ?? r.status}
-        </Chip>
+        <div className="space-y-1">
+          <Chip variant={r.work_order_quality?.state === 'released' ? 'success' : STATUS_CHIP[r.status]}>
+            {r.work_order_quality?.state === 'released' ? 'Quality released' : r.status_label ?? labels.get(r.status) ?? r.status}
+          </Chip>
+          {r.work_order_quality?.state === 'released' && r.status === 'failed' && (
+            <p className="text-xs text-muted">Original QC failed</p>
+          )}
+        </div>
       ),
     },
     {
@@ -138,6 +150,18 @@ export default function InspectionsListPage() {
     },
   ];
 
+  const counts = data?.meta.status_counts;
+  const queues = [
+    { label: 'To inspect', count: counts?.to_inspect, status: '', work_queue: 'to_inspect' },
+    {
+      label: 'Awaiting review',
+      count: counts?.awaiting_review,
+      status: 'awaiting_review',
+      work_queue: '',
+    },
+    { label: 'Failed inspections', count: counts?.failed, status: 'failed', work_queue: '' },
+    { label: 'All', count: counts?.all, status: '', work_queue: '' },
+  ] as const;
   const filterConfig: FilterConfig[] = [
     {
       key: 'stage',
@@ -175,12 +199,48 @@ export default function InspectionsListPage() {
           ) : undefined
         }
       />
+      <nav
+        aria-label="Inspection work queue"
+        className="flex flex-wrap gap-2 border-b border-default px-5 py-3"
+      >
+        {queues.map((queue) => (
+          <Button
+            key={queue.label}
+            variant={
+              filters.status === queue.status && (filters.work_queue ?? '') === queue.work_queue
+                ? 'primary'
+                : 'secondary'
+            }
+            size="sm"
+            aria-pressed={
+              filters.status === queue.status && (filters.work_queue ?? '') === queue.work_queue
+            }
+            onClick={() =>
+              setFilters((f) => ({
+                ...f,
+                page: 1,
+                status: queue.status,
+                work_queue: queue.work_queue,
+              }))
+            }
+          >
+            {queue.label} {queue.count != null ? `(${queue.count})` : ''}
+          </Button>
+        ))}
+      </nav>
       <FilterBar
         filters={filterConfig}
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search inspection number or product…"
+        onFilter={(key, value) =>
+          setFilters((f) => ({
+            ...f,
+            [key]: value,
+            ...(key === 'status' ? { work_queue: '' } : {}),
+            page: 1,
+          }))
+        }
+        searchPlaceholder="Search inspection, product, WO, GRN, or return…"
         dateRange={{ fromKey: 'from', toKey: 'to', label: 'Date' }}
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
@@ -195,36 +255,6 @@ export default function InspectionsListPage() {
           }
         />
       )}
-      {data && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
-          <StatCard
-            label={labels.get('draft') ?? '—'}
-            value={data.data.filter((i) => i.status === 'draft').length}
-            helper="in current view"
-            linkTo="?status=draft"
-          />
-          <StatCard
-            label={labels.get('in_progress') ?? '—'}
-            value={data.data.filter((i) => i.status === 'in_progress').length}
-            helper="in current view"
-            linkTo="?status=in_progress"
-          />
-          <StatCard
-            label={labels.get('passed') ?? '—'}
-            value={data.data.filter((i) => i.status === 'passed').length}
-            helper="in current view"
-            linkTo="?status=passed"
-            className="border-success bg-success-bg"
-          />
-          <StatCard
-            label={labels.get('failed') ?? '—'}
-            value={data.data.filter((i) => i.status === 'failed').length}
-            helper="in current view"
-            linkTo="?status=failed"
-            className="border-danger bg-danger-bg"
-          />
-        </div>
-      )}
 
       {data && data.data.length === 0 && <ListEmptyState />}
 
@@ -232,7 +262,7 @@ export default function InspectionsListPage() {
         <div className="px-5 py-4">
           <DataTable
             tableKey="inspections"
-            onRowClick={(r) => navigate(`/quality/inspections/${r.id}`)}
+            onRowClick={(r) => navigate(r.final_work_order_id ? `/quality/work-orders/${r.final_work_order_id}/final-inspection` : `/quality/inspections/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { LuDownload, LuPrinter } from '@/lib/icons';
+import { usePermission } from '@/hooks/usePermission';
 import { stockCardApi } from '@/api/inventory/stockCard';
+import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -34,13 +36,15 @@ function fmtMoney(s: string): string {
 }
 
 export default function StockCardPage() {
+  const { can } = usePermission();
   const { id = '' } = useParams<{ id: string }>();
   const [from, setFrom] = useState(monthAgoStr);
   const [to, setTo] = useState(todayStr);
+  const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'stock-card', id, from, to],
-    queryFn: () => stockCardApi.show(id, { from, to }),
+    queryKey: ['inventory', 'stock-card', id, from, to, page],
+    queryFn: () => stockCardApi.show(id, { from, to, page }),
     placeholderData: (prev) => prev,
   });
 
@@ -74,13 +78,19 @@ export default function StockCardPage() {
           label="From"
           type="date"
           value={from}
-          onChange={(e: { target: { value: string } }) => setFrom(e.target.value)}
+          onChange={(e: { target: { value: string } }) => {
+            setFrom(e.target.value);
+            setPage(1);
+          }}
         />
         <Input
           label="To"
           type="date"
           value={to}
-          onChange={(e: { target: { value: string } }) => setTo(e.target.value)}
+          onChange={(e: { target: { value: string } }) => {
+            setTo(e.target.value);
+            setPage(1);
+          }}
         />
         <Button variant="secondary" size="sm" onClick={() => refetch()}>
           Apply
@@ -147,7 +157,7 @@ export default function StockCardPage() {
             />
             <StatCard
               label="Movements"
-              value={String(data.rows.length)}
+              value={String(data.meta?.total ?? data.rows.length)}
               helper={`${data.from} → ${data.to}`}
             />
           </div>
@@ -173,12 +183,18 @@ export default function StockCardPage() {
                       {row.date ? formatDateTime(row.date) : '—'}
                     </Td>
                     <Td mono>
-                      {row.reference_url ? (
+                      {row.reference_url &&
+                      (!row.reference_url.startsWith('/inventory/material-issues/') ||
+                        can('inventory.issue.create')) &&
+                      (!row.reference_url.startsWith('/production/') ||
+                        (can('production.view') && can('production.work_orders.view'))) ? (
                         <Link to={row.reference_url} className="text-accent hover:underline">
-                          {row.reference_id ?? row.reference_type}
+                          {row.reference_label ?? row.reference_id ?? row.reference_type}
                         </Link>
                       ) : (
-                        <span className="text-muted">{row.reference_id ?? '—'}</span>
+                        <span className="text-muted">
+                          {row.reference_label ?? row.reference_id ?? '—'}
+                        </span>
                       )}
                     </Td>
                     <Td>{row.movement_type_label ?? row.movement_type}</Td>
@@ -199,6 +215,7 @@ export default function StockCardPage() {
               </tbody>
             </table>
           </div>
+          {data.meta && <DataTablePagination meta={data.meta} onPageChange={setPage} />}
         </div>
       )}
     </div>

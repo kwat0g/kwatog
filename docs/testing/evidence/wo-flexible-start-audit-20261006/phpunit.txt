@@ -1,0 +1,28 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+
+AUDIT schedule-page mismatch: ["Current time is outside the approved production slot. PPC or production management must review remaining work in Review production slot; started timing stays unchanged."]
+.
+AUDIT absent-worker routing: [{"code":"presence","message":"Lorna Ebert: HR recorded this worker as absent or on leave."},{"code":"schedule","message":"Worker attendance does not permit this start."}]
+.
+AUDIT approved late deadline after 16 minutes: [{"code":"schedule","message":"Finish by the production deadline or obtain explicit late-production approval for paused work or repair."}]
+.
+AUDIT running overrun recorder: Attendance or schedule no longer permits recording. Contact Production management to report earlier output.
+.
+AUDIT legacy exact-duration at 1 minute late: {"ready":false,"needs_reschedule":true,"blockers":[{"code":"schedule","message":"Assigned crew cannot cover this slot because HR shift, leave or another reservation conflicts. Review crew before scheduling remaining work."}],"start_mode":null,"requires_late_start_acknowledgement":false}
+.
+AUDIT daily-capacity resume: 2 hours original allocation + 2 hours new reservation passes 2.5-hour machine daily capacity.
+.
+AUDIT overdue calendar maintenance: execution window remains available.
+.
+AUDIT 16-minute delay: estimated work fits original slot, but new 2-hour reservation exceeds crew shift. [{"code":"schedule","message":"Assigned crew cannot cover this slot because HR shift, leave or another reservation conflicts. Review crew before scheduling remaining work."}]
+.
+AUDIT operation setup accepts known-absent assigned operator while WO is running.
+.                                                           9 / 9 (100%)
+
+Time: 00:30.933, Memory: 82.50 MB
+
+OK (9 tests, 22 assertions)

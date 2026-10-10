@@ -11,13 +11,15 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
+use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
-use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Services\MovementGlPostingService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Production\Models\WorkOrder;
@@ -27,13 +29,27 @@ use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use App\Modules\SupplyChain\Services\DeliveryStockReservationService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\HasPassedInProcessQc;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\TestCase;
 
 class DeliveryDispatchProvenanceTest extends TestCase
 {
+    use HasPassedInProcessQc;
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class, ChartOfAccountsSeeder::class]);
+    }
 
     public function test_dispatch_uses_the_inspected_output_stock_instead_of_an_empty_first_bin(): void
     {
@@ -123,6 +139,7 @@ class DeliveryDispatchProvenanceTest extends TestCase
         $this->assertSame(['APPROVED-BATCH'], $line->stockMovements()->pluck('lot_number')->unique()->all());
         $this->assertSame('0.000', (string) StockLevel::where('location_id', $source->id)->value('quantity'));
         $this->assertSame('7.000', (string) StockLevel::where('location_id', $destination->id)->value('quantity'));
+        $this->attachDeliveryEvidence($delivery);
         $service->updateStatus($delivery->fresh(), DeliveryStatus::Delivered);
         $sources = app(\App\Modules\ReturnManagement\Services\ReturnCaseSourceService::class);
         $options = $sources->options($sources->resolve('delivery', $delivery->hash_id));
@@ -194,19 +211,25 @@ class DeliveryDispatchProvenanceTest extends TestCase
         ]], $preparation['locations']);
     }
 
-    public function test_archiving_a_scheduled_delivery_releases_its_stock_reservation(): void
+    public function test_archiving_a_scheduled_delivery_with_a_stock_hold_is_blocked(): void
     {
-        [$delivery, , , $source] = $this->arrange();
+        [$delivery, , , $source] = $this->arrange(prepareShipment: false);
         $delivery->forceFill(['status' => DeliveryStatus::Scheduled])->save();
         $batch = $delivery->stockReservationBatch()->firstOrFail();
 
         $this->assertSame('3.000', (string) StockLevel::where('location_id', $source->id)->value('reserved_quantity'));
 
-        app(DeliveryService::class)->delete($delivery);
+        try {
+            app(DeliveryService::class)->delete($delivery);
+            $this->fail('A scheduled delivery cannot be archived after it has reserved dispatch stock.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('stock reservation history', $error->getMessage());
+        }
 
-        $this->assertSame('released', $batch->fresh()->status->value);
-        $this->assertSame('3.000', (string) $batch->reservations()->firstOrFail()->released_quantity);
-        $this->assertSame('0.000', (string) StockLevel::where('location_id', $source->id)->value('reserved_quantity'));
+        $this->assertNotNull(Delivery::find($delivery->id));
+        $this->assertSame(DeliveryStatus::Scheduled, $delivery->fresh()->status);
+        $this->assertSame('reserved', $batch->fresh()->status->value);
+        $this->assertSame('3.000', (string) StockLevel::where('location_id', $source->id)->value('reserved_quantity'));
     }
 
     public function test_another_operation_cannot_reserve_the_stock_this_delivery_holds(): void
@@ -227,7 +250,7 @@ class DeliveryDispatchProvenanceTest extends TestCase
     }
 
     /** @return array{Delivery, StockMovement, Item, WarehouseLocation} */
-    private function arrange(bool $secondBin = false, bool $olderLot = false): array
+    private function arrange(bool $secondBin = false, bool $olderLot = false, bool $prepareShipment = true): array
     {
         $actor = User::factory()->create();
         $checker = User::factory()->create();
@@ -250,6 +273,7 @@ class DeliveryDispatchProvenanceTest extends TestCase
             'planned_start' => now()->subDay(), 'planned_end' => now(),
             'status' => 'completed', 'created_by' => $actor->id,
         ]);
+        $this->passInProcessQc($workOrder);
         $output = WorkOrderOutput::create([
             'work_order_id' => $workOrder->id, 'recorded_by' => $actor->id, 'recorded_at' => now(),
             'good_count' => 10, 'reject_count' => 0, 'batch_code' => 'APPROVED-BATCH',
@@ -282,6 +306,8 @@ class DeliveryDispatchProvenanceTest extends TestCase
             'reference_type' => 'work_order_output', 'reference_id' => $output->id,
             'created_by' => $actor->id, 'created_at' => now(),
         ]);
+        app(MovementGlPostingService::class)->postFor($receipt);
+        $this->assertSame(MovementGlHandoffStatus::Generated, $receipt->fresh()->gl_handoff_status);
         $output->update([
             'production_receipt_movement_id' => $receipt->id,
             'production_receipt_handoff_status' => 'generated',
@@ -298,6 +324,7 @@ class DeliveryDispatchProvenanceTest extends TestCase
             'sales_order_id' => $so->id, 'scheduled_date' => now()->toDateString(),
             'items' => [['sales_order_item_id' => $soLine->id, 'quantity' => '3.00', 'inspection_id' => $inspection->id]],
         ], $actor);
+        if ($prepareShipment) $this->prepareShipmentForDispatch($delivery);
         // Arrange the dispatch boundary; the full browser flow covers assignment/loading UI.
         $delivery->forceFill(['status' => DeliveryStatus::Loading])->save();
 

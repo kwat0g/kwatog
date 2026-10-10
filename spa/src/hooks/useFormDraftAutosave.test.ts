@@ -1,5 +1,6 @@
+import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { __TEST_ONLY__ } from './useFormDraftAutosave';
+import { __TEST_ONLY__, useFormDraftAutosave } from './useFormDraftAutosave';
 
 const { stripSensitive, STORAGE_PREFIX } = __TEST_ONLY__;
 
@@ -61,4 +62,15 @@ describe('stripSensitive', () => {
  expect(out.first_name).toBe('Juan');
  expect(out).not.toHaveProperty('custom_secret');
  });
+});
+
+it('never recreates a draft on unmount after a successful save disables recovery', () => {
+ const options = { formKey: 'inspection:1', userId: 'user-1', getValues: () => ({ value: '10.2' }), setValues: () => {}, enabled: true };
+ const hook = renderHook(props => useFormDraftAutosave(props), { initialProps: options });
+ hook.result.current.saveNow();
+ expect(localStorage.getItem(`${STORAGE_PREFIX}user-1:inspection:1`)).not.toBeNull();
+ hook.result.current.discard();
+ hook.rerender({ ...options, enabled: false });
+ hook.unmount();
+ expect(localStorage.getItem(`${STORAGE_PREFIX}user-1:inspection:1`)).toBeNull();
 });

@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/lib/formatDate';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -114,7 +115,7 @@ export function SystemAccountSection({ employeeId }: Props) {
  <span className="text-muted">
  Last login:{' '}
  <span className="font-mono tabular-nums text-primary">
- {data.last_login_at ? new Date(data.last_login_at).toLocaleString() : 'Never'}
+ {data.last_login_at ? formatDateTime(data.last_login_at) : 'Never'}
  </span>
  </span>
  </div>
@@ -132,7 +133,7 @@ export function SystemAccountSection({ employeeId }: Props) {
  </div>
  )}
  <div className="flex gap-2 pt-2">
- {can('hr.employees.reset_password') && (
+ {can('admin.users.manage') && (
  <Button
  variant="secondary"
  size="sm"
@@ -142,7 +143,7 @@ export function SystemAccountSection({ employeeId }: Props) {
  Reset Password
  </Button>
  )}
- {can('hr.employees.deactivate_account') && data.is_active && (
+ {can('admin.users.manage') && data.is_active && (
  <Button
  variant="danger"
  size="sm"

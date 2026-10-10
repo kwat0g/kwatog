@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\OutboxService;
 use App\Common\Support\Money;
@@ -126,6 +127,28 @@ class PayrollPeriodService
         }
         $period->gl_entry_number = $entryNo;
 
+        $period->gl_reversal = null;
+        if ($period->status === PayrollPeriodStatus::Voided
+            && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
+            $original = JournalEntry::query()
+                ->with('reversedBy:id,entry_number')
+                ->where('reference_type', 'payroll_period')
+                ->where('reference_id', $period->id)
+                ->where('status', JournalEntryStatus::Reversed->value)
+                ->orderByDesc('id')
+                ->first();
+            $reversal = $original?->reversedBy;
+
+            if ($original && $reversal) {
+                $period->gl_reversal = [
+                    'original_entry_id' => $original->hash_id,
+                    'original_entry_number' => $original->entry_number,
+                    'reversal_entry_id' => $reversal->hash_id,
+                    'reversal_entry_number' => $reversal->entry_number,
+                ];
+            }
+        }
+
         return $period;
     }
 
@@ -138,7 +161,14 @@ class PayrollPeriodService
                 COUNT(CASE WHEN error_message IS NOT NULL THEN 1 END) as failed_count,
                 COALESCE(SUM(gross_pay), 0) as total_gross,
                 COALESCE(SUM(total_deductions), 0) as total_deductions,
-                COALESCE(SUM(net_pay), 0) as total_net
+                COALESCE(SUM(net_pay), 0) as total_net,
+                COALESCE(SUM(sss_ee), 0) as sss_employee_share,
+                COALESCE(SUM(philhealth_ee), 0) as philhealth_employee_share,
+                COALESCE(SUM(pagibig_ee), 0) as pagibig_employee_share,
+                COALESCE(SUM(withholding_tax), 0) as withholding_tax,
+                COALESCE(SUM(loan_deductions), 0) as loan_deductions,
+                COALESCE(SUM(other_deductions), 0) as uncategorized_deductions,
+                COALESCE(SUM(adjustment_amount), 0) as net_adjustments
             ')
             ->first();
 
@@ -148,7 +178,26 @@ class PayrollPeriodService
             'total_gross'      => Money::round2((string) ($row->total_gross ?? '0.00')),
             'total_deductions' => Money::round2((string) ($row->total_deductions ?? '0.00')),
             'total_net'        => Money::round2((string) ($row->total_net ?? '0.00')),
+            'deduction_breakdown' => [
+                'sss_employee_share' => Money::round2((string) ($row->sss_employee_share ?? '0.00')),
+                'philhealth_employee_share' => Money::round2((string) ($row->philhealth_employee_share ?? '0.00')),
+                'pagibig_employee_share' => Money::round2((string) ($row->pagibig_employee_share ?? '0.00')),
+                'withholding_tax' => Money::round2((string) ($row->withholding_tax ?? '0.00')),
+                'loan_deductions' => Money::round2((string) ($row->loan_deductions ?? '0.00')),
+            ],
+            'uncategorized_deductions' => Money::round2((string) ($row->uncategorized_deductions ?? '0.00')),
+            'net_adjustments'  => Money::round2((string) ($row->net_adjustments ?? '0.00')),
         ];
+    }
+
+    private function assertDeductionsClassified(PayrollPeriod $period, string $action): void
+    {
+        $count = $period->payrolls()->where('other_deductions', '<>', '0')->count();
+        if ($count > 0) {
+            throw new BusinessRuleException(
+                "Cannot {$action}: {$count} payroll row(s) have unclassified other deductions. Resolve their treatment before continuing.",
+            );
+        }
     }
 
     /**
@@ -894,6 +943,11 @@ class PayrollPeriodService
      */
     public function releaseClaim(PayrollPeriod $period, array $extraAttributes = [], ?string $token = null): PayrollPeriod
     {
+        $oldValues = [
+            'status' => $period->status?->value,
+            'processing_started_at' => optional($period->processing_started_at)->toIso8601String(),
+            'anomaly_detection_failed' => (bool) $period->anomaly_detection_failed,
+        ];
         $attributes = array_merge([
             'status' => $period->payrolls()->exists()
                 ? PayrollPeriodStatus::Computed->value
@@ -907,7 +961,24 @@ class PayrollPeriodService
             $query->where('status', PayrollPeriodStatus::Processing->value)
                 ->where('processing_token', $token);
         }
-        $query->update($attributes);
+        $released = $query->update($attributes);
+
+        if ($released > 0) {
+            AuditLog::create([
+                'actor_type' => 'system',
+                'action'     => 'updated',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $period->id,
+                'old_values' => $oldValues,
+                'new_values' => [
+                    'status' => $attributes['status'],
+                    'processing_started_at' => null,
+                    'anomaly_detection_failed' => $attributes['anomaly_detection_failed'] ?? $oldValues['anomaly_detection_failed'],
+                ],
+                'source_command' => 'payroll.compute.release',
+                'created_at' => now(),
+            ]);
+        }
 
         return PayrollPeriod::query()->find($period->id) ?? $period;
     }
@@ -936,91 +1007,121 @@ class PayrollPeriodService
      */
     public function claimForCompute(PayrollPeriod $period, ?User $actor = null): PayrollPeriod
     {
-        $status = $period->status;
+        return DB::transaction(function () use ($period, $actor): PayrollPeriod {
+            $period = PayrollPeriod::query()->lockForUpdate()->find($period->id);
+            if (! $period) {
+                throw new BusinessRuleException('Payroll period not found.');
+            }
 
-        // A dead claim is takeable. Both guards below have to agree on that:
-        // Processing is deliberately NOT in isComputable(), so without this the
-        // staleness check passed and the very next guard still refused with
-        // "Cannot compute a processing period."
-        $isStaleClaim = $status === PayrollPeriodStatus::Processing && $this->claimIsStale($period);
+            $status = $period->status;
 
-        if ($status === PayrollPeriodStatus::Processing && ! $isStaleClaim) {
-            throw new BusinessRuleException('This period is already being computed. Wait for the current run to finish.');
-        }
-        if ($status !== null && ! $status->isComputable() && ! $isStaleClaim) {
-            throw new BusinessRuleException(sprintf(
-                'Cannot compute a %s period. %s',
-                strtolower($status->label()),
-                match ($status) {
-                    PayrollPeriodStatus::Approved  => 'Payroll has already been approved — void it or force-unlock to recompute.',
-                    PayrollPeriodStatus::Finalized => 'Finalized payroll is immutable — void the period first.',
-                    PayrollPeriodStatus::Disbursed => 'Salaries have already been disbursed; this run cannot be changed.',
-                    PayrollPeriodStatus::Voided    => 'Create a replacement period instead.',
-                    default                        => '',
-                },
-            ));
-        }
-        if ($period->is_thirteenth_month) {
-            throw new BusinessRuleException('13th-month periods are generated by the 13th-month run, not by Compute.');
-        }
+            // A dead claim is takeable. Both guards below have to agree on that:
+            // Processing is deliberately NOT in isComputable(), so without this the
+            // staleness check passed and the very next guard still refused with
+            // "Cannot compute a processing period."
+            $isStaleClaim = $status === PayrollPeriodStatus::Processing && $this->claimIsStale($period);
 
-        // A SCOPED run that matches nobody is almost always a mis-set filter, and
-        // left to run it would write zero rows, park back at Draft via
-        // releaseClaim(), and give the operator no clue why nothing happened.
-        // Fail here instead, naming the scope.
-        //
-        // Deliberately NOT applied to company-wide periods: "no active employees
-        // at all" is a legitimate state (fresh install, everyone separated) and
-        // blocking it would change long-standing compute/claim behaviour that has
-        // nothing to do with scoping.
-        if (! $period->isCompanyWide() && ! $this->availableEmployeeQuery($period)->exists()) {
-            throw new BusinessRuleException(sprintf(
-                'This period\'s scope (%s) matches no active employee hired on or before %s. Widen the scope, or create the period unscoped to pay everyone.',
-                $period->scopeLabel() ?? 'custom',
-                $period->period_end->format('Y-m-d'),
-            ));
-        }
+            if ($status === PayrollPeriodStatus::Processing && ! $isStaleClaim) {
+                throw new BusinessRuleException('This period is already being computed. Wait for the current run to finish.');
+            }
+            if ($status !== null && ! $status->isComputable() && ! $isStaleClaim) {
+                throw new BusinessRuleException(sprintf(
+                    'Cannot compute a %s period. %s',
+                    strtolower($status->label()),
+                    match ($status) {
+                        PayrollPeriodStatus::Approved  => 'Payroll has already been approved — void it or force-unlock to recompute.',
+                        PayrollPeriodStatus::Finalized => 'Finalized payroll is immutable — void the period first.',
+                        PayrollPeriodStatus::Disbursed => 'Salaries have already been disbursed; this run cannot be changed.',
+                        PayrollPeriodStatus::Voided    => 'Create a replacement period instead.',
+                        default                        => '',
+                    },
+                ));
+            }
+            if ($period->is_thirteenth_month) {
+                throw new BusinessRuleException('13th-month periods are generated by the 13th-month run, not by Compute.');
+            }
 
-        $claimed = PayrollPeriod::query()
-            ->whereKey($period->id)
-            ->where(function ($q) use ($period) {
-                $q->whereIn('status', [
-                    PayrollPeriodStatus::Draft->value,
-                    PayrollPeriodStatus::Computed->value,
-                ])
-                // A stale Processing claim is dead (worker crashed mid-run) —
-                // reclaim it so the next Compute click actually restarts the
-                // batch instead of wedging the period forever.
-                ->orWhere(fn ($qq) => $qq
-                    ->where('status', PayrollPeriodStatus::Processing->value)
-                    ->where('processing_started_at', '<', CarbonImmutable::now()->subMinutes($this->staleAfterMinutes()))
+            // A SCOPED run that matches nobody is almost always a mis-set filter, and
+            // left to run it would write zero rows, park back at Draft via
+            // releaseClaim(), and give the operator no clue why nothing happened.
+            // Fail here instead, naming the scope.
+            //
+            // Deliberately NOT applied to company-wide periods: "no active employees
+            // at all" is a legitimate state (fresh install, everyone separated) and
+            // blocking it would change long-standing compute/claim behaviour that has
+            // nothing to do with scoping.
+            if (! $period->isCompanyWide() && ! $this->availableEmployeeQuery($period)->exists()) {
+                throw new BusinessRuleException(sprintf(
+                    'This period\'s scope (%s) matches no active employee hired on or before %s. Widen the scope, or create the period unscoped to pay everyone.',
+                    $period->scopeLabel() ?? 'custom',
+                    $period->period_end->format('Y-m-d'),
+                ));
+            }
+
+            $processingStartedAt = now();
+            $computedBy = $actor?->id ?? $period->computed_by;
+            $claimed = PayrollPeriod::query()
+                ->whereKey($period->id)
+                ->where(function ($q) use ($period) {
+                    $q->whereIn('status', [
+                        PayrollPeriodStatus::Draft->value,
+                        PayrollPeriodStatus::Computed->value,
+                    ])
+                    // A stale Processing claim is dead (worker crashed mid-run) —
+                    // reclaim it so the next Compute click actually restarts the
+                    // batch instead of wedging the period forever.
+                    ->orWhere(fn ($qq) => $qq
+                        ->where('status', PayrollPeriodStatus::Processing->value)
+                        ->where('processing_started_at', '<', CarbonImmutable::now()->subMinutes($this->staleAfterMinutes()))
+                    );
+                })
+                ->update([
+                    'status'                => PayrollPeriodStatus::Processing->value,
+                    'processing_started_at' => $processingStartedAt,
+                    'processing_token'      => (string) Str::uuid(),
+                    'computed_by'           => $computedBy,
+                    'updated_at'            => $processingStartedAt,
+                ]);
+
+            if ($claimed === 0) {
+                // Lost the race — another request claimed it between our read and
+                // this UPDATE. Report the status that actually won.
+                $current = $period->fresh();
+                throw new BusinessRuleException(
+                    $current?->status === PayrollPeriodStatus::Processing && ! $this->claimIsStale($current)
+                        ? 'This period is already being computed. Wait for the current run to finish.'
+                        : 'This period is no longer computable. Refresh and try again.',
                 );
-            })
-            ->update([
-                'status'                => PayrollPeriodStatus::Processing->value,
-                'processing_started_at' => now(),
-                'processing_token'      => (string) Str::uuid(),
-                'computed_by'           => $actor?->id ?? $period->computed_by,
-                'updated_at'            => now(),
+            }
+
+            AuditLog::create([
+                'user_id'    => $actor?->id,
+                'actor_type' => $actor ? 'user' : 'system',
+                'action'     => 'updated',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $period->id,
+                'old_values' => [
+                    'status' => $status?->value,
+                    'processing_started_at' => optional($period->processing_started_at)->toIso8601String(),
+                    'computed_by' => $period->computed_by,
+                ],
+                'new_values' => [
+                    'status' => PayrollPeriodStatus::Processing->value,
+                    'processing_started_at' => $processingStartedAt->toIso8601String(),
+                    'computed_by' => $computedBy,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
             ]);
 
-        if ($claimed === 0) {
-            // Lost the race — another request claimed it between our read and
-            // this UPDATE. Report the status that actually won.
-            $current = $period->fresh();
-            throw new BusinessRuleException(
-                $current?->status === PayrollPeriodStatus::Processing && ! $this->claimIsStale($current)
-                    ? 'This period is already being computed. Wait for the current run to finish.'
-                    : 'This period is no longer computable. Refresh and try again.',
-            );
-        }
+            // Drop the previous run's progress snapshot so the UI never shows a
+            // stale "142 / 200" before this run's first broadcast lands.
+            $fresh = $period->fresh();
+            $this->progress->forget($fresh);
 
-        // Drop the previous run's progress snapshot so the UI never shows a
-        // stale "142 / 200" before this run's first broadcast lands.
-        $fresh = $period->fresh();
-        $this->progress->forget($fresh);
-
-        return $fresh;
+            return $fresh;
+        });
     }
 
     /**
@@ -1086,6 +1187,8 @@ class PayrollPeriodService
                 throw new BusinessRuleException("Cannot approve: {$failed} employee(s) failed computation. Resolve first.");
             }
 
+            $this->assertDeductionsClassified($locked, 'approve');
+
             $eligibleEmployees = $this->availableEmployeeQuery($locked)
                 ->pluck('id')->map(static fn ($id): int => (int) $id)->all();
             $computedEmployees = $locked->payrolls()
@@ -1099,13 +1202,21 @@ class PayrollPeriodService
                 );
             }
 
-            // REC-04 — maker-checker Segregation of Duties. The HR user who
-            // computed this run may not also approve it unless explicitly
-            // overridden.
-            if ($locked->computed_by !== null
-                && $locked->computed_by === $actor->id
-                && ! $actor->hasPermission('payroll.periods.self_approve_override')) {
-                throw new BusinessRuleException('Maker-checker: the person who computed this payroll cannot also approve it. A different approver is required.');
+            // The requester and the compute operator are both makers. Role
+            // changes during an in-flight period must not make either one an
+            // eligible checker.
+            $makerIds = array_map(
+                static fn ($id): int => (int) $id,
+                array_filter([$locked->created_by, $locked->computed_by], static fn ($id): bool => $id !== null),
+            );
+            $isMaker = in_array((int) $actor->id, $makerIds, true);
+            $makerCheckerOverride = $isMaker && $actor->hasPermission('payroll.periods.self_approve_override');
+            if ($isMaker && ! $makerCheckerOverride) {
+                throw new BusinessRuleException(
+                    $locked->created_by !== null && (int) $locked->created_by === (int) $actor->id
+                        ? 'Maker-checker: the person who created this payroll period cannot approve it. A different approver is required.'
+                        : 'Maker-checker: the person who computed this payroll cannot also approve it. A different approver is required.',
+                );
             }
 
             $previous = $locked->status?->value;
@@ -1118,13 +1229,20 @@ class PayrollPeriodService
                 'approved_at' => now(),
             ])->save();
 
+            $newAuditValues = [
+                'status' => PayrollPeriodStatus::Approved->value,
+                'approved_by' => $actor->id,
+            ];
+            if ($makerCheckerOverride) {
+                $newAuditValues['maker_checker_override'] = true;
+            }
             AuditLog::create([
                 'user_id'    => $actor->id,
                 'action'     => 'payroll.period.approve',
                 'model_type' => PayrollPeriod::class,
                 'model_id'   => $locked->id,
                 'old_values' => ['status' => $previous],
-                'new_values' => ['status' => PayrollPeriodStatus::Approved->value, 'approved_by' => $actor->id],
+                'new_values' => $newAuditValues,
                 'ip_address' => request()?->ip(),
                 'user_agent' => request()?->userAgent(),
                 'created_at' => now(),
@@ -1135,9 +1253,8 @@ class PayrollPeriodService
     }
 
     /**
-     * Finance returns a computed period to HR for correction. The payroll rows
-     * remain available for review until HR recomputes; the new Draft status
-     * prevents approval/finalization until that recomputation completes.
+     * Finance returns a computed period to HR for correction. A legacy Approved
+     * period with no recorded approver can also return to Draft for safe recovery.
      */
     public function requestCorrection(PayrollPeriod $period, User $actor, string $reason): PayrollPeriod
     {
@@ -1146,13 +1263,19 @@ class PayrollPeriodService
             if (! $locked) {
                 throw new BusinessRuleException('Payroll period not found.');
             }
-            if ($locked->status !== PayrollPeriodStatus::Computed) {
-                throw new BusinessRuleException('Only computed periods can be returned for correction.');
+            $isComputed = $locked->status === PayrollPeriodStatus::Computed;
+            $isUnapprovedLegacyPeriod = $locked->status === PayrollPeriodStatus::Approved && $locked->approved_by === null;
+            if (! $isComputed && ! $isUnapprovedLegacyPeriod) {
+                throw new BusinessRuleException('Only computed periods, or approved periods missing an approver, can be returned for correction.');
             }
 
             $previous = $locked->status->value;
+            $previousApproverId = $locked->approved_by;
+            $previousApprovedAt = optional($locked->approved_at)->toIso8601String();
             $locked->forceFill([
                 'status'                  => PayrollPeriodStatus::Draft->value,
+                'approved_by'             => null,
+                'approved_at'             => null,
                 'correction_requested_by' => $actor->id,
                 'correction_requested_at' => now(),
                 'correction_reason'       => $reason,
@@ -1163,9 +1286,15 @@ class PayrollPeriodService
                 'action'     => 'payroll.period.request_correction',
                 'model_type' => PayrollPeriod::class,
                 'model_id'   => $locked->id,
-                'old_values' => ['status' => $previous],
+                'old_values' => [
+                    'status' => $previous,
+                    'approved_by' => $previousApproverId,
+                    'approved_at' => $previousApprovedAt,
+                ],
                 'new_values' => [
                     'status' => PayrollPeriodStatus::Draft->value,
+                    'approved_by' => null,
+                    'approved_at' => null,
                     'correction_requested_by' => $actor->id,
                     'correction_reason' => $reason,
                 ],
@@ -1225,8 +1354,7 @@ class PayrollPeriodService
         // P3.5 — wrap the status mutation in a transaction so any DB write
         // that throws rolls back atomically, matching other lifecycle methods.
         // The event is fired AFTER commit so listeners see persisted state.
-        // REC-04 — no self-approve block here (approve() already enforced the
-        // second set of eyes); we only record the finalizer for attribution.
+        // REC-04 — the recorded approver and finalizer must be different users.
         $fresh = DB::transaction(function () use ($period, $actor) {
             // Finalization is the H2R handoff into bank-file generation and GL
             // posting. Re-read and lock the period before checking guards so a
@@ -1239,6 +1367,15 @@ class PayrollPeriodService
             if ($locked->status !== PayrollPeriodStatus::Approved) {
                 throw new BusinessRuleException('Only approved periods can be finalized.');
             }
+
+            if ($locked->approved_by === null) {
+                throw new BusinessRuleException('Cannot finalize: this period has no recorded approver. Return it for correction before continuing.');
+            }
+            if ((int) $locked->approved_by === (int) $actor->id) {
+                throw new ForbiddenActionException('The approver cannot finalize the same payroll period. A different finance user must finalize it.');
+            }
+
+            $this->assertDeductionsClassified($locked, 'finalize');
 
             // Task A9 — block finalization while unresolved anomaly flags exist.
             //
@@ -1446,7 +1583,7 @@ class PayrollPeriodService
                 && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
                 $je = JournalEntry::find($locked->journal_entry_id);
                 if ($je && $je->status === JournalEntryStatus::Posted && $je->reversed_by_entry_id === null) {
-                    $reversal = app(JournalEntryService::class)->reverse($je, $actor);
+                    $reversal = app(JournalEntryService::class)->reverseSource($je, $actor);
                     $reversalId = $reversal->id;
                 }
                 // If the JE is already reversed/missing we leave it — idempotent.

@@ -202,15 +202,19 @@ class MrpCommitmentRerunTest extends TestCase
         $this->assertSame(0, $plan->auto_pr_count);
     }
 
-    public function test_cancelled_paused_wo_does_not_erase_its_existing_good_output(): void
+    public function test_imported_cancelled_wo_preserves_its_existing_good_output_commitment(): void
     {
         $this->engine->runForSalesOrder($this->so);
         $wo = WorkOrder::where('sales_order_item_id', $this->so->items()->value('id'))->firstOrFail();
-        // A paused WO may be cancelled after recording some good output.
+        // Imported data can retain good output after a work order was marked cancelled.
         $wo->forceFill(['status' => WorkOrderStatus::Cancelled, 'quantity_produced' => 4, 'quantity_good' => 4])->save();
 
         $plan = $this->engine->runForSalesOrder($this->so->fresh());
 
+        $this->assertSame(6, (int) WorkOrder::query()
+            ->where('mrp_plan_id', $plan->id)
+            ->whereNull('parent_wo_id')
+            ->value('quantity_target'));
         $this->assertEqualsWithDelta(6.0, (float) PurchaseRequest::where('mrp_plan_id', $plan->id)->firstOrFail()->items()->firstOrFail()->quantity, 0.001);
     }
 

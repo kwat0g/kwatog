@@ -7,9 +7,9 @@ import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
 import type { PurchaseRequest, SourcingLine } from '@/types/purchasing';
@@ -34,11 +34,9 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
   const qc = useQueryClient();
   const prId = purchaseRequest?.id ?? null;
   const [vendorMap, setVendorMap] = useState<Record<string, string>>({});
-  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
 
   useEffect(() => {
     setVendorMap({});
-    setExpectedDeliveryDate('');
   }, [prId]);
 
   const sourcing = useQuery({
@@ -70,7 +68,7 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
       for (const [lineId, vendorId] of Object.entries(effective)) {
         if (vendorId) map[lineId] = vendorId;
       }
-      return purchaseRequestsApi.convert(prId!, map, expectedDeliveryDate || undefined);
+      return purchaseRequestsApi.convert(prId!, map);
     },
     onSuccess: (orders) => {
       qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
@@ -106,14 +104,10 @@ export function ConvertPrToPoModal({ purchaseRequest, onClose }: Props) {
             Assign a supplier per line. Each vendor becomes its own purchase order. Lines left
             unassigned stay on the request and can be converted later.
           </p>
-          <Input
-            label="Required delivery date"
-            type="date"
-            value={expectedDeliveryDate}
-            onChange={(event) => setExpectedDeliveryDate(event.target.value)}
-            helper="The date OGAMI needs the goods; the supplier may propose a different confirmed date."
-            containerClassName="max-w-xs"
-          />
+          <p className="text-sm text-muted">
+            Needed by: <span className="font-medium text-primary">{formatDate(purchaseRequest?.required_delivery_date)}</span>
+            {' '}<span className="text-xs">(from purchase request)</span>
+          </p>
           {lines.map((line) => {
             const chosen = effective[line.id] ?? '';
             const qualified = !chosen || qualifiedIds(line).has(chosen);

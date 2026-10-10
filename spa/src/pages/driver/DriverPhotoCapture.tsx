@@ -1,11 +1,11 @@
 /**
- * Receipt photo — the last step of a delivered run.
+ * Receipt photo records handover, or completes a historical delivery's evidence.
  *
  * Two file inputs on purpose: `capture="environment"` opens the camera app on a
  * phone, the plain one opens the gallery. Both write into the same preview, so
  * the driver can retake or pick an existing shot before committing the upload.
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -15,6 +15,7 @@ import { driverApi } from '@/api/driver';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
+import { SkeletonPanel } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 
 const MAX_BYTES = 8 * 1024 * 1024; // mirrors backend image|max:8192
@@ -47,6 +48,11 @@ export default function DriverPhotoCapture() {
  const [preview, setPreview] = useState<string | null>(null);
  const [file, setFile] = useState<File | null>(null);
  const [hint, setHint] = useState<string | null>(null);
+ const { data, isLoading, error, refetch, isFetching } = useQuery({
+ queryKey: ['driver', 'delivery', id],
+ queryFn: () => driverApi.showDelivery(id!),
+ enabled: Boolean(id),
+ });
 
  // Revoke previous blob URL whenever preview changes, and on unmount.
  useEffect(() => {
@@ -62,7 +68,7 @@ export default function DriverPhotoCapture() {
  },
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['driver'] });
- toast.success('Receipt uploaded.');
+ toast.success(data?.status === 'in_transit' ? 'Delivery recorded. Waiting for customer confirmation.' : 'Receipt uploaded.');
  if (id) navigate(`/driver/${id}`);
  },
  onError: (err) => toast.error(describeUploadError(err)),
@@ -75,6 +81,32 @@ export default function DriverPhotoCapture() {
  <EmptyState icon="alert-circle" title="Missing delivery" description="Open the delivery again from your list and retry the upload." />
  </div>
  );
+ }
+
+ if (isLoading) {
+ return <div>
+ <PageHeader title="Receipt photo" subtitle="Loading delivery…" backTo={`/driver/${id}`} backLabel="Back to delivery" />
+ <div className="max-w-2xl px-5 py-4"><SkeletonPanel /></div>
+ </div>;
+ }
+
+ if (error || !data) {
+ return <div>
+ <PageHeader title="Receipt photo" backTo={`/driver/${id}`} backLabel="Back to delivery" />
+ <EmptyState icon="alert-circle" title="Could not load delivery" description="Check your connection and try again."
+ action={<Button disabled={isFetching} onClick={() => refetch()}>{isFetching ? 'Retrying…' : 'Try again'}</Button>} />
+ </div>;
+ }
+
+ const recordsDelivery = data.status === 'in_transit';
+ if (!recordsDelivery && data.status !== 'delivered' && data.status !== 'confirmed') {
+ return <div>
+ <PageHeader title="Receipt photo" backTo={`/driver/${id}`} backLabel="Back to delivery" />
+ <EmptyState icon="alert-circle" title="Delivery is not ready for receipt"
+ description={data.status === 'scheduled' || data.status === 'loading'
+ ? 'The office must dispatch this delivery before you record receipt.'
+ : 'Receipt upload is unavailable for this delivery. Open the delivery to review its status.'} />
+ </div>;
  }
 
  const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -101,8 +133,8 @@ export default function DriverPhotoCapture() {
  return (
  <div>
  <PageHeader
- title="Receipt photo"
- subtitle="Signed receipt or delivery photo"
+ title={recordsDelivery ? 'Record delivery' : 'Receipt photo'}
+ subtitle={`${data.delivery_number} · Signed receipt or delivery photo`}
  backTo={`/driver/${id}`}
  backLabel="Back to delivery"
  />
@@ -110,8 +142,8 @@ export default function DriverPhotoCapture() {
  <div className="max-w-2xl space-y-4 px-5 py-4">
  <Panel title="Capture the proof">
  <p className="text-sm text-secondary">
- Photograph the signed receipt, or the delivered goods with the customer&apos;s name visible. The
- office uses it to confirm the delivery against your report.
+ Photograph the signed receipt, or the delivered goods with the customer&apos;s name visible.
+ {recordsDelivery ? ' Save the photo after handing over the goods. This records delivery and asks the customer to confirm receipt.' : ' Save the photo as evidence for this recorded delivery.'}
  </p>
 
  <input
@@ -120,6 +152,7 @@ export default function DriverPhotoCapture() {
  accept="image/*"
  capture="environment"
  className="hidden"
+ disabled={upload.isPending}
  onChange={onPickFile}
  />
  <input
@@ -127,6 +160,7 @@ export default function DriverPhotoCapture() {
  type="file"
  accept="image/*"
  className="hidden"
+ disabled={upload.isPending}
  onChange={onPickFile}
  />
 
@@ -159,6 +193,7 @@ export default function DriverPhotoCapture() {
  variant="secondary"
  size="touch"
  icon={<LuCamera size={14} />}
+ disabled={upload.isPending}
  onClick={() => fileRef.current?.click()}
  >
  {preview ? 'Retake' : 'Take photo'}
@@ -167,6 +202,7 @@ export default function DriverPhotoCapture() {
  variant="secondary"
  size="touch"
  icon={<LuImage size={14} />}
+ disabled={upload.isPending}
  onClick={() => galleryRef.current?.click()}
  >
  Choose from gallery
@@ -181,10 +217,10 @@ export default function DriverPhotoCapture() {
  disabled={!file}
  onClick={() => upload.mutate()}
  >
- Upload photo
+ {recordsDelivery ? 'Record delivery' : 'Upload receipt photo'}
  </Button>
 
- <p className="mt-3 text-xs text-subtle">
+ <p className="mt-3 text-xs text-secondary">
  Images up to 8 MB. The photo is stored against this delivery and is visible to the office.
  </p>
  </Panel>

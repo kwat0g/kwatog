@@ -11,7 +11,7 @@ Route::prefix('return-management/cases')->middleware(['auth:sanctum', 'feature:r
     Route::get('/', [ReturnCaseController::class, 'index'])->middleware('permission:return_management.view');
     Route::get('/sources', [ReturnCaseController::class, 'sources'])->middleware('permission:return_management.view');
     Route::get('/source-options', [ReturnCaseController::class, 'sourceOptions'])->middleware('permission:return_management.view');
-    Route::post('/', [ReturnCaseController::class, 'store'])->middleware('permission:return_management.manage');
+    Route::post('/', [ReturnCaseController::class, 'store'])->middleware('permission_any:return_management.manage,inventory.grn.create');
     Route::get('/{returnCase}', [ReturnCaseController::class, 'show'])->middleware('permission:return_management.view');
     Route::get('/{returnCase}/resolution-options', [ReturnCaseController::class, 'resolutionOptions'])->middleware('permission:return_management.view');
     Route::post('/{returnCase}/actions', [ReturnCaseController::class, 'act'])->middleware('permission_any:return_management.manage,return_management.approve,accounting.credit_notes.manage');

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Models;
 
+use App\Common\Services\SettingsService;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Enums\MoldStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,9 +20,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Mold extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
+        'current_work_order_id', 'current_rework_ncr_id',
         'mold_code', 'name', 'product_id', 'cavity_count', 'cycle_time_seconds',
         'output_rate_per_hour', 'setup_time_minutes', 'current_shot_count',
         'max_shots_before_maintenance', 'lifetime_total_shots',
@@ -33,25 +36,25 @@ class Mold extends Model
     ];
 
     protected $casts = [
-        'status'                       => MoldStatus::class,
-        'cavity_count'                 => 'integer',
-        'cycle_time_seconds'           => 'integer',
-        'output_rate_per_hour'         => 'integer',
-        'setup_time_minutes'           => 'integer',
-        'current_shot_count'           => 'integer',
+        'status' => MoldStatus::class,
+        'cavity_count' => 'integer',
+        'cycle_time_seconds' => 'integer',
+        'output_rate_per_hour' => 'integer',
+        'setup_time_minutes' => 'integer',
+        'current_shot_count' => 'integer',
         'max_shots_before_maintenance' => 'integer',
-        'lifetime_total_shots'         => 'integer',
-        'lifetime_max_shots'           => 'integer',
-        'asset_id'                     => 'integer',
+        'lifetime_total_shots' => 'integer',
+        'lifetime_max_shots' => 'integer',
+        'asset_id' => 'integer',
         // Lifecycle manager.
-        'commissioned_at'              => 'date',
-        'decommissioned_at'            => 'date',
-        'last_maintenance_at'          => 'date',
-        'maintenance_count'            => 'integer',
-        'total_maintenance_cost'       => 'decimal:2',
-        'acquisition_cost'             => 'decimal:2',
-        'estimated_replacement_cost'   => 'decimal:2',
-        'maintenance_frequency_shots'  => 'integer',
+        'commissioned_at' => 'date',
+        'decommissioned_at' => 'date',
+        'last_maintenance_at' => 'date',
+        'maintenance_count' => 'integer',
+        'total_maintenance_cost' => 'decimal:2',
+        'acquisition_cost' => 'decimal:2',
+        'estimated_replacement_cost' => 'decimal:2',
+        'maintenance_frequency_shots' => 'integer',
     ];
 
     public function product(): BelongsTo
@@ -61,7 +64,7 @@ class Mold extends Model
 
     public function asset(): BelongsTo
     {
-        return $this->belongsTo(\App\Modules\Assets\Models\Asset::class, 'asset_id');
+        return $this->belongsTo(Asset::class, 'asset_id');
     }
 
     public function compatibleMachines(): BelongsToMany
@@ -82,13 +85,17 @@ class Mold extends Model
     public function getShotPercentageAttribute(): float
     {
         $max = (int) $this->max_shots_before_maintenance;
-        if ($max <= 0) return 0.0;
+        if ($max <= 0) {
+            return 0.0;
+        }
+
         return round(((int) $this->current_shot_count / $max) * 100, 1);
     }
 
     public function getNearingLimitAttribute(): bool
     {
-        $ratio = app(\App\Common\Services\SettingsService::class)->requiredFloat('alerts.mold.warning_ratio', 0, 1);
+        $ratio = app(SettingsService::class)->requiredFloat('alerts.mold.warning_ratio', 0, 1);
+
         return $this->shot_percentage >= ($ratio * 100);
     }
 
@@ -96,8 +103,11 @@ class Mold extends Model
     public function getCostPerShotAttribute(): float
     {
         $shots = (int) $this->lifetime_total_shots;
-        if ($shots <= 0) return 0.0;
+        if ($shots <= 0) {
+            return 0.0;
+        }
         $lifecycle = (float) $this->acquisition_cost + (float) $this->total_maintenance_cost;
+
         return round($lifecycle / $shots, 4);
     }
 

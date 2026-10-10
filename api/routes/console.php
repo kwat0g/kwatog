@@ -8,6 +8,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
+Schedule::command('production:notify-upcoming-work-orders')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->onOneServer();
+
 Schedule::command('purchasing:close-due-rfqs')
     ->everyMinute()
     ->withoutOverlapping(5)
@@ -30,7 +35,6 @@ Schedule::command('qc:sweep-missing-outgoing --limit=50')
     ->hourly()
     ->withoutOverlapping(15)
     ->onOneServer();
-
 
 // Time in/out — HR hears about yesterday's open rows at 07:00 (they compute zero
 // hours until corrected), and raw GPS is purged after 90 days (RA 10173).
@@ -353,6 +357,11 @@ Schedule::command('inventory:recompute-safety-stock')
     ->withoutOverlapping(120)
     ->onOneServer();
 
+Schedule::command('inventory:reconcile-replenishment --limit=100')
+    ->dailyAt('02:30')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
 // T1.5 — AR dunning emails. Daily at 07:00 (after overnight batch jobs).
 Schedule::command('ar:run-dunning')
     ->dailyAt('07:00')
@@ -430,3 +439,13 @@ Schedule::command('kpi:compute-monthly')
     ->name('kpi:compute-monthly')
     ->withoutOverlapping(120)
     ->onOneServer();
+
+// Recover cost-refresh handoffs and remind commercial owners about pricing risk.
+Schedule::command('pricing:review-agreements')->dailyAt('07:00')->withoutOverlapping(60)->onOneServer();
+
+// Pricing refreshes have an inline recovery path even when the generic queue worker is unavailable.
+Schedule::command('pricing:review-agreements --dispatch-only')->everyMinute()->withoutOverlapping(10)->onOneServer();
+
+Schedule::command('maintenance:check-assignment')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer();
+
+Schedule::command('maintenance:check-repeat-breakdowns')->dailyAt('07:10')->withoutOverlapping(30)->onOneServer();

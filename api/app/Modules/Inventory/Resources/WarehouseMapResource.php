@@ -13,53 +13,63 @@ class WarehouseMapResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'          => $this->hash_id,
-            'code'        => $this->code,
-            'name'        => $this->name,
-            'address'     => $this->address,
-            'zones'       => $this->whenLoaded('zones', fn () =>
-                $this->zones->map(fn ($zone) => [
-                    'id'        => $zone->hash_id,
-                    'code'      => $zone->code,
-                    'name'      => $zone->name,
-                    'zone_type' => $zone->zone_type?->value,
-                    'type_label' => $zone->zone_type?->label(),
-                    'locations' => $zone->relationLoaded('locations')
-                        ? $zone->locations->map(fn ($loc) => [
-                            'id'              => $loc->hash_id,
-                            'code'            => $loc->code,
-                            'full_code'       => $loc->full_code,
-                            'rack'            => $loc->rack,
-                            'bin'             => $loc->bin,
-                            'is_blocked'      => $loc->is_blocked,
-                            'blocked_reason'  => $loc->blocked_reason,
-                            'capacity_kg'     => $loc->capacity_kg,
-                            'current_item'    => $this->summary($loc)['current_item'] ? [
-                                'id'       => $this->summary($loc)['current_item']->hash_id,
-                                'code'     => $this->summary($loc)['current_item']->code,
-                                'name'     => $this->summary($loc)['current_item']->name,
-                            ] : null,
-                            'current_quantity'    => $this->summary($loc)['current_quantity'],
-                            'current_lot_number'  => $this->summary($loc)['current_lot_number'],
-                            'current_expiry_date' => $this->summary($loc)['current_expiry_date'],
-                            'stock_status'        => $this->getStockStatus($loc),
-                            'stock_status_label'  => $this->getStockStatusLabel($loc),
-                            'stock_quantity'      => $this->getStockQuantity($loc),
-                            'last_movement_at'    => $loc->last_movement_at,
-                        ])->values()
-                        : [],
-                ])
+            'id' => $this->hash_id,
+            'code' => $this->code,
+            'name' => $this->name,
+            'address' => $this->address,
+            'zones' => $this->whenLoaded('zones', fn () => $this->zones->map(fn ($zone) => [
+                'id' => $zone->hash_id,
+                'code' => $zone->code,
+                'name' => $zone->name,
+                'zone_type' => $zone->zone_type?->value,
+                'type_label' => $zone->zone_type?->label(),
+                'locations' => $zone->relationLoaded('locations')
+                    ? $zone->locations->map(fn ($loc) => [
+                        'id' => $loc->hash_id,
+                        'code' => $loc->code,
+                        'full_code' => $loc->full_code,
+                        'rack' => $loc->rack,
+                        'bin' => $loc->bin,
+                        'is_blocked' => $loc->is_blocked,
+                        'blocked_reason' => $loc->blocked_reason,
+                        'capacity_kg' => $loc->capacity_kg,
+                        'current_item' => $this->summary($loc)['current_item'] ? [
+                            'id' => $this->summary($loc)['current_item']->hash_id,
+                            'code' => $this->summary($loc)['current_item']->code,
+                            'name' => $this->summary($loc)['current_item']->name,
+                            'unit_of_measure' => $this->summary($loc)['current_item']->unit_of_measure,
+                        ] : null,
+                        'current_quantity' => $this->summary($loc)['current_quantity'],
+                        'current_lot_number' => $this->summary($loc)['current_lot_number'],
+                        'current_expiry_date' => $this->summary($loc)['current_expiry_date'],
+                        'stock_status' => $this->getStockStatus($loc),
+                        'stock_status_label' => $this->getStockStatusLabel($loc),
+                        'stock_quantity' => $this->getStockQuantity($loc),
+                        'last_movement_at' => $loc->last_movement_at,
+                    ])->values()
+                    : [],
+            ])
             ),
         ];
     }
 
     private function getStockStatus($loc): string
     {
-        if ($loc->is_blocked) return 'blocked';
+        if ($loc->is_blocked) {
+            return 'blocked';
+        }
         $qty = (float) $this->getStockQuantity($loc);
-        if ($qty <= 0) return 'empty';
-        if ($loc->capacity_kg && $qty < $loc->capacity_kg * 0.2) return 'low';
-        if ($loc->capacity_kg && $qty >= $loc->capacity_kg * 0.9) return 'full';
+        if ($qty <= 0) {
+            return 'empty';
+        }
+        $inKilograms = strtolower((string) ($this->summary($loc)['current_item']?->unit_of_measure ?? '')) === 'kg';
+        if ($inKilograms && $loc->capacity_kg && $qty < $loc->capacity_kg * 0.2) {
+            return 'low';
+        }
+        if ($inKilograms && $loc->capacity_kg && $qty >= $loc->capacity_kg * 0.9) {
+            return 'full';
+        }
+
         return 'ok';
     }
 

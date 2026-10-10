@@ -41,6 +41,7 @@ class JournalEntryServiceTest extends TestCase
         return User::create([
             'name' => 'Test', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
             'role_id' => $roleId,
+            'is_active' => true,
         ]);
     }
 
@@ -94,6 +95,7 @@ class JournalEntryServiceTest extends TestCase
     public function test_posted_entry_can_be_reversed_once(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
 
         $je = $svc->create([
@@ -105,10 +107,10 @@ class JournalEntryServiceTest extends TestCase
             ],
         ], $user);
 
-        $je = $svc->post($je, $user);
+        $je = $svc->post($je, $checker);
         $this->assertSame(JournalEntryStatus::Posted, $je->status);
 
-        $reversal = $svc->reverse($je, $user, null, 'Correction approved by finance.');
+        $reversal = $svc->reverse($je, $checker, null, 'Correction approved by finance.');
         $this->assertSame(JournalEntryStatus::Posted, $reversal->status);
         $this->assertSame('Correction approved by finance.', $reversal->reversal_reason);
         $this->assertSame(JournalEntryStatus::Reversed, $je->fresh()->status);
@@ -120,12 +122,13 @@ class JournalEntryServiceTest extends TestCase
 
         // Cannot reverse twice.
         $this->expectException(\RuntimeException::class);
-        $svc->reverse($je->fresh(), $user);
+        $svc->reverse($je->fresh(), $checker);
     }
 
     public function test_reverse_rejects_a_stale_posted_entry_after_it_is_reversed(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc  = app(JournalEntryService::class);
         $je   = $svc->create([
             'date' => '2026-04-15',
@@ -135,29 +138,16 @@ class JournalEntryServiceTest extends TestCase
                 ['account_id' => $this->id('3010'), 'debit' => '0',       'credit' => '1000.00'],
             ],
         ], $user);
-        $je = $svc->post($je, $user);
-
-        $replacement = JournalEntry::create([
-            'entry_number' => 'JE-999999-9999',
-            'date' => '2026-04-15',
-            'description' => 'Existing valid reversal',
-            'reference_type' => 'journal_entry_reversal',
-            'reference_id' => $je->id,
-            'total_debit' => '1000.00',
-            'total_credit' => '1000.00',
-            'status' => JournalEntryStatus::Posted,
-            'posted_at' => now(),
-            'posted_by' => $user->id,
-        ]);
-
-        DB::table('journal_entries')->where('id', $je->id)->update([
-            'status' => JournalEntryStatus::Reversed->value,
-            'reversed_by_entry_id' => $replacement->id,
-        ]);
+        $je = $svc->post($je, $checker);
+        $stale = JournalEntry::findOrFail($je->id);
+        $replacement = $svc->reverse($je, $checker, null, 'First reversal.');
+        $sequenceCountBeforeRetry = DB::table('document_sequences')
+            ->where('document_type', 'journal_entry')
+            ->count();
 
         $exception = null;
         try {
-            $svc->reverse($je, $user);
+            $svc->reverse($stale, $checker);
         } catch (RuntimeException $e) {
             $exception = $e;
         }
@@ -168,12 +158,15 @@ class JournalEntryServiceTest extends TestCase
         $this->assertSame(JournalEntryStatus::Reversed->value, $row->status);
         $this->assertSame((int) $replacement->id, (int) $row->reversed_by_entry_id);
         $this->assertSame(1, JournalEntry::query()->where('reference_type', 'journal_entry_reversal')->count());
-        $this->assertSame(1, DB::table('document_sequences')->where('document_type', 'journal_entry')->count());
+        $this->assertSame($sequenceCountBeforeRetry, DB::table('document_sequences')
+            ->where('document_type', 'journal_entry')
+            ->count());
     }
 
     public function test_posted_journal_lines_cannot_be_mutated_by_raw_queries(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc  = app(JournalEntryService::class);
         $je   = $svc->create([
             'date' => '2026-04-15',
@@ -183,7 +176,7 @@ class JournalEntryServiceTest extends TestCase
                 ['account_id' => $this->id('3010'), 'debit' => '0',       'credit' => '1000.00'],
             ],
         ], $user);
-        $je = $svc->post($je, $user);
+        $je = $svc->post($je, $checker);
         $lineIds = DB::table('journal_entry_lines')->where('journal_entry_id', $je->id)->orderBy('line_no')->pluck('id');
 
         $this->expectException(QueryException::class);
@@ -193,6 +186,7 @@ class JournalEntryServiceTest extends TestCase
     public function test_database_rejects_soft_deleting_a_posted_entry(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
         $je = $svc->post($svc->create([
             'date' => '2026-04-15',
@@ -201,7 +195,7 @@ class JournalEntryServiceTest extends TestCase
                 ['account_id' => $this->id('1010'), 'debit' => '100.00', 'credit' => '0'],
                 ['account_id' => $this->id('3010'), 'debit' => '0', 'credit' => '100.00'],
             ],
-        ], $user), $user);
+        ], $user), $checker);
 
         $this->expectException(QueryException::class);
         DB::table('journal_entries')->where('id', $je->id)->update(['deleted_at' => now()]);
@@ -210,6 +204,7 @@ class JournalEntryServiceTest extends TestCase
     public function test_database_rejects_an_unlinked_reversal_transition(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
         $je = $svc->post($svc->create([
             'date' => '2026-04-15',
@@ -218,7 +213,7 @@ class JournalEntryServiceTest extends TestCase
                 ['account_id' => $this->id('1010'), 'debit' => '100.00', 'credit' => '0'],
                 ['account_id' => $this->id('3010'), 'debit' => '0', 'credit' => '100.00'],
             ],
-        ], $user), $user);
+        ], $user), $checker);
 
         $this->expectException(QueryException::class);
         DB::table('journal_entries')->where('id', $je->id)->update([
@@ -229,6 +224,7 @@ class JournalEntryServiceTest extends TestCase
     public function test_posting_rejects_an_empty_locked_line_aggregate(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
         $je = $svc->create([
             'date' => '2026-04-15',
@@ -243,7 +239,7 @@ class JournalEntryServiceTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('at least two lines');
-        $svc->post($je, $user);
+        $svc->post($je, $checker);
     }
 
     public function test_explicit_posting_actor_and_reversal_reason_are_audited_on_header_and_lines(): void
@@ -300,6 +296,7 @@ class JournalEntryServiceTest extends TestCase
     public function test_reversal_rejects_a_closed_reversal_period(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
         $je = $svc->post($svc->create([
             'date' => '2026-04-15',
@@ -308,17 +305,18 @@ class JournalEntryServiceTest extends TestCase
                 ['account_id' => $this->id('1010'), 'debit' => '100.00', 'credit' => '0'],
                 ['account_id' => $this->id('3010'), 'debit' => '0', 'credit' => '100.00'],
             ],
-        ], $user), $user);
+        ], $user), $checker);
 
         app(AccountingPeriodService::class)->close(2026, 4, $user);
 
         $this->expectException(ClosedPeriodException::class);
-        $svc->reverse($je, $user, Carbon::parse('2026-04-30'), 'Late correction.');
+        $svc->reverse($je, $checker, Carbon::parse('2026-04-30'), 'Late correction.');
     }
 
     public function test_stale_update_and_delete_cannot_mutate_a_posted_entry(): void
     {
         $user = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
         $je = $svc->create([
             'date' => '2026-04-15',
@@ -329,9 +327,7 @@ class JournalEntryServiceTest extends TestCase
             ],
         ], $user);
         $stale = $je->fresh();
-        DB::table('journal_entries')->where('id', $je->id)->update([
-            'status' => JournalEntryStatus::Posted->value,
-        ]);
+        $svc->post($je, $checker);
 
         try {
             $svc->update($stale, [

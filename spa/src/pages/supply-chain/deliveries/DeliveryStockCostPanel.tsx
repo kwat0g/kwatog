@@ -6,11 +6,13 @@ import { deliveriesApi } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import type { Delivery, DeliveryCostHandoff } from '@/types/supplyChain';
 
 export function DeliveryStockCostPanel({ delivery }: { delivery: Delivery }) {
   const qc = useQueryClient();
+  const { can } = usePermission();
   const [failure, setFailure] = useState('');
   const userId = useAuthStore((state) => state.user?.id);
   const requestKey = (kind: string) => {
@@ -43,11 +45,11 @@ export function DeliveryStockCostPanel({ delivery }: { delivery: Delivery }) {
     {value.can_retry && <Button variant="secondary" loading={retryCost.isPending} onClick={() => retryCost.mutate(kind)}>Retry {label.toLowerCase()}</Button>}
   </div>;
   if (!delivery.stock_reservation_status && !delivery.cogs_handoff && !delivery.loss_handoff) return null;
-  return <Panel title="Stock and accounting">
+  return <Panel title="Shipment stock" meta={<Chip variant={delivery.stock_reservation_status === 'reserved' ? 'success' : chipVariantForStatus(delivery.stock_reservation_status ?? 'unreserved')}>{(delivery.stock_reservation_status ?? 'unreserved').replace(/_/g, ' ')}</Chip>}>
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium">Shipment stock</span><Chip variant={chipVariantForStatus(delivery.stock_reservation_status ?? 'unreserved')}>{(delivery.stock_reservation_status ?? 'unreserved').replace(/_/g, ' ')}</Chip></div>
-      {delivery.stock_reservation_status === 'reserved' && <p className="text-sm text-muted">The approved lot is held for this shipment until departure or cancellation.</p>}
-      {delivery.can_reserve_stock && <><p className="text-sm text-muted">Reserve the approved physical stock before this delivery departs.</p><Button variant="secondary" loading={reserve.isPending} onClick={() => reserve.mutate()}>Reserve shipment stock</Button></>}
+
+      {delivery.stock_reservation_status === 'reserved' && <p className="text-sm text-muted">Approved stock reserved automatically. Held until dispatch or cancellation.</p>}
+      {delivery.can_reserve_stock && (can('supply_chain.deliveries.create') || can('inventory.adjust')) && <><p className="text-sm text-muted">Stock reserves automatically when the shipment is assigned. You can retry here if needed.</p><Button variant="secondary" loading={reserve.isPending} onClick={() => reserve.mutate()}>Retry stock reservation</Button></>}
       {Boolean(delivery.stock_reservation_allocations?.length) && <details className="text-sm">
         <summary className="cursor-pointer text-link">Reserved lots and locations</summary>
         <ul className="mt-2 space-y-2">{delivery.stock_reservation_allocations?.map((row, index) => <li key={`${row.delivery_item_id}-${row.location_id}-${index}`} className="break-words">{row.item.code} · {row.location_code} · Lot {row.lot_number}<span className="block font-mono tabular-nums">{row.quantity} reserved · {row.consumed_quantity} dispatched</span></li>)}</ul>

@@ -57,14 +57,30 @@ function collectRequests() {
       }
     }
 
-    function visit(node) {
+    function visit(node, scopeConstants = constants) {
+      if (ts.isFunctionLike(node)) {
+        const functionConstants = new Map(scopeConstants);
+        if (node.body && ts.isBlock(node.body)) {
+          for (const statement of node.body.statements) {
+            if (!ts.isVariableStatement(statement)) continue;
+            for (const declaration of statement.declarationList.declarations) {
+              if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+              const value = staticPath(declaration.initializer, functionConstants);
+              if (value !== null) functionConstants.set(declaration.name.text, value);
+            }
+          }
+        }
+        ts.forEachChild(node, (child) => visit(child, functionConstants));
+        return;
+      }
+
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
         const { expression, name } = node.expression;
         const clientName = ts.isIdentifier(expression) ? expression.text : null;
         const method = name.text.toLowerCase();
 
         if (clientName && axiosClients.has(clientName) && requestMethods.has(method) && node.arguments[0]) {
-          const path = staticPath(node.arguments[0], constants);
+          const path = staticPath(node.arguments[0], scopeConstants);
           if (path) {
             const prefix = clientName === 'publicClient' ? '/public/recruitment' : '';
             requests.push({
@@ -76,7 +92,7 @@ function collectRequests() {
           }
         }
       }
-      ts.forEachChild(node, visit);
+      ts.forEachChild(node, (child) => visit(child, scopeConstants));
     }
 
     visit(sourceFile);
@@ -114,23 +130,18 @@ function laravelRoutes() {
     })));
 }
 
-function routePattern(path) {
-  const escaped = path
-    .split('/')
-    .map((segment) => {
-      if (/^\{[^}]+\??\}$/.test(segment)) {
-        return segment.endsWith('?}') ? '[^/]*' : '[^/]+';
-      }
-      return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    })
-    .join('/');
-  return new RegExp(`^${escaped}$`);
+function routeMatches(routePath, requestPath) {
+  const routeParts = routePath.split('/');
+  const requestParts = requestPath.split('/');
+  return routeParts.length === requestParts.length && routeParts.every((part, index) =>
+    part === requestParts[index] || /^\{[^}]+\??\}$/.test(part) || requestParts[index] === '{value}',
+  );
 }
 
 const requests = collectRequests();
 const routes = laravelRoutes();
 const missing = requests.filter((request) => !routes.some(
-  (route) => route.method === request.method && routePattern(route.path).test(request.path),
+  (route) => route.method === request.method && routeMatches(route.path, request.path),
 ));
 
 const scopeManifest = JSON.parse(readFileSync(scopeManifestPath, 'utf8'));

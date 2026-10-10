@@ -11,6 +11,8 @@ use App\Modules\Maintenance\Requests\StoreMaintenanceScheduleRequest;
 use App\Modules\Maintenance\Requests\UpdateMaintenanceScheduleRequest;
 use App\Modules\Maintenance\Resources\MaintenanceScheduleResource;
 use App\Modules\Maintenance\Services\MaintenanceScheduleService;
+use App\Modules\Maintenance\Services\MaintenanceWindowService;
+use App\Modules\Maintenance\Services\MaintenanceAssigneeSuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -45,6 +47,12 @@ class MaintenanceScheduleController
     public function show(MaintenanceSchedule $schedule): MaintenanceScheduleResource
     {
         return new MaintenanceScheduleResource($this->service->show($schedule));
+    }
+
+    public function windowSuggestions(MaintenanceSchedule $schedule, MaintenanceWindowService $windows,
+        MaintenanceAssigneeSuggestionService $assignees): JsonResponse
+    {
+        return response()->json(['data' => $windows->suggestions($schedule, $assignees)]);
     }
 
     public function store(StoreMaintenanceScheduleRequest $request): JsonResponse

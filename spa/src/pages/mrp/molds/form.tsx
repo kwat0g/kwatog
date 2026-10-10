@@ -148,7 +148,7 @@ export function MoldForm({ initial, mode }: Props) {
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
-      className="max-w-3xl mx-auto px-5 py-4"
+      className="min-w-0 w-full px-5 py-4"
     >
       <FormDraftBanner safety={safety} inset={false} />
       <fieldset className="mb-8">
@@ -173,7 +173,7 @@ export function MoldForm({ initial, mode }: Props) {
           />
         </div>
         <div className="mt-3">
-          <Select
+          <Select searchable
             label="Product"
             required
             {...register('product_id')}

@@ -1,11 +1,13 @@
 // Sprint 7 — Quality types. IDs are hash strings; decimals come back as strings.
+export type { WorkOrderFinalInspection, FinalInspectionEvidence, FinalInspectionManifest, FinalInspectionSubmission } from './quality-final';
 
 export type InspectionParameterType = 'dimensional' | 'visual' | 'functional';
 
 export interface InspectionSpecItem {
   id: string;
+  acceptance_criterion?: string | null;
   parameter_name: string;
-  parameter_type: InspectionParameterType;
+  parameter_type: InspectionParameterType | null;
   parameter_type_label?: string;
   unit_of_measure: string | null;
   nominal_value: string | null;
@@ -18,6 +20,7 @@ export interface InspectionSpecItem {
 }
 
 export interface InspectionSpecRevision {
+  capture_method?: 'measurement' | 'checklist';
   id: string;
   version: number;
   is_current?: boolean;
@@ -29,6 +32,7 @@ export interface InspectionSpecRevision {
 }
 
 export interface InspectionSpec {
+  capture_method?: 'measurement' | 'checklist';
   id: string;
   version: number;
   is_active: boolean;
@@ -75,23 +79,68 @@ export type InspectionEntityType = 'grn' | 'work_order' | 'delivery' | 'return_r
 export type InspectionMode = 'per_unit' | 'lot_checklist';
 
 export interface InspectionMeasurement {
+  checklist_key?: string;
+  item_result?: 'passed' | 'failed' | null;
+  item_problem_description?: string | null;
   id: string;
   sample_index: number;
+  acceptance_criterion?: string | null;
   parameter_name: string;
-  parameter_type: InspectionParameterType;
+  parameter_type: InspectionParameterType | null;
   parameter_type_label?: string;
   evaluation_mode?: 'numeric' | 'manual';
   unit_of_measure: string | null;
-  nominal_value: number | null;
-  tolerance_min: number | null;
-  tolerance_max: number | null;
-  measured_value: number | null;
+  nominal_value: string | number | null;
+  tolerance_min: string | number | null;
+  tolerance_max: string | number | null;
+  measured_value: string | number | null;
   is_critical: boolean;
   is_pass: boolean | null;
   notes: string | null;
 }
 
+export interface CountedInspectionSubmission {
+  expected_result_version: number; coverage_confirmed: boolean; inspected_quantity: number; sample_defect_count?: number; physical_defects_confirmed?: boolean;
+  problem_description?: string; requirement_problem?: boolean;
+  measurements: Array<{ id: string; measured_value: string }>;
+}
+
 export interface Inspection {
+  final_work_order_id?: string | null;
+  work_order_quality?: {
+    state: 'checking' | 'awaiting_review' | 'failed' | 'released';
+    produced_quantity: number;
+    defective_quantity: number;
+    accepted_quantity: number;
+    repaired_accepted_quantity: number;
+  } | null;
+  defective_quantity?: number;
+  described_defective_quantity?: number;
+  missing_readings?: number;
+  historical_held?: boolean;
+  counted_capture?: {
+    version: 1 | 2 | 3;
+    required_quantity: number;
+    result_policy: 'zero_defects';
+    dimensional_quantity?: number;
+    workflow?: 'finish_first_v1';
+    evidence_method?: 'confirmed_checks';
+  } | null;
+  coverage_confirmed_at?: string | null;
+  checks_confirmed_at?: string | null;
+  startup_trial_required?: boolean;
+  startup_trial?: { required_quantity: number; recorded_quantity: number; settled: boolean; captured_at: string | null; output_id: string | null } | null;
+  ncr?: { id: string; ncr_number: string; status: string; status_label: string; disposition: string | null; disposition_label: string | null; href: string | null } | null;
+  incoming_acceptance?: { grn_item_id: string; grn_id: string; grn_number: string; quantity_received: string; quantity_accepted: string; unit: string; status: string; status_label: string } | null;
+  can_replace_checklist?: boolean;
+  replaces_inspection_id?: string | null;
+  result_version?: number;
+  source_quantity?: string | null;
+  source_uom_code?: string | null;
+  sampling_basis?: 'piece' | 'lot' | null;
+  capture_method?: 'measurement' | 'checklist';
+  count_only_incoming?: boolean;
+  can_manage?: boolean;
   id: string;
   inspection_number: string;
   stage: InspectionStage;
@@ -99,9 +148,14 @@ export interface Inspection {
   status: InspectionStatus;
   status_label?: string;
   proposed_result?: 'passed' | 'failed' | null;
+  recorded_result?: 'passed' | 'failed' | null;
+  problem_description?: string | null;
+  affected_quantity?: number | null;
+  sorting_approved_at?: string | null;
   /** Server-computed: awaiting review, holds the review permission, and is not the inspector. */
   can_review?: boolean;
   reviewed_at?: string | null;
+  coc_unavailable_reason?: string | null;
   review_remarks?: string | null;
   entity_type: InspectionEntityType | null;
   entity_hash_id: string | null;
@@ -122,6 +176,9 @@ export interface Inspection {
   defect_count: number;
   inspection_mode?: InspectionMode;
   sample_defect_count?: number | null;
+  inspected_quantity?: number | null;
+  critical_defect?: boolean | null;
+  defects_removed_confirmed?: boolean | null;
   started_at: string | null;
   completed_at: string | null;
   notes: string | null;
@@ -173,33 +230,14 @@ export interface WorkOrderOutputOption {
   work_order: { id: string; wo_number: string } | null;
 }
 
-export interface RecordMeasurementsData {
-  measurements: Array<{
-    id: string;
-    measured_value?: number | null;
-    is_pass?: boolean | null;
-    notes?: string | null;
-  }>;
+export interface RecordInspectionItemResultsData {
+  expected_result_version?: number;
+  items: Array<{ id: string; result: 'passed' | 'failed'; problem_description?: string; measured_value?: string }>;
+  submit: boolean;
 }
 
-export interface RecordLotResultData {
-  checklist: Array<{
-    id: string;
-    is_pass: boolean;
-    notes: string | null;
-  }>;
-  measurements: Array<{
-    id: string;
-    measured_value: string | null;
-    /**
-     * The row's answer when it carries no reading: `true` for a ticked dimension
-     * ("inspected, conforming"), `false` for an explicit NG mark. Null leaves the
-     * reading in charge — the server refuses a claim that contradicts one.
-     */
-    is_pass?: boolean | null;
-  }>;
-  sample_defect_count: number | null;
-  complete: boolean;
+export interface RecordInspectionMeasurementsData {
+  measurements: Array<{ id: string; measured_value: string | number | null }>;
 }
 
 export interface AqlPlan {
@@ -242,6 +280,10 @@ export interface NcrAction {
 }
 
 export interface Ncr {
+  full_piece_inspection?: boolean;
+  startup_trial?: boolean;
+  historical_held?: boolean;
+  process_recovery_quantity?: number | null;
   id: string;
   ncr_number: string;
   source: NcrSource;
@@ -256,6 +298,21 @@ export interface Ncr {
   affected_quantity: number;
   is_auto_generated: boolean;
   is_incoming_mrb?: boolean;
+  is_outgoing_recovery?: boolean;
+  is_process_recovery?: boolean;
+  late_incoming?: boolean;
+  late_hold_quantity?: string | null;
+  concession_approval_reference?: string | null;
+  material_review_records?: Array<{
+    id: string;
+    mrb_number: string;
+    status: string;
+    quantity: string | number;
+  }>;
+  sorting_required_quantity?: string | number | null;
+  sorting_inspected_quantity?: string | null;
+  sorting_evidence_reference?: string | null;
+  sorting_approved_at?: string | null;
   mrb_accepted_quantity?: string | null;
   mrb_decided_at?: string | null;
   mrb_decider?: { id: string; name: string } | null;
@@ -266,6 +323,14 @@ export interface Ncr {
   inspection?: {
     id: string;
     inspection_number: string;
+    batch_quantity?: number;
+    source_quantity?: string | null;
+    source_uom_code?: string | null;
+    sampling_basis?: 'piece' | 'lot' | null;
+    accepted_quantity?: number;
+    sample_defect_count?: number | null;
+    inspected_quantity?: number | null;
+    inspector?: { id: string; name: string } | null;
     stage: string;
     stage_label?: string;
     status: string;
@@ -274,6 +339,17 @@ export interface Ncr {
   creator?: { id: string; name: string } | null;
   assignee?: { id: string; name: string } | null;
   closer?: { id: string; name: string } | null;
+  is_inline_rework?: boolean;
+  confirmed_rework_quantity?: number | null;
+  rework_started_at?: string | null;
+  rework_finished_at?: string | null;
+  rework_work_order?: {
+    id: string;
+    wo_number: string;
+    status: string;
+    status_label?: string;
+    quantity_target: number;
+  } | null;
   replacement_work_order?: {
     id: string;
     wo_number: string;
@@ -305,6 +381,16 @@ export interface SetNcrDispositionData {
   root_cause?: string;
   corrective_action?: string;
   mrb_accepted_quantity?: string;
+  sorting_evidence?: {
+    defects_segregated?: boolean;
+    trial_scrapped_quantity?: number;
+    trial_defects?: Array<{ defect_type_id: string; count: number }>;
+    concession_approval_reference?: string;
+    inspected_quantity: string;
+    evidence_reference: string;
+    performed_by: string;
+    recovery_passed: boolean;
+  };
 }
 
 // ─── Sprint 7 Task 63 — Defect Pareto ──────────────────────────────────
@@ -384,11 +470,13 @@ export interface CreateNcrTemplateData {
 }
 
 export interface UpsertInspectionSpecData {
+  capture_method?: 'measurement' | 'checklist';
   product_id: string;
   notes?: string;
   items: Array<{
+    acceptance_criterion?: string | null;
     parameter_name: string;
-    parameter_type: InspectionParameterType;
+    parameter_type: InspectionParameterType | null;
     unit_of_measure?: string;
     nominal_value?: string;
     tolerance_min?: string;
@@ -397,4 +485,25 @@ export interface UpsertInspectionSpecData {
     sort_order?: number;
     notes?: string;
   }>;
+}
+
+export interface RecordInspectionBatchResultData {
+  result: 'passed' | 'failed';
+  coverage_confirmed: true;
+  inspected_quantity: number;
+  sample_defect_count: number;
+  problem_description?: string;
+  critical_defect: boolean;
+  defects_removed_confirmed: boolean;
+}
+
+export interface ChecklistSubmission {
+  expected_result_version: number;
+  items: Array<{ id: string; result: 'passed' | 'failed'; problem_description?: string; measured_value?: string }>;
+  coverage_confirmed: true;
+  inspected_quantity?: number;
+  physical_defects_confirmed?: boolean;
+  sample_defect_count?: number;
+  defects_removed_confirmed?: boolean;
+  problem_description?: string;
 }

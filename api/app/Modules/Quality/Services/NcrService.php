@@ -5,24 +5,46 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Services\SettingsService;
-use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxService;
+use App\Common\Services\SettingsService;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Services\GrnService;
+use App\Modules\Inventory\Services\QuarantineService;
+use App\Modules\Inventory\Services\StockLocationSummaryService;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\MRP\Events\MrpReplanRequested;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Services\WorkOrderOutputService;
+use App\Modules\Production\Services\WorkOrderReworkService;
+use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Enums\EffectivenessStatus;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Events\OutgoingQuantityReleased;
 use App\Modules\Quality\Jobs\ProcessNcrRecurrenceScan;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NcrRecurrenceScan;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Support\LotDefectCounter;
+use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -53,17 +75,26 @@ class NcrService
     {
         $q = NonConformanceReport::query()->with([
             'product:id,part_number,name',
-            'inspection:id,inspection_number,stage,status,entity_type,entity_id',
+            'inspection:id,inspection_number,stage,status,entity_type,entity_id,work_order_output_id,grn_item_id,batch_quantity,accepted_quantity,sample_defect_count,sample_size,capture_method,inspected_quantity,source_quantity,source_uom_code,sampling_basis,startup_trial_required,counted_capture,inspector_id',
+            'inspection.trialOutput',
+            'inspection.workOrderOutput',
+            'inspection.inspector:id,name,role_id',
             'creator:id,name,role_id',
             'assignee:id,name',
             'reworkWorkOrder:id,wo_number,status,quantity_target',
         ]);
 
         foreach (['source', 'severity', 'status', 'disposition'] as $f) {
-            if (! empty($filters[$f])) $q->where($f, $filters[$f]);
+            if (! empty($filters[$f])) {
+                $q->where($f, $filters[$f]);
+            }
         }
-        if (! empty($filters['product_id']))    $q->where('product_id', $filters['product_id']);
-        if (! empty($filters['inspection_id'])) $q->where('inspection_id', $filters['inspection_id']);
+        if (! empty($filters['product_id'])) {
+            $q->where('product_id', $filters['product_id']);
+        }
+        if (! empty($filters['inspection_id'])) {
+            $q->where('inspection_id', $filters['inspection_id']);
+        }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b
@@ -79,11 +110,15 @@ class NcrService
     {
         return $ncr->load([
             'product:id,part_number,name',
-            'inspection:id,inspection_number,stage,status,product_id,entity_type,entity_id',
+            'inspection:id,inspection_number,stage,status,product_id,entity_type,entity_id,work_order_output_id,grn_item_id,batch_quantity,accepted_quantity,sample_defect_count,sample_size,capture_method,inspected_quantity,source_quantity,source_uom_code,sampling_basis,startup_trial_required,counted_capture,inspector_id',
+            'inspection.workOrderOutput',
+            'inspection.inspector:id,name,role_id',
             'creator:id,name,role_id',
             'assignee:id,name',
             'closer:id,name',
             'mrbDecider:id,name',
+            'reworkStartedBy:id,name',
+            'reworkFinishedBy:id,name',
             'recurrenceOf:id,ncr_number',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
             'reworkWorkOrder:id,wo_number,status,quantity_target',
@@ -106,22 +141,33 @@ class NcrService
     public function create(array $data, User $by): NonConformanceReport
     {
         $ncr = DB::transaction(function () use ($data, $by) {
+            if (! empty($data['inspection_id'])) {
+                app(WorkOrderOutputService::class)->lockTrialSource(Inspection::query()->findOrFail($data['inspection_id']));
+            }
             $inspection = ! empty($data['inspection_id'])
-                ? Inspection::query()->with('measurements')->find((int) $data['inspection_id'])
+                ? Inspection::query()->with('measurements')->lockForUpdate()->findOrFail((int) $data['inspection_id'])
                 : null;
 
-            // Mirror the ncr_inspection_unique constraint as a domain rule: one
-            // NCR per inspection, ever. Without this guard a duplicate dies as
-            // an uncaught 23505 and the API answers 500 instead of a business
-            // rule; the constraint stays as the concurrency backstop.
+            if ($inspection?->startup_trial_required) {
+                app(WorkOrderOutputService::class)->assertTrialEvidence($inspection);
+                $data['affected_quantity'] = $inspection->processRecoveryQuantity();
+            }
+
+            // One active incident per inspection; closed history remains intact.
+            // The partial unique index is the concurrency backstop.
+            if ($inspection !== null && isset($data['product_id']) && $data['product_id'] !== null
+                && (int) $data['product_id'] !== (int) $inspection->product_id) {
+                throw new BusinessRuleException('NCR product must match the linked inspection.');
+            }
             if ($inspection !== null) {
                 $existing = NonConformanceReport::query()
                     ->where('inspection_id', $inspection->id)
+                    ->whereNotIn('status', [NcrStatus::Closed->value, NcrStatus::Cancelled->value])
                     ->first();
                 if ($existing !== null) {
                     throw new BusinessRuleException(
                         "Inspection {$inspection->inspection_number} already has NCR {$existing->ncr_number}; "
-                        .'one NCR is raised per inspection.'
+                        .'resolve the active NCR before reporting another incident.'
                     );
                 }
             }
@@ -134,24 +180,49 @@ class NcrService
             }
 
             $ncr = NonConformanceReport::create([
-                'ncr_number'        => $this->sequences->generate('ncr'),
-                'source'            => NcrSource::from((string) $data['source'])->value,
-                'severity'          => NcrSeverity::from((string) $data['severity'])->value,
-                'status'            => NcrStatus::Open->value,
-                'product_id'        => $data['product_id'] ?? null,
-                'inspection_id'     => $data['inspection_id'] ?? null,
-                'complaint_id'      => $data['complaint_id'] ?? null,
+                'ncr_number' => $this->sequences->generate('ncr'),
+                'source' => NcrSource::from((string) $data['source'])->value,
+                'severity' => NcrSeverity::from((string) $data['severity'])->value,
+                'status' => NcrStatus::Open->value,
+                'product_id' => $inspection?->product_id ?? $data['product_id'] ?? null,
+                'inspection_id' => $data['inspection_id'] ?? null,
+                'complaint_id' => $data['complaint_id'] ?? null,
                 'defect_description' => $data['defect_description'],
-                'defect_signature'  => $defectSignature,
+                'defect_signature' => $defectSignature,
                 'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
-                'created_by'        => $by->id,
-                'assigned_to'       => $data['assigned_to'] ?? null,
+                'created_by' => $by->id,
+                'assigned_to' => $data['assigned_to'] ?? null,
                 'is_auto_generated' => (bool) ($data['is_auto_generated'] ?? false),
             ]);
 
+            if ($inspection?->startup_trial_required) {
+                $ncr->forceFill(['recovery_batch_quantity' => $inspection->processRecoveryQuantity()])->save();
+            }
+            if ($inspection && $inspection->stage === InspectionStage::Outgoing && $inspection->work_order_output_id) {
+                $removed = NonConformanceReport::query()->where('inspection_id', $inspection->id)->where('id', '<', $ncr->id)->where('status', '!=', NcrStatus::Cancelled->value)->get()->sum(fn ($prior) => $prior->disposition === NcrDisposition::Scrap
+                    ? max(0, (int) ($prior->recovery_batch_quantity ?? $inspection->batch_quantity) - (int) $prior->mrb_accepted_quantity)
+                    : (int) $prior->confirmed_rework_quantity);
+                $receipt = $inspection->workOrderOutput?->productionReceiptMovement;
+                $released = $receipt?->lot_number ? (int) StockMovement::query()->where('item_id', $receipt->item_id)->where('lot_number', $receipt->lot_number)->whereIn('movement_type', ['delivery', 'material_issue'])->sum('quantity') : 0;
+                $remaining = max(0, (int) $inspection->batch_quantity - $removed - $released);
+                if ($remaining === 0) {
+                    throw new BusinessRuleException('No pieces remain in this original batch. Report defects against the repaired output or customer return instead.');
+                }
+                $ncr->forceFill(['original_accepted_quantity' => (int) $inspection->accepted_quantity, 'recovery_batch_quantity' => $remaining, 'previously_released_quantity' => $released])->save();
+                $inspection->forceFill(['accepted_quantity' => 0])->save();
+            }
+
+            if ($inspection?->stage === InspectionStage::Incoming && $inspection->grn_item_id) {
+                $line = GrnItem::query()->with('grn', 'item')->findOrFail($inspection->grn_item_id);
+                if (in_array($line->grn->status, GrnStatus::billable(), true)) {
+                    $ncr->forceFill(['is_late_incoming' => true])->save();
+                    $this->holdAcceptedReceipt($ncr, $line, $by);
+                }
+            }
+
             NcrRecurrenceScan::create([
-                'ncr_id'       => $ncr->id,
-                'status'       => 'pending',
+                'ncr_id' => $ncr->id,
+                'status' => 'pending',
                 'available_at' => now(),
             ]);
 
@@ -160,7 +231,93 @@ class NcrService
             return $ncr->fresh();
         });
 
+        if ($ncr->is_late_incoming) {
+            $audience = User::query()->where('is_active', true)->whereHas('role', fn ($role) => $role->whereIn('slug', ['qc_inspector', 'warehouse_staff', 'purchasing_officer']))->get()
+                ->filter(fn (User $user) => $user->hasPermission('quality.ncr.view'));
+            app(NotificationService::class)->sendInApp($audience, 'quality.late_incoming', [
+                'title' => 'Accepted material held: '.$ncr->ncr_number,
+                'message' => 'Review remaining stock and downstream material usage. Resolve all linked quarantine holds before closing the defect.',
+                'link_to' => '/quality/ncrs/'.$ncr->hash_id, 'entity_type' => 'ncr', 'entity_id' => $ncr->hash_id,
+            ], 'late-incoming-'.$ncr->id);
+        }
+
         return $ncr;
+    }
+
+    /** Preserve passed receipt evidence while holding a newly suspect remaining lot. */
+    /** Retry only missing holds; retain the original incident quantity and released history. */
+    public function retryQuarantine(NonConformanceReport $ncr, User $by): NonConformanceReport
+    {
+        if (! $by->can('inventory.mrb.manage') || ! $by->can('quality.ncr.view')) {
+            throw new BusinessRuleException('Quarantine recovery requires Quality record access and quarantine management permission.');
+        }
+
+        return DB::transaction(function () use ($ncr, $by) {
+            $inspection = Inspection::query()->lockForUpdate()->findOrFail($ncr->inspection_id);
+            $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->id);
+            $line = $inspection->grnItem;
+            if (! $locked->is_late_incoming || ! in_array($locked->status, [NcrStatus::Open, NcrStatus::InProgress], true)
+                || ! $line || ! in_array($line->grn->status, [GrnStatus::Accepted, GrnStatus::PartialAccepted], true)) {
+                throw new BusinessRuleException('Only an active late incoming incident on accepted material can retry quarantine.');
+            }
+            $this->holdAcceptedReceipt($locked, $line, $by, retry: true);
+
+            return $this->show($locked);
+        });
+    }
+
+    private function holdAcceptedReceipt(NonConformanceReport $ncr, GrnItem $line, User $by, bool $retry = false): void
+    {
+        $levels = StockLevel::query()->where('item_id', $line->item_id)->with('location.zone.warehouse')->orderBy('location_id')->get();
+        $remaining = '0.000';
+        foreach ($levels as $level) {
+            if (! in_array($level->location?->zone?->zone_type?->value, ['quarantine', 'scrap'], true)) {
+                $quantity = $line->material_lot_number
+                    ? app(StockLocationSummaryService::class)->lotQuantity($line->item_id, $level->location_id, $line->material_lot_number)
+                    : ($level->location_id === $line->location_id ? (string) $level->quantity : '0');
+                $remaining = bcadd($remaining, $quantity, 3);
+            }
+        }
+        if (! $retry) {
+            $ncr->forceFill(['late_hold_quantity' => $remaining])->save();
+        }
+        $outstanding = bcsub((string) $ncr->late_hold_quantity, (string) MaterialReviewRecord::where('ncr_id', $ncr->id)->sum('quantity'), 3);
+        foreach ($levels as $level) {
+            $zone = $level->location?->zone?->zone_type?->value;
+            if (in_array($zone, ['quarantine', 'scrap'], true)) {
+                continue;
+            }
+            $quantity = $line->material_lot_number
+                ? app(StockLocationSummaryService::class)->lotQuantity($line->item_id, $level->location_id, $line->material_lot_number)
+                : ($level->location_id === $line->location_id ? (string) $level->quantity : '0');
+            if ($retry) {
+                $releasedHere = (string) MaterialReviewRecord::where('ncr_id', $ncr->id)->where('status', 'released')
+                    ->where('release_location_id', $level->location_id)->sum('quantity');
+                $quantity = bcsub($quantity, $releasedHere, 3);
+            }
+            $quantity = bccomp($quantity, $outstanding, 3) > 0 ? $outstanding : $quantity;
+            if (bccomp($quantity, '0', 3) <= 0) {
+                continue;
+            }
+            try {
+                app(QuarantineService::class)->hold([
+                    'item_id' => $line->item_id, 'quantity' => $quantity, 'source_location_id' => $level->location_id,
+                    'ncr_id' => $ncr->id, 'inspection_id' => $ncr->inspection_id,
+                    'lot_number' => $line->material_lot_number, 'notes' => 'Late defect on accepted receipt '.$line->grn->grn_number,
+                ], $by, 'late-incoming-'.$ncr->id.'-'.$level->location_id);
+                $outstanding = bcsub($outstanding, $quantity, 3);
+            } catch (BusinessRuleException $error) {
+                if ($retry) {
+                    throw $error;
+                }
+                // The source-linked NCR remains an immediate logical hold when a
+                // physical move needs reservation release or quarantine setup.
+                Log::warning('Late incoming quarantine needs action', ['ncr_id' => $ncr->id, 'message' => $error->getMessage()]);
+            }
+        }
+        if ($retry && bccomp($outstanding, '0', 3) > 0) {
+            throw new BusinessRuleException('Some suspect material cannot be located for quarantine. Review its stock movements and downstream traceability.');
+        }
     }
 
     /**
@@ -173,11 +330,14 @@ class NcrService
         $existing = NonConformanceReport::query()
             ->where('inspection_id', $inspection->id)
             ->first();
-        if ($existing) return $this->show($existing);
+        if ($existing) {
+            return $this->show($existing);
+        }
 
-        $criticalFail = $inspection->measurements?->contains(
-            fn ($m) => $m->is_critical && $m->is_pass === false
-        ) ?? false;
+        $inspection->loadMissing('measurements');
+        $criticalFail = $inspection->critical_defect || ($inspection->usesChecklistCapture()
+            ? $inspection->measurements->contains(fn ($row) => $row->is_critical && $row->item_result === 'failed')
+            : LotDefectCounter::for($inspection, $inspection->measurements)['criticalFail']);
         $severity = $criticalFail
             ? NcrSeverity::Critical->value
             : ($inspection->defect_count > $inspection->accept_count
@@ -186,7 +346,9 @@ class NcrService
 
         // Build description: for lot_checklist, mention the defect count found in sample.
         $descriptionBase = 'Automated NCR from inspection '.$inspection->inspection_number.': ';
-        if ($inspection->inspection_mode && $inspection->inspection_mode->value === 'lot_checklist' && $inspection->sample_defect_count !== null) {
+        if ($inspection->usesFullPieceCapture()) {
+            $descriptionBase .= $inspection->sample_defect_count.' defective piece(s) found while checking all '.$inspection->batch_quantity.' pieces';
+        } elseif ($inspection->inspection_mode && $inspection->inspection_mode->value === 'lot_checklist' && $inspection->sample_defect_count !== null) {
             $descriptionBase .= $inspection->sample_defect_count.' defective piece(s) found in a sample of '
                               .$inspection->sample_size.' (accept ≤ '.$inspection->accept_count.')';
         } else {
@@ -194,16 +356,19 @@ class NcrService
         }
         $descriptionBase .= ' on '.$inspection->stage->value.' stage'
                           .($criticalFail ? ' (critical parameter failure)' : '').'.';
+        if ($inspection->recorded_result && $inspection->problem_description) {
+            $descriptionBase = 'Reported problem from inspection '.$inspection->inspection_number.': '.$inspection->problem_description;
+        }
 
         try {
             $ncr = $this->create([
-                'source'             => NcrSource::InspectionFail->value,
-                'severity'           => $severity,
-                'product_id'         => $inspection->product_id,
-                'inspection_id'      => $inspection->id,
+                'source' => NcrSource::InspectionFail->value,
+                'severity' => $severity,
+                'product_id' => $inspection->product_id,
+                'inspection_id' => $inspection->id,
                 'defect_description' => $descriptionBase,
-                'affected_quantity'  => $inspection->batch_quantity,
-                'is_auto_generated'  => true,
+                'affected_quantity' => $inspection->affected_quantity ?? $inspection->batch_quantity,
+                'is_auto_generated' => true,
             ], $by);
         } catch (QueryException $exception) {
             if (! $this->isInspectionUniqueViolation($exception)) {
@@ -226,23 +391,25 @@ class NcrService
                 (array) $this->settings->get('quality.ncr.auto_created_notification_roles', []),
                 static fn ($role): bool => is_string($role) && $role !== '',
             ));
-            $qcHeads = \App\Modules\Auth\Models\User::query()
+            $qcHeads = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $notificationRoles))
                 ->where('is_active', true)
                 ->get();
             app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [
-                'title'         => 'NCR auto-created',
-                'message'       => "NCR auto-created from {$inspection->stage->value} inspection. {$inspection->defect_count} pcs rejected. {$severity} severity. Review disposition.",
-                'link_to'       => "/quality/ncrs/{$ncr->hash_id}",
-                'entity_type'   => 'ncr',
-                'entity_id'     => $ncr->hash_id,
-                'ncr_number'    => $ncr->ncr_number,
+                'title' => 'NCR auto-created',
+                'message' => $inspection->problem_description
+                    ? "NCR auto-created from {$inspection->stage->value} inspection. Reported problem: {$inspection->problem_description}. Review disposition."
+                    : "NCR auto-created from {$inspection->stage->value} inspection. {$inspection->defect_count} pcs rejected. {$severity} severity. Review disposition.",
+                'link_to' => "/quality/ncrs/{$ncr->hash_id}",
+                'entity_type' => 'ncr',
+                'entity_id' => $ncr->hash_id,
+                'ncr_number' => $ncr->ncr_number,
                 'inspection_id' => $inspection->hash_id,
-                'severity'      => $severity,
+                'severity' => $severity,
             ]);
         } catch (\Throwable $e) {
             // NCR is already persisted; only the QC notification fan-out failed.
-            \Illuminate\Support\Facades\Log::warning(
+            Log::warning(
                 "NcrService: failed to notify on NCR {$ncr->ncr_number}: {$e->getMessage()}",
                 ['ncr_id' => $ncr->id, 'exception' => $e::class]
             );
@@ -256,28 +423,40 @@ class NcrService
         if ($ncr->status->isTerminal()) {
             throw new BusinessRuleException('Cannot add actions to a closed NCR.');
         }
+
         return DB::transaction(function () use ($ncr, $data, $by) {
             // Lock-then-guard: re-read so a stale action cannot be appended to
             // an NCR that a concurrent close just made terminal.
+            $sourceInspection = $ncr->inspection_id ? Inspection::query()->find($ncr->inspection_id) : null;
+            if ($sourceInspection?->startup_trial_required) {
+                app(WorkOrderOutputService::class)->lockTrialSource($sourceInspection);
+                Inspection::query()->whereKey($sourceInspection->id)->lockForUpdate()->firstOrFail();
+            }
+            if ($sourceInspection?->usesFullPieceCapture()) {
+                WorkOrder::query()->whereKey($sourceInspection->entity_id)->lockForUpdate()->firstOrFail();
+                WorkOrderOutput::query()->where('work_order_id', $sourceInspection->entity_id)->orderBy('id')->lockForUpdate()->get();
+                Inspection::query()->whereKey($sourceInspection->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
                 throw new BusinessRuleException('Cannot add actions to a closed NCR.');
             }
             $action = NcrAction::create([
-                'ncr_id'       => $locked->id,
-                'action_type'  => NcrActionType::from((string) $data['action_type'])->value,
-                'description'  => $data['description'],
+                'ncr_id' => $locked->id,
+                'action_type' => NcrActionType::from((string) $data['action_type'])->value,
+                'description' => $data['description'],
                 'performed_by' => $by->id,
                 'performed_at' => $data['performed_at'] ?? now(),
                 // CAPA: seed ownership + due date so the effectiveness loop has
                 // an accountable owner once the NCR closes.
-                'owner_id'     => $data['owner_id'] ?? $by->id,
-                'due_date'     => $data['due_date'] ?? now()->addDays($this->settings->requiredInt('quality.effectiveness.check_interval_days', 1))->toDateString(),
+                'owner_id' => $data['owner_id'] ?? $by->id,
+                'due_date' => $data['due_date'] ?? now()->addDays($this->settings->requiredInt('quality.effectiveness.check_interval_days', 1))->toDateString(),
             ]);
             // Bump status to in_progress on first action.
             if ($locked->status === NcrStatus::Open) {
                 $locked->forceFill(['status' => NcrStatus::InProgress->value])->save();
             }
+
             return $action->load(['performer:id,name,role_id', 'owner:id,name']);
         });
     }
@@ -289,8 +468,12 @@ class NcrService
      * Material Review Board decision: it is recorded with its decider and the
      * receipt is settled in the same transaction (see GrnService::settleIncomingQc).
      * use_as_is is a concession, so the inspector who failed the lot cannot
-     * grant it. $mrbAcceptedQuantity (return_to_supplier/scrap only) is the
-     * number of good pieces kept after sorting; the rest goes back.
+     * grant it. A sorted-good quantity requires full sorting and reinspection
+     * evidence, approved by someone other than the sorter and original makers.
+     * Outgoing recovery changes only the releasable quantity; the original
+     * failed inspection and its evidence remain unchanged.
+     *
+     * @param  array{inspected_quantity?: mixed, evidence_reference?: mixed, performed_by?: mixed, recovery_passed?: mixed}  $sortingEvidence
      */
     public function setDisposition(
         NonConformanceReport $ncr,
@@ -299,14 +482,20 @@ class NcrService
         ?string $correctiveAction,
         ?User $by = null,
         ?string $mrbAcceptedQuantity = null,
+        array $sortingEvidence = [],
     ): NonConformanceReport {
         if ($ncr->status->isTerminal()) {
             throw new BusinessRuleException('NCR is already closed.');
         }
         $dispositionEnum = NcrDisposition::from($disposition);
 
-        return DB::transaction(function () use ($ncr, $dispositionEnum, $rootCause, $correctiveAction, $by, $mrbAcceptedQuantity) {
+        return DB::transaction(function () use ($ncr, $dispositionEnum, $rootCause, $correctiveAction, $by, $mrbAcceptedQuantity, $sortingEvidence) {
             // Lock-then-guard: a stale disposition must not flip a concurrently closed NCR back to in_progress.
+            $sourceInspection = $ncr->inspection_id ? Inspection::query()->find($ncr->inspection_id) : null;
+            if ($sourceInspection?->startup_trial_required) {
+                app(WorkOrderOutputService::class)->lockTrialSource($sourceInspection);
+                Inspection::query()->whereKey($sourceInspection->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
                 throw new BusinessRuleException('NCR is already closed.');
@@ -319,37 +508,157 @@ class NcrService
                 ? $locked->disposition->value
                 : $locked->disposition;
             if ($locked->mrb_decided_at !== null
-                && ($currentDisposition !== $dispositionEnum->value || $mrbAcceptedQuantity !== null)) {
+                && ($currentDisposition !== $dispositionEnum->value || $mrbAcceptedQuantity !== null || $sortingEvidence !== [])) {
                 throw new BusinessRuleException(
-                    'The Material Review Board decision is final: the receipt was settled against it.'
+                    'The Material Review Board decision is final: material quantities were settled against it.'
                 );
             }
 
-            $grn = $this->pendingIncomingGrnForMrb($locked);
+            $inspection = $locked->inspection_id
+                ? Inspection::query()->with('measurements')->lockForUpdate()->findOrFail($locked->inspection_id)
+                : null;
+            $locked->setRelation('inspection', $inspection);
+            if ($dispositionEnum === NcrDisposition::UseAsIs
+                && ($locked->severity === NcrSeverity::Critical
+                    || ($inspection && LotDefectCounter::for($inspection, $inspection->measurements)['criticalFail']))) {
+                throw new BusinessRuleException('A critical failure cannot be released by a use-as-is concession.');
+            }
+            $grn = $locked->mrb_decided_at === null ? $this->pendingIncomingGrnForMrb($locked) : null;
             $mrbQuantity = $grn !== null
                 ? $this->validateMrbDecision($locked, $grn, $dispositionEnum, $by, $mrbAcceptedQuantity)
                 : null;
-            if ($grn === null && $mrbAcceptedQuantity !== null) {
+            $outgoingRecovery = $grn === null && $mrbAcceptedQuantity !== null
+                && $inspection?->stage === InspectionStage::Outgoing && $inspection->work_order_output_id !== null;
+            $processRecovery = $grn === null && $mrbAcceptedQuantity !== null
+                && $inspection?->stage === InspectionStage::InProcess && $dispositionEnum === NcrDisposition::Rework;
+            $sortingFill = [];
+            $trialDefects = [];
+            if ($processRecovery) {
+                if ($inspection->startup_trial_required || ($inspection->work_order_output_id && $inspection->workOrderOutput?->production_started_at)) {
+                    app(WorkOrderOutputService::class)->assertTrialEvidence($inspection, null, true);
+                    if (! $by?->is_active || ! $by->hasPermission('quality.ncr.manage')) {
+                        throw new BusinessRuleException('Trial recovery requires an active authorized NCR approver.');
+                    }
+                    $scrap = $sortingEvidence['trial_scrapped_quantity'] ?? null;
+                    $trialDefects = $sortingEvidence['trial_defects'] ?? null;
+                    if (! is_int($scrap) || $scrap < 0 || ! is_array($trialDefects)
+                        || ! preg_match('/^\d+(?:\.0{1,3})?$/', $mrbAcceptedQuantity)
+                        || (int) $mrbAcceptedQuantity + $scrap !== $inspection->processRecoveryQuantity()
+                        || array_sum(array_column($trialDefects, 'count')) !== $scrap) {
+                        throw new BusinessRuleException('Trial recovery needs explicit whole kept-good and scrap quantities plus actual defect counts covering every sample piece.');
+                    }
+                    if (trim((string) ($rootCause ?: $locked->root_cause)) === ''
+                        || trim((string) ($correctiveAction ?: $locked->corrective_action)) === '') {
+                        throw new BusinessRuleException('Record the verified process correction and its root cause before trial recovery.');
+                    }
+                } elseif (bccomp($mrbAcceptedQuantity, (string) $inspection->processRecoveryQuantity(), 3) !== 0) {
+                    throw new BusinessRuleException('In-process recovery must verify the corrected process on the inspected sample before production continues.');
+                }
+                $mrbQuantity = $mrbAcceptedQuantity;
+                $sortingFill = $this->validateSortingEvidence($inspection, (string) $inspection->processRecoveryQuantity(), $by, $sortingEvidence);
+            } elseif ($outgoingRecovery) {
+                $mrbQuantity = $this->validateOutgoingRecovery($inspection, $dispositionEnum, $mrbAcceptedQuantity);
+                $limit = (int) ($locked->recovery_batch_quantity ?? $inspection->batch_quantity);
+                if (bccomp($mrbQuantity, (string) $limit, 3) > 0) {
+                    throw new BusinessRuleException('Good quantity cannot include pieces already repaired or scrapped.');
+                }
+                $sortingFill = $this->validateSortingEvidence($inspection, (string) $limit, $by, $sortingEvidence);
+            } elseif ($grn === null && $mrbAcceptedQuantity !== null) {
                 throw new BusinessRuleException(
-                    'Good pieces kept after sorting can only be recorded while the receipt is waiting for the MRB decision.'
+                    'Good pieces kept after sorting require a pending incoming receipt or a failed output-bound outgoing inspection.'
                 );
+            }
+            if ($grn !== null && ($dispositionEnum === NcrDisposition::UseAsIs
+                || ($mrbQuantity !== null && bccomp($mrbQuantity, '0', 3) > 0))) {
+                if ($inspection->grn_item_id === null && $grn->items()->count() > 1) {
+                    throw new BusinessRuleException('Sorting and release evidence must cover one receipt line at a time.');
+                }
+                $line = $inspection->grn_item_id
+                    ? GrnItem::query()->where('goods_receipt_note_id', $grn->id)->findOrFail($inspection->grn_item_id)
+                    : $grn->items()->firstOrFail();
+                $sortingFill = $this->validateSortingEvidence($inspection, (string) $line->quantity_received, $by, $sortingEvidence);
+            } elseif (! $outgoingRecovery && ! $processRecovery && $sortingEvidence !== []) {
+                throw new BusinessRuleException('Sorting evidence applies only to a material release decision.');
+            }
+
+            if ($dispositionEnum === NcrDisposition::UseAsIs && $locked->mrb_decided_at === null && $sortingFill !== []) {
+                $approval = trim((string) ($sortingEvidence['concession_approval_reference'] ?? ''));
+                if ($approval === '' || mb_strlen($approval) > 500 || $approval === ($sortingFill['sorting_evidence_reference'] ?? null)) {
+                    throw new BusinessRuleException('A known-defect concession requires a separate authorized approval or customer sign-off reference.');
+                }
+                $sortingFill['concession_approval_reference'] = $approval;
             }
 
             $fill = [
-                'disposition'       => $dispositionEnum->value,
-                'root_cause'        => $rootCause ?: $locked->root_cause,
+                'disposition' => $dispositionEnum->value,
+                'root_cause' => $rootCause ?: $locked->root_cause,
                 'corrective_action' => $correctiveAction ?: $locked->corrective_action,
-                'status'            => NcrStatus::InProgress->value,
+                'status' => NcrStatus::InProgress->value,
             ];
-            if ($grn !== null) {
+            if ($grn !== null || $outgoingRecovery || $processRecovery) {
                 $fill['mrb_accepted_quantity'] = $mrbQuantity;
                 $fill['mrb_decided_by'] = $by->id;
                 $fill['mrb_decided_at'] = now();
             }
-            $locked->forceFill($fill)->save();
+            $locked->forceFill($fill + $sortingFill)->save();
+            if ($inspection?->stage === InspectionStage::Outgoing
+                && $dispositionEnum === NcrDisposition::Rework && $locked->rework_work_order_id === null) {
+                if (! $outgoingRecovery || $locked->sorting_approved_at === null) {
+                    throw new BusinessRuleException('Confirm full sorting and the good quantity before creating a repair work order.');
+                }
+                $repairQuantity = max(0, (int) ($locked->recovery_batch_quantity ?? $inspection->batch_quantity) - (int) $mrbQuantity);
 
+                $locked->forceFill(['confirmed_rework_quantity' => $repairQuantity])->save();
+                if ($repairQuantity > 0) {
+                    $sourceWo = WorkOrder::query()->lockForUpdate()->findOrFail($inspection->entity_id);
+                    $repair = ! in_array($sourceWo->status->value, ['closed', 'cancelled'], true)
+                        ? $sourceWo
+                        : $this->createRequiredWorkOrder([
+                            'product_id' => $inspection->product_id,
+                            'quantity_target' => $repairQuantity,
+                            'priority' => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
+                            'planned_start' => now()->toDateString(),
+                            'planned_end' => now()->addDay()->toDateString(),
+                            'parent_ncr_id' => $locked->id,
+                            'rework_source_output_id' => $inspection->work_order_output_id,
+                            'work_order_class' => 'service',
+                            'exception_reason' => "Repair held pieces from NCR {$locked->ncr_number}.",
+                            'created_by' => $by->id,
+                        ] + $this->outgoingOutputSalesOrderLineage($inspection, (int) $inspection->product_id));
+                    $locked->forceFill(['rework_work_order_id' => $repair->id])->save();
+                    if ($repair->id === $sourceWo->id) {
+                        app(WorkOrderReworkService::class)->notifyProduction($sourceWo, $locked, 'required');
+                    }
+                }
+            }
+
+            if ($inspection?->work_order_output_id && $dispositionEnum === NcrDisposition::Scrap && ! $outgoingRecovery) {
+                $workOrder = $inspection->workOrderOutput?->workOrder;
+                if ($workOrder?->coversSalesOrderLine()) {
+                    app(OutboxService::class)->record(new MrpReplanRequested([(int) $workOrder->sales_order_id], 'outgoing_scrap_disposition', $by?->id));
+                }
+            }
+            if ($outgoingRecovery) {
+                $inspection->forceFill(['accepted_quantity' => (int) $mrbQuantity + (int) $locked->previously_released_quantity])->save();
+                if ($inspection->fresh()->canReleaseOutgoing()) {
+                    app(OutboxService::class)->record(new OutgoingQuantityReleased($inspection));
+                }
+                $workOrder = $inspection->workOrderOutput?->workOrder;
+                if ($workOrder?->coversSalesOrderLine()) {
+                    app(OutboxService::class)->record(new MrpReplanRequested(
+                        [(int) $workOrder->sales_order_id], 'outgoing_qc_recovery', $by->id,
+                    ));
+                }
+            }
+
+            if ($processRecovery && $inspection->startup_trial_required) {
+                app(WorkOrderOutputService::class)->settleTrial($inspection, $by, (int) $mrbQuantity, $trialDefects);
+            }
+            if ($processRecovery && $inspection->work_order_output_id && $inspection->workOrderOutput?->production_started_at) {
+                app(WorkOrderOutputService::class)->settleHistoricalHeld($inspection, $by, (int) $mrbQuantity, $trialDefects);
+            }
             if ($grn !== null) {
-                app(\App\Modules\Inventory\Services\GrnService::class)->settleIncomingQc($grn, $by);
+                app(GrnService::class)->settleIncomingQc($grn, $by);
             }
 
             return $this->show($locked);
@@ -367,7 +676,7 @@ class NcrService
      * whose GRN is pending_qc while MRB review is on. Null means the
      * disposition is a record only (legacy auto-rejected receipt, other stages).
      */
-    private function pendingIncomingGrnForMrb(NonConformanceReport $ncr): ?\App\Modules\Inventory\Models\GoodsReceiptNote
+    private function pendingIncomingGrnForMrb(NonConformanceReport $ncr): ?GoodsReceiptNote
     {
         $inspection = $ncr->inspection;
         if (! $inspection || $inspection->stage !== InspectionStage::Incoming) {
@@ -383,15 +692,15 @@ class NcrService
             return null;
         }
 
-        $grn = \App\Modules\Inventory\Models\GoodsReceiptNote::query()->find((int) $inspection->entity_id);
+        $grn = GoodsReceiptNote::query()->find((int) $inspection->entity_id);
 
-        return $grn && $grn->status === \App\Modules\Inventory\Enums\GrnStatus::PendingQc ? $grn : null;
+        return $grn && $grn->status === GrnStatus::PendingQc ? $grn : null;
     }
 
     /** @return string|null the normalised sorted-good quantity */
     private function validateMrbDecision(
         NonConformanceReport $ncr,
-        \App\Modules\Inventory\Models\GoodsReceiptNote $grn,
+        GoodsReceiptNote $grn,
         NcrDisposition $disposition,
         ?User $by,
         ?string $mrbAcceptedQuantity,
@@ -400,16 +709,11 @@ class NcrService
             throw new BusinessRuleException('An MRB decision on a pending receipt must record who made it.');
         }
         $inspection = $ncr->inspection;
-
-        // A concession overrides a failed verdict; neither the row's assigned
-        // inspector (pre-staged as the receiver) nor whoever actually authored
-        // the failing result may waive it.
-        if ($disposition === NcrDisposition::UseAsIs
-            && ((int) $inspection->inspector_id === (int) $by->id
-                || $inspection->hasResultAuthorId((int) $by->id))) {
-            throw new BusinessRuleException(
-                'Use-as-is is a concession: it must be granted by someone other than the inspector who failed the lot.'
-            );
+        if ($disposition === NcrDisposition::Scrap) {
+            throw new BusinessRuleException('Local scrap is not supported for an unaccepted receipt. Choose Return to supplier, or obtain an approved supplier disposal workflow.');
+        }
+        if ($disposition !== NcrDisposition::ReturnToSupplier) {
+            throw new BusinessRuleException('Failed supplier receipts allow Return to supplier only.');
         }
 
         if ($mrbAcceptedQuantity === null || $mrbAcceptedQuantity === '') {
@@ -422,6 +726,10 @@ class NcrService
             throw new BusinessRuleException('Good pieces kept must be a non-negative number with at most 3 decimals.');
         }
         $qty = bcadd(trim($mrbAcceptedQuantity), '0', 3);
+        if (($inspection->sampling_basis === 'piece' || strcasecmp((string) ($inspection->source_uom_code ?: $inspection->grnItem?->item?->unit_of_measure), 'PCS') === 0)
+            && bccomp($qty, bcdiv($qty, '1', 0), 3) !== 0) {
+            throw new BusinessRuleException('Good pieces kept must be a whole-number quantity for PCS.');
+        }
 
         if ($inspection->grn_item_id === null && $grn->items()->count() > 1) {
             throw new BusinessRuleException(
@@ -438,7 +746,98 @@ class NcrService
             );
         }
 
-        return bccomp($qty, '0', 3) === 0 ? null : $qty;
+        if ($inspection->sampling_basis !== 'lot'
+            && bccomp($qty, bcsub($limit, (string) max((int) $inspection->sample_defect_count, (int) $inspection->defect_count), 3), 3) > 0) {
+            throw new BusinessRuleException('Sorting cannot recover pieces already recorded as defective; record completed rework instead.');
+        }
+
+        return $qty;
+    }
+
+    private function validateOutgoingRecovery(Inspection $inspection, NcrDisposition $disposition, string $goodQuantity): string
+    {
+        if (! in_array($disposition, [NcrDisposition::Scrap, NcrDisposition::Rework], true)) {
+            throw new BusinessRuleException('Outgoing sorted-good recovery requires scrap or rework disposition.');
+        }
+        if (! preg_match('/^\d+(\.0{1,3})?$/', trim($goodQuantity))) {
+            throw new BusinessRuleException('Outgoing good pieces kept must be a non-negative whole number.');
+        }
+        $quantity = bcadd(trim($goodQuantity), '0', 3);
+        if (($inspection->counted_capture['workflow'] ?? null) === 'finish_first_v1') {
+            $conforming = max(0, (int) $inspection->batch_quantity - max((int) $inspection->sample_defect_count, (int) $inspection->defect_count));
+            if (bccomp($quantity, (string) $conforming, 3) > 0) {
+                throw new BusinessRuleException("Repair defective pieces before releasing them. At most {$conforming} conforming pieces can release.");
+            }
+        }
+        if (bccomp($quantity, (string) $inspection->batch_quantity, 3) > 0
+            || ($disposition !== NcrDisposition::Rework
+                && bccomp($quantity, (string) $inspection->batch_quantity, 3) === 0)) {
+            throw new BusinessRuleException('Good pieces kept cannot exceed the batch; recovering the whole batch requires rework.');
+        }
+        if ($disposition !== NcrDisposition::Rework
+            && bccomp($quantity, (string) ($inspection->batch_quantity - max((int) $inspection->sample_defect_count, (int) $inspection->defect_count)), 3) > 0) {
+            throw new BusinessRuleException('Sorting cannot recover pieces already recorded as defective; record completed rework instead.');
+        }
+        $output = $inspection->workOrderOutput()->lockForUpdate()->first();
+        if (! $output || $inspection->entity_type !== InspectionEntityType::WorkOrder
+            || (int) $inspection->entity_id !== (int) $output->work_order_id
+            || (int) $inspection->batch_quantity !== (int) $output->good_count
+            || (int) $inspection->product_id !== (int) $output->workOrder?->product_id) {
+            throw new BusinessRuleException('Outgoing recovery requires the original output batch and product lineage.');
+        }
+        $inspection->setRelation('workOrderOutput', $output);
+
+        return $quantity;
+    }
+
+    /**
+     * @param  array{inspected_quantity?: mixed, evidence_reference?: mixed, performed_by?: mixed, recovery_passed?: mixed}  $evidence
+     * @return array<string, mixed>
+     */
+    private function validateSortingEvidence(Inspection $inspection, string $fullQuantity, ?User $by, array $evidence): array
+    {
+        if (($inspection->counted_capture['workflow'] ?? null) === 'finish_first_v1'
+            && ($evidence['defects_segregated'] ?? null) !== true) {
+            throw new BusinessRuleException('Confirm defective pieces were physically separated before release.');
+        }
+        if (! in_array($inspection->status, [InspectionStatus::Failed, InspectionStatus::Passed], true) || ($inspection->stage !== InspectionStage::InProcess && ! $inspection->isMakerChecked())) {
+            throw new BusinessRuleException('Sorting release requires the original failed inspection to be checked.');
+        }
+        if ($by === null || ! User::query()->whereKey($by->id)->where('is_active', true)->exists()) {
+            throw new BusinessRuleException('Sorting release must record an active approving user.');
+        }
+        $sorterId = $evidence['performed_by'] ?? null;
+        if ((! is_int($sorterId) && ! is_string($sorterId)) || ! ctype_digit((string) $sorterId)
+            || ! User::query()->whereKey((int) $sorterId)->where('is_active', true)->exists()) {
+            throw new BusinessRuleException('Sorting evidence must identify the active user who performed the sorting and reinspection.');
+        }
+        $reviewedQcSeparation = $inspection->canConfirmReviewedSeparation($by);
+        if (! $reviewedQcSeparation && ((int) $by->id === (int) $sorterId || (int) $by->id === (int) $inspection->inspector_id
+            || $inspection->hasResultAuthorId((int) $by->id))) {
+            throw new BusinessRuleException('Sorting release must be approved by someone other than the sorter and original inspection makers.');
+        }
+        $inspected = $evidence['inspected_quantity'] ?? null;
+        if ((! is_string($inspected) && ! is_int($inspected))
+            || ! preg_match('/^\d+(\.\d{1,3})?$/', trim((string) $inspected))
+            || bccomp(trim((string) $inspected), $fullQuantity, 3) !== 0) {
+            throw new BusinessRuleException('Sorting and reinspection must cover the full affected batch or receipt line.');
+        }
+        $reference = $evidence['evidence_reference'] ?? null;
+        if (! is_string($reference) || trim($reference) === '' || mb_strlen(trim($reference)) > 500) {
+            throw new BusinessRuleException('Provide a sorting and reinspection evidence reference in 1–500 characters.');
+        }
+        if (($evidence['recovery_passed'] ?? null) !== true) {
+            throw new BusinessRuleException('Confirm that the sorted-good pieces passed reinspection before release.');
+        }
+
+        return [
+            'sorting_inspected_quantity' => bcadd(trim((string) $inspected), '0', 3),
+            'sorting_evidence_reference' => trim($reference),
+            'sorting_performed_by' => (int) $sorterId,
+            'sorting_approved_by' => $by->id,
+            'sorting_approved_at' => now(),
+            'sorting_uses_reviewed_qc' => $reviewedQcSeparation,
+        ];
     }
 
     /**
@@ -455,71 +854,122 @@ class NcrService
             throw new BusinessRuleException('Cannot close NCR without a disposition.');
         }
 
-        $counts = $ncr->actions()
-            ->reorder()
-            ->selectRaw('action_type, COUNT(*) as c')
-            ->groupBy('action_type')
-            ->pluck('c', 'action_type');
-
-        if (((int) ($counts[NcrActionType::Corrective->value] ?? 0)) < 1) {
-            throw new BusinessRuleException('Cannot close NCR without at least one Corrective action.');
-        }
-        if (((int) ($counts[NcrActionType::Preventive->value] ?? 0)) < 1) {
-            throw new BusinessRuleException('Cannot close NCR without at least one Preventive action.');
-        }
-
         return DB::transaction(function () use ($ncr, $by) {
             // Lock-then-guard: re-read so a concurrent close cannot double-
             // create the replacement/rework WO from a stale snapshot.
+            $sourceInspection = $ncr->inspection_id ? Inspection::query()->find($ncr->inspection_id) : null;
+            if ($sourceInspection?->startup_trial_required) {
+                app(WorkOrderOutputService::class)->lockTrialSource($sourceInspection);
+                Inspection::query()->whereKey($sourceInspection->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
                 throw new BusinessRuleException('NCR is already closed.');
             }
+            // Full-piece WO dispositions use segregation, repair and checked QC as evidence.
+            $fullPieceDisposition = $locked->inspection?->stage === InspectionStage::Outgoing
+                && $locked->inspection?->work_order_output_id !== null
+                && ($locked->inspection?->counted_capture['workflow'] ?? null) === 'finish_first_v1'
+                && in_array($locked->disposition, [NcrDisposition::Rework, NcrDisposition::Scrap], true);
+            if (! $fullPieceDisposition) {
+                $counts = $locked->actions()->reorder()
+                    ->selectRaw('action_type, COUNT(*) as c')->groupBy('action_type')->pluck('c', 'action_type');
+                if (((int) ($counts[NcrActionType::Corrective->value] ?? 0)) < 1) {
+                    throw new BusinessRuleException('Cannot close NCR without at least one Corrective action.');
+                }
+                if (((int) ($counts[NcrActionType::Preventive->value] ?? 0)) < 1) {
+                    throw new BusinessRuleException('Cannot close NCR without at least one Preventive action.');
+                }
+            } elseif (! $locked->sorting_approved_at || $locked->mrb_decided_at === null) {
+                throw new BusinessRuleException('Approve physical separation and release quantities before closing this NCR.');
+            }
+
+            $lateIncoming = (bool) $locked->is_late_incoming;
+            if ($lateIncoming) {
+                $reviews = MaterialReviewRecord::query()->where('ncr_id', $locked->id)->get();
+                if (bccomp($reviews->reduce(fn ($sum, $review) => bcadd($sum, (string) $review->quantity, 3), '0.000'), (string) ($locked->late_hold_quantity ?? '0'), 3) < 0
+                    || $reviews->contains(fn ($review) => $review->status->value === 'held')) {
+                    throw new BusinessRuleException('Resolve the late incoming quarantine holds before closing this NCR.');
+                }
+            }
+            $inlineRepair = false;
+            if ($locked->disposition === NcrDisposition::Rework && $locked->inspection?->stage === InspectionStage::Outgoing) {
+                $repair = $locked->reworkWorkOrder;
+                $inlineRepair = $repair && (int) $repair->id === (int) $locked->inspection->entity_id;
+                if ($locked->confirmed_rework_quantity === null) {
+                    throw new BusinessRuleException('Confirm sorting and create the repair work order before closing this NCR.');
+                }
+                if ((int) $locked->confirmed_rework_quantity > 0 && ! $repair) {
+                    throw new BusinessRuleException('This NCR requires a linked repair work order before closure.');
+                }
+                if ($inlineRepair && ! $locked->rework_finished_at) {
+                    throw new BusinessRuleException('Finish the inline repair before closing this NCR.');
+                }
+                if ($repair && ! $inlineRepair && (! in_array($repair->status->value, ['completed', 'closed'], true)
+                    || (int) $repair->quantity_produced !== (int) $repair->quantity_target
+                    || ((int) $repair->quantity_good > 0 && ! $repair->outputs()->where('good_count', '>', 0)->exists()))) {
+                    throw new BusinessRuleException('The linked repair work order must finish and pass outgoing QC before the NCR closes.');
+                }
+                if ($repair) {
+                    foreach ($repair->outputs()->when($inlineRepair, fn ($q) => $q->where('rework_ncr_id', $locked->id))
+                        ->where('good_count', '>', 0)->get() as $repairOutput) {
+                        $qc = $repairOutput->inspections()->where('stage', 'outgoing')->where('status', '!=', 'cancelled')->orderByDesc('id')->first();
+                        if (! $qc || ((! $qc->canReleaseOutgoing() || (int) $qc->accepted_quantity !== (int) $repairOutput->good_count) && ! $qc->hasResolvedOutgoingDisposition())) {
+                            throw new BusinessRuleException('The linked repair must have independently checked, released output before this NCR closes.');
+                        }
+                    }
+                }
+            }
 
             $locked->forceFill([
-                'status'    => NcrStatus::Closed->value,
+                'status' => NcrStatus::Closed->value,
                 'closed_by' => $by->id,
                 'closed_at' => now(),
             ])->save();
+
+            $outgoingInspection = $locked->inspection_id ? Inspection::find($locked->inspection_id) : null;
+            $dispositionQuantity = $locked->sorting_approved_at !== null
+                && $locked->mrb_accepted_quantity !== null
+                && $outgoingInspection?->stage === InspectionStage::Outgoing
+                ? max(0, (int) ($locked->recovery_batch_quantity ?? $outgoingInspection->batch_quantity) - (int) $locked->mrb_accepted_quantity)
+                : (int) ($locked->recovery_batch_quantity ?? $locked->affected_quantity);
+
+            if ($locked->disposition === NcrDisposition::Scrap && $outgoingInspection?->work_order_output_id && $dispositionQuantity > 0) {
+                $output = $outgoingInspection->workOrderOutput;
+                $receipt = $output?->productionReceiptMovement;
+                if (! $receipt || ! $receipt->lot_number || ! $receipt->to_location_id) {
+                    throw new BusinessRuleException('Scrap requires the original traceable finished-goods receipt. Restore the receipt before closing this NCR.');
+                }
+                app(StockMovementService::class)->move(new StockMovementInput(
+                    type: StockMovementType::Scrap,
+                    itemId: (int) $receipt->item_id,
+                    quantity: (string) $dispositionQuantity,
+                    fromLocationId: app(QualityStockHoldService::class)->dispositionLocation((int) $receipt->item_id, (string) $receipt->lot_number, (string) $dispositionQuantity),
+                    referenceType: 'work_order_output',
+                    referenceId: (int) $output->id,
+                    createdBy: (int) $by->id,
+                    lotNumber: (string) $receipt->lot_number,
+                    remarks: "Scrap confirmed by NCR {$locked->ncr_number}.",
+                ));
+            }
 
             // Replacement WO: outgoing-QC scrap → re-create the lost output.
             if ($locked->disposition === NcrDisposition::Scrap
                 && $locked->inspection_id
                 && $locked->product_id
-                && $locked->affected_quantity > 0) {
+                && $dispositionQuantity > 0) {
                 $insp = Inspection::find($locked->inspection_id);
                 if ($insp && $insp->stage === InspectionStage::Outgoing && ! $this->mrpReplansOutput($insp)) {
                     $wo = $this->createRequiredWorkOrder([
-                        'product_id'      => $locked->product_id,
-                        'quantity_target' => $locked->affected_quantity,
-                        'planned_start'   => now()->addDay()->toDateString(),
-                        'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
-                        'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
-                        'parent_ncr_id'   => $locked->id,
-                        'created_by'      => $by->id,
+                        'product_id' => $locked->product_id,
+                        'quantity_target' => $dispositionQuantity,
+                        'planned_start' => now()->addDay()->toDateString(),
+                        'planned_end' => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
+                        'priority' => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
+                        'parent_ncr_id' => $locked->id,
+                        'created_by' => $by->id,
                     ] + $this->outgoingOutputSalesOrderLineage($insp, (int) $locked->product_id));
                     $locked->forceFill(['replacement_work_order_id' => $wo->id])->save();
-                }
-            }
-
-            // T3.1.B — Rework disposition mirrors Scrap branch but creates a
-            // rework WO on the configured replacement timeline and priority.
-            if ($locked->disposition === NcrDisposition::Rework
-                && $locked->inspection_id
-                && $locked->product_id
-                && $locked->affected_quantity > 0) {
-                $insp = Inspection::find($locked->inspection_id);
-                if ($insp && $insp->stage === InspectionStage::Outgoing && ! $this->mrpReplansOutput($insp)) {
-                    $wo = $this->createRequiredWorkOrder([
-                        'product_id'      => $locked->product_id,
-                        'quantity_target' => (int) $locked->affected_quantity,
-                        'planned_start'   => now()->addDay()->toDateString(),
-                        'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
-                        'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
-                        'parent_ncr_id'   => $locked->id,
-                        'created_by'      => $by->id,
-                    ] + $this->outgoingOutputSalesOrderLineage($insp, (int) $locked->product_id));
-                    $locked->forceFill(['rework_work_order_id' => $wo->id])->save();
                 }
             }
 
@@ -528,14 +978,44 @@ class NcrService
             // PO are handled by the ONE engine, then still notify Purchasing.
             // Without GRN/PO lineage there is no safe stock or credit action, so
             // the close must roll back and remain operator-actionable.
-            if ($locked->disposition === NcrDisposition::ReturnToSupplier) {
+            if ($locked->disposition === NcrDisposition::ReturnToSupplier && ! $lateIncoming) {
                 $this->openSupplierReturnRmaForNcr($locked, $by);
                 $this->notifyPurchasing($locked);
             }
 
+            if ($locked->rework_work_order_id) {
+                $repairOrder = $locked->reworkWorkOrder;
+                $repairRejects = $inlineRepair ? (int) $repairOrder->outputs()->where('rework_ncr_id', $locked->id)->sum('reject_count') : (int) ($repairOrder?->quantity_rejected ?? 0);
+                if ($repairOrder?->coversSalesOrderLine() && $repairRejects > 0) {
+                    app(OutboxService::class)->record(new MrpReplanRequested([(int) $repairOrder->sales_order_id], 'repair_rejected_output', $by->id));
+                } elseif ($repairOrder && $repairRejects > 0 && ! $locked->replacement_work_order_id) {
+                    $replacement = $this->createRequiredWorkOrder([
+                        'product_id' => $locked->product_id, 'quantity_target' => $repairRejects,
+                        'planned_start' => now()->addDay()->toDateString(),
+                        'planned_end' => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
+                        'priority' => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
+                        'parent_ncr_id' => $locked->id, 'created_by' => $by->id,
+                    ]);
+                    $locked->forceFill(['replacement_work_order_id' => $replacement->id])->save();
+                }
+            }
+
             // CAPA effectiveness loop: schedule 30-day verification checks for
             // the corrective + preventive actions now that the NCR is closed.
-            app(EffectivenessService::class)->scheduleVerification($locked);
+            if ($fullPieceDisposition && ! $locked->actions()->whereIn('action_type', ['corrective', 'preventive'])->exists()) {
+                $locked->forceFill([
+                    'effectiveness_status' => EffectivenessStatus::NotApplicable->value,
+                    'effectiveness_closed_at' => now(),
+                ])->save();
+            } else {
+                app(EffectivenessService::class)->scheduleVerification($locked);
+            }
+            if ($locked->inspection?->entity_type?->value === 'work_order') {
+                $wo = WorkOrder::query()->find($locked->inspection->entity_id);
+                if ($wo) {
+                    app(WorkOrderService::class)->requestQualityClose($wo, $by);
+                }
+            }
 
             return $this->show($locked);
         });
@@ -546,19 +1026,43 @@ class NcrService
         if ($ncr->status->isTerminal()) {
             throw new BusinessRuleException('NCR is already closed.');
         }
+
         return DB::transaction(function () use ($ncr, $reason, $by) {
             // Lock-then-guard: a stale cancel must not flip a concurrently
             // closed NCR to cancelled.
+            $sourceInspection = $ncr->inspection_id ? Inspection::query()->find($ncr->inspection_id) : null;
+            if ($sourceInspection?->startup_trial_required) {
+                app(WorkOrderOutputService::class)->lockTrialSource($sourceInspection);
+                Inspection::query()->whereKey($sourceInspection->id)->lockForUpdate()->firstOrFail();
+            }
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
                 throw new BusinessRuleException('NCR is already closed.');
             }
+            if ($locked->is_late_incoming) {
+                throw new BusinessRuleException('A late incoming incident owns suspect stock. Resolve its holds and close the NCR instead of cancelling it.');
+            }
+            if ($locked->mrb_decided_at !== null) {
+                throw new BusinessRuleException('An NCR with a settled material decision cannot be cancelled.');
+            }
+            $inspection = $locked->inspection_id ? Inspection::query()->lockForUpdate()->find($locked->inspection_id) : null;
+            if ($inspection && $locked->original_accepted_quantity !== null) {
+                $inspection->forceFill(['accepted_quantity' => $locked->original_accepted_quantity])->save();
+            }
             $locked->forceFill([
-                'status'           => NcrStatus::Cancelled->value,
-                'closed_by'        => $by->id,
-                'closed_at'        => now(),
-                'corrective_action'=> trim(($locked->corrective_action ? $locked->corrective_action."\n" : '').'[cancelled] '.($reason ?: 'no reason given')),
+                'status' => NcrStatus::Cancelled->value,
+                'closed_by' => $by->id,
+                'closed_at' => now(),
+                'corrective_action' => trim(($locked->corrective_action ? $locked->corrective_action."\n" : '').'[cancelled] '.($reason ?: 'no reason given')),
             ])->save();
+
+            if ($inspection?->entity_type === InspectionEntityType::WorkOrder) {
+                $wo = WorkOrder::find($inspection->entity_id);
+                if ($wo) {
+                    app(WorkOrderService::class)->requestQualityClose($wo, $by);
+                }
+            }
+
             return $this->show($locked);
         });
     }
@@ -592,19 +1096,20 @@ class NcrService
     }
 
     /** Lazy resolve to keep the Quality module bootable without Production. */
-    private function workOrderService(): ?\App\Modules\Production\Services\WorkOrderService
+    private function workOrderService(): ?WorkOrderService
     {
         try {
-            return app(\App\Modules\Production\Services\WorkOrderService::class);
+            return app(WorkOrderService::class);
         } catch (\Throwable $exception) {
             Log::warning('Production work-order service could not be resolved for NCR disposition.', [
                 'exception' => $exception,
             ]);
+
             return null;
         }
     }
 
-    private function createRequiredWorkOrder(array $data): \App\Modules\Production\Models\WorkOrder
+    private function createRequiredWorkOrder(array $data): WorkOrder
     {
         $service = $this->workOrderService();
         if ($service === null) {
@@ -618,8 +1123,8 @@ class NcrService
         } catch (\Throwable $exception) {
             Log::error('NCR close could not create the required production work order.', [
                 'parent_ncr_id' => $data['parent_ncr_id'] ?? null,
-                'exception'     => $exception::class,
-                'message'       => $exception->getMessage(),
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
             ]);
 
             throw new BusinessRuleException(
@@ -668,21 +1173,21 @@ class NcrService
         $poItem = $grnItem->purchaseOrderItem;
 
         try {
-            app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)
+            app(ReturnRequestService::class)
                 ->openSupplierReturnForReversedGoods(
                     vendorId: (int) $grn->vendor_id,
                     purchaseOrderId: $grn->purchase_order_id ? (int) $grn->purchase_order_id : null,
                     goodsReceiptNoteId: (int) $grn->id,
                     lines: [[
-                        'grn_item_id'              => (int) $grnItem->id,
-                        'purchase_order_item_id'   => $grnItem->purchase_order_item_id
+                        'grn_item_id' => (int) $grnItem->id,
+                        'purchase_order_item_id' => $grnItem->purchase_order_item_id
                             ? (int) $grnItem->purchase_order_item_id
                             : null,
-                        'item_id'                  => (int) $grnItem->item_id,
-                        'quantity'                 => $quantity,
-                        'unit_price'               => (string) ($poItem?->unit_price ?? $grnItem->unit_cost),
-                        'reason'                   => "NCR {$ncr->ncr_number}: {$ncr->defect_description}",
-                        'lot_number'               => $grnItem->material_lot_number,
+                        'item_id' => (int) $grnItem->item_id,
+                        'quantity' => $quantity,
+                        'unit_price' => (string) ($poItem?->unit_price ?? $grnItem->unit_cost),
+                        'reason' => "NCR {$ncr->ncr_number}: {$ncr->defect_description}",
+                        'lot_number' => $grnItem->material_lot_number,
                         // A failed incoming inspection's GRN is rejected by
                         // RejectGRNOnQcFail, which already reversed the PO
                         // receipt; never reverse it a second time.
@@ -694,8 +1199,8 @@ class NcrService
                 );
         } catch (\Throwable $e) {
             Log::error('NcrService: failed to open a supplier-return RMA for return_to_supplier NCR.', [
-                'ncr_id'    => $ncr->id,
-                'error'     => $e->getMessage(),
+                'ncr_id' => $ncr->id,
+                'error' => $e->getMessage(),
                 'exception' => $e::class,
             ]);
 
@@ -748,25 +1253,29 @@ class NcrService
     private function notifyPurchasing(NonConformanceReport $ncr): void
     {
         $roles = array_values(array_filter((array) $this->settings->get('quality.ncr.return_to_supplier.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-        if ($roles === []) return;
+        if ($roles === []) {
+            return;
+        }
         $recipients = User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
             ->get();
-        if ($recipients->isEmpty()) return;
+        if ($recipients->isEmpty()) {
+            return;
+        }
 
         $severity = $ncr->severity instanceof \BackedEnum
             ? $ncr->severity->value
             : (string) $ncr->severity;
         $this->notifications->send($recipients, 'ncr.return_to_supplier', [
-            'title'         => "Return-to-supplier required: NCR {$ncr->ncr_number}",
-            'message'       => "NCR {$ncr->ncr_number} closed with disposition return_to_supplier. Quantity: {$ncr->affected_quantity}.",
-            'link_to'       => "/quality/ncrs/{$ncr->hash_id}",
-            'entity_type'   => 'ncr',
-            'entity_id'     => $ncr->hash_id,
-            'ncr_number'    => $ncr->ncr_number,
-            'affected_qty'  => (int) $ncr->affected_quantity,
-            'severity'      => $severity,
+            'title' => "Return-to-supplier required: NCR {$ncr->ncr_number}",
+            'message' => "NCR {$ncr->ncr_number} closed with disposition return_to_supplier. Quantity: {$ncr->affected_quantity}.",
+            'link_to' => "/quality/ncrs/{$ncr->hash_id}",
+            'entity_type' => 'ncr',
+            'entity_id' => $ncr->hash_id,
+            'ncr_number' => $ncr->ncr_number,
+            'affected_qty' => (int) $ncr->affected_quantity,
+            'severity' => $severity,
         ]);
     }
 

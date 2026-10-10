@@ -41,6 +41,7 @@ class StoreDeliveryScheduleRequest extends FormRequest
                     $fail('Delivery schedules must be for current month or later.');
                 }
             }],
+            'planned_delivery_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'lines'                => ['required', 'array', 'min:1'],
             'lines.*.purchase_order_item_id' => ['required', 'string'],
             'lines.*.product_name' => ['nullable', 'string', 'max:255'],

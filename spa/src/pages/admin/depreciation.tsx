@@ -28,7 +28,7 @@ export default function DepreciationRunsPage() {
  return (
  <div>
  <PageHeader title="Monthly depreciation" subtitle="Idempotent — re-running for an already-processed month is a no-op." />
- <div className="px-5 py-4 max-w-2xl">
+ <div className="min-w-0 w-full px-5 py-4">
  <Panel title="Run for a period">
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
  <Input

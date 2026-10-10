@@ -25,9 +25,12 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\QuarantineService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -223,9 +226,6 @@ class DispositionTest extends TestCase
         $product = $this->makeProduct();
         $rma = $this->makeInspectedRma($by, $customer, product: $product);
         $this->makeLineStockable($rma, $by);
-        // 2026-08-08 — restock lines are received back into stock at dispose
-        // time, so the destination location is mandatory.
-        $location = WarehouseLocation::factory()->create();
 
         $svc = app(ReturnRequestService::class);
 
@@ -235,19 +235,29 @@ class DispositionTest extends TestCase
                 'disposition' => 'restock',
                 'notes'       => 'Good condition after inspection',
             ],
-        ], $by, false, $location->id);
+        ], $by);
 
         $this->assertSame('disposed', $result->disposition_status);
 
         $item = $result->items->first();
         $this->assertSame('restock', $item->disposition);
         $this->assertSame('Good condition after inspection', $item->disposition_notes);
-        $this->assertSame('8.000', (string) $item->stock_movement_quantity);
-        $this->assertNotNull($result->stock_movement_id);
-        $this->assertSame(2, StockMovement::query()
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $item->id)->firstOrFail();
+        $this->assertSame('held', $mrb->status->value);
+        $this->assertSame('8.000', (string) $mrb->quantity);
+        $this->assertNull($mrb->release_movement_id);
+        $this->assertSame('held', $item->quarantine_status);
+        $this->assertSame('0.000', (string) $item->stock_movement_quantity);
+        $this->assertNull($item->quarantine_release_movement_id);
+        $this->assertNull($result->stock_movement_id);
+        $this->assertSame(1, StockMovement::query()
             ->where('reference_type', 'return_request')
             ->where('reference_id', $rma->id)
             ->count());
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->item_id)
+            ->where('location_id', $item->quarantine_location_id)
+            ->value('quantity'));
     }
 
     public function test_dispose_creates_ncr_for_scrap_items(): void
@@ -736,7 +746,11 @@ class DispositionTest extends TestCase
         ]);
         $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
-        $location = WarehouseLocation::factory()->create();
+        $targetZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $quarantineZone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $location = WarehouseLocation::factory()->create(['zone_id' => $targetZone->id]);
         $rma = ReturnRequest::create([
             'rma_number'        => 'RMA-REPLAY-'.substr(uniqid(), -5),
             'type'              => ReturnRequestType::CustomerReturn->value,
@@ -779,11 +793,27 @@ class DispositionTest extends TestCase
         $disposed = $service->dispose($inspected, [[
             'item_id' => $line->hash_id,
             'disposition' => 'restock',
-        ]], $by, false, $location->id);
+        ]], $by);
+
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $line->id)->firstOrFail();
+        $reviewer = $this->makeUser();
+        app(QuarantineService::class)->release(
+            $mrb,
+            'use_as_is',
+            $reviewer,
+            $location->id,
+            null,
+            [
+                'inspected_quantity' => '2.000',
+                'evidence_reference' => 'REPLAY-REINSPECTION-'.$rma->rma_number,
+                'recovery_passed' => true,
+            ],
+        );
+        $movementCountAfterRelease = StockMovement::query()->count();
 
         // Keep a stale aggregate at the final transition boundary. The receipt
-        // and release are already stamped, so completion/replay cannot issue a
-        // second stock movement.
+        // and independent MRB release are already stamped, so completion and
+        // replay cannot issue a second stock movement.
         $stale = $disposed->fresh()->load('items.product');
 
         $service->complete($disposed, $by, $location->id);
@@ -795,9 +825,14 @@ class DispositionTest extends TestCase
             $this->assertStringContainsString('Expected status inspected, got completed', $e->getMessage());
         }
 
-        $this->assertSame(2, \App\Modules\Inventory\Models\StockMovement::query()
+        $this->assertSame($movementCountAfterRelease, StockMovement::query()->count());
+        $this->assertSame(1, StockMovement::query()
             ->where('reference_type', 'return_request')
             ->where('reference_id', $rma->id)
+            ->count());
+        $this->assertSame(1, StockMovement::query()
+            ->where('reference_type', 'material_review_record')
+            ->where('reference_id', $mrb->id)
             ->count());
         $this->assertSame('2.000', (string) $rma->fresh('items')->items->first()->stock_movement_quantity);
     }

@@ -10,23 +10,28 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
-use App\Modules\Accounting\Events\CreditNoteFinalized;
-use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\CreditNoteStatus;
 use App\Modules\Accounting\Enums\CreditNoteType;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Events\CreditNoteFinalized;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\CreditNoteLine;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Services\SalesOrderService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * REC-13 — AR/AP credit notes.
@@ -52,7 +57,7 @@ class CreditNoteService
     /**
      * Paginated list with optional type/status/party filters.
      *
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -68,11 +73,11 @@ class CreditNoteService
             // No (string) cast: HashIdFilter::decode takes mixed, and casting an
             // array payload (?customer_id[]=x) raised an E_WARNING that Laravel
             // rethrows as ErrorException — a 500 on a bad query string.
-            $cid = HashIdFilter::decode($filters['customer_id'], \App\Modules\Accounting\Models\Customer::class);
+            $cid = HashIdFilter::decode($filters['customer_id'], Customer::class);
             $q->where('customer_id', $cid ?? 0);
         }
         if (! empty($filters['vendor_id'])) {
-            $vid = HashIdFilter::decode($filters['vendor_id'], \App\Modules\Accounting\Models\Vendor::class);
+            $vid = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
             $q->where('vendor_id', $vid ?? 0);
         }
 
@@ -103,8 +108,8 @@ class CreditNoteService
     {
         $type = CreditNoteType::from($data['type']);
         $lines = $data['lines'] ?? [];
-        $customerId = $this->decode($data['customer_id'] ?? null, \App\Modules\Accounting\Models\Customer::class);
-        $vendorId = $this->decode($data['vendor_id'] ?? null, \App\Modules\Accounting\Models\Vendor::class);
+        $customerId = $this->decode($data['customer_id'] ?? null, Customer::class);
+        $vendorId = $this->decode($data['vendor_id'] ?? null, Vendor::class);
         $invoiceId = $this->decode($data['invoice_id'] ?? null, Invoice::class);
         $billId = $this->decode($data['bill_id'] ?? null, Bill::class);
         if (count($lines) < 1) {
@@ -142,23 +147,23 @@ class CreditNoteService
             $vat = $isVatable ? Money::round2(Money::mul($subtotal, $this->taxPolicy->requiredVatRate())) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
-            $cn = new CreditNote();
+            $cn = new CreditNote;
             $cn->fill([
-                'type'              => $type->value,
-                'customer_id'       => $customerId,
-                'vendor_id'         => $vendorId,
-                'invoice_id'        => $invoiceId,
-                'bill_id'           => $billId,
+                'type' => $type->value,
+                'customer_id' => $customerId,
+                'vendor_id' => $vendorId,
+                'invoice_id' => $invoiceId,
+                'bill_id' => $billId,
                 'return_request_id' => $data['return_request_id'] ?? null,
-                'date'              => $data['date'],
-                'is_vatable'        => $isVatable,
-                'subtotal'          => $subtotal,
-                'vat_amount'        => $vat,
-                'total_amount'      => $total,
-                'applied_amount'    => '0.00',
-                'balance'           => $total,
-                'reason'            => $data['reason'] ?? null,
-                'created_by'        => $by->id,
+                'date' => $data['date'],
+                'is_vatable' => $isVatable,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
+                'applied_amount' => '0.00',
+                'balance' => $total,
+                'reason' => $data['reason'] ?? null,
+                'created_by' => $by->id,
             ]);
             $cn->status = CreditNoteStatus::Draft;
             $cn->save();
@@ -203,13 +208,13 @@ class CreditNoteService
             $number = $this->sequences->generate('credit_note', $locked->date);
 
             $je = $this->journals->create([
-                'date'           => $locked->date->toDateString(),
-                'description'    => "Credit note {$number} ({$locked->type->label()})",
+                'date' => $locked->date->toDateString(),
+                'description' => "Credit note {$number} ({$locked->type->label()})",
                 'reference_type' => 'credit_note',
-                'reference_id'   => $locked->id,
-                'lines'          => $lines,
+                'reference_id' => $locked->id,
+                'lines' => $lines,
             ], $by);
-            $je = $this->journals->post($je, $by);
+            $je = $this->journals->postSystem($je, (int) $by->id);
 
             $locked->fill(['credit_note_number' => $number, 'journal_entry_id' => $je->id]);
             $locked->status = CreditNoteStatus::Finalized;
@@ -237,7 +242,27 @@ class CreditNoteService
             throw new BusinessRuleException('Application amount must be > 0.');
         }
 
-        return DB::transaction(function () use ($cn, $data, $amount, $by) {
+        $key = $data['operation_key'] ?? null;
+        if ($key !== null && (! is_string($key) || ! Str::isUuid($key))) {
+            throw ValidationException::withMessages(['operation_key' => 'A valid operation key is required.']);
+        }
+        $key = $key !== null ? strtolower($key) : null;
+
+        return DB::transaction(function () use ($cn, $data, $amount, $by, $key) {
+            if ($key !== null) {
+                DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?::text, 0))', ['credit-application:'.$key]);
+                $existing = CreditNoteApplication::query()->where('operation_key', $key)->first();
+                if ($existing !== null) {
+                    if ($existing->credit_note_id !== $cn->id || $existing->created_by !== $by->id
+                        || Money::cmp((string) $existing->amount, $amount) !== 0
+                        || $existing->invoice_id !== $this->decode($data['invoice_id'] ?? null, Invoice::class)
+                        || $existing->bill_id !== $this->decode($data['bill_id'] ?? null, Bill::class)) {
+                        throw ValidationException::withMessages(['operation_key' => 'This operation key was already used for a different credit application.']);
+                    }
+
+                    return $existing;
+                }
+            }
             // Route-bound credit notes can be stale when two applications race.
             // Lock the authoritative credit row before checking status/balance
             // so an already-consumed note cannot be applied a second time.
@@ -250,9 +275,10 @@ class CreditNoteService
             }
 
             $application = new CreditNoteApplication([
+                'operation_key' => $key,
                 'credit_note_id' => $creditNote->id,
-                'amount'         => $amount,
-                'created_by'     => $by->id,
+                'amount' => $amount,
+                'created_by' => $by->id,
             ]);
 
             if ($creditNote->type === CreditNoteType::Customer) {
@@ -275,16 +301,16 @@ class CreditNoteService
                 if (Money::gt($amount, (string) $invoice->balance)) {
                     throw new BusinessRuleException("Amount {$amount} exceeds the invoice's outstanding balance {$invoice->balance}.");
                 }
-                $newPaid    = Money::add((string) $invoice->amount_paid, $amount);
+                $newPaid = Money::add((string) $invoice->amount_paid, $amount);
                 $newBalance = Money::sub((string) $invoice->total_amount, $newPaid);
-                $newStatus  = Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial;
+                $newStatus = Money::isZero($newBalance) ? InvoiceStatus::Paid : InvoiceStatus::Partial;
                 $invoice->update([
                     'amount_paid' => $newPaid,
-                    'balance'     => $newBalance,
-                    'status'      => $newStatus,
+                    'balance' => $newBalance,
+                    'status' => $newStatus,
                 ]);
                 if ($newStatus === InvoiceStatus::Paid && $invoice->sales_order_id) {
-                    app(\App\Modules\CRM\Services\SalesOrderService::class)
+                    app(SalesOrderService::class)
                         ->synchronizeCompletionState((int) $invoice->sales_order_id);
                 }
                 if ($invoice->wasChanged('status')) {
@@ -313,13 +339,13 @@ class CreditNoteService
                 if (Money::gt($amount, (string) $bill->balance)) {
                     throw new BusinessRuleException("Amount {$amount} exceeds the bill's outstanding balance {$bill->balance}.");
                 }
-                $newPaid    = Money::add((string) $bill->amount_paid, $amount);
+                $newPaid = Money::add((string) $bill->amount_paid, $amount);
                 $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
-                $newStatus  = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
+                $newStatus = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
                 $bill->update([
                     'amount_paid' => $newPaid,
-                    'balance'     => $newBalance,
-                    'status'      => $newStatus,
+                    'balance' => $newBalance,
+                    'status' => $newStatus,
                 ]);
                 if ($bill->wasChanged('status')) {
                     $fresh = $bill->fresh();
@@ -374,7 +400,7 @@ class CreditNoteService
                 throw new BusinessRuleException('The credit note journal entry is no longer posted.');
             }
 
-            $reversal = $this->journals->reverse($journal, $by, $locked->date, $reason);
+            $reversal = $this->journals->reverseSource($journal, $by, $locked->date, $reason);
             $locked->forceFill([
                 'status' => CreditNoteStatus::Void,
                 'balance' => '0.00',
@@ -427,6 +453,7 @@ class CreditNoteService
                 $lines[] = ['account_id' => $this->accountId($this->accounts->vatInput()), 'debit' => '0.00', 'credit' => (string) $cn->vat_amount, 'description' => 'VAT Input reversal'];
             }
         }
+
         return $lines;
     }
 
@@ -501,7 +528,10 @@ class CreditNoteService
 
     private function decode(mixed $value, string $modelClass): ?int
     {
-        if ($value === null || $value === '') return null;
+        if ($value === null || $value === '') {
+            return null;
+        }
+
         return is_numeric($value) ? (int) $value : HashIdFilter::decode($value, $modelClass);
     }
 

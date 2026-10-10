@@ -1,0 +1,82 @@
+{
+  "baseURL": "http://localhost:18080",
+  "results": [
+    {
+      "stage": "in_process",
+      "scenario": "pass",
+      "passed": true
+    },
+    {
+      "stage": "outgoing",
+      "scenario": "pass",
+      "passed": true
+    },
+    {
+      "stage": "customer_return",
+      "scenario": "pass",
+      "passed": true
+    },
+    {
+      "stage": "supplier_return",
+      "scenario": "pass",
+      "passed": true
+    },
+    {
+      "stage": "incoming",
+      "scenario": "pass",
+      "passed": true
+    },
+    {
+      "stage": "in_process",
+      "scenario": "size_fail",
+      "passed": true
+    },
+    {
+      "stage": "outgoing",
+      "scenario": "size_fail",
+      "passed": true
+    },
+    {
+      "stage": "customer_return",
+      "scenario": "size_fail",
+      "passed": true
+    },
+    {
+      "stage": "supplier_return",
+      "scenario": "size_fail",
+      "passed": true
+    },
+    {
+      "stage": "incoming",
+      "scenario": "size_fail",
+      "passed": true
+    },
+    {
+      "stage": "in_process",
+      "scenario": "document_fail",
+      "passed": true
+    },
+    {
+      "stage": "outgoing",
+      "scenario": "document_fail",
+      "passed": true
+    },
+    {
+      "stage": "customer_return",
+      "scenario": "document_fail",
+      "passed": true
+    },
+    {
+      "stage": "supplier_return",
+      "scenario": "document_fail",
+      "passed": true
+    },
+    {
+      "stage": "incoming",
+      "scenario": "document_fail",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "productionBusinessWrites": 0
+}

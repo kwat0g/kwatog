@@ -10,6 +10,9 @@ use App\Modules\Attendance\Controllers\ShiftController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')->group(function () {
+    Route::get('/shift-assignments', [ShiftController::class, 'assignmentIndex'])->middleware('permission:attendance.shifts.manage');
+    Route::patch('/shift-assignments/{assignment}/working-days', [ShiftController::class, 'configureWorkingDays'])->middleware('permission:attendance.shifts.manage');
+
     // Shifts
     Route::get('/shifts', [ShiftController::class, 'index'])->middleware('permission_any:attendance.edit,attendance.shifts.manage');
     Route::post('/shifts', [ShiftController::class, 'store'])->middleware('permission:attendance.shifts.manage');

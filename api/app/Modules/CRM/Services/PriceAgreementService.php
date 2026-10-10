@@ -27,10 +27,52 @@ use Illuminate\Validation\ValidationException;
  */
 class PriceAgreementService
 {
+    /** One price policy for catalog, preview and order writes. */
+    public function quote(int $customerId, int $productId, CarbonInterface $date, string|int $quantity, bool $checkAccess = true): array
+    {
+        $product = Product::query()->active()->find($productId);
+        if (! $product || ! Customer::query()->active()->whereKey($customerId)->exists()
+            || ($checkAccess && ! $product->isAvailableToCustomer($customerId))) {
+            throw ValidationException::withMessages(['product_id' => ['This product is not available to your customer account.']]);
+        }
+        $agreement = PriceAgreement::query()->where('customer_id', $customerId)->where('product_id', $productId)
+            ->activeOn($date)->orderByDesc('effective_from')->first();
+        $tier = null;
+        if ($agreement) {
+            $price = $this->resolveUnitPrice($agreement, $quantity);
+            if ($agreement->pricing_method === PricingMethod::Tiered) {
+                $tier = collect($agreement->tiers ?? [])->sortByDesc('min_qty')
+                    ->first(fn ($entry) => Money::gte((string) $quantity, (string) $entry['min_qty']));
+            }
+        } elseif ($product->base_selling_price !== null) {
+            $price = Money::round2($product->base_selling_price);
+        } else {
+            throw ValidationException::withMessages(['product_id' => ['No base selling price or applicable customer agreement is configured for this delivery date.']]);
+        }
+        try {
+            $this->assertPriceFloor($product, $price, 'unit_price');
+        } catch (ValidationException $e) {
+            if (! $checkAccess) throw $e;
+            throw ValidationException::withMessages(['unit_price' => ['This product’s selling price requires review by sales before it can be ordered.']]);
+        }
+        return [
+            'unit_price' => $price, 'price_source' => $agreement ? 'agreement' : 'base',
+            'price_agreement_id' => $agreement?->id, 'pricing_date' => $date->toDateString(),
+            'price_tier_min_qty' => $tier['min_qty'] ?? null,
+        ];
+    }
+
+    public function assertPriceFloor(Product $product, string $price, string $field): void
+    {
+        if (! preg_match('/^\d+(\.\d{1,2})?$/', $price) || Money::lte($price, '0') || ($product->minimum_selling_price !== null && Money::lt($price, $product->minimum_selling_price))) {
+            throw ValidationException::withMessages([$field => ['Selling price must be positive and at least the configured minimum selling price'.($product->minimum_selling_price !== null ? ' ('.$product->minimum_selling_price.').' : '.')]]);
+        }
+    }
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = PriceAgreement::query()
-            ->with(['product:id,part_number,name,unit_of_measure', 'customer:id,name']);
+            ->with(['product:id,part_number,name,unit_of_measure,base_selling_price,minimum_selling_price,standard_cost', 'product.activeBom', 'customer:id,name']);
 
         TrashedFilter::apply($q, $filters);
 
@@ -64,7 +106,7 @@ class PriceAgreementService
 
     public function listForCustomer(int $customerId): Collection
     {
-        return PriceAgreement::with('product:id,part_number,name,unit_of_measure')
+        return PriceAgreement::with(['product.activeBom', 'customer'])
             ->where('customer_id', $customerId)
             ->orderByDesc('effective_from')
             ->get();
@@ -72,7 +114,7 @@ class PriceAgreementService
 
     public function show(PriceAgreement $a): PriceAgreement
     {
-        return $a->load(['product', 'customer']);
+        return $a->load(['product.activeBom', 'customer']);
     }
 
     public function create(array $data): PriceAgreement
@@ -82,33 +124,44 @@ class PriceAgreementService
             $productId = (int) $data['product_id'];
             $customerId = (int) $data['customer_id'];
 
-            $this->lockAgreementReferences([$productId], [$customerId]);
+            $this->lockPricingReferences([$productId], [$customerId]);
             $this->assertActiveReferences($productId, $customerId);
+            $this->assertAgreementPrices(Product::findOrFail($productId), $data);
             $this->assertNoOverlap(
                 $productId,
                 $customerId,
                 $data['effective_from'],
                 $data['effective_to'],
             );
-            return PriceAgreement::create($data)->load(['product', 'customer']);
+            $created = PriceAgreement::create($data)->load(['product.activeBom', 'customer']);
+            app(PricingReviewService::class)->request([$productId], 'agreement_created');
+            return $created;
         });
     }
 
     public function update(PriceAgreement $a, array $data): PriceAgreement
     {
         return DB::transaction(function () use ($a, $data) {
+            $a = PriceAgreement::query()->findOrFail($a->id);
+            if ($a->effective_to->toDateString() >= today()->toDateString() || ($data['effective_to'] ?? '') >= today()->toDateString() || \App\Modules\CRM\Models\PriceRequest::where('agreement_id', $a->id)->exists()) {
+                throw new BusinessRuleException('Accepted and unexpired agreement terms are locked. Propose a dated replacement for customer acceptance.');
+            }
             $requestedProductId = (int) ($data['product_id'] ?? $a->product_id);
             $requestedCustomerId = (int) ($data['customer_id'] ?? $a->customer_id);
-            $this->lockAgreementReferences(
+            $this->lockPricingReferences(
                 [$a->product_id, $requestedProductId],
                 [$a->customer_id, $requestedCustomerId],
             );
 
             $locked = PriceAgreement::query()->lockForUpdate()->findOrFail($a->id);
+            if ($locked->product_id !== $a->product_id || $locked->customer_id !== $a->customer_id) {
+                throw new BusinessRuleException('Agreement references changed while saving. Refresh and retry.');
+            }
             $data = $this->normalisePricingData($data, $locked);
             $productId = (int) ($data['product_id'] ?? $locked->product_id);
             $customerId = (int) ($data['customer_id'] ?? $locked->customer_id);
             $this->assertActiveReferences($productId, $customerId);
+            $this->assertAgreementPrices(Product::findOrFail($productId), $data, $locked);
             $this->assertNoOverlap(
                 $productId,
                 $customerId,
@@ -117,26 +170,47 @@ class PriceAgreementService
                 exceptId: $locked->id,
             );
             $locked->update($data);
-            return $locked->fresh()->load(['product', 'customer']);
+            app(PricingReviewService::class)->request([$productId], 'agreement_updated');
+            return $locked->fresh()->load(['product.activeBom', 'customer']);
         });
     }
 
     public function delete(PriceAgreement $a): void
     {
-        DB::transaction(fn () => PriceAgreement::query()->lockForUpdate()->findOrFail($a->id)->delete());
+        DB::transaction(function () use ($a): void {
+            $current = PriceAgreement::findOrFail($a->id);
+            if ($current->effective_to->toDateString() >= today()->toDateString()) {
+                throw new BusinessRuleException('An unexpired agreement cannot be archived without changing customer terms. Propose a replacement instead.');
+            }
+            $this->lockPricingReferences([$current->product_id], [$current->customer_id]);
+            $locked = PriceAgreement::query()->lockForUpdate()->findOrFail($a->id);
+            if ($locked->product_id !== $current->product_id || $locked->customer_id !== $current->customer_id) {
+                throw new BusinessRuleException('Agreement references changed. Refresh and retry.');
+            }
+            $locked->delete();
+            app(PricingReviewService::class)->request([(int) $locked->product_id], 'agreement_archived');
+        });
     }
 
     public function restore(PriceAgreement $a): PriceAgreement
     {
         return DB::transaction(function () use ($a): PriceAgreement {
-            $this->lockAgreementReferences([$a->product_id], [$a->customer_id]);
+            $a = PriceAgreement::withTrashed()->findOrFail($a->id);
+            $this->lockPricingReferences([$a->product_id], [$a->customer_id]);
             $locked = PriceAgreement::withTrashed()->lockForUpdate()->findOrFail($a->id);
 
             if (! $locked->trashed()) {
-                return $locked->fresh()->load(['product', 'customer']);
+                return $locked->fresh()->load(['product.activeBom', 'customer']);
+            }
+            if ($locked->effective_to->toDateString() >= today()->toDateString()) {
+                throw new BusinessRuleException('Restoring unexpired pricing requires a new proposal and customer acceptance.');
             }
 
+            if ($locked->product_id !== $a->product_id || $locked->customer_id !== $a->customer_id) {
+                throw new BusinessRuleException('Agreement references changed. Refresh and retry.');
+            }
             $this->assertActiveReferences((int) $locked->product_id, (int) $locked->customer_id);
+            $this->assertAgreementPrices(Product::findOrFail($locked->product_id), [], $locked);
             $this->assertNoOverlap(
                 (int) $locked->product_id,
                 (int) $locked->customer_id,
@@ -145,8 +219,9 @@ class PriceAgreementService
                 exceptId: $locked->id,
             );
             $locked->restore();
+            app(PricingReviewService::class)->request([(int) $locked->product_id], 'agreement_restored');
 
-            return $locked->fresh()->load(['product', 'customer']);
+            return $locked->fresh()->load(['product.activeBom', 'customer']);
         });
     }
 
@@ -203,6 +278,15 @@ class PriceAgreementService
      * Service-level uniqueness rule: no two overlapping windows for the
      * same (customer, product).
      */
+    private function assertAgreementPrices(Product $product, array $data, ?PriceAgreement $existing = null): void
+    {
+        $price = (string) ($data['price'] ?? $existing?->price ?? '');
+        $this->assertPriceFloor($product, $price, 'price');
+        foreach (($data['tiers'] ?? $existing?->tiers ?? []) as $index => $tier) {
+            $this->assertPriceFloor($product, (string) $tier['unit_price'], "tiers.{$index}.unit_price");
+        }
+    }
+
     private function assertNoOverlap(
         int $productId,
         int $customerId,
@@ -255,7 +339,7 @@ class PriceAgreementService
      * @param list<int> $productIds
      * @param list<int> $customerIds
      */
-    private function lockAgreementReferences(array $productIds, array $customerIds): void
+    public function lockPricingReferences(array $productIds, array $customerIds): void
     {
         $productIds = array_values(array_unique(array_map('intval', $productIds)));
         $customerIds = array_values(array_unique(array_map('intval', $customerIds)));

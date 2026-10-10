@@ -6,6 +6,7 @@ namespace Tests\Feature\Accounting;
 
 use App\Modules\Accounting\Enums\AccountingPeriodStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -406,27 +407,24 @@ SQL);
     // Invariant 5 — maker-checker
     // ─────────────────────────────────────────────────────────────────
 
-    public function test_a_maker_cannot_post_their_own_entry_but_an_override_holder_can(): void
+    public function test_a_maker_cannot_post_their_own_entry_even_with_override_permission(): void
     {
         $svc = app(JournalEntryService::class);
         $fin = $this->user('finance_officer');
         $fin2 = $this->user('finance_officer');
         $admin = $this->user('system_admin');
 
-        // The seeder withholds the override from finance_officer on purpose.
+        // Fresh installs omit legacy slugs; the migration test covers renaming old rows.
         $this->assertFalse($fin->hasPermission('accounting.journal.self_post_override'));
-        $this->assertSame(['system_admin'], DB::table('role_permissions')
-            ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
-            ->join('roles', 'roles.id', '=', 'role_permissions.role_id')
-            ->where('permissions.slug', 'accounting.journal.self_post_override')
-            ->pluck('roles.slug')->all());
+        $this->assertFalse($fin->hasPermission('accounting.journal.self_post_override.retired'));
+        $this->assertDatabaseMissing('permissions', ['slug' => 'accounting.journal.self_post_override']);
 
         $ownDraft = $this->draft($fin, '2029-09-01');
         try {
             $svc->post(JournalEntry::findOrFail($ownDraft->id), $fin);
             $this->fail('A maker posted their own journal entry.');
-        } catch (Throwable $e) {
-            $this->assertStringContainsString('segregation of duties', $e->getMessage());
+        } catch (ForbiddenActionException $exception) {
+            $this->assertStringContainsString('segregation of duties', $exception->getMessage());
         }
         $this->assertSame(JournalEntryStatus::Draft, JournalEntry::findOrFail($ownDraft->id)->status);
 
@@ -434,9 +432,116 @@ SQL);
         $this->assertSame(JournalEntryStatus::Posted,
             $svc->post(JournalEntry::findOrFail($ownDraft->id), $fin2)->status);
 
-        // The override holder may self-post.
-        $this->assertSame(JournalEntryStatus::Posted,
-            $svc->post($this->draft($admin, '2029-09-03'), $admin)->status);
+        // System Admin's override permission cannot bypass the same-document rule.
+        $adminDraft = $this->draft($admin, '2029-09-03');
+        try {
+            $svc->post($adminDraft, $admin);
+            $this->fail('System Admin self-posted a journal entry.');
+        } catch (ForbiddenActionException $exception) {
+            $this->assertStringContainsString('segregation of duties', $exception->getMessage());
+        }
+        $this->assertSame(JournalEntryStatus::Draft, $adminDraft->fresh()->status);
+        $this->assertNull($adminDraft->fresh()->posted_by);
+    }
+
+    public function test_source_linked_draft_cannot_be_manually_posted(): void
+    {
+        $maker = $this->user('system_admin');
+        $poster = $this->user('finance_officer');
+        $entry = app(JournalEntryService::class)->create([
+            'date' => '2026-10-02',
+            'description' => 'System opening entry',
+            'reference_type' => 'opening',
+            'reference_id' => null,
+            'lines' => [
+                ['account_id' => $this->acct('1010'), 'debit' => '100.00', 'credit' => '0'],
+                ['account_id' => $this->acct('3010'), 'debit' => '0', 'credit' => '100.00'],
+            ],
+        ], $maker);
+        $auditCount = DB::table('audit_logs')
+            ->where('model_type', $entry->getMorphClass())
+            ->where('model_id', $entry->id)
+            ->count();
+
+        $response = $this->actingAs($poster)->patchJson(
+            '/api/v1/journal-entries/'.$entry->hash_id.'/post',
+        );
+
+        $response->assertForbidden();
+        $this->assertStringContainsString('source document', (string) $response->json('message'));
+        $this->assertSame(JournalEntryStatus::Draft, $entry->fresh()->status);
+        $this->assertNull($entry->fresh()->posted_by);
+        $this->assertNull($entry->fresh()->posted_at);
+        $this->assertSame(1, JournalEntry::query()->count());
+        $this->assertSame($auditCount, DB::table('audit_logs')
+            ->where('model_type', $entry->getMorphClass())
+            ->where('model_id', $entry->id)
+            ->count());
+    }
+
+    public function test_source_linked_posted_entry_cannot_be_manually_reversed(): void
+    {
+        $system = $this->user('system_admin');
+        $actor = $this->user('finance_officer');
+        $journals = app(JournalEntryService::class);
+        $entry = $journals->create([
+            'date' => '2026-10-02',
+            'description' => 'System opening entry',
+            'reference_type' => 'opening',
+            'reference_id' => null,
+            'lines' => [
+                ['account_id' => $this->acct('1010'), 'debit' => '100.00', 'credit' => '0'],
+                ['account_id' => $this->acct('3010'), 'debit' => '0', 'credit' => '100.00'],
+            ],
+        ], $system);
+        $journals->postSystem($entry, $system->id);
+        $auditCount = DB::table('audit_logs')
+            ->where('model_type', $entry->getMorphClass())
+            ->where('model_id', $entry->id)
+            ->count();
+
+        $response = $this->actingAs($actor)->postJson(
+            '/api/v1/journal-entries/'.$entry->hash_id.'/reverse',
+            ['reverse_date' => '2026-10-02', 'reason' => 'Attempted source bypass.'],
+        );
+
+        $response->assertForbidden();
+        $this->assertStringContainsString('source document', (string) $response->json('message'));
+        $this->assertSame(JournalEntryStatus::Posted, $entry->fresh()->status);
+        $this->assertNull($entry->fresh()->reversed_by_entry_id);
+        $this->assertSame(1, JournalEntry::query()->count());
+        $this->assertSame($auditCount, DB::table('audit_logs')
+            ->where('model_type', $entry->getMorphClass())
+            ->where('model_id', $entry->id)
+            ->count());
+    }
+
+    public function test_reversal_maker_cannot_reverse_their_own_reversal(): void
+    {
+        $maker = $this->user('finance_officer');
+        $checker = $this->user('system_admin');
+        $journals = app(JournalEntryService::class);
+        $entry = $journals->post($this->draft($maker, '2026-10-02'), $checker);
+        $reversal = $journals->reverse($entry, $checker, null, 'Correct the original entry.');
+        $auditCount = DB::table('audit_logs')
+            ->where('model_type', $reversal->getMorphClass())
+            ->where('model_id', $reversal->id)
+            ->count();
+
+        $response = $this->actingAs($checker)->postJson(
+            '/api/v1/journal-entries/'.$reversal->hash_id.'/reverse',
+            ['reverse_date' => $reversal->date->toDateString(), 'reason' => 'Attempted self reversal.'],
+        );
+
+        $response->assertForbidden();
+        $this->assertStringContainsString('segregation of duties', (string) $response->json('message'));
+        $this->assertSame(JournalEntryStatus::Posted, $reversal->fresh()->status);
+        $this->assertNull($reversal->fresh()->reversed_by_entry_id);
+        $this->assertSame(2, JournalEntry::query()->count());
+        $this->assertSame($auditCount, DB::table('audit_logs')
+            ->where('model_type', $reversal->getMorphClass())
+            ->where('model_id', $reversal->id)
+            ->count());
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -450,7 +555,7 @@ SQL);
         $svc = app(JournalEntryService::class);
         $src = $svc->post($this->draft($maker, '2029-10-15', '250.00'), $checker);
 
-        $rev = $svc->reverse(JournalEntry::findOrFail($src->id), $checker, null, 'operator reason');
+        $rev = $svc->reverse(JournalEntry::findOrFail($src->id), $checker, $src->date, 'operator reason');
         $srcFresh = JournalEntry::findOrFail($src->id);
 
         // linked both ways
@@ -491,16 +596,17 @@ SQL);
 
     public function test_no_journal_payload_carries_a_raw_database_id(): void
     {
-        $admin = $this->user();
+        $maker = $this->user();
+        $checker = $this->user();
         $svc = app(JournalEntryService::class);
-        $src = $svc->post($this->draft($admin, '2029-11-15'), $admin);
-        $rev = $svc->reverse(JournalEntry::findOrFail($src->id), $admin, null, 'why');
+        $src = $svc->post($this->draft($maker, '2029-11-15'), $checker);
+        $rev = $svc->reverse(JournalEntry::findOrFail($src->id), $checker, $src->date, 'why');
 
         foreach ([
             'detail' => '/api/v1/journal-entries/'.$rev->hash_id,
             'list' => '/api/v1/journal-entries?per_page=100',
         ] as $what => $url) {
-            $r = $this->actingAs($admin)->getJson($url);
+            $r = $this->actingAs($checker)->getJson($url);
             $r->assertOk();
             $payload = $r->json();
             $rows = $what === 'list' ? ($payload['data'] ?? []) : [$payload['data']];
@@ -560,7 +666,7 @@ SQL);
         $this->assertSame('10.00', (string) $posted->total_debit);
         $this->assertHeadersEqualLines();
 
-        $svc->reverse(JournalEntry::findOrFail($posted->id), $checker, null, 'reconcile');
+        $svc->reverse(JournalEntry::findOrFail($posted->id), $checker, $posted->date, 'reconcile');
         $this->assertHeadersEqualLines();
 
         $archived = $this->draft($maker, '2029-12-03', '33.33');

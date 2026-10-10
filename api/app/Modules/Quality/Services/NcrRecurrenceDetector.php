@@ -39,6 +39,10 @@ class NcrRecurrenceDetector
 
     public static function signatureForInspection(Inspection $inspection): string
     {
+        if ($inspection->recorded_result && $inspection->problem_description) {
+            return self::descriptionSignature($inspection->problem_description);
+        }
+
         /** @var Collection<int, \App\Modules\Quality\Models\InspectionMeasurement> $measurements */
         $measurements = $inspection->relationLoaded('measurements')
             ? $inspection->measurements

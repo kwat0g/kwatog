@@ -20,6 +20,8 @@ class DeliveryScheduleResource extends JsonResource
         return [
             'id'             => $this->hash_id,
             'month'          => $this->month,
+            'planned_delivery_date' => $this->planned_delivery_date?->toDateString(),
+            'precision' => $this->planned_delivery_date ? 'day' : 'month',
             'status'         => $statusValue,
             'status_label'   => DeliveryScheduleStatus::tryFrom($statusValue)?->label() ?? Str::headline($statusValue),
             'source'         => $this->customer_id ? 'customer' : 'supplier',
@@ -69,7 +71,7 @@ class DeliveryScheduleResource extends JsonResource
                 'id'   => $this->reviewer->hash_id,
                 'name' => $this->reviewer->name,
             ] : null),
-            'can_cancel'     => $this->vendor_id && ($this->status === DeliveryScheduleStatus::Submitted || $this->status === DeliveryScheduleStatus::Acknowledged) ? true : false,
+            'can_cancel'     => false,
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),
         ];

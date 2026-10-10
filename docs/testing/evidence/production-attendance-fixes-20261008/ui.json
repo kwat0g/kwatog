@@ -1,0 +1,26 @@
+[
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "reads": 4,
+    "mutations": 0,
+    "accurateWarning": true,
+    "startHidden": true,
+    "crewEditorVisible": true,
+    "overflow": false
+  },
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "reads": 4,
+    "mutations": 0,
+    "accurateWarning": true,
+    "startHidden": true,
+    "crewEditorVisible": true,
+    "overflow": false
+  }
+]

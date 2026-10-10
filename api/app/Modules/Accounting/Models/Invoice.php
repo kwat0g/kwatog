@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Common\Models\AuditLog;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Auth\Models\User;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Invoice extends Model
 {
@@ -76,6 +78,11 @@ class Invoice extends Model
         return $this->hasMany(Collection::class)->orderBy('collection_date');
     }
 
+    public function paymentSubmissions(): HasMany
+    {
+        return $this->hasMany(InvoicePaymentSubmission::class)->orderByDesc('id');
+    }
+
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
@@ -86,12 +93,39 @@ class Invoice extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function prebillApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'prebill_approved_by');
+    }
+
+    public function auditLogs(): MorphMany
+    {
+        return $this->morphMany(AuditLog::class, 'model')->orderBy('id');
+    }
+
     public function scopeOpen(Builder $q): Builder
     {
         return $q->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]);
     }
 
     public function isDraft(): bool { return $this->status === InvoiceStatus::Draft; }
+
+    public function revisionToken(): string
+    {
+        $attributes = $this->getRawOriginal();
+        ksort($attributes);
+        $items = $this->items->sortBy('id')->map(static function (InvoiceItem $item): array {
+            $attributes = $item->getAttributes();
+            ksort($attributes);
+
+            return $attributes;
+        })->values()->all();
+
+        return hash('sha256', json_encode(
+            [$attributes, $items],
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+        ));
+    }
 
     public function isOverdue(): bool
     {

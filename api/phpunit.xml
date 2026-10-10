@@ -20,7 +20,7 @@
 -->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/phpunit-bootstrap.php"
          failOnEmptyTestSuite="true"
          colors="true">
     <testsuites>
@@ -52,6 +52,10 @@
         -->
         <env name="APP_ENV" value="testing" force="true"/>
         <server name="APP_ENV" value="testing" force="true"/>
+        <!-- Legacy measurement tests use a deterministic default; checklist tests opt in explicitly. -->
+        <env name="QC_CHECKLIST_CAPTURE_ENABLED" value="false" force="true"/>
+        <server name="QC_CHECKLIST_CAPTURE_ENABLED" value="false" force="true"/>
+        <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost,localhost:3000,localhost:5173,127.0.0.1,127.0.0.1:8000,::1" force="true"/>
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <!--
@@ -240,18 +244,20 @@
         -->
         <env name="BROADCAST_CONNECTION" value="log" force="true"/>
         <server name="BROADCAST_CONNECTION" value="log" force="true"/>
-        <env name="CACHE_STORE" value="array"/>
+        <server name="CACHE_STORE" value="array" force="true"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="db"/>
         <env name="DB_PORT" value="5432"/>
+        <!-- The bootstrap falls back to this database and only allows ogami_test* overrides. -->
         <env name="DB_DATABASE" value="ogami_test"/>
+        <server name="DB_DATABASE" value="ogami_test"/>
         <env name="DB_USERNAME" value="ogami"/>
-        <env name="DB_PASSWORD" value="ogami_dev_pw"/>
         <env name="MAIL_MAILER" value="array" force="true"/>
         <server name="MAIL_MAILER" value="array" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <server name="QUEUE_CONNECTION" value="sync" force="true"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <env name="SEED_DEMO_DATA" value="false" force="true"/>
+        <server name="SESSION_DRIVER" value="array" force="true"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
     </php>
 </phpunit>

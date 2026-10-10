@@ -8,6 +8,7 @@ use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
+use App\Modules\SupplyChain\Requests\ShipmentPlanRequest;
 use App\Modules\SupplyChain\Requests\AmendDeliveryAttemptRequest;
 use App\Modules\SupplyChain\Requests\ReserveDeliveryStockRequest;
 use App\Modules\SupplyChain\Requests\RetryDeliveryCostRequest;
@@ -77,6 +78,14 @@ class DeliveryController
             'data' => User::query()
                 ->where('is_active', true)
                 ->whereHas('role', static fn ($query) => $query->where('slug', 'driver'))
+                ->whereNotIn('id', Delivery::query()
+                    ->whereNotNull('driver_id')
+                    ->whereIn('status', [
+                        DeliveryStatus::Loading->value,
+                        DeliveryStatus::InTransit->value,
+                        DeliveryStatus::ReturnPending->value,
+                    ])
+                    ->select('driver_id'))
                 ->orderBy('name')
                 ->get(['id', 'name'])
                 ->map(static fn (User $driver): array => [
@@ -123,6 +132,13 @@ class DeliveryController
             $request->validated(),
             $request->user(),
             $request->idempotencyKey(),
+        ));
+    }
+
+    public function shipmentPlan(ShipmentPlanRequest $request, Delivery $delivery): DeliveryResource
+    {
+        return new DeliveryResource($this->service->saveShipmentPlan(
+            $delivery, $request->validated(), $request->user(), $request->file('loading_photo'),
         ));
     }
 
@@ -275,7 +291,7 @@ class DeliveryController
 
     public function restore(Delivery $delivery): JsonResponse
     {
-        $delivery->restore();
+        $this->service->restore($delivery);
         return response()->json(['message' => 'Delivery restored.']);
     }
 }

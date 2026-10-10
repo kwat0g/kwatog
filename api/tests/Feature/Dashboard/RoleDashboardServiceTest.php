@@ -173,6 +173,39 @@ class RoleDashboardServiceTest extends TestCase
         $this->assertSame(50, $rows[0]['percent']);
     }
 
+    public function test_zone_utilization_identifies_warehouse_when_zone_names_and_codes_repeat(): void
+    {
+        foreach ([['WH-A', 'Main'], ['WH-B', 'Overflow']] as [$warehouseCode, $warehouseName]) {
+            $warehouseId = DB::table('warehouses')->insertGetId([
+                'code' => $warehouseCode, 'name' => $warehouseName, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $zoneId = DB::table('warehouse_zones')->insertGetId([
+                'warehouse_id' => $warehouseId, 'name' => 'Raw Materials', 'code' => 'A',
+                'zone_type' => 'raw_materials', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('warehouse_locations')->insert([
+                'zone_id' => $zoneId, 'code' => $warehouseCode.'-A-1', 'is_active' => true, 'current_quantity' => 12.5,
+                'is_blocked' => false, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $service = app(WarehouseDashboardService::class);
+        $method = (new \ReflectionClass($service))->getMethod('warehouseZoneUtilization');
+        $method->setAccessible(true);
+        $rows = $method->invoke($service);
+
+        $warehouseCodes = array_column($rows, 'warehouse_code');
+        sort($warehouseCodes);
+        $this->assertSame(['WH-A', 'WH-B'], $warehouseCodes);
+        $warehouseNames = array_values(array_unique(array_column($rows, 'warehouse_name')));
+        sort($warehouseNames);
+        $this->assertSame(['Main', 'Overflow'], $warehouseNames);
+        $main = collect($rows)->firstWhere('warehouse_code', 'WH-A');
+        $this->assertSame('A', $main['zone']);
+        $this->assertSame('Raw Materials', $main['name']);
+        $this->assertSame(100, $main['percent']);
+    }
+
     public function test_low_stock_alerts_use_available_quantity_in_one_query(): void
     {
         $catId = DB::table('item_categories')->insertGetId([

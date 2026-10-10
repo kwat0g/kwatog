@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\E2E;
 
 use App\Common\Services\ApprovalService;
+use App\Common\Models\AuditLog;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
@@ -16,16 +17,20 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
+use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Models\MoldHistory;
 use App\Modules\Production\Models\MachineDowntime;
+use App\Modules\Production\Models\WorkOrder;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\UomSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -55,6 +60,7 @@ class AssetsMaintenanceAuditTest extends TestCase
     private User $vp;
     private User $prodManager;
     private User $maintenanceTech;
+    private User $maintenanceSupervisor;
     private User $employee;
 
     protected function setUp(): void
@@ -76,6 +82,13 @@ class AssetsMaintenanceAuditTest extends TestCase
         $this->vp = $make('vice_president');
         $this->prodManager = $make('production_manager');
         $this->maintenanceTech = $make('maintenance_tech');
+        $this->maintenanceSupervisor = $make('maintenance_supervisor');
+        $maintenanceDepartment = \App\Modules\HR\Models\Department::query()->firstOrCreate(
+            ['code' => 'MAINT'], ['name' => 'Maintenance & Engineering']);
+        $maintenanceEmployee = \App\Modules\HR\Models\Employee::factory()->create([
+            'department_id' => $maintenanceDepartment->id,
+        ]);
+        $this->maintenanceTech->update(['employee_id' => $maintenanceEmployee->id]);
         $this->employee = $make('employee');
     }
 
@@ -214,7 +227,7 @@ class AssetsMaintenanceAuditTest extends TestCase
 
         // ── Assign an active employee, then start ──
         $tech = $this->techEmployee();
-        $this->actingAs($this->admin)
+        $this->actingAs($this->maintenanceSupervisor)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo['id']}/assign", [
                 'employee_id' => $tech->hash_id,
             ])
@@ -254,8 +267,9 @@ class AssetsMaintenanceAuditTest extends TestCase
             'reserved_quantity' => 0,
             'weighted_avg_cost' => 250,
         ]);
-        $this->actingAs($this->maintenanceTech)
+        $issue = $this->actingAs($this->maintenanceTech)
             ->postJson("/api/v1/maintenance/work-orders/{$wo['id']}/spare-parts", [
+                'operation_key' => Str::uuid()->toString(),
                 'item_id' => $item->hash_id,
                 'location_id' => $location->hash_id,
                 'quantity' => 2,
@@ -268,6 +282,31 @@ class AssetsMaintenanceAuditTest extends TestCase
                 ->where('location_id', $location->id)
                 ->value('quantity'),
             'spare-part issue must draw from stock',
+        );
+        $this->actingAs($this->maintenanceTech)
+            ->postJson("/api/v1/maintenance/work-orders/{$wo['id']}/spare-parts/{$issue->json('data.id')}/returns", [
+                'operation_key' => Str::uuid()->toString(),
+                'quantity' => 1,
+            ])->assertOk();
+        $this->assertSame('4.000', (string) \App\Modules\Inventory\Models\StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $location->id)->value('quantity'));
+        $this->assertSame('250.00', (string) $woModel->fresh()->cost);
+        $issueMovement = \App\Modules\Inventory\Models\StockMovement::query()
+            ->where('reference_type', 'maintenance_work_order')->where('reference_id', $woModel->id)->firstOrFail();
+        $returnMovement = \App\Modules\Inventory\Models\StockMovement::query()
+            ->where('reference_type', 'stock_movement')->where('reference_id', $issueMovement->id)->firstOrFail();
+        $this->assertSame('250.00', (string) $returnMovement->total_cost);
+        $this->assertNotNull($issueMovement->journal_entry_id);
+        $this->assertNotNull($returnMovement->journal_entry_id);
+        $issueEntry = JournalEntry::query()->findOrFail($issueMovement->journal_entry_id);
+        $returnEntry = JournalEntry::query()->findOrFail($returnMovement->journal_entry_id);
+        $this->assertSame(
+            $issueEntry->lines()->where('debit', '>', 0)->firstOrFail()->account_id,
+            $returnEntry->lines()->where('credit', '>', 0)->firstOrFail()->account_id,
+        );
+        $this->assertSame(
+            $issueEntry->lines()->where('credit', '>', 0)->firstOrFail()->account_id,
+            $returnEntry->lines()->where('debit', '>', 0)->firstOrFail()->account_id,
         );
 
         // ── Complete: the elapsed minutes post as machine downtime ──
@@ -312,8 +351,8 @@ class AssetsMaintenanceAuditTest extends TestCase
             ->postJson('/api/v1/maintenance/schedules', $this->scheduleBody($mold))
             ->assertForbidden();
 
-        // ── Admin creates a shot-based preventive schedule on the mold ──
-        $this->actingAs($this->admin)
+        // ── Maintenance supervisor creates a shot-based preventive schedule ──
+        $this->actingAs($this->maintenanceSupervisor)
             ->postJson('/api/v1/maintenance/schedules', $this->scheduleBody($mold))
             ->assertCreated();
         $schedule = MaintenanceSchedule::query()
@@ -368,6 +407,85 @@ class AssetsMaintenanceAuditTest extends TestCase
         $this->assertNotNull($schedule->refresh()->deleted_at, 'schedule retires as a soft delete');
     }
 
+    public function test_in_use_mold_without_runtime_owner_blocks_maintenance_start_via_api(): void
+    {
+        $mold = $this->inUseMoldWithoutOwner();
+        $productionWo = WorkOrder::factory()->create([
+            'mold_id' => $mold->id,
+            'product_id' => $mold->product_id,
+            'status' => 'in_progress',
+        ]);
+        $created = $this->actingAs($this->maintenanceTech)
+            ->postJson('/api/v1/maintenance/work-orders', $this->mwoBody($mold))
+            ->assertCreated()
+            ->json('data');
+        $maintenanceWo = MaintenanceWorkOrder::query()->findOrFail(
+            (int) app('hashids')->decode((string) $created['id'])[0]
+        );
+        $auditCount = $this->maintenanceAuditCount($maintenanceWo);
+        $historyCount = MoldHistory::query()->where('mold_id', $mold->id)->count();
+        $logCount = MaintenanceLog::query()->where('work_order_id', $maintenanceWo->id)->count();
+
+        $this->actingAs($this->maintenanceTech)
+            ->patchJson("/api/v1/maintenance/work-orders/{$maintenanceWo->hash_id}/start")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('maintainable_id');
+
+        $this->assertSame('open', $maintenanceWo->fresh()->status->value);
+        $this->assertNull($maintenanceWo->fresh()->started_at);
+        $this->assertSame('in_use', $mold->fresh()->status->value);
+        $this->assertNull($mold->fresh()->current_work_order_id);
+        $this->assertSame(5000, (int) $mold->fresh()->current_shot_count);
+        $this->assertSame('in_progress', $productionWo->fresh()->status->value);
+        $this->assertSame($auditCount, $this->maintenanceAuditCount($maintenanceWo));
+        $this->assertSame($historyCount, MoldHistory::query()->where('mold_id', $mold->id)->count());
+        $this->assertSame($logCount, MaintenanceLog::query()->where('work_order_id', $maintenanceWo->id)->count());
+    }
+
+    public function test_in_use_mold_without_runtime_owner_blocks_maintenance_completion_via_api(): void
+    {
+        $mold = $this->inUseMoldWithoutOwner();
+        $productionWo = WorkOrder::factory()->create([
+            'mold_id' => $mold->id,
+            'product_id' => $mold->product_id,
+            'status' => 'in_progress',
+        ]);
+        $maintenanceWo = MaintenanceWorkOrder::create([
+            'mwo_number' => 'OWNERSHIP-'.substr(uniqid(), -8),
+            'maintainable_type' => 'mold',
+            'maintainable_id' => $mold->id,
+            'type' => 'corrective',
+            'priority' => 'high',
+            'description' => 'Legacy in-progress mold maintenance fixture',
+            'status' => 'in_progress',
+            'started_at' => now()->subHour(),
+            'assigned_to' => $this->maintenanceTech->employee_id,
+            'created_by' => $this->maintenanceTech->id,
+        ]);
+        $auditCount = $this->maintenanceAuditCount($maintenanceWo);
+        $historyCount = MoldHistory::query()->where('mold_id', $mold->id)->count();
+        $logCount = MaintenanceLog::query()->where('work_order_id', $maintenanceWo->id)->count();
+
+        $this->actingAs($this->maintenanceTech)
+            ->patchJson("/api/v1/maintenance/work-orders/{$maintenanceWo->hash_id}/complete", [
+                'remarks' => 'Attempt to release unresolved production mold.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('maintainable_id');
+
+        $this->assertSame('in_progress', $maintenanceWo->fresh()->status->value);
+        $this->assertNull($maintenanceWo->fresh()->completed_at);
+        $this->assertSame('in_use', $mold->fresh()->status->value);
+        $this->assertNull($mold->fresh()->current_work_order_id);
+        $this->assertSame(5000, (int) $mold->fresh()->current_shot_count);
+        $this->assertSame(0, (int) $mold->fresh()->maintenance_count);
+        $this->assertSame('0.00', $mold->fresh()->total_maintenance_cost);
+        $this->assertSame('in_progress', $productionWo->fresh()->status->value);
+        $this->assertSame($auditCount, $this->maintenanceAuditCount($maintenanceWo));
+        $this->assertSame($historyCount, MoldHistory::query()->where('mold_id', $mold->id)->count());
+        $this->assertSame($logCount, MaintenanceLog::query()->where('work_order_id', $maintenanceWo->id)->count());
+    }
+
     /* ══════════════════════════════════════════════════════════════════
        Fixtures & helpers
        ══════════════════════════════════════════════════════════════════ */
@@ -402,6 +520,30 @@ class AssetsMaintenanceAuditTest extends TestCase
         ];
     }
 
+    private function inUseMoldWithoutOwner(): Mold
+    {
+        return Mold::create([
+            'mold_code' => 'OWNERSHIP-'.substr(uniqid(), -8),
+            'name' => 'Mold with unresolved runtime owner',
+            'product_id' => \App\Modules\CRM\Models\Product::factory()->create()->id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 120,
+            'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000,
+            'current_shot_count' => 5000,
+            'status' => 'in_use',
+        ]);
+    }
+
+    private function maintenanceAuditCount(MaintenanceWorkOrder $wo): int
+    {
+        return AuditLog::query()
+            ->where('model_type', $wo->getMorphClass())
+            ->where('model_id', $wo->getKey())
+            ->count();
+    }
+
     private function scheduleBody(Mold $mold): array
     {
         return [
@@ -416,9 +558,7 @@ class AssetsMaintenanceAuditTest extends TestCase
 
     private function techEmployee(): \App\Modules\HR\Models\Employee
     {
-        return \App\Modules\HR\Models\Employee::factory()->create([
-            'status' => 'active',
-        ]);
+        return $this->maintenanceTech->employee;
     }
 
     private function disposalJeCount(Asset $asset): int

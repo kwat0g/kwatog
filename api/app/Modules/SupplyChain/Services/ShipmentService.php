@@ -46,6 +46,7 @@ class ShipmentService
         $q = Shipment::query()->with([
             'purchaseOrder:id,po_number,vendor_id',
             'creator:id,name,role_id',
+            'containers' => fn ($q) => $q->withTrashed()->orderBy('id'),
         ]);
 
         TrashedFilter::apply($q, $filters);
@@ -64,11 +65,37 @@ class ShipmentService
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b
                 ->where('shipment_number', SearchOperator::like(), $term)
-                ->orWhere('container_number', SearchOperator::like(), $term)
+                ->orWhereHas('containers', fn (Builder $containers) => $containers
+                    ->where('container_number', SearchOperator::like(), $term))
+                ->orWhere(function (Builder $legacy) use ($term): void {
+                    $legacy->where('container_number', SearchOperator::like(), $term)
+                        ->whereDoesntHave('containers', fn ($containers) => $containers->withTrashed());
+                })
                 ->orWhere('bl_number', SearchOperator::like(), $term));
         }
 
         return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+    }
+
+    public function purchaseOrderOptions(array $filters): LengthAwarePaginator
+    {
+        $statuses = array_map(
+            static fn (PurchaseOrderStatus $status): string => $status->value,
+            PurchaseOrderStatus::shipmentEligible(),
+        );
+        $q = PurchaseOrder::query()
+            ->with('vendor:id,name')
+            ->whereIn('status', $statuses);
+
+        if (! empty($filters['search'])) {
+            $term = '%'.trim((string) $filters['search']).'%';
+            $q->where(fn (Builder $b) => $b
+                ->where('po_number', SearchOperator::like(), $term)
+                ->orWhereHas('vendor', fn (Builder $vendor) => $vendor->where('name', SearchOperator::like(), $term)));
+        }
+
+        return $q->orderByDesc('date')->orderByDesc('id')
+            ->paginate(min((int) ($filters['per_page'] ?? 100), 100));
     }
 
     public function show(Shipment $s): Shipment
@@ -76,7 +103,8 @@ class ShipmentService
         return $s->load([
             'purchaseOrder:id,po_number,vendor_id',
             'creator:id,name,role_id',
-            'documents' => fn ($q) => $q->with('uploader:id,name,role_id')->orderBy('uploaded_at'),
+            'containers' => fn ($q) => $q->withTrashed()->orderBy('id'),
+            'documents' => fn ($q) => $q->withTrashed()->with('uploader:id,name,role_id')->orderBy('uploaded_at'),
             // ShipmentLandedCostResource is exposed via whenLoaded('landedCosts'),
             // so without this the detail endpoint always returned it as null and
             // the allocated costs were invisible to the UI.
@@ -93,6 +121,7 @@ class ShipmentService
      *   vessel?: string|null,
      *   container_number?: string|null,
      *   bl_number?: string|null,
+     *   incoterm?: string|null,
      *   etd?: string|null,
      *   eta?: string|null,
      *   freight_cost?: string|null,
@@ -109,8 +138,13 @@ class ShipmentService
             $po = PurchaseOrder::query()
                 ->lockForUpdate()
                 ->findOrFail((int) $data['purchase_order_id']);
-            if (! in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
+            if (! in_array($po->status, PurchaseOrderStatus::shipmentEligible(), true)) {
                 throw new BusinessRuleException("Purchase order {$po->po_number} is not open for shipment.");
+            }
+            $poIncoterm = $po->incoterm?->value;
+            $shipmentIncoterm = $data['incoterm'] ?? null;
+            if ($shipmentIncoterm !== null && $shipmentIncoterm !== $poIncoterm) {
+                throw new BusinessRuleException('Shipment incoterm must match the purchase order incoterm.');
             }
 
             $shipment = Shipment::create([
@@ -121,17 +155,9 @@ class ShipmentService
                 'vessel' => $data['vessel'] ?? null,
                 'container_number' => $data['container_number'] ?? null,
                 'bl_number' => $data['bl_number'] ?? null,
-                // CreateShipmentRequest validates `incoterm` against the Incoterm
-                // enum and the SPA create form submits it, but it was never copied
-                // into the payload: the caller got a 201 with the value silently
-                // gone and the column left null, so customs paperwork fell back to
-                // the PO's term or a blank.
-                //
-                // Persisting the submitted value is not the same as deciding whether
-                // a shipment term OVERRIDES or INHERITS the PO's — the generated PDFs
-                // still render `$po->incoterm`, and reconciling those two is left to
-                // the trade-document work in the action plan.
-                'incoterm' => $data['incoterm'] ?? null,
+                // Customs documents currently render the PO term; inherit it so
+                // the shipment resource cannot contradict its trade documents.
+                'incoterm' => $poIncoterm,
                 'etd' => $data['etd'] ?? null,
                 'eta' => $data['eta'] ?? null,
                 'freight_cost' => $data['freight_cost'] ?? '0.00',
@@ -142,6 +168,13 @@ class ShipmentService
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $by->id,
             ]);
+
+            if (! empty($data['container_number'])) {
+                Container::create([
+                    'shipment_id' => $shipment->id,
+                    'container_number' => $data['container_number'],
+                ]);
+            }
 
             return $this->show($shipment);
         });
@@ -215,8 +248,29 @@ class ShipmentService
                     'Landed cost cannot be changed after this shipment has an accepted receipt.'
                 );
             }
+            if (array_key_exists('container_number', $patch)) {
+                $containerNumber = $patch['container_number'];
+                if (! is_string($containerNumber) || trim($containerNumber) === '') {
+                    throw new BusinessRuleException('Archive a shipment container to remove it.');
+                }
+                $container = Container::query()
+                    ->where('shipment_id', $locked->id)
+                    ->orderBy('id')
+                    ->first();
+                if ($container) {
+                    $container->update(['container_number' => $containerNumber]);
+                } else {
+                    Container::create([
+                        'shipment_id' => $locked->id,
+                        'container_number' => $containerNumber,
+                    ]);
+                }
+            }
             if ($patch !== []) {
                 $locked->forceFill($patch)->save();
+                if ($costPatch !== []) {
+                    app(LandedCostService::class)->recalculate($locked);
+                }
             }
 
             return $this->show($locked);

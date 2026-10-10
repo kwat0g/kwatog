@@ -110,9 +110,27 @@ export async function assignCrewThroughUi(
 }
 
 export async function navigateSpa(page: Page, route: string): Promise<void> {
-  await page.evaluate((nextRoute) => {
-    window.history.pushState({}, '', nextRoute);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+  await page.evaluate(async (nextRoute) => {
+    const previousMain = document.querySelector('main');
+    const previousMarkup = previousMain?.innerHTML;
+    await new Promise<void>((resolve) => {
+      let timeout: number;
+      const observer = new MutationObserver(() => {
+        const currentMain = document.querySelector('main');
+        if (currentMain === previousMain && currentMain?.innerHTML === previousMarkup) return;
+        observer.disconnect();
+        window.clearTimeout(timeout);
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+      });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      window.history.pushState({}, '', nextRoute);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      // ponytail: identical not-found views fall through at 500 ms; add a router path marker if exact route commits matter.
+      timeout = window.setTimeout(() => {
+        observer.disconnect();
+        resolve();
+      }, 500);
+    });
   }, route);
 }
 
@@ -138,6 +156,8 @@ export const ROLES: Array<{ slug: string; email: string; password: string }> = [
 export interface NetworkCapture {
   errors: string[];
   failedRequests: Array<{ url: string; method: string; status: number }>;
+  requestFailures: Array<{ url: string; method: string; error: string }>;
+  waitForApiIdle: (quietMs?: number, timeoutMs?: number) => Promise<void>;
   stop: () => void;
 }
 
@@ -150,30 +170,72 @@ export function relevantErrors(net: NetworkCapture): string[] {
     return true;
   });
 }
-/** Collect console errors + failed API responses for a page. Attach BEFORE navigation. */
+/** Collect browser errors, failed requests, and failed API responses before navigation. */
 export function captureNetwork(page: Page): NetworkCapture {
   const errors: string[] = [];
   const failedRequests: NetworkCapture['failedRequests'] = [];
+  const requestFailures: NetworkCapture['requestFailures'] = [];
+  const pendingApi = new Set<Request>();
+  let lastApiActivity = Date.now();
 
   const onConsole = (msg: { type: () => string; text: () => string }) => {
     if (msg.type() === 'error') errors.push(msg.text().slice(0, 500));
   };
+  const onPageError = (error: Error) => errors.push(`Page error: ${error.message.slice(0, 500)}`);
   const onResponse = (res: Response) => {
     const url = res.url();
-    if (!url.includes('/api/')) return;
+    if (url.includes('/api/v1/')) onRequestDone(res.request());
     if (res.status() >= 400) {
       const req: Request = res.request();
       failedRequests.push({ url: url.slice(0, 200), method: req.method(), status: res.status() });
     }
   };
+  const onRequest = (request: Request) => {
+    if (!request.url().includes('/api/v1/')) return;
+    pendingApi.add(request);
+    lastApiActivity = Date.now();
+  };
+  const onRequestDone = (request: Request) => {
+    if (pendingApi.delete(request)) lastApiActivity = Date.now();
+  };
+  const onRequestFailed = (request: Request) => {
+    const failure = request.failure();
+    requestFailures.push({
+      url: request.url().slice(0, 200),
+      method: request.method(),
+      error: failure?.errorText ?? 'Request failed',
+    });
+    onRequestDone(request);
+  };
   page.on('console', onConsole as never);
+  page.on('pageerror', onPageError);
   page.on('response', onResponse);
+  page.on('request', onRequest);
+  page.on('requestfinished', onRequestDone);
+  page.on('requestfailed', onRequestFailed);
   return {
     errors,
     failedRequests,
+    requestFailures,
+    waitForApiIdle: async (quietMs = 500, timeoutMs = 15_000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (pendingApi.size > 0 || Date.now() - lastApiActivity < quietMs) {
+        if (Date.now() >= deadline) {
+          const pending = [...pendingApi].map((request) => `${request.method()} ${request.url()}`).slice(0, 5);
+          throw new Error(
+            `API requests did not settle within ${timeoutMs} ms${pending.length ? `: ${pending.join(', ')}` : ''}`,
+          );
+        }
+        await sleep(50);
+      }
+    },
     stop: () => {
       page.off('console', onConsole as never);
+      page.off('pageerror', onPageError);
       page.off('response', onResponse);
+      page.off('request', onRequest);
+      page.off('requestfinished', onRequestDone);
+      page.off('requestfailed', onRequestFailed);
     },
   };
 }

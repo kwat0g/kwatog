@@ -6,6 +6,7 @@ export interface ClearanceItem {
  item_key: string;
  label: string;
  status: 'pending' | 'cleared' | 'blocked';
+ can_sign?: boolean;
  signed_by: string | number | null;
  signed_at: string | null;
  remarks: string | null;
@@ -20,7 +21,7 @@ export interface Clearance {
  full_name: string;
  department?: { id: string; name: string; code: string } | null;
  position?: { id: string; title: string } | null;
- pay_type: string;
+ pay_type: string | null;
  date_hired: string | null;
  } | null;
  separation_date: string | null;
@@ -29,6 +30,7 @@ export interface Clearance {
  cleared_count: number;
  items_total: number;
  progress_pct: number;
+ can_view_final_pay?: boolean;
  final_pay_computed: boolean;
  final_pay_amount: string | null;
  final_pay_breakdown: Record<string, string> | null;

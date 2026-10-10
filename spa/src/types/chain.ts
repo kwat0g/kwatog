@@ -1,47 +1,51 @@
 export type ChainStepState = 'done' | 'active' | 'pending' | 'rejected' | 'skipped';
 
 export interface ChainStep {
- key: string;
- label: string;
- date?: string | null;
- state: ChainStepState;
- href?: string;
- onClick?: (step: ChainStep) => void;
- description?: string;
- is_overdue?: boolean;
- sla_label?: string;
+  key: string;
+  label: string;
+  shortLabel?: string;
+  date?: string | null;
+  state: ChainStepState;
+  href?: string;
+  onClick?: (step: ChainStep) => void;
+  description?: string | null;
+  is_overdue?: boolean;
+  sla_label?: string;
 }
 
 export type StageColor = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export interface StageRow {
- label: string;
- count: number;
- /** 0–100; controls the fill width of the progress bar. */
- percent: number;
- color?: StageColor;
+  label: string;
+  count: number;
+  /** 0–100; controls the fill width of the progress bar. */
+  percent: number;
+  color?: StageColor;
 }
 
 export type LinkedDot = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export interface LinkedItem {
- id: string;
- href?: string;
- meta?: string;
- chip?: { variant: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple'; text: string };
+  id: string;
+  href?: string;
+  meta?: string;
+  chip?: {
+    variant: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple';
+    text: string;
+  };
 }
 
 export interface LinkedGroup {
- label: string;
- items: LinkedItem[];
+  label: string;
+  items: LinkedItem[];
 }
 
 import type { ReactNode } from 'react';
 
 export interface ActivityItem {
- dot: LinkedDot;
- text: ReactNode;
- time: string;
+  dot: LinkedDot;
+  text: ReactNode;
+  time: string;
 }
 
 /**
@@ -53,20 +57,20 @@ export interface ActivityItem {
 export type ApprovalAction = 'pending' | 'approved' | 'rejected' | 'skipped';
 
 export interface ApprovalStep {
- /** 1-based step index. */
- step_order: number;
- /** Human-readable role label (e.g. "Department head"). */
- role: string;
- /** Approver display name once acted, otherwise null. */
- approver_name: string | null;
- action: ApprovalAction;
- /** ISO 8601 timestamp when the step was acted on. */
- acted_at: string | null;
- remarks: string | null;
- /** True if the step is pending and the SLA (24h) has elapsed. */
- is_overdue?: boolean;
- /** Hours since pending was raised — populated when is_overdue=true. */
- overdue_hours?: number | null;
+  /** 1-based step index. */
+  step_order: number;
+  /** Human-readable role label (e.g. "Department head"). */
+  role: string;
+  /** Approver display name once acted, otherwise null. */
+  approver_name: string | null;
+  action: ApprovalAction;
+  /** ISO 8601 timestamp when the step was acted on. */
+  acted_at: string | null;
+  remarks: string | null;
+  /** True if the step is pending and the SLA (24h) has elapsed. */
+  is_overdue?: boolean;
+  /** Hours since pending was raised — populated when is_overdue=true. */
+  overdue_hours?: number | null;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -75,22 +79,22 @@ export interface ApprovalStep {
  * ────────────────────────────────────────────────────────────────── */
 
 export type ChainEntityType =
- | 'sales_order'
- | 'work_order'
- | 'purchase_order'
- | 'delivery'
- | 'grn'
- | 'bill'
- | 'invoice';
+  | 'sales_order'
+  | 'work_order'
+  | 'purchase_order'
+  | 'delivery'
+  | 'grn'
+  | 'bill'
+  | 'invoice';
 
 export interface ChainStepEvent {
- entity_type: ChainEntityType;
- entity_id: string;
- doc_number: string;
- new_status: string;
- active_step: string;
- completed_steps: string[];
- actor_name: string | null;
+  entity_type: ChainEntityType;
+  entity_id: string;
+  doc_number: string;
+  new_status: string;
+  active_step: string;
+  completed_steps: string[];
+  actor_name: string | null;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -99,90 +103,90 @@ export interface ChainStepEvent {
  * ────────────────────────────────────────────────────────────────── */
 
 export interface ChainBottleneckRow {
- key: string;
- label: string;
- audience: string;
- entity_type: string;
- entity_id: string;
- doc_number: string;
- status: string;
- stuck_since: string | null;
- hours_stuck: number | null;
+  key: string;
+  label: string;
+  audience: string;
+  entity_type: string;
+  entity_id: string;
+  doc_number: string;
+  status: string;
+  stuck_since: string | null;
+  hours_stuck: number | null;
 }
 
 export interface ChainBottleneckGroup {
- key: string;
- label: string;
- audience: string | null;
- count: number;
- rows: ChainBottleneckRow[];
+  key: string;
+  label: string;
+  audience: string | null;
+  count: number;
+  rows: ChainBottleneckRow[];
 }
 
 export interface ChainBottlenecks {
- total: number;
- groups: ChainBottleneckGroup[];
- automation?: ChainAutomationSummary;
+  total: number;
+  groups: ChainBottleneckGroup[];
+  automation?: ChainAutomationSummary;
 }
 
 export type ChainAutomationStatus = 'healthy' | 'attention' | 'unavailable';
 
 export interface ChainAutomationSource {
- available: boolean;
- total: number;
- processing: number;
- stale_processing: number;
- failed: number;
- oldest_failure_at: string | null;
+  available: boolean;
+  total: number;
+  processing: number;
+  stale_processing: number;
+  failed: number;
+  oldest_failure_at: string | null;
 }
 
 export interface ChainOutboxAutomationSource extends ChainAutomationSource {
- pending: number;
- stale_pending: number;
- published: number;
- oldest_pending_at: string | null;
+  pending: number;
+  stale_pending: number;
+  published: number;
+  oldest_pending_at: string | null;
 }
 
 export interface ChainListenerAutomationSource extends ChainAutomationSource {
- retrying: number;
- completed: number;
- oldest_active_at: string | null;
- outcomes?: ChainListenerOutcomeSummary;
+  retrying: number;
+  completed: number;
+  oldest_active_at: string | null;
+  outcomes?: ChainListenerOutcomeSummary;
 }
 
 export interface ChainListenerOutcomeSummary {
- available: boolean;
- total: number;
- completed: number;
- skipped: number;
- manual_required: number;
- failed: number;
- unclassified: number;
+  available: boolean;
+  total: number;
+  completed: number;
+  skipped: number;
+  manual_required: number;
+  failed: number;
+  unclassified: number;
 }
 
 export interface ChainAutomationSummary {
- status: ChainAutomationStatus;
- outbox: ChainOutboxAutomationSource;
- listeners: ChainListenerAutomationSource;
- supplier_dispatch?: ChainSupplierDispatchAutomationSource;
- failed_jobs: ChainFailedJobAutomationSource;
+  status: ChainAutomationStatus;
+  outbox: ChainOutboxAutomationSource;
+  listeners: ChainListenerAutomationSource;
+  supplier_dispatch?: ChainSupplierDispatchAutomationSource;
+  failed_jobs: ChainFailedJobAutomationSource;
 }
 
 export interface ChainFailedJobAutomationSource {
- available: boolean;
- total: number;
- oldest_at: string | null;
+  available: boolean;
+  total: number;
+  oldest_at: string | null;
 }
 
 export interface ChainSupplierDispatchAutomationSource {
- available: boolean;
- total: number;
- pending: number;
- portal_available: number;
- manual_required: number;
- confirmed: number;
- failed: number;
- cancelled: number;
- stale_pending: number;
+  available: boolean;
+  total: number;
+  pending: number;
+  portal_available: number;
+  manual_required: number;
+  confirmed: number;
+  failed: number;
+  cancelled: number;
+  stale_pending: number;
   oldest_attention_at: string | null;
 }
 
@@ -191,7 +195,12 @@ export interface ChainSupplierDispatchAutomationSource {
  * ────────────────────────────────────────────────────────────────── */
 
 export type ChainListenerQueueStatus = 'processing' | 'retrying' | 'completed' | 'failed';
-export type ChainListenerOutcomeStatus = 'completed' | 'skipped' | 'manual_required' | 'failed' | 'unclassified';
+export type ChainListenerOutcomeStatus =
+  | 'completed'
+  | 'skipped'
+  | 'manual_required'
+  | 'failed'
+  | 'unclassified';
 export type ChainListenerResolutionStatus = 'open' | 'resolved' | 'not_required';
 
 export interface ChainListenerRun {

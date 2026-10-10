@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Enums\DocumentType;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentVaultService;
 use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Services\SettingsService;
@@ -16,6 +17,7 @@ use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Exceptions\InspectionCertificateException;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Models\InspectionPieceReading;
 use App\Modules\Quality\Support\LotDefectCounter;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
@@ -37,6 +39,17 @@ class CoCService
         private readonly PdfRenderService $renderer,
         private readonly DocumentVaultService $vault,
     ) {}
+
+    public function unavailableReason(Inspection $inspection): ?string
+    {
+        try {
+            $this->assertEligible($inspection);
+
+            return null;
+        } catch (InspectionCertificateException $exception) {
+            return $exception->getMessage();
+        }
+    }
 
     /**
      * Generate a CoC PDF for the given inspection. Optionally accepts a
@@ -86,9 +99,10 @@ class CoCService
         $bytes = $this->renderer->render('pdf.coc', $payload, [
             'title' => DocumentType::Coc->label(),
         ]);
+
         return [
-            'file_name'  => "CoC-{$cocNumber}.pdf",
-            'contents'   => $bytes,
+            'file_name' => "CoC-{$cocNumber}.pdf",
+            'contents' => $bytes,
             'coc_number' => $cocNumber,
         ];
     }
@@ -98,7 +112,7 @@ class CoCService
      */
     private function buildPayload(Inspection $inspection, ?string $deliveryNumber): array
     {
-        $inspection->loadMissing(['product', 'inspector', 'measurements']);
+        $inspection->loadMissing(['product', 'inspector', 'reviewer', 'specRevision', 'measurements']);
 
         // ADV3 — IATF 16949 traceability: pull batch / lot / material lot refs.
         [$batchNumber, $materialLotRefs] = $this->traceFromInspection($inspection);
@@ -122,51 +136,90 @@ class CoCService
                 $allPass = $rows->every(fn ($m) => $m->is_pass !== false);
 
                 return [
-                    'parameter'  => $first->parameter_name,
-                    'unit'       => $first->unit_of_measure,
-                    'nominal'    => $first->nominal_value,
-                    'tol_min'    => $first->tolerance_min,
-                    'tol_max'    => $first->tolerance_max,
+                    'parameter' => $first->parameter_name,
+                    'unit' => $first->unit_of_measure,
+                    'nominal' => $first->nominal_value,
+                    'tol_min' => $first->tolerance_min,
+                    'tol_max' => $first->tolerance_max,
                     'min_actual' => $values->min(),
                     'max_actual' => $values->max(),
-                    'sample_n'   => $rows->count(),
-                    'pass'       => $allPass,
+                    'sample_n' => $rows->count(),
+                    'pass' => $allPass,
                 ];
             })
             ->values()
             ->all();
 
+        $confirmedChecks = $inspection->usesConfirmedChecks();
+        $confirmedRequirements = $confirmedChecks ? $inspection->measurements->map(fn ($row) => [
+            'parameter' => $row->parameter_name,
+            'criterion' => $row->acceptance_criterion,
+            'nominal' => $row->nominal_value,
+            'minimum' => $row->tolerance_min,
+            'maximum' => $row->tolerance_max,
+            'unit' => $row->unit_of_measure,
+            'critical' => (bool) $row->is_critical,
+        ])->all() : [];
+
+        if ($confirmedChecks) {
+            $criticalMeasurements = [];
+        } elseif ($inspection->usesFullPieceCapture()) {
+            $actual = InspectionPieceReading::query()->where('inspection_id', $inspection->id)
+                ->selectRaw('requirement_id, MIN(measured_value) AS minimum_value, MAX(measured_value) AS maximum_value, COUNT(*) AS reading_count')
+                ->groupBy('requirement_id')->get()->keyBy('requirement_id');
+            $criticalMeasurements = $inspection->measurements->where('is_critical', true)
+                ->filter(fn ($row) => $row->requiresSizeReading())
+                ->map(fn ($row) => [
+                    'parameter' => $row->parameter_name, 'unit' => $row->unit_of_measure,
+                    'nominal' => $row->nominal_value, 'tol_min' => $row->tolerance_min, 'tol_max' => $row->tolerance_max,
+                    'min_actual' => $actual->get($row->id)?->minimum_value,
+                    'max_actual' => $actual->get($row->id)?->maximum_value,
+                    'sample_n' => (int) $actual->get($row->id)?->reading_count,
+                    'pass' => true,
+                ])->values()->all();
+        }
+
         $cocNumber = $this->cocNumber($inspection);
         $payload = [
-            'company'                 => $this->companyInfo(),
-            'user'                    => optional(request()?->user())->name,
-            'coc_number'              => $cocNumber,
-            'issued_at'               => now()->format('M d, Y H:i'),
-            'inspection_number'       => $inspection->inspection_number,
-            'stage'                   => $inspection->stage instanceof InspectionStage ? $inspection->stage->value : $inspection->stage,
-            'product_part_number'     => $inspection->product?->part_number ?? '—',
-            'product_name'            => $inspection->product?->name ?? '—',
-            'batch_quantity'          => (int) $inspection->batch_quantity,
-            'sample_size'             => (int) $inspection->sample_size,
-            'aql_code'                => $inspection->aql_code,
-            'defect_count'            => (int) $inspection->defect_count,
-            'accept_count'            => (int) $inspection->accept_count,
-            'inspector_name'          => $inspection->inspector?->name,
-            'delivery_number'         => $deliveryNumber,
+            'counted_capture' => $inspection->counted_capture,
+            'evidence_method' => $confirmedChecks ? 'confirmed_checks' : null,
+            'measurement_disclosure' => $confirmedChecks ? 'Numeric measurements were not recorded for this inspection.' : null,
+            'confirmed_requirements' => $confirmedRequirements,
+            'coverage_confirmed_at' => $inspection->coverage_confirmed_at?->toISOString(),
+            'capture_method' => $inspection->capture_method ?? 'measurement',
+            'checklist_results' => $inspection->usesChecklistCapture() && ! $inspection->counted_capture ? $inspection->measurements->map(fn ($row) => ['name' => $row->parameter_name, 'criterion' => $row->acceptance_criterion, 'nominal' => $row->nominal_value, 'minimum' => $row->tolerance_min, 'maximum' => $row->tolerance_max, 'unit' => $row->unit_of_measure, 'measured' => $row->measured_value, 'decision' => strtoupper($row->item_result)])->all() : [],
+            'source_quantity' => $inspection->source_quantity, 'source_uom_code' => $inspection->source_uom_code,
+            'inspected_quantity' => $inspection->inspected_quantity, 'reviewer_name' => $inspection->reviewer?->name,
+            'checklist_revision' => $inspection->specRevision?->version,
+            'company' => $this->companyInfo(),
+            'user' => optional(request()?->user())->name,
+            'coc_number' => $cocNumber,
+            'issued_at' => now()->format('M d, Y g:i A'),
+            'inspection_number' => $inspection->inspection_number,
+            'stage' => $inspection->stage instanceof InspectionStage ? $inspection->stage->value : $inspection->stage,
+            'product_part_number' => $inspection->product?->part_number ?? '—',
+            'product_name' => $inspection->product?->name ?? '—',
+            'batch_quantity' => (int) $inspection->batch_quantity,
+            'sample_size' => $confirmedChecks ? null : (int) $inspection->sample_size,
+            'aql_code' => $confirmedChecks ? null : $inspection->aql_code,
+            'defect_count' => $confirmedChecks ? (int) ($inspection->sample_defect_count ?? $inspection->defect_count) : (int) $inspection->defect_count,
+            'accept_count' => (int) $inspection->accept_count,
+            'inspector_name' => $inspection->inspector?->name,
+            'delivery_number' => $deliveryNumber,
             // OGAMI-008 — data-driven result + measurement table.
-            'inspection_result'       => $resultLabel,
-            'inspection_passed'       => $status === InspectionStatus::Passed,
-            'critical_measurements'   => $criticalMeasurements,
+            'inspection_result' => $resultLabel,
+            'inspection_passed' => $status === InspectionStatus::Passed,
+            'critical_measurements' => $confirmedChecks || ($inspection->usesChecklistCapture() && ! $inspection->counted_capture) ? [] : $criticalMeasurements,
             // ADV3 traceability fields (rendered conditionally by the blade).
-            'batch_number'            => $batchNumber,
-            'lot_number'              => $lotNumber,
+            'batch_number' => $batchNumber,
+            'lot_number' => $lotNumber,
             'material_lot_references' => $materialLotRefs,
-            'quality_standard'        => (string) $this->settings->get('landing.quality_policy.standard', ''),
-            'quality_certification'   => (string) $this->settings->get('landing.quality_policy.certification_title', ''),
-            'aql_level'               => (string) $this->settings->get('quality.aql.default_level', ''),
-            'quality_statement'       => (string) $this->settings->get('landing.quality_policy.certification_body', ''),
-            'quality_manager_name'    => (string) $this->settings->get('quality.coc.manager_name', ''),
-            'quality_manager_role'    => (string) $this->settings->get('quality.coc.manager_role', ''),
+            'quality_standard' => (string) $this->settings->get('landing.quality_policy.standard', ''),
+            'quality_certification' => (string) $this->settings->get('landing.quality_policy.certification_title', ''),
+            'aql_level' => $confirmedChecks || $inspection->usesChecklistCapture() ? '' : (string) $this->settings->get('quality.aql.default_level', ''),
+            'quality_statement' => (string) $this->settings->get('landing.quality_policy.certification_body', ''),
+            'quality_manager_name' => (string) $this->settings->get('quality.coc.manager_name', ''),
+            'quality_manager_role' => (string) $this->settings->get('quality.coc.manager_role', ''),
         ];
 
         return [$cocNumber, $payload];
@@ -174,7 +227,7 @@ class CoCService
 
     private function assertEligible(Inspection $inspection): void
     {
-        $stage  = $inspection->stage instanceof InspectionStage ? $inspection->stage : InspectionStage::from((string) $inspection->stage);
+        $stage = $inspection->stage instanceof InspectionStage ? $inspection->stage : InspectionStage::from((string) $inspection->stage);
         $status = $inspection->status instanceof InspectionStatus ? $inspection->status : InspectionStatus::from((string) $inspection->status);
 
         if ($stage !== InspectionStage::Outgoing) {
@@ -197,6 +250,10 @@ class CoCService
         }
 
         $this->assertEvidenceSupportsCertificate($inspection);
+        if ($inspection->work_order_output_id && ! $inspection->canReleaseOutgoing()) {
+            throw new InspectionCertificateException('CoC is unavailable while the output batch is on QC hold.', 'COC_BATCH_HELD');
+        }
+
     }
 
     /**
@@ -208,7 +265,7 @@ class CoCService
      * of the following means the certificate would misstate its own evidence:
      *
      *   - no measurement rows at all                 → nothing was measured
-     *   - a row with is_pass = null                  → the lot is part-inspected
+     *   - an unresolved measurement or attribute row → the lot is part-inspected
      *   - a critical row with is_pass = false        → evidence contradicts the verdict
      *   - defects above the acceptance number        → ditto
      *   - fewer sampled units than `sample_size`     → per-unit mode only; a
@@ -225,6 +282,62 @@ class CoCService
      */
     private function assertEvidenceSupportsCertificate(Inspection $inspection): void
     {
+        if ($inspection->usesFullPieceCapture()) {
+            try {
+                $evidence = app(InspectionService::class)->assertFullPieceEvidence($inspection);
+            } catch (BusinessRuleException $exception) {
+                throw new InspectionCertificateException($exception->getMessage(), 'COC_EVIDENCE_INCOMPLETE');
+            }
+            if ($evidence['defects']->isNotEmpty() || $evidence['failed_piece_numbers'] !== []
+                || ($evidence['critical_defect'] ?? false) || $inspection->critical_defect
+                || (int) ($inspection->sample_defect_count ?? $inspection->defect_count) !== 0) {
+                $message = $inspection->usesConfirmedChecks()
+                    ? 'CoC requires full confirmed coverage and zero defective pieces.'
+                    : 'CoC requires zero defective pieces and all required passing size readings.';
+                throw new InspectionCertificateException($message, 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+            }
+
+            return;
+        }
+        if ($inspection->counted_capture) {
+            $rows = $inspection->measurements()->get();
+            if (($inspection->counted_capture['version'] ?? null) !== 1
+                || ($inspection->counted_capture['result_policy'] ?? null) !== 'zero_defects'
+                || ($inspection->counted_capture['required_quantity'] ?? null) !== $inspection->batch_quantity
+                || ! $inspection->coverage_confirmed_at || $inspection->sample_defect_count !== 0 || $inspection->critical_defect
+                || $inspection->inspected_quantity !== ($inspection->counted_capture['required_quantity'] ?? null)
+                || $rows->isEmpty() || $rows->contains(fn ($row) => trim((string) $row->acceptance_criterion) === ''
+                    || ($row->requiresSizeReading() && ($row->measured_value === null || $row->evaluate() !== true)))) {
+                throw new InspectionCertificateException('CoC requires complete counted coverage, zero defective pieces and all required passing size readings.', 'COC_EVIDENCE_INCOMPLETE');
+            }
+
+            return;
+        }
+        if ($inspection->usesChecklistCapture()) {
+            $checks = $inspection->measurements()->get();
+            if ($checks->isEmpty()) {
+                throw new InspectionCertificateException(
+                    'CoC requires recorded inspection checks; this inspection has none.',
+                    'COC_NO_MEASUREMENT_EVIDENCE',
+                );
+            }
+            if ($checks->contains(fn ($row) => $row->item_result === 'failed'
+                || $row->is_pass === false || $row->evaluate() === false)) {
+                throw new InspectionCertificateException(
+                    'CoC cannot be issued: saved checklist evidence contradicts the passed result.',
+                    'COC_EVIDENCE_CONTRADICTS_VERDICT',
+                );
+            }
+            if ($checks->contains(fn ($row) => $row->item_result !== 'passed' || trim((string) $row->acceptance_criterion) === ''
+                || ($row->requiresSizeReading() && $row->measured_value === null))
+                || $inspection->inspected_quantity === null || $inspection->sample_defect_count === null
+                || $inspection->inspected_quantity < $inspection->sample_size || $inspection->inspected_quantity > $inspection->batch_quantity
+                || (int) $inspection->sample_defect_count !== 0 || $inspection->critical_defect) {
+                throw new InspectionCertificateException('CoC requires complete passing checks and attested sample coverage.', 'COC_EVIDENCE_INCOMPLETE');
+            }
+
+            return;
+        }
         $rows = InspectionMeasurement::query()
             ->where('inspection_id', $inspection->getKey())
             ->get();
@@ -236,7 +349,24 @@ class CoCService
             );
         }
 
-        $unresolved = $rows->filter(static fn (InspectionMeasurement $row): bool => $row->is_pass === null)->count();
+        $groups = $rows->groupBy(static fn (InspectionMeasurement $row): string => $row->checklistKey());
+
+        if ($rows->contains(static fn (InspectionMeasurement $row): bool => $row->item_result === 'failed')) {
+            throw new InspectionCertificateException(
+                'CoC cannot be issued: a checklist requirement was recorded as failed.',
+                'COC_EVIDENCE_CONTRADICTS_VERDICT',
+            );
+        }
+
+        $unresolved = $rows->filter(static function (InspectionMeasurement $row) use ($groups): bool {
+            if ($row->is_pass !== null) {
+                return false;
+            }
+
+            $itemResult = $groups->get($row->checklistKey())?->first()?->item_result;
+
+            return $row->hasTolerance() || $itemResult !== 'passed';
+        })->count();
         if ($unresolved > 0) {
             throw new InspectionCertificateException(
                 "CoC requires every sampled measurement to be resolved; {$unresolved} have no pass/fail recorded.",
@@ -328,6 +458,7 @@ class CoCService
         if (! $wo) {
             return [null, []];
         }
+
         return [
             $wo->batch_number,
             (array) ($wo->material_lot_references ?? []),
@@ -340,6 +471,7 @@ class CoCService
         if (! $deliveryNumber) {
             return null;
         }
+
         return ShipmentLot::query()
             ->join('deliveries', 'shipment_lots.delivery_id', '=', 'deliveries.id')
             ->where('deliveries.delivery_number', $deliveryNumber)
@@ -350,16 +482,16 @@ class CoCService
     private function companyInfo(): array
     {
         return [
-            'name'          => $this->setting('company.legal_name'),
-            'address'       => $this->setting('company.address'),
-            'phone'         => $this->setting('company.phone'),
-            'email'         => $this->setting('company.email'),
-            'tin'           => $this->setting('company.tin'),
-            'vat_status'    => $this->setting('company.vat_status'),
-            'logo_path'     => $this->setting('company.logo_path'),
-            'public_url'    => $this->setting('company.public_url'),
+            'name' => $this->setting('company.legal_name'),
+            'address' => $this->setting('company.address'),
+            'phone' => $this->setting('company.phone'),
+            'email' => $this->setting('company.email'),
+            'tin' => $this->setting('company.tin'),
+            'vat_status' => $this->setting('company.vat_status'),
+            'logo_path' => $this->setting('company.logo_path'),
+            'public_url' => $this->setting('company.public_url'),
             'certification' => $this->setting('company.certification'),
-            'disclaimer'    => $this->setting('pdf.footer_disclaimer'),
+            'disclaimer' => $this->setting('pdf.footer_disclaimer'),
         ];
     }
 
@@ -367,6 +499,7 @@ class CoCService
     {
         try {
             $val = $this->settings->get($key);
+
             return is_string($val) && trim($val) !== '' ? $val : '';
         } catch (\Throwable) {
             return '';

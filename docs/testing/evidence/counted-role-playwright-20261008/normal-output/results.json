@@ -1,0 +1,40 @@
+{
+  "results": [
+    {
+      "name": "Support role is denied with a valid output payload and submission key",
+      "status": "passed",
+      "detail": {
+        "status": 422
+      }
+    },
+    {
+      "name": "Recorder reports normal output after sample quality release",
+      "status": "passed",
+      "detail": {
+        "beforePhysical": 6,
+        "afterPhysical": 7,
+        "good": 1,
+        "rawStockUnchanged": true
+      }
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "method": "POST",
+      "path": "/production/my-work-orders/5KZYy8gNxw/outputs",
+      "status": 422,
+      "message": "Only the designated recorder can enter output for this crew."
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/production/work-orders/5KZYy8gNxw",
+      "status": 200
+    }
+  ]
+}

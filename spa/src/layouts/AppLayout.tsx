@@ -5,6 +5,7 @@ import { LuCircleHelp } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { Spinner } from '@/components/ui/Spinner';
 import { DevErrorPanel } from '@/components/dev/DevErrorPanel';
 import { OfflineBanner } from '@/components/ui/OfflineBanner';
 import { useAuthStore } from '@/stores/authStore';
@@ -34,16 +35,37 @@ function AppLayoutInner() {
  const features = useAuthStore((s) => s.features);
  const logout = useAuthStore((s) => s.logout);
  const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
- const { data: businessPolicies, isFetched: policiesFetched } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+ const {
+  data: businessPolicies,
+  isFetched: policiesFetched,
+  isError: policiesError,
+  isFetching: policiesFetching,
+  refetch: refetchPolicies,
+ } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
  // formatPeso reads the currency from a module variable, so a page that
  // rendered before this policy arrived kept bare numbers ("58,800.00", no ₱)
  // until something else re-rendered it. Hold route content until it is set.
  const [currencyApplied, setCurrencyApplied] = useState(false);
+ const routeLoading = (
+ <div className="flex min-h-[320px] items-center justify-center">
+ <Spinner size="lg" />
+ </div>
+ );
+
+ const functionalCurrencyCode = businessPolicies?.functional_currency_code;
+ const currencyUnavailable = policiesError || (policiesFetched && !functionalCurrencyCode?.trim());
 
  useEffect(() => {
- setFunctionalCurrency(businessPolicies?.functional_currency_code);
- if (policiesFetched) setCurrencyApplied(true);
- }, [businessPolicies?.functional_currency_code, policiesFetched]);
+ if (currencyUnavailable) {
+ setFunctionalCurrency(undefined);
+ setCurrencyApplied(false);
+ return;
+ }
+ if (functionalCurrencyCode?.trim()) {
+ setFunctionalCurrency(functionalCurrencyCode);
+ setCurrencyApplied(true);
+ }
+ }, [currencyUnavailable, functionalCurrencyCode]);
 
  // Listen for real-time permission and module toggle changes
  usePermissionSync();
@@ -70,20 +92,23 @@ function AppLayoutInner() {
  </a>
  <OfflineBanner />
  <Topbar
- user={user ? { name: user.name, email: user.email } : null}
+ user={user ? { name: user.name, email: user.email, avatarUrl: user.employee?.photo_url } : null}
  onLogout={onLogout}
- rightExtras={
- <Tooltip content="Keyboard shortcuts (?)">
- <Button
- variant="ghost"
- size="sm"
- iconOnly
- icon={<LuCircleHelp size={14} />}
- aria-label="Keyboard shortcuts"
- onClick={() => setHelpOpen(true)}
- className="text-muted hover:text-primary"
- />
- </Tooltip>
+  onOpenShortcuts={() => setHelpOpen(true)}
+  rightExtras={
+ <span className="hidden lg:inline-flex">
+  <Tooltip content="Keyboard shortcuts (?)">
+   <Button
+   variant="ghost"
+   size="sm"
+   iconOnly
+   icon={<LuCircleHelp size={14} />}
+   aria-label="Keyboard shortcuts"
+   onClick={() => setHelpOpen(true)}
+   className="min-h-[44px] min-w-[44px] text-muted hover:text-primary sm:min-h-0 sm:min-w-0"
+   />
+  </Tooltip>
+ </span>
  }
  />
  <div className="flex flex-1">
@@ -99,7 +124,23 @@ function AppLayoutInner() {
  * the user that page now, not their navigation.
  */}
  <ErrorBoundary>
- {currencyApplied && <Outlet />}
+ <Suspense fallback={routeLoading}>
+ {currencyUnavailable ? (
+ <div role="alert" className="px-5 py-4 text-sm text-danger-fg">
+ <p>Business currency settings are unavailable. Financial values are hidden until settings load.</p>
+ <Button
+  type="button"
+  variant="secondary"
+  size="sm"
+  loading={policiesFetching}
+  onClick={() => void refetchPolicies()}
+  className="mt-3"
+ >
+  Retry business settings
+ </Button>
+ </div>
+ ) : currencyApplied ? <Outlet /> : routeLoading}
+ </Suspense>
  </ErrorBoundary>
  </RouteTransition>
  </main>

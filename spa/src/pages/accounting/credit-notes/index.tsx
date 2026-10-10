@@ -396,10 +396,10 @@ function CreateCreditNoteModal({
               </div>
               <div className="col-span-2">
                 <Input
-                  step="0.01"
                   min="0"
                   className="font-mono tabular-nums text-right"
                   {...numberInputProps()}
+                  step="0.01"
                   {...register(`lines.${idx}.amount` as const)}
                   error={errors.lines?.[idx]?.amount?.message}
                 />

@@ -7,39 +7,40 @@ namespace Tests\Feature\Inventory;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Exceptions\MaterialReturnConflictException;
 use App\Modules\Inventory\Models\Item;
-use App\Modules\Inventory\Models\MaterialIssueSlip;
-use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\MaterialIssueService;
 use App\Modules\Inventory\Services\MaterialReturnService;
-use App\Modules\Inventory\Exceptions\MaterialReturnConflictException;
-use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
+use App\Modules\Production\Services\WorkOrderMaterialUsageService;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
-use App\Modules\Quality\Services\InspectionSpecService;
 use App\Modules\Quality\Services\InspectionService;
+use App\Modules\Quality\Services\InspectionSpecService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
+use Tests\Support\HasAssignedProductionCrew;
 use Tests\TestCase;
 
 class MaterialReturnServiceTest extends TestCase
 {
+    use HasAssignedProductionCrew;
     use RefreshDatabase;
 
     private User $user;
@@ -53,13 +54,15 @@ class MaterialReturnServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['inspection.checklist_capture_enabled' => true]);
         Event::fake();
         $this->seed(RolePermissionSeeder::class);
 
         $this->user = User::factory()->withRole('production_manager')->create();
         $this->product = Product::factory()->create();
         app(InspectionSpecService::class)->upsertForProduct($this->product->id, [
-            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual', 'is_critical' => false],
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual',
+                'acceptance_criterion' => 'No cracks, contamination, or visible surface damage.', 'is_critical' => false],
         ], $this->user->id);
         $this->item = Item::factory()->create([
             'unit_of_measure' => 'kg',
@@ -89,6 +92,8 @@ class MaterialReturnServiceTest extends TestCase
             'good_count' => 5,
             'reject_count' => 0,
             'defects' => [],
+            'crew_id' => $workOrder->crews()->whereNull('ended_at')->latest('id')->value('id'),
+            'recording_reason' => 'Warehouse regression output recording.',
         ], $this->user->id, 'material-return-auto-output');
 
         $returns = app(MaterialReturnService::class);
@@ -208,7 +213,7 @@ class MaterialReturnServiceTest extends TestCase
             ->where('location_id', $this->location->id)
             ->value('quantity'));
 
-        $groups = app(\App\Modules\Production\Services\WorkOrderMaterialUsageService::class)
+        $groups = app(WorkOrderMaterialUsageService::class)
             ->groups($workOrder, includeReservations: false);
         $material = collect($groups)->firstWhere('item_id', $this->item->id);
         $this->assertSame('2.000', $material['manual_quantity_issued']);
@@ -311,7 +316,7 @@ class MaterialReturnServiceTest extends TestCase
         $this->assertSame('1.000', $returnedQuantity);
         $this->assertSame('5.0100', (string) $movements[0]->unit_cost);
 
-        $groups = app(\App\Modules\Production\Services\WorkOrderMaterialUsageService::class)
+        $groups = app(WorkOrderMaterialUsageService::class)
             ->groups($workOrder, includeReservations: false);
         $material = collect($groups)->firstWhere('item_id', $this->item->id);
         $this->assertSame('0.000', $material['manual_quantity_issued']);
@@ -523,7 +528,7 @@ class MaterialReturnServiceTest extends TestCase
             'session_number' => 'SC-MRET-'.substr(uniqid(), -6),
             'title' => 'Material return freeze regression',
             'scope' => 'full',
-            'status' => \App\Modules\Inventory\Enums\StockCountSessionStatus::InProgress,
+            'status' => StockCountSessionStatus::InProgress,
             'created_by' => $this->user->id,
         ]);
         StockCountItem::create([
@@ -563,6 +568,8 @@ class MaterialReturnServiceTest extends TestCase
             'good_count' => 1,
             'reject_count' => 0,
             'defects' => [],
+            'crew_id' => $workOrder->crews()->whereNull('ended_at')->latest('id')->value('id'),
+            'recording_reason' => 'Warehouse regression output recording.',
         ], $this->user->id, 'manual-no-bom-return-output');
 
         $returns = app(MaterialReturnService::class);
@@ -598,6 +605,7 @@ class MaterialReturnServiceTest extends TestCase
 
     private function startBomWorkOrder(string $planSource = 'bom'): WorkOrder
     {
+        $this->travelTo(now()->startOfMinute());
         $workOrder = $this->confirmedWorkOrder(WorkOrderStatus::Planned, $planSource);
         $machine = Machine::factory()->create(['status' => 'idle']);
         $mold = Mold::create([
@@ -615,6 +623,8 @@ class MaterialReturnServiceTest extends TestCase
         ]);
         $mold->compatibleMachines()->syncWithoutDetaching([$machine->id]);
         $service = app(WorkOrderService::class);
+
+        $this->assignProductionCrew($workOrder, $this->user);
 
         return $service->start(
             $service->confirm($workOrder, $machine->id, $mold->id),
@@ -638,18 +648,35 @@ class MaterialReturnServiceTest extends TestCase
         $inspector = User::factory()->withRole('qc_inspector')->create();
         $checker = User::factory()->withRole('qc_inspector')->create();
         $service = app(InspectionService::class);
-        $service->recordItemResults($inspection, ['items' => $items, 'submit' => false], $inspector);
+        $startVersion = (int) $inspection->result_version;
+        $inspection = $service->recordItemResults($inspection, [
+            'expected_result_version' => $startVersion,
+            'items' => $items,
+            'submit' => false,
+        ], $inspector);
+        $this->assertSame(InspectionStatus::InProgress, $inspection->status);
+        $this->assertSame($startVersion + 1, (int) $inspection->result_version);
+        $this->assertSame($items, $inspection->measurements()->orderBy('id')
+            ->get()->map(fn ($measurement) => ['id' => $measurement->id, 'result' => $measurement->item_result])
+            ->all());
         $result = $service->recordBatchResult($inspection, [
+            'expected_result_version' => (int) $inspection->result_version,
+            'items' => $items,
             'coverage_confirmed' => true,
             'inspected_quantity' => (int) $inspection->sample_size,
             'sample_defect_count' => 0,
-            'result' => 'passed',
-            'critical_defect' => false,
-            'defects_removed_confirmed' => false,
         ], $inspector);
 
         if ($result->status === InspectionStatus::AwaitingReview) {
-            $result = $service->review($result, InspectionStatus::Passed->value, null, $checker);
+            $this->assertSame(0, (int) $result->accepted_quantity);
+            $this->assertNull($result->completed_at);
+            $result = $service->review($result, InspectionStatus::Passed->value, null, $checker,
+                (int) $result->result_version);
+            $this->assertSame($checker->id, (int) $result->reviewed_by);
+            $this->assertNotNull($result->reviewed_at);
+        } else {
+            $this->assertSame(InspectionStatus::Passed, $result->status);
+            $this->assertNull($result->reviewed_by);
         }
 
         $this->assertSame(InspectionStatus::Passed, $result->status);
@@ -664,8 +691,8 @@ class MaterialReturnServiceTest extends TestCase
             'quantity_produced' => 0,
             'quantity_good' => 0,
             'quantity_rejected' => 0,
-            'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'planned_start' => now()->toDateTimeString(),
+            'planned_end' => now()->addHours(4)->toDateTimeString(),
             'work_order_class' => 'standard',
             'material_plan_source' => $planSource,
             'created_by' => $this->user->id,

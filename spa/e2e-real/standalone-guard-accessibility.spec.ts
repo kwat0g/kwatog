@@ -16,11 +16,11 @@ test('denied factory routes render their not-found state inside a main landmark'
   network.stop();
 });
 
-test('denied maintenance mobile route renders its not-found state inside a main landmark', async ({ page }) => {
+test('denied maintenance route renders its not-found state inside a main landmark', async ({ page }) => {
   await loginAs(page, 'finance@ogami.test', 'password');
   const network = captureNetwork(page);
 
-  await page.goto('/maintenance/mobile', { waitUntil: 'domcontentloaded' });
+  await page.goto('/maintenance/work-orders', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await expect(page.getByRole('main')).toHaveCount(1);
 

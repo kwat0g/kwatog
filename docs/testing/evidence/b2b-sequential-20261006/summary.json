@@ -1,0 +1,221 @@
+{
+  "run_id": "B2BSEQ2606D",
+  "database": "ogami_test_o2c_browser_o2cuib2bseq2606d",
+  "base_url": "http://127.0.0.1:5243",
+  "checks": 347,
+  "failures": 0,
+  "checkpoints": [
+    {
+      "name": "1. Customer submission and sales confirmation",
+      "status": "passed",
+      "started_at": "2026-10-06T14:44:23.358Z",
+      "finished_at": "2026-10-06T14:44:55.771Z"
+    },
+    {
+      "name": "2. PPC crew, equipment and material reservation",
+      "status": "passed",
+      "started_at": "2026-10-06T14:44:55.772Z",
+      "finished_at": "2026-10-06T14:45:10.674Z"
+    },
+    {
+      "name": "3. Production start, material movement and handover",
+      "status": "passed",
+      "started_at": "2026-10-06T14:45:10.675Z",
+      "finished_at": "2026-10-06T14:45:42.812Z"
+    },
+    {
+      "name": "4. In-process QC release",
+      "status": "passed",
+      "started_at": "2026-10-06T14:45:42.812Z",
+      "finished_at": "2026-10-06T14:45:52.967Z"
+    },
+    {
+      "name": "5. Assigned employee output recording",
+      "status": "passed",
+      "started_at": "2026-10-06T14:45:52.967Z",
+      "finished_at": "2026-10-06T14:46:14.257Z"
+    },
+    {
+      "name": "6. Outgoing QC failure and automatic NCR",
+      "status": "passed",
+      "started_at": "2026-10-06T14:46:14.257Z",
+      "finished_at": "2026-10-06T14:46:34.883Z"
+    },
+    {
+      "name": "7. Full-batch sorting and inline repair decision",
+      "status": "passed",
+      "started_at": "2026-10-06T14:46:34.883Z",
+      "finished_at": "2026-10-06T14:46:43.268Z"
+    },
+    {
+      "name": "8. Same-WO one-piece repair",
+      "status": "passed",
+      "started_at": "2026-10-06T14:46:43.268Z",
+      "finished_at": "2026-10-06T14:47:25.165Z"
+    },
+    {
+      "name": "9. Fresh repair QC, NCR closure and automatic WO closure",
+      "status": "passed",
+      "started_at": "2026-10-06T14:47:25.166Z",
+      "finished_at": "2026-10-06T14:47:55.506Z"
+    },
+    {
+      "name": "10. Approved lot dispatch, driver proof and customer receipt",
+      "status": "passed",
+      "started_at": "2026-10-06T14:47:55.506Z",
+      "finished_at": "2026-10-06T14:49:09.765Z"
+    },
+    {
+      "name": "11. Invoice finalization, collection and SO closure",
+      "status": "passed",
+      "started_at": "2026-10-06T14:49:09.768Z",
+      "finished_at": "2026-10-06T14:49:51.325Z"
+    },
+    {
+      "name": "12. Supplier purchase request and approval",
+      "status": "passed",
+      "started_at": "2026-10-06T14:49:51.328Z",
+      "finished_at": "2026-10-06T14:50:13.804Z"
+    },
+    {
+      "name": "13. Purchase order approval, supplier acceptance and automatic GRN",
+      "status": "passed",
+      "started_at": "2026-10-06T14:50:13.806Z",
+      "finished_at": "2026-10-06T14:50:49.187Z"
+    },
+    {
+      "name": "14. Supplier receiving and one-piece QC failure",
+      "status": "passed",
+      "started_at": "2026-10-06T14:50:49.191Z",
+      "finished_at": "2026-10-06T14:51:12.666Z"
+    },
+    {
+      "name": "15. Supplier full-batch sorting and automatic one-piece return",
+      "status": "passed",
+      "started_at": "2026-10-06T14:51:12.669Z",
+      "finished_at": "2026-10-06T14:51:27.946Z"
+    },
+    {
+      "name": "16. Supplier return approval, completion and replacement PO",
+      "status": "passed",
+      "started_at": "2026-10-06T14:51:27.949Z",
+      "finished_at": "2026-10-06T14:52:06.596Z"
+    },
+    {
+      "name": "17. Replacement receiving, fresh QC and stock reconciliation",
+      "status": "passed",
+      "started_at": "2026-10-06T14:52:06.599Z",
+      "finished_at": "2026-10-06T14:52:46.313Z"
+    }
+  ],
+  "api_errors": [
+    "customer.o2c@ogami.test 401 GET /api/v1/auth/user",
+    "customer.o2c@ogami.test 401 GET /api/v1/auth/user",
+    "crm@ogami.test 401 GET /api/v1/auth/user",
+    "crm@ogami.test 401 GET /api/v1/auth/user",
+    "ppc@ogami.test 401 GET /api/v1/auth/user",
+    "ppc@ogami.test 401 GET /api/v1/auth/user",
+    "production@ogami.test 401 GET /api/v1/auth/user",
+    "production@ogami.test 401 GET /api/v1/auth/user",
+    "warehouse@ogami.test 401 GET /api/v1/auth/user",
+    "warehouse@ogami.test 401 GET /api/v1/auth/user",
+    "qc@ogami.test 401 GET /api/v1/auth/user",
+    "qc@ogami.test 401 GET /api/v1/auth/user",
+    "employee@ogami.test 401 GET /api/v1/auth/user",
+    "employee@ogami.test 401 GET /api/v1/auth/user",
+    "b2b.qc2@ogami.test 401 GET /api/v1/auth/user",
+    "b2b.qc2@ogami.test 401 GET /api/v1/auth/user",
+    "employee@ogami.test 401 GET /api/v1/auth/user",
+    "employee@ogami.test 401 GET /api/v1/auth/user",
+    "employee@ogami.test 401 GET /api/v1/auth/user",
+    "employee@ogami.test 401 GET /api/v1/auth/user",
+    "b2b.worker2@ogami.test 401 GET /api/v1/auth/user",
+    "b2b.worker2@ogami.test 401 GET /api/v1/auth/user",
+    "impex@ogami.test 401 GET /api/v1/auth/user",
+    "impex@ogami.test 401 GET /api/v1/auth/user",
+    "driver@ogami.test 401 GET /api/v1/auth/user",
+    "driver@ogami.test 401 GET /api/v1/auth/user",
+    "finance@ogami.test 401 GET /api/v1/auth/user",
+    "finance@ogami.test 401 GET /api/v1/auth/user",
+    "purchasing@ogami.test 401 GET /api/v1/auth/user",
+    "purchasing@ogami.test 401 GET /api/v1/auth/user",
+    "supplier.b2b@ogami.test 401 GET /api/v1/auth/user",
+    "supplier.b2b@ogami.test 401 GET /api/v1/auth/user",
+    "depthead@ogami.test 401 GET /api/v1/auth/user",
+    "depthead@ogami.test 401 GET /api/v1/auth/user"
+  ],
+  "http_errors": [],
+  "page_errors": [],
+  "console_errors": [
+    "customer.o2c@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "customer.o2c@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "crm@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "crm@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "ppc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "ppc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "production@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "production@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "warehouse@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "warehouse@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "qc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "qc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.qc2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.qc2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.worker2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.worker2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "impex@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "impex@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "driver@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "driver@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "finance@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "finance@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "purchasing@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "purchasing@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "supplier.b2b@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "supplier.b2b@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "depthead@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "depthead@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "expected_console_errors": [
+    "customer.o2c@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "customer.o2c@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "crm@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "crm@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "ppc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "ppc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "production@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "production@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "warehouse@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "warehouse@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "qc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "qc@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.qc2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.qc2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "employee@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.worker2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "b2b.worker2@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "impex@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "impex@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "driver@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "driver@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "finance@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "finance@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "purchasing@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "purchasing@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "supplier.b2b@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "supplier.b2b@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "depthead@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "depthead@ogami.test: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+}

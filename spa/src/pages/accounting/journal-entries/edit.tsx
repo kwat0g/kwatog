@@ -125,7 +125,7 @@ export default function EditJournalEntryPage() {
   <div>
    <PageHeader title={`Edit ${data.entry_number}`} backTo={`/accounting/journal-entries/${data.id}`} backLabel="Journal Entry" />
    <FormDraftBanner safety={safety} />
-   <form onSubmit={handleSubmit((values) => mutation.mutate(values), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
+   <form onSubmit={handleSubmit((values) => mutation.mutate(values), onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4 space-y-4">
     <Panel title="Header">
      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
@@ -145,7 +145,7 @@ export default function EditJournalEntryPage() {
       {fields.map((field, index) => (
        <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
         <div className="col-span-4">
-         <Select required {...register(`lines.${index}.account_id` as const)} error={errors.lines?.[index]?.account_id?.message}>
+         <Select aria-label={`Account for line ${index + 1}`} searchable required {...register(`lines.${index}.account_id` as const)} error={errors.lines?.[index]?.account_id?.message}>
           <option value="">— Select account —</option>
           {accounts.filter((account) => account.is_active).map((account) => (
            <option key={account.id} value={account.id}>{account.code} — {account.name}</option>
@@ -154,10 +154,10 @@ export default function EditJournalEntryPage() {
         </div>
         <div className="col-span-3"><Input placeholder="Memo" {...register(`lines.${index}.description` as const)} /></div>
         <div className="col-span-2">
-         <Input step="0.01" min="0" placeholder="0.00" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`lines.${index}.debit` as const)} error={errors.lines?.[index]?.debit?.message} />
+         <Input min="0" placeholder="0.00" className="font-mono tabular-nums text-right" {...numberInputProps()} step="0.01" {...register(`lines.${index}.debit` as const)} error={errors.lines?.[index]?.debit?.message} />
         </div>
         <div className="col-span-2">
-         <Input step="0.01" min="0" placeholder="0.00" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`lines.${index}.credit` as const)} error={errors.lines?.[index]?.credit?.message} />
+         <Input min="0" placeholder="0.00" className="font-mono tabular-nums text-right" {...numberInputProps()} step="0.01" {...register(`lines.${index}.credit` as const)} error={errors.lines?.[index]?.credit?.message} />
         </div>
         <div className="col-span-1 flex justify-end pt-1">
          {fields.length > 2 && <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)} className="text-muted hover:text-danger-fg">Remove</Button>}

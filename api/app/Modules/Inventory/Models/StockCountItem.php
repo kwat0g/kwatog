@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
-use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +20,7 @@ class StockCountItem extends Model
         'session_id', 'location_id', 'item_id',
         'system_quantity', 'counted_quantity', 'variance', 'variance_percent',
         'lot_number', 'status', 'counted_by', 'counted_at', 'notes',
-        'verified_by',
+        'verified_by', 'variance_allocations',
     ];
 
     protected $casts = [
@@ -29,6 +29,7 @@ class StockCountItem extends Model
         'variance' => 'decimal:3',
         'variance_percent' => 'decimal:2',
         'counted_at' => 'datetime',
+        'variance_allocations' => 'array',
         'status' => StockCountItemStatus::class,
     ];
 

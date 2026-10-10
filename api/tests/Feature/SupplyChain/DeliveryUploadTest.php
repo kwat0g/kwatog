@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\SupplyChain;
 
 use App\Modules\Accounting\Models\Customer;
-use App\Modules\Auth\Models\Permission;
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -68,6 +66,19 @@ class DeliveryUploadTest extends TestCase
         ]);
     }
 
+    public function test_receipt_upload_while_in_transit_records_arrival_and_stores_evidence(): void
+    {
+        $user = $this->makeUser();
+        $delivery = $this->seedDelivery($user, 'in_transit');
+
+        $result = $this->svc->uploadReceiptPhoto($delivery, UploadedFile::fake()->image('receipt.jpg'), $user);
+
+        $this->assertSame('delivered', $result->status->value);
+        $this->assertNotNull($result->delivered_at);
+        Storage::disk('local')->assertExists($result->receipt_photo_path);
+        $this->assertDatabaseHas('delivery_proofs', ['delivery_id' => $delivery->id, 'proof_type' => 'photo']);
+    }
+
     // ─── (b) Rollback path — file must be cleaned up on DB failure ────────────
 
     /**
@@ -119,18 +130,7 @@ class DeliveryUploadTest extends TestCase
 
     private function makeUser(): User
     {
-        $role = Role::create([
-            'name'        => 'Upload Test Role ' . uniqid(),
-            'slug'        => 'upload_test_' . uniqid(),
-            'description' => 'Test',
-        ]);
-        $perm = Permission::firstOrCreate(
-            ['slug' => 'supply_chain.deliveries.create'],
-            ['name' => 'Create Delivery', 'module' => 'supply_chain'],
-        );
-        $role->permissions()->syncWithoutDetaching([$perm->id]);
-
-        return User::factory()->create(['role_id' => $role->id]);
+        return User::factory()->withRole('driver')->create(['is_active' => true]);
     }
 
     private function seedCustomer(): Customer
@@ -166,6 +166,7 @@ class DeliveryUploadTest extends TestCase
             'status'          => $status,
             'scheduled_date'  => now()->toDateString(),
             'created_by'      => $user->id,
+            'driver_id'       => $user->id,
         ]);
     }
 }

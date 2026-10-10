@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class InspectionSpecItem extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected static function booted(): void
     {
@@ -41,7 +41,7 @@ class InspectionSpecItem extends Model
         static::updating(static function (self $item): void {
             $immutableFields = [
                 'inspection_spec_id', 'inspection_spec_revision_id', 'parameter_name',
-                'parameter_type', 'unit_of_measure', 'nominal_value', 'tolerance_min',
+                'acceptance_criterion', 'parameter_type', 'unit_of_measure', 'nominal_value', 'tolerance_min',
                 'tolerance_max', 'is_critical', 'sort_order', 'notes',
             ];
 
@@ -54,6 +54,7 @@ class InspectionSpecItem extends Model
     }
 
     protected $fillable = [
+        'acceptance_criterion',
         'inspection_spec_id', 'inspection_spec_revision_id', 'parameter_name', 'parameter_type',
         'unit_of_measure', 'nominal_value', 'tolerance_min', 'tolerance_max',
         'is_critical', 'sort_order', 'notes',
@@ -61,11 +62,11 @@ class InspectionSpecItem extends Model
 
     protected $casts = [
         'parameter_type' => InspectionParameterType::class,
-        'nominal_value'  => 'decimal:4',
-        'tolerance_min'  => 'decimal:4',
-        'tolerance_max'  => 'decimal:4',
-        'is_critical'    => 'boolean',
-        'sort_order'     => 'integer',
+        'nominal_value' => 'decimal:4',
+        'tolerance_min' => 'decimal:4',
+        'tolerance_max' => 'decimal:4',
+        'is_critical' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     public function spec(): BelongsTo
@@ -85,10 +86,19 @@ class InspectionSpecItem extends Model
      */
     public function evaluate(?float $measurement): ?bool
     {
-        if ($measurement === null) return null;
-        if ($this->tolerance_min === null && $this->tolerance_max === null) return null;
-        if ($this->tolerance_min !== null && $measurement < (float) $this->tolerance_min) return false;
-        if ($this->tolerance_max !== null && $measurement > (float) $this->tolerance_max) return false;
+        if ($measurement === null) {
+            return null;
+        }
+        if ($this->tolerance_min === null && $this->tolerance_max === null) {
+            return null;
+        }
+        if ($this->tolerance_min !== null && $measurement < (float) $this->tolerance_min) {
+            return false;
+        }
+        if ($this->tolerance_max !== null && $measurement > (float) $this->tolerance_max) {
+            return false;
+        }
+
         return true;
     }
 }

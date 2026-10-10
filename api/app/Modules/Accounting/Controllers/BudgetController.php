@@ -19,6 +19,7 @@ use App\Modules\Accounting\Services\BudgetActualsSyncService;
 use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\FiscalYearService;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -173,10 +174,19 @@ class BudgetController extends Controller
     }
 
     /** Show a single budget with line items. */
-    public function show(Budget $budget): JsonResponse
+    public function show(Request $request, Budget $budget): JsonResponse
     {
         $budget->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy', 'rejectedBy']);
         $this->consumption->hydrate(collect([$budget]));
+        $actor = $request->user();
+        $budget->setAttribute(
+            'can_approve',
+            $actor instanceof User
+                && $actor->hasPermission('budgeting.approve')
+                && $budget->status === 'submitted'
+                && (int) $budget->submitted_by !== (int) $actor->id
+                && $this->budgetService->hasDifferentRoleFromSubmitter($budget, $actor),
+        );
 
         return response()->json([
             'success' => true,

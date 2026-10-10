@@ -47,6 +47,10 @@ test.describe('Self-service portal — mobile (390px)', () => {
   });
 
   test('self-service home does not present a partial summary after a home-query failure', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '500 GET /api/v1/hr/self-service/home' },
+      { type: 'expected-http-response', description: '500 GET /api/v1/hr/self-service/home' },
+    );
     await page.route('**/api/v1/hr/self-service/home', async (route) => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'failed' }) });
     });
@@ -125,8 +129,10 @@ test.describe('Self-service portal — mobile (390px)', () => {
   });
 
   test('self-service /dtr renders', async ({ page }) => {
-    await page.route('**/api/v1/hr/self-service/attendance*', async (route) => {
+    let optionsRequested = false;
+    await page.route('**/api/v1/hr/self-service/attendance**', async (route) => {
       if (new URL(route.request().url()).pathname.endsWith('/options')) {
+        optionsRequested = true;
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
           data: { statuses: [{ value: 'present', label: 'Present' }] },
         })});
@@ -143,6 +149,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
     const bp = new BasePage(page);
     await expect(bp.deniedPageText).not.toBeVisible();
     await expect(page.getByRole('heading', { name: 'Daily Time Record' })).toBeVisible();
+    expect(optionsRequested).toBe(true);
   });
 
   test('self-service /loans renders', async ({ page }) => {
@@ -167,6 +174,10 @@ test.describe('Self-service portal — mobile (390px)', () => {
   });
 
   test('profile makes update-request failure explicit', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '500 GET /api/v1/hr/self-service/profile/update-requests' },
+      { type: 'expected-http-response', description: '500 GET /api/v1/hr/self-service/profile/update-requests' },
+    );
     await mockSelfServiceProfile(page, 500);
     await loginAs(page, 'employee', '/self-service/profile');
     await expect(page.getByText("Couldn’t load your change requests.")).toBeVisible();
@@ -174,6 +185,10 @@ test.describe('Self-service portal — mobile (390px)', () => {
   });
 
   test('notification catalogue failure does not render an empty preference matrix', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '500 GET /api/v1/notification-preferences/options' },
+      { type: 'expected-http-response', description: '500 GET /api/v1/notification-preferences/options' },
+    );
     await page.route('**/api/v1/notification-preferences', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
     });

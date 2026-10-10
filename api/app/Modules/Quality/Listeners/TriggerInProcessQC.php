@@ -67,6 +67,10 @@ class TriggerInProcessQC implements ShouldQueue
                     return null;
                 }
 
+                if ($lockedWo->usesFinishFirstQc()) {
+                    return null;
+                }
+
                 // Idempotent — if an in-process inspection already exists, skip.
                 // A CANCELLED one does not count: its slot is reusable (migration
                 // 0565 released the unique claim), so a WO whose in-process QC
@@ -75,6 +79,7 @@ class TriggerInProcessQC implements ShouldQueue
                     ->where('stage', InspectionStage::InProcess->value)
                     ->where('entity_type', InspectionEntityType::WorkOrder->value)
                     ->where('entity_id', $lockedWo->id)
+                    ->whereNull('wo_operation_id')
                     ->where('status', '!=', InspectionStatus::Cancelled->value)
                     ->exists();
                 if ($existing) {

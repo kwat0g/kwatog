@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
-use App\Common\Support\HashIdFilter;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
-use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Requests\AcceptGrnRequest;
 use App\Modules\Inventory\Requests\FinalizeGrnRequest;
-use App\Modules\Inventory\Requests\RejectGrnRequest;
 use App\Modules\Inventory\Requests\RejectGrnRemainderRequest;
+use App\Modules\Inventory\Requests\RejectGrnRequest;
 use App\Modules\Inventory\Requests\StoreGrnRequest;
 use App\Modules\Inventory\Resources\GoodsReceiptNoteResource;
 use App\Modules\Inventory\Resources\ReceivablePurchaseOrderResource;
@@ -20,10 +25,6 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\Accounting\Exceptions\ClosedPeriodException;
-use App\Modules\Inventory\Exceptions\InsufficientStockException;
-use App\Modules\Inventory\Exceptions\InvalidMovementException;
 
 class GoodsReceiptNoteController
 {
@@ -132,6 +133,7 @@ class GoodsReceiptNoteController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return (new GoodsReceiptNoteResource($grn))->response()->setStatusCode(201);
     }
 
@@ -143,10 +145,11 @@ class GoodsReceiptNoteController
     public function finalize(FinalizeGrnRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
     {
         try {
-            $result = $this->service->finalizeDraft($grn, $request->validated()['items'], $request->user());
+            $result = $this->service->finalizeDraft($grn, $request->validated()['items'], $request->user(), $request->validated()['supplier_shipment_id'] ?? null);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
+
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
@@ -161,7 +164,7 @@ class GoodsReceiptNoteController
                 foreach ($map as $key => $qty) {
                     $id = ctype_digit((string) $key)
                         ? (int) $key
-                        : \App\Modules\Inventory\Models\GrnItem::tryDecodeHash((string) $key);
+                        : GrnItem::tryDecodeHash((string) $key);
                     if ($id !== null) {
                         $decoded[$id] = $qty;
                     }
@@ -174,6 +177,7 @@ class GoodsReceiptNoteController
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             abort(422, $e->getMessage());
         }
+
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
@@ -184,6 +188,7 @@ class GoodsReceiptNoteController
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
+
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
@@ -194,6 +199,7 @@ class GoodsReceiptNoteController
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
+
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
@@ -212,33 +218,42 @@ class GoodsReceiptNoteController
         // StoreGrnRequest already uses.
         $request->merge(['idempotency_key' => $request->header('Idempotency-Key')]);
         $data = $request->validate([
-            'idempotency_key'                    => ['nullable', 'string', 'max:128', 'regex:/^[A-Za-z0-9._:-]+$/D'],
-            'purchase_order_id'                  => ['required', 'string'],
-            'received_date'                      => ['nullable', 'date', 'before_or_equal:today'],
-            'remarks'                            => ['nullable', 'string'],
-            'items'                              => ['required', 'array', 'min:1'],
-            'items.*.purchase_order_item_id'     => ['required', 'string'],
-            'items.*.item_id'                    => ['required', 'string'],
-            'items.*.location_id'                => ['required', 'string'],
-            'items.*.quantity_received'           => ['required', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
-            'items.*.unit_cost'                  => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
-            'items.*.received_uom_code'          => ['nullable', 'string', 'max:20'],
-            'items.*.lot_number'                 => ['nullable', 'string', 'max:50'],
-            'items.*.material_lot_number'        => ['nullable', 'string', 'max:50'],
-            'items.*.supplier_lot_reference'     => ['nullable', 'string', 'max:100'],
-            'items.*.expiry_date'                => ['nullable', 'date'],
-            'items.*.moisture_percentage'       => ['nullable', 'decimal:0,3', 'min:0', 'max:100'],
-            'items.*.coa_document_path'         => ['nullable', 'string', 'max:500'],
-            'items.*.coa_verified'              => ['prohibited'],
-            'items.*.remarks'                    => ['nullable', 'string'],
-            'qc.result'                          => ['required', 'in:passed,failed,passed_with_remarks,pending'],
-            'qc.inspector_id'                    => ['nullable', 'string'],
-            'qc.product_id'                      => ['nullable', 'string'],
-            'qc.checks'                          => ['nullable', 'array'],
-            'qc.remarks'                         => ['nullable', 'string'],
-            'qc.failure_reason'                  => ['nullable', 'required_if:qc.result,failed', 'string'],
-            'qc.disposition'                     => ['nullable', 'string', 'in:return_to_supplier'],
-            'qc.is_quality_failure'              => ['nullable', 'boolean'],
+            'idempotency_key' => ['nullable', 'string', 'max:128', 'regex:/^[A-Za-z0-9._:-]+$/D'],
+            'purchase_order_id' => ['required', 'string'],
+            'received_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'remarks' => ['nullable', 'string'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.purchase_order_item_id' => ['required', 'string'],
+            'items.*.item_id' => ['required', 'string'],
+            'items.*.location_id' => ['required', 'string'],
+            'items.*.quantity_received' => ['required', 'decimal:0,3', 'min:0.001', 'max:999999999999.999'],
+            'items.*.unit_cost' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
+            'items.*.received_uom_code' => ['nullable', 'string', 'max:20'],
+            'items.*.lot_number' => ['nullable', 'string', 'max:50'],
+            'items.*.material_lot_number' => ['nullable', 'string', 'max:50'],
+            'items.*.supplier_lot_reference' => ['nullable', 'string', 'max:100'],
+            'items.*.expiry_date' => ['nullable', 'date'],
+            'items.*.moisture_percentage' => ['nullable', 'decimal:0,3', 'min:0', 'max:100'],
+            'items.*.coa_document_path' => ['nullable', 'string', 'max:500'],
+            'items.*.coa_verified' => ['prohibited'],
+            'items.*.remarks' => ['nullable', 'string'],
+            'qc.result' => ['required', 'in:passed,failed,passed_with_remarks,pending'],
+            'qc.inspector_id' => ['nullable', 'string'],
+            'qc.product_id' => ['nullable', 'string'],
+            'qc.checks' => ['nullable', 'array'],
+            'qc.checks.*.label' => ['required_with:qc.checks', 'string', 'max:255', 'distinct:strict'],
+            'qc.checks.*.passed' => ['required_with:qc.checks', 'boolean'],
+            'qc.checks.*.problem_description' => ['nullable', 'string', 'max:500'],
+            'qc.remarks' => ['nullable', 'string'],
+            'qc.coverage_confirmed' => ['sometimes', 'boolean'],
+            'qc.inspected_quantity' => ['sometimes', 'integer', 'min:1'],
+            'qc.sample_defect_count' => ['sometimes', 'integer', 'min:0'],
+            'qc.critical_defect' => ['sometimes', 'boolean'],
+            'qc.defects_removed_confirmed' => ['sometimes', 'boolean'],
+            'qc.problem_description' => ['nullable', 'string', 'max:2000'],
+            'qc.failure_reason' => ['nullable', 'required_if:qc.result,failed', 'string'],
+            'qc.disposition' => ['nullable', 'string', 'in:return_to_supplier'],
+            'qc.is_quality_failure' => ['nullable', 'boolean'],
         ]);
 
         // Receiving and Quality are separate responsibilities. Inventory may
@@ -264,10 +279,22 @@ class GoodsReceiptNoteController
                 $data['items'],
                 [
                     'received_date' => $data['received_date'] ?? null,
-                    'remarks'       => $data['remarks'] ?? null,
+                    'remarks' => $data['remarks'] ?? null,
                     'idempotency_key' => $data['idempotency_key'] ?? null,
                 ],
-                $data['qc'],
+                array_replace($data['qc'], array_intersect_key([
+                    'inspected_quantity' => $request->integer('qc.inspected_quantity'),
+                    'sample_defect_count' => $request->integer('qc.sample_defect_count'),
+                    'critical_defect' => $request->boolean('qc.critical_defect'),
+                    'defects_removed_confirmed' => $request->boolean('qc.defects_removed_confirmed'),
+                    'coverage_confirmed' => $request->boolean('qc.coverage_confirmed'),
+                    'checks' => array_map(
+                        static fn (array $check): array => array_replace($check, [
+                            'passed' => filter_var($check['passed'], FILTER_VALIDATE_BOOLEAN),
+                        ]),
+                        $data['qc']['checks'] ?? [],
+                    ),
+                ], $data['qc'])),
                 $request->user(),
             );
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
@@ -275,9 +302,9 @@ class GoodsReceiptNoteController
         }
 
         return response()->json([
-            'data'          => (new GoodsReceiptNoteResource($result['grn']))->resolve(),
-            'qc_result'     => $result['qc_result'],
-            'disposition'   => $result['disposition'],
+            'data' => (new GoodsReceiptNoteResource($result['grn']))->resolve(),
+            'qc_result' => $result['qc_result'],
+            'disposition' => $result['disposition'],
             'stock_updated' => $result['stock_updated'],
         ], 201);
     }

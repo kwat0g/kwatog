@@ -1,0 +1,132 @@
+
+   PASS  Tests\Feature\Attendance\AttendanceHardeningTest
+  ✓ overtime decisions are scoped to the approvers department           19.50s  
+  ✓ manual attendance writes are blocked for a locked payroll period     0.17s  
+  ✓ computed payroll inputs stay frozen after employee transfer          0.17s  
+  ✓ paired csv import allows correction in a voided payroll period       0.24s  
+  ✓ shift assignments close only the current range and reject future ov… 0.17s  
+  ✓ inactive shift cannot be assigned to an employee                     0.09s  
+  ✓ shift with an open assignment cannot be deactivated                  0.11s  
+  ✓ shift time change recomputes unlocked attendance rows                0.26s  
+  ✓ holiday creation recomputes unlocked attendance rows                 0.17s  
+  ✓ holidays are unique by active date and shift updates merge times     0.08s  
+  ✓ soft deleted attendance shift and holiday can be restored through t… 1.14s  
+  ✓ working days are preserved and legacy calendars are not guessed      0.27s  
+  ✓ assignment api requires calendar and hr configuration preserves dat… 1.22s  
+
+   PASS  Tests\Feature\Attendance\ImportManualCorrectionGuardTest
+  ✓ reimporting the same file leaves a manual correction untouched       0.22s  
+  ✓ a manual row the import would only fill is skipped too               0.15s  
+  ✓ an exact replay of a manual row is a noop success                    0.29s  
+  ✓ an exact replay of an untouched imported row still succeeds          0.22s  
+  ✓ biometric reimport cannot overwrite approved leave                   0.12s  
+  ✓ a guarded day does not fail the rest of the file                     0.27s  
+  ✓ raw punch reimport leaves a manual correction untouched              0.22s  
+
+   PASS  Tests\Feature\Attendance\PunchImportMergeTest
+  ✓ paired import keeps earliest in and latest out across sources        0.28s  
+  ✓ replaying the same file is idempotent                                0.31s  
+  ✓ import without app punches behaves as before                         0.15s  
+  ✓ raw punch import merges app punches                                  0.23s  
+
+   PASS  Tests\Feature\Attendance\PunchShiftSessionTest
+  ✓ open night session uses its stored shift after assignment rotates    0.25s  
+  ✓ midnight uses previous workday window and enforces earliest out      0.25s  
+  ✓ inactive stored shift cannot be replaced by new assignment           0.23s  
+  ✓ archived stored shift cannot be replaced by new assignment           0.23s  
+  ✓ missing open attendance cannot attach out to a new day               0.18s  
+  ✓ open session row guards still reject manual leave and archived days  0.38s  
+  ✓ stale night session starts new day and normal day punches still wor… 0.36s  
+Worker options: 41 employees, 16 queries
+
+   PASS  Tests\Feature\Production\ProductionAttendanceConnectionTest
+  ✓ accepted reentry is present without erasing payroll clock out        1.49s  
+  ✓ clock in before shift is explained as shift coverage not missing at… 1.29s  
+  ✓ worker options batch reads and do not reuse stale attendance         2.45s  
+  ✓ missing calendar and overtime do not imply shift coverage            1.49s  
+  ✓ shift and calendar edits cannot break a committed work order         1.29s  
+  ✓ clock out notifies managers and blocks new operations not historica… 1.62s  
+  ✓ punched shift history requires a future assignment and new shift de… 1.54s  
+  ✓ expired active work requires hr impact review                        1.42s  
+
+   PASS  Tests\Feature\Production\WorkOrderAttendanceSafetyTest
+  ✓ start check is read only and missing attendance requires confirmati… 1.57s  
+  ✓ legacy visual spec missing pass requirement blocks readiness and st… 2.21s  
+  ✓ future slot offers a read only suggestion without requiring manual…  1.69s  
+  ✓ future schedule still revalidates duration and crew before waiting   1.74s  
+  ✓ preferred day search uses plant calendar and offers next available…  1.59s  
+  ✓ preferred day rejects invalid past or excessively distant dates      1.26s  
+  ✓ material and quality blockers do not claim resources or start work   1.43s  
+  ✓ employee cannot check management readiness or approve suggestions    1.27s  
+  ✓ absence blocks start and short remaining slot needs rescheduling     1.42s  
+  ✓ approval revalidates versions and keeps production confirmed         1.69s  
+  ✓ no available crew or equipment deadline returns blockers without mu… 1.33s  
+  ✓ manual review allows exact deadline but blocks later finish without… 1.50s  
+  ✓ paused late suggestion requires explicit approval and execution rec… 1.61s  
+  ✓ ppc cannot authorize late production even with a reason              1.32s  
+  ✓ suggestion replaces off shift worker and can start only inside appr… 2.30s  
+  ✓ two hour reservation preserves estimates and scales for long runs    1.27s  
+  ✓ early start requires verified attendance and preserves approved tim… 1.90s  
+  ✓ early start lists unverified workers once without allowing start     1.69s  
+  ✓ super late start requires acknowledgement and rechecks attendance    2.02s  
+  ✓ fifteen minute grace uses existing reservation and later start requ… 1.90s  
+  ✓ late acknowledgement does not override equipment conflicts or deadl… 1.67s  
+  ✓ stale schedule and off duty workers block late start without mutati… 1.54s  
+  ✓ late presence confirmation uses actual reservation for recorder acc… 1.76s  
+  ✓ late resume keeps started schedule immutable and reserves remaining… 1.56s  
+  ✓ late start rejects worker overlap even when equipment is free        1.57s  
+  ✓ late start retains approved end when remaining work fits shift       1.97s  
+  ✓ absence offers worker recovery without rescheduling                  1.41s  
+  ✓ operation setup rejects absent operator                              1.41s  
+  ✓ running extension preserves history and restores recorder access     1.91s  
+  ✓ running extension rejects conflict absence and unapproved deadline   1.86s  
+  ✓ extension conflict and unprivileged actor do not mutate run          1.42s  
+  ✓ operation resume rejects clocked out operator                        1.33s  
+  ✓ schedule page uses same late execution readiness                     1.44s  
+  ✓ operation output requires reason after operator clockout             1.60s  
+  ✓ early punch is present but does not allow start before shift         1.28s  
+  ✓ archived attendance and recorded short session block assignment      1.42s  
+  ✓ later shift is provisional and exposes selected shift times          1.57s  
+  ✓ immediate suggestion prefers present replacement without changing a… 1.64s  
+  ✓ clocked out recorder is blocked and manager requires explicit late…  1.69s  
+  ✓ missing punch can use current start attestation but explicit absenc… 1.68s  
+  ✓ previous presence confirmation does not cover a replacement slot     1.50s  
+  ✓ expired slot blocks employee output but preserves management late r… 1.77s  
+  ✓ half day leave requires explicit hr review without invented clock t… 1.65s  
+  ✓ invalid punch cannot be overridden by presence confirmation          1.36s  
+  ✓ http output blocks clocked out worker and accepts explained managem… 1.66s  
+
+   PASS  Tests\Feature\Production\WorkOrderCrewTest
+  ✓ multiple workers one recorder and handover keep original history     0.74s  
+  ✓ staffing bounds reject invalid crew without saving                   0.16s  
+  ✓ unassigned employee cannot read wo or general production list        0.19s  
+  ✓ worker batch output uses hr shift and exact replay after completion  2.10s  
+  ✓ http assignment bounds and recorder membership are enforced          0.26s  
+  ✓ office recorder can resolve only own receipt without an employee li… 0.21s  
+  ✓ maximum staffing inactive members and portal accounts are rejected   0.54s  
+  ✓ same worker can hold separate slots but overlap preserves both crew… 0.45s  
+  ✓ manual future assignment without schedule id requires hr shift cove… 0.25s  
+  ✓ newly approved leave blocks start after assignment                   0.36s  
+  ✓ non production options and assignment are rejected                   0.32s  
+  ✓ suggestion requires shift and preserves valid crew without writes    0.42s  
+  ✓ suggestion staffing overrides are read only and select the requeste… 0.41s  
+  ✓ suggestion staffing override reports shortage and preserves current… 0.72s  
+  ✓ worker options explain unavailability and include all production em… 1.28s  
+  ✓ only employee accounts can be suggested or assigned as production w… 0.38s  
+  ✓ runtime overrun and department transfer block output readiness       0.42s  
+  ✓ overnight shift covers next date and approved leave excludes worker  0.25s  
+  ✓ missing slot suggestion read is pure and assign permission cannot c… 0.24s  
+  ✓ proposal day is validated and never saved until confirmation         0.59s  
+  ✓ assign only actor cannot generate new date proposal                  0.18s  
+  ✓ support without employee account is excluded from suggestions        0.27s  
+  ✓ future nonoverlap membership does not revoke runtime output          0.56s  
+  ✓ unknown presence requires authorized action attestation and never o… 0.40s  
+  ✓ reviewing time and replacement crew commits together and rolls back… 0.74s  
+  ✓ confirmation saves preference atomically and replays exact assignme… 1.06s  
+  ✓ expired short and stale confirmation preserve reviewed business sta… 0.69s  
+  ✓ presence distinguishes unknown absent and closed attendance          0.18s  
+  ✓ night presence matches preceding work date and explicit sunday work… 0.17s  
+
+  Tests:    113 passed (675 assertions)
+  Duration: 129.55s
+

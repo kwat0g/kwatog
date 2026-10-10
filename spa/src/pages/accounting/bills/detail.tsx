@@ -24,8 +24,9 @@ import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
-import { ChainHeader } from '@/components/chain';
+import { ApprovalTimeline, ChainHeader } from '@/components/chain';
 import { buildP2pChain } from '@/lib/chains';
+import { fromApprovalRecords } from '@/lib/approvals';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
@@ -42,9 +43,9 @@ import { agingBucketLabel } from '@/lib/labels';
 const paymentSchema = z.object({
   cash_account_id: z.string().min(1, 'Required'),
   payment_date: z.string().min(1, 'Required'),
-  amount: z.coerce.number({ invalid_type_error: 'Payment amount is required.' }).positive('Payment amount must be greater than zero.').max(999999999999.99, 'Payment amount is too large.'),
+  amount: z.coerce.number({ invalid_type_error: 'Payment amount is required.' }).min(0.01, 'Amount must be at least 0.01.').max(999999999999.99, 'Payment amount is too large.'),
   payment_method: z.string().min(1, 'Required'),
-  reference_number: z.string().max(50).optional().or(z.literal('')),
+  reference_number: z.string().trim().min(1, 'Reference number is required.').max(50),
 });
 type PaymentFormValues = z.infer<typeof paymentSchema>;
 
@@ -72,6 +73,7 @@ export default function BillDetailPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [showPay, setShowPay] = useState(false);
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showPostConfirm, setShowPostConfirm] = useState(false);
   const [showPostOverride, setShowPostOverride] = useState(false);
@@ -91,12 +93,13 @@ export default function BillDetailPage() {
   // 2026-08-08 — final P2P link: live chain progress (payments / credit-note
   // applications settle the bill in real time).
   useChainProgress('bill', id, ['accounting', 'bills', id]);
-  const { data: accountingOptions } = useQuery({
+  const { data: accountingOptions, isError: paymentOptionsFailed, isFetching: paymentOptionsPending, refetch: refetchPaymentOptions } = useQuery({
     queryKey: ['accounting', 'options'],
     queryFn: () => accountingOptionsApi.list(),
+    enabled: showPay && can('accounting.bills.pay'),
   });
 
-  const { data: cashAccounts } = useQuery({
+  const { data: cashAccounts, isError: cashAccountsFailed, isFetching: cashAccountsPending, refetch: refetchCashAccounts } = useQuery({
     queryKey: ['accounting', 'accounts', 'cash'],
     queryFn: () => accountsApi.list({ per_page: 50, type: 'asset' }),
     enabled: showPay,
@@ -115,13 +118,30 @@ export default function BillDetailPage() {
     enabled: !!id && hasMatch,
   });
 
+  const pendingPaymentRequests = (bill?.payments ?? []).filter((payment) => payment.status === 'pending_approval');
+  const unreservedCentavos = bill
+    ? toCentavos(bill.balance) - pendingPaymentRequests.reduce((sum, payment) => sum + toCentavos(payment.amount), 0)
+    : 0;
+  const unreserved = fromCentavos(unreservedCentavos);
+  const minimumPartialCentavos = Math.ceil(toCentavos(bill?.total_amount) / 2);
+  const minimumPartial = fromCentavos(minimumPartialCentavos);
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
   } = useForm<PaymentFormValues>({
-    resolver: zodResolver(paymentSchema),
+    resolver: zodResolver(paymentSchema.extend({
+      amount: paymentSchema.shape.amount.refine(
+        (amount) => amount <= Number(unreserved),
+        `Amount cannot exceed ${formatPeso(unreserved)}.`,
+      ).refine(
+        (amount) => toCentavos(amount) >= minimumPartialCentavos || toCentavos(amount) === toCentavos(bill?.balance),
+        `Partial payment must be at least ${formatPeso(minimumPartial)}. A smaller final payment must clear the outstanding balance.`,
+      ),
+    })),
     mode: 'onChange',
     defaultValues: { payment_date: localIsoDate(), payment_method: '' },
   });
@@ -156,15 +176,17 @@ export default function BillDetailPage() {
           payment_date: d.payment_date,
           amount: String(d.amount),
           payment_method: d.payment_method as PaymentMethod,
-          reference_number: d.reference_number || undefined,
+          reference_number: d.reference_number,
+          proof_file: paymentProof ?? undefined,
         },
         (paymentIdempotencyKey.current ??= `bill-payment:${id}:${crypto.randomUUID()}`),
       ),
-    onSuccess: () => {
-      toast.success('Payment submitted for approval.');
+    onSuccess: (payment) => {
+      toast.success(payment.status === 'posted' ? 'Payment recorded.' : 'Payment submitted for VP approval.');
       qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
       void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] });
       setShowPay(false);
+      setPaymentProof(null);
       paymentIdempotencyKey.current = null;
       reset({
         payment_date: localIsoDate(),
@@ -225,15 +247,9 @@ export default function BillDetailPage() {
   if (!bill) return null;
 
   const isOpen = bill.status === 'unpaid' || bill.status === 'partial';
-  // Pending payment requests reserve part of the balance and the API refuses
-  // anything above the rest, so only offer and cap what is still unreserved.
-  const unreserved = fromCentavos(
-    toCentavos(bill.balance) -
-      (bill.payments ?? [])
-        .filter((p) => p.status === 'pending_approval')
-        .reduce((sum, p) => sum + toCentavos(p.amount), 0),
-  );
-  const canRecordPayment = isOpen && toCentavos(unreserved) > 0;
+  // Pending requests reserve balance, so only offer what remains available.
+  const canRecordPayment = isOpen && unreservedCentavos > 0
+    && (unreservedCentavos >= minimumPartialCentavos || unreservedCentavos === toCentavos(bill.balance));
   // Header accounts (e.g. 1000 Assets) share the 10xx prefix but cannot take a posting.
   const cashParentIds = new Set((cashAccounts?.data ?? []).map((a) => a.parent_id).filter(Boolean));
   const cashAccts = (cashAccounts?.data ?? []).filter(
@@ -246,7 +262,7 @@ export default function BillDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{bill.bill_number}</span>
-            <Chip variant={chipVariantForStatus(bill.status)}>
+            <Chip variant={bill.payment_approval_pending ? 'warning' : chipVariantForStatus(bill.status)}>
               {bill.status_label ?? bill.status}
             </Chip>
             {bill.is_overdue && <Chip variant="danger">overdue</Chip>}
@@ -304,13 +320,19 @@ export default function BillDetailPage() {
                 variant="primary"
                 size="sm"
                 icon={<LuReceipt size={14} />}
-                onClick={() => setShowPay(true)}
+                onClick={() => {
+                  reset({ payment_date: localIsoDate() < bill.date ? bill.date : localIsoDate(), payment_method: '' });
+                  setPaymentProof(null);
+                  paymentIdempotencyKey.current = null;
+                  setShowPay(true);
+                }}
               >
                 Record payment
               </Button>
             )}
             {bill.amount_paid === '0.00' &&
               bill.status !== 'cancelled' &&
+              !bill.supplier_invoice_number &&
               can('accounting.bills.update') && (
                 <Button
                   variant="danger"
@@ -342,7 +364,7 @@ export default function BillDetailPage() {
                 ? { id: bill.purchase_order.id, number: bill.purchase_order.po_number }
                 : null,
               grns: bill.goods_receipt_notes ?? [],
-              bills: [{ id: bill.id, bill_number: bill.bill_number, status: bill.status }],
+              bills: [{ id: bill.id, bill_number: bill.bill_number, status: bill.status, payment_approval_pending: bill.payment_approval_pending }],
             })}
           />
         </Panel>
@@ -393,6 +415,11 @@ export default function BillDetailPage() {
                       <span className="text-muted"> · {formatDate(bill.supplier_invoice_date)}</span>
                     )}
                   </dd>
+                  {bill.supplier_invoice_group_total && (
+                    <p className="text-xs text-muted mt-0.5">
+                      Supplier invoice total {formatPeso(bill.supplier_invoice_group_total)}; this AP bill matches its linked receipt.
+                    </p>
+                  )}
                   {bill.supplier_invoice_attachment && (
                     <button
                       type="button"
@@ -570,19 +597,26 @@ export default function BillDetailPage() {
                       {p.reference_number ? ` · ${p.reference_number}` : ''} ·{' '}
                       {p.status_label ?? p.status}
                     </span>
+                    {p.status === 'pending_approval' && bill.status === 'cancelled' && (
+                      <span className="text-xs text-muted" role="note">
+                        Reject this request; the cancelled bill cannot be paid.
+                      </span>
+                    )}
                     {/* Server decides: current step role and not the requester, not just the permission. */}
                     {p.status === 'pending_approval' &&
                       (p.can_decide ?? can('accounting.bills.payment_approve')) && (
                         <span className="flex gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => approvePaymentMut.mutate(p.id)}
-                            loading={approvePaymentMut.isPending}
-                          >
-                            Approve
-                          </Button>
+                          {bill.status !== 'cancelled' && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => approvePaymentMut.mutate(p.id)}
+                              loading={approvePaymentMut.isPending}
+                            >
+                              Approve
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="ghost"
@@ -594,9 +628,8 @@ export default function BillDetailPage() {
                           </Button>
                         </span>
                       )}
-                    {p.status === 'posted' &&
-                      can('accounting.bills.void_payment') &&
-                      bill.status !== 'cancelled' && (
+                    {p.status === 'posted' && bill.status !== 'cancelled' && (
+                      p.can_void ? (
                         <Button
                           type="button"
                           variant="ghost"
@@ -605,8 +638,26 @@ export default function BillDetailPage() {
                         >
                           Void
                         </Button>
-                      )}
+                      ) : p.void_block_reason ? (
+                        <span className="text-xs text-muted" role="note">{p.void_block_reason}</span>
+                      ) : null
+                    )}
                   </div>
+                  {p.proof_file_name && (
+                    <button
+                      type="button"
+                      className="text-accent hover:underline text-xs mt-1"
+                      onClick={() => void downloadAuthenticatedFile(billsApi.paymentProofUrl(bill.id, p.id), {
+                        filename: p.proof_file_name!,
+                        errorMessage: 'Failed to download payment proof.',
+                      })}
+                    >
+                      Proof: {p.proof_file_name}
+                    </button>
+                  )}
+                  {p.approval_records?.some((record) => record.action !== 'skipped') ? (
+                    <ApprovalTimeline steps={fromApprovalRecords(p.approval_records)} className="mt-3" />
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -712,9 +763,15 @@ export default function BillDetailPage() {
         size="sm"
       >
         <form
-          onSubmit={handleSubmit((d) => payMut.mutate(d), onFormInvalid<PaymentFormValues>())}
+          onSubmit={handleSubmit((d) => { if (!paymentOptionsFailed && !paymentOptionsPending && !cashAccountsFailed && !cashAccountsPending) payMut.mutate(d); }, onFormInvalid<PaymentFormValues>())}
           className="space-y-3"
         >
+          {(paymentOptionsFailed || cashAccountsFailed) && <div role="alert" className="text-sm text-danger-fg">
+            Payment options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+              if (paymentOptionsFailed) void refetchPaymentOptions();
+              if (cashAccountsFailed) void refetchCashAccounts();
+            }}>Retry payment options</Button>
+          </div>}
           <Select
             label="Cash account"
             required
@@ -732,26 +789,43 @@ export default function BillDetailPage() {
             label="Payment date"
             type="date"
             required
+            min={bill.date}
             {...register('payment_date')}
             error={errors.payment_date?.message}
+            helper={`On or after the bill date (${formatDate(bill.date)}).`}
           />
-          <Input
-            label={`Amount (max ${formatPeso(unreserved)})`}
-            step="0.01"
-            min="0.01"
-            max={unreserved}
-            className="font-mono tabular-nums text-right"
-            required
-            prefix="₱"
-            {...numberInputProps()}
-            {...register('amount')}
-            error={errors.amount?.message}
-            helper={
-              bill.ewt_amount && bill.ewt_amount !== '0.00'
-                ? `Enter the payable settled. EWT is withheld pro-rata (${formatPeso(bill.ewt_amount)} on the full bill); the rest is paid out as cash.`
-                : undefined
-            }
-          />
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label htmlFor="payment-amount" className="text-xs text-muted font-medium">
+                Amount (max {formatPeso(unreserved)})<span aria-hidden="true" className="text-danger-fg ml-0.5">*</span>
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                size="xs"
+                onClick={() => setValue('amount', Number(unreserved), { shouldValidate: true, shouldDirty: true })}
+              >
+                Exact Amount
+              </Button>
+            </div>
+            <Input
+              id="payment-amount"
+              min="0.01"
+              max={unreserved}
+              className="font-mono tabular-nums text-left"
+              required
+              prefix="₱"
+              {...numberInputProps()}
+              step="0.01"
+              {...register('amount')}
+              error={errors.amount?.message}
+              helper={
+                bill.ewt_amount && bill.ewt_amount !== '0.00'
+                  ? `Partial payments must be at least ${formatPeso(minimumPartial)}; a smaller final payment must clear the balance. EWT is withheld pro-rata (${formatPeso(bill.ewt_amount)} on the full bill).`
+                  : `Partial payments must be at least ${formatPeso(minimumPartial)}; a smaller final payment must clear the balance.`
+              }
+            />
+          </div>
           <Select
             label="Method"
             required
@@ -765,7 +839,20 @@ export default function BillDetailPage() {
               </option>
             ))}
           </Select>
-          <Input label="Reference no." {...register('reference_number')} />
+          <Input
+            label="Reference no."
+            required
+            {...register('reference_number')}
+            error={errors.reference_number?.message}
+            helper="Bank transaction ID, check number, or cash voucher number."
+          />
+          <Input
+            label="Payment proof (optional)"
+            type="file"
+            accept="application/pdf,image/jpeg,image/png"
+            onChange={(event) => setPaymentProof(event.target.files?.[0] ?? null)}
+            helper="PDF, JPG, or PNG; maximum 10 MB. Attach a receipt if funds were already sent."
+          />
           <ModalFooter>
             <Button type="button" variant="secondary" onClick={() => setShowPay(false)}>
               Cancel
@@ -774,7 +861,7 @@ export default function BillDetailPage() {
               type="submit"
               variant="primary"
               loading={payMut.isPending}
-              disabled={payMut.isPending}
+              disabled={payMut.isPending || paymentOptionsFailed || paymentOptionsPending || cashAccountsFailed || cashAccountsPending}
             >
               Record
             </Button>
@@ -800,7 +887,9 @@ export default function BillDetailPage() {
         }}
         onConfirm={(reason) => rejectPaymentMut.mutate(reason)}
         title="Reject payment request?"
-        description="The payment will not post and the bill will remain open."
+        description={bill.status === 'cancelled'
+          ? 'Rejecting this request will close the pending payment while keeping the bill cancelled.'
+          : 'The payment will not post and the bill will remain open.'}
         reasonLabel="Rejection reason"
         reasonPlaceholder="e.g. Amount does not match approved payment advice."
         minLength={3}

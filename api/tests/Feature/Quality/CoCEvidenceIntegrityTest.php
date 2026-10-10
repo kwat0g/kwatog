@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionMode;
@@ -25,6 +26,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
+use Tests\Support\HasPassedInProcessQc;
 
 /**
  * M056 — a Certificate of Conformance must not outrun its evidence.
@@ -43,6 +45,7 @@ use Tests\TestCase;
 class CoCEvidenceIntegrityTest extends TestCase
 {
     use RefreshDatabase;
+    use HasPassedInProcessQc;
 
     private User $user;
 
@@ -60,6 +63,11 @@ class CoCEvidenceIntegrityTest extends TestCase
         Storage::fake('local');
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
+        $viewPermission = Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.view'],
+            ['name' => 'View inspections', 'module' => 'quality'],
+        );
+        $role->permissions()->syncWithoutDetaching([$viewPermission->id]);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
         $reviewRole = Role::firstOrCreate(['slug' => 'quality_reviewer_test'], ['name' => 'Quality Reviewer Test']);
         $reviewPermission = Permission::firstOrCreate(
@@ -140,8 +148,8 @@ class CoCEvidenceIntegrityTest extends TestCase
 
     public function test_certificate_is_refused_when_the_evidence_contradicts_the_verdict(): void
     {
-        // The real reachability: a lot passes, the certificate is issued, and
-        // the readings are then rewritten outside the state machine.
+        // A lot passes, the certificate is issued, then contradictory row
+        // state is written outside the checklist state machine.
         $inspection = $this->passedOutgoingThroughService();
         app(CoCService::class)->buildBinaryForInspection($inspection);
 
@@ -151,6 +159,40 @@ class CoCEvidenceIntegrityTest extends TestCase
         $this->assertGreaterThan(0, $rewritten);
 
         $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+    }
+
+    public function test_certificate_is_refused_when_a_passed_check_is_changed_to_failed(): void
+    {
+        $inspection = $this->passedOutgoingThroughService();
+        DB::table('inspection_measurements')
+            ->where('inspection_id', $inspection->id)
+            ->limit(1)
+            ->update(['item_result' => 'failed', 'item_problem_description' => 'The check failed after review.']);
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+    }
+
+    public function test_coc_endpoint_rechecks_changed_checklist_evidence_without_storing_a_certificate(): void
+    {
+        $inspection = $this->passedOutgoingThroughService();
+        DB::table('inspection_measurements')
+            ->where('inspection_id', $inspection->id)
+            ->limit(1)
+            ->update(['is_pass' => false]);
+        $documentsBefore = DB::table('documents')
+            ->where('entity_type', Inspection::class)
+            ->where('entity_id', $inspection->id)
+            ->count();
+
+        $this->actingAs($this->user)
+            ->getJson('/api/v1/quality/inspections/'.$inspection->hash_id.'/coc')
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+
+        $this->assertSame($documentsBefore, DB::table('documents')
+            ->where('entity_type', Inspection::class)
+            ->where('entity_id', $inspection->id)
+            ->count());
     }
 
     public function test_certificate_is_refused_when_the_evidence_rows_are_deleted(): void
@@ -235,6 +277,30 @@ class CoCEvidenceIntegrityTest extends TestCase
         $this->assertSame(0, $inspection->fresh()->measurements->whereNotNull('tolerance_min')->count());
         $out = app(CoCService::class)->buildBinaryForInspection($inspection->fresh());
         $this->assertStringContainsString('%PDF', substr($out['contents'], 0, 8));
+    }
+
+    public function test_a_passed_lot_checklist_item_resolves_an_attribute_row_for_the_certificate(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 1);
+        $row = $this->fabricateChecklistRow($inspection, 1, true);
+        $row->forceFill(['is_pass' => null, 'item_result' => 'passed'])->save();
+
+        $out = app(CoCService::class)->buildBinaryForInspection($inspection->fresh());
+
+        $this->assertStringContainsString('%PDF', substr($out['contents'], 0, 8));
+    }
+
+    public function test_a_passed_lot_checklist_cannot_certify_a_failed_requirement(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 1);
+        $row = $this->fabricateChecklistRow($inspection, 1, true);
+        $row->forceFill([
+            'is_pass' => null,
+            'item_result' => 'failed',
+            'item_problem_description' => 'Conflicting checklist evidence.',
+        ])->save();
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
     }
 
     public function test_a_lot_checklist_without_a_reported_count_is_refused(): void
@@ -388,12 +454,29 @@ class CoCEvidenceIntegrityTest extends TestCase
 
     private function passedOutgoingThroughService(int $good = 10): Inspection
     {
-        $so = SalesOrder::factory()->create();
+        $subtotal = number_format($good * 10, 2, '.', '');
+        $vat = number_format($good * 1.2, 2, '.', '');
+        $so = SalesOrder::factory()->create([
+            'status' => 'confirmed',
+            'subtotal' => $subtotal,
+            'vat_amount' => $vat,
+            'total_amount' => number_format($good * 11.2, 2, '.', ''),
+        ]);
+        $soItem = SalesOrderItem::factory()->create([
+            'sales_order_id' => $so->id,
+            'product_id' => $this->product->id,
+            'quantity' => number_format($good, 2, '.', ''),
+            'unit_price' => '10.00',
+            'total' => $subtotal,
+            'quantity_delivered' => '0.00',
+        ]);
         $wo = WorkOrder::factory()->create([
             'product_id' => $this->product->id,
             'sales_order_id' => $so->id,
+            'sales_order_item_id' => $soItem->id,
             'quantity_target' => $good,
         ]);
+        $this->passInProcessQc($wo);
         $output = WorkOrderOutput::create([
             'work_order_id' => $wo->id,
             'batch_code' => 'CB-'.substr(uniqid(), -6),
@@ -410,24 +493,41 @@ class CoCEvidenceIntegrityTest extends TestCase
             'work_order_output_id' => $output->id,
         ], $this->user);
 
-        $patch = [];
-        foreach (InspectionMeasurement::query()->where('inspection_id', $inspection->id)->get() as $m) {
-            $patch[$m->id] = ['measured_value' => '10.0000'];
-        }
-        $this->svc->recordMeasurements($inspection, $patch, $this->user);
-
-        // Lot-checklist inspections cannot complete without a reported count.
-        // Zero is correct here and is not an attestation shortcut: this helper
-        // has just written an in-tolerance reading to every measured piece.
         $inspection = $inspection->fresh();
         if ($inspection->inspection_mode === InspectionMode::LotChecklist) {
-            $inspection->forceFill(['sample_defect_count' => 0])->save();
-            $inspection = $inspection->fresh();
+            if ($inspection->usesChecklistCapture()) {
+                $completed = $this->svc->recordBatchResult($inspection, [
+                    'expected_result_version' => (int) $inspection->result_version,
+                    'inspected_quantity' => (int) $inspection->sample_size,
+                    'items' => $inspection->measurements()->get()->map(fn (InspectionMeasurement $row) => [
+                        'id' => $row->id,
+                        'result' => 'passed',
+                    ])->all(),
+                    'coverage_confirmed' => true,
+                ], $this->user);
+            } else {
+                $patch = [];
+                foreach (InspectionMeasurement::query()->where('inspection_id', $inspection->id)->get() as $m) {
+                    $patch[$m->id] = ['measured_value' => '10.0000'];
+                }
+                $this->svc->recordMeasurements($inspection, $patch, $this->user);
+                $completed = $this->svc->recordLotResult($inspection->fresh(), [
+                    'sample_defect_count' => 0,
+                    'coverage_confirmed' => true,
+                    'complete' => true,
+                ], $this->user);
+            }
+        } else {
+            $patch = [];
+            foreach (InspectionMeasurement::query()->where('inspection_id', $inspection->id)->get() as $m) {
+                $patch[$m->id] = ['measured_value' => '10.0000'];
+            }
+            $this->svc->recordMeasurements($inspection, $patch, $this->user);
+            $completed = $this->svc->complete($inspection, $this->user);
         }
 
-        $completed = $this->svc->complete($inspection->fresh(), $this->user);
         return $completed->status === InspectionStatus::AwaitingReview
-            ? $this->svc->review($completed, InspectionStatus::Passed->value, null, $this->reviewer)
+            ? $this->svc->review($completed, InspectionStatus::Passed->value, null, $this->reviewer, (int) $completed->result_version)
             : $completed;
     }
 

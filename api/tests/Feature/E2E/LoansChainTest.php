@@ -30,8 +30,8 @@ use Tests\TestCase;
  * → finance_officer approves (step 2) → vice_president approves (step 3,
  * final) → loan Active, disbursement JE posted (receivable / cash) →
  * finance settles via a manual repayment (cash / receivable JE) → balance
- * zero → write-off refused on a settled loan. A company_loan variant proves
- * the 4-step chain with its extra production_manager "Manager" step.
+ * zero → write-off refused on a settled loan. A small company_loan variant
+ * proves HR eligibility review and Finance approval with VP skipped.
  *
  * Adversarial probes ride along: wrong actor (an employee user requesting for
  * somebody else, a production_manager approving a cash advance whose step 2
@@ -298,8 +298,7 @@ class LoansChainTest extends TestCase
     public function test_company_loan_chain_and_write_off_maker_checker(): void
     {
         // ------------------------------------------------------------------
-        // ACT 1 — company loan: a 4-step chain (dept head → production
-        // manager → finance → VP).
+        // ACT 1 — small company loan: department head, HR, then Finance.
         // ------------------------------------------------------------------
         $response = $this->requestLoan('company_loan', '20000.00', 12);
         $response->assertStatus(201);
@@ -308,13 +307,12 @@ class LoansChainTest extends TestCase
         $loan = $this->fromApiId(EmployeeLoan::class, $response->json('data.id'));
         $this->assertMatchesRegularExpression('/^LN-\d{6}-\d{4}$/', (string) $loan->loan_no);
 
-        // Wrong time: step 2 (production manager) cannot act first — the
-        // current step names department_head → 403.
+        // A production manager has no step in a newly submitted company loan.
         $this->actingAs($this->productionManager)
             ->patchJson("/api/v1/loans/{$loan->hash_id}/approve", [])
-            ->assertStatus(403);
+            ->assertStatus(422);
 
-        foreach ([$this->deptHead, $this->productionManager, $this->finance, $this->vp] as $approver) {
+        foreach ([$this->deptHead, $this->hr, $this->finance] as $approver) {
             $this->actingAs($approver)
                 ->patchJson("/api/v1/loans/{$loan->hash_id}/approve", [])
                 ->assertOk();

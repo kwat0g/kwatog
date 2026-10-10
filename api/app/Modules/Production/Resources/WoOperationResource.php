@@ -53,6 +53,7 @@ class WoOperationResource extends JsonResource
                 'qty_value' => $log->qty_value,
                 'downtime_reason' => $log->downtime_reason,
                 'notes' => $log->notes,
+                'material_handover_exception' => $log->material_handover_exception,
                 'recorded_at' => optional($log->recorded_at)->toIso8601String(),
             ])
             ),

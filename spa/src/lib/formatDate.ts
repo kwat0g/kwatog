@@ -32,6 +32,11 @@ export function formatDateTime(value: string | Date | null | undefined, fallback
 }
 
 export function formatTime(value: string | Date | null | undefined, fallback = '—'): string {
+ if (typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value)) {
+  const [hour, minute] = value.split(':');
+  const hours = Number(hour);
+  return `${hours % 12 || 12}:${minute} ${hours < 12 ? 'AM' : 'PM'}`;
+ }
  const d = toDate(value);
  return d ? format(d, 'h:mm a') : fallback;
 }
@@ -48,6 +53,16 @@ export function formatRelative(value: string | Date | null | undefined, fallback
  */
 export function localIsoDate(d: Date = new Date()): string {
  return format(d, 'yyyy-MM-dd');
+}
+
+export function manilaIsoDate(d: Date = new Date()): string {
+ return new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+ }).format(d);
+}
+
+export function tomorrowIsoDate(): string {
+ return manilaIsoDate(new Date(Date.now() + 86_400_000));
 }
 
 /**

@@ -21,6 +21,35 @@ class DowntimeAnalyticsService
 {
     public function __construct(private readonly SettingsService $settings) {}
 
+    /** Distinct downtime rows; preserve the crossing key while its episode remains above threshold. */
+    public function repeatBreakdowns(): array
+    {
+        $result = [];
+        // shortcut: replay history to retain episode keys; persist episodes if measured history volume becomes costly.
+        $rows = MachineDowntime::query()->with('machine')->where('category', 'breakdown')
+            ->where('start_time', '<=', now())
+            ->orderBy('start_time')->orderBy('id')->get()->groupBy('machine_id');
+        foreach ($rows as $incidents) {
+            $incidents = $incidents->unique('id')->values();
+            $window = collect();
+            $crossing = null;
+            foreach ($incidents as $incident) {
+                $window = $window->filter(fn ($prior) => $prior->start_time->gte($incident->start_time->copy()->subDays(30)));
+                if ($window->count() === 2) {
+                    // Oldest created incident keeps the key stable when a backdated row arrives.
+                    $crossing = min($window->min('id'), $incident->id);
+                }
+                $window->push($incident);
+            }
+            $current = $window->filter(fn ($row) => $row->start_time->gte(now()->subDays(30)));
+            if ($current->count() >= 3 && $incidents->first()->machine) {
+                $result[] = ['machine' => $incidents->first()->machine, 'count' => $current->count(), 'crossing_id' => $crossing];
+            }
+        }
+
+        return $result;
+    }
+
     /**
      * Overall summary for a machine or all machines.
      *
@@ -31,6 +60,8 @@ class DowntimeAnalyticsService
      * @return array{
      *   total_downtime_minutes: int,
      *   breakdown_count: int,
+     *   resolved_breakdown_count: int,
+     *   open_breakdown_count: int,
      *   mtbf_hours: float|null,
      *   mttr_minutes: float|null,
      *   availability_pct: float|null,
@@ -53,13 +84,19 @@ class DowntimeAnalyticsService
         $totalMinutes = intdiv($totalSeconds, 60);
         $breakdownCount = $this->eventCount($rows, MachineDowntimeCategory::Breakdown->value, $from, $to);
         $breakdownRows = $rows->filter(fn (MachineDowntime $row): bool =>
-            $this->categoryValue($row) === MachineDowntimeCategory::Breakdown->value
-            && $this->startsInWindow($row, $from, $to));
-        $breakdownSeconds = array_sum(array_map(
-            static fn (array $segment): int => $segment['end'] - $segment['start'],
-            $this->effectiveSegments($breakdownRows, $from, $to),
+            $this->categoryValue($row) === MachineDowntimeCategory::Breakdown->value);
+        $resolvedBreakdowns = $breakdownRows->filter(fn (MachineDowntime $row): bool =>
+            $row->end_time !== null
+            && $row->end_time->greaterThanOrEqualTo($from)
+            && $row->end_time->lessThan($to)
+            && $row->end_time->greaterThanOrEqualTo($row->start_time));
+        $resolvedBreakdownCount = $resolvedBreakdowns->count();
+        $openBreakdownCount = $breakdownRows->filter(fn (MachineDowntime $row): bool =>
+            $row->end_time === null || $row->end_time->greaterThanOrEqualTo($to))->count();
+        $resolvedSeconds = $resolvedBreakdowns->sum(fn (MachineDowntime $row): int => max(
+            0,
+            $row->end_time->getTimestamp() - $row->start_time->getTimestamp(),
         ));
-        $breakdownMinutes = intdiv($breakdownSeconds, 60);
         $categories = [];
         foreach ($rows as $row) {
             $category = $this->categoryValue($row);
@@ -72,14 +109,21 @@ class DowntimeAnalyticsService
 
         // MTBF = total uptime / number of breakdowns.
         $mtbf = null;
-        $windowMinutes = max(0, (int) floor($from->diffInSeconds($to, true) / 60));
+        $machineCount = $machineId !== null ? 1 : Machine::query()
+            ->when(trim((string) $search) !== '', function (Builder $query) use ($search): void {
+                $term = '%'.trim((string) $search).'%';
+                $query->where(fn (Builder $machine) => $machine
+                    ->where('machine_code', 'ilike', $term)
+                    ->orWhere('name', 'ilike', $term));
+            })->count();
+        $windowMinutes = max(0, (int) floor($from->diffInSeconds($to, true) / 60)) * $machineCount;
         if ($breakdownCount > 0) {
             $uptimeMinutes = max(0, $windowMinutes - $totalMinutes);
             $mtbf = round($uptimeMinutes / $breakdownCount / 60, 2);
         }
 
-        // MTTR = total repair time / number of breakdowns.
-        $mttr = $breakdownCount > 0 ? round($breakdownMinutes / $breakdownCount, 2) : null;
+        // MTTR averages full durations for breakdowns resolved in the selected period.
+        $mttr = $resolvedBreakdownCount > 0 ? round($resolvedSeconds / 60 / $resolvedBreakdownCount, 2) : null;
         $availabilityPct = $windowMinutes > 0
             ? round(max(0, $windowMinutes - $totalMinutes) / $windowMinutes * 100, 2)
             : null;
@@ -97,6 +141,8 @@ class DowntimeAnalyticsService
         return [
             'total_downtime_minutes' => $totalMinutes,
             'breakdown_count' => $breakdownCount,
+            'resolved_breakdown_count' => $resolvedBreakdownCount,
+            'open_breakdown_count' => $openBreakdownCount,
             'mtbf_hours' => $mtbf,
             'mttr_minutes' => $mttr,
             'availability_pct' => $availabilityPct,
@@ -255,7 +301,6 @@ class DowntimeAnalyticsService
         }
         foreach ($categories as &$category) {
             $category['minutes'] = intdiv($category['seconds'] ?? 0, 60);
-            unset($category['seconds']);
         }
         unset($category);
 
@@ -263,21 +308,22 @@ class DowntimeAnalyticsService
             return [];
         }
 
-        uasort($categories, static fn (array $left, array $right): int => $right['minutes'] <=> $left['minutes']);
-        $totalMinutes = array_sum(array_column($categories, 'minutes'));
+        uasort($categories, static fn (array $left, array $right): int => ($right['seconds'] ?? 0) <=> ($left['seconds'] ?? 0));
+        $totalSeconds = array_sum(array_column($categories, 'seconds'));
         $running = 0;
         $result = [];
 
         foreach ($categories as $category => $values) {
             $minutes = (int) $values['minutes'];
-            $running += $minutes;
+            $seconds = $values['seconds'] ?? 0;
+            $running += $seconds;
             $result[] = [
                 'category' => $category,
                 'label' => $this->labelFor($category),
                 'minutes' => $minutes,
                 'count' => (int) $values['count'],
-                'percent' => round($minutes / $totalMinutes * 100, 2),
-                'cumulative_percent' => round($running / $totalMinutes * 100, 2),
+                'percent' => $totalSeconds > 0 ? round($seconds / $totalSeconds * 100, 2) : 0.0,
+                'cumulative_percent' => $totalSeconds > 0 ? round($running / $totalSeconds * 100, 2) : 0.0,
             ];
         }
 

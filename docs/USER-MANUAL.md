@@ -102,10 +102,16 @@ date range, reason. Validates balance + no overlap server-side.
 
 ## 6. Loans & Cash Advance
 
-*Sidebar → HR → Loans → New Loan*. Validation: max 1 active company loan
-plus 1 active cash advance per employee. Company loan capped at one month
+*Sidebar → HR → Loans → New Loan*. Employees with a pending or active company
+loan or cash advance cannot request another of either type. This rule applies
+to employee self-service and HR creation, including loans awaiting write-off
+approval. Closed loans do not block new requests. Company loan capped at one month
 basic salary. On approval the system generates the amortization schedule
 and auto-deducts on subsequent payrolls.
+
+New company loans require Department Head endorsement, HR eligibility review,
+and Finance approval. VP approval is skipped below ₱50,000 and required at
+₱50,000 or more. Existing submitted loans retain their recorded approval chain.
 
 ## 7. Payroll
 
@@ -158,9 +164,9 @@ resolves it via **Convert to PO** on the detail page and handles each line
 separately. PO ≥ ₱50,000 (configurable) requires VP signoff.
 
 #### Competitive RFQ
-Open an approved PR with `sourcing_method: Competitive RFQ` or any approved PR
-whose Direct PO conversion fell to **manual_required**. Choose **Start RFQ**
-and fill a one-page form: title, deadline, and invitee list. Select **Save draft**
+Open an approved PR with `sourcing_method: Competitive RFQ`. Choose **Start RFQ**
+and fill a one-page form: title, deadline, and invitee list. Direct PO requests
+that need manual sourcing stay on **Convert to PO**. Select **Save draft**
 to edit later or **Publish now** to go live.
 
 Once published, suppliers log into the portal, upload a quotation PDF, then

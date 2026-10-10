@@ -10,7 +10,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import type { MaterialIssueStatus } from '@/types/inventory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -73,7 +73,18 @@ export default function MaterialIssueDetailPage() {
  </Td>
  <Td mono>{line.location?.code ?? '—'}</Td>
  <Td align="right" mono>
- {Number(line.quantity_issued).toFixed(4)} {line.item?.unit_of_measure}
+ <div>{Number(line.quantity_issued).toFixed(4)} {line.item?.unit_of_measure}</div>
+ {line.quantity_issued_in_uom !== null && line.issued_uom_conversion_factor !== null ? (
+ <div className="text-2xs text-muted">
+  Entered {formatQuantity(line.quantity_issued_in_uom)} {line.issued_uom_code || line.item?.unit_of_measure}
+  {' · 1 '}{line.issued_uom_code || line.item?.unit_of_measure}
+  {' = '}{Number(line.issued_uom_conversion_factor).toFixed(6)} {line.item?.unit_of_measure}
+ </div>
+ ) : line.issued_uom_code ? (
+ <div className="text-2xs text-muted">
+  Source unit {line.issued_uom_code}; original quantity was not recorded.
+ </div>
+ ) : null}
  </Td>
  <Td align="right" mono>{formatPeso(line.unit_cost)}</Td>
           <Td align="right" mono className="font-medium">{formatPeso(line.total_cost)}</Td>

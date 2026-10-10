@@ -84,7 +84,7 @@ class OvertimeRequestOptionsAndCancelTest extends TestCase
         $this->actingAs($admin)
             ->postJson('/api/v1/attendance/overtime-requests', [
                 'employee_id' => $employee->hash_id,
-                'date' => now()->toDateString(),
+                'date' => now()->addDay()->toDateString(),
                 'hours_requested' => 4.5,
                 'reason' => 'Overtime above the daily payroll cap',
             ])

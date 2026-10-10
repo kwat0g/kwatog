@@ -10,8 +10,10 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
+use App\Modules\Leave\Services\LeaveBalanceService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class DemoAccountSeeder extends Seeder
 {
@@ -43,6 +45,8 @@ class DemoAccountSeeder extends Seeder
         ['email' => 'depthead@ogami.test',    'name' => 'Roberto Santos',       'role' => 'department_head',    'dept' => 'PROD'],
         ['email' => 'driver@ogami.test',      'name' => 'Nestor Flores',        'role' => 'driver',             'dept' => 'WH'],
         ['email' => 'customerservice@ogami.test', 'name' => 'Maya Customer Service', 'role' => 'customer_service_officer', 'dept' => 'CS'],
+        ['email' => 'maintenance2@ogami.test', 'name' => 'Ewan Torres', 'role' => 'maintenance_tech', 'dept' => 'MAINT'],
+        ['email' => 'maintenancehead@ogami.test', 'name' => 'Mila Ramos', 'role' => 'maintenance_supervisor', 'dept' => 'MAINT'],
     ];
 
     public function run(): void
@@ -96,7 +100,7 @@ class DemoAccountSeeder extends Seeder
             $employeeNo = 'DEMO-' . str_pad((string) $probe, 4, '0', STR_PAD_LEFT);
         }
 
-        return Employee::updateOrCreate(
+        $employee = Employee::updateOrCreate(
             ['email' => $account['email']],
             [
                 'employee_no'          => $employeeNo,
@@ -130,5 +134,11 @@ class DemoAccountSeeder extends Seeder
                 'bank_account_no'      => '00123456' . str_pad((string) $index, 4, '0', STR_PAD_LEFT),
             ],
         );
+
+        if (Schema::hasTable('leave_types') && Schema::hasTable('employee_leave_balances')) {
+            app(LeaveBalanceService::class)->seedProratedFor($employee);
+        }
+
+        return $employee;
     }
 }

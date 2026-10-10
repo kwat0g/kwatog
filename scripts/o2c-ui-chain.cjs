@@ -16,15 +16,14 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
-const { createRequire } = require('node:module');
 
 const ROOT = path.resolve(__dirname, '..');
 const SPA = path.join(ROOT, 'spa');
 const { chromium } = require(path.join(SPA, 'node_modules/playwright'));
-const spaRequire = createRequire(path.join(SPA, 'package.json'));
 
 const RUN = (process.env.O2CUI_RUN_ID || `O2CUI${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_o2c_browser_o2cui${RUN.toLowerCase()}`;
+const TEST_STORAGE = `/tmp/ogami-audit-storage/o2c-ui-${RUN.toLowerCase()}`;
 const API_PORT = Number(process.env.O2CUI_API_PORT || 8231);
 const SPA_PORT = Number(process.env.O2CUI_SPA_PORT || 5231);
 const DB_USER = process.env.O2CUI_DB_USER || 'ogami';
@@ -32,10 +31,12 @@ const BASE = `http://127.0.0.1:${SPA_PORT}`;
 const OUT = process.env.O2CUI_OUTPUT || path.join('/tmp', `o2c-ui-chain-${RUN}`);
 const KEEP = process.env.O2CUI_KEEP === '1';
 const FIXTURE_IN_CONTAINER = `/tmp/o2c-fixture-${RUN}.json`;
+const API_LOG_IN_CONTAINER = `/tmp/o2c-ui-chain-${RUN}.api.log`;
 if (!/^[a-z_][a-z0-9_]*$/i.test(DB_USER)) throw new Error('O2CUI_DB_USER must be a PostgreSQL role name.');
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  LARAVEL_STORAGE_PATH: TEST_STORAGE,
   SESSION_DOMAIN: '127.0.0.1', SESSION_SECURE_COOKIE: 'false', SESSION_SAME_SITE: 'lax',
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
   COMPANY_LEGAL_NAME: 'Ogami Audit Test Corporation', COMPANY_ADDRESS: 'Audit Test Site',
@@ -68,7 +69,7 @@ function compose(args) {
   return execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 }
 const envFlags = () => Object.entries(ENV).flatMap(([k, v]) => ['-e', `${k}=${v}`]);
-const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', 'artisan', ...args]);
 const psql = (sqlText, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', DB_USER, '-d', db, '-At', '-F', '|', '-c', sqlText]).trim();
 const sql = (query) => psql(query, DB);
 const apiIp = () => {
@@ -83,15 +84,30 @@ function stopApiServer() {
   }
 }
 
+function assertIsolatedStorage() {
+  compose(['exec', '-T', 'api', 'mkdir', '-p', `${TEST_STORAGE}/app`, `${TEST_STORAGE}/app/public`, `${TEST_STORAGE}/framework/cache/data`, `${TEST_STORAGE}/framework/sessions`, `${TEST_STORAGE}/framework/views`, `${TEST_STORAGE}/logs`]);
+  const actualStorage = artisan('tinker', '--execute', 'echo storage_path();').trim();
+  if (actualStorage !== TEST_STORAGE) throw new Error(`Expected isolated Laravel storage ${TEST_STORAGE}; got ${actualStorage}.`);
+}
+
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
   stopApiServer();
-  psql(`CREATE DATABASE ${DB} OWNER ${DB_USER};`);
+  if (process.env.O2CUI_RESUME !== '1') {
+    psql(`CREATE DATABASE ${DB} OWNER ${DB_USER};`);
+    // The shared Docker PostgreSQL instance has a 64 MB /dev/shm limit.
+    // Keep this disposable database's proof queries out of parallel DSM.
+    psql(`ALTER DATABASE ${DB} SET max_parallel_workers_per_gather=0;`);
+  }
+  assertIsolatedStorage();
   artisan('migrate', '--force');
-  artisan('tinker', '--execute', "require 'tests/Browser/o2c_fixture.php';");
+  if (process.env.O2CUI_RESUME !== '1') {
+    const fixtureOutput = artisan('tinker', '--execute', "require 'tests/Browser/o2c_fixture.php';");
+    if (!fixtureOutput.includes(`O2C prerequisites ready: ${RUN}.`)) throw new Error(fixtureOutput);
+  }
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
   fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
-  compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
+  compose(['exec', '-d', ...envFlags(), 'api', 'sh', '-c', 'log="$1"; shift; exec "$@" > "$log" 2>&1', 'sh', API_LOG_IN_CONTAINER, 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
   let ready = false;
   for (let i = 0; i < 60; i++) {
@@ -107,7 +123,6 @@ async function setUp() {
   process.chdir(SPA);
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -132,6 +147,7 @@ async function tearDown(server) {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
     psql(`DROP DATABASE IF EXISTS ${DB};`);
   } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+  try { compose(['exec', '-T', 'api', 'rm', '-rf', TEST_STORAGE]); } catch (e) { console.log(`Could not remove ${TEST_STORAGE}: ${e.message}`); }
 }
 
 /* ─── Browser helpers ─────────────────────────────────────────────── */
@@ -187,7 +203,8 @@ function unexplainedConsoleErrors() {
 }
 
 async function signIn(page, email, sessionCheck) {
-  const loginRoute = sessionCheck === '/b2b/customer/me' ? '/portal/customer/login' : '/sign-in';
+  const loginRoute = sessionCheck === '/b2b/customer/me' ? '/portal/customer/login'
+    : sessionCheck === '/b2b/supplier/me' ? '/portal/supplier/login' : '/sign-in';
   // The login form disables its inputs while a 429 cooldown runs; back-to-back
   // runs log in many accounts from one IP, so wait OUT the cooldown instead of
   // timing out on a disabled field. The form itself can also take a moment on
@@ -331,6 +348,14 @@ async function dialogSelect(page, index, option) {
   await sel.waitFor({ state: 'visible', timeout: 10_000 });
   if (typeof option === 'number') await sel.selectOption({ index: option });
   else await sel.selectOption(option);
+}
+
+async function fillCollectionModal(page, amount, reference) {
+  await pageButton(page, 'Record collection');
+  await dialogSelect(page, 0, { label: /1020/ }).catch(() => dialogSelect(page, 0, { index: 1 }));
+  await page.getByRole('dialog').getByRole('spinbutton').last().fill(amount);
+  await dialogSelect(page, 1, { label: /Bank/i }).catch(() => dialogSelect(page, 1, { index: 1 }));
+  await page.getByRole('dialog').getByRole('textbox').last().fill(reference);
 }
 
 async function modalButton(page, name) {
@@ -538,11 +563,37 @@ async function step3ConfirmAndStart(woId, woDbId) {
   await page.waitForTimeout(500);
   const woAfter = (await api(page, 'GET', `/production/work-orders/${woId}`)).body?.data;
   check(`${label}: status is in progress`, woAfter?.status === 'in_progress', woAfter?.status);
+  const processInspection = (woAfter?.inspections ?? []).find((inspection) => inspection.stage === 'in_process');
+  check(`${label}: start creates an in-process QC inspection before output`, processInspection?.status === 'draft', processInspection?.inspection_number);
+  check(`${label}: in-process QC is the current output blocker`, woAfter?.process_quality_blocker?.includes(processInspection?.inspection_number ?? '__missing__'), woAfter?.process_quality_blocker);
+  check(`${label}: QC start notification reaches the inspection queue`, ((await api(who.qc, 'GET', '/notifications?type=chain.in_process_qc_required&per_page=100')).body?.data ?? [])
+    .some((notification) => notification.data?.entity_id === woId), processInspection?.inspection_number);
   const autoIssue = sql(`select coalesce(sum(quantity),0) from stock_movements where reference_type='work_order' and reference_id=${woDbId} and movement_type='material_issue'`);
   check(`${label}: start issued only the 4.000 kg BOM requirement`, autoIssue === '4.000', autoIssue);
   const stock = sql(`select coalesce(sum(quantity),0) from stock_levels where item_id=(select id from items where code='RM-${RUN}')`);
   check(`${label}: on-hand stock reflects the automatic issue`, stock === '496.000', stock);
   check(`${label}: start transition is audited by production`, Number(sql(`select count(*) from audit_logs where model_type like '%WorkOrder' and model_id=${woDbId} and user_id=(select id from users where email='production@ogami.test') and action='updated' and new_values->>'status'='in_progress'`)) === 1);
+}
+
+async function attemptOutputBeforeProcessQc(woId, woDbId) {
+  const label = '3.5 · In-process QC gate';
+  const page = who.prod;
+  const inspectionNumber = sql(`select inspection_number from inspections where stage='in_process' and entity_type='work_order' and entity_id=${woDbId} and status='draft'`);
+  check(`${label}: exactly one draft inspection blocks output`, /^QC-/.test(inspectionNumber), inspectionNumber);
+  await open(page, `/production/work-orders/${woId}`);
+  const blocker = page.getByRole('alert').filter({ hasText: inspectionNumber });
+  check(`${label}: work-order detail explains the blocker`, await blocker.isVisible().catch(() => false), inspectionNumber);
+  check(`${label}: production UI hides Record output until QC passes`, await page.getByRole('button', { name: 'Record output', exact: true }).count() === 0);
+
+  const state = () => sql(`select status||'|'||quantity_produced||'|'||quantity_good||'|'||quantity_rejected||'|'||(select count(*) from work_order_outputs where work_order_id=${woDbId})||'|'||(select count(*) from audit_logs where model_type like '%WorkOrderOutput' and model_id in (select id from work_order_outputs where work_order_id=${woDbId})) from work_orders where id=${woDbId}`);
+  const before = `${state()}|${finishedGoodStockSnapshot()}`;
+  const response = await api(page, 'POST', `/production/work-orders/${woId}/outputs`, {
+    good_count: 1, reject_count: 0, shift: 'Day Shift',
+  }, {}, { probe: false });
+  const after = `${state()}|${finishedGoodStockSnapshot()}`;
+  check(`${label}: server rejects output while in-process QC is pending`, response.status === 422 && /in-process QC/i.test(response.body?.message ?? ''), response);
+  check(`${label}: blocked output leaves work order, receipts, stock, and audit unchanged`, after === before, `${before} → ${after}`);
+  assertCleanStep(label, [`${emailOf(page)} ${response.status} POST /api/v1/production/work-orders/${woId}/outputs`]);
 }
 
 // 4 — Warehouse issues the reserved material to the running WO.
@@ -631,18 +682,16 @@ async function step5ProduceOutputs(woId) {
   check(`${label}: output audit identifies production actor`, Number(sql(`select count(*) from audit_logs where model_type like '%WorkOrderOutput' and model_id in (select id from work_order_outputs where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}')) and user_id=(select id from users where email='production@ogami.test') and action='created'`)) === 2);
 }
 
-// 6 — QC inspector measures, saves, and completes every inspection (UI).
-// Handles BOTH capture modes: the per-unit measurement table (Save (n) +
-// Complete) and the lot-checklist capture panel (Tick all, defect count,
-// piece measurements, Submit result).
-async function measureInspectionUI(page, inspectionNumber, { good = true } = {}) {
+// QC inspector measures, saves, and completes every inspection (UI).
+// Handles the item checklist, lot checklist, and per-unit capture modes.
+async function measureInspectionUI(page, inspectionNumber, { good = true, label = '6 · QC' } = {}) {
   // Resolve the hash id up front (read-only) so navigation cannot flake.
   const found = ((await api(page, 'GET', `/quality/inspections?search=${inspectionNumber}`)).body?.data ?? [])
     .find((i) => i.inspection_number === inspectionNumber);
   if (!found) throw new Error(`Inspection ${inspectionNumber} not found in the list API.`);
   await open(page, `/quality/inspections/${found.id}`);
   // Either capture UI must appear before we decide the mode.
-  await page.getByRole('button', { name: /Submit result|^Save \(/ }).first()
+  await page.getByRole('button', { name: /Submit result|Submit inspection|Save measurements|^Save \(/ }).first()
     .waitFor({ state: 'visible', timeout: 20_000 })
     .catch(async () => {
       const body = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 250);
@@ -650,34 +699,43 @@ async function measureInspectionUI(page, inspectionNumber, { good = true } = {})
     });
 
   const lotPanel = page.getByRole('button', { name: 'Submit result' });
+  const itemChecklist = page.getByRole('button', { name: 'Submit inspection', exact: true });
   const isLotMode = (await lotPanel.count()) > 0;
 
-  if (isLotMode) {
-    // Section 1: tick every checklist item OK (with its confirm dialog).
-    const tickAll = page.getByRole('button', { name: 'Tick all' });
-    if ((await tickAll.count()) && (await tickAll.first().isVisible().catch(() => false))) {
-      await tickAll.first().click();
-      await modalButton(page, 'OK').catch(() => {});
-    }
-    // Section 2: tap targets replace the input when the reject limit is small.
-    const defectGroup = page.getByRole('group', { name: 'Defective pieces found' });
-    if (await defectGroup.count()) {
-      const choices = defectGroup.getByRole('button');
-      await choices.nth(good ? 0 : (await choices.count()) - 1).click();
-    } else {
-      await page.getByLabel('Defective pieces found').fill(good ? '0' : '8');
-    }
-    // Section 3: per-piece measurements of the toleranced dimensions.
-    const numeric = page.locator('input[type="number"][aria-label*=", piece "]');
+  if (await itemChecklist.count()) {
+    const numeric = page.getByRole('spinbutton');
+    await numeric.first().waitFor({ state: 'visible', timeout: 10_000 });
     const rows = await numeric.count();
     for (let i = 0; i < rows; i += 1) await numeric.nth(i).fill(good ? '10.010' : '10.200');
-    // Submit from the panel (single POST with complete=true).
-    const lotPost = page.waitForResponse((r) => r.url().includes('/lot-result') && r.request().method() === 'POST', { timeout: 20_000 });
+    const measurementsPost = page.waitForResponse((r) => r.url().includes('/measurements') && r.request().method() === 'PATCH', { timeout: 20_000 });
+    await pageButton(page, 'Save measurements');
+    const measurementsResult = await measurementsPost;
+    check(`${label}: ${inspectionNumber} measurements saved through the form (${rows} rows)`, measurementsResult.status() === 200, `HTTP ${measurementsResult.status()}`);
+    const checklistButtons = page.getByRole('button', { name: /^PASS / });
+    const checklistCount = await checklistButtons.count();
+    for (let i = 0; i < checklistCount; i += 1) await checklistButtons.nth(i).click();
+    const itemResultPost = page.waitForResponse((r) => r.url().includes('/item-results') && r.request().method() === 'POST', { timeout: 20_000 });
+    await itemChecklist.click();
+    const itemResult = await itemResultPost;
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await expectToast(page, /review|completed/i, `${label}: ${inspectionNumber} checklist submitted through the form`);
+    check(`${label}: ${inspectionNumber} item-result POST accepted`, itemResult.status() === 200 || itemResult.status() === 201, `HTTP ${itemResult.status()}`);
+  } else if (isLotMode) {
+    const plan = (await api(page, 'GET', `/quality/inspections/${found.id}`)).body?.data;
+    await page.getByLabel('Inspected pieces').fill(String(plan?.sample_size ?? ''));
+    await page.getByLabel('Defective pieces found').fill(good ? '0' : '8');
+    await page.getByRole('checkbox', { name: 'I confirm all required checks on the planned sample were completed' }).check();
+    // Record each measured piece before marking every remaining requirement PASS.
+    const numeric = page.getByRole('spinbutton', { name: /, piece / });
+    const rows = await numeric.count();
+    for (let i = 0; i < rows; i += 1) await numeric.nth(i).fill(good ? '10.010' : '10.200');
+    await pageButton(page, 'PASS all remaining');
+    const lotPost = page.waitForResponse((r) => r.url().includes('/batch-result') && r.request().method() === 'POST', { timeout: 20_000 });
     await lotPanel.first().click();
     const lotResult = await lotPost;
     await page.waitForLoadState('networkidle').catch(() => {});
-    await expectToast(page, /review|PASSED|FAILED/i, `6 · QC: ${inspectionNumber} lot result submitted through the capture panel (${rows} piece rows)`);
-    check(`6 · QC: ${inspectionNumber} lot-result POST accepted`, lotResult.status() === 200 || lotResult.status() === 201, `HTTP ${lotResult.status()}`);
+    await expectToast(page, /review|passed|failed|completed/i, `${label}: ${inspectionNumber} lot result submitted through the capture panel (${rows} piece rows)`);
+    check(`${label}: ${inspectionNumber} batch-result POST accepted`, lotResult.status() === 200 || lotResult.status() === 201, `HTTP ${lotResult.status()}`);
   } else {
     const numeric = page.locator('input[aria-label^="Measured value —"]');
     const rows = await numeric.count();
@@ -685,7 +743,7 @@ async function measureInspectionUI(page, inspectionNumber, { good = true } = {})
     const shortcut = page.getByRole('button', { name: /Pass \d+ open manual check/ });
     if (await shortcut.count()) await shortcut.click();
     await pageButton(page, /^Save \(/);
-    await expectToast(page, /saved/i, `6 · QC: ${inspectionNumber} measurements saved through the form (${rows} numeric rows)`);
+    await expectToast(page, /saved/i, `${label}: ${inspectionNumber} measurements saved through the form (${rows} numeric rows)`);
     await pageButton(page, 'Complete');
     await modalButton(page, 'Complete');
     await page.waitForTimeout(600);
@@ -694,11 +752,36 @@ async function measureInspectionUI(page, inspectionNumber, { good = true } = {})
   const hashId = found.id;
   const detail = await inspectionStatus(page, hashId);
   const actor = (await api(page, 'GET', '/auth/user')).body?.data;
-  check(`6 · QC: ${inspectionNumber} records the actual measurement author`, detail.resultAuthors.some((author) => author.id === actor?.id), detail.resultAuthors);
+  check(`${label}: ${inspectionNumber} records the actual measurement author`, detail.resultAuthors.some((author) => author.id === actor?.id), detail.resultAuthors);
   const authorLabel = page.getByText('Results recorded by', { exact: true });
   const authorText = await authorLabel.locator('xpath=..').innerText().catch(() => '');
-  check(`6 · QC: ${inspectionNumber} shows the result author in its detail page`, authorText.includes(actor?.name ?? '__missing__'), authorText);
+  check(`${label}: ${inspectionNumber} shows the result author in its detail page`, authorText.includes(actor?.name ?? '__missing__'), authorText);
   return detail.status;
+}
+
+async function releaseInProcessQc(woId, woDbId) {
+  const label = '4.75 · In-process QC';
+  const qc = who.qc;
+  const production = who.prod;
+  const inspectionNumber = sql(`select inspection_number from inspections where stage='in_process' and entity_type='work_order' and entity_id=${woDbId} and status='draft'`);
+  const inspectionId = ((await api(qc, 'GET', `/quality/inspections?search=${inspectionNumber}`)).body?.data ?? [])
+    .find((row) => row.inspection_number === inspectionNumber)?.id;
+  check(`${label}: QC queue exposes the pending inspection`, !!inspectionId, inspectionNumber);
+  const finishedStockBefore = finishedGoodStockSnapshot();
+  const status = await measureInspectionUI(qc, inspectionNumber, { label });
+  check(`${label}: authorized QC actor records and releases the result`, status === 'passed', status);
+  const inspection = await inspectionStatus(qc, inspectionId);
+  const qcActor = (await api(qc, 'GET', '/auth/user')).body?.data;
+  check(`${label}: result author is QC and no extra checker is required for this stage`, inspection.resultAuthors.some((author) => author.id === qcActor?.id) && inspection.reviewer == null, inspection);
+  const dbResult = sql(`select status||'|'||(reviewed_by is null)::text from inspections where inspection_number='${inspectionNumber}'`);
+  check(`${label}: persisted inspection is passed with no separate reviewer`, dbResult === 'passed|true', dbResult);
+
+  const workOrder = (await api(production, 'GET', `/production/work-orders/${woId}`)).body?.data;
+  check(`${label}: passed inspection clears the server-side output blocker`, workOrder?.process_quality_blocker == null, workOrder?.process_quality_blocker);
+  check(`${label}: QC has not created production output or changed finished stock`, sql(`select count(*) from work_order_outputs where work_order_id=${woDbId}`) === '0' && finishedGoodStockSnapshot() === finishedStockBefore, `${sql(`select count(*) from work_order_outputs where work_order_id=${woDbId}`)} outputs; ${finishedStockBefore} → ${finishedGoodStockSnapshot()}`);
+  await open(production, `/production/work-orders/${woId}`);
+  check(`${label}: Record output appears after QC releases the order`, await production.getByRole('button', { name: 'Record output', exact: true }).count() === 1);
+  assertCleanStep(label);
 }
 
 async function step6QC(woDbId) {
@@ -767,6 +850,7 @@ async function attemptDeliveryFromUnreviewedLot(inspectionNumber) {
   const order = (await api(who.sales, 'GET', `/crm/sales-orders/${SO_ID}`)).body?.data;
   const item = order?.items?.[0];
   if (!inspection || !item) throw new Error(`Cannot construct the pending-QC delivery attempt for ${inspectionNumber}.`);
+  check(`${label}: the second outgoing lot is still awaiting checker review`, inspection.status === 'awaiting_review', inspection.status);
   const before = {
     deliveries: sql(`select count(*) from deliveries where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`),
     reservations: sql(`select count(*) from delivery_stock_reservations r join deliveries d on d.id=r.delivery_id where d.sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`),
@@ -778,7 +862,7 @@ async function attemptDeliveryFromUnreviewedLot(inspectionNumber) {
     notes: `Audit pending-QC gate ${RUN}`,
     items: [{ sales_order_item_id: item.id, quantity: '0.01', inspection_id: inspection.id }],
   }, { 'Idempotency-Key': `audit-${RUN}-pending-qc` }, { probe: false });
-  check(`${label}: server rejects an unreviewed outgoing lot`, response.status === 422 && response.body?.message === 'The selected inspection is not a passed outgoing inspection.', response);
+  check(`${label}: server rejects an unreviewed outgoing lot`, response.status === 422 && response.body?.message === 'The selected outgoing inspection has not been checked.', response);
   check(`${label}: rejected attempt creates no delivery`, sql(`select count(*) from deliveries where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`) === before.deliveries, before.deliveries);
   check(`${label}: rejected attempt reserves no stock`, sql(`select count(*) from delivery_stock_reservations r join deliveries d on d.id=r.delivery_id where d.sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`) === before.reservations, before.reservations);
   check(`${label}: rejected attempt creates no movement`, sql("select count(*) from stock_movements where reference_type='delivery'") === before.movements, before.movements);
@@ -970,6 +1054,16 @@ async function step9DriverProof(deliveries) {
   const page = who.driver;
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   for (const delivery of deliveries) {
+    const deliveryDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
+    const proofCount = sql(`select count(*) from delivery_proofs where delivery_id=${deliveryDbId}`);
+    const beforeConfirm = sql(`select status||'|'||coalesce(confirmed_at::text,'')||'|'||coalesce(confirmed_by::text,'')||'|'||(select count(*) from invoices where delivery_id=d.id)||'|'||(select count(*) from audit_logs where actor_type='customer_portal' and action='customer.delivery.confirmed' and model_id=d.id) from deliveries d where id=${deliveryDbId}`);
+    const confirmWithoutProof = await api(who.customer, 'POST', `/b2b/customer/deliveries/${delivery.id}/confirm`, { receiver_name: 'Juan Dela Cruz' });
+    if (confirmWithoutProof.status === 422) {
+      report.expected_api_errors ??= [];
+      report.expected_api_errors.push(`${emailOf(who.customer)} 422 POST /api/v1/b2b/customer/deliveries/${delivery.id}/confirm`);
+    }
+    const afterConfirm = sql(`select status||'|'||coalesce(confirmed_at::text,'')||'|'||coalesce(confirmed_by::text,'')||'|'||(select count(*) from invoices where delivery_id=d.id)||'|'||(select count(*) from audit_logs where actor_type='customer_portal' and action='customer.delivery.confirmed' and model_id=d.id) from deliveries d where id=${deliveryDbId}`);
+    check(`${label}: ${delivery.number} direct portal API cannot confirm before proof exists`, proofCount === '0' && confirmWithoutProof.status === 422 && /At least one proof of delivery/.test(confirmWithoutProof.body?.message ?? '') && beforeConfirm === afterConfirm, `proofs=${proofCount} response=${confirmWithoutProof.status} state=${beforeConfirm} → ${afterConfirm}`);
     await openDetail(page, '/driver', delivery.number, /\/driver\/[^/]+$/, `/driver/${delivery.id}`);
     await page.getByRole('button', { name: /Capture receipt photo/i }).click();
     await page.waitForFunction(() => /\/driver\/[^/]+\/photo$/.test(window.location.pathname), undefined, { timeout: 15_000 });
@@ -977,9 +1071,69 @@ async function step9DriverProof(deliveries) {
     await inputs.nth(1).setInputFiles({ name: `receipt-${delivery.number}.png`, mimeType: 'image/png', buffer: png });
     await page.getByRole('button', { name: /Upload photo/i }).click();
     await expectToast(page, /upload|success/i, `${label}: receipt photo uploaded for ${delivery.number} through the driver flow`);
-    const deliveryDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
     check(`${label}: ${delivery.number} proof is stored under the driver actor`, Number(sql(`select count(*) from delivery_proofs where delivery_id=${deliveryDbId} and uploaded_by=(select id from users where email='driver@ogami.test') and mime_type='image/png' and file_size>0`)) === 1);
     check(`${label}: uploading proof leaves the delivered state unchanged`, sql(`select status from deliveries where id=${deliveryDbId}`) === 'delivered');
+
+    const dispatcher = who.impex;
+    await open(dispatcher, `/supply-chain/deliveries/${delivery.id}`);
+    const activeRestoreButtons = await dispatcher.getByRole('button', { name: 'Restore', exact: true }).count();
+    const activeArchiveButtons = await dispatcher.getByRole('button', { name: 'Archive', exact: true }).count();
+    check(`${label}: ${delivery.number} active proof shows Archive only`, activeRestoreButtons === 0 && activeArchiveButtons === 1, `restore=${activeRestoreButtons} archive=${activeArchiveButtons}`);
+
+    const activeDetail = (await api(dispatcher, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+    const proof = activeDetail?.proofs?.find((row) => !row.deleted_at);
+    check(`${label}: ${delivery.number} proof ID resolved (read-only)`, !!proof?.id, proof?.id);
+    const proofId = proof.id;
+    const proofDbId = Number(sql(`select id from delivery_proofs where delivery_id=${deliveryDbId} and deleted_at is null and uploaded_by=(select id from users where email='driver@ogami.test')`));
+    const proofModelType = sql(`select model_type from audit_logs where model_id=${proofDbId} and action='created' order by id desc limit 1`);
+    check(`${label}: ${delivery.number} proof audit identity resolved (read-only)`, proofDbId > 0 && !!proofModelType, `${proofDbId}|${proofModelType}`);
+    const archiveResultWait = dispatcher.waitForResponse((response) =>
+      response.url().includes(`/deliveries/${delivery.id}/proofs/${proofId}`) && response.request().method() === 'DELETE', { timeout: 20_000 });
+    await pageButton(dispatcher, 'Archive');
+    await modalButton(dispatcher, 'Archive');
+    const archiveResult = await archiveResultWait;
+    await dispatcher.waitForLoadState('networkidle').catch(() => {});
+    await expectToast(dispatcher, /Proof archived/i, `${label}: ${delivery.number} proof archived by ImpEx`);
+    check(`${label}: ${delivery.number} proof archive request succeeded`, archiveResult.status() === 204, `HTTP ${archiveResult.status()}`);
+
+    const archivedDelivery = (await api(dispatcher, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+    const archivedProof = archivedDelivery?.proofs?.find((row) => row.id === proofId);
+    const archivedState = sql(`select status||'|'||(confirmed_at is not null)::text||'|'||(select count(*) from invoices where delivery_id=${deliveryDbId}) from deliveries where id=${deliveryDbId}`);
+    check(`${label}: ${delivery.number} archive records proof as inactive without advancing delivery`, !!archivedProof?.deleted_at && archivedDelivery?.proof_count === 0 && archivedDelivery?.can_confirm === false && archivedState === 'delivered|false|0', `${archivedProof?.deleted_at}|count=${archivedDelivery?.proof_count}|can_confirm=${archivedDelivery?.can_confirm}|${archivedState}`);
+    await dispatcher.getByText('Archived', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+    const archivedRestoreButtons = await dispatcher.getByRole('button', { name: 'Restore', exact: true }).count();
+    const archivedArchiveButtons = await dispatcher.getByRole('button', { name: 'Archive', exact: true }).count();
+    const archivedFileVisible = await dispatcher.getByText(`receipt-${delivery.number}.png`, { exact: true }).count();
+    const archivedLabelCount = await dispatcher.getByText('Archived', { exact: true }).count();
+    check(`${label}: ${delivery.number} archived proof is visible and offers Restore only`, archivedLabelCount === 1 && archivedFileVisible === 1 && archivedRestoreButtons === 1 && archivedArchiveButtons === 0, `label=${archivedLabelCount} file=${archivedFileVisible} restore=${archivedRestoreButtons} archive=${archivedArchiveButtons}`);
+    check(`${label}: ${delivery.number} proof archive is audited by ImpEx`, sql(`select count(*) from audit_logs where model_type='${proofModelType}' and model_id=${proofDbId} and user_id=(select id from users where email='impex@ogami.test') and action='deleted'`) === '1');
+
+    const beforeBlockedConfirm = sql(`select status||'|'||coalesce(confirmed_at::text,'')||'|'||(select count(*) from invoices where delivery_id=${deliveryDbId})||'|'||(select count(*) from audit_logs where actor_type='customer_portal' and action='customer.delivery.confirmed' and model_id=${deliveryDbId}) from deliveries where id=${deliveryDbId}`);
+    const blockedConfirm = await api(who.customer, 'POST', `/b2b/customer/deliveries/${delivery.id}/confirm`, { receiver_name: 'Juan Dela Cruz' });
+    if (blockedConfirm.status === 422) {
+      report.expected_api_errors ??= [];
+      report.expected_api_errors.push(`${emailOf(who.customer)} 422 POST /api/v1/b2b/customer/deliveries/${delivery.id}/confirm`);
+    }
+    const afterBlockedConfirm = sql(`select status||'|'||coalesce(confirmed_at::text,'')||'|'||(select count(*) from invoices where delivery_id=${deliveryDbId})||'|'||(select count(*) from audit_logs where actor_type='customer_portal' and action='customer.delivery.confirmed' and model_id=${deliveryDbId}) from deliveries where id=${deliveryDbId}`);
+    check(`${label}: ${delivery.number} archived proof cannot satisfy the customer confirmation gate`, blockedConfirm.status === 422 && /At least one proof of delivery/.test(blockedConfirm.body?.message ?? '') && beforeBlockedConfirm === afterBlockedConfirm, `HTTP ${blockedConfirm.status} ${beforeBlockedConfirm} → ${afterBlockedConfirm}`);
+
+    const restoreResultWait = dispatcher.waitForResponse((response) =>
+      response.url().includes(`/deliveries/${delivery.id}/proofs/${proofId}/restore`) && response.request().method() === 'PATCH', { timeout: 20_000 });
+    await pageButton(dispatcher, 'Restore');
+    await modalButton(dispatcher, 'Restore');
+    const restoreResult = await restoreResultWait;
+    await dispatcher.waitForLoadState('networkidle').catch(() => {});
+    await expectToast(dispatcher, /Proof restored/i, `${label}: ${delivery.number} proof restored by ImpEx`);
+    check(`${label}: ${delivery.number} proof restore request succeeded`, restoreResult.status() === 200, `HTTP ${restoreResult.status()}`);
+    const restoredDelivery = (await api(dispatcher, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+    await dispatcher.getByText('Archived', { exact: true }).waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+    const restoredArchiveButtons = await dispatcher.getByRole('button', { name: 'Archive', exact: true }).count();
+    const restoredRestoreButtons = await dispatcher.getByRole('button', { name: 'Restore', exact: true }).count();
+    const restoredFileVisible = await dispatcher.getByText(`receipt-${delivery.number}.png`, { exact: true }).count();
+    const restoreAuditCount = sql(`select count(*) from audit_logs where model_type='${proofModelType}' and model_id=${proofDbId} and user_id=(select id from users where email='impex@ogami.test') and action='updated' and old_values->>'deleted_at' is not null and (new_values::jsonb ? 'deleted_at') and new_values->>'deleted_at' is null`);
+    check(`${label}: ${delivery.number} restored proof reopens confirmation gate`, restoredDelivery?.proof_count === 1 && restoredDelivery?.can_confirm === true && sql(`select count(*) from delivery_proofs where delivery_id=${deliveryDbId} and deleted_at is null`) === '1', `count=${restoredDelivery?.proof_count}|can_confirm=${restoredDelivery?.can_confirm}`);
+    check(`${label}: ${delivery.number} restored proof is visible and offers Archive only`, restoredFileVisible === 1 && restoredArchiveButtons === 1 && restoredRestoreButtons === 0, `file=${restoredFileVisible} archive=${restoredArchiveButtons} restore=${restoredRestoreButtons}`);
+    check(`${label}: ${delivery.number} proof restore audit records before and after`, restoreAuditCount === '1', restoreAuditCount);
   }
 }
 
@@ -1001,15 +1155,32 @@ async function step10CustomerConfirm(deliveries) {
     check(`${label}: ${delivery.number} receiver, confirmation, and invoice handoff are persisted`, /^confirmed\|Juan Dela Cruz\|Warehouse Staff\|true\|true\|generated$/.test(state), state);
     check(`${label}: ${delivery.number} customer confirmation has a portal audit entry`, Number(sql(`select count(*) from audit_logs where actor_type='customer_portal' and action='customer.delivery.confirmed' and model_type like '%Delivery' and model_id=${deliveryDbId} and new_values->>'email'='${fixture.customer_email.replaceAll("'", "''")}'`)) === 1);
     check(`${label}: ${delivery.number} has exactly one linked draft invoice`, sql(`select count(*) from invoices where delivery_id=${deliveryDbId} and status='draft'`) === '1');
+
+    const dispatcher = who.impex;
+    const confirmedDelivery = (await api(dispatcher, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+    check(`${label}: ${delivery.number} confirmed CoC is present`, confirmedDelivery?.proofs?.some((proof) => proof.proof_type === 'coc' && !proof.deleted_at), confirmedDelivery?.proofs?.map((proof) => proof.proof_type));
+    await open(dispatcher, `/supply-chain/deliveries/${delivery.id}`);
+    const cocCard = dispatcher.getByRole('listitem').filter({ hasText: /Certificate of conformance/i }).first();
+    const cocCardCount = await dispatcher.getByRole('listitem').filter({ hasText: /Certificate of conformance/i }).count();
+    const cocArchiveButtons = cocCardCount ? await cocCard.getByRole('button', { name: 'Archive', exact: true }).count() : -1;
+    const cocArchiveReason = cocCardCount ? await cocCard.getByText('The Certificate of Conformance cannot be deleted from a confirmed delivery.', { exact: true }).count() : 0;
+    check(`${label}: ${delivery.number} confirmed CoC hides Archive and explains why`, cocCardCount === 1 && cocArchiveButtons === 0 && cocArchiveReason === 1, `CoC cards=${cocCardCount}|Archive buttons=${cocArchiveButtons}|reason=${cocArchiveReason}`);
+    if (cocCardCount === 1 && cocArchiveReason === 1) {
+      const viewport = dispatcher.viewportSize();
+      await dispatcher.setViewportSize({ width: 375, height: 812 });
+      const reasonFitsCard = await cocCard.evaluate((card) => card.scrollWidth <= card.clientWidth);
+      check(`${label}: ${delivery.number} archive explanation fits its proof card at phone width`, reasonFitsCard, `card=${await cocCard.evaluate((card) => `${card.clientWidth}/${card.scrollWidth}`)}`);
+      if (viewport) await dispatcher.setViewportSize(viewport);
+    }
   }
 }
 
-// 11 — Finance finalizes both invoices and records the full collections.
+// 11 — Finance finalizes invoices, races two tabs on one partial collection, then settles balances.
 async function step11Finance(invoices) {
   const label = '11 · Finance';
   const page = who.finance;
   check(`${label}: one draft invoice per confirmed delivery`, invoices.length === 2, `count=${invoices.length}`);
-  for (const invoice of invoices) {
+  for (const [index, invoice] of invoices.entries()) {
     await open(page, `/accounting/invoices/${invoice.hash}`);
     const finalizePost = page.waitForResponse((r) => r.url().includes(`/invoices/${invoice.hash}/finalize`) && r.request().method() === 'PATCH', { timeout: 20_000 });
     await pageButton(page, 'Finalize');
@@ -1023,21 +1194,90 @@ async function step11Finance(invoices) {
 
     const balance = sql(`select balance from invoices where id=${invoice.dbId}`);
     const collectionsBefore = sql(`select count(*) from collections where invoice_id=${invoice.dbId}`);
-    await pageButton(page, 'Record collection');
-    await dialogSelect(page, 0, { label: /1020/ }).catch(() => dialogSelect(page, 0, { index: 1 }));
-    await page.getByRole('dialog').getByRole('spinbutton').last().fill(balance);
-    await dialogSelect(page, 1, { label: /Bank/i }).catch(() => dialogSelect(page, 1, { index: 1 }));
-    await page.getByRole('dialog').getByRole('textbox').last().fill(`UI-${RUN}-${number}`);
-    const collectPost = page.waitForResponse((r) => r.url().includes(`/invoices/${invoice.hash}/collections`) && r.request().method() === 'POST', { timeout: 20_000 });
-    await modalButton(page, 'Record');
-    const collectResult = await collectPost;
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await expectToast(page, /record|collection/i, `${label}: ${number} collection of ₱${balance} recorded through the modal`);
-    check(`${label}: ${number} collection POST accepted`, collectResult.status() === 201 || collectResult.status() === 200, `HTTP ${collectResult.status()}`);
-    const after = sql(`select status||':'||balance from invoices where id=${invoice.dbId}`);
+    const firstAmount = index === 0 ? (Number(balance) / 2).toFixed(2) : balance;
+    const collectionRoute = `/invoices/${invoice.hash}/collections`;
+    let after;
+    if (index === 0) {
+      const secondPage = await page.context().newPage();
+      const email = emailOf(page);
+      secondPage.on('pageerror', (e) => report.page_errors.push(`${email} (second tab): ${e.message}`));
+      secondPage.on('console', (message) => {
+        if (message.type() === 'error') report.console_errors.push(`${email} (second tab): ${message.text().slice(0, 500)}`);
+      });
+      secondPage.on('response', (r) => {
+        if (r.status() < 400 || !r.url().includes('/api/')) return;
+        const failure = `${email} ${r.status()} ${r.request().method()} ${r.url().replace(BASE, '')}`;
+        report.api_errors.push(failure);
+        if (r.status() >= 500) report.http_errors.push(failure);
+      });
+      await open(secondPage, `/accounting/invoices/${invoice.hash}`);
+      const reference = `UI-${RUN}-${number}`;
+      await fillCollectionModal(page, firstAmount, reference);
+      await fillCollectionModal(secondPage, firstAmount, reference);
+      const firstCollectPost = page.waitForResponse((r) => r.url().includes(collectionRoute) && r.request().method() === 'POST', { timeout: 20_000 });
+      const secondCollectPost = secondPage.waitForResponse((r) => r.url().includes(collectionRoute) && r.request().method() === 'POST', { timeout: 20_000 });
+      await Promise.all([modalButton(page, 'Record'), modalButton(secondPage, 'Record')]);
+      const [firstCollect, secondCollect] = await Promise.all([firstCollectPost, secondCollectPost]);
+      await Promise.all([page.waitForLoadState('networkidle').catch(() => {}), secondPage.waitForLoadState('networkidle').catch(() => {})]);
+      await expectToast(page, /record|collection/i, `${label}: ${number} first tab reports the collection result`);
+      await expectToast(secondPage, /record|collection/i, `${label}: ${number} second tab reports the collection result`);
+      check(`${label}: ${number} both Finance tabs submit the same partial action`, [firstCollect.status(), secondCollect.status()].every((status) => status === 201 || status === 200), `${firstCollect.status()} / ${secondCollect.status()}`);
+      const submitted = firstCollect.request().postDataJSON();
+      const submittedFromSecondTab = secondCollect.request().postDataJSON();
+      const half = firstAmount;
+      const remainingAfterFirst = (Number(balance) - Number(half)).toFixed(2);
+      after = sql(`select status||':'||balance||':'||amount_paid from invoices where id=${invoice.dbId}`);
+      const firstEffects = sql(`select (select count(*) from collections where invoice_id=${invoice.dbId})||'|'||(select count(*) from journal_entries where reference_type='collection' and reference_id in (select id from collections where invoice_id=${invoice.dbId}))||'|'||(select count(*) from official_receipts where collection_id in (select id from collections where invoice_id=${invoice.dbId}))`);
+      check(`${label}: ${number} concurrent tabs produce one partial payment, journal, and receipt`, after === `partial:${remainingAfterFirst}:${half}` && firstEffects === '1|1|1', `${after} effects=${firstEffects}`);
+      check(`${label}: ${number} both tabs use the same invoice-state idempotency key`, typeof submitted.idempotency_key === 'string' && submitted.idempotency_key.length > 0 && submitted.idempotency_key === submittedFromSecondTab.idempotency_key, `${submitted.idempotency_key ?? '(missing)'} / ${submittedFromSecondTab.idempotency_key ?? '(missing)'}`);
+      const firstAudit = sql(`select count(*)||'|'||count(*) filter (where action='created')||'|'||count(*) filter (where action='updated')||'|'||count(*) filter (where user_id=(select id from users where email='finance@ogami.test')) from audit_logs where model_type like '%Collection' and model_id in (select id from collections where invoice_id=${invoice.dbId})`);
+      check(`${label}: ${number} concurrent retry records one collection audit trail by Finance`, firstAudit === '2|1|1|2', firstAudit);
+
+      const withoutKey = { ...submitted };
+      delete withoutKey.idempotency_key;
+      const retryWithoutKey = await api(page, 'POST', collectionRoute, withoutKey);
+      if (retryWithoutKey.status === 422) {
+        report.expected_api_errors ??= [];
+        report.expected_api_errors.push(`${emailOf(page)} 422 POST /api/v1${collectionRoute}`);
+      }
+      const afterUnkeyedRetry = sql(`select status||':'||balance||':'||amount_paid from invoices where id=${invoice.dbId}`);
+      const effectsAfterUnkeyedRetry = sql(`select (select count(*) from collections where invoice_id=${invoice.dbId})||'|'||(select count(*) from journal_entries where reference_type='collection' and reference_id in (select id from collections where invoice_id=${invoice.dbId}))||'|'||(select count(*) from official_receipts where collection_id in (select id from collections where invoice_id=${invoice.dbId}))`);
+      const auditAfterUnkeyedRetry = sql(`select count(*)||'|'||count(*) filter (where action='created')||'|'||count(*) filter (where action='updated') from audit_logs where model_type like '%Collection' and model_id in (select id from collections where invoice_id=${invoice.dbId})`);
+      check(`${label}: ${number} rejects an unkeyed retry without changing invoice, journals, receipts, or audit`, retryWithoutKey.status === 422 && afterUnkeyedRetry === after && effectsAfterUnkeyedRetry === firstEffects && auditAfterUnkeyedRetry === '2|1|1', `${retryWithoutKey.status} ${JSON.stringify(retryWithoutKey.body)} state=${afterUnkeyedRetry} effects=${effectsAfterUnkeyedRetry} audit=${auditAfterUnkeyedRetry}`);
+
+      const keyedRetry = await api(page, 'POST', collectionRoute, submitted);
+      const afterKeyedRetry = sql(`select status||':'||balance||':'||amount_paid from invoices where id=${invoice.dbId}`);
+      const effectsAfterKeyedRetry = sql(`select (select count(*) from collections where invoice_id=${invoice.dbId})||'|'||(select count(*) from journal_entries where reference_type='collection' and reference_id in (select id from collections where invoice_id=${invoice.dbId}))||'|'||(select count(*) from official_receipts where collection_id in (select id from collections where invoice_id=${invoice.dbId}))`);
+      const auditAfterKeyedRetry = sql(`select count(*)||'|'||count(*) filter (where action='created')||'|'||count(*) filter (where action='updated') from audit_logs where model_type like '%Collection' and model_id in (select id from collections where invoice_id=${invoice.dbId})`);
+      check(`${label}: ${number} same-key retry returns one original collection without duplicate side effects or audit`, keyedRetry.status === 201 && afterKeyedRetry === after && effectsAfterKeyedRetry === firstEffects && auditAfterKeyedRetry === '2|1|1', `${keyedRetry.status} state=${afterKeyedRetry} effects=${effectsAfterKeyedRetry} audit=${auditAfterKeyedRetry}`);
+
+      await page.reload();
+      await page.waitForLoadState('networkidle').catch(() => {});
+      const remaining = sql(`select balance from invoices where id=${invoice.dbId}`);
+      await fillCollectionModal(page, remaining, `UI-${RUN}-${number}-REMAINDER`);
+      const finalCollectPost = page.waitForResponse((r) => r.url().includes(collectionRoute) && r.request().method() === 'POST', { timeout: 20_000 });
+      await modalButton(page, 'Record');
+      const finalCollectResult = await finalCollectPost;
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await expectToast(page, /record|collection/i, `${label}: ${number} remaining collection recorded through the modal`);
+      check(`${label}: ${number} remaining partial balance accepted through UI`, finalCollectResult.status() === 201 || finalCollectResult.status() === 200, `HTTP ${finalCollectResult.status()}`);
+      after = sql(`select status||':'||balance from invoices where id=${invoice.dbId}`);
+      await secondPage.close();
+    } else {
+      await fillCollectionModal(page, firstAmount, `UI-${RUN}-${number}`);
+      const collectPost = page.waitForResponse((r) => r.url().includes(collectionRoute) && r.request().method() === 'POST', { timeout: 20_000 });
+      await modalButton(page, 'Record');
+      const collectResult = await collectPost;
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await expectToast(page, /record|collection/i, `${label}: ${number} collection of ₱${firstAmount} recorded through the modal`);
+      check(`${label}: ${number} collection POST accepted`, collectResult.status() === 201 || collectResult.status() === 200, `HTTP ${collectResult.status()}`);
+      after = sql(`select status||':'||balance from invoices where id=${invoice.dbId}`);
+    }
     check(`${label}: ${number} fully paid`, /paid:0\.00/.test(after), after);
-    check(`${label}: ${number} collection was recorded once by Finance`, sql(`select count(*) from collections where invoice_id=${invoice.dbId} and amount=${balance} and created_by=(select id from users where email='finance@ogami.test')`) === '1' && collectionsBefore === '0');
-    check(`${label}: ${number} collection has one balanced posted journal entry`, sql(`select count(*) from collections c join journal_entries j on j.id=c.journal_entry_id where c.invoice_id=${invoice.dbId} and j.status='posted' and j.total_debit=j.total_credit`) === '1');
+    const expectedCollections = index === 0 ? '2' : '1';
+    check(`${label}: ${number} collections total invoice amount and belong to Finance`, sql(`select count(*)||'|'||sum(amount)::numeric(15,2)::text||'|'||count(*) filter (where created_by=(select id from users where email='finance@ogami.test')) from collections where invoice_id=${invoice.dbId}`) === `${expectedCollections}|${balance}|${expectedCollections}` && collectionsBefore === '0');
+    check(`${label}: ${number} has one balanced posted journal and official receipt per collection`, sql(`select count(*)||'|'||count(*) filter (where j.status='posted' and j.total_debit=j.total_credit)||'|'||(select count(*) from official_receipts where collection_id in (select id from collections where invoice_id=${invoice.dbId})) from collections c join journal_entries j on j.id=c.journal_entry_id where c.invoice_id=${invoice.dbId}`) === `${expectedCollections}|${expectedCollections}|${expectedCollections}`);
+    check(`${label}: ${number} has exactly one created and one posted-journal audit per Finance collection`, sql(`select count(*)||'|'||count(*) filter (where action='created')||'|'||count(*) filter (where action='updated')||'|'||count(*) filter (where user_id=(select id from users where email='finance@ogami.test')) from audit_logs where model_type like '%Collection' and model_id in (select id from collections where invoice_id=${invoice.dbId})`) === `${expectedCollections * 2}|${expectedCollections}|${expectedCollections}|${expectedCollections * 2}`);
   }
   const soId = sql(`select id from sales_orders where so_number='${SO_NUMBER}'`);
   const soStatus = sql(`select status from sales_orders where id=${soId}`);
@@ -1053,7 +1293,7 @@ async function verifyAlignment(woDbId) {
   const soId = sql(`select id from sales_orders where so_number='${SO_NUMBER}'`);
   const guards = {
     'WO belongs to the SO': sql(`select count(*) from work_orders where id=${woDbId} and sales_order_id=${soId}`) === '1',
-    'WO is completed': sql(`select status from work_orders where id=${woDbId}`) === 'completed',
+    'WO auto-closed after production and quality resolution': sql(`select status from work_orders where id=${woDbId}`) === 'closed',
     'every output batch has exactly one PASSED outgoing inspection': sql(`select count(*) from work_order_outputs o where o.work_order_id=${woDbId} and (select count(*) from inspections i where i.work_order_output_id=o.id and i.stage='outgoing' and i.status='passed') <> 1`) === '0',
     'every non-cancelled delivery reached customer-confirmed': sql(`select count(*) from deliveries where sales_order_id=${soId} and status not in ('confirmed','cancelled')`) === '0',
     'cancelled delivery remains terminal with released stock and no invoice or dispatch': sql(`select count(*) from deliveries d where d.sales_order_id=${soId} and d.status='cancelled' and exists(select 1 from delivery_stock_reservation_batches b where b.delivery_id=d.id and b.status='released') and not exists(select 1 from invoices i where i.delivery_id=d.id) and not exists(select 1 from delivery_items di where di.delivery_id=d.id and (di.stock_movement_id is not null or di.customer_received_quantity is not null))`) === '1',
@@ -1086,9 +1326,131 @@ async function verifySalesOrderActivity(page) {
   check('12 · Activity: timeline has no fabricated current-status row', !events.some((event) => /^Status:\s*/.test(event)), events);
 }
 
+async function stepAssetAssociation() {
+  const label = '13 · Asset association';
+  const finance = who.finance;
+  const impex = who.impex;
+  const plate = `AUD-${RUN.slice(-8)}`;
+  const assetResult = await api(finance, 'POST', '/assets', {
+    name: `Audit vehicle ${RUN}`,
+    category: 'vehicle',
+    acquisition_date: today(),
+    acquisition_cost: '10000.00',
+    useful_life_years: 5,
+  });
+  const asset = assetResult.body?.data;
+  check(`${label}: Finance creates a vehicle asset`, assetResult.status === 201 && !!asset?.id, `${assetResult.status}|${asset?.asset_code}`);
+  const assetDbId = Number(sql(`select id from assets where asset_code='${asset?.asset_code}'`) || 0);
+  check(`${label}: asset is active and starts unassociated`, assetDbId > 0 && sql(`select status||'|'||coalesce((select asset_id::text from vehicles where asset_id=assets.id limit 1),'') from assets where id=${assetDbId}`) === 'active|');
+
+  const vehicleResult = await api(impex, 'POST', '/supply-chain/vehicles', {
+    plate_number: plate,
+    name: `Audit van ${RUN}`,
+    vehicle_type: 'van',
+    status: 'available',
+  });
+  const vehicle = vehicleResult.body?.data;
+  check(`${label}: ImpEx creates an unlinked fleet vehicle`, vehicleResult.status === 201 && !!vehicle?.id, `${vehicleResult.status}|${vehicle?.plate_number}`);
+  const vehicleDbId = Number(sql(`select id from vehicles where plate_number='${plate}'`) || 0);
+  check(`${label}: vehicle is available and unassociated before linking`, vehicleDbId > 0 && sql(`select status||'|'||coalesce(asset_id::text,'') from vehicles where id=${vehicleDbId}`) === 'available|');
+
+  const fleetRead = await api(finance, 'GET', '/supply-chain/vehicles');
+  if (fleetRead.status === 403) {
+    report.expected_api_errors ??= [];
+    report.expected_api_errors.push(`${emailOf(finance)} 403 GET /api/v1/supply-chain/vehicles`);
+  }
+  check(`${label}: Finance cannot list Fleet without supply-chain read permission`, fleetRead.status === 403, `${fleetRead.status}|${JSON.stringify(fleetRead.body)}`);
+
+  await open(finance, `/assets/${asset.id}`);
+  check(`${label}: Finance sees the unassociated state and link action`, await finance.getByText('No operational record linked.').isVisible().catch(() => false)
+    && await finance.getByRole('button', { name: 'Associate vehicle', exact: true }).isVisible().catch(() => false));
+  await pageButton(finance, 'Associate vehicle');
+  await finance.getByRole('textbox', { name: 'Search vehicle records' }).fill(plate);
+  const optionsResponse = await finance.waitForResponse((response) => {
+    if (!response.url().includes(`/assets/${asset.id}/association-options`) || response.request().method() !== 'GET') return false;
+    return new URL(response.url()).searchParams.get('search') === plate;
+  }, { timeout: 20_000 });
+  const options = await optionsResponse.json();
+  check(`${label}: Assets permission returns this unassociated vehicle without Fleet read permission`, optionsResponse.status() === 200
+    && options.data?.length === 1 && options.data[0].id === vehicle.id && options.meta?.total === 1, `${optionsResponse.status()}|${JSON.stringify(options.data)}`);
+  await finance.getByLabel('Vehicle', { exact: true }).selectOption(vehicle.id);
+  const linkResponseWait = finance.waitForResponse((response) =>
+    response.url().includes(`/assets/${asset.id}/association`) && response.request().method() === 'PATCH', { timeout: 20_000 });
+  await pageButton(finance, 'Save association');
+  const linkResponse = await linkResponseWait;
+  await expectToast(finance, /Operational record linked/i, `${label}: association saves through Asset detail`);
+  const linked = (await api(finance, 'GET', `/assets/${asset.id}`)).body?.data;
+  const linkAudit = sql(`select count(*)||'|'||count(*) filter (where user_id=(select id from users where email='finance@ogami.test') and old_values->>'asset_id' is null and new_values->>'asset_id'='${assetDbId}') from audit_logs where model_type like '%Vehicle' and model_id=${vehicleDbId} and action='updated'`);
+  check(`${label}: link completes before any later operation`, linkResponse.status() === 200 && linked?.status === 'active'
+    && linked?.association?.type === 'vehicle' && linked?.association?.id === vehicle.id
+    && sql(`select asset_id from vehicles where id=${vehicleDbId}`) === String(assetDbId) && linkAudit === '1|1',
+  `${linkResponse.status()}|${linked?.association?.id}|${sql(`select asset_id from vehicles where id=${vehicleDbId}`)}|${linkAudit}`);
+  check(`${label}: detail page shows the linked plate and offers only clear`, await finance.getByText(plate, { exact: true }).isVisible().catch(() => false)
+    && await finance.getByRole('button', { name: 'Clear association', exact: true }).isVisible().catch(() => false));
+  check(`${label}: linked asset cannot request disposal and explains the blocker`, await finance.getByRole('button', { name: 'Dispose', exact: true }).count() === 0
+    && await finance.getByText('Clear this operational association before requesting disposal.', { exact: true }).isVisible().catch(() => false));
+
+  await open(impex, '/supply-chain/fleet');
+  const vehicleRow = impex.getByRole('row').filter({ hasText: plate });
+  await vehicleRow.getByRole('button', { name: 'Archive', exact: true }).click();
+  const archiveDialog = impex.getByRole('dialog');
+  check(`${label}: archive confirmation explains the linked-asset blocker`, await archiveDialog.getByText(/linked assets.*Disassociate the fixed asset first/i).isVisible().catch(() => false));
+  const vehicleRoute = `/supply-chain/vehicles/${vehicle.id}`;
+  const archiveError = `${emailOf(impex)} 422 DELETE /api/v1${vehicleRoute}`;
+  const blockedState = () => `${sql(`select coalesce(asset_id::text,'')||'|'||coalesce(deleted_at::text,'') from vehicles where id=${vehicleDbId}`)}|${sql(`select count(*) from audit_logs where model_type like '%Vehicle' and model_id=${vehicleDbId} and action='updated'`)}`;
+  const linkedState = blockedState();
+  const uiArchiveWait = impex.waitForResponse((response) => response.url().includes(`/api/v1${vehicleRoute}`)
+    && response.request().method() === 'DELETE', { timeout: 20_000 });
+  await modalButton(impex, 'Archive vehicle');
+  const uiArchive = await uiArchiveWait;
+  const archiveErrorToast = impex.getByRole('status').filter({ hasText: /Disassociate this asset before archiving the vehicle/i }).last();
+  await archiveErrorToast.waitFor({ state: 'visible', timeout: 12_000 });
+  check(`${label}: linked vehicle archive is rejected in Fleet with a clear message`, uiArchive.status() === 422
+    && (await archiveErrorToast.innerText()).includes('Disassociate this asset before archiving the vehicle.'), `${uiArchive.status()}|${await archiveErrorToast.innerText()}`);
+  check(`${label}: UI archive rejection preserves association, vehicle, and audit state`, blockedState() === linkedState, `${linkedState} → ${blockedState()}`);
+
+  const directArchive = await api(impex, 'DELETE', vehicleRoute);
+  check(`${label}: direct archive API rejects the same linked vehicle`, directArchive.status === 422
+    && directArchive.body?.message === 'Disassociate this asset before archiving the vehicle.', `${directArchive.status}|${JSON.stringify(directArchive.body)}`);
+  check(`${label}: direct archive rejection has no partial writes`, blockedState() === linkedState, `${linkedState} → ${blockedState()}`);
+  assertCleanStep(`${label}: archive guard`, [archiveError, archiveError]);
+
+  await pageButton(finance, 'Clear association');
+  const clearDialog = finance.getByRole('dialog');
+  check(`${label}: clearing names the linked vehicle before confirmation`, await clearDialog.getByText(new RegExp(plate)).isVisible().catch(() => false));
+  const clearResponseWait = finance.waitForResponse((response) =>
+    response.url().includes(`/assets/${asset.id}/association`) && response.request().method() === 'PATCH', { timeout: 20_000 });
+  await modalButton(finance, 'Clear association');
+  const clearResponse = await clearResponseWait;
+  await expectToast(finance, /Operational record unlinked/i, `${label}: clear confirms only after server response`);
+  const cleared = (await api(finance, 'GET', `/assets/${asset.id}`)).body?.data;
+  const clearAudit = sql(`select count(*)||'|'||count(*) filter (where user_id=(select id from users where email='finance@ogami.test') and old_values->>'asset_id'='${assetDbId}' and new_values::jsonb ? 'asset_id' and new_values->>'asset_id' is null) from audit_logs where model_type like '%Vehicle' and model_id=${vehicleDbId} and action='updated'`);
+  check(`${label}: clear reverses the link and records the Finance actor`, clearResponse.status() === 200 && cleared?.association === null
+    && sql(`select asset_id from vehicles where id=${vehicleDbId}`) === '' && clearAudit === '2|1',
+  `${clearResponse.status()}|${JSON.stringify(cleared?.association)}|${sql(`select asset_id from vehicles where id=${vehicleDbId}`)}|${clearAudit}`);
+  check(`${label}: clearing the blocker restores the disposal action`, await finance.getByRole('button', { name: 'Dispose', exact: true }).isVisible().catch(() => false));
+
+  await open(impex, '/supply-chain/fleet');
+  const unlinkedVehicle = impex.getByRole('row').filter({ hasText: plate });
+  await unlinkedVehicle.getByRole('button', { name: 'Archive', exact: true }).click();
+  const allowedArchiveWait = impex.waitForResponse((response) => response.url().includes(`/api/v1${vehicleRoute}`)
+    && response.request().method() === 'DELETE', { timeout: 20_000 });
+  await modalButton(impex, 'Archive vehicle');
+  const allowedArchive = await allowedArchiveWait;
+  await expectToast(impex, /Vehicle archived\./, `${label}: asset can archive its vehicle after Finance clears the link`);
+  const archivedVehicleState = sql(`select (asset_id is null)::text||'|'||(deleted_at is not null)::text from vehicles where id=${vehicleDbId}`);
+  check(`${label}: allowed archive completes only after disassociation`, allowedArchive.status() === 204 && archivedVehicleState === 'true|true',
+    `${allowedArchive.status()}|${archivedVehicleState}`);
+
+  const auditCount = sql(`select count(*) from audit_logs where model_type like '%Vehicle' and model_id=${vehicleDbId} and action='updated'`);
+  const repeatClear = await api(finance, 'PATCH', `/assets/${asset.id}/association`, { target_type: 'vehicle', target_id: null });
+  const stateAfterRetry = `${sql(`select asset_id from vehicles where id=${vehicleDbId}`)}|${sql(`select count(*) from audit_logs where model_type like '%Vehicle' and model_id=${vehicleDbId} and action='updated'`)}`;
+  check(`${label}: repeated clear is harmless and adds no audit side effect`, repeatClear.status === 200 && stateAfterRetry === `|${auditCount}` && auditCount === '2', `${repeatClear.status}|${stateAfterRetry}`);
+}
+
 /* ─── Main ────────────────────────────────────────────────────────── */
 
-(async () => {
+if (require.main === module) (async () => {
   let server;
   try {
     server = await setUp();
@@ -1119,9 +1481,11 @@ async function verifySalesOrderActivity(page) {
     const woDbId = Number(sql(`select id from work_orders where wo_number='${WO_NUMBER}'`) || 0);
     await step3ConfirmAndStart(woId, woDbId);
     assertCleanStep('3 · Confirm and start work order');
+    await attemptOutputBeforeProcessQc(woId, woDbId);
     await step4IssueMaterial(woId, woDbId);
     assertCleanStep('4 · Issue material');
     await attemptUnauthorizedOutput(woId, woDbId);
+    await releaseInProcessQc(woId, woDbId);
     await step5ProduceOutputs(woId);
     assertCleanStep('5 · Production output');
     const qcNumbers = await step6QC(woDbId);
@@ -1174,6 +1538,8 @@ async function verifySalesOrderActivity(page) {
     await verifySalesOrderActivity(who.sales);
     await shot(who.finance, `/accounting/invoices/${invoices[0]?.hash}`, 'ui-chain-invoice-paid');
     assertCleanStep('12 · Final inspection');
+    await stepAssetAssociation();
+    assertCleanStep('13 · Asset association');
   } catch (error) {
     if (!error.auditCheck) {
       const evidence = error.stack?.slice(0, 900) ?? String(error);
@@ -1182,6 +1548,12 @@ async function verifySalesOrderActivity(page) {
     }
   } finally {
     const unexpectedConsoleErrors = unexplainedConsoleErrors();
+    try {
+      compose(['cp', `api:${API_LOG_IN_CONTAINER}`, path.join(OUT, 'server.log')]);
+      report.server_log = path.join(OUT, 'server.log');
+    } catch (error) {
+      report.server_log_capture_error = error.message;
+    }
     report.summary = {
       passed: report.checks.length, failed: report.failures.length,
       api_errors: report.api_errors.length,
@@ -1200,3 +1572,8 @@ async function verifySalesOrderActivity(page) {
     process.exitCode = report.failures.length || report.summary.unexplained_api_errors || report.http_errors.length || unexpectedConsoleErrors.length || report.page_errors.length ? 1 : 0;
   }
 })();
+
+module.exports = { setUp, tearDown, login, api, open, shot, pageButton, modalButton,
+  expectToast, assertCleanStep, check, sql, artisan, compose, report, who,
+  OUT, RUN, BASE, env: ENV, get fixture() { return fixture; },
+  closeBrowser: () => browser?.close() };

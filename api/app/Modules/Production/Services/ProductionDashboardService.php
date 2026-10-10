@@ -143,7 +143,7 @@ class ProductionDashboardService
 
         foreach ($sos as $so) {
             $key = match (true) {
-                $so->status === SalesOrderStatus::Draft => 'Order Entered',
+                $so->status->isBeforeConfirmation() => 'Order Entered',
                 $so->status === SalesOrderStatus::Confirmed => $so->mrp_plan_id ? 'MRP Planned' : 'Order Entered',
                 $so->status === SalesOrderStatus::InProduction => 'In Production',
                 $so->status === SalesOrderStatus::PartiallyDelivered => 'Ready to Ship',

@@ -48,7 +48,7 @@ export default function AttendanceImportPage() {
  backTo="/hr/attendance"
  backLabel="Attendance"
  />
- <div className="max-w-3xl mx-auto px-5 py-4 space-y-4">
+ <div className="min-w-0 w-full px-5 py-4 space-y-4">
  <Panel title="Upload file">
  <div
  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}

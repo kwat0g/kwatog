@@ -1,0 +1,4 @@
+database=ogami
+credit_note_applications.operation_key=present
+spare_part_usage.operation_key=present
+maintenance_work_orders.pre_maintenance_status=present

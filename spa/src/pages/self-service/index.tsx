@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LuCalendar,
+  LuWrench,
   LuFileText,
   LuReceipt,
   LuClock,
@@ -33,7 +34,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
-import { formatDate, formatDateFull } from '@/lib/formatDate';
+import { formatDate, formatDateFull, formatTime } from '@/lib/formatDate';
 import type { SelfServiceHome } from '@/types/self-service';
 import { TimeClockCard } from '@/components/self-service/TimeClockCard';
 
@@ -142,7 +143,7 @@ export default function SelfServiceHomePage() {
   const subtitleParts = [
     home ? formatDateFull(home.today) : null,
     shift
-      ? `${shift.name} shift · ${String(shift.time_in).slice(0, 5)}–${String(shift.time_out).slice(0, 5)}`
+      ? `${shift.name} shift · ${formatTime(shift.time_in)}–${formatTime(shift.time_out)}`
       : null,
     home?.employee.department ?? null,
   ].filter(Boolean);
@@ -215,12 +216,16 @@ export default function SelfServiceHomePage() {
 
 function QuickActionsPanel({ payslipSubtitle }: { payslipSubtitle: string }) {
   const { can } = usePermission();
+  const production = useFeature('production');
+  const maintenance = useFeature('maintenance');
   const attendance = useFeature('attendance');
   const leave = useFeature('leave');
   const loans = useFeature('loans');
   const payroll = useFeature('payroll');
 
   const actions = [
+    maintenance && can('maintenance.work.assigned') && { to: '/self-service/maintenance-work-orders', Icon: LuWrench, title: 'My maintenance work', subtitle: 'Record repairs and spare parts for assigned work' },
+    production && { to: '/self-service/work-orders', Icon: LuFolderOpen, title: 'My work orders', subtitle: 'Assigned production work and output receipts' },
     payroll &&
       can('payroll.view') && {
         to: '/self-service/payslips',

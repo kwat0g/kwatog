@@ -48,6 +48,8 @@ describe('stores/authStore', () => {
  features: new Set(),
  isAuthenticated: false,
  isLoading: true,
+ bootstrapError: null,
+ retryAt: 0,
  });
  });
 
@@ -79,13 +81,30 @@ describe('stores/authStore', () => {
  });
 
  it('bootstrap failure clears state and exits loading', async () => {
- vi.mocked(authApi.me).mockRejectedValueOnce(new Error('401'));
+ vi.mocked(authApi.me).mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } });
  await useAuthStore.getState().bootstrap();
  const s = useAuthStore.getState();
  expect(s.user).toBeNull();
  expect(s.isAuthenticated).toBe(false);
  expect(s.permissions.size).toBe(0);
  expect(s.isLoading).toBe(false);
+ });
+
+ it('retains identity but blocks protected content when bootstrap is throttled', async () => {
+ useAuthStore.getState().applyUser(fakeUser);
+ vi.mocked(authApi.me).mockRejectedValueOnce({ isAxiosError: true, response: { status: 429, headers: { 'retry-after': '30' } } });
+ await useAuthStore.getState().bootstrap();
+ expect(useAuthStore.getState().user).toBe(fakeUser);
+ expect(useAuthStore.getState().bootstrapError).toMatch(/temporarily limited/);
+ expect(useAuthStore.getState().retryAt).toBeGreaterThan(Date.now());
+ expect(queryClient.clear).not.toHaveBeenCalled();
+ });
+
+ it('does not authenticate a guest after a temporary session-check failure', async () => {
+ vi.mocked(authApi.me).mockRejectedValueOnce(new Error('Network Error'));
+ await useAuthStore.getState().bootstrap();
+ expect(useAuthStore.getState().isAuthenticated).toBe(false);
+ expect(useAuthStore.getState().bootstrapError).toMatch(/Could not verify/);
  });
 
  it('logout clears state even if the network call fails', async () => {
@@ -115,13 +134,19 @@ describe('stores/authStore', () => {
  expect(queryClient.clear).toHaveBeenCalledTimes(1);
  });
 
- it('login clears the query cache before authenticating', async () => {
- vi.mocked(authApi.login).mockResolvedValueOnce(fakeUser);
+ it('login clears guest query data only after authentication succeeds', async () => {
+ let authenticated = false;
+ vi.mocked(authApi.login).mockImplementationOnce(async () => {
+ await Promise.resolve();
+ authenticated = true;
+ return fakeUser;
+ });
+ vi.mocked(queryClient.clear).mockImplementationOnce(() => {
+ expect(authenticated).toBe(true);
+ });
+
  await useAuthStore.getState().login({ email: 'u@t.test', password: 'x' });
  expect(queryClient.clear).toHaveBeenCalledTimes(1);
- expect(vi.mocked(queryClient.clear).mock.invocationCallOrder[0]).toBeLessThan(
- vi.mocked(authApi.login).mock.invocationCallOrder[0],
- );
  expect(useAuthStore.getState().isAuthenticated).toBe(true);
  });
 });

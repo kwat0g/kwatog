@@ -1,3 +1,4 @@
+import { createRequestKey } from '@/lib/requestKey';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +48,7 @@ export default function CreditNoteDetailPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const [applyOpen, setApplyOpen] = useState(false);
+ const [operationKey, setOperationKey] = useState(() => createRequestKey());
 
  const { data: cn, isLoading, isError } = useQuery({
  queryKey: ['accounting', 'credit-notes', id],
@@ -56,7 +58,12 @@ export default function CreditNoteDetailPage() {
  const isCustomer = cn?.type === 'customer';
 
  // Open documents to apply against (only load when the modal is relevant).
- const { data: openDocs } = useQuery({
+ const {
+ data: openDocs,
+ isLoading: openDocsLoading,
+ isError: openDocsError,
+ refetch: refetchOpenDocs,
+ } = useQuery({
  queryKey: ['accounting', 'credit-notes', id, 'open-docs', cn?.type, cn?.customer?.id, cn?.vendor?.id],
  queryFn: async () => {
  if (isCustomer) {
@@ -84,6 +91,7 @@ export default function CreditNoteDetailPage() {
 
  const apply = useMutation({
  mutationFn: (v: ApplyFormValues) => creditNotesApi.apply(id, {
+ operation_key: operationKey,
  amount: String(v.amount),
  ...(isCustomer ? { invoice_id: v.document_id } : { bill_id: v.document_id }),
  }),
@@ -91,6 +99,7 @@ export default function CreditNoteDetailPage() {
  qc.invalidateQueries({ queryKey: ['accounting', 'credit-notes'] });
  setApplyOpen(false);
  reset();
+ setOperationKey(createRequestKey());
  toast.success('Credit applied.');
  },
  onError: (e: AxiosError<ApiValidationError>) => toast.error(e.response?.data?.message ?? 'Failed to apply credit.'),
@@ -116,7 +125,7 @@ export default function CreditNoteDetailPage() {
  </Button>
  )}
  {canManage && cn.status === 'finalized' && Number(cn.balance) > 0 && (
- <Button variant="primary" size="sm" icon={<LuLink2 size={14} />} onClick={() => setApplyOpen(true)}>
+ <Button variant="primary" size="sm" icon={<LuLink2 size={14} />} onClick={() => { setOperationKey(createRequestKey()); setApplyOpen(true); }}>
  Apply to {isCustomer ? 'invoice' : 'bill'}
  </Button>
  )}
@@ -124,7 +133,7 @@ export default function CreditNoteDetailPage() {
  }
  />
 
- <div className="max-w-4xl mx-auto px-5 py-4 space-y-4">
+ <div className="min-w-0 w-full px-5 py-4 space-y-4">
  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
  <StatCard label="Type" value={cn.type_label} />
  <StatCard label="Total" value={formatPeso(cn.total_amount)} />
@@ -179,13 +188,25 @@ export default function CreditNoteDetailPage() {
  </div>
 
  <Modal isOpen={applyOpen} onClose={() => setApplyOpen(false)} title={`Apply credit to ${isCustomer ? 'invoice' : 'bill'}`}>
+ {openDocsLoading ? (
+ <p role="status" className="text-sm text-muted">Loading eligible documents…</p>
+ ) : openDocsError ? (
+ <div role="alert" className="space-y-3 text-sm text-danger-fg">
+ <p>Could not load eligible documents. Retry before applying this credit.</p>
+ <Button variant="secondary" onClick={() => void refetchOpenDocs()}>Retry</Button>
+ </div>
+ ) : openDocs?.length === 0 ? (
+ <p role="status" className="text-sm text-muted">
+ No {isCustomer ? 'finalized or partially paid invoices are available for this customer' : 'unpaid or partially paid bills are available for this vendor'}. The credit remains unapplied and can be applied when an eligible {isCustomer ? 'invoice' : 'bill'} exists.
+ </p>
+ ) : (
  <form onSubmit={handleSubmit((v) => apply.mutate(v), onFormInvalid<ApplyFormValues>())} className="space-y-3">
  <Select label={isCustomer ? 'Open invoice' : 'Open bill'} required {...register('document_id')} error={errors.document_id?.message}>
  <option value="">— Select —</option>
  {(openDocs ?? []).map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
  </Select>
- <Input label="Amount" step="0.01" min="0.01" required
- className="font-mono tabular-nums text-right" {...numberInputProps()}
+ <Input label="Amount" min="0.01" required
+ className="font-mono tabular-nums text-right" {...numberInputProps()} step="0.01"
  {...register('amount')} error={errors.amount?.message}
  helper={`Credit balance available: ${formatPeso(cn.balance)}`} />
  <div className="flex justify-end gap-2 pt-2">
@@ -193,6 +214,7 @@ export default function CreditNoteDetailPage() {
  <Button type="submit" variant="primary" loading={apply.isPending}>Apply</Button>
  </div>
  </form>
+ )}
  </Modal>
  </div>
  );

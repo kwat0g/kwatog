@@ -51,6 +51,10 @@ class ProfileUpdateRequestResource extends JsonResource
     {
         $changes = (array) $this->changes;
         $user = $request->user();
+        if ($user?->hasPermission('hr.profile_updates.finance_review') && ! $user->hasPermission('hr.employees.view')
+            && (int) $user->employee_id !== (int) $this->employee_id) {
+            $changes = array_intersect_key($changes, array_flip(['bank_name', 'bank_account_no']));
+        }
         $employee = $this->relationLoaded('employee') ? $this->employee : null;
         $canSeeFull = $user?->hasPermission('hr.employees.view_sensitive')
             || $user?->hasPermission('hr.profile_updates.finance_review')

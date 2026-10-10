@@ -29,26 +29,36 @@ docker run --rm -i grafana/k6 run - <script.js
 
 ## Running the tests
 
-All scripts are run from the **repository root** (`/path/to/ogami-erp/`).
+Run from the repository root against the isolated test app at
+`http://localhost:18080` by default. Set `BASE_URL` to another dedicated test
+app when needed; do not point these tests at a user or production app.
 
-### Against the local Docker stack (default)
+Seed the isolated test database first, from its API container:
+
+```bash
+AUDIT_E2E_TESTING=true php artisan db:seed --class='Database\Seeders\LoadTestUserSeeder'
+```
+
+The seeder refuses production and any database whose name does not start with
+`ogami_test_`. It creates 200 warehouse actors and 10 system-admin actors with
+the test-only password `password`.
+
+### Against the isolated audit app (default)
 
 ```bash
 # Inventory concurrency (200 VUs, 60 s)
 k6 run api/tests/Load/concurrent-inventory.js
 
-# Payroll serialization (10 VUs, 120 s)
+# Payroll reads (10 VUs, 120 s)
 k6 run api/tests/Load/concurrent-payroll.js
 ```
 
 ### Against a specific environment
 
-Pass `BASE_URL`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` as environment variables:
+Override `BASE_URL` only for another isolated test app:
 
 ```bash
-BASE_URL=http://localhost \
-ADMIN_EMAIL=admin@ogami.test \
-ADMIN_PASSWORD=Password1! \
+BASE_URL=http://localhost:18080 \
 k6 run api/tests/Load/concurrent-inventory.js
 ```
 
@@ -72,15 +82,19 @@ k6 run --vus 50 --duration 30s api/tests/Load/concurrent-inventory.js
 | p95 threshold | < 2 000 ms |
 | Error rate threshold | < 1 % |
 
-Simulates 200 warehouse users simultaneously querying inventory. Each VU:
-1. Authenticates via Sanctum SPA cookies
+Simulates 200 concurrent inventory reads with 50 seeded warehouse actors. Setup
+authenticates each actor once using Sanctum SPA cookies, then assigns four VUs
+per actor at the default load:
+1. VUs share only read-only sessions; each actor stays below the 300-request/minute authenticated cap
 2. Loops 5 times per iteration:
    - `GET /api/v1/inventory/stock-levels?page=1&per_page=25`
    - `GET /api/v1/inventory/items?search=<random-code>`
    - Sleeps 1–3 s between requests
 
 **Purpose:** Verify the inventory read path (stock levels + item search) stays
-under 2 s at the 95th percentile when all warehouse staff are active at once.
+under 2 s at the 95th percentile under concurrent reads without exceeding
+either the 60-request/minute guest login cap or any actor's authenticated API
+rate limit.
 
 ---
 
@@ -93,17 +107,17 @@ under 2 s at the 95th percentile when all warehouse staff are active at once.
 | p95 threshold | < 5 000 ms |
 | Error rate threshold | < 1 % |
 
-Simulates 10 concurrent users accessing the payroll module. The low VU count
-is intentional — payroll endpoints acquire DB row locks and run heavy
-computations. The test verifies:
+Simulates 10 concurrent payroll reads with one seeded system-admin account per
+VU. Setup authenticates each actor once and shares its read-only session only
+with that VU. The test verifies:
 
 - No `500 Internal Server Error` responses under concurrent access
-- Proper serialization: all responses are `200 OK` or `403 Forbidden`
+- No server errors: responses are `200 OK` or `403 Forbidden`
 - Response bodies are valid JSON with the expected pagination structure
 - Optionally drills into the most recent payroll period detail
 
-**Purpose:** Catch serialization bugs (missing `DB::transaction()` wrappers,
-race conditions on period status transitions) before they surface in production.
+**Purpose:** Verify payroll list and detail reads stay under 5 s at the 95th
+percentile without server errors.
 
 ---
 
@@ -113,10 +127,10 @@ Both scripts use the `getAuthCookie()` helper in `config.js`, which replicates
 the Sanctum SPA authentication flow:
 
 1. `GET /sanctum/csrf-cookie` — receives `XSRF-TOKEN` cookie
-2. `POST /api/v1/auth/login` — sends credentials + `X-XSRF-TOKEN` header
-3. Returns the `laravel_session` cookie string for use in subsequent requests
+2. `POST /api/v1/auth/login` — sends credentials, `Origin`, `Referer`, and `X-XSRF-TOKEN`
+3. Returns the session cookies from k6's cookie jar for subsequent requests
 
-**No Bearer tokens are used.** This matches the production security model
+**No real credentials or Bearer tokens are used.** This matches the production security model
 (HTTP-only cookies, no tokens in `localStorage`).
 
 ---

@@ -17,6 +17,9 @@ import {
  LuLogOut,
  LuChevronDown,
  LuLayoutDashboard,
+ LuCircleHelp,
+ LuMoon,
+ LuSun,
  LuShieldCheck,
 } from '@/lib/icons';
 import { Avatar } from '@/components/ui/Avatar';
@@ -24,8 +27,11 @@ import { cn } from '@/lib/cn';
 import { focusRing, focusRingInset } from '@/lib/focus';
 
 interface ProfileDropdownProps {
- user?: { name: string; email: string } | null;
+ user?: { name: string; email: string; avatarUrl?: string | null } | null;
  onLogout?: () => void;
+ theme?: 'light' | 'dark';
+ onToggleTheme?: () => void;
+ onOpenShortcuts?: () => void;
 }
 
 const MENU_ITEMS = [
@@ -40,7 +46,7 @@ const MENU_ITEMS = [
  { label: 'Approval cover', to: '/approvals/delegations', icon: LuShieldCheck },
 ] as const;
 
-export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
+export function ProfileDropdown({ user, onLogout, theme, onToggleTheme, onOpenShortcuts }: ProfileDropdownProps) {
  const [open, setOpen] = useState(false);
  const menuRef = useRef<HTMLDivElement>(null);
  const btnRef = useRef<HTMLButtonElement>(null);
@@ -79,12 +85,15 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
  ref={btnRef}
  type="button"
  onClick={() => setOpen((v) => !v)}
- className={cn('flex items-center gap-1.5 pl-2 ml-1 border-l border-default hover:bg-elevated rounded-md pr-1.5 py-0.5 transition-colors duration-fast cursor-pointer', focusRing)}
- aria-label="Profile menu"
+ className={cn('flex min-h-[44px] items-center gap-1.5 pl-2 ml-1 border-l border-default hover:bg-elevated rounded-md pr-1.5 py-0.5 transition-colors duration-fast cursor-pointer sm:min-h-0', focusRing)}
+ aria-label={`Profile menu for ${user.name}`}
  aria-expanded={open}
- aria-haspopup="true"
+ aria-haspopup="menu"
  >
- <Avatar size="sm" name={user.name} />
+ <Avatar size="sm" name={user.name} src={user.avatarUrl} className="shrink-0" />
+ <span title={user.name} className="hidden min-w-0 max-w-24 truncate text-sm text-secondary md:inline lg:max-w-48">
+ {user.name}
+ </span>
  <LuChevronDown
  size={12}
  className={cn(
@@ -114,13 +123,46 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
  to={item.to}
  onClick={() => setOpen(false)}
  role="menuitem"
- className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-secondary hover:bg-elevated hover:text-primary transition-colors duration-fast"
+ className={cn('group mx-1 flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-secondary transition-colors duration-fast hover:bg-accent/10 hover:text-primary', focusRingInset)}
  >
- <item.icon size={14} className="shrink-0 text-muted" />
+ <item.icon size={14} className="shrink-0 text-muted transition-colors duration-fast group-hover:text-accent group-focus-visible:text-accent" />
  {item.label}
  </Link>
  ))}
  </div>
+
+ {(onToggleTheme || onOpenShortcuts) && (
+ <div className="border-t border-default py-1">
+ {onToggleTheme && (
+ <button
+ type="button"
+ onClick={() => {
+ setOpen(false);
+ onToggleTheme();
+ }}
+ role="menuitem"
+ className={cn('group mx-1 flex min-h-9 w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-secondary transition-colors duration-fast hover:bg-accent/10 hover:text-primary', focusRingInset)}
+ >
+ {theme === 'dark' ? <LuSun size={14} className="shrink-0 text-muted group-hover:text-accent group-focus-visible:text-accent" /> : <LuMoon size={14} className="shrink-0 text-muted group-hover:text-accent group-focus-visible:text-accent" />}
+ {theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+ </button>
+ )}
+ {onOpenShortcuts && (
+ <button
+ type="button"
+ onClick={() => {
+ setOpen(false);
+ onOpenShortcuts();
+ }}
+ role="menuitem"
+ className={cn('group mx-1 flex min-h-9 w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-secondary transition-colors duration-fast hover:bg-accent/10 hover:text-primary', focusRingInset)}
+ >
+ <LuCircleHelp size={14} className="shrink-0 text-muted group-hover:text-accent group-focus-visible:text-accent" />
+ Keyboard shortcuts
+ </button>
+ )}
+ </div>
+ )}
 
  {/* Logout */}
  <div className="border-t border-default pt-1 pb-1">

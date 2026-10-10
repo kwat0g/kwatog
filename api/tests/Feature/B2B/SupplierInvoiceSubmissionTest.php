@@ -6,12 +6,14 @@ namespace Tests\Feature\B2B;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\SupplierInvoice;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Policies\SupplierPoCapabilities;
 use App\Modules\B2B\Services\SupplierInvoiceService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -114,6 +116,239 @@ class SupplierInvoiceSubmissionTest extends TestCase
 
     /* ─── Test Cases ─────────────────────────────────────────────── */
 
+    public function test_later_acceptance_on_same_grn_does_not_rewrite_an_invoiced_draft(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor);
+        $poItem = $this->makePoItem($po, '2.00');
+        $grn = $this->makeAcceptedGrn($po, $vendor, $poItem, '1.00');
+        $first = app(BillService::class)->createDraftForGrn($grn, User::factory()->create());
+        $this->assertNotNull($first);
+
+        $this->actAs($user);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-PART-1',
+            'date' => now()->toDateString(),
+        ])->assertCreated();
+
+        $grn->items()->firstOrFail()->update(['quantity_accepted' => '2.00']);
+        $second = app(BillService::class)->createDraftForGrn($grn->fresh(), User::factory()->create());
+
+        $this->assertNotNull($second);
+        $this->assertNotSame($first->id, $second->id);
+        $this->assertSame('1.00', (string) $first->fresh()->items()->firstOrFail()->quantity);
+        $this->assertSame('1.00', (string) $second->items()->firstOrFail()->quantity);
+        $this->assertSame('SUP-PART-1', $first->fresh()->supplier_invoice_number);
+        $this->assertTrue(SupplierPoCapabilities::invoiceableReceipts($po)->whereKey($grn->id)->exists());
+    }
+
+    public function test_one_supplier_invoice_claims_two_accepted_receipt_bills(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor);
+        $po->forceFill(['is_vatable' => false])->save();
+        $firstGrn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po), '1.00');
+        $secondGrn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po), '1.00');
+        $first = app(BillService::class)->createDraftForGrn($firstGrn, User::factory()->create());
+        $second = app(BillService::class)->createDraftForGrn($secondGrn, User::factory()->create());
+        $this->assertNotNull($first);
+        $this->assertNotNull($second);
+
+        $this->actAs($user);
+        $this->getJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}")
+            ->assertOk()
+            ->assertJsonCount(2, 'data.invoiceable_bill_portions');
+        $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-MULTI-1',
+            'date' => now()->toDateString(),
+            'gross_total' => '200.00',
+            'bill_ids' => [$first->hash_id, $second->hash_id],
+        ]);
+
+        $response->assertCreated()->assertJsonPath('data.supplier_invoice_number', 'SUP-MULTI-1');
+        $invoice = SupplierInvoice::query()->where('number', 'SUP-MULTI-1')->firstOrFail();
+        $this->assertSame(2, $invoice->bills()->count());
+        $this->assertSame('200.00', (string) $invoice->gross_total);
+        $this->assertSame($invoice->id, $first->fresh()->supplier_invoice_id);
+        $this->assertSame($invoice->id, $second->fresh()->supplier_invoice_id);
+        $this->getJson('/api/v1/b2b/supplier/supplier-invoices')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $invoice->hash_id);
+        $this->getJson("/api/v1/b2b/supplier/supplier-invoices/{$invoice->hash_id}")
+            ->assertOk()
+            ->assertJsonCount(2, 'data.bills');
+
+        $first->forceFill(['status' => 'cancelled'])->save();
+        $second->forceFill(['status' => 'unpaid'])->save();
+        $this->getJson('/api/v1/b2b/supplier/supplier-invoices?status=requires_correction')
+            ->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/b2b/supplier/supplier-invoices?status=unpaid')
+            ->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_grouped_invoice_rejects_amount_mismatch_and_reuses_identical_retry(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor);
+        $po->forceFill(['is_vatable' => false])->save();
+        $grn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po), '1.00');
+        $bill = app(BillService::class)->createDraftForGrn($grn, User::factory()->create());
+        $this->assertNotNull($bill);
+        $payload = [
+            'bill_number' => 'SUP-RETRY-1',
+            'date' => now()->toDateString(),
+            'gross_total' => '99.00',
+            'bill_ids' => [$bill->hash_id],
+        ];
+
+        $this->actAs($user);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'bill_creation_failed');
+        $this->assertSame(0, SupplierInvoice::query()->count());
+
+        $payload['gross_total'] = '100.00';
+        Event::fake([SupplierInvoiceSubmitted::class]);
+        $first = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload)
+            ->assertCreated();
+        $second = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload)
+            ->assertCreated();
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertSame(1, SupplierInvoice::query()->count());
+        Event::assertDispatchedTimes(SupplierInvoiceSubmitted::class, 1);
+    }
+
+    public function test_partial_receipts_can_be_invoiced_separately_and_cannot_claim_another_vendors_bill(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $supplier = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor);
+        $po->forceFill(['is_vatable' => false])->save();
+        $poItem = $this->makePoItem($po, '2.00');
+        $first = app(BillService::class)->createDraftForGrn(
+            $this->makeAcceptedGrn($po, $vendor, $poItem, '1.00'), User::factory()->create()
+        );
+        $second = app(BillService::class)->createDraftForGrn(
+            $this->makeAcceptedGrn($po, $vendor, $poItem, '1.00'), User::factory()->create()
+        );
+        $otherVendor = Vendor::factory()->create();
+        $otherPo = $this->makePo($otherVendor);
+        $otherPo->forceFill(['is_vatable' => false])->save();
+        $otherBill = app(BillService::class)->createDraftForGrn(
+            $this->makeAcceptedGrn($otherPo, $otherVendor, $this->makePoItem($otherPo), '1.00'), User::factory()->create()
+        );
+
+        $this->actAs($supplier);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-PART-A', 'date' => now()->toDateString(),
+            'gross_total' => '200.00', 'bill_ids' => [$first->hash_id, $otherBill->hash_id],
+        ])->assertUnprocessable();
+        $this->assertSame(0, SupplierInvoice::query()->count());
+
+        foreach ([[$first, 'SUP-PART-A'], [$second, 'SUP-PART-B']] as [$bill, $number]) {
+            $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+                'bill_number' => $number, 'date' => now()->toDateString(),
+                'gross_total' => '100.00', 'bill_ids' => [$bill->hash_id],
+            ])->assertCreated();
+        }
+        $this->assertSame(2, SupplierInvoice::query()->where('vendor_id', $vendor->id)->count());
+        $this->assertNotSame($first->fresh()->supplier_invoice_id, $second->fresh()->supplier_invoice_id);
+    }
+
+    public function test_pre_cutover_posted_unpaid_bill_can_be_reconciled_once(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor);
+        $po->forceFill(['is_vatable' => false])->save();
+        $grn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po), '1.00');
+        $bill = app(BillService::class)->createDraftForGrn($grn, User::factory()->create());
+        $this->assertNotNull($bill);
+        $bill->forceFill(['status' => 'unpaid'])->save();
+
+        $this->actAs($user);
+        $this->getJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}")
+            ->assertOk()->assertJsonCount(1, 'data.invoiceable_bill_portions');
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-LEGACY-POSTED',
+            'date' => now()->toDateString(),
+            'gross_total' => '100.00',
+            'bill_ids' => [$bill->hash_id],
+        ])->assertCreated();
+        $this->assertNotNull($bill->fresh()->supplier_invoice_id);
+    }
+
+    public function test_grouped_invoice_file_is_stored_once_and_scoped_to_vendor(): void
+    {
+        Storage::fake('local');
+        $vendor = Vendor::factory()->create();
+        $ownUser = $this->makePortalUser($vendor);
+        $otherUser = $this->makePortalUser();
+        $po = $this->makePo($vendor);
+        $po->forceFill(['is_vatable' => false])->save();
+        $firstGrn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po), '1.00');
+        $secondGrn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po), '1.00');
+        $first = app(BillService::class)->createDraftForGrn($firstGrn, User::factory()->create());
+        $second = app(BillService::class)->createDraftForGrn($secondGrn, User::factory()->create());
+
+        $this->actAs($ownUser);
+        $this->post("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-FILE-1', 'date' => now()->toDateString(),
+            'gross_total' => '200.00', 'bill_ids' => [$first->hash_id, $second->hash_id],
+            'file' => UploadedFile::fake()->createWithContent('invoice.pdf', '%PDF-test%'),
+        ], ['Accept' => 'application/json'])->assertCreated();
+        $invoice = SupplierInvoice::query()->where('number', 'SUP-FILE-1')->firstOrFail();
+        $document = $invoice->documents()->sole();
+        Storage::disk('local')->assertExists($document->file_path);
+        $this->get("/api/v1/b2b/supplier/shipping-documents/{$document->hash_id}/download")->assertOk();
+
+        $this->actAs($otherUser);
+        $this->getJson("/api/v1/b2b/supplier/supplier-invoices/{$invoice->hash_id}")->assertForbidden();
+        $this->get("/api/v1/b2b/supplier/shipping-documents/{$document->hash_id}/download")->assertNotFound();
+
+        $this->app['auth']->forgetGuards();
+        $finance = User::factory()->create(['role_id' => Role::query()->where('slug', 'finance_officer')->value('id')]);
+        $this->actingAs($finance, 'web');
+        foreach ([$first, $second] as $bill) {
+            $this->getJson("/api/v1/bills/{$bill->hash_id}/supplier-invoice-attachment/{$document->hash_id}")
+                ->assertOk();
+        }
+    }
+
+    public function test_only_finance_can_void_a_submitted_draft_invoice(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $supplier = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor);
+        $grn = $this->makeAcceptedGrn($po, $vendor, $this->makePoItem($po));
+        $bill = app(BillService::class)->createDraftForGrn($grn, User::factory()->create());
+        $this->actAs($supplier);
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-VOID-ROLE', 'date' => now()->toDateString(),
+            'gross_total' => (string) $bill->total_amount,
+            'bill_ids' => [$bill->hash_id],
+        ])->assertCreated();
+        $invoice = SupplierInvoice::query()->where('number', 'SUP-VOID-ROLE')->firstOrFail();
+
+        $warehouse = User::factory()->create(['role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id')]);
+        $this->actingAs($warehouse, 'sanctum');
+        $this->postJson("/api/v1/supplier-invoices/{$invoice->hash_id}/void", [
+            'reason' => 'Supplier reissued invoice.',
+        ])->assertForbidden();
+
+        $finance = User::factory()->create(['role_id' => Role::query()->where('slug', 'finance_officer')->value('id')]);
+        $this->actingAs($finance, 'sanctum');
+        $this->postJson("/api/v1/supplier-invoices/{$invoice->hash_id}/void", [
+            'reason' => 'Supplier reissued invoice.',
+        ])->assertOk();
+        $this->assertNotNull($invoice->fresh()->voided_at);
+        $this->assertNull($bill->fresh()->supplier_invoice_id);
+    }
+
     /**
      * (1) Auto-staged draft exists (call BillService::createDraftForGrn) →
      * submission attaches to it: still ONE bill, supplier number stored,
@@ -151,6 +386,7 @@ class SupplierInvoiceSubmissionTest extends TestCase
         $this->assertSame(now()->toDateString(), $bill->supplier_invoice_date->toDateString());
         $this->assertNotNull($bill->supplier_invoice_submitted_at);
         $this->assertSame($user->id, $bill->supplier_invoice_portal_user_id);
+        $this->assertSame('SUP-INV-001', $bill->supplierInvoice?->number);
         $this->assertSame(1, Bill::where('vendor_id', $vendor->id)->count());
     }
 
@@ -342,8 +578,8 @@ class SupplierInvoiceSubmissionTest extends TestCase
         $response1->assertStatus(201);
         $bill = Bill::where('vendor_id', $vendor->id)->where('supplier_invoice_number', 'SUP-INV-REUSABLE')->firstOrFail();
 
-        // Cancel the bill.
-        $bill->forceFill(['status' => 'cancelled', 'cancelled_at' => now()])->save();
+        // Finance voids the unposted invoice; the draft becomes available again.
+        app(BillService::class)->voidSupplierInvoice($bill->supplierInvoice, User::factory()->create(), 'Supplier reissued invoice.');
 
         // Create a second GRN and resubmit the same invoice number.
         $poItem2 = $this->makePoItem($po);
@@ -352,6 +588,7 @@ class SupplierInvoiceSubmissionTest extends TestCase
         $response2 = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
             'bill_number' => 'SUP-INV-REUSABLE',
             'date' => now()->toDateString(),
+            'goods_receipt_note_id' => $grn2->hash_id,
         ]);
 
         $response2->assertStatus(201);

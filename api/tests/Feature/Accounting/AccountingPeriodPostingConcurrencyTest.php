@@ -70,16 +70,17 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         $this->requirePostgresProcessSupport();
 
         $admin = $this->admin();
+        $poster = $this->admin();
         $period = $this->openPeriod(2031, 8);
         $je = $this->draft($admin, '2031-08-15');
         $this->commitFixtureTransaction();
 
         $result = $this->runBlockedWorker(
             8,
-            function () use ($je, $admin): void {
+            function () use ($je, $poster): void {
                 app(JournalEntryService::class)->post(
                     JournalEntry::findOrFail($je->id),
-                    User::findOrFail($admin->id),
+                    User::findOrFail($poster->id),
                 );
             },
             function () use ($period, $admin): void {
@@ -135,16 +136,17 @@ class AccountingPeriodPostingConcurrencyTest extends TestCase
         $this->requirePostgresProcessSupport();
 
         $admin = $this->admin();
+        $poster = $this->admin();
         $period = $this->openPeriod(2031, 10);
         $je = $this->draft($admin, '2031-10-15');
         $this->commitFixtureTransaction();
 
         $result = $this->runBlockedWorker(
             10,
-            function () use ($je, $admin): void {
+            function () use ($je, $poster): void {
                 app(JournalEntryService::class)->post(
                     JournalEntry::findOrFail($je->id),
-                    User::findOrFail($admin->id),
+                    User::findOrFail($poster->id),
                 );
             },
             static function (): void {

@@ -7,6 +7,8 @@ namespace App\Common\Services;
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Mail\UserNotificationMail;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,6 +45,37 @@ class NotificationService
 
     /** Postgres handles far more, but a single INSERT has a bind-param ceiling. */
     private const INSERT_CHUNK = 500;
+
+    /** Store portal notices without internal-user preferences, email, or broadcast channels. */
+    public function sendPortalInApp(iterable $recipients, string $type, array $data, ?string $dedupeKey = null): void
+    {
+        $data = $this->normaliseEnvelope($type, $data);
+        $users = [];
+        foreach ($recipients as $user) {
+            if ((! $user instanceof CustomerPortalUser && ! $user instanceof SupplierPortalUser)
+                || $user->id === null || ! $user->is_active || $user->trashed()) {
+                continue;
+            }
+            $users[$user::class.':'.$user->id] = $user;
+        }
+        $now = now();
+        $rows = [];
+        foreach ($users as $user) {
+            $rows[] = [
+                'id' => (string) Str::uuid(), 'type' => $type,
+                'notifiable_type' => $user::class, 'notifiable_id' => $user->id,
+                'dedupe_key' => $dedupeKey, 'data' => json_encode($data),
+                'read_at' => null, 'created_at' => $now, 'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
+            if ($dedupeKey === null) {
+                DB::table('notifications')->insert($chunk);
+            } else {
+                DB::table('notifications')->insertOrIgnore($chunk);
+            }
+        }
+    }
 
     /**
      * Send an in-app notification with a standardized data envelope.

@@ -24,13 +24,6 @@ use Illuminate\Validation\ValidationException;
  */
 class ProfileUpdateRequestService
 {
-    /**
-     * REC-02 — SoD override. A reviewer may not approve a profile-change
-     * request they submitted unless they hold this permission (system_admin
-     * always does). Withheld from hr_officer via seeder `except`.
-     */
-    private const SELF_REVIEW_OVERRIDE_PERMISSION = 'hr.profile_updates.self_review_override';
-
     /** Whitelist of contact/address fields — single HR approval. */
     private const ALLOWED_FIELDS = [
         'mobile_number',
@@ -96,18 +89,28 @@ class ProfileUpdateRequestService
         $query = ProfileUpdateRequest::query()
             ->with(['employee.department', 'requester']);
 
-        DepartmentScope::apply(
-            $query,
-            $user,
-            viewAllPermission: 'hr.employees.view_sensitive',
-            departmentPermission: 'hr.employees.view',
-            deptColumn: 'department_id',
-            selfColumn: null,
-            selfId: null,
-            deptRelation: 'employee',
-        );
+        $financeOnly = $user?->hasPermission('hr.profile_updates.finance_review')
+            && ! $user->hasPermission('hr.employees.view');
 
-        $status = $filters['status'] ?? 'pending';
+        if ($financeOnly) {
+            // Finance sees its bank-change leg and completed bank requests,
+            // without receiving contact changes or general employee access.
+            $query->where('requires_finance', true)
+                ->whereIn('status', [ProfileUpdateStatus::PendingFinance->value, ProfileUpdateStatus::Approved->value, ProfileUpdateStatus::Rejected->value]);
+        } else {
+            DepartmentScope::apply(
+                $query,
+                $user,
+                viewAllPermission: 'hr.employees.view_sensitive',
+                departmentPermission: 'hr.employees.view',
+                deptColumn: 'department_id',
+                selfColumn: null,
+                selfId: null,
+                deptRelation: 'employee',
+            );
+        }
+
+        $status = $filters['status'] ?? ($financeOnly ? 'pending_finance' : 'pending');
         if (in_array($status, ProfileUpdateStatus::values(), true)) {
             $query->where('status', $status);
         }
@@ -167,6 +170,17 @@ class ProfileUpdateRequestService
             $locked = ProfileUpdateRequest::query()->lockForUpdate()->findOrFail($request->getKey());
             abort_unless($locked->requires_finance, 422, 'This request does not require Finance review.');
             abort_unless($locked->status === ProfileUpdateStatus::PendingFinance->value, 422, 'Request is not awaiting Finance review.');
+            $this->assertNotSelfReviewing($locked, $reviewer);
+            abort_unless(
+                $locked->reviewed_by !== null && $locked->reviewed_at !== null,
+                422,
+                'Finance approval requires a recorded HR review.',
+            );
+            abort_unless(
+                (int) $locked->reviewed_by !== (int) $reviewer->id,
+                403,
+                'Finance approval must be performed by a different reviewer than the HR approval (segregation of duties).',
+            );
 
             $this->applyChanges($locked);
 
@@ -215,18 +229,11 @@ class ProfileUpdateRequestService
         });
     }
 
-    /**
-     * REC-02 — block a reviewer from acting on a request they submitted.
-     * A null requested_by cannot trigger the guard.
-     */
+    /** Block a reviewer from acting on a request they submitted, including admins and overrides. */
     private function assertNotSelfReviewing(ProfileUpdateRequest $request, User $reviewer): void
     {
         if ($request->requested_by === null || (int) $request->requested_by !== (int) $reviewer->id) {
             return; // different reviewer, or unknown submitter — allowed.
-        }
-
-        if ($reviewer->hasPermission(self::SELF_REVIEW_OVERRIDE_PERMISSION)) {
-            return; // explicit override.
         }
 
         abort(403, 'You cannot review a profile-change request you submitted. A different reviewer must act (segregation of duties).');

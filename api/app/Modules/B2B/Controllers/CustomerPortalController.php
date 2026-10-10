@@ -10,11 +10,13 @@ use App\Modules\B2B\Resources\CustomerPortalInvoiceResource;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Requests\Customer\ConfirmPortalDeliveryRequest;
+use App\Modules\B2B\Requests\Customer\ConfirmPortalReceiptGroupRequest;
 use App\Modules\B2B\Requests\Customer\CreateComplaintRequest;
 use App\Modules\B2B\Requests\Customer\CustomerStoreDeliveryScheduleRequest;
 use App\Modules\B2B\Requests\Customer\RespondToSalesOrderRequest;
 use App\Modules\B2B\Requests\Customer\StoreCustomerReturnRequest;
 use App\Modules\B2B\Requests\Customer\StorePortalOrderRequest;
+use App\Modules\B2B\Requests\Customer\UpdatePortalOrderRequest;
 use App\Modules\B2B\Resources\CustomerPortalComplaintResource;
 use App\Modules\B2B\Resources\CustomerReturnRequestResource;
 use App\Modules\B2B\Resources\CustomerDeliveryResource;
@@ -24,6 +26,8 @@ use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderResponse;
+use App\Modules\CRM\Services\SalesOrderResponseService;
 use App\Modules\CRM\Resources\SalesOrderResource;
 use App\Modules\CRM\Resources\SalesOrderResponseResource;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
@@ -92,8 +96,20 @@ class CustomerPortalController extends Controller
     }
 
     /**
-     * POST /api/v1/b2b/customer/orders
+     * POST /api/v1/b2b/customer/orders/quote
      */
+    public function quoteOrder(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'sales_order_id' => ['nullable', 'string'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'string', 'distinct'],
+            'items.*.quantity' => ['required', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],
+            'items.*.delivery_date' => ['required', 'date_format:Y-m-d'],
+        ]);
+        return response()->json(['data' => $this->service->quoteOrder($this->user($request), $data)]);
+    }
+
     public function storeOrder(StorePortalOrderRequest $request): JsonResponse
     {
         $user = $this->user($request);
@@ -103,6 +119,24 @@ class CustomerPortalController extends Controller
             'data'    => new SalesOrderResource($result['order']),
             'message' => 'Order submitted. It will be confirmed by our sales team.',
         ], $result['replayed'] ? 200 : 201);
+    }
+
+    public function updateOrder(UpdatePortalOrderRequest $request, SalesOrder $salesOrder): SalesOrderResource
+    {
+        return new SalesOrderResource($this->service->updateOrder($salesOrder, $this->user($request), $request->validated()));
+    }
+
+    public function respondToDeliveryProposal(Request $request, SalesOrder $salesOrder, SalesOrderResponse $response): SalesOrderResponseResource
+    {
+        $data = $request->validate(['decision' => ['required', Rule::in(['accept', 'reject'])]]);
+        return new SalesOrderResponseResource(app(SalesOrderResponseService::class)
+            ->respondToDeliveryProposal($salesOrder, $response, $this->user($request), $data['decision']));
+    }
+
+    public function cancelOrder(Request $request, SalesOrder $salesOrder): SalesOrderResource
+    {
+        $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
+        return new SalesOrderResource($this->service->cancelOrder($salesOrder, $this->user($request), $data['reason'] ?? null));
     }
 
     /**
@@ -244,6 +278,33 @@ class CustomerPortalController extends Controller
             'data'    => new CustomerDeliveryResource($confirmed),
             'message' => 'Delivery confirmed. Thank you for confirming receipt.',
         ]);
+    }
+
+    public function receiptGroup(Delivery $delivery, Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+        return response()->json(['data' => $this->serializeReceiptGroup($this->service->receiptGroup($user->customer_id, $delivery))]);
+    }
+
+    public function confirmReceiptGroup(Delivery $delivery, ConfirmPortalReceiptGroupRequest $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $group = $this->service->confirmReceiptGroup($user->customer_id, $delivery, $request->validated(), $user);
+        return response()->json(['data' => $this->serializeReceiptGroup($group), 'message' => 'Shipment receipts confirmed. Replacement pieces are free.']);
+    }
+
+    private function serializeReceiptGroup(?array $group): ?array
+    {
+        if ($group === null) {
+            return null;
+        }
+        $case = $group['case'];
+        $group['case'] = ['id' => $case->hash_id, 'case_number' => $case->case_number, 'status' => $case->status->value];
+        $group['shipments'] = array_map(static function (array $shipment): array {
+            $shipment['delivery'] = new CustomerDeliveryResource($shipment['delivery']);
+            return $shipment;
+        }, $group['shipments']);
+        return $group;
     }
 
     public function deliveryProof(Delivery $delivery, DeliveryProof $proof, Request $request): StreamedResponse

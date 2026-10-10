@@ -136,6 +136,10 @@ test.describe('HR Dashboard — Headcount Forecast Panel', () => {
   });
 
   test('shows error state when API fails', async ({ page }) => {
+    test.info().annotations.push(
+      { type: 'expected-http-response', description: '500 GET /api/v1/dashboards/hr' },
+      { type: 'expected-http-response', description: '500 GET /api/v1/dashboards/hr' },
+    );
     await setupDashboard(page, API_URL, USERS.hr, {}, { status: 500 });
     await expect(page.getByRole('heading', { name: "Can't load this dashboard" })).toBeVisible();
   });

@@ -1,3 +1,4 @@
+import { formatTime } from '@/lib/formatDate';
 import { useState } from 'react';
 import { LuTriangleAlert, LuX, LuTrash2, LuChevronDown, LuChevronRight } from '@/lib/icons';
 import { useErrorLogStore, type ServerErrorEntry } from '@/stores/errorLogStore';
@@ -23,7 +24,7 @@ export function DevErrorPanel() {
  const [open, setOpen] = useState(false);
  const [expanded, setExpanded] = useState<string | null>(null);
 
- if (!showDevPanel) return null;
+ if (!showDevPanel || entries.length === 0) return null;
 
  const toggle = () => {
  if (!open) markRead();
@@ -117,7 +118,7 @@ function ErrorRow({
  expanded: boolean;
  onToggle: () => void;
 }) {
- const time = new Date(entry.timestamp).toLocaleTimeString('en-PH', { hour12: false });
+ const time = formatTime(entry.timestamp);
  const statusColor = entry.status && entry.status >= 500
  ? 'text-danger-fg' : entry.status === 403 || entry.status === 401
  ? 'text-warning-fg' : 'text-muted';

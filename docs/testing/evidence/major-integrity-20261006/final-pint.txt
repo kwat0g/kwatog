@@ -1,0 +1,7 @@
+
+  .✓
+
+  ──────────────────────────────────────────────────────────────────── Laravel  
+    FIXED   ..................................... 2 files, 1 style issue fixed  
+  ✓ tests/Feature/Operations/MajorIntegrityRegressionTest.php class_attribute…  
+

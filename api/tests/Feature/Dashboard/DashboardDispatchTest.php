@@ -38,6 +38,9 @@ class DashboardDispatchTest extends TestCase
     public static function roleLandingProvider(): array
     {
         return [
+            'vice_president' => ['vice_president', '/dashboard/plant-manager'],
+            'sales_officer' => ['sales_officer', '/dashboard/default'],
+            'customer_service_officer' => ['customer_service_officer', '/dashboard/default'],
             'production_manager' => ['production_manager', '/dashboard/plant-manager'],
             'hr_officer'         => ['hr_officer',         '/dashboard/hr'],
             'ppc_head'           => ['ppc_head',           '/dashboard/ppc'],

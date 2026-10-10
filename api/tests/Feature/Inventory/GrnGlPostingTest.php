@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Inventory;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Admin\Services\RoleService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -14,6 +15,7 @@ use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnGlPostingService;
 use App\Modules\Inventory\Services\GrnService;
@@ -23,9 +25,9 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Services\InspectionService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -43,6 +45,7 @@ class GrnGlPostingTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     // Maker-checker: an incoming inspection counts only when a different user checks it.
     private User $checker;
 
@@ -205,10 +208,12 @@ class GrnGlPostingTest extends TestCase
 
     public function test_receive_with_qc_posts_the_same_required_gl_entry(): void
     {
+        config(['inspection.checklist_capture_enabled' => true]);
         $this->enableAccounting(true);
 
         $item = Item::factory()->create([
             'item_type' => ItemType::RawMaterial->value,
+            'unit_of_measure' => 'PCS',
             'is_active' => true,
         ]);
         $location = WarehouseLocation::factory()->create();
@@ -237,7 +242,15 @@ class GrnGlPostingTest extends TestCase
                 'unit_cost' => '5.00',
             ]],
             ['received_date' => now()->toDateString()],
-            ['result' => 'passed'],
+            [
+                'result' => 'passed',
+                'coverage_confirmed' => true,
+                'inspected_quantity' => 10,
+                'sample_defect_count' => 0,
+                'critical_defect' => false,
+                'defects_removed_confirmed' => false,
+                'checks' => [['label' => 'Full piece count', 'passed' => true]],
+            ],
             $this->user,
         );
 
@@ -246,6 +259,9 @@ class GrnGlPostingTest extends TestCase
         $this->assertSame(GrnStatus::PendingQc, $result['grn']->status);
         $this->assertSame('awaiting_review', $result['inspection']->status->value);
         $this->assertSame($item->id, $result['inspection']->item_id);
+        $this->assertFalse($result['stock_updated'], 'A proposed PASS has not released stock.');
+        $this->assertSame(0, StockMovement::query()->where('reference_type', 'goods_receipt_note')
+            ->where('reference_id', $result['grn']->id)->count());
 
         // A different user (the checker) reviews the inspection and approves it.
         $inspectionService = app(InspectionService::class);
@@ -254,6 +270,7 @@ class GrnGlPostingTest extends TestCase
             'passed',
             null,
             $this->checker,
+            (int) $result['inspection']->fresh()->result_version,
         );
 
         // After the checker reviews and approves, the inspection passes and the
@@ -262,6 +279,9 @@ class GrnGlPostingTest extends TestCase
         $acceptedGrn = $result['grn']->fresh();
         $this->assertSame(GrnStatus::Accepted, $acceptedGrn->status);
         $this->assertNotNull($acceptedGrn->journal_entry_id);
+        $this->assertSame(1, StockMovement::query()->where('reference_type', 'goods_receipt_note')
+            ->where('reference_id', $acceptedGrn->id)->count());
+        $this->assertSame('10.000', (string) $acceptedGrn->items()->firstOrFail()->quantity_accepted);
         $this->assertDatabaseHas('journal_entries', [
             'id' => $acceptedGrn->journal_entry_id,
             'reference_type' => 'goods_receipt_note',
@@ -333,11 +353,16 @@ class GrnGlPostingTest extends TestCase
             ['item_type' => ItemType::RawMaterial->value, 'quantity' => '10', 'unit_cost' => '5.00'],
         ]);
         $accepted = $this->grnSvc->accept($grn, $this->user);
-        $this->user->role->permissions()->detach(
-            Permission::query()->where('slug', 'accounting.journal.post')->value('id'),
-        );
+        $role = $this->user->role;
+        $this->actingAs($this->user);
+        app(RoleService::class)->syncPermissions($role, [
+            'quality.inspections.manage',
+            'accounting.journal.view',
+        ]);
 
-        $this->actingAs($this->user, 'sanctum')
+        // A new authenticated model represents the next request after the
+        // role permission change; the role cache was invalidated by the service.
+        $this->actingAs(User::query()->findOrFail($this->user->id), 'sanctum')
             ->postJson('/api/v1/inventory/grn/'.$accepted->hash_id.'/retry-gl')
             ->assertForbidden();
 

@@ -127,11 +127,11 @@ export default function LoginPage() {
 
  const onSubmit = async (data: LoginForm) => {
  try {
-  queryClient.clear();
   const result = await authApi.signIn({
   email: data.email,
   password: data.password,
   });
+  queryClient.clear();
 
   if (result.realm === 'internal') {
   applyUser(result.user);
@@ -140,7 +140,11 @@ export default function LoginPage() {
   navigate(result.must_change_password ? '/change-password' : from, { replace: true });
   } else {
   const portalPath = `/portal/${result.realm}`;
-  navigate(result.must_change_password ? `${portalPath}/change-password` : portalPath, { replace: true });
+  const returnPath = (location.state as { from?: string } | null)?.from;
+  const portalReturnPath = returnPath === portalPath || returnPath?.startsWith(`${portalPath}/`)
+   ? returnPath
+   : portalPath;
+  navigate(result.must_change_password ? `${portalPath}/change-password` : portalReturnPath, { replace: true });
   }
  } catch (err) {
  const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;

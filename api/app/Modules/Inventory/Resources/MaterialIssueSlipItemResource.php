@@ -14,22 +14,28 @@ class MaterialIssueSlipItemResource extends JsonResource
         return [
             'id' => $this->hash_id,
             'stock_movement_id' => $this->whenLoaded('stockMovement', fn () => $this->stockMovement?->hash_id),
-            'item'            => $this->whenLoaded('item', fn () => [
-                'id'              => $this->item->hash_id,
-                'code'            => $this->item->code,
-                'name'            => $this->item->name,
+            'item' => $this->whenLoaded('item', fn () => [
+                'id' => $this->item->hash_id,
+                'code' => $this->item->code,
+                'name' => $this->item->name,
                 'unit_of_measure' => $this->item->unit_of_measure,
             ]),
-            'location'        => $this->whenLoaded('location', fn () => [
-                'id'   => $this->location->hash_id,
+            'location' => $this->whenLoaded('location', fn () => [
+                'id' => $this->location->hash_id,
                 'code' => $this->location->code,
             ]),
             'quantity_issued' => (string) $this->quantity_issued,
-            'unit_cost'       => (string) $this->unit_cost,
-            'total_cost'      => (string) $this->total_cost,
+            'quantity_issued_in_uom' => $this->quantity_issued_in_uom !== null
+                ? (string) $this->quantity_issued_in_uom
+                : null,
+            'issued_uom_conversion_factor' => $this->issued_uom_conversion_factor !== null
+                ? (string) $this->issued_uom_conversion_factor
+                : null,
+            'unit_cost' => (string) $this->unit_cost,
+            'total_cost' => (string) $this->total_cost,
             'issued_uom_code' => $this->issued_uom_code,
-            'lot_number'      => $this->lot_number,
-            'remarks'         => $this->remarks,
+            'lot_number' => $this->lot_number,
+            'remarks' => $this->remarks,
         ];
     }
 }

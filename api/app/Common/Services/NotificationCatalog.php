@@ -162,10 +162,23 @@ final class NotificationCatalog
     public static function defaults(): array
     {
         return [
+            ['title' => 'BOM and pricing', 'hint' => 'Manufacturing estimates and commercial price reviews', 'types' => [
+                ['key' => 'bom.cost_updated', 'label' => 'BOM cost refreshed', 'description' => 'An active manufacturing cost estimate refreshed after master-data changes.'],
+                ['key' => 'bom.cost_review_failed', 'label' => 'BOM refresh needs review', 'description' => 'A cost estimate could not refresh because source data needs repair.'],
+                ['key' => 'pricing.review_required', 'label' => 'Selling price needs review', 'description' => 'Base or agreed prices need review against configured costs and minimum prices.'],
+                ['key' => 'pricing.prices_changed', 'label' => 'Selling price changed', 'description' => 'Product selling prices or minimum price were changed.'],
+                ['key' => 'pricing.negotiation', 'label' => 'Pricing negotiation', 'description' => 'Customer request, Finance review, or customer decision needs attention.'],
+                ['key' => 'pricing.agreement_expiring', 'label' => 'Price agreement expiring', 'description' => 'An agreement ends within seven days; renew terms with the customer.'],
+                ['key' => 'inventory.receipt_cost_changed', 'label' => 'Supplier receipt cost differs', 'description' => 'Accepted supplier unit cost differs from approved inventory standard cost.'],
+            ]],
             ['title' => 'Chain 1 · Order to Cash', 'hint' => 'Sales orders through production, delivery, and invoicing', 'types' => [
                 ['key' => 'chain.so_confirmed', 'label' => 'Sales order confirmed', 'description' => 'A sales order has been confirmed by the customer.'],
                 ['key' => 'chain.in_process_qc_required', 'label' => 'In-process QC required', 'description' => 'A work order started and needs periodic in-process sampling.'],
                 ['key' => 'production.wo_completed', 'label' => 'Work order completed', 'description' => 'A production work order has finished. Outgoing QC is next.'],
+                ['key' => 'production.assignment.review', 'label' => 'Production assignment needs review', 'description' => 'A production slot, equipment or assigned crew needs PPC or production management review.'],
+                ['key' => 'production.crew.assigned', 'label' => 'Work order assigned', 'description' => 'You were assigned to a work-order crew.'],
+                ['key' => 'production.crew.changed', 'label' => 'Crew assignment changed', 'description' => 'Your previous work-order assignment ended.'],
+                ['key' => 'production.schedule.reminder', 'label' => 'Production schedule reminder', 'description' => 'An approved work order starts within 30 minutes, is due to start, or has missed its start time.'],
                 ['key' => 'chain.outgoing_qc_required', 'label' => 'Outgoing QC required', 'description' => 'A finished work order needs AQL sampling before it can ship.'],
                 ['key' => 'chain.outgoing_qc_missing', 'label' => 'Outgoing QC missing escalation', 'description' => 'A completed work order shipped its output without a recorded outgoing inspection and was escalated for repair.'],
                 ['key' => 'quality.inspection_failed', 'label' => 'QC inspection failed', 'description' => 'A quality inspection failed. An NCR may be required.'],
@@ -182,6 +195,7 @@ final class NotificationCatalog
             ['title' => 'Chain 2 · Procure to Pay', 'hint' => 'Requests, purchase orders, and goods receipts', 'types' => [
                 ['key' => 'inventory.grn_received', 'label' => 'Goods receipt created', 'description' => 'Goods have been received against a purchase order.'],
                 ['key' => 'chain.incoming_qc_required', 'label' => 'Incoming QC required', 'description' => 'A goods receipt needs incoming inspection before stock is accepted.'],
+                ['key' => 'inventory.replenishment_blocked', 'label' => 'Automatic replenishment blocked', 'description' => 'Inventory master data or Purchasing must repair setup before automatic replenishment can continue.'],
                 ['key' => 'inventory.low_stock', 'label' => 'Low stock alert', 'description' => 'An item fell below reorder point and an auto-PR was created.'],
                 ['key' => 'chain.pr_approved', 'label' => 'Purchase request approved', 'description' => 'A purchase request has been fully approved.'],
                 ['key' => 'chain.pr_auto_convert_skipped', 'label' => 'PR auto-conversion skipped', 'description' => 'An approved PR could not be auto-converted to a PO (missing supplier or price) and needs manual conversion.'],
@@ -190,6 +204,7 @@ final class NotificationCatalog
                 ['key' => 'purchasing.supplier_deterioration', 'label' => 'Supplier performance dropped', 'description' => 'A supplier’s rating fell sharply against its recent baseline.'],
                 ['key' => 'supplier_listing_submitted', 'label' => 'Supplier listing submitted', 'description' => 'A supplier submitted an item listing through the B2B portal and it needs purchasing review.'],
                 ['key' => 'return.shipped_to_vendor', 'label' => 'Returned goods shipped to vendor', 'description' => 'Supplier-returned goods were shipped back to the vendor. Purchasing should track the shipment and follow up on the credit.'],
+                ['key' => 'return.supplier_defect', 'label' => 'Supplier defect return needs review', 'description' => 'Incoming QC separated defective goods. Purchasing should review the supplier return and replacement.'],
                 ['key' => 'supplier.po_responded', 'label' => 'Supplier purchase order response', 'description' => 'A supplier responded to a purchase order confirmation request.'],
                 ['key' => 'supplier.schedule_cancelled', 'label' => 'Supplier cancelled a delivery schedule', 'description' => 'A supplier withdrew a delivery plan that purchasing had already acknowledged.'],
                 ['key' => 'portal.order_awaiting_review', 'label' => 'Portal order awaiting review', 'description' => 'A self-service order submission is waiting for internal review.'],
@@ -231,12 +246,21 @@ final class NotificationCatalog
             ['title' => 'Finance & accounting', 'hint' => 'Receivables and invoicing exceptions', 'types' => [
                 ['key' => 'ar.dunning.escalation', 'label' => 'Overdue receivable escalated', 'description' => 'A customer invoice passed its final dunning stage.'],
                 ['key' => 'invoice.auto_failed', 'label' => 'Automatic invoicing failed', 'description' => 'An invoice could not be generated from a confirmed delivery.'],
+                ['key' => 'invoice.payment_submitted', 'label' => 'Customer payment submitted', 'description' => 'Customer payment evidence awaits Finance verification.'],
+                ['key' => 'invoice.payment_reviewed', 'label' => 'Customer payment reviewed', 'description' => 'Finance verified or rejected customer payment evidence.'],
             ]],
             // Title matches the group already present in the seeded setting so
             // the merge drops mrp_run_completed into it rather than creating a
             // near-duplicate group beside it.
             ['title' => 'Maintenance & approvals', 'hint' => 'MRP runs, machine breakdowns, and approvals waiting on you', 'types' => [
-                ['key' => 'mrp_run_completed', 'label' => 'Daily MRP run finished', 'description' => 'The scheduled MRP run completed. Shortages and auto-PRs are ready to review.'],
+                ['key' => 'mrp_run_completed', 'label' => 'MRP planning result', 'description' => 'MRP planning finished. Review material shortages, work orders, scheduling conflicts, and failed orders.'],
+                ['key' => 'maintenance.assignment_needed', 'label' => 'Maintenance assignment needed', 'description' => 'A new maintenance work order needs a technician.'],
+                ['key' => 'maintenance.assigned', 'label' => 'Maintenance assigned', 'description' => 'You have been assigned a maintenance work order.'],
+                ['key' => 'maintenance.assignment_escalated', 'label' => 'Critical maintenance unassigned', 'description' => 'A critical maintenance order has remained unassigned for 15 minutes.'],
+                ['key' => 'maintenance.repair_submitted', 'label' => 'Repair ready for verification', 'description' => 'A technician submitted maintenance evidence for review.'],
+                ['key' => 'maintenance.repair_rejected', 'label' => 'Repair verification rejected', 'description' => 'A verifier requested more maintenance work or evidence.'],
+                ['key' => 'maintenance.shift_handover', 'label' => 'Maintenance shift handover', 'description' => 'An in-progress repair may need a replacement technician before shift end.'],
+                ['key' => 'maintenance.repeat_breakdown', 'label' => 'Repeated breakdown review', 'description' => 'A machine has had three distinct breakdown incidents within 30 days. Review its history and preventive schedule.'],
                 ['key' => 'maintenance.breakdown', 'label' => 'Machine breakdown', 'description' => 'A machine has entered breakdown status and may have paused a work order.'],
                 ['key' => 'approval_reminder', 'label' => 'Approval reminder', 'description' => 'You have a pending approval that has been waiting over 24 hours.'],
                 ['key' => 'approval_escalation', 'label' => 'Approval escalation', 'description' => 'An approval you are responsible for has been escalated due to timeout.'],

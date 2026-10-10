@@ -9,6 +9,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Support\WidgetScope;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Quality\Services\DefectParetoService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +56,7 @@ final class CoreWidgetAnalytics
             'machine.utilization', 'oee.gauges' => $this->oeeGauge(),
             'finance.ar_aging' => $this->arAging(),
             'hr.headcount' => $this->headcount($user),
-            'purchasing.open_pos' => $this->poStatusMix(),
+            'purchasing.open_pos' => $this->poStatusMix($user),
             default => [],
         };
     }
@@ -251,7 +253,7 @@ final class CoreWidgetAnalytics
      *
      * @return array<string, mixed>
      */
-    private function poStatusMix(): array
+    private function poStatusMix(User $user): array
     {
         $tone = [
             PurchaseOrderStatus::Draft->value => 'neutral',
@@ -267,7 +269,7 @@ final class CoreWidgetAnalytics
             PurchaseOrderStatus::Cancelled->value => 'danger',
         ];
 
-        $rows = DB::table('purchase_orders')
+        $rows = app(PurchaseOrderAccessPolicy::class)->visibleTo(PurchaseOrder::query(), $user)
             ->selectRaw('status as label, COUNT(*) as value')
             ->whereNull('deleted_at')
             ->groupBy('status')

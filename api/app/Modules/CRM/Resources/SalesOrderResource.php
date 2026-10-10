@@ -6,7 +6,11 @@ namespace App\Modules\CRM\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderResponseStatus;
+use App\Modules\CRM\Enums\SalesOrderResponseType;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -14,11 +18,27 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Common\Support\Money;
 
 class SalesOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $awaitingDelivery = $this->status->isBeforeConfirmation()
+            && $this->relationLoaded('latestResponse')
+            && $this->latestResponse?->response_type === SalesOrderResponseType::DeliveryDate
+            && $this->latestResponse?->status === SalesOrderResponseStatus::Pending;
+
+        $displayStatus = $this->status;
+        if (in_array($displayStatus, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction, SalesOrderStatus::PartiallyDelivered], true)
+            && $this->relationLoaded('items') && $this->items->isNotEmpty()
+            && $this->items->contains(fn ($item): bool => Money::gt((string) ($item->quantity_delivered ?? '0'), '0'))) {
+            // Match the chain's actual delivery coverage without writing during a read.
+            $displayStatus = $this->items->every(fn ($item): bool => Money::gte(
+                (string) ($item->quantity_delivered ?? '0'), (string) $item->quantity,
+            )) ? SalesOrderStatus::Delivered : SalesOrderStatus::PartiallyDelivered;
+        }
+
         return [
             'id'                 => $this->hash_id,
             'so_number'          => $this->so_number,
@@ -26,8 +46,11 @@ class SalesOrderResource extends JsonResource
             'subtotal'           => (string) $this->subtotal,
             'vat_amount'         => (string) $this->vat_amount,
             'total_amount'       => (string) $this->total_amount,
-            'status'             => (string) $this->status?->value,
-            'status_label'       => $this->status?->label(),
+            'status'             => (string) $displayStatus?->value,
+            'status_label'       => in_array($displayStatus, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction], true)
+                && $this->relationLoaded('items') && $this->items->contains(fn ($line) => $line->fulfillment_policy === 'stock_first')
+                && $this->items->every(fn ($line) => bccomp(app(\App\Modules\CRM\Services\SalesOrderSupplyService::class)->lineCoverage($line)['ready_quantity'], (string) $line->quantity, 3) >= 0)
+                ? 'Ready for delivery' : $displayStatus?->label(),
             'next_statuses'      => array_map(
                 static fn (string $next): array => [
                     'value' => $next,
@@ -39,17 +62,32 @@ class SalesOrderResource extends JsonResource
             'delivery_terms'     => $this->delivery_terms,
             'incoterm'           => $this->incoterm?->value,
             'notes'              => $this->notes,
+            'requested_delivery_dates' => $this->whenLoaded('items', fn () => $this->items
+                ->map(fn ($item) => optional($item->requested_delivery_date ?? $item->delivery_date)->toDateString())
+                ->filter()->unique()->sort()->values()->all()),
+            'delivery_dates' => $this->whenLoaded('items', fn () => $this->items
+                ->map(fn ($item) => optional($item->delivery_date)->toDateString())
+                ->filter()->unique()->sort()->values()->all()),
             'submission_source'  => (string) ($this->submission_source?->value ?? $this->submission_source ?? 'internal'),
             // The portal only treats a draft as negotiable once sales has
             // released it to the customer (requestCustomerConfirmation()).
             'customer_confirmation_requested_at' => optional($this->customer_confirmation_requested_at)->toIso8601String(),
             'latest_response'    => $this->latestResponseBlock(),
+            'delivery_negotiations' => $this->whenLoaded('deliveryNegotiations', fn () => SalesOrderResponseResource::collection($this->deliveryNegotiations)),
             'capabilities'       => [
+                'can_propose_delivery' => $this->submission_source === SalesOrderSubmissionSource::CustomerPortal
+                    && $this->status->isBeforeConfirmation()
+                    && ($request->user() instanceof User)
+                    && $request->user()->hasPermission('crm.sales_orders.confirm'),
+                'can_respond_delivery' => $this->canCustomerChange($request) && $awaitingDelivery,
+                'awaiting_delivery_response' => $awaitingDelivery,
+                'can_edit' => $this->canCustomerChange($request),
+                'can_cancel' => $this->canCustomerChange($request),
                 'can_respond' => $this->isOpenToCustomerResponse(),
                 'can_confirm' => $this->isOpenToCustomerResponse(),
             ],
-            'is_editable'        => (bool) $this->is_editable,
-            'is_cancellable'     => (bool) $this->is_cancellable,
+            'is_editable'        => (bool) $this->is_editable && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal,
+            'is_cancellable'     => (bool) $this->is_cancellable && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal,
             'item_count'         => (int) ($this->items_count ?? $this->items?->count() ?? 0),
             'customer'           => $this->whenLoaded('customer', fn () => [
                 'id'   => $this->customer?->hash_id,
@@ -167,6 +205,14 @@ class SalesOrderResource extends JsonResource
         ];
     }
 
+    private function canCustomerChange(Request $request): bool
+    {
+        $user = $request->user('customer_portal');
+        return $user !== null && $user->customer_id === $this->customer_id
+            && $this->submission_source === SalesOrderSubmissionSource::CustomerPortal
+            && $this->status->isBeforeConfirmation();
+    }
+
     private function isOpenToCustomerResponse(): bool
     {
         $status = $this->status instanceof SalesOrderStatus
@@ -174,6 +220,7 @@ class SalesOrderResource extends JsonResource
             : SalesOrderStatus::tryFrom((string) $this->status);
 
         return $status === SalesOrderStatus::Draft
+            && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal
             && $this->customer_confirmation_requested_at !== null;
     }
 }

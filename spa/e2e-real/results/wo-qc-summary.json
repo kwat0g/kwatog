@@ -1,0 +1,313 @@
+{
+  "config": {
+    "argv": [
+      "/usr/bin/node-24",
+      "/home/ec2-user/kwatog/spa/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "playwright.qc.config.ts"
+    ],
+    "configFile": "/home/ec2-user/kwatog/spa/playwright.qc.config.ts",
+    "rootDir": "/home/ec2-user/kwatog/spa/e2e-real",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/ec2-user/kwatog/spa/wo-qc-test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "real-chromium",
+        "name": "real-chromium",
+        "testDir": "/home/ec2-user/kwatog/spa/e2e-real",
+        "testIgnore": [],
+        "testMatch": [
+          "work-order-qc-connection.spec.ts"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "e2e-real/results/wo-qc-summary.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "work-order-qc-connection.spec.ts",
+      "file": "work-order-qc-connection.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "five QC stages use three PASS/FAIL requirements for 100 pieces; failure requires explanation and independent review",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14249,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "steps": [
+                    {
+                      "title": "outgoing",
+                      "duration": 2231
+                    },
+                    {
+                      "title": "incoming",
+                      "duration": 1598
+                    },
+                    {
+                      "title": "in_process",
+                      "duration": 1551
+                    },
+                    {
+                      "title": "supplier_return",
+                      "duration": 1534
+                    },
+                    {
+                      "title": "customer_return",
+                      "duration": 1462
+                    }
+                  ],
+                  "startTime": "2026-10-03T20:23:36.760Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "83dd8cd4a5669b63c3f4-99b54c5d1e8de5d9cbc2",
+          "file": "work-order-qc-connection.spec.ts",
+          "line": 81,
+          "column": 1
+        },
+        {
+          "title": "role boundaries protect QC and production mutations",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4449,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T20:23:55.485Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "83dd8cd4a5669b63c3f4-8b669863cc98036b17eb",
+          "file": "work-order-qc-connection.spec.ts",
+          "line": 115,
+          "column": 1
+        },
+        {
+          "title": "late defect on closed WO holds stock, releases 99 sorted pieces, repairs one, and closes NCR after new QC",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 38702,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T20:23:59.991Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "83dd8cd4a5669b63c3f4-c8596d4a02a4b8e12bca",
+          "file": "work-order-qc-connection.spec.ts",
+          "line": 130,
+          "column": 1
+        },
+        {
+          "title": "open WO repairs inside same order, notifies production and automatically closes after fresh QC and NCR resolution",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18655,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T20:24:38.740Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "83dd8cd4a5669b63c3f4-0b2bec5426fd4e11fd0c",
+          "file": "work-order-qc-connection.spec.ts",
+          "line": 210,
+          "column": 1
+        },
+        {
+          "title": "Report defect opens linked NCR creation form",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2800,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T20:24:57.437Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "83dd8cd4a5669b63c3f4-5af32f59a82cee496196",
+          "file": "work-order-qc-connection.spec.ts",
+          "line": 264,
+          "column": 1
+        },
+        {
+          "title": "WO close and required-operation gates refuse uninspected output; frozen output cannot change",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4442,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-03T20:25:00.280Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "83dd8cd4a5669b63c3f4-9c9f07e3b31447b52716",
+          "file": "work-order-qc-connection.spec.ts",
+          "line": 270,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-03T20:23:31.868Z",
+    "duration": 93704.745,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

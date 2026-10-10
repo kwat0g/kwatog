@@ -62,6 +62,25 @@ class CustomerPortalServiceTest extends TestCase
 
     /* ─── Dashboard ──────────────────────────────────────────────── */
 
+    public function test_customer_process_status_does_not_expose_internal_planning_errors_or_routes(): void
+    {
+        $customer = Customer::factory()->create();
+        $portal = $this->makePortalUser($customer);
+        $so = SalesOrder::factory()->create(['customer_id' => $customer->id, 'status' => 'confirmed']);
+        \App\Modules\MRP\Models\MrpRun::create([
+            'run_at' => now(), 'triggered_by' => 'manual', 'status' => 'partial',
+            'summary' => ['per_sales_order' => [[
+                'so_id' => $so->id, 'error' => 'Internal supplier cost details.', 'error_code' => 'mrp_business_rule',
+            ]]],
+        ]);
+        $steps = app(\App\Modules\B2B\Services\CustomerPortalService::class)->salesOrderChain($customer->id, $so);
+        $step = collect($steps)->firstWhere('key', 'mrp_planned');
+        $this->assertSame('rejected', $step['state']);
+        $this->assertArrayNotHasKey('href', $step);
+        $this->assertStringNotContainsString('Internal supplier', $step['description']);
+        $this->assertStringContainsString('contact sales', $step['description']);
+    }
+
     public function test_dashboard_returns_own_data(): void
     {
         $customer = Customer::factory()->create();

@@ -1,6 +1,6 @@
 import { client } from '../client';
 
-export type SettingValue = string | number | boolean | string[] | Record<string, unknown> | null;
+export type SettingValue = string | number | boolean | unknown[] | Record<string, unknown> | null;
 
 export interface SettingRow {
  key: string;

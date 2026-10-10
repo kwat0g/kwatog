@@ -124,6 +124,7 @@ class ReturnCaseController extends Controller
         [$customer, $supplier] = $this->parties($request);
         abort_if($customer && ($case->type->value !== 'customer' || (int) $case->customer_id !== (int) $customer->customer_id), 403);
         abort_if($supplier && ($case->type->value !== 'supplier' || (int) $case->vendor_id !== (int) $supplier->vendor_id), 403);
+        abort_if($supplier && ! $case->events()->where('is_public', true)->exists(), 403);
     }
 
     private function actor(Request $request): array

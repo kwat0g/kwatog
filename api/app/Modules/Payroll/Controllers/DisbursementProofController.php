@@ -53,8 +53,8 @@ class DisbursementProofController extends Controller
         $validated = $request->validate([
             'proof_type' => ['required', Rule::enum(DisbursementProofType::class)],
             'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'bank_name' => ['nullable', 'string', 'max:100'],
-            'transaction_reference' => ['nullable', 'string', 'max:100'],
+            'bank_name' => ['required', 'string', 'max:100'],
+            'transaction_reference' => ['required', 'string', 'max:100'],
             'disbursed_amount' => ['required', 'decimal:0,2', 'gt:0'],
             'disbursement_date' => ['required', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],

@@ -130,7 +130,7 @@ export const selfServiceApi = {
 
  // ─── Leave filing (Task SS-LF) ──────────────────────────────────
  leaveTypes: () =>
- client.get<{ data: SelfServiceLeaveType[] }>('/leaves/types', { params: { is_active: 'true' } }).then((r) => r.data.data),
+ client.get<{ data: SelfServiceLeaveType[] }>('/leaves/types', { params: { is_active: 'true', per_page: 200 } }).then((r) => r.data.data),
 
  leaveBalancesMe: () =>
  client

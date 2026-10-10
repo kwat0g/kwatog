@@ -7,6 +7,7 @@ namespace App\Modules\B2B\Controllers;
 use App\Modules\B2B\Enums\SupplierShippingDocumentType;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Requests\Supplier\ShipmentUpdateRequest;
+use App\Modules\B2B\Requests\Supplier\StoreSupplierShipmentRequest;
 use App\Modules\B2B\Requests\Supplier\UploadShippingDocumentsRequest;
 use App\Modules\B2B\Resources\PortalShippingDocumentResource;
 use App\Modules\B2B\Services\SupplierShipmentService;
@@ -96,7 +97,7 @@ class SupplierShipmentController extends Controller
      *
      * Create a new shipment for the PO.
      */
-    public function storeShipment(PurchaseOrder $purchaseOrder, ShipmentUpdateRequest $request): JsonResponse
+    public function storeShipment(PurchaseOrder $purchaseOrder, StoreSupplierShipmentRequest $request): JsonResponse
     {
         $user = $this->user($request);
 
@@ -105,6 +106,7 @@ class SupplierShipmentController extends Controller
             $user->id,
             $purchaseOrder,
             $request->validated(),
+            $request->file('dispatch_photo'),
         );
 
         return response()->json([

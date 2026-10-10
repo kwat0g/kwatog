@@ -3,7 +3,7 @@ import { TouchShell, type TouchTab } from '@/components/layout/TouchShell';
 
 /** Maintenance Tech PWA — tech-scoped, no sidebar. Chrome lives in TouchShell. */
 const tabs: readonly TouchTab[] = [
- { to: '/maintenance/mobile', label: 'Work Orders', icon: LuClipboardList, exact: true },
+ { to: '/maintenance/mobile', label: 'Maintenance Work Orders', icon: LuClipboardList, exact: true },
 ];
 
 export default function MaintenanceMobileLayout() {

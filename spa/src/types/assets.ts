@@ -10,7 +10,7 @@ export interface Asset {
  category: AssetCategory;
  category_label?: string;
  department?: { id: string; name: string; code: string } | null;
- association?: { type: 'machine' | 'mold' | 'vehicle'; id: string; code: string; name: string } | null;
+ association?: { type: 'machine' | 'mold' | 'vehicle'; id: string; code: string; name: string; archived?: boolean } | null;
  acquisition_date: string;
  acquisition_cost: string;
  useful_life_years: number;
@@ -89,6 +89,12 @@ export interface UpdateAssetData {
 export interface AssociateAssetData {
  target_type: 'machine' | 'mold' | 'vehicle';
  target_id: string | null;
+}
+
+export interface AssetAssociationOption {
+ id: string;
+ code: string;
+ name: string;
 }
 
 export interface DisposeAssetData {

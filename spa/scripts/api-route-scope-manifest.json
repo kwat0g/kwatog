@@ -1,11 +1,5 @@
 [
   {
-    "method": "POST",
-    "path": "/inventory/stock-transfers",
-    "status": "superseded",
-    "reason": "The current inventory transfer workflow uses transfer orders; this legacy mutation is intentionally unreachable."
-  },
-  {
     "method": "GET",
     "path": "/maintenance/condition-readings/options",
     "status": "scope_cut",

@@ -1,11 +1,11 @@
 import { client } from '../client';
-import type { ParetoResult } from '@/types/quality';
+import type { InspectionStage, ParetoResult } from '@/types/quality';
 
 export interface ParetoFilters {
  from?: string;
  to?: string;
  product_id?: string;
- stage?: 'incoming' | 'in_process' | 'outgoing';
+ stage?: InspectionStage;
  limit?: number;
 }
 

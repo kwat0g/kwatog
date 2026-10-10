@@ -6,12 +6,14 @@ namespace Tests\Unit;
 
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Mail\UserNotificationMail;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -340,5 +342,17 @@ class NotificationServiceHardeningTest extends TestCase
             'type' => 'email.delivery_failed',
         ]);
         Mail::assertNothingQueued();
+    }
+
+    public function test_email_delivery_fallback_skips_empty_recipient_collections(): void
+    {
+        $notifications = Mockery::mock(NotificationService::class);
+        $notifications->shouldNotReceive('sendInApp');
+
+        (new EmailDeliveryFailureNotifier($notifications))->notify(
+            collect(),
+            'Critical alert',
+            'No recipient has a usable address.',
+        );
     }
 }

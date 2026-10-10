@@ -22,6 +22,8 @@ const DEFAULT_FILTERS: OrderFilters = { page: 1, per_page: 25 };
 const STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'draft', label: 'Draft' },
+  { value: 'awaiting_confirmation', label: 'Awaiting confirmation' },
+  { value: 'delivery_negotiation', label: 'Delivery negotiation' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'in_production', label: 'In production' },
   { value: 'partially_delivered', label: 'Partially delivered' },

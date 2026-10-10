@@ -6,22 +6,22 @@ namespace App\Modules\Purchasing\Enums;
 
 enum PurchaseOrderStatus: string
 {
-    case Draft              = 'draft';
-    case PendingApproval    = 'pending_approval';
-    case Approved           = 'approved';
-    case Sent               = 'sent';
+    case Draft = 'draft';
+    case PendingApproval = 'pending_approval';
+    case Approved = 'approved';
+    case Sent = 'sent';
     // 2026-09-11 — supplier response states. `sent` now means OGAMI transmitted
     // the PO; the supplier's acceptance is `acknowledged`, and a supplier that
     // cannot fulfil as-is counter-offers (`supplier_proposed`) or refuses
     // (`supplier_declined`). Previously the supplier's acknowledgment was
     // recorded as `sent`, so the status described the wrong event.
-    case Acknowledged       = 'acknowledged';
-    case SupplierProposed   = 'supplier_proposed';
-    case SupplierDeclined   = 'supplier_declined';
-    case PartiallyReceived  = 'partially_received';
-    case Received           = 'received';
-    case Closed             = 'closed';
-    case Cancelled          = 'cancelled';
+    case Acknowledged = 'acknowledged';
+    case SupplierProposed = 'supplier_proposed';
+    case SupplierDeclined = 'supplier_declined';
+    case PartiallyReceived = 'partially_received';
+    case Received = 'received';
+    case Closed = 'closed';
+    case Cancelled = 'cancelled';
 
     public static function values(): array
     {
@@ -63,6 +63,17 @@ enum PurchaseOrderStatus: string
             self::SupplierProposed,
             self::PartiallyReceived,
         ];
+    }
+
+    /**
+     * Statuses that prove supplier dispatch before inbound shipment tracking starts.
+     * Proposed or declined supplier responses remain blocked until Purchasing resolves them.
+     *
+     * @return list<self>
+     */
+    public static function shipmentEligible(): array
+    {
+        return [self::Sent, self::Acknowledged, self::PartiallyReceived];
     }
 
     public function label(): string

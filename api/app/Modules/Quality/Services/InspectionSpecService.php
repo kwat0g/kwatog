@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
-use App\Common\Support\TrashedFilter;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\InspectionSpecRevision;
+use App\Modules\Quality\Support\ChecklistDefinition;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -34,7 +36,7 @@ class InspectionSpecService
             ->with(['product' => fn ($product) => $product
                 ->withTrashed()
                 ->select(['id', 'part_number', 'name', 'is_active', 'deleted_at'])])
-            ->withCount('items');
+            ->with('currentRevision')->withCount('items');
 
         if (isset($filters['is_active']) && $filters['is_active'] !== ''
             && ! filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN)) {
@@ -44,7 +46,9 @@ class InspectionSpecService
 
         if (! empty($filters['product_id'])) {
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);
-            if ($pid) $q->where('product_id', $pid);
+            if ($pid) {
+                $q->where('product_id', $pid);
+            }
         }
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
@@ -106,15 +110,31 @@ class InspectionSpecService
     public function forProduct(int $productId): ?InspectionSpec
     {
         return InspectionSpec::with([
-                'product' => fn ($product) => $product
-                    ->withTrashed()
-                    ->select(['id', 'part_number', 'name', 'is_active', 'deleted_at']),
-                'items',
-                'currentRevision.creator:id,name,role_id',
-            ])
+            'product' => fn ($product) => $product
+                ->withTrashed()
+                ->select(['id', 'part_number', 'name', 'is_active', 'deleted_at']),
+            'items',
+            'currentRevision.creator:id,name,role_id',
+        ])
             ->where('product_id', $productId)
             ->where('is_active', true)
             ->first();
+    }
+
+    public function assertInspectable(?InspectionSpec $spec): void
+    {
+        if (! $spec || $spec->items->isEmpty() || ! $spec->currentRevision) {
+            throw new BusinessRuleException('QC must publish an inspection specification before production can start.');
+        }
+        if (! config('inspection.checklist_capture_enabled') && $spec->currentRevision->capture_method !== 'checklist') {
+            return;
+        }
+        ChecklistDefinition::assertEnabled();
+        foreach ($spec->items as $item) {
+            if (ChecklistDefinition::criterion($item->toArray()) === '') {
+                throw new BusinessRuleException('QC: add a PASS requirement for "'.$item->parameter_name.'" in the inspection specification.');
+            }
+        }
     }
 
     /**
@@ -127,9 +147,17 @@ class InspectionSpecService
      *   is_critical?: bool, sort_order?: int, notes?: ?string
      * }> $items
      */
-    public function upsertForProduct(int $productId, array $items, int $userId, ?string $notes = null): InspectionSpec
+    public function upsertForProduct(int $productId, array $items, int $userId, ?string $notes = null, string $captureMethod = 'measurement'): InspectionSpec
     {
-        return DB::transaction(function () use ($productId, $items, $userId, $notes) {
+        if ($captureMethod === 'checklist') {
+            ChecklistDefinition::assertEnabled();
+            $items = ChecklistDefinition::validate($items, 'items', true);
+        } elseif (config('inspection.checklist_capture_enabled')) {
+            ChecklistDefinition::requireInstructions($items, 'items');
+        }
+
+        return DB::transaction(function () use ($productId, $items, $userId, $notes, $captureMethod) {
+            Product::query()->lockForUpdate()->findOrFail($productId);
             $spec = InspectionSpec::withTrashed()
                 ->where('product_id', $productId)
                 ->lockForUpdate()
@@ -140,25 +168,26 @@ class InspectionSpecService
                     $spec->restore();
                 }
                 $spec->update([
-                    'version'   => $spec->version + 1,
+                    'version' => $spec->version + 1,
                     'is_active' => true,
-                    'notes'     => $notes,
+                    'notes' => $notes,
                 ]);
             } else {
                 $spec = InspectionSpec::create([
                     'product_id' => $productId,
-                    'version'    => 1,
-                    'is_active'  => true,
-                    'notes'      => $notes,
+                    'version' => 1,
+                    'is_active' => true,
+                    'notes' => $notes,
                     'created_by' => $userId,
                 ]);
             }
 
             $revision = InspectionSpecRevision::create([
+                'capture_method' => $captureMethod,
                 'inspection_spec_id' => $spec->id,
-                'version'            => $spec->version,
-                'created_by'         => $userId,
-                'notes'              => $notes,
+                'version' => $spec->version,
+                'created_by' => $userId,
+                'notes' => $notes,
             ]);
 
             $currentItems = InspectionSpecItem::query()
@@ -171,15 +200,16 @@ class InspectionSpecService
                 InspectionSpecItem::create([
                     'inspection_spec_id' => $spec->id,
                     'inspection_spec_revision_id' => $revision->id,
-                    'parameter_name'     => $row['parameter_name'],
-                    'parameter_type'     => $row['parameter_type'],
-                    'unit_of_measure'    => $row['unit_of_measure'] ?? null,
-                    'nominal_value'      => $row['nominal_value'] ?? null,
-                    'tolerance_min'      => $row['tolerance_min'] ?? null,
-                    'tolerance_max'      => $row['tolerance_max'] ?? null,
-                    'is_critical'        => $row['is_critical'] ?? false,
-                    'sort_order'         => (int) ($row['sort_order'] ?? $i),
-                    'notes'              => $row['notes'] ?? null,
+                    'parameter_name' => $row['parameter_name'],
+                    'parameter_type' => $row['parameter_type'] ?? null,
+                    'acceptance_criterion' => $row['acceptance_criterion'] ?? null,
+                    'unit_of_measure' => $row['unit_of_measure'] ?? null,
+                    'nominal_value' => $row['nominal_value'] ?? null,
+                    'tolerance_min' => $row['tolerance_min'] ?? null,
+                    'tolerance_max' => $row['tolerance_max'] ?? null,
+                    'is_critical' => $row['is_critical'] ?? false,
+                    'sort_order' => (int) ($row['sort_order'] ?? $i),
+                    'notes' => $row['notes'] ?? null,
                 ]);
             }
 

@@ -7,9 +7,11 @@ namespace App\Modules\Quality\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Enums\InspectionParameterType;
+use App\Modules\Quality\Support\ChecklistDefinition;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 class UpsertInspectionSpecRequest extends FormRequest
@@ -31,24 +33,55 @@ class UpsertInspectionSpecRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_id'                => ['required', 'integer', 'exists:products,id'],
-            'notes'                     => ['nullable', 'string', 'max:2000'],
-            'items'                     => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.parameter_name'    => ['required', 'string', 'max:150'],
-            'items.*.parameter_type'    => ['required', Rule::enum(InspectionParameterType::class)],
-            'items.*.unit_of_measure'   => ['nullable', 'string', 'max:20'],
-            'items.*.nominal_value'     => ['nullable', $this->signedDecimalRule()],
-            'items.*.tolerance_min'     => ['nullable', $this->signedDecimalRule()],
-            'items.*.tolerance_max'     => ['nullable', $this->signedDecimalRule()],
-            'items.*.is_critical'       => ['nullable', 'boolean'],
-            'items.*.sort_order'        => ['nullable', 'integer', 'min:0', 'max:65535'],
-            'items.*.notes'             => ['nullable', 'string', 'max:500'],
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'capture_method' => ['sometimes', Rule::in(['measurement', 'checklist'])],
+            'items.*.acceptance_criterion' => ['nullable', 'string', 'max:500'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.parameter_name' => ['required', 'string', 'max:150'],
+            'items.*.parameter_type' => [$this->input('capture_method') === 'checklist' ? 'nullable' : 'required', Rule::enum(InspectionParameterType::class)],
+            'items.*.unit_of_measure' => ['nullable', 'string', 'max:20'],
+            'items.*.nominal_value' => ['nullable', $this->signedDecimalRule()],
+            'items.*.tolerance_min' => ['nullable', $this->signedDecimalRule()],
+            'items.*.tolerance_max' => ['nullable', $this->signedDecimalRule()],
+            'items.*.is_critical' => ['nullable', 'boolean'],
+            'items.*.sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
+            'items.*.notes' => ['nullable', 'string', 'max:500'],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            if ($this->input('capture_method') === 'checklist') {
+                try {
+                    ChecklistDefinition::validate((array) $this->input('items', []), 'items', true);
+                } catch (ValidationException $e) {
+                    foreach ($e->errors() as $key => $messages) {
+                        foreach ($messages as $message) {
+                            $validator->errors()->add($key, $message);
+                        }
+                    }
+                }
+
+                return;
+            }
+            if (config('inspection.checklist_capture_enabled')) {
+                try {
+                    ChecklistDefinition::requireInstructions((array) $this->input('items', []), 'items');
+                } catch (ValidationException $e) {
+                    foreach ($e->errors() as $key => $messages) {
+                        foreach ($messages as $message) {
+                            $validator->errors()->add($key, $message);
+                        }
+                    }
+                }
+            }
+
             $seenNames = [];
 
             foreach ((array) $this->input('items', []) as $index => $row) {
@@ -79,6 +112,9 @@ class UpsertInspectionSpecRequest extends FormRequest
                 }
 
                 if ($type === InspectionParameterType::Dimensional->value) {
+                    if (trim((string) ($row['unit_of_measure'] ?? '')) === '') {
+                        $validator->errors()->add("{$path}.unit_of_measure", 'Choose a measurement unit.');
+                    }
                     if ($nominal === null) {
                         $validator->errors()->add("{$path}.nominal_value", 'Dimensional parameters require a nominal value.');
                     }
@@ -113,6 +149,7 @@ class UpsertInspectionSpecRequest extends FormRequest
         return static function (string $attribute, mixed $value, Closure $fail): void {
             if (! is_int($value) && ! is_float($value) && ! is_string($value)) {
                 $fail('The value must be a signed decimal with up to four places.');
+
                 return;
             }
 

@@ -144,7 +144,7 @@ export const advancedRoutes = (
       <Route
         path="/return-management/cases/new"
         element={
-          <PermissionGuard permission="return_management.manage">
+          <PermissionGuard anyOf={['return_management.manage', 'inventory.grn.create']}>
             <ReturnCaseCreatePage />
           </PermissionGuard>
         }

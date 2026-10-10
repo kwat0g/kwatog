@@ -20,6 +20,10 @@ use App\Modules\Inventory\Enums\MaterialIssueStatus;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Assets\Enums\AssetStatus;
@@ -136,8 +140,8 @@ class DashboardWidgetDataService
             'payroll.upcoming' => $this->upcomingPayroll(),
             'approvals.pending' => $this->pendingApprovalsForRole($user),
 
-            'purchasing.open_prs' => $this->number(DB::table('purchase_requests')->whereNotIn('status', [PurchaseRequestStatus::Converted->value, PurchaseRequestStatus::Rejected->value, PurchaseRequestStatus::Cancelled->value])->count(), 'open purchase requests'),
-            'purchasing.open_pos' => $this->number(DB::table('purchase_orders')->whereIn('status', PurchaseOrderStatus::open())->count(), 'open purchase orders'),
+            'purchasing.open_prs' => $this->number(app(PurchaseRequestAccessPolicy::class)->visibleTo(PurchaseRequest::query(), $user)->whereNotIn('status', [PurchaseRequestStatus::Converted->value, PurchaseRequestStatus::Rejected->value, PurchaseRequestStatus::Cancelled->value])->count(), 'open purchase requests'),
+            'purchasing.open_pos' => $this->number(app(PurchaseOrderAccessPolicy::class)->visibleTo(PurchaseOrder::query(), $user)->whereIn('status', PurchaseOrderStatus::open())->count(), 'open purchase orders'),
             'purchasing.supplier_perf' => $this->supplierPerformance(),
             'supply.overdue_deliveries' => $this->number(DB::table('deliveries')->whereDate('scheduled_date', '<', $today)->whereNotIn('status', [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value, DeliveryStatus::Cancelled->value])->count(), 'past scheduled date'),
             'supply.delivery_schedule' => $this->number(DB::table('deliveries')->whereBetween('scheduled_date', [$today, now()->addDays($deliveryDays)->toDateString()])->whereNotIn('status', [DeliveryStatus::Confirmed->value, DeliveryStatus::Cancelled->value])->count(), "scheduled in the next {$deliveryDays} days"),

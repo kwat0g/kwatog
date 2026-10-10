@@ -207,7 +207,7 @@ export default function PurchaseRequestsListPage() {
             header: '',
             align: 'right' as const,
             cell: (r: PurchaseRequest) =>
-              r.status === 'approved' ? (
+              r.status === 'approved' && r.sourcing_method !== 'rfq' ? (
                 <Button
                   size="sm"
                   variant="secondary"

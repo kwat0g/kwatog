@@ -9,8 +9,9 @@ test('Production Manager mold form loads limited product options', async ({ page
   const net = captureNetwork(page);
 
   await page.goto('/mrp/molds/create');
-  const product = page.getByLabel('Product');
-  await expect.poll(() => product.locator('option').count()).toBeGreaterThan(1);
+  const product = page.getByRole('combobox', { name: 'Product' });
+  await product.click();
+  await expect(page.getByRole('listbox', { name: 'Product' }).getByRole('option').first()).toBeVisible();
 
   expect(net.failedRequests).toEqual([]);
   expect(net.errors).toEqual([]);

@@ -11,11 +11,12 @@ use App\Modules\HR\Models\Employee;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Attendance extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'employee_id', 'date', 'shift_id',
@@ -27,19 +28,24 @@ class Attendance extends Model
     ];
 
     protected $casts = [
-        'date'                => 'date',
-        'time_in'             => 'datetime',
-        'time_out'            => 'datetime',
-        'regular_hours'       => 'decimal:2',
-        'overtime_hours'      => 'decimal:2',
-        'night_diff_hours'    => 'decimal:2',
-        'tardiness_minutes'   => 'integer',
-        'undertime_minutes'   => 'integer',
-        'is_rest_day'         => 'boolean',
-        'day_type_rate'       => 'decimal:2',
-        'status'              => AttendanceStatus::class,
-        'is_manual_entry'     => 'boolean',
+        'date' => 'date',
+        'time_in' => 'datetime',
+        'time_out' => 'datetime',
+        'regular_hours' => 'decimal:2',
+        'overtime_hours' => 'decimal:2',
+        'night_diff_hours' => 'decimal:2',
+        'tardiness_minutes' => 'integer',
+        'undertime_minutes' => 'integer',
+        'is_rest_day' => 'boolean',
+        'day_type_rate' => 'decimal:2',
+        'status' => AttendanceStatus::class,
+        'is_manual_entry' => 'boolean',
     ];
+
+    public function punches(): HasMany
+    {
+        return $this->hasMany(AttendancePunch::class);
+    }
 
     public function employee(): BelongsTo
     {

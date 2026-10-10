@@ -14,7 +14,8 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Tests\Support\ReceivesProductionOutput;
+use Tests\Support\HasDeliveryStock;
+use Tests\Support\PreparesDeliveryShipment;
 use Tests\TestCase;
 
 /**
@@ -26,7 +27,8 @@ use Tests\TestCase;
  */
 class DriverDeliveryTest extends TestCase
 {
-    use ReceivesProductionOutput;
+    use HasDeliveryStock;
+    use PreparesDeliveryShipment;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -62,10 +64,35 @@ class DriverDeliveryTest extends TestCase
             'capacity_kg' => '1000.00',
             'status' => 'available',
         ]);
-        [$delivery] = $this->dispatchableDelivery($driver, '3.00');
+        [$delivery] = $this->deliveryWithApprovedStock($driver);
         $delivery->forceFill([
-            'driver_id' => $driver->id, 'vehicle_id' => $vehicle->id, 'status' => $status,
+            'driver_id' => $driver->id,
+            'vehicle_id' => $vehicle->id,
+            'scheduled_date' => now()->toDateString(),
         ])->save();
+
+        $this->prepareShipmentForDispatch($delivery);
+
+        if (in_array($status, ['confirmed', 'cancelled'], true)) {
+            $delivery->forceFill(['status' => $status])->save();
+
+            return $delivery->fresh();
+        }
+
+        $steps = match ($status) {
+            'scheduled' => [],
+            'loading' => ['loading'],
+            'in_transit' => ['loading', 'in_transit'],
+            'delivered' => ['loading', 'in_transit', 'delivered'],
+            default => throw new \InvalidArgumentException("Unsupported delivery fixture status {$status}."),
+        };
+        foreach ($steps as $step) {
+            if ($step === 'delivered') $this->attachDeliveryEvidence($delivery);
+            $this->actingAs($driver)
+                ->patchJson("/api/v1/driver/deliveries/{$delivery->hash_id}/status", ['status' => $step])
+                ->assertOk()
+                ->assertJsonPath('data.status', $step);
+        }
 
         return $delivery->fresh();
     }
@@ -126,6 +153,7 @@ class DriverDeliveryTest extends TestCase
     {
         $a = $this->driver();
         $d = $this->deliveryFor($a, 'in_transit');
+        $this->attachDeliveryEvidence($d);
 
         $r = $this->actingAs($a)->patchJson("/api/v1/driver/deliveries/{$d->hash_id}/status", [
             'status' => 'delivered',
@@ -173,17 +201,34 @@ class DriverDeliveryTest extends TestCase
         $r->assertStatus(404);
     }
 
-    public function test_receipt_upload(): void
+    public function test_receipt_upload_records_arrival_from_in_transit(): void
     {
         $a = $this->driver();
-        $d = $this->deliveryFor($a, 'delivered');
+        $d = $this->deliveryFor($a, 'in_transit');
 
         $r = $this->actingAs($a)->post("/api/v1/driver/deliveries/{$d->hash_id}/receipt", [
             'photo' => UploadedFile::fake()->image('receipt.jpg', 400, 600),
         ]);
 
         $r->assertOk();
-        $this->assertSame(1, $d->fresh()->proofs()->count());
+        $this->assertSame(1, $d->fresh()->proofs()->where('proof_type', 'photo')->count());
+        $this->assertSame('delivered', $d->fresh()->status->value);
+        $this->assertNotNull($d->fresh()->delivered_at);
+    }
+
+    public function test_other_driver_cannot_upload_receipt_for_an_unassigned_delivery(): void
+    {
+        $assigned = $this->driver();
+        $other = $this->driver();
+        $delivery = $this->deliveryFor($assigned, 'in_transit');
+
+        $this->actingAs($other)->post("/api/v1/driver/deliveries/{$delivery->hash_id}/receipt", [
+            'photo' => UploadedFile::fake()->image('receipt.jpg'),
+        ], ['Accept' => 'application/json'])->assertNotFound();
+
+        $this->assertSame('in_transit', $delivery->fresh()->status->value);
+        $this->assertNull($delivery->fresh()->receipt_photo_path);
+        $this->assertSame(0, $delivery->proofs()->where('proof_type', 'photo')->count());
     }
 
     public function test_unauthenticated_is_401(): void

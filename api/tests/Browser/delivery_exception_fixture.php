@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Failed-delivery acceptance starts with approved output; the browser creates every delivery and return.
+// Failed-delivery acceptance starts with completed output and released process QC; the browser creates each delivery and return.
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
@@ -24,6 +24,13 @@ use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\SupplyChain\Models\Vehicle;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\DemoAccountSeeder;
+use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\PositionSeeder;
+use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 
 $database = (string) config('database.connections.pgsql.database');
 if (! str_starts_with($database, 'ogami_test_dispatch_browser_') || $database !== getenv('DISPATCH_BROWSER_DB')) {
@@ -32,20 +39,36 @@ if (! str_starts_with($database, 'ogami_test_dispatch_browser_') || $database !=
 // Fixture seeding must never populate the shared runtime settings cache.
 config(['cache.default' => 'array']);
 $run = strtoupper(preg_replace('/[^a-z0-9]/i', '', getenv('DISPATCH_RUN_ID') ?: ''));
-if (strlen($run) < 6 || strlen($run) > 16) throw new RuntimeException('Use a unique 6–16 character DISPATCH_RUN_ID.');
-if (Product::where('part_number', 'FG-'.$run)->exists()) throw new RuntimeException('Use a fresh database and run identifier.');
+if (strlen($run) < 6 || strlen($run) > 16) {
+    throw new RuntimeException('Use a unique 6–16 character DISPATCH_RUN_ID.');
+}
+if (Product::where('part_number', 'FG-'.$run)->exists()) {
+    throw new RuntimeException('Use a fresh database and run identifier.');
+}
 foreach ([
-    Database\Seeders\RolePermissionSeeder::class, Database\Seeders\SettingsSeeder::class,
-    Database\Seeders\ChartOfAccountsSeeder::class, Database\Seeders\DepartmentSeeder::class,
-    Database\Seeders\PositionSeeder::class, Database\Seeders\DemoAccountSeeder::class,
-    Database\Seeders\WorkflowSeeder::class,
-] as $seeder) (new $seeder)->run();
+    RolePermissionSeeder::class, SettingsSeeder::class,
+    ChartOfAccountsSeeder::class, DepartmentSeeder::class,
+    PositionSeeder::class, DemoAccountSeeder::class,
+    WorkflowSeeder::class,
+] as $seeder) {
+    (new $seeder)->run();
+}
 foreach (['supply_chain', 'inventory', 'quality', 'b2b', 'return_management'] as $module) {
     app(SettingsService::class)->set('modules.'.$module, true, 'modules');
 }
 $manager = User::where('email', 'production@ogami.test')->firstOrFail();
 $qc = User::where('email', 'qc@ogami.test')->firstOrFail();
+$warehouse = User::where('email', 'warehouse@ogami.test')->firstOrFail();
 $driver = User::where('email', 'driver@ogami.test')->firstOrFail();
+$warehouseChecker = User::factory()->create([
+    'name' => 'Dispatch Warehouse Checker',
+    'email' => 'warehouse-checker@ogami.test',
+    'password' => bcrypt('password'),
+    'role_id' => $warehouse->role_id,
+    'is_active' => true,
+    'must_change_password' => false,
+    'password_changed_at' => now(),
+]);
 $customer = Customer::factory()->create(['name' => 'Dispatch customer '.$run]);
 $portal = CustomerPortalUser::create([
     'customer_id' => $customer->id, 'name' => 'Receiving contact '.$run,
@@ -74,6 +97,21 @@ $workOrder = WorkOrder::create([
     'planned_start' => now()->subDay(), 'planned_end' => now(), 'status' => 'completed',
     'batch_number' => 'WO-BATCH-'.$run, 'created_by' => $manager->id,
 ]);
+$processInspection = Inspection::create([
+    'inspection_number' => 'QC-'.$run.'-PROCESS', 'stage' => 'in_process', 'status' => 'passed',
+    'product_id' => $product->id, 'entity_type' => 'work_order', 'entity_id' => $workOrder->id,
+    'batch_quantity' => 10, 'accepted_quantity' => 10, 'sample_size' => 1,
+    'proposed_result' => 'passed', 'inspector_id' => $qc->id, 'completed_at' => now(),
+]);
+$processInspection->forceFill([
+    'inspected_quantity' => 1, 'sample_defect_count' => 0,
+    'defect_count' => 0, 'recorded_result' => 'passed',
+])->save();
+$processInspection->measurements()->create([
+    'sample_index' => 1, 'parameter_name' => 'In-process visual condition',
+    'parameter_type' => 'visual', 'is_critical' => false, 'is_pass' => true,
+]);
+$processInspection->resultAuthors()->create(['user_id' => $qc->id]);
 $batches = [];
 foreach ([6, 4] as $index => $quantity) {
     $output = WorkOrderOutput::create([
@@ -82,7 +120,9 @@ foreach ([6, 4] as $index => $quantity) {
     ]);
     // Exercise the actual production receipt handoff; never hand-stamp a lot.
     $output = app(WorkOrderOutputService::class)->retryProductionReceipt($output, $manager);
-    if ($output->productionReceiptMovement?->lot_number !== $output->batch_code) throw new RuntimeException('Production receipt lost its batch lot.');
+    if ($output->productionReceiptMovement?->lot_number !== $output->batch_code) {
+        throw new RuntimeException('Production receipt lost its batch lot.');
+    }
     $inspection = Inspection::create([
         'inspection_number' => 'QC-'.$run.'-'.$index, 'stage' => 'outgoing', 'status' => 'passed',
         'inspector_id' => $manager->id, 'reviewed_by' => $qc->id, 'reviewed_at' => now(),
@@ -103,15 +143,19 @@ foreach ([6, 4] as $index => $quantity) {
 }
 $spec = InspectionSpec::create(['product_id' => $product->id, 'version' => 1, 'is_active' => true, 'created_by' => $manager->id]);
 InspectionSpecItem::create(['inspection_spec_id' => $spec->id, 'parameter_name' => 'Return condition', 'parameter_type' => 'visual', 'is_critical' => true, 'sort_order' => 1]);
-$quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+$quarantineZone = WarehouseZone::factory()->create(['warehouse_id' => $locations[0]->zone->warehouse_id, 'zone_type' => 'quarantine']);
 $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id, 'code' => 'TRUCK-RET', 'is_active' => true, 'is_blocked' => false]);
+$stagingZone = WarehouseZone::factory()->create(['warehouse_id' => $locations[0]->zone->warehouse_id, 'zone_type' => 'staging']);
+$staging = WarehouseLocation::factory()->create(['zone_id' => $stagingZone->id, 'code' => 'STAGING-RET', 'is_active' => true, 'is_blocked' => false]);
 $checker = User::factory()->create(['email' => 'qc.checker.dispatch@ogami.test', 'password' => bcrypt('password'), 'role_id' => $qc->role_id, 'is_active' => true, 'must_change_password' => false, 'password_changed_at' => now()]);
 $otherDriver = User::factory()->create(['email' => 'other.driver.dispatch@ogami.test', 'password' => bcrypt('password'), 'role_id' => $driver->role_id, 'is_active' => true, 'must_change_password' => false, 'password_changed_at' => now()]);
 $vehicle = Vehicle::create(['plate_number' => 'DSP-'.$run, 'name' => 'Dispatch audit truck', 'vehicle_type' => 'truck', 'status' => 'available']);
 $fixture = ['run_id' => $run, 'database' => $database, 'sales_order' => $order->hash_id, 'so_number' => $order->so_number, 'line' => $line->hash_id,
     'item' => $item->hash_id, 'product_code' => $product->part_number, 'batches' => $batches,
     'vehicle' => $vehicle->hash_id, 'driver' => $driver->hash_id, 'customer_email' => $portal->email,
-    'location' => $locations[0]->hash_id, 'quarantine' => $quarantine->hash_id, 'checker_email' => $checker->email,
+    'location' => $locations[0]->hash_id, 'staging_location' => $staging->hash_id,
+    'quarantine' => $quarantine->hash_id, 'checker_email' => $checker->email,
+    'warehouse_checker_email' => $warehouseChecker->email,
     'locations' => $locations->map(fn ($location) => ['id' => $location->hash_id, 'code' => $location->full_code])->all()];
 file_put_contents(getenv('DISPATCH_FIXTURE_PATH') ?: '/tmp/dispatch-fixture.json', json_encode($fixture, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 echo "Dispatch prerequisites ready: {$run}.\n";

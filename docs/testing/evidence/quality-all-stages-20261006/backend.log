@@ -1,0 +1,36 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+...............................................................  63 / 401 ( 15%)
+............................................................... 126 / 401 ( 31%)
+............................................................... 189 / 401 ( 47%)
+............................................................... 252 / 401 ( 62%)
+.................................................E............. 315 / 401 ( 78%)
+............................................................... 378 / 401 ( 94%)
+.......................                                         401 / 401 (100%)
+
+Time: 07:21.421, Memory: 137.00 MB
+
+There was 1 error:
+
+1) Tests\Feature\Quality\OutgoingQcIdempotencyTest::test_delayed_completion_event_still_creates_inspection_after_close
+App\Common\Exceptions\BusinessRuleException: This work order is closed. Report a late defect against its final QC record; repair uses a linked recovery work order.
+
+/var/www/app/Modules/Quality/Services/InspectionService.php:600
+/var/www/app/Modules/Quality/Services/InspectionService.php:498
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Services/InspectionService.php:498
+/var/www/app/Modules/Quality/Services/InspectionService.php:467
+/var/www/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:103
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:52
+/var/www/tests/Feature/Quality/OutgoingQcIdempotencyTest.php:376
+
+ERRORS!
+Tests: 401, Assertions: 1721, Errors: 1.

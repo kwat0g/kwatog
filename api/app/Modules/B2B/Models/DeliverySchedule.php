@@ -24,6 +24,7 @@ class DeliverySchedule extends Model
         'vendor_id',
         'purchase_order_id',
         'month',
+        'planned_delivery_date',
         'status',
         'lines',
         'reviewed_by',
@@ -36,6 +37,7 @@ class DeliverySchedule extends Model
 
     protected $casts = [
         'status' => DeliveryScheduleStatus::class,
+        'planned_delivery_date' => 'date',
         'reviewed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'lines' => 'array',

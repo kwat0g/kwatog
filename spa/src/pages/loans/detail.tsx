@@ -169,11 +169,6 @@ export default function LoanDetailPage() {
  ) : (
  <>
  <p className="text-sm text-muted mb-2">{loan.approval_chain_size}-step workflow.</p>
- <p className="text-xs text-muted">
- {loan.loan_type === 'company_loan'
- ? 'Dept Head → Manager → Accounting → VP'
- : 'Dept Head → Accounting → VP'}
- </p>
  <p className="text-xs text-muted mt-2">
  Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
  </p>
@@ -206,7 +201,7 @@ export default function LoanDetailPage() {
  onClose={() => setConfirmApprove(false)}
  onConfirm={() => { approve.mutate(); setConfirmApprove(false); }}
  title="Approve loan request?"
- description="This will approve and disburse the loan."
+ description="This approves your current step. The loan is disbursed after all required approvals."
  confirmLabel="Approve"
  variant="warning"
  pending={approve.isPending}

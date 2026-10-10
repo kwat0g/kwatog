@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -14,7 +13,6 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -55,6 +53,7 @@ class JournalEntryPostRaceTest extends TestCase
     {
         $svc   = app(JournalEntryService::class);
         $maker = $this->admin();
+        $checker = $this->admin();
 
         $je = $svc->create([
             'date'        => '2026-04-15',
@@ -65,37 +64,16 @@ class JournalEntryPostRaceTest extends TestCase
             ],
         ], $maker);
 
-        // A concurrent, already-posted reversal flips the authoritative row
-        // to 'reversed' AFTER the draft model was loaded. The in-memory model
-        // is still Draft, so an unlocked guard cannot see the flip.
-        $replacement = JournalEntry::create([
-            'entry_number' => 'JE-999999-9999',
-            'date' => '2026-04-15',
-            'description' => 'Existing valid reversal',
-            'reference_type' => 'journal_entry_reversal',
-            'reference_id' => $je->id,
-            'total_debit' => '500.00',
-            'total_credit' => '500.00',
-            'status' => JournalEntryStatus::Posted,
-            'posted_at' => now(),
-            'posted_by' => $maker->id,
-        ]);
-        DB::table('journal_entries')->where('id', $je->id)->update([
-            'status' => 'posted',
-            'posted_at' => now(),
-            'posted_by' => $maker->id,
-            'total_debit' => '500.00',
-            'total_credit' => '500.00',
-        ]);
-        DB::table('journal_entries')->where('id', $je->id)->update([
-            'status' => 'reversed',
-            'reversed_by_entry_id' => $replacement->id,
-        ]);
+        // Complete the real Draft → Posted → Reversed path after keeping a
+        // stale Draft model in memory. The next post must inspect the locked row.
+        $staleDraft = JournalEntry::findOrFail($je->id);
+        $posted = $svc->post($je, $checker);
+        $svc->reverse($posted, $checker, null, 'Race fixture reversal.');
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('Only draft entries can be posted.');
 
         // Posting the stale model must fail against the locked authoritative row.
-        $svc->post($je, $this->admin());
+        $svc->post($staleDraft, $this->admin());
     }
 }

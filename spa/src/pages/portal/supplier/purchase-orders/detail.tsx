@@ -6,7 +6,6 @@ import {
   LuCircleCheck,
   LuTruck,
   LuFileDown,
-  LuUpload,
   LuFileText,
   LuSend,
   LuPencil,
@@ -24,14 +23,15 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { FileInput } from '@/components/ui/FileInput';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
-import { formatPeso } from '@/lib/formatNumber';
-import { formatDate } from '@/lib/formatDate';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { formatDate, localIsoDate } from '@/lib/formatDate';
+import { overDispatchedLines, remainingDispatchQuantities } from '@/lib/supplierDispatch';
 import { reportMutationError } from '@/lib/formErrors';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -86,30 +86,25 @@ export default function SupplierPurchaseOrderDetailPage() {
   const queryClient = useQueryClient();
   const [showShipmentForm, setShowShipmentForm] = useState(false);
   const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
-  const [showUploadForm, setShowUploadForm] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [shippedDate, setShippedDate] = useState('');
   const [carrier, setCarrier] = useState('');
   const [estimatedArrival, setEstimatedArrival] = useState('');
   const [shipmentNotes, setShipmentNotes] = useState('');
-
-  const [uploadDocType, setUploadDocType] = useState('');
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadNotes, setUploadNotes] = useState('');
-  const { data: shippingOptions } = useQuery({
-    queryKey: ['portal', 'supplier', 'shipping-document-options'],
-    queryFn: () => supplierPortalApi.shippingDocumentOptions(),
-  });
+  const [shipmentQuantities, setShipmentQuantities] = useState<Record<string, string>>({});
+  const [dispatchPhoto, setDispatchPhoto] = useState<File | null>(null);
+  const [replacementReturnId, setReplacementReturnId] = useState('');
+  const [photoShipmentId, setPhotoShipmentId] = useState<string | null>(null);
+  const [legacyPhoto, setLegacyPhoto] = useState<File | null>(null);
 
   const [billNumber, setBillNumber] = useState('');
   const [billDate, setBillDate] = useState('');
-  const [grnId, setGrnId] = useState('');
+  const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [billRemarks, setBillRemarks] = useState('');
 
   const [acceptOpen, setAcceptOpen] = useState(false);
-  const [acceptDate, setAcceptDate] = useState('');
   const [acceptNotes, setAcceptNotes] = useState('');
   const [declineOpen, setDeclineOpen] = useState(false);
   const [proposeOpen, setProposeOpen] = useState(false);
@@ -131,8 +126,17 @@ export default function SupplierPurchaseOrderDetailPage() {
     queryFn: () => supplierPortalApi.getPo(id!),
     enabled: !!id,
   });
+  const fallbackInvoiceGrn = (po?.invoiceable_bill_portions?.length ?? 0) === 0
+    ? po?.goods_receipt_notes.find((grn) => grn.can_invoice)
+    : undefined;
+  const selectedInvoicePortions = (po?.invoiceable_bill_portions ?? [])
+    .filter((portion) => selectedBillIds.includes(portion.id));
+  const invoiceGrossTotal = selectedBillIds.length > 0 && selectedInvoicePortions.length === selectedBillIds.length
+    ? (selectedInvoicePortions.reduce((sum, portion) => sum + Math.round(Number(portion.gross_total) * 100), 0) / 100).toFixed(2)
+    : '';
+  const draftGrnCount = po?.goods_receipt_notes.filter((grn) => grn.status === 'draft').length ?? 0;
 
-  const { data: shippingDocs, refetch: refetchDocs } = useQuery({
+  const { data: shippingDocs, isError: shippingDocsFailed, refetch: refetchDocs } = useQuery({
     queryKey: ['portal', 'supplier', 'po', id, 'shipping-documents'],
     queryFn: () => supplierPortalApi.listShippingDocuments(id!),
     enabled: !!id,
@@ -161,44 +165,64 @@ export default function SupplierPurchaseOrderDetailPage() {
 
   const shipmentMut = useMutation({
     mutationFn: () => {
+      const editing = po?.shipments.find((shipment) => shipment.id === editingShipmentId);
       const payload = {
-        shipped_date: shippedDate || undefined,
+        shipped_date: editing && shippedDate === (editing.shipped_date ?? '') ? undefined : shippedDate || undefined,
         carrier: carrier.trim() || undefined,
         tracking_number: trackingNumber.trim() || undefined,
-        estimated_arrival: estimatedArrival || undefined,
+        estimated_arrival: editing && estimatedArrival === (editing.estimated_arrival ?? '') ? undefined : estimatedArrival || undefined,
         notes: shipmentNotes.trim() || undefined,
       };
       if (editingShipmentId) {
-        return supplierPortalApi.updateShipmentById(id!, editingShipmentId, payload);
+        return supplierPortalApi.updateShipmentById(id!, editingShipmentId, {
+          ...payload,
+          ...(!editing?.quantity_recorded ? { items: Object.entries(shipmentQuantities)
+            .filter(([, quantity]) => quantity.trim() !== '')
+            .map(([purchase_order_item_id, quantity_shipped]) => ({ purchase_order_item_id, quantity_shipped })) } : {}),
+        });
       } else {
-        return supplierPortalApi.createShipment(id!, payload);
+        const form = new FormData();
+        form.append('shipped_date', shippedDate);
+        form.append('estimated_arrival', estimatedArrival);
+        if (payload.carrier) form.append('carrier', payload.carrier);
+        if (payload.tracking_number) form.append('tracking_number', payload.tracking_number);
+        if (payload.notes) form.append('notes', payload.notes);
+        if (replacementReturnId) form.append('return_request_id', replacementReturnId);
+        Object.entries(shipmentQuantities)
+          .filter(([, quantity]) => quantity.trim() !== '')
+          .forEach(([itemId, quantity], index) => {
+            form.append(`items[${index}][purchase_order_item_id]`, itemId);
+            form.append(`items[${index}][quantity_shipped]`, quantity);
+          });
+        form.append('dispatch_photo', dispatchPhoto!);
+        return supplierPortalApi.createShipment(id!, form);
       }
     },
     onSuccess: () => {
-      toast.success(editingShipmentId ? 'Shipment details updated.' : 'Shipment added.');
+      toast.success(editingShipmentId ? 'Shipment updated.' : 'Shipment added.');
       setShowShipmentForm(false);
       setEditingShipmentId(null);
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id, 'shipping-documents'] });
     },
     onError: (error) => reportMutationError(error, 'Could not save shipment details.'),
   });
 
-  const uploadDocMut = useMutation({
+  const backfillPhotoMut = useMutation({
     mutationFn: () => {
       const form = new FormData();
-      form.append('document_type', uploadDocType);
-      form.append('file', uploadFile!);
-      if (uploadNotes) form.append('notes', uploadNotes);
+      form.append('document_type', 'dispatch_photo');
+      form.append('supplier_shipment_id', photoShipmentId!);
+      form.append('file', legacyPhoto!);
       return supplierPortalApi.uploadShippingDocument(id!, form);
     },
     onSuccess: () => {
-      toast.success('Document uploaded.');
-      setShowUploadForm(false);
-      setUploadFile(null);
-      setUploadNotes('');
-      refetchDocs();
+      toast.success('Dispatch photo attached.');
+      setPhotoShipmentId(null);
+      setLegacyPhoto(null);
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id, 'shipping-documents'] });
     },
-    onError: (error) => reportMutationError(error, 'Could not upload the shipping document.'),
+    onError: (error) => reportMutationError(error, 'Could not attach the dispatch photo.'),
   });
 
   const submitInvoiceMut = useMutation({
@@ -206,7 +230,12 @@ export default function SupplierPurchaseOrderDetailPage() {
       const form = new FormData();
       form.append('bill_number', billNumber);
       form.append('date', billDate);
-      form.append('goods_receipt_note_id', grnId);
+      if (selectedBillIds.length > 0) {
+        selectedBillIds.forEach((billId) => form.append('bill_ids[]', billId));
+        form.append('gross_total', invoiceGrossTotal);
+      } else if (fallbackInvoiceGrn) {
+        form.append('goods_receipt_note_id', fallbackInvoiceGrn.id);
+      }
       if (invoiceFile) form.append('file', invoiceFile);
       if (billRemarks) form.append('remarks', billRemarks);
       return supplierPortalApi.submitInvoice(id!, form);
@@ -216,7 +245,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setShowInvoiceForm(false);
       setBillNumber('');
       setBillDate('');
-      setGrnId('');
+      setSelectedBillIds([]);
       setInvoiceFile(null);
       setBillRemarks('');
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
@@ -241,12 +270,24 @@ export default function SupplierPurchaseOrderDetailPage() {
   const canPropose = po?.capabilities.can_propose ?? false;
   const canDecline = po?.capabilities.can_decline ?? false;
   const canUpdateShipment = po?.capabilities.can_update_shipment ?? false;
+  const canEditAnyShipment = canUpdateShipment && (po?.shipments ?? []).some((shipment) => shipment.can_edit !== false);
   const canUploadDocument = po?.capabilities.can_upload_document ?? false;
   const canSubmitInvoice = po?.capabilities.can_submit_invoice ?? false;
-  const canScheduleDelivery = po?.capabilities.can_schedule_delivery ?? false;
+  const pendingReplacementReturns = po?.supplier_returns?.filter((item) => item.replacement_pending) ?? [];
+  const hasUnquantifiedShipment = po?.shipments.some((shipment) => !shipment.quantity_recorded) ?? false;
+  const editingNeedsQuantities = po?.shipments.some((shipment) => shipment.id === editingShipmentId && !shipment.quantity_recorded) ?? false;
+  const recordingQuantities = !editingShipmentId || editingNeedsQuantities;
+  const remainingByItem = po ? remainingDispatchQuantities(po.shipments, po.items.map((item) => ({
+    id: item.id, quantity: item.quantity_dispatch_limit,
+  }))) : new Map<string, number>();
+  const hasRemainingToDispatch = [...remainingByItem.values()].some((quantity) => quantity > 0);
+  const shipmentWouldBePartial = po?.items.some((item) =>
+    (remainingByItem.get(item.id) ?? 0) > Number(shipmentQuantities[item.id] || 0)) ?? false;
+  const overDispatched = po ? overDispatchedLines(po.shipments, po.items.map((item) => ({
+    id: item.id, quantity: item.quantity_dispatch_limit,
+  }))) : [];
 
   const openAccept = () => {
-    setAcceptDate(po?.expected_delivery_date ?? '');
     setAcceptNotes('');
     setAcceptOpen(true);
   };
@@ -289,38 +330,48 @@ export default function SupplierPurchaseOrderDetailPage() {
     }
     setLineErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    if (items.length === 0) {
-      setProposeError('Change at least one line before sending a proposal.');
+    if (items.length === 0 && (!proposeDeliveryDate || proposeDeliveryDate === po?.expected_delivery_date)) {
+      setProposeError('Change the delivery date or at least one line before sending a proposal.');
       return;
     }
     setProposeError(null);
     respondMut.mutate({
       type: 'propose',
-      proposed_delivery_date: proposeDeliveryDate || undefined,
+      proposed_delivery_date: proposeDeliveryDate !== po?.expected_delivery_date ? proposeDeliveryDate || undefined : undefined,
       notes: proposeNotes.trim() || undefined,
       items,
     });
   };
 
   const openInvoiceForm = () => {
-    // Receipts arrive oldest-first; invoice them in the order they landed.
-    if (!showInvoiceForm) {
-      setGrnId(po?.goods_receipt_notes?.find((grn) => grn.can_invoice)?.id ?? '');
-    }
-    setShowInvoiceForm(!showInvoiceForm);
+    setBillDate(localIsoDate());
+    const first = po?.invoiceable_bill_portions?.[0];
+    setSelectedBillIds(first ? [first.id] : []);
+    setShowInvoiceForm(true);
+  };
+
+  const toggleInvoicePortion = (billId: string) => {
+    const next = selectedBillIds.includes(billId)
+      ? selectedBillIds.filter((id) => id !== billId)
+      : [...selectedBillIds, billId];
+    setSelectedBillIds(next);
   };
 
   const openAddShipmentForm = () => {
-    setShippedDate('');
+    setShippedDate(localIsoDate());
     setCarrier('');
     setTrackingNumber('');
     setEstimatedArrival('');
     setShipmentNotes('');
+    setShipmentQuantities({});
+    setDispatchPhoto(null);
+    setReplacementReturnId(pendingReplacementReturns.length === 1 ? pendingReplacementReturns[0].id : '');
     setEditingShipmentId(null);
     setShowShipmentForm(true);
   };
 
   const openEditShipmentForm = (shipment: PortalShipment) => {
+    setShipmentQuantities({});
     setShippedDate(shipment.shipped_date ?? '');
     setCarrier(shipment.carrier ?? '');
     setTrackingNumber(shipment.tracking_number ?? '');
@@ -393,24 +444,16 @@ export default function SupplierPurchaseOrderDetailPage() {
                   Decline
                 </Button>
               )}
-              {canUpdateShipment && (
+              {canUpdateShipment && hasRemainingToDispatch && (
                 <Button
                   variant="secondary"
                   size="sm"
                   icon={<LuTruck size={14} />}
                   onClick={openAddShipmentForm}
+                  disabled={hasUnquantifiedShipment}
+                  title={hasUnquantifiedShipment ? 'Record quantities on the earlier shipment first' : undefined}
                 >
                   Add shipment
-                </Button>
-              )}
-              {canUploadDocument && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<LuUpload size={14} />}
-                  onClick={() => setShowUploadForm(!showUploadForm)}
-                >
-                  Upload doc
                 </Button>
               )}
               {canSubmitInvoice && (
@@ -421,15 +464,6 @@ export default function SupplierPurchaseOrderDetailPage() {
                   onClick={openInvoiceForm}
                 >
                   Submit invoice
-                </Button>
-              )}
-              {canScheduleDelivery && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => (window.location.href = '/portal/supplier/delivery-schedules')}
-                >
-                  Schedule delivery
                 </Button>
               )}
             </div>
@@ -461,8 +495,7 @@ export default function SupplierPurchaseOrderDetailPage() {
             {(po.status === 'sent' || po.status === 'supplier_proposed') && (
               <Panel>
                 <p className="text-sm text-secondary">
-                  Accept this purchase order to update shipments, upload documents and schedule
-                  deliveries.
+                  Accept this purchase order to report shipments and upload documents.
                 </p>
               </Panel>
             )}
@@ -481,6 +514,11 @@ export default function SupplierPurchaseOrderDetailPage() {
                 </p>
               </Panel>
             )}
+            {canUpdateShipment && (
+              <p className="text-sm text-secondary" aria-label="Supplier fulfillment actions">
+                Add a shipment after dispatch. Include its quantity, expected arrival, and a photo of the dispatched items. OGAMI confirms receipt in a GRN.
+              </p>
+            )}
             <KpiGrid count={5}>
               <StatCard label="Total Amount" value={formatPeso(po.total_amount)} />
               <StatCard
@@ -494,9 +532,9 @@ export default function SupplierPurchaseOrderDetailPage() {
               />
               <StatCard label="Incoterm" value={po.incoterm ?? '—'} />
               <StatCard
-                label="Receipts"
-                value={po.goods_receipt_notes.length}
-                helper="Goods receipts posted"
+                label="Received GRNs"
+                value={po.goods_receipt_notes.length - draftGrnCount}
+                helper={`${draftGrnCount} expected GRN${draftGrnCount === 1 ? '' : 's'}`}
               />
             </KpiGrid>
 
@@ -601,10 +639,43 @@ export default function SupplierPurchaseOrderDetailPage() {
               </Panel>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              {(po.supplier_returns?.length ?? 0) > 0 && (
+                <Panel title="Quality returns" meta={String(po.supplier_returns?.length ?? 0)}>
+                  <p className="mb-3 text-sm text-secondary">OGAMI separated these defective units. Return details and replacement status appear below.</p>
+                  {!canSubmitInvoice && (po.invoiceable_bill_portions?.length ?? 0) > 0 && pendingReplacementReturns.length > 0 && (
+                    <p className="mb-3 text-sm text-secondary">Submit invoice becomes available after the replacement pieces pass QC on a new GRN.</p>
+                  )}
+                  <div className="space-y-3">
+                    {po.supplier_returns?.map((item) => (
+                      <div key={item.rma_number} className="rounded-md border border-subtle p-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1"><strong className="font-mono">{item.rma_number}</strong><Chip variant={chipVariantForStatus(item.status)}>{item.status_label}</Chip><span>{item.items.map((line) => `${line.part_number ?? 'Item'}: ${formatQuantity(line.quantity)} ${line.unit ?? ''}`).join(' · ')}</span></div>
+                        {item.problem && <p className="mt-2">Problem: {item.problem}</p>}
+                        {item.replacement_purchase_order ? (
+                          <p className="mt-2">Ship replacements against {item.replacement_purchase_order.po_number}.</p>
+                        ) : item.replacement_due_date && item.status === 'completed' ? (
+                          <p className="mt-2">{item.replacement_pending
+                            ? `Ship replacements against ${po.po_number} by ${formatDate(item.replacement_due_date)}.`
+                            : 'Replacement received and accepted.'}</p>
+                        ) : null}
+                        {item.defect_photo_name && <Button size="sm" variant="secondary" className="mt-2" onClick={async () => {
+                          try {
+                            const blob = await supplierPortalApi.downloadReturnDefectPhoto(id!, item.id);
+                            downloadBlob(blob, item.defect_photo_name!);
+                          } catch { toast.error('Could not download the defect photo.'); }
+                        }}>Download defect photo</Button>}
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              )}
               <Panel title="Shipments" meta={String(po.shipments?.length ?? 0)} noPadding>
                 {po.shipments && po.shipments.length > 0 ? (
                   <div className="overflow-x-auto">
+                    {hasUnquantifiedShipment && <p role="alert" className="px-4 py-2 text-sm text-warning-fg">Record quantities on earlier shipments before adding another.</p>}
+                    {overDispatched.length > 0 && <p role="alert" className="px-4 py-2 text-sm text-warning-fg">
+                      Recorded dispatch exceeds ordered quantity for {overDispatched.map((line) => po.items.find((item) => item.id === line.id)?.part_number ?? 'PO item').join(', ')}. Confirm with Purchasing before another shipment.
+                    </p>}
                     <table className={tableCls}>
                       <thead>
                         <tr className={theadTrCls}>
@@ -612,12 +683,16 @@ export default function SupplierPurchaseOrderDetailPage() {
                           <Th>Carrier</Th>
                           <Th>Tracking</Th>
                           <Th>ETA</Th>
+                          <Th>Dispatched</Th>
+                          <Th>Dispatch photo</Th>
                           <Th>Updated</Th>
-                          {canUpdateShipment && <Th align="right">Action</Th>}
+                          {canEditAnyShipment && <Th align="right">Action</Th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {po.shipments.map((shipment) => (
+                        {po.shipments.map((shipment) => {
+                          const photo = shippingDocs?.find((doc) => doc.document_type === 'dispatch_photo' && doc.supplier_shipment_id === shipment.id);
+                          return (
                           <tr key={shipment.id} className={trCls}>
                             <Td mono className="text-muted">
                               {shipment.shipped_date ? formatDate(shipment.shipped_date) : '—'}
@@ -630,23 +705,39 @@ export default function SupplierPurchaseOrderDetailPage() {
                               {shipment.estimated_arrival
                                 ? formatDate(shipment.estimated_arrival)
                                 : '—'}
+                              {shipment.late_eta && <div className="text-warning-fg text-xs">At risk: ETA after confirmed date</div>}
+                            </Td>
+                            <Td>{shipment.quantity_recorded ? shipment.items?.map((line) => {
+                              const item = po.items.find((candidate) => candidate.id === line.purchase_order_item_id);
+                              return <div key={line.purchase_order_item_id}>{item?.part_number ?? 'Item'}: {line.quantity_shipped} {item?.unit ?? ''}</div>;
+                            }) : 'Quantity not recorded'}
+                              {shipment.notes && <div className="text-xs text-muted">Reason / notes: {shipment.notes}</div>}
+                              {shipment.return_rma_number && <div className="text-xs text-muted">Replacement for {shipment.return_rma_number}</div>}
+                            </Td>
+                            <Td>
+                              {photo ? <Button variant="ghost" size="sm" onClick={() => void downloadShippingDoc(photo)}>Download photo</Button>
+                                : shippingDocs ? (canUploadDocument
+                                  ? <Button variant="ghost" size="sm" onClick={() => { setPhotoShipmentId(shipment.id); setLegacyPhoto(null); }}>Add photo</Button>
+                                  : <span className="text-muted text-xs">Not attached</span>)
+                                  : <span className="text-muted text-xs">—</span>}
                             </Td>
                             <Td mono className="text-muted text-xs">
                               {shipment.updated_at ? formatDate(shipment.updated_at) : '—'}
                             </Td>
-                            {canUpdateShipment && (
+                            {canEditAnyShipment && (
                               <Td align="right">
-                                <Button
+                                {shipment.can_edit !== false && <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => openEditShipmentForm(shipment)}
                                 >
-                                  Edit
-                                </Button>
+                                  {shipment.quantity_recorded ? 'Edit' : 'Record quantities'}
+                                </Button>}
                               </Td>
                             )}
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -655,10 +746,13 @@ export default function SupplierPurchaseOrderDetailPage() {
                 )}
               </Panel>
 
-              {shippingDocs && shippingDocs.length > 0 && (
-                <Panel title="Shipping Documents" meta={String(shippingDocs.length)}>
+              {shippingDocsFailed && <div role="alert" className="text-sm text-danger-fg">
+                Shipping documents could not be loaded. <Button variant="secondary" size="sm" onClick={() => void refetchDocs()}>Retry documents</Button>
+              </div>}
+              {shippingDocs && shippingDocs.some((doc) => doc.document_type !== 'dispatch_photo' || !doc.supplier_shipment_id) && (
+                <Panel title="Shipping documents" meta={String(shippingDocs.filter((doc) => doc.document_type !== 'dispatch_photo' || !doc.supplier_shipment_id).length)}>
                   <div className="divide-y divide-subtle">
-                    {shippingDocs.map((doc) => (
+                    {shippingDocs.filter((doc) => doc.document_type !== 'dispatch_photo' || !doc.supplier_shipment_id).map((doc) => (
                       <div
                         key={doc.id}
                         className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
@@ -668,7 +762,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                           <div className="min-w-0">
                             <p className="text-xs font-medium truncate">{doc.original_filename}</p>
                             <p className="text-2xs text-muted">
-                              {doc.document_type_label} · {doc.file_size_formatted}
+                              {doc.document_type_label} · {doc.file_size_formatted} · {doc.supplier_shipment_id ? po.shipments.find((shipment) => shipment.id === doc.supplier_shipment_id)?.tracking_number ?? 'Shipment' : 'PO-wide'}
                             </p>
                           </div>
                         </div>
@@ -687,20 +781,54 @@ export default function SupplierPurchaseOrderDetailPage() {
             </div>
 
             {showShipmentForm && canUpdateShipment && (
-              <Panel title={editingShipmentId ? 'Edit shipment' : 'Add shipment'}>
+              <Modal
+                isOpen
+                onClose={() => { if (!shipmentMut.isPending) setShowShipmentForm(false); }}
+                title={editingNeedsQuantities ? 'Record shipment quantities' : editingShipmentId ? 'Edit shipment' : 'Add shipment'}
+                size="xl"
+                closeOnOverlayClick={!shipmentMut.isPending}
+              >
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
+                    if (recordingQuantities) {
+                      const entered = Object.entries(shipmentQuantities).filter(([, quantity]) => quantity.trim() !== '');
+                      if (!entered.some(([, quantity]) => DECIMAL_RE.test(quantity) && Number(quantity) > 0)) {
+                        toast.error('Enter a positive shipped quantity for at least one PO item.');
+                        return;
+                      }
+                      if (entered.some(([itemId, quantity]) => !DECIMAL_RE.test(quantity) || Number(quantity) <= 0
+                        || Math.round(Number(quantity) * 100) > Math.round((remainingByItem.get(itemId) ?? 0) * 100))) {
+                        toast.error('Shipped quantity cannot exceed remaining ordered quantity.');
+                        return;
+                      }
+                      if (shipmentWouldBePartial && !shipmentNotes.trim()) {
+                        toast.error('Enter a reason for the partial shipment.');
+                        return;
+                      }
+                    }
+                    if (!editingShipmentId && !dispatchPhoto) {
+                      toast.error('Add a photo of the dispatched items.');
+                      return;
+                    }
                     shipmentMut.mutate();
                   }}
-                  className="flex flex-col gap-3"
+                  className="flex flex-col gap-4"
                 >
+                  <p className="text-sm text-secondary">Record goods already dispatched. The photo documents this shipment; OGAMI confirms actual receipt separately.</p>
+                  {!editingShipmentId && pendingReplacementReturns.length > 0 && (
+                    <Select label="Shipment purpose" value={replacementReturnId} onChange={(event) => setReplacementReturnId(event.target.value)}>
+                      <option value="">Regular PO delivery</option>
+                      {pendingReplacementReturns.map((item) => <option key={item.id} value={item.id}>Replacement for {item.rma_number}</option>)}
+                    </Select>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <Input
                       label="Shipped date"
                       type="date"
+                      required={!editingShipmentId}
                       value={shippedDate}
-                      onChange={(e) => setShippedDate(e.target.value)}
+                      readOnly
                     />
                     <Input
                       label="Carrier"
@@ -718,22 +846,55 @@ export default function SupplierPurchaseOrderDetailPage() {
                     <Input
                       label="Estimated arrival"
                       type="date"
+                      required={!editingShipmentId}
                       value={estimatedArrival}
                       onChange={(e) => setEstimatedArrival(e.target.value)}
                     />
                   </div>
+                  {recordingQuantities && <div className="space-y-2">
+                    <p className="text-xs text-muted">Record quantity dispatched in the PO unit. OGAMI records receipt separately.</p>
+                    {po.items.map((item) => {
+                      const remaining = Math.max(0, remainingByItem.get(item.id) ?? 0);
+                      const entered = shipmentQuantities[item.id] ?? '';
+                      return <Input
+                        key={item.id}
+                        label={`${item.part_number} · ${item.name} (${item.unit ?? 'units'})`}
+                        aria-label={`Shipped quantity for ${item.part_number}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Shipped quantity"
+                        value={entered}
+                        onChange={(e) => setShipmentQuantities((current) => ({ ...current, [item.id]: e.target.value }))}
+                        pattern="^\d+(\.\d{1,2})?$"
+                        disabled={remaining <= 0}
+                        helper={`Remaining to dispatch: ${formatQuantity(remaining)} ${item.unit ?? 'units'}`}
+                        error={entered && DECIMAL_RE.test(entered) && Math.round(Number(entered) * 100) > Math.round(remaining * 100)
+                          ? `Maximum ${formatQuantity(remaining)} ${item.unit ?? 'units'}` : undefined}
+                      />;
+                    })}
+                  </div>}
+                  {!editingShipmentId && <FileInput
+                    label="Photo of dispatched items"
+                    helper="Required · Take a photo or choose JPG, PNG, or WebP (maximum 10 MB)."
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="environment"
+                    required
+                    onChange={(e) => setDispatchPhoto(e.target.files?.[0] ?? null)}
+                  />}
                   <Textarea
-                    label="Notes (optional)"
+                    label={recordingQuantities && shipmentWouldBePartial ? 'Reason for partial shipment' : 'Notes (optional)'}
                     value={shipmentNotes}
                     onChange={(e) => setShipmentNotes(e.target.value)}
+                    required={recordingQuantities && shipmentWouldBePartial}
                     rows={2}
                     maxLength={500}
                   />
-                  <div className="flex justify-end gap-2 pt-2 border-t border-default">
+                  <ModalFooter>
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
+                      disabled={shipmentMut.isPending}
                       onClick={() => {
                         setShowShipmentForm(false);
                         setEditingShipmentId(null);
@@ -747,150 +908,36 @@ export default function SupplierPurchaseOrderDetailPage() {
                       size="sm"
                       loading={shipmentMut.isPending}
                     >
-                      {editingShipmentId ? 'Save changes' : 'Add shipment'}
+                      {editingNeedsQuantities ? 'Record quantities' : editingShipmentId ? 'Save changes' : 'Add shipment'}
                     </Button>
-                  </div>
+                  </ModalFooter>
                 </form>
-              </Panel>
+              </Modal>
             )}
 
-            {showUploadForm && canUploadDocument && (
-              <Panel title="Upload shipping document">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (uploadFile) uploadDocMut.mutate();
-                  }}
-                  className="flex flex-col gap-3"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Select
-                      label="Document type"
-                      value={uploadDocType}
-                      onChange={(e) => setUploadDocType(e.target.value)}
-                    >
-                      <option value="">— Select —</option>
-                      {(shippingOptions?.document_types ?? []).map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </Select>
-                    <FileInput
-                      label="File"
-                      helper="PDF, JPG, or PNG — max 10MB"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
-                    />
-                  </div>
-                  <Textarea
-                    label="Notes (optional)"
-                    value={uploadNotes}
-                    onChange={(e) => setUploadNotes(e.target.value)}
-                    rows={2}
-                  />
-                  <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowUploadForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={!uploadFile || !uploadDocType}
-                      loading={uploadDocMut.isPending}
-                    >
-                      Upload
-                    </Button>
-                  </div>
-                </form>
-              </Panel>
-            )}
-
-            {showInvoiceForm && canSubmitInvoice && (
-              <Panel title="Submit invoice" meta="Creates a draft bill for AP review">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    submitInvoiceMut.mutate();
-                  }}
-                  className="flex flex-col gap-3"
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input
-                      label="Your invoice #"
-                      required
-                      type="text"
-                      value={billNumber}
-                      onChange={(e) => setBillNumber(e.target.value)}
-                      className="font-mono"
-                    />
-                    <Input
-                      label="Invoice date"
-                      required
-                      type="date"
-                      value={billDate}
-                      onChange={(e) => setBillDate(e.target.value)}
-                    />
-                    <Select
-                      label="Goods receipt note"
-                      required
-                      value={grnId}
-                      onChange={(e) => setGrnId(e.target.value)}
-                    >
-                      <option value="">— Select GRN —</option>
-                      {(po.goods_receipt_notes ?? [])
-                        .filter((g) => g.can_invoice)
-                        .map((grn) => (
-                          <option key={grn.id} value={grn.id}>
-                            {grn.grn_number} · Received{' '}
-                            {grn.received_date ? formatDate(grn.received_date) : '—'}
-                          </option>
-                        ))}
-                    </Select>
-                  </div>
-                  <FileInput
-                    label="Attach invoice file (optional)"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
-                  />
-                  <Textarea
-                    label="Remarks (optional)"
-                    value={billRemarks}
-                    onChange={(e) => setBillRemarks(e.target.value)}
-                    rows={2}
-                  />
-                  <p className="text-2xs text-muted">
-                    Due date follows your payment terms; VAT follows the purchase order.
-                  </p>
-                  <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowInvoiceForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      icon={<LuSend size={14} />}
-                      disabled={!billNumber || !billDate || !grnId}
-                      loading={submitInvoiceMut.isPending}
-                    >
-                      Submit invoice
-                    </Button>
-                  </div>
-                </form>
-              </Panel>
-            )}
+            <Modal
+              isOpen={!!photoShipmentId && canUploadDocument}
+              onClose={() => { if (!backfillPhotoMut.isPending) setPhotoShipmentId(null); }}
+              title="Add dispatch photo"
+              size="md"
+              closeOnOverlayClick={!backfillPhotoMut.isPending}
+            >
+              <form onSubmit={(event) => { event.preventDefault(); if (legacyPhoto) backfillPhotoMut.mutate(); }}>
+                <p className="text-sm text-secondary mb-4">Attach a photo to this earlier shipment. OGAMI records actual receipt separately.</p>
+                <FileInput
+                  label="Photo of dispatched items"
+                  helper="JPG, PNG, or WebP · maximum 10 MB"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  required
+                  onChange={(event) => setLegacyPhoto(event.target.files?.[0] ?? null)}
+                />
+                <ModalFooter>
+                  <Button type="button" variant="secondary" size="sm" disabled={backfillPhotoMut.isPending} onClick={() => setPhotoShipmentId(null)}>Cancel</Button>
+                  <Button type="submit" variant="primary" size="sm" loading={backfillPhotoMut.isPending}>Attach photo</Button>
+                </ModalFooter>
+              </form>
+            </Modal>
 
             <Panel title="Line items" meta={String(po.items?.length ?? 0)} noPadding>
               {po.items && po.items.length > 0 ? (
@@ -1038,6 +1085,99 @@ export default function SupplierPurchaseOrderDetailPage() {
         )}
       </div>
 
+      {po && (
+        <Modal
+          isOpen={showInvoiceForm && canSubmitInvoice}
+          onClose={() => { if (!submitInvoiceMut.isPending) setShowInvoiceForm(false); }}
+          title="Submit invoice"
+          size="lg"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitInvoiceMut.mutate();
+            }}
+            className="flex flex-col gap-3"
+          >
+            <p className="text-sm text-secondary">Send your invoice for {po.po_number} to OGAMI for AP review.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Your invoice #"
+                required
+                type="text"
+                value={billNumber}
+                onChange={(e) => setBillNumber(e.target.value)}
+                className="font-mono"
+              />
+              <Input
+                label="Invoice date"
+                required
+                type="date"
+                value={billDate}
+                readOnly
+              />
+            </div>
+            <div className="rounded-md border border-default p-3 space-y-2">
+              <p className="text-xs font-medium text-primary">Accepted receipt portions</p>
+              {(po.invoiceable_bill_portions ?? []).length === 0 && fallbackInvoiceGrn && (
+                <p className="text-sm">{fallbackInvoiceGrn.grn_number} · AP will stage its accepted receipt bill.</p>
+              )}
+              {(po.invoiceable_bill_portions ?? []).map((portion) => (
+                <label key={portion.id} className="flex items-center gap-3 text-sm">
+                  {po.invoiceable_bill_portions!.length > 1 && (
+                    <input type="checkbox" checked={selectedBillIds.includes(portion.id)}
+                      onChange={() => toggleInvoicePortion(portion.id)} />
+                  )}
+                  <span className="font-mono">{portion.grn_number}</span>
+                  <span className="text-secondary">{formatQuantity(portion.quantity)} pcs</span>
+                  <span className="ml-auto font-mono">{formatPeso(portion.gross_total)}</span>
+                </label>
+              ))}
+            </div>
+            {selectedBillIds.length > 0 && (
+              <Input label="Invoiceable total (before withholding tax)" type="text" readOnly
+                value={formatPeso(invoiceGrossTotal)} className="font-mono tabular-nums"
+                helper="Calculated from selected receipts. If your invoice differs, contact OGAMI before submitting." />
+            )}
+            <FileInput
+              label="Attach invoice file (optional)"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+            />
+            <Textarea
+              label="Remarks (optional)"
+              value={billRemarks}
+              onChange={(e) => setBillRemarks(e.target.value)}
+              rows={2}
+            />
+            <p className="text-2xs text-muted">
+              Due date follows your payment terms; VAT follows the purchase order.
+            </p>
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={submitInvoiceMut.isPending}
+                onClick={() => setShowInvoiceForm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                icon={<LuSend size={14} />}
+                disabled={!billNumber || !billDate || (selectedBillIds.length > 0 ? !invoiceGrossTotal : !fallbackInvoiceGrn)}
+                loading={submitInvoiceMut.isPending}
+              >
+                Submit invoice
+              </Button>
+            </ModalFooter>
+          </form>
+        </Modal>
+      )}
+
       <Modal
         isOpen={acceptOpen}
         onClose={() => (respondMut.isPending ? undefined : setAcceptOpen(false))}
@@ -1046,16 +1186,12 @@ export default function SupplierPurchaseOrderDetailPage() {
       >
         <div className="space-y-4 py-2">
           <p className="text-sm text-secondary">
-            Accepting confirms the order as written. You may optionally confirm a delivery date and
-            add notes.
+            Accepting confirms the order as written, including its required delivery date. To request
+            another date, use Propose changes.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Confirmed delivery date (optional)"
-              type="date"
-              value={acceptDate}
-              onChange={(e) => setAcceptDate(e.target.value)}
-            />
+          <div className="text-sm">
+            <span className="text-muted">Required delivery date</span>
+            <div className="font-medium">{po?.expected_delivery_date ? formatDate(po.expected_delivery_date) : '—'}</div>
           </div>
           <Textarea
             label="Notes (optional)"
@@ -1083,7 +1219,6 @@ export default function SupplierPurchaseOrderDetailPage() {
             onClick={() =>
               respondMut.mutate({
                 type: 'accept',
-                proposed_delivery_date: acceptDate || undefined,
                 notes: acceptNotes.trim() || undefined,
               })
             }
@@ -1101,9 +1236,18 @@ export default function SupplierPurchaseOrderDetailPage() {
       >
         <div className="space-y-4 py-2">
           <p className="text-sm text-secondary">
-            Edit the lines you want to change. Only changed lines are sent. A reason is required for
-            each.
+            Change the delivery date, order lines, or both. Only changed lines are sent. Explain each
+            line change.
           </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Proposed delivery date (optional)"
+              helper="Change this date if you cannot meet the required delivery date."
+              type="date"
+              value={proposeDeliveryDate}
+              onChange={(e) => setProposeDeliveryDate(e.target.value)}
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className={tableCls}>
               <thead>
@@ -1192,14 +1336,6 @@ export default function SupplierPurchaseOrderDetailPage() {
             </table>
           </div>
           {proposeError && <p className="text-sm text-danger-fg">{proposeError}</p>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Proposed delivery date (optional)"
-              type="date"
-              value={proposeDeliveryDate}
-              onChange={(e) => setProposeDeliveryDate(e.target.value)}
-            />
-          </div>
           <Textarea
             label="Notes (optional)"
             value={proposeNotes}

@@ -26,6 +26,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use Tests\Support\HasPassedInProcessQc;
 
 /**
  * L-7 — Auto-delivery draft must inherit unit_price from the SO item, not '0.00'.
@@ -38,6 +39,7 @@ use Tests\TestCase;
 class CreateDeliveryDraftOnQcPassTest extends TestCase
 {
     use RefreshDatabase;
+    use HasPassedInProcessQc;
 
     protected function setUp(): void
     {
@@ -68,6 +70,154 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         );
         $this->assertSame('10.000', (string) $item->quantity);
         $this->assertSame($inspection->id, $item->inspection_id);
+        $this->assertSame('transit', $delivery->cost_recognition_mode->value);
+        $this->assertEquals(10, $delivery->stockReservations()->sum('quantity'));
+    }
+
+    public function test_sorted_failed_output_drafts_only_checked_good_quantity_once(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $inspection->forceFill(['status' => 'failed', 'accepted_quantity' => 9])->save();
+        $sorter = User::factory()->create();
+        $approver = User::factory()->create();
+        \App\Modules\Quality\Models\NonConformanceReport::create([
+            'ncr_number' => 'NCR-SORT-DRAFT', 'source' => 'inspection_fail', 'severity' => 'high', 'status' => 'in_progress',
+            'inspection_id' => $inspection->id, 'product_id' => $inspection->product_id,
+            'affected_quantity' => 1, 'defect_description' => 'One rejected piece.', 'disposition' => 'scrap',
+            'created_by' => $sorter->id,
+        ])->forceFill(['sorting_approved_at' => now(), 'sorting_evidence_reference' => 'SORT-10',
+            'sorting_inspected_quantity' => 10, 'sorting_approved_by' => $approver->id, 'sorting_performed_by' => $sorter->id,
+            'mrb_accepted_quantity' => 9])->save();
+        $listener = new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class));
+        $event = new \App\Modules\Quality\Events\OutgoingQuantityReleased($inspection);
+        $listener->handle($event);
+        $listener->handle($event);
+        $this->assertSame(1, Delivery::where('sales_order_id', $wo->sales_order_id)->count());
+        $this->assertSame('9.000', DeliveryItem::where('inspection_id', $inspection->id)->firstOrFail()->quantity);
+        $this->assertSame(InspectionStatus::Failed, $inspection->fresh()->status);
+    }
+
+    public function test_repaired_pass_recovers_unallocated_original_release_into_the_same_draft(): void
+    {
+        [$wo, $original] = $this->arrange(unitPrice: '75.00');
+        $original->forceFill(['status' => 'failed', 'accepted_quantity' => 8])->save();
+        $sorter = User::factory()->create();
+        $approver = User::factory()->create();
+        \App\Modules\Quality\Models\NonConformanceReport::create([
+            'ncr_number' => 'NCR-REPAIRED-DRAFT', 'source' => 'inspection_fail', 'severity' => 'high', 'status' => 'closed',
+            'inspection_id' => $original->id, 'product_id' => $original->product_id,
+            'affected_quantity' => 2, 'defect_description' => 'Two repaired pieces.', 'disposition' => 'rework',
+            'created_by' => $sorter->id,
+        ])->forceFill(['sorting_approved_at' => now(), 'sorting_evidence_reference' => 'BOX-1',
+            'sorting_inspected_quantity' => 10, 'sorting_approved_by' => $approver->id, 'sorting_performed_by' => $sorter->id,
+            'mrb_accepted_quantity' => 8])->save();
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $wo->id, 'recorded_by' => $wo->created_by, 'recorded_at' => now(),
+            'good_count' => 2, 'reject_count' => 0, 'batch_code' => 'L7-REPAIR-002',
+        ]);
+        $this->receipt($output, $wo);
+        $repaired = $original->replicate();
+        $repaired->forceFill(['inspection_number' => 'QC-REPAIR-DRAFT', 'work_order_output_id' => $output->id,
+            'batch_quantity' => 2, 'sample_size' => 2, 'accepted_quantity' => 2, 'status' => 'passed'])->save();
+        $draft = Delivery::create([
+            'delivery_number' => 'DR-REPAIR-DRAFT', 'sales_order_id' => $wo->sales_order_id,
+            'status' => 'scheduled', 'scheduled_date' => now()->addDay()->toDateString(),
+            'created_by' => $wo->created_by, 'notes' => "Auto-drafted from WO {$wo->wo_number} on outgoing QC pass.",
+        ]);
+        DeliveryItem::create(['delivery_id' => $draft->id, 'sales_order_item_id' => $wo->sales_order_item_id,
+            'inspection_id' => $repaired->id, 'quantity' => 2, 'unit_price' => '75.00']);
+
+        $listener = new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class));
+        $listener->handle(new InspectionPassed($repaired));
+        $listener->handle(new InspectionPassed($repaired));
+
+        $this->assertSame(1, Delivery::where('sales_order_id', $wo->sales_order_id)->count());
+        $this->assertSame(2, $draft->items()->count());
+        $this->assertEquals(10, $draft->items()->sum('quantity'));
+        $this->assertEquals(10, $draft->stockReservations()->sum('quantity'));
+        $this->assertSame(2, $draft->stockReservations()->count());
+        $this->assertSame('8.000', $draft->items()->where('inspection_id', $original->id)->firstOrFail()->quantity);
+        $this->assertSame(InspectionStatus::Failed, $original->fresh()->status);
+    }
+
+    public function test_later_output_extends_reserved_draft_without_duplicating_existing_holds(): void
+    {
+        [$wo, $original] = $this->arrange(unitPrice: '75.00');
+        $original->forceFill(['accepted_quantity' => 8])->save();
+        $listener = new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class));
+        $listener->handle(new InspectionPassed($original));
+        $draft = Delivery::where('sales_order_id', $wo->sales_order_id)->firstOrFail();
+        $hold = $draft->stockReservations()->firstOrFail();
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $wo->id, 'recorded_by' => $wo->created_by, 'recorded_at' => now(),
+            'good_count' => 2, 'reject_count' => 0, 'batch_code' => 'L7-LATER-002',
+        ]);
+        $this->receipt($output, $wo);
+        $later = $original->replicate();
+        $later->forceFill(['inspection_number' => 'QC-LATER-DRAFT', 'work_order_output_id' => $output->id,
+            'batch_quantity' => 2, 'sample_size' => 2, 'accepted_quantity' => 2])->save();
+        $listener->handle(new InspectionPassed($later));
+        $listener->handle(new InspectionPassed($later));
+        $this->assertSame(1, Delivery::where('sales_order_id', $wo->sales_order_id)->count());
+        $this->assertEquals(10, $draft->stockReservations()->sum('quantity'));
+        $this->assertSame(2, $draft->stockReservations()->count());
+        $this->assertSame('8.000', $hold->fresh()->quantity);
+    }
+
+    public function test_assignment_recovers_stock_automatically_and_retries_without_duplicate_holds(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $draft = Delivery::create(['delivery_number' => 'DR-ASSIGN-RECOVERY', 'sales_order_id' => $wo->sales_order_id,
+            'status' => 'scheduled', 'scheduled_date' => now()->addDay()->toDateString(), 'created_by' => $wo->created_by]);
+        DeliveryItem::create(['delivery_id' => $draft->id, 'sales_order_item_id' => $wo->sales_order_item_id,
+            'inspection_id' => $inspection->id, 'quantity' => 10, 'unit_price' => '75.00']);
+        $driver = User::factory()->create(['role_id' => Role::where('slug', 'driver')->firstOrFail()->id, 'is_active' => true]);
+        $vehicle = \App\Modules\SupplyChain\Models\Vehicle::create(['name' => 'Recovery truck', 'plate_number' => 'REC-001',
+            'vehicle_type' => 'truck', 'status' => 'available']);
+        $service = app(\App\Modules\SupplyChain\Services\DeliveryService::class);
+        $payload = ['driver_id' => $driver->id, 'vehicle_id' => $vehicle->id, 'reason' => 'Initial assignment.'];
+        $actor = User::findOrFail($wo->created_by);
+        $service->assign($draft, $payload, $actor);
+        $service->assign($draft, $payload, $actor);
+        $this->assertEquals(10, $draft->stockReservations()->sum('quantity'));
+        $this->assertSame(1, $draft->stockReservations()->count());
+        $this->assertSame($driver->id, $draft->fresh()->driver_id);
+        $this->assertSame('legacy', $draft->fresh()->cost_recognition_mode->value);
+    }
+
+    public function test_pick_guidance_counts_all_own_lot_holds_in_a_shared_bin(): void
+    {
+        [$wo, $original] = $this->arrange(unitPrice: '75.00');
+        $original->forceFill(['accepted_quantity' => 8])->save();
+        $firstReceipt = $original->workOrderOutput->productionReceiptMovement;
+        $firstReceipt->update(['quantity' => 8]);
+        $output = WorkOrderOutput::create(['work_order_id' => $wo->id, 'recorded_by' => $wo->created_by,
+            'recorded_at' => now(), 'good_count' => 2, 'reject_count' => 0, 'batch_code' => 'SHARED-REPAIR']);
+        $receipt = $firstReceipt->replicate();
+        $receipt->forceFill(['quantity' => 2, 'total_cost' => 100, 'lot_number' => $output->batch_code, 'reference_id' => $output->id])->save();
+        $output->update(['production_receipt_movement_id' => $receipt->id, 'production_receipt_handoff_status' => 'generated']);
+        $repair = $original->replicate();
+        $repair->forceFill(['inspection_number' => 'QC-SHARED-REPAIR', 'work_order_output_id' => $output->id,
+            'batch_quantity' => 2, 'sample_size' => 2, 'accepted_quantity' => 2])->save();
+        (new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class)))->handle(new InspectionPassed($repair));
+        $draft = Delivery::where('sales_order_id', $wo->sales_order_id)->firstOrFail();
+        $guidance = app(\App\Modules\SupplyChain\Services\DeliveryService::class)->show($draft)->preparation;
+        $this->assertSame(['0.000', '0.000'], $guidance->pluck('shortage')->all());
+        $this->assertSame([null, null], $guidance->pluck('message')->all());
+    }
+
+    public function test_missing_receipt_rolls_back_automatic_draft_and_lines(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $inspection->workOrderOutput->update(['production_receipt_movement_id' => null]);
+        try {
+            (new CreateDeliveryDraftOnQcPass(app(DocumentSequenceService::class)))->handle(new InspectionPassed($inspection));
+            $this->fail('Unbacked stock must not be reserved.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('traceable finished-goods receipt', $error->getMessage());
+        }
+        $this->assertSame(0, Delivery::count());
+        $this->assertSame(0, DeliveryItem::count());
     }
 
     public function test_auto_draft_does_not_bypass_sales_order_remaining_quantity(): void
@@ -145,6 +295,28 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         $this->assertSame(0, Delivery::query()->where('sales_order_id', $wo->sales_order_id)->count());
     }
 
+    private function receipt(WorkOrderOutput $output, WorkOrder $wo): void
+    {
+        $product = $wo->product;
+        $item = \App\Modules\Inventory\Models\Item::query()->where('code', $product->part_number)->first();
+        if (! $item) {
+            $item = \App\Modules\Inventory\Models\Item::factory()->create(['code' => $product->part_number, 'item_type' => 'finished_good']);
+        }
+        $location = \App\Modules\Inventory\Models\WarehouseLocation::factory()->create([
+            'zone_id' => \App\Modules\Inventory\Models\WarehouseZone::factory()->create(['zone_type' => 'finished_goods'])->id,
+        ]);
+        \App\Modules\Inventory\Models\StockLevel::factory()->create([
+            'item_id' => $item->id, 'location_id' => $location->id, 'quantity' => $output->good_count, 'weighted_avg_cost' => 50,
+        ]);
+        $receipt = \App\Modules\Inventory\Models\StockMovement::create([
+            'item_id' => $item->id, 'to_location_id' => $location->id, 'movement_type' => 'production_receipt',
+            'quantity' => $output->good_count, 'unit_cost' => 50, 'total_cost' => 50 * $output->good_count,
+            'lot_number' => $output->batch_code, 'reference_type' => 'work_order_output', 'reference_id' => $output->id,
+            'created_by' => $wo->created_by, 'gl_handoff_status' => 'generated',
+        ]);
+        $output->update(['production_receipt_movement_id' => $receipt->id, 'production_receipt_handoff_status' => 'generated']);
+    }
+
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
     /**
@@ -208,6 +380,7 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             'status' => 'completed',
             'created_by' => $user->id,
         ]);
+        $this->passInProcessQc($wo);
 
         $output = WorkOrderOutput::create([
             'work_order_id' => $wo->id,
@@ -217,6 +390,8 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             'reject_count' => 0,
             'batch_code' => 'L7-BATCH-001',
         ]);
+
+        $this->receipt($output, $wo);
 
         $inspection = Inspection::create([
             'inspection_number' => 'QC-L7-'.substr(uniqid(), -8),

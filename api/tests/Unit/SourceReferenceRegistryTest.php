@@ -27,7 +27,7 @@ final class SourceReferenceRegistryTest extends TestCase
 
     public function test_legacy_period_depreciation_reference_may_remain_unkeyed(): void
     {
+        self::assertSame(['model' => null, 'nullable_id' => true], SourceReferenceRegistry::types()['asset_depreciation']);
         SourceReferenceRegistry::assertValid('asset_depreciation', null);
-        self::assertTrue(true);
     }
 }

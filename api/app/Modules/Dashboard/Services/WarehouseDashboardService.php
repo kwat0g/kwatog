@@ -206,22 +206,26 @@ class WarehouseDashboardService
     }
 
     /**
-     * Zone occupancy grouped by zone.
+     * Zone occupancy grouped by warehouse and zone.
      *
-     * @return array<int, array{zone: string, name: string, occupied: int, total: int, percent: int}>
+     * @return array<int, array{warehouse_code: string, warehouse_name: string, zone: string, name: string, occupied: int, total: int, percent: int}>
      */
     private function warehouseZoneUtilization(): array
     {
-        if (! Schema::hasTable('warehouse_locations') || ! Schema::hasTable('warehouse_zones')) {
+        if (! Schema::hasTable('warehouse_locations') || ! Schema::hasTable('warehouse_zones') || ! Schema::hasTable('warehouses')) {
             return [];
         }
 
         return DB::table('warehouse_locations as wl')
             ->join('warehouse_zones as wz', 'wz.id', '=', 'wl.zone_id')
+            ->join('warehouses as wh', 'wh.id', '=', 'wz.warehouse_id')
             ->where('wl.is_active', true)
-            ->groupBy('wz.id', 'wz.code', 'wz.name')
+            ->groupBy('wz.id', 'wh.code', 'wh.name', 'wz.code', 'wz.name')
+            ->orderBy('wh.code')
             ->orderBy('wz.code')
             ->select(
+                'wh.code as warehouse_code',
+                'wh.name as warehouse_name',
                 'wz.code as zone',
                 'wz.name as name',
                 DB::raw('COUNT(*) as total'),
@@ -229,6 +233,8 @@ class WarehouseDashboardService
             )
             ->get()
             ->map(fn ($r) => [
+                'warehouse_code' => $r->warehouse_code,
+                'warehouse_name' => $r->warehouse_name,
                 'zone' => $r->zone,
                 'name' => $r->name,
                 'occupied' => (int) $r->occupied,

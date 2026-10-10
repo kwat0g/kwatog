@@ -18,6 +18,8 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
+use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
@@ -781,7 +783,11 @@ class ReturnRequestScenarioTest extends TestCase
         $item  = $this->finishedGoodItem($product);
         $zone  = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
-        $destination = WarehouseLocation::factory()->create();
+        $targetZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $zone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $destination = WarehouseLocation::factory()->create(['zone_id' => $targetZone->id]);
         $rma   = $this->inspectedRma($admin, $this->customer(), p: $product, item: $item);
         $this->attachSalesOrderSource($rma, $admin, $product, $item);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
@@ -798,17 +804,52 @@ class ReturnRequestScenarioTest extends TestCase
             'location_id' => $destination->hash_id,
         ])->assertOk();
 
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $line->id)->firstOrFail();
+        $this->assertSame('held', $mrb->status->value);
+        $this->assertSame('0.000', (string) $line->fresh()->stock_movement_quantity);
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $loc->id)->value('quantity'));
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete", [])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Every customer-return restock or rework line needs a completed MRB disposition before the RMA can complete.');
+        $this->assertSame('inspected', $rma->fresh()->status->value);
+        $this->assertNull($mrb->fresh()->release_movement_id);
+
+        $reviewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+            'is_active' => true,
+        ]);
+        $this->actingAs($reviewer)
+            ->postJson("/api/v1/inventory/mrb/{$mrb->hash_id}/release", [
+                'disposition' => 'use_as_is',
+                'target_location_id' => $destination->hash_id,
+                'inspected_quantity' => '8.000',
+                'evidence_reference' => 'RETURN-SCENARIO-REINSPECTION',
+                'recovery_passed' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'released');
+
+        $this->assertSame('8.000', (string) $line->fresh()->stock_movement_quantity);
+        $this->assertSame('0.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $loc->id)->value('quantity'));
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $item->id)->where('location_id', $destination->id)->value('quantity'));
+
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/complete", [
                 'location_id' => $loc->hash_id,
             ])
             ->assertOk();
 
-        $this->assertSame('8.000', StockMovement::query()
-            ->where('reference_type', 'return_request')
-            ->where('reference_id', $rma->id)
+        $this->assertSame('completed', $rma->fresh()->status->value);
+        $this->assertSame($mrb->fresh()->release_movement_id, StockMovement::query()
+            ->where('reference_type', 'material_review_record')
+            ->where('reference_id', $mrb->id)
             ->where('movement_type', StockMovementType::Transfer->value)
-            ->value('quantity'));
+            ->value('id'));
     }
 
     /* ───────────────── Terminal transitions ───────────────── */

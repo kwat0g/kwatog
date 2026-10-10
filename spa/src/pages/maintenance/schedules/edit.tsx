@@ -20,6 +20,7 @@ const schema = z.object({
  description: z.string().min(1).max(200),
  interval_type: z.string().min(1, 'Interval type required'),
  interval_value: z.coerce.number().int().min(1),
+ estimated_duration_minutes: z.coerce.number().int().min(15).max(480),
  is_active: z.string(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -42,6 +43,7 @@ export default function EditMaintenanceSchedulePage() {
  description: data.description,
  interval_type: data.interval_type,
  interval_value: data.interval_value,
+ estimated_duration_minutes: data.estimated_duration_minutes,
  is_active: data.is_active ? 'true' : 'false',
  } : undefined,
  });
@@ -77,7 +79,7 @@ export default function EditMaintenanceSchedulePage() {
  backLabel="Schedule"
  />
       <FormDraftBanner safety={safety} />
- <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
+ <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="min-w-0 w-full px-5 py-4">
  <div className="mb-6 p-3 bg-subtle rounded-md text-sm">
  <span className="text-muted text-xs uppercase tracking-wider font-medium mr-2">Target</span>
  <span className="font-mono">{data.maintainable?.code ?? '—'}</span>
@@ -94,6 +96,9 @@ export default function EditMaintenanceSchedulePage() {
  {(options?.interval_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
  <Input label="Interval value" type="number" {...register('interval_value')} error={errors.interval_value?.message} required />
+ </div>
+ <div className="mt-3">
+ <Input label="Estimated duration (minutes)" type="number" min={15} max={480} {...register('estimated_duration_minutes')} error={errors.estimated_duration_minutes?.message} required />
  </div>
  <div className="mt-3">
  <Select label="Status" {...register('is_active')} error={errors.is_active?.message}>

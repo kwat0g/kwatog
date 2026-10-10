@@ -4,21 +4,24 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Modules\Admin\Services\UserAdminService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Requests\BulkProvisionAccountsRequest;
 use App\Modules\HR\Requests\ProvisionAccountRequest;
 use App\Modules\HR\Resources\EmployeeAccountStatusResource;
 use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 /**
  * U1 — system account lifecycle for an employee.
- * Each method delegates to UserProvisioningService and returns a thin shape.
+ * Account mutations reuse the administrator safeguards and audit trail.
  */
 class EmployeeAccountController
 {
     public function __construct(
         private readonly UserProvisioningService $provisioning,
+        private readonly UserAdminService $userAdministration,
     ) {}
 
     public function status(Employee $employee): EmployeeAccountStatusResource
@@ -51,19 +54,24 @@ class EmployeeAccountController
         ], 201);
     }
 
-    public function deactivate(Employee $employee): JsonResponse
+    public function deactivate(Request $request, Employee $employee): JsonResponse
     {
-        $this->provisioning->deactivateForEmployee($employee);
+        $user = $employee->user()->first();
+        if ($user) {
+            $this->userAdministration->deactivate($user, $request->user());
+        }
         return response()->json(null, 204);
     }
 
-    public function resetPassword(Employee $employee): JsonResponse
+    public function resetPassword(Request $request, Employee $employee): JsonResponse
     {
-        $this->provisioning->resetPasswordForEmployee($employee);
+        $user = $employee->user()->first();
+        abort_if(! $user, 404, 'Employee has no system account.');
+        $this->userAdministration->resetPassword($user, $request->user());
         return response()->json([
             'message' => 'Password reset. A notification was queued for the user.',
             'delivery_status' => 'queued',
-            'sent_to' => $employee->user?->email,
+            'sent_to' => $user->email,
         ]);
     }
 

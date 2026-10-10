@@ -59,6 +59,7 @@ $portal = CustomerPortalUser::create([
 $product = Product::factory()->create([
     'part_number' => 'O2C-'.$run, 'name' => 'O2C wiper bushing', 'unit_of_measure' => 'pcs',
     'standard_cost' => '5.00', 'is_active' => true,
+    'portal_visibility' => 'standard',
 ]);
 Item::factory()->create([
     'code' => $product->part_number, 'name' => $product->name, 'item_type' => 'finished_good',
@@ -78,9 +79,9 @@ app(BomService::class)->create($product->id, [
     ['item_id' => $resin->id, 'quantity_per_unit' => '0.0200', 'unit' => 'kg', 'waste_factor' => '0'],
 ]);
 app(InspectionSpecService::class)->upsertForProduct($product->id, [
-    ['parameter_name' => 'Outer diameter', 'parameter_type' => 'dimensional', 'unit_of_measure' => 'mm',
+    ['parameter_name' => 'Outer diameter', 'parameter_type' => 'dimensional', 'acceptance_criterion' => 'Verify outer diameter against the approved drawing.', 'unit_of_measure' => 'mm',
         'nominal_value' => '10.000', 'tolerance_min' => '9.950', 'tolerance_max' => '10.050', 'is_critical' => true],
-    ['parameter_name' => 'Flash / short shot', 'parameter_type' => 'visual', 'is_critical' => false],
+    ['parameter_name' => 'Flash / short shot', 'parameter_type' => 'visual', 'acceptance_criterion' => 'No visible flash or short shot.', 'is_critical' => false],
 ], $admin->id, 'O2C browser spec');
 
 $machine = Machine::factory()->create(['machine_code' => 'MC-'.substr($run, -6), 'name' => 'O2C press', 'status' => 'idle']);

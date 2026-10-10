@@ -186,18 +186,19 @@ class UserAdministrationEscalationTest extends TestCase
         // peer-driven verbs
         $this->actingAs($peer)
             ->patchJson("/api/v1/admin/users/{$lastAdmin->hash_id}/deactivate")
-            ->assertUnprocessable();
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'account_inactive');
         $this->actingAs($peer)->patchJson("/api/v1/admin/users/{$lastAdmin->hash_id}/role", [
             'role_id' => $employeeRole->hash_id,
             'expected_role_id' => $systemRole->hash_id,
             'reason' => 'Peer demotion attempt',
-        ])->assertUnprocessable();
+        ])->assertUnauthorized()->assertJsonPath('code', 'account_inactive');
         $this->actingAs($peer)->patchJson('/api/v1/admin/users/bulk-role', [
             'user_ids' => [$lastAdmin->hash_id],
             'role_id' => $employeeRole->hash_id,
             'reason' => 'Peer bulk demotion attempt',
             'expected_role_ids' => [$lastAdmin->hash_id => $systemRole->hash_id],
-        ])->assertUnprocessable();
+        ])->assertUnauthorized()->assertJsonPath('code', 'account_inactive');
 
         // there is no destroy route, so the module cannot soft-delete the last
         // administrator either. 405 (not 404) proves the URI exists for other

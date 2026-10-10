@@ -62,7 +62,6 @@ class SupplierDeliveryScheduleService
         return PurchaseOrder::query()
             ->where('vendor_id', $vendorId)
             ->whereIn('status', array_map(static fn ($s): string => $s->value, SupplierPoCapabilities::FULFILMENT_STATUSES))
-            ->whereHas('items', static fn ($items) => $items->whereColumn('quantity', '>', 'quantity_received'))
             ->with('items.item:id,code,name,unit_of_measure')
             ->orderBy('po_number')
             ->get()
@@ -73,6 +72,7 @@ class SupplierDeliveryScheduleService
                 return [
                     'id' => $po->hash_id,
                     'po_number' => $po->po_number,
+                    'delivery_deadline' => ($po->confirmed_delivery_date ?? $po->expected_delivery_date)?->toDateString(),
                     'items' => $po->items->map(static fn (PurchaseOrderItem $item): array => [
                         'id' => $item->hash_id,
                         'part_number' => $item->item?->code ?? '—',
@@ -105,6 +105,16 @@ class SupplierDeliveryScheduleService
                 ->firstOrFail();
             SupplierPoCapabilities::assert($po, 'schedule');
 
+            $plannedDate = $data['planned_delivery_date'] ?? null;
+            if ($plannedDate !== null) {
+                $poDeadline = $po->confirmed_delivery_date ?? $po->expected_delivery_date;
+                if (substr($plannedDate, 0, 7) !== $data['month']
+                    || $plannedDate < now()->toDateString()
+                    || ($poDeadline && $plannedDate > $poDeadline->toDateString())) {
+                    throw new BusinessRuleException('Planned delivery date must match the month, be today or later, and not exceed the PO delivery date.');
+                }
+            }
+
             $normalizedLines = $this->normalizeScheduleLines($po, $data['lines']);
 
             // A double-submit of the same plan returns the first row instead of
@@ -116,6 +126,7 @@ class SupplierDeliveryScheduleService
                 ->where('vendor_id', $vendorId)
                 ->where('purchase_order_id', $po->id)
                 ->where('month', $data['month'])
+                ->where('planned_delivery_date', $plannedDate)
                 ->where('status', DeliveryScheduleStatus::Submitted->value)
                 ->get()
                 ->first(static fn (DeliverySchedule $existing): bool => $existing->lines === $normalizedLines);
@@ -128,6 +139,7 @@ class SupplierDeliveryScheduleService
                 'vendor_id' => $vendorId,
                 'purchase_order_id' => $po->id,
                 'month' => $data['month'],
+                'planned_delivery_date' => $plannedDate,
                 'status' => DeliveryScheduleStatus::Submitted->value,
                 'lines' => $normalizedLines,
             ]);

@@ -26,18 +26,21 @@ class SchedulerController
     public function run(RunSchedulerRequest $request): JsonResponse
     {
         $result = $this->service->run($request->input('work_order_ids'));
+
         return response()->json(['data' => $result]);
     }
 
     public function confirm(ConfirmScheduleRequest $request): JsonResponse
     {
         $confirmed = $this->service->confirm(
-            $request->validated()['schedule_ids'],
+            array_column($request->validated()['schedules'], 'schedule_id'),
             $request->user()->id,
+            $request->validated()['schedules'],
         );
+
         return response()->json(['data' => [
             'confirmed_count' => $confirmed->count(),
-            'schedule_ids'    => $confirmed->pluck('hash_id')->all(),
+            'schedule_ids' => $confirmed->pluck('hash_id')->all(),
         ]]);
     }
 
@@ -50,6 +53,7 @@ class SchedulerController
             'priority_order' => ['required', 'integer', 'min:0', 'max:65535'],
         ]);
         $this->service->reorder($schedule->id, (int) $data['priority_order']);
+
         return response()->json(['message' => 'Reordered.']);
     }
 
@@ -59,11 +63,12 @@ class SchedulerController
             return response()->json(['message' => 'Forbidden'], 403);
         }
         $machineId = HashIdFilter::decode($request->input('machine_id'), Machine::class);
-        $moldId    = HashIdFilter::decode($request->input('mold_id'), Mold::class);
+        $moldId = HashIdFilter::decode($request->input('mold_id'), Mold::class);
         if (! $machineId || ! $moldId) {
             return response()->json(['message' => 'Invalid machine_id or mold_id.'], 422);
         }
         $this->service->reassign($schedule->id, $machineId, $moldId);
+
         return response()->json(['message' => 'Reassigned.']);
     }
 
@@ -78,7 +83,8 @@ class SchedulerController
     {
         $from = Carbon::parse($request->query('from', Carbon::today()->toDateString()));
         $horizon = $this->settings->requiredInt('mrp.schedule.default_horizon_days', 0);
-        $to   = Carbon::parse($request->query('to', Carbon::today()->copy()->addDays($horizon)->toDateString()));
+        $to = Carbon::parse($request->query('to', Carbon::today()->copy()->addDays($horizon)->toDateString()));
+
         return response()->json(['data' => $this->service->snapshot($from, $to)]);
     }
 }

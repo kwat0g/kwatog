@@ -55,7 +55,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         app(InspectionSpecService::class)->upsertForProduct($product->id, [
             ['parameter_name' => 'Outer diameter', 'parameter_type' => 'dimensional', 'unit_of_measure' => 'mm',
                 'nominal_value' => '10.000', 'tolerance_min' => '9.950', 'tolerance_max' => '10.050', 'is_critical' => true],
-            ['parameter_name' => 'Flash', 'parameter_type' => 'visual', 'is_critical' => false],
+            ['parameter_name' => 'Flash', 'acceptance_criterion' => 'No visible flash', 'parameter_type' => 'visual', 'is_critical' => false],
         ], $by->id);
 
         return WorkOrder::factory()->create([
@@ -70,6 +70,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
     {
         $user = $this->userWithRole('production_manager');
         $this->actingAs($user);
+        config(['inspection.checklist_capture_enabled' => true]);
         $wo = $this->startedWorkOrder(5000, $user);
 
         app(TriggerInProcessQC::class)->handle(new WorkOrderStatusChanged($wo, 'confirmed', 'in_progress'));
@@ -77,13 +78,13 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'in_process')->firstOrFail();
         $this->assertSame(5000, (int) $inspection->batch_quantity);
         $this->assertSame(5, (int) $inspection->sample_size);
-        // Lot-checklist shape: five measured pieces for the toleranced
-        // parameter plus one checklist row for the visual one — not
-        // `sample_size × parameters`.
+        // Checklist capture records one decision per requirement while
+        // retaining the planned sample quantity for coverage.
+        $this->assertSame('checklist', $inspection->capture_method);
         $this->assertSame(
-            6,
+            2,
             InspectionMeasurement::query()->where('inspection_id', $inspection->id)->count(),
-            '5 measured pieces + 1 checklist row',
+            'One checklist row per requirement',
         );
     }
 

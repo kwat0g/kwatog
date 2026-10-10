@@ -185,7 +185,7 @@ export function Modal({
   {title && (
   <div className="px-5 py-4 border-b border-default bg-surface shrink-0 flex items-center justify-between rounded-t-md">
   <h2 id={titleId} className="text-base font-medium text-primary m-0">{title}</h2>
-  <button onClick={onClose} type="button" className="text-muted hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-accent rounded-sm" aria-label="Close modal">
+  <button onClick={onClose} type="button" className="min-h-11 min-w-11 inline-flex items-center justify-center text-muted hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-accent rounded-sm" aria-label="Close modal">
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
   </button>
   </div>

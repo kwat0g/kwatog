@@ -1,6 +1,6 @@
 import { client } from './client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Asset, AssetCategory, AssetStatus, CreateAssetData, DisposeAssetData, UpdateAssetData, AssociateAssetData } from '@/types/assets';
+import type { Asset, AssetAssociationOption, AssetCategory, AssetStatus, CreateAssetData, DisposeAssetData, UpdateAssetData, AssociateAssetData } from '@/types/assets';
 
 export interface AssetListParams extends ListParams {
  category?: AssetCategory;
@@ -16,7 +16,9 @@ export const assetsApi = {
  client.get<ApiSuccess<Asset>>(`/assets/${id}`).then(r => r.data.data),
  create: (data: CreateAssetData) =>
  client.post<ApiSuccess<Asset>>('/assets', data).then(r => r.data.data),
-  update: (id: string, data: UpdateAssetData) =>
+ associationOptions: (id: string, params?: ListParams) =>
+ client.get<PaginatedResponse<AssetAssociationOption>>(`/assets/${id}/association-options`, { params }).then(r => r.data),
+ update: (id: string, data: UpdateAssetData) =>
   client.put<ApiSuccess<Asset>>(`/assets/${id}`, data).then(r => r.data.data),
   associate: (id: string, data: AssociateAssetData) =>
   client.patch<ApiSuccess<Asset>>(`/assets/${id}/association`, data).then(r => r.data.data),

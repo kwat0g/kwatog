@@ -77,7 +77,7 @@ test.describe('scheduled export creation', () => {
         return;
       }
       if (request.method() !== 'GET') {
-        await route.continue();
+        await route.fallback();
         return;
       }
       await route.fulfill({
@@ -126,6 +126,7 @@ test.describe('scheduled export creation', () => {
   });
 
   test('a create failure surfaces the server field error instead of a silent close', async ({ page }) => {
+    test.info().annotations.push({ type: 'expected-http-response', description: '422 POST /api/v1/scheduled-exports' });
     await page.route('**/api/v1/scheduled-exports*', async (route) => {
       if (route.request().method() === 'POST') {
         await route.fulfill({
@@ -139,7 +140,7 @@ test.describe('scheduled export creation', () => {
         return;
       }
       if (route.request().method() !== 'GET') {
-        await route.continue();
+        await route.fallback();
         return;
       }
       await route.fulfill({ status: 200, contentType: 'application/json', body: listBody([]) });

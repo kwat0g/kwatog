@@ -137,7 +137,7 @@ class PdfRenderService
             'by'      => $generator?->name ?? 'system',
             'by_user' => $generator,
             'at'      => CarbonImmutable::now(),
-            'at_text' => CarbonImmutable::now()->format('M d, Y H:i'),
+            'at_text' => CarbonImmutable::now()->format('M d, Y g:i A'),
         ];
     }
 }

@@ -1,0 +1,37 @@
+PASS Production manager and employee sign in through real UI Four separate cookie sessions
+PASS Employee clocks in before HR shift through GPS punch button Accepted 8:50 AM punches for 9:00 AM shift
+PASS Early clock-in does not allow production before shift [
+  {
+    code: 'presence',
+    message: 'Worker Browser Test: Clocked in, but HR shift hours do not cover this time.'
+  },
+  {
+    code: 'presence',
+    message: 'Support Browser Test: Clocked in, but HR shift hours do not cover this time.'
+  }
+]
+PASS Refresh workers detects clock-in inside HR shift without rescheduling Ready at 9:05 AM for approved 9:15 AM schedule
+PASS Start production through manager UI issues materials once {
+  status: 'in_progress',
+  actual_start: '2026-10-08T09:05:00+08:00',
+  stock: '90.000|0.000'
+}
+PASS Duplicate Start rejected without duplicate stock issue Illegal work-order lifecycle transition: in_progress → in_progress.
+PASS QC inspector completes auto-created in-process PASS checklist In-process PASS becomes final; separate review is required for outgoing/incoming release
+PASS Worker clocks out through UI during active production [
+  { direction: 'in', punched_at: '2026-10-08T08:50:00+08:00' },
+  { direction: 'out', punched_at: '2026-10-08T10:45:00+08:00' }
+]
+PASS Manager and PPC receive staffing notice; WO remains running [ 'Support Browser Test: Worker has clocked out.' ]
+PASS New operation blocked when support worker has clocked out Support Browser Test: Worker has clocked out. Ask Production management to review attendance.
+PASS Manager replaces clocked-out support through mobile Change workers form Backup assigned; old crew retained in history; staffing warning clears
+PASS Clocked-out worker re-enters through actual punch and restores presence { latest_in: '10:47', payroll: '08:50|10:45' }
+PASS Role restrictions reject management access for employee, warehouse, HR and sales [ 'worker', 'warehouse', 'hr', 'sales', 'outsider' ]
+PASS Warehouse Stock Levels page works with warehouse role GET stock-levels 200; page rendered
+PASS Assigned employee sees own WO; unrelated employee cannot retrieve it { assigned: 200, unassigned: 404 }
+PASS No unexpected browser exceptions or API 500 responses []
+{
+  "passed": 16,
+  "failed": 0,
+  "errors": []
+}

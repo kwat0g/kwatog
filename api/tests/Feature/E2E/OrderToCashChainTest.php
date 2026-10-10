@@ -7,17 +7,25 @@ namespace Tests\Feature\E2E;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Collection;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Models\Collection;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStockReservationStatus;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
+use App\Modules\SupplyChain\Models\DeliveryStockReservationBatch;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -27,6 +35,8 @@ use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
@@ -51,11 +61,19 @@ class OrderToCashChainTest extends TestCase
     use RefreshDatabase;
 
     private User $soOfficer;
+
     private User $impex;
+
     private User $finance;
+
     private User $financeChecker;
+
     private User $vp;
+
+    private User $warehouse;
+
     private User $driver;
+
     private User $employee;
 
     protected function setUp(): void
@@ -77,6 +95,7 @@ class OrderToCashChainTest extends TestCase
         $this->finance = $make('finance_officer');
         $this->financeChecker = $make('finance_officer');
         $this->vp = $make('vice_president');
+        $this->warehouse = $make('warehouse_staff');
         $this->driver = $make('driver');
         $this->employee = $make('employee');
 
@@ -129,11 +148,11 @@ class OrderToCashChainTest extends TestCase
     /** SO pricing resolves through an active customer+product price agreement. */
     private function makePriceAgreement(Customer $customer, Product $product, string $price = '100.00'): void
     {
-        \App\Modules\CRM\Models\PriceAgreement::create([
+        PriceAgreement::create([
             'customer_id' => $customer->id,
             'product_id' => $product->id,
             'price' => $price,
-            'pricing_method' => \App\Modules\CRM\Enums\PricingMethod::Flat,
+            'pricing_method' => PricingMethod::Flat,
             'effective_from' => now()->subDay()->toDateString(),
             'effective_to' => now()->addYear()->toDateString(),
         ]);
@@ -196,6 +215,47 @@ class OrderToCashChainTest extends TestCase
      */
     private function deliverAndConfirm(Delivery $delivery): Invoice
     {
+        $line = DeliveryItem::query()->where('delivery_id', $delivery->id)->sole();
+        $this->assertSame(DeliveryStatus::Scheduled, $delivery->status);
+        $this->assertDatabaseMissing('delivery_stock_reservation_batches', ['delivery_id' => $delivery->id]);
+
+        $requestKey = (string) Str::uuid();
+        $this->actingAs($this->employee)
+            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
+                'request_key' => $requestKey,
+            ])
+            ->assertForbidden();
+        $this->assertDatabaseMissing('delivery_stock_reservation_batches', ['delivery_id' => $delivery->id]);
+
+        $reservationResponse = $this->actingAs($this->warehouse)
+            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
+                'request_key' => $requestKey,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', DeliveryStatus::Scheduled->value)
+            ->assertJsonPath('data.stock_reservation_status', DeliveryStockReservationStatus::Reserved->value)
+            ->assertJsonPath('data.can_reserve_stock', false);
+        $batch = DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->sole();
+        $reservation = $batch->reservations()->sole();
+        $this->assertSame($this->warehouse->id, (int) $batch->reserved_by);
+        $this->assertSame(DeliveryStockReservationStatus::Reserved, $batch->status);
+        $this->assertSame($line->id, (int) $reservation->delivery_item_id);
+        $this->assertSame((string) $line->quantity, (string) $reservation->quantity);
+        $stockLevel = StockLevel::query()
+            ->where('item_id', $reservation->item_id)
+            ->where('location_id', $reservation->location_id)
+            ->sole();
+        $this->assertSame((string) $line->quantity, (string) $stockLevel->reserved_quantity);
+
+        $this->actingAs($this->warehouse)
+            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
+                'request_key' => $requestKey,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.stock_reservation_batch_id', $reservationResponse->json('data.stock_reservation_batch_id'));
+        $this->assertSame(1, DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->count());
+        $this->assertSame((string) $line->quantity, (string) $stockLevel->fresh()->reserved_quantity);
+
         $vehicle = Vehicle::create([
             'plate_number' => 'FD-'.substr(uniqid(), -8),
             'name' => 'O2C test van '.substr(uniqid(), -6),
@@ -211,6 +271,10 @@ class OrderToCashChainTest extends TestCase
                 'reason' => 'Scheduled customer run',
             ])
             ->assertOk();
+        $delivery = Delivery::query()->findOrFail($delivery->id);
+        $this->assertSame(DeliveryStatus::Scheduled, $delivery->status);
+        $this->assertSame($vehicle->id, (int) $delivery->vehicle_id);
+        $this->assertSame($this->driver->id, (int) $delivery->driver_id);
 
         foreach (['loading', 'in_transit', 'delivered'] as $status) {
             $this->actingAs($this->impex)
@@ -218,6 +282,43 @@ class OrderToCashChainTest extends TestCase
                     'status' => $status,
                 ])
                 ->assertOk();
+
+            $delivery = Delivery::query()->findOrFail($delivery->id);
+            $this->assertSame($status, $delivery->status->value);
+            $reservation->refresh();
+            $batch->refresh();
+            $stockLevel->refresh();
+
+            if ($status === DeliveryStatus::Loading->value) {
+                $this->assertSame(DeliveryStockReservationStatus::Reserved, $batch->status);
+                $this->assertSame((string) $line->quantity, (string) $stockLevel->reserved_quantity);
+                $this->assertSame('in_use', $vehicle->fresh()->status);
+                $this->assertSame(0, StockMovement::query()
+                    ->where('reference_type', 'delivery_item')
+                    ->where('reference_id', $line->id)
+                    ->where('movement_type', 'delivery')
+                    ->count());
+            } elseif ($status === DeliveryStatus::InTransit->value) {
+                $this->assertSame(DeliveryStockReservationStatus::Consumed, $batch->status);
+                $this->assertSame(DeliveryStockReservationStatus::Consumed, $reservation->status);
+                $this->assertSame((string) $line->quantity, (string) $reservation->consumed_quantity);
+                $this->assertSame('0.000', (string) $stockLevel->quantity);
+                $this->assertSame('0.000', (string) $stockLevel->reserved_quantity);
+                $movement = StockMovement::query()
+                    ->where('reference_type', 'delivery_item')
+                    ->where('reference_id', $line->id)
+                    ->where('movement_type', 'delivery')
+                    ->sole();
+                $this->assertSame((string) $line->quantity, (string) $movement->quantity);
+                $this->assertSame($reservation->lot_number, $movement->lot_number);
+                $this->assertSame($this->impex->id, (int) $movement->created_by);
+                $this->assertSame($movement->id, (int) $reservation->stock_movement_id);
+            } else {
+                $line->refresh();
+                $this->assertSame((string) $line->quantity, (string) $line->customer_received_quantity);
+                $this->assertSame('available', $vehicle->fresh()->status);
+                $this->assertSame('0.000', (string) $stockLevel->quantity);
+            }
         }
         // NOTE: refresh() re-loads every loaded relation by name; the fixture
         // model carries the computed `preparation` payload (not an Eloquent
@@ -230,6 +331,9 @@ class OrderToCashChainTest extends TestCase
         $this->actingAs($this->impex)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/confirm")
             ->assertStatus(422);
+        $this->assertSame(DeliveryStatus::Delivered, Delivery::query()->findOrFail($delivery->id)->status);
+        $this->assertSame(0, DeliveryProof::query()->where('delivery_id', $delivery->id)->count());
+        $this->assertNull(Delivery::query()->findOrFail($delivery->id)->invoice_id);
 
         $this->actingAs($this->impex)
             ->post("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/proofs", [
@@ -238,6 +342,8 @@ class OrderToCashChainTest extends TestCase
                 'notes' => 'Signed by receiver',
             ])
             ->assertSuccessful();
+        $proof = DeliveryProof::query()->where('delivery_id', $delivery->id)->sole();
+        $this->assertSame($this->impex->id, (int) $proof->uploaded_by);
 
         $this->actingAs($this->impex)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/confirm")
@@ -260,10 +366,11 @@ class OrderToCashChainTest extends TestCase
         $this->assertNotNull($invoice->invoice_number, 'finalizing must assign the invoice number');
     }
 
-    private function collect(Invoice $invoice, string $amount, string $idemKey): \Illuminate\Testing\TestResponse
+    private function collect(Invoice $invoice, string $amount, string $idemKey): TestResponse
     {
-        return $this->actingAs($this->finance)
+        return $this->actingAs(User::whereHas('role', fn ($query) => $query->where('slug', 'system_admin'))->firstOrFail())
             ->postJson("/api/v1/invoices/{$invoice->hash_id}/collections", [
+                'manual_reason' => 'Audited partial payment test exception',
                 'cash_account_id' => $this->cashAccount()->hash_id,
                 'collection_date' => now()->toDateString(),
                 'amount' => $amount,
@@ -291,9 +398,8 @@ class OrderToCashChainTest extends TestCase
 
         $this->confirmSo($so);
 
-        // The dispatchable fixture manufactures its own confirmed SO upstream
-        // (produced stock + passed outgoing QC) — the chain's SO is that one.
-        $delivery = $this->dispatchableDelivery($this->impex, '5.00', $this->driver)[0];
+        $delivery = $this->dispatchableDelivery($this->impex, '5.00', salesOrder: $so)[0];
+        $this->assertSame($so->id, $delivery->sales_order_id, 'The delivered order must be the order created and confirmed in this chain.');
         $chainSo = SalesOrder::query()->findOrFail($delivery->sales_order_id);
 
         // -- Wrong time: the status route must refuse jumping to delivered ----
@@ -304,9 +410,24 @@ class OrderToCashChainTest extends TestCase
             ->assertStatus(422);
 
         $invoice = $this->deliverAndConfirm($delivery);
+        $this->actingAs($this->finance)
+            ->getJson("/api/v1/invoices/{$invoice->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.delivery.status', DeliveryStatus::Confirmed->value);
 
-        // -- Invoice math: 5 × 15.00 (fixture SO price), consistent VAT ------
-        $this->assertSame('75.00', (string) $invoice->subtotal);
+        // -- Invoice math must reconcile to the source SO lines --------------
+        $expectedSubtotal = SalesOrderItem::query()
+            ->where('sales_order_id', $so->id)
+            ->get()
+            ->reduce(
+                static fn (string $sum, SalesOrderItem $item): string => bcadd(
+                    $sum,
+                    bcmul((string) $item->quantity, (string) $item->unit_price, 2),
+                    2,
+                ),
+                '0.00',
+            );
+        $this->assertSame($expectedSubtotal, (string) $invoice->subtotal);
         $expectedTotal = (float) $invoice->subtotal + (float) $invoice->vat_amount;
         $this->assertEqualsWithDelta($expectedTotal, (float) $invoice->total_amount, 0.001,
             'total must equal subtotal + VAT');
@@ -374,10 +495,10 @@ class OrderToCashChainTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // 2. DELIVERY GATE — a standard invoice cannot be finalized undelivered
+    // 2. DELIVERY GATE — standard invoices cannot be created before delivery
     // ------------------------------------------------------------------
 
-    public function test_standard_invoice_cannot_be_finalized_without_a_confirmed_delivery(): void
+    public function test_standard_invoice_cannot_be_created_without_a_confirmed_delivery(): void
     {
         $customer = $this->makeCustomer();
         $product = $this->makeProduct();
@@ -385,9 +506,10 @@ class OrderToCashChainTest extends TestCase
         $so = $this->createSo($customer, $product);
         $this->confirmSo($so);
 
-        // Draft invoice with no delivery linkage is allowed…
+        // A confirmed order alone is not enough to create a standard invoice.
         $revenue = Account::query()->where('code', '4010')->firstOrFail();
-        $res = $this->actingAs($this->finance)
+        $invoiceCount = Invoice::query()->count();
+        $this->actingAs($this->finance)
             ->postJson('/api/v1/invoices', [
                 'customer_id' => $customer->hash_id,
                 'date' => now()->toDateString(),
@@ -399,21 +521,12 @@ class OrderToCashChainTest extends TestCase
                     'quantity' => '5.00',
                     'unit_price' => '100.00',
                 ]],
-            ]);
-        $res->assertCreated();
-        $invoice = $this->fromApiId(Invoice::class, $res->json('data.id'));
-        $this->assertSame(InvoiceStatus::Draft->value, $invoice->status->value);
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.');
 
-        // …but finalize is delivery-gated: no confirmed delivered quantity.
-        $this->actingAs($this->finance)
-            ->patchJson("/api/v1/invoices/{$invoice->hash_id}/finalize")
-            ->assertStatus(422);
-        $invoice->refresh();
-        $this->assertSame(InvoiceStatus::Draft->value, $invoice->status->value);
-
-        // And while stuck as a draft, collection is refused too.
-        $this->collect($invoice, '10.00', 'o2c-gate-'.substr(uniqid(), -8))
-            ->assertStatus(422);
+        $this->assertSame($invoiceCount, Invoice::query()->count(), 'a refused invoice must leave no draft behind');
+        $this->assertSame(0, Invoice::query()->where('sales_order_id', $so->id)->count());
     }
 
     // ------------------------------------------------------------------
@@ -427,7 +540,7 @@ class OrderToCashChainTest extends TestCase
         $this->makePriceAgreement($customer, $product);
         $so = $this->createSo($customer, $product, '5.00');
         $this->confirmSo($so);
-        $delivery = $this->dispatchableDelivery($this->impex, '5.00', $this->driver)[0];
+        $delivery = $this->dispatchableDelivery($this->impex, '5.00', salesOrder: $so)[0];
         $invoice = $this->deliverAndConfirm($delivery);
         $this->finalizeInvoice($invoice);
 
@@ -464,7 +577,7 @@ class OrderToCashChainTest extends TestCase
         $this->makePriceAgreement($customer, $product);
         $so = $this->createSo($customer, $product, '5.00');
         $this->confirmSo($so);
-        $delivery = $this->dispatchableDelivery($this->impex, '5.00', $this->driver)[0];
+        $delivery = $this->dispatchableDelivery($this->impex, '5.00', salesOrder: $so)[0];
 
         $this->deliverAndConfirm($delivery);
 
@@ -497,7 +610,7 @@ class OrderToCashChainTest extends TestCase
         $this->makePriceAgreement($customer, $product);
         $so = $this->createSo($customer, $product, '5.00');
         $this->confirmSo($so);
-        $delivery = $this->dispatchableDelivery($this->impex, '5.00', $this->driver)[0];
+        $delivery = $this->dispatchableDelivery($this->impex, '5.00', salesOrder: $so)[0];
 
         // Sales officer cannot move someone else's delivery.
         $this->actingAs($this->soOfficer)

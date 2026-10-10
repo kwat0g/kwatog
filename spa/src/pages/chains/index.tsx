@@ -44,6 +44,8 @@ import { cn } from '@/lib/cn';
 import { useDebounce } from '@/hooks/useDebounce';
 const SO_STATUS_VARIANT: Record<SalesOrderStatus, ChipVariant> = {
   draft: 'neutral',
+  awaiting_confirmation: 'info',
+  delivery_negotiation: 'warning',
   confirmed: 'info',
   in_production: 'info',
   partially_delivered: 'warning',
@@ -127,7 +129,8 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
 
   const results = useQuery({
     queryKey: ['chains', 'so-search', debouncedSearch],
-    queryFn: ({ signal }) => salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }, signal),
+    queryFn: ({ signal }) =>
+      salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }, signal),
     placeholderData: (prev) => prev,
   });
 

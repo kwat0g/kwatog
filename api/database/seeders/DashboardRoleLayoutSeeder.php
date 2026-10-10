@@ -104,10 +104,16 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],
+            'maintenance_supervisor' => [
+                'machine.status', 'maintenance.open_wos', 'maintenance.due_schedules',
+                'assets.under_maintenance', 'approvals.pending',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
+            ],
             'impex_officer' => [
                 'supply.overdue_deliveries', 'supply.delivery_schedule',
                 'purchasing.open_prs', 'purchasing.open_pos',
-                'purchasing.supplier_perf', 'approvals.pending',
+                'approvals.pending',
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],

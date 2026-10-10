@@ -38,7 +38,7 @@
     <tr>
       <th>Inspection Parameter / Characteristic</th>
       <th style="width: 90px;" class="r">Batch Qty</th>
-      <th style="width: 100px;" class="r">Sample Plan</th>
+      <th style="width: 100px;" class="r">{{ ($evidence_method ?? null) === 'confirmed_checks' ? 'Coverage' : 'Sample Plan' }}</th>
       <th style="width: 80px;" class="r">Defects</th>
       <th style="width: 100px;" class="c">Result</th>
     </tr>
@@ -52,7 +52,7 @@
         </div>
       </td>
       <td class="r mono font-semibold">{{ number_format($batch_quantity) }}</td>
-      <td class="r mono">{{ number_format($sample_size) }} @if ($aql_code)<span style="font-size:7.5pt; color:#64748B;">[{{ $aql_code }}]</span>@endif</td>
+      <td class="r mono">@if (($evidence_method ?? null) === 'confirmed_checks') Full batch @else {{ number_format($sample_size) }} @if ($aql_code)<span style="font-size:7.5pt; color:#64748B;">[{{ $aql_code }}]</span>@endif @endif</td>
       <td class="r mono" style="{{ $defect_count > 0 ? 'color:#DC2626; font-weight:bold;' : '' }}">{{ $defect_count }}</td>
       <td class="c">
         @php($__pass = !empty($inspection_passed))
@@ -88,6 +88,52 @@
     @endif
   </tbody>
 </table>
+
+@if (($evidence_method ?? null) === 'confirmed_checks')
+  <p>Confirmed physical coverage: {{ $inspected_quantity ?? $batch_quantity }} pieces. Defective pieces: {{ $defect_count }}. Inspector: {{ $inspector_name ?: '—' }}. Reviewer: {{ $reviewer_name ?: '—' }}.</p>
+  <p>{{ $measurement_disclosure }}</p>
+  @if (!empty($confirmed_requirements))
+    <table class="lines">
+      <thead><tr><th>Requirement</th><th>Target / limits / acceptance reference</th><th class="c">Critical</th></tr></thead>
+      <tbody>
+        @foreach ($confirmed_requirements as $requirement)
+          <tr>
+            <td style="font-weight:bold;">{{ $requirement['parameter'] }}</td>
+            <td>
+              @if ($requirement['nominal'] !== null) Target: {{ $requirement['nominal'] }} {{ $requirement['unit'] }} @endif
+              @if ($requirement['minimum'] !== null || $requirement['maximum'] !== null)
+                @if ($requirement['nominal'] !== null)<br>@endif
+                Limits: {{ $requirement['minimum'] ?? '—' }} to {{ $requirement['maximum'] ?? '—' }} {{ $requirement['unit'] }}
+              @endif
+              @if (trim((string) $requirement['criterion']) !== '')
+                @if ($requirement['nominal'] !== null || $requirement['minimum'] !== null || $requirement['maximum'] !== null)<br>@endif
+                {{ $requirement['criterion'] }}
+              @endif
+            </td>
+            <td class="c">{{ $requirement['critical'] ? 'Yes' : 'No' }}</td>
+          </tr>
+        @endforeach
+      </tbody>
+    </table>
+  @endif
+@elseif (!empty($counted_capture))
+<p>Counted coverage: {{ $inspected_quantity ?? $batch_quantity }} pieces. Defective pieces: {{ $sample_defect_count ?? $defect_count }}. Result: PASS.</p>
+@endif
+@if (($capture_method ?? 'measurement') === 'checklist' && empty($counted_capture))
+  <p>PASS/FAIL checklist, revision {{ $checklist_revision ?? '—' }}. Source: {{ $source_quantity }} {{ $source_uom_code }}.
+    Inspected: {{ $inspected_quantity }} pieces. {{ $inspected_quantity == $batch_quantity ? 'Entire batch inspected.' : 'Planned sample inspected.' }}
+    Inspector: {{ $inspector_name }}. Checker: {{ $reviewer_name }}.</p>
+  <table class="lines"><thead><tr><th>Check</th><th>Acceptance criterion / reference</th><th>Decision</th></tr></thead><tbody>
+  @foreach ($checklist_results as $check)
+    <tr><td>{{ $check['name'] }}</td><td>{{ $check['criterion'] }}
+      @if ($check['nominal'] !== null)<br>Nominal: {{ $check['nominal'] }} {{ $check['unit'] }}@endif
+      @if ($check['minimum'] !== null)<br>Minimum: {{ $check['minimum'] }} {{ $check['unit'] }}@endif
+      @if ($check['maximum'] !== null)<br>Maximum: {{ $check['maximum'] }} {{ $check['unit'] }}@endif
+      @if (($check['measured'] ?? null) !== null)<br>Actual size: {{ $check['measured'] }} {{ $check['unit'] }}@endif
+    </td><td>{{ $check['decision'] }}</td></tr>
+  @endforeach
+  </tbody></table>
+@endif
 
 @if (!empty($critical_measurements) && is_array($critical_measurements))
   <div style="font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:#1E1B4B; margin: 14px 0 6px;">

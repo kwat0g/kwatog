@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Production;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Production\Enums\ProductionLogEvent;
 use App\Modules\Production\Enums\WoOperationStatus;
@@ -13,7 +14,10 @@ use App\Modules\Production\Models\ProductionLog;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WoOperationService;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\HasAssignedProductionCrew;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\TestCase;
 
 /**
@@ -27,6 +31,8 @@ use Tests\TestCase;
  */
 class WoOperationOutputRaceTest extends TestCase
 {
+    use HasAssignedProductionCrew;
+    use HasPassedInProcessQc;
     use RefreshDatabase;
 
     private WoOperationService $svc;
@@ -41,11 +47,16 @@ class WoOperationOutputRaceTest extends TestCase
     {
         $workOrder = WorkOrder::factory()->create([
             'status' => WorkOrderStatus::InProgress->value,
+            'planned_start' => now()->subHour(), 'planned_end' => now()->addHours(8),
         ]);
+        $actor = User::factory()->create();
+        $this->assignProductionCrew($workOrder, $actor);
+        $this->passInProcessQc($workOrder);
 
         return WoOperation::create([
             'work_order_id' => $workOrder->id,
             'sequence' => 1,
+            'operator_id' => $actor->employee_id,
             'operation_name' => 'Injection',
             'status' => WoOperationStatus::InProgress->value,
             'qty_planned' => '100.0000',
@@ -122,10 +133,32 @@ class WoOperationOutputRaceTest extends TestCase
         $this->svc->startSetup($op, Employee::factory()->create());
     }
 
+    public function test_handover_requires_a_current_operator_and_allows_resume_with_replacement(): void
+    {
+        $op = $this->inProgressOperation();
+        $replacement = User::factory()->create();
+        $crew = app(WorkOrderAssignmentService::class)->currentCrew($op->workOrder);
+        $crew->forceFill(['ended_at' => now()])->save();
+        $this->assignProductionCrew($op->workOrder, $replacement);
+
+        try {
+            $this->svc->recordOutput($op, 5);
+            $this->fail('Removed operator must not record output.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('current WO crew', $e->getMessage());
+        }
+        $this->assertSame('0.0000', (string) $op->fresh()->qty_completed);
+        $this->svc->pauseOperation($op);
+        $this->svc->resumeOperation($op->fresh(), $replacement->employee()->firstOrFail());
+        $this->assertSame($replacement->employee_id, $op->fresh()->operator_id);
+        $this->svc->recordOutput($op->fresh(), 5);
+        $this->assertSame('5.0000', (string) $op->fresh()->qty_completed);
+    }
+
     public function test_skipping_an_operation_records_the_operator_and_reason(): void
     {
         $op = $this->inProgressOperation();
-        $operator = Employee::factory()->create();
+        $operator = Employee::query()->findOrFail($op->operator_id);
 
         $this->svc->skipOperation($op, 'Routing step not required for this batch.', $operator);
 

@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "name": "200-piece full count keeps dimensions separate and derives FAIL",
+      "status": "passed",
+      "detail": {
+        "checked": 200,
+        "defects": 1,
+        "result": "failed",
+        "sizeReadings": 5,
+        "storedOutOfLimitReadings": 1,
+        "verification": "SQL confirms five persisted size readings and one failed reading after submission; form is removed on successful submit."
+      }
+    }
+  ],
+  "errors": [],
+  "responses": []
+}

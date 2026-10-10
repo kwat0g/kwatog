@@ -280,6 +280,10 @@ test.describe('leave requests — bulk approve', () => {
   });
 
   test('a committed first half survives the second call failing', async ({ page }) => {
+    test.info().annotations.push({
+      type: 'expected-http-response',
+      description: '500 POST /api/v1/leaves/requests/bulk-approve-hr',
+    });
     // The Critical from review round 1. Both stages are pending and `hr` may
     // approve both, so the dept call goes first and commits — each approveDept
     // is its own DB::transaction server-side. Then the HR call dies at the
@@ -473,6 +477,10 @@ test.describe('items — bulk archive', () => {
   test('a fan-out that partly fails reports the count and still offers an undo', async ({
     page,
   }) => {
+    test.info().annotations.push({
+      type: 'expected-http-response',
+      description: '422 DELETE /api/v1/inventory/items/it3',
+    });
     mockList(page, '**/api/v1/inventory/items*', [
       itemRow(),
       itemRow({ id: 'it2', code: 'RES-PP-002' }),

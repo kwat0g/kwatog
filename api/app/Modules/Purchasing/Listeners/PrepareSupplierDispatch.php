@@ -32,29 +32,23 @@ class PrepareSupplierDispatch implements ShouldQueue
             ]);
 
             $status = $dispatch->status;
-            if ($status === SupplierDispatchStatus::PortalAvailable) {
-                app(ChainListenerRunService::class)->recordOutcome(
-                    'manual_required',
-                    'supplier_portal_confirmation_required',
-                    'The supplier portal has the approved PO; confirm transmission after supplier notification.',
-                );
-                return;
-            }
             if ($status === SupplierDispatchStatus::ManualRequired) {
                 app(ChainListenerRunService::class)->recordOutcome(
                     'manual_required',
                     'supplier_dispatch_manual_transmission_required',
                     (string) ($dispatch->last_error ?: 'Transmit the approved PO through the configured supplier channel.'),
                 );
+
                 return;
             }
 
             app(ChainListenerRunService::class)->recordOutcome(
                 'completed',
                 $status === SupplierDispatchStatus::Confirmed
-                    ? 'supplier_dispatch_already_confirmed'
+                    ? ($dispatch->channel === 'supplier_portal' ? 'supplier_portal_auto_sent' : 'supplier_dispatch_already_confirmed')
                     : 'supplier_dispatch_prepared',
             );
+
             return;
         }
 

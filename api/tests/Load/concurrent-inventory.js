@@ -1,8 +1,8 @@
 /**
  * concurrent-inventory.js
  *
- * Simulates 200 warehouse users querying inventory concurrently.
- * Each virtual user authenticates once, then repeatedly hits the two
+ * Simulates concurrent authenticated clients querying inventory.
+ * Setup authenticates once, then each virtual user repeatedly hits the two
  * most common read endpoints:
  *   - GET /api/v1/inventory/stock-levels   (paginated list)
  *   - GET /api/v1/inventory/items          (search by item code)
@@ -14,7 +14,7 @@
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { BASE_URL, getAuthCookie } from './config.js';
+import { BASE_URL, getAuthCookie, getStatefulHeaders, loadTestEmail } from './config.js';
 
 export const options = {
   vus: 200,
@@ -33,6 +33,11 @@ const ITEM_CODE_PREFIXES = [
   'RESIN-', 'PIGM-', 'INSERT-', 'BUSH-', 'CAP-',
 ];
 
+// Guests share a 60-request/minute IP cap during setup; 50 logins leave headroom.
+// At the default 200 VUs this shares four read-only sessions per user, below
+// the authenticated 300-request/minute per-user limit.
+const SESSION_COUNT = 50;
+
 /** Return a random integer between min and max (inclusive). */
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -48,17 +53,26 @@ function randomItemCode() {
   return sample(ITEM_CODE_PREFIXES) + String(randInt(1000, 9999));
 }
 
-export default function () {
-  // ------------------------------------------------------------------ auth --
-  const sessionCookie = getAuthCookie(BASE_URL);
-  if (!sessionCookie) {
-    console.error('VU authentication failed — skipping iteration');
-    return;
+export function setup() {
+  const sessions = [];
+  for (let userId = 1; userId <= SESSION_COUNT; userId++) {
+    const email = loadTestEmail('warehouse', userId);
+    const cookie = getAuthCookie(BASE_URL, email);
+    if (!cookie) {
+      throw new Error(`Load-test authentication failed for ${email}`);
+    }
+    sessions.push({ email, cookie });
   }
+  return { sessions };
+}
+
+export default function (data) {
+  const { cookie: sessionCookie } = data.sessions[(__VU - 1) % data.sessions.length];
 
   const headers = {
     Accept: 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    ...getStatefulHeaders(BASE_URL),
     Cookie: sessionCookie,
   };
 

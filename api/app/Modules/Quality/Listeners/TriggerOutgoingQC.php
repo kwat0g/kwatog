@@ -46,10 +46,11 @@ class TriggerOutgoingQC implements ShouldQueue
         try {
             // The queued event carries a serialized WO snapshot. Re-read and
             // lock the authoritative row before creating cross-module QC work.
-            // Closed is a compatible successor of completed; cancellation is
-            // not, because it invalidates the shipment-quality obligation.
+            // Closed sources are inspected for missing evidence and escalated;
+            // only completed sources permit automatic QC creation.
             $created = [];
-            $wo = DB::transaction(function () use ($event, &$created): ?WorkOrder {
+            $reconciliationRequired = false;
+            $wo = DB::transaction(function () use ($event, &$created, &$reconciliationRequired): ?WorkOrder {
                 $lockedWo = WorkOrder::query()
                     ->with('creator')
                     ->lockForUpdate()
@@ -61,19 +62,8 @@ class TriggerOutgoingQC implements ShouldQueue
                     return null;
                 }
 
-                // REC-07 — Trigger outgoing QC when the WO is tied to a customer
-                // order OR when it is a rework/replacement WO born from an NCR
-                // (parent_ncr_id set). The latter case was previously skipped on
-                // the false assumption that rework WOs "inherit the parent's
-                // flow" — they do not, so reworked parts shipped without any
-                // re-measurement (IATF §8.7.1.4 violation). A rework WO carries
-                // its own id, so the (stage, entity_type, entity_id) unique index
-                // still yields a distinct inspection; no SO fulfilment state is
-                // touched, only re-verification is enforced.
-                if (! $lockedWo->sales_order_id && ! $lockedWo->parent_ncr_id) {
-                    return null;
-                }
-
+                // Every stock output, including internal production and repair,
+                // requires its own outgoing QC before consumption or delivery.
                 $productId = $lockedWo->product_id;
                 if (! $productId) {
                     throw new BusinessRuleException(
@@ -94,10 +84,31 @@ class TriggerOutgoingQC implements ShouldQueue
                     ->orderBy('id')
                     ->lockForUpdate()
                     ->get();
+                if ($outputs->isEmpty() && $lockedWo->rework_source_output_id && (int) $lockedWo->quantity_good === 0) {
+                    return null;
+                }
                 if ($outputs->isEmpty()) {
                     throw new BusinessRuleException(
                         "Completed WO {$lockedWo->wo_number} has no good output batch available for outgoing QC. Correct production output and replay the completion event."
                     );
+                }
+
+                if ($lockedWo->status === WorkOrderStatus::Closed) {
+                    $reconciliationRequired = $outputs->contains(fn ($output) => ! $output->inspections()
+                        ->where('stage', 'outgoing')->where('status', '!=', 'cancelled')->exists());
+                    if ($reconciliationRequired) {
+                        Log::warning('Closed work order requires controlled outgoing QC reconciliation', ['wo_id' => $lockedWo->id]);
+                    }
+
+                    return null;
+                }
+
+                if ($lockedWo->usesFinishFirstQc()) {
+                    $created = app(\App\Modules\Quality\Services\WorkOrderFinalInspectionService::class)
+                        ->ensureForCompletedWorkOrder($lockedWo, $creator)->all();
+
+                    return collect($created)->contains(static fn (Inspection $inspection): bool => $inspection->wasRecentlyCreated)
+                        ? $lockedWo : null;
                 }
 
                 $createdAny = false;
@@ -118,6 +129,12 @@ class TriggerOutgoingQC implements ShouldQueue
                 return $createdAny ? $lockedWo : null;
             });
 
+            if ($reconciliationRequired) {
+                app(ChainListenerRunService::class)->recordOutcome('manual_required', 'closed_work_order_missing_outgoing_qc', 'Closed work order has missing outgoing QC. Controlled reconciliation required; qc:sweep-missing-outgoing reports this blocker.');
+
+                return;
+            }
+
             if (! $wo) {
                 app(ChainListenerRunService::class)->recordOutcome(
                     'skipped',
@@ -135,13 +152,16 @@ class TriggerOutgoingQC implements ShouldQueue
                     ->where('is_active', true)
                     ->get();
 
+                $finalWorkOrderUrl = $wo->usesFinishFirstQc()
+                    ? "/quality/work-orders/{$wo->hash_id}/final-inspection"
+                    : null;
                 app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [
                     'title' => 'Outgoing QC required',
                     'message' => "Outgoing QC required for WO {$wo->wo_number}.",
                     // One batch: open its inspection. Several: the WO page lists them all.
-                    'link_to' => count($created) === 1
+                    'link_to' => $finalWorkOrderUrl ?? (count($created) === 1
                         ? "/quality/inspections/{$created[0]->hash_id}"
-                        : "/production/work-orders/{$wo->hash_id}",
+                        : "/production/work-orders/{$wo->hash_id}"),
                     'entity_type' => 'work_order',
                     'entity_id' => $wo->hash_id,
                     'wo_number' => $wo->wo_number,

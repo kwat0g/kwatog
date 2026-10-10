@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /** Narrow, durable recovery request for one payroll-period → GL handoff. */
-class PayrollGlPostingRequested
+class PayrollGlPostingRequested implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 

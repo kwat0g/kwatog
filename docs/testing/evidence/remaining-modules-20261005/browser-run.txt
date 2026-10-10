@@ -1,0 +1,7 @@
+maintenance: 4 list/form pages; 1 detail pages
+impex: 2 list/form pages; 1 detail pages
+warehouse: 1 list/form pages; 1 detail pages
+finance: 11 list/form pages; 2 detail pages
+hr: 5 list/form pages; 0 detail pages
+buyer: 4 list/form pages; 0 detail pages
+admin: 8 list/form pages; 0 detail pages

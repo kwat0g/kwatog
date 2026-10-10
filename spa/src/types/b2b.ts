@@ -1,3 +1,4 @@
+import type { DeliveryNegotiation } from '@/types/crm';
 /** Portal user types for ADV10 — B2B Portals */
 
 import type { PurchaseOrderResponse, PurchaseOrderResponseType } from '@/types/purchasing';
@@ -75,9 +76,11 @@ export interface RespondToPurchaseOrderPayload {
 
 export interface PortalPoItem {
   id: string;
+  unit?: string;
   part_number: string;
   name: string;
   quantity_ordered: string;
+  quantity_dispatch_limit: string;
   quantity_received: string;
   quantity_accepted: string;
   quantity_remaining: string;
@@ -88,6 +91,11 @@ export interface PortalPoItem {
 
 export interface PortalShipment {
   id: string;
+  can_edit?: boolean;
+  return_rma_number?: string | null;
+  quantity_recorded?: boolean;
+  late_eta?: boolean;
+  items?: Array<{ purchase_order_item_id: string; quantity_shipped: string }>;
   shipped_date: string | null;
   carrier: string | null;
   tracking_number: string | null;
@@ -114,6 +122,25 @@ export interface PortalPoDetail extends PortalPoSummary {
   shipments: PortalShipment[];
   items: PortalPoItem[];
   goods_receipt_notes: PortalPoGrn[];
+  supplier_returns?: Array<{
+    id: string;
+    rma_number: string;
+    status: string;
+    status_label: string;
+    problem: string | null;
+    replacement_due_date: string | null;
+    replacement_pending: boolean;
+    replacement_purchase_order?: { po_number: string } | null;
+    defect_photo_name: string | null;
+    items: Array<{ part_number: string | null; quantity: string; unit: string | null }>;
+  }>;
+  invoiceable_bill_portions?: Array<{
+    id: string;
+    grn_id: string;
+    grn_number: string;
+    quantity: string;
+    gross_total: string;
+  }>;
   bills: Array<{
     id: string;
     bill_number: string;
@@ -160,16 +187,39 @@ export interface PortalSoSummary {
 }
 
 export interface PortalSoItem {
+  price_source?: 'base' | 'agreement' | null;
+  pricing_date?: string | null;
+  price_tier_min_qty?: number | null;
   id: string;
-  part_number: string;
-  name: string;
+  product?: {
+    id: string;
+    part_number: string | null;
+    name: string | null;
+    unit_of_measure: string | null;
+  } | null;
   quantity: string;
   unit_price: string;
   total: string;
   delivery_date: string | null;
 }
 
+export interface PortalOrderQuote {
+  items: Array<{
+    product_id: string;
+    quantity: string;
+    delivery_date: string;
+    unit_price: string;
+    total: string;
+    price_source?: 'base' | 'agreement' | null;
+  }>;
+  subtotal: string;
+  vat_amount: string;
+  total_amount: string;
+  signature: string;
+}
+
 export interface PortalCatalogItem {
+  price_source?: 'base' | 'agreement' | null;
   id: string;
   part_number: string;
   name: string;
@@ -179,6 +229,10 @@ export interface PortalCatalogItem {
 }
 
 export interface PortalSoDetail extends PortalSoSummary {
+  requested_delivery_dates?: string[];
+  delivery_dates?: string[];
+  subtotal?: string;
+  vat_amount?: string;
   items?: PortalSoItem[];
   work_orders?: Array<{
     id: string;
@@ -194,7 +248,15 @@ export interface PortalSoDetail extends PortalSoSummary {
   payment_terms_days?: number;
   delivery_terms?: string;
   submission_source?: string;
-  capabilities?: { can_respond: boolean; can_confirm: boolean };
+  capabilities?: {
+    can_respond: boolean;
+    can_confirm: boolean;
+    can_edit?: boolean;
+    can_cancel?: boolean;
+    can_respond_delivery?: boolean;
+    awaiting_delivery_response?: boolean;
+  };
+  delivery_negotiations?: DeliveryNegotiation[];
   latest_response?: {
     id: string;
     type: 'accept' | 'propose' | 'decline' | string;
@@ -270,6 +332,9 @@ export interface PortalInvoiceSummary {
 }
 
 export interface PortalInvoiceDetail extends PortalInvoiceSummary {
+  payment_submissions?: import('./invoice-payments').InvoicePaymentSubmission[];
+  can_submit_payment?: boolean;
+  payment_submission_blocked_reason?: string | null;
   items: Array<{
     id: string;
     description: string;
@@ -322,6 +387,19 @@ export interface SupplierBillDetail extends SupplierBillSummary {
   }>;
 }
 
+export interface SupplierInvoiceSummary extends SupplierBillSummary {
+  amount_paid: string;
+  purchase_order: { id: string; po_number: string } | null;
+  bills: Array<{ id: string; bill_number: string; grn_number: string | null; total_amount: string; balance: string; status: string }>;
+  invoice_attachment: { id: string; original_filename: string } | null;
+}
+
+export interface SupplierInvoiceDetail extends SupplierInvoiceSummary {
+  items: SupplierBillDetail['items'];
+  payments: SupplierBillDetail['payments'];
+  goods_receipt_note: SupplierBillDetail['goods_receipt_note'];
+}
+
 export interface PortalDeliverySummary {
   id: string;
   delivery_number: string;
@@ -341,6 +419,7 @@ export interface PortalDeliveryDetail extends PortalDeliverySummary {
     name: string;
     quantity_delivered: string | number;
     quantity_dispatched?: string;
+    unit_of_measure?: string | null;
   }>;
   proofs: Array<{
     id: string;
@@ -350,11 +429,36 @@ export interface PortalDeliveryDetail extends PortalDeliverySummary {
     notes: string | null;
   }>;
   receiver_name?: string | null;
+  receiver_position?: string | null;
+  delivery_remarks?: string | null;
   confirmed_at?: string | null;
   driver?: { id: string; name: string } | null;
   /** Server rule: delivered AND a proof of delivery has been uploaded. */
   can_confirm?: boolean;
   billing_hold?: { case_id: string; case_number: string; message: string } | null;
+}
+
+export interface PortalReceiptGroup {
+  case: { id: string; case_number: string; status: string };
+  version: string;
+  can_confirm: boolean;
+  blocked_reason: string | null;
+  shipments: Array<{
+    kind: 'original' | 'replacement';
+    already_confirmed: boolean;
+    delivery: PortalDeliveryDetail;
+  }>;
+}
+
+export interface PortalReceiptGroupSubmission {
+  version: string;
+  receiver_name: string;
+  receiver_position?: string;
+  delivery_remarks?: string;
+  shipments: Array<{
+    delivery_id: string;
+    lines: Array<{ delivery_item_id: string; received_quantity: string }>;
+  }>;
 }
 
 export interface PortalCoCSummary {
@@ -379,6 +483,7 @@ export interface PortalPaymentSummary {
 
 export interface PortalShippingDocument {
   id: string;
+  supplier_shipment_id?: string | null;
   purchase_order_id: string | null;
   document_type: string;
   document_type_label: string;
@@ -530,6 +635,8 @@ export interface PortalBulkListingResult {
 export interface DeliverySchedule {
   id: string;
   month: string;
+  planned_delivery_date?: string | null;
+  precision?: 'day' | 'month';
   status: string;
   status_label?: string;
   source?: 'customer' | 'supplier';
@@ -546,24 +653,13 @@ export interface DeliverySchedule {
   updated_at: string;
 }
 
-export interface SchedulablePoOption {
-  id: string;
-  po_number: string;
-  items: Array<{
-    id: string;
-    part_number: string;
-    name: string;
-    quantity_ordered: string;
-    quantity_received: string;
-    quantity_schedulable: string;
-  }>;
-}
-
 // ── Internal B2B delivery schedule review ────────────
 
 export interface InternalDeliverySchedule {
   id: string;
   month: string;
+  planned_delivery_date?: string | null;
+  precision?: 'day' | 'month';
   status: string;
   status_label: string;
   source: 'customer' | 'supplier';
@@ -611,6 +707,9 @@ export interface VendorStatementOfAccount {
     aging_bucket: string;
     purchase_order?: { id: string; po_number: string } | null;
   }>;
+  open_invoices?: Array<VendorStatementOfAccount['open_bills'][number] & {
+    supplier_invoice_number: string | null;
+  }>;
   as_of_date: string;
 }
 
@@ -624,7 +723,7 @@ export interface SupplierDashboardData {
   unpaid_invoice_count: number;
   total_unpaid_amount: string;
   recent_pos: PortalPoSummary[];
-  recent_invoices: SupplierBillSummary[];
+  recent_invoices: SupplierInvoiceSummary[];
 }
 
 // ── Customer portal dashboard ─────────────────────────

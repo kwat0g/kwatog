@@ -21,6 +21,7 @@ class AssignMaintenanceWorkOrderRequest extends FormRequest
     {
         return [
             'employee_id' => Employee::class,
+            'expected_assignee_id' => Employee::class,
         ];
     }
 
@@ -28,6 +29,9 @@ class AssignMaintenanceWorkOrderRequest extends FormRequest
     {
         return [
             'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'expected_assignee_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
+            'presence_attestation_reason' => ['nullable', 'string', 'max:5000'],
+            'handover_note' => ['nullable', 'string', 'max:5000'],
         ];
     }
 }

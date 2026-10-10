@@ -39,6 +39,8 @@ class PurchaseOrderItemResource extends JsonResource
             'quantity_received' => (string) $this->quantity_received,
             'quantity_accepted' => (string) $this->quantity_accepted,
             'quantity_remaining' => $this->quantity_remaining,
+            'base_quantity_ordered' => $this->when($this->getAttribute('base_quantity_ordered') !== null, fn () => $this->getAttribute('base_quantity_ordered')),
+            'base_quantity_remaining' => $this->when($this->getAttribute('base_quantity_remaining') !== null, fn () => $this->getAttribute('base_quantity_remaining')),
             'quantity_open' => $this->physical_quantity_remaining, // unreceived + unreceived_but_received (in QC)
         ];
     }

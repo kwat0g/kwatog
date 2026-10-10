@@ -117,7 +117,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-3xl mx-auto px-5 py-4 space-y-4"
+        className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Identity">
           <div className="grid grid-cols-2 gap-3">

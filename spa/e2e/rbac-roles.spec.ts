@@ -78,10 +78,17 @@ const GATED_PAGES: Record<string, { url: string; permission: string; }> = {
   'supply chain deliveries': { url: '/supply-chain/deliveries',    permission: 'supply_chain.view' },
 };
 
-test.beforeEach(async ({ page }) => {
-  // Permission-guard tests only need pages to mount; their data contracts are
-  // covered elsewhere. Prevent unmocked API requests from reaching the local
-  // backend and turning a frontend RBAC assertion into an auth-redirect test.
+test.beforeEach(async ({ page }, testInfo) => {
+  // Permission-guard tests isolate route access from page data. Every API read
+  // is intentionally failed. Record responses, not route dispatches: Firefox
+  // may cancel a duplicate request while navigating away from a denied page.
+  page.on('response', (response) => {
+    if (response.status() !== 500 || !new URL(response.url()).pathname.startsWith('/api/v1/')) return;
+    testInfo.annotations.push({
+      type: 'expected-http-response',
+      description: `500 ${response.request().method()} ${new URL(response.url()).pathname}`,
+    });
+  });
   await page.route('**/api/v1/**', async (route) => {
     await route.fulfill({
       status: 500,

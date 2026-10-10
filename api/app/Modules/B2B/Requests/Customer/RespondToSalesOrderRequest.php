@@ -26,7 +26,7 @@ class RespondToSalesOrderRequest extends FormRequest
             // A counter-offer must name at least one line to be meaningful.
             'items'                       => ['required_if:type,propose', 'array', 'min:1'],
             'items.*.sales_order_item_id' => ['required', 'string'],
-            'items.*.proposed_quantity'   => ['nullable', 'numeric', 'min:0.01'],
+            'items.*.proposed_quantity'   => ['nullable', 'numeric', 'min:1', 'regex:/\A[0-9]+(?:\.0+)?\z/'],
             'items.*.proposed_unit_price' => ['nullable', 'numeric', 'min:0.01'],
             'items.*.reason'              => ['nullable', 'string', 'max:500'],
         ];

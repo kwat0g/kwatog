@@ -1,0 +1,25 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+.............E
+
+Time: 00:35.588, Memory: 167.00 MB
+
+There was 1 error:
+
+1) Tests\Feature\Inventory\MaterialReturnServiceTest::test_auto_issue_return_replays_after_response_loss_and_cannot_cross_recorded_production_floor
+App\Common\Exceptions\BusinessRuleException: Assign a Production crew and one output recorder before confirming.
+
+/var/www/app/Modules/Production/Services/WorkOrderAssignmentService.php:481
+/var/www/app/Modules/Production/Services/WorkOrderService.php:308
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Production/Services/WorkOrderService.php:264
+/var/www/tests/Feature/Inventory/MaterialReturnServiceTest.php:620
+/var/www/tests/Feature/Inventory/MaterialReturnServiceTest.php:80
+
+ERRORS!
+Tests: 14, Assertions: 25, Errors: 1.

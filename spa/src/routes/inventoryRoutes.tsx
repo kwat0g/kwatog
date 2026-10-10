@@ -3,9 +3,12 @@ import { Route, Navigate } from 'react-router-dom';
 import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
+const CostReviewsPage = lazy(() => import('@/pages/crm/price-agreements/cost-reviews'));
+
 // Inventory (Sprint 5 — Tasks 39-41, 46)
 const InventoryDashboardPage = lazy(() => import('@/pages/inventory/dashboard'));
 const ItemsListPage = lazy(() => import('@/pages/inventory/items'));
+const UomCatalogPage = lazy(() => import('@/pages/inventory/uoms'));
 const CreateItemPage = lazy(() => import('@/pages/inventory/items/create'));
 const EditItemPage = lazy(() => import('@/pages/inventory/items/edit'));
 const ItemDetailPage = lazy(() => import('@/pages/inventory/items/detail'));
@@ -38,78 +41,245 @@ const TransferOrdersPage = lazy(() => import('@/pages/warehouse/transfers'));
 const WarehouseScannerPage = lazy(() => import('@/pages/warehouse/scanner'));
 
 export const inventoryRoutes = (
- <>
- {/* Inventory module (Sprint 5) */}
- <Route element={<ModuleGuard module="inventory" />}>
- <Route path="/inventory" element={<Navigate to="/inventory/items" replace />} />
- <Route path="/inventory/dashboard"
- element={<PermissionGuard permission="inventory.view"><InventoryDashboardPage /></PermissionGuard>} />
+  <>
+    {/* Inventory module (Sprint 5) */}
+    <Route element={<ModuleGuard module="inventory" />}>
+      <Route
+        path="/crm/price-agreements/cost-reviews"
+        element={
+          <PermissionGuard permission="inventory.costs.review">
+            <CostReviewsPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/inventory/items"
- element={<PermissionGuard permission="inventory.view"><ItemsListPage /></PermissionGuard>} />
- <Route path="/inventory/items/create"
- element={<PermissionGuard permission="inventory.items.manage"><CreateItemPage /></PermissionGuard>} />
- <Route path="/inventory/items/:id"
- element={<PermissionGuard permission="inventory.view"><ItemDetailPage /></PermissionGuard>} />
- <Route path="/inventory/items/:id/edit"
- element={<PermissionGuard permission="inventory.items.manage"><EditItemPage /></PermissionGuard>} />
- {/* Series F / Task F3 — per-item stock card */}
- <Route path="/inventory/items/:id/stock-card"
- element={<PermissionGuard permission="inventory.view"><StockCardPage /></PermissionGuard>} />
- <Route path="/inventory/items/:id/quality-plans"
- element={<PermissionGuard permission="inventory.view"><ItemQualityPlansPage /></PermissionGuard>} />
+      <Route path="/inventory" element={<Navigate to="/inventory/items" replace />} />
+      <Route
+        path="/inventory/dashboard"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <InventoryDashboardPage />
+          </PermissionGuard>
+        }
+      />
 
- {/* /inventory/categories removed 2026-08-08 (scope cut — Categories modal on the Items page) */}
-  <Route path="/inventory/warehouse"
-  element={<PermissionGuard permission="inventory.warehouse.manage"><WarehousePage /></PermissionGuard>} />
+      <Route
+        path="/inventory/items"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <ItemsListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/uoms"
+        element={
+          <PermissionGuard permission="inventory.items.manage">
+            <UomCatalogPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/items/create"
+        element={
+          <PermissionGuard permission="inventory.items.manage">
+            <CreateItemPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/items/:id"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <ItemDetailPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/items/:id/edit"
+        element={
+          <PermissionGuard permission="inventory.items.manage">
+            <EditItemPage />
+          </PermissionGuard>
+        }
+      />
+      {/* Series F / Task F3 — per-item stock card */}
+      <Route
+        path="/inventory/items/:id/stock-card"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <StockCardPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/items/:id/quality-plans"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <ItemQualityPlansPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/inventory/stock-levels"
- element={<PermissionGuard permission="inventory.view"><StockLevelsPage /></PermissionGuard>} />
- {/* /inventory/movements removed 2026-08-08 (scope cut — now a view toggle on Stock Levels) */}
-  <Route path="/inventory/stock-adjustments"
-  element={<PermissionGuard anyOf={['inventory.adjust', 'inventory.adjust.approve']}><StockAdjustmentsPage /></PermissionGuard>} />
- <Route path="/inventory/stock-adjustments/create"
- element={<PermissionGuard permission="inventory.adjust"><CreateStockAdjustmentPage /></PermissionGuard>} />
- {/* /inventory/stock-transfers/create removed 2026-08-08 (scope cut — page file kept) */}
+      {/* /inventory/categories removed 2026-08-08 (scope cut — Categories modal on the Items page) */}
+      <Route
+        path="/inventory/warehouse"
+        element={
+          <PermissionGuard permission="inventory.warehouse.manage">
+            <WarehousePage />
+          </PermissionGuard>
+        }
+      />
 
- {/* ADV8 — WMS (Warehouse Management System) */}
-  <Route path="/inventory/warehouse-map"
-  element={<PermissionGuard permission="inventory.warehouse.manage"><WarehouseMapPage /></PermissionGuard>} />
- {/* /inventory/stock-count merged into Warehouse Map (2026-08-08). Path kept
+      <Route
+        path="/inventory/stock-levels"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <StockLevelsPage />
+          </PermissionGuard>
+        }
+      />
+      {/* /inventory/movements removed 2026-08-08 (scope cut — now a view toggle on Stock Levels) */}
+      <Route
+        path="/inventory/stock-adjustments"
+        element={
+          <PermissionGuard anyOf={['inventory.adjust', 'inventory.adjust.approve']}>
+            <StockAdjustmentsPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/stock-adjustments/create"
+        element={
+          <PermissionGuard permission="inventory.adjust">
+            <CreateStockAdjustmentPage />
+          </PermissionGuard>
+        }
+      />
+      {/* Legacy direct stock transfers were replaced by maker-checker transfer orders. */}
+
+      {/* ADV8 — WMS (Warehouse Management System) */}
+      <Route
+        path="/inventory/warehouse-map"
+        element={
+          <PermissionGuard permission="inventory.warehouse.manage">
+            <WarehouseMapPage />
+          </PermissionGuard>
+        }
+      />
+      {/* /inventory/stock-count merged into Warehouse Map (2026-08-08). Path kept
  as a live alias — the barcode scanner links here — and renders the merged
  page in count view (see WarehouseMapPage). */}
- <Route path="/inventory/stock-count"
- element={<PermissionGuard permission="inventory.stock_count.view"><WarehouseMapPage /></PermissionGuard>} />
-  <Route path="/inventory/picking"
-  element={<PermissionGuard permission="inventory.picking.view"><PickingListPage /></PermissionGuard>} />
-  <Route path="/inventory/transfer-orders"
-  element={<PermissionGuard permission="inventory.adjust"><TransferOrdersPage /></PermissionGuard>} />
- <Route path="/inventory/scanner"
- element={<PermissionGuard permission="inventory.view"><WarehouseScannerPage /></PermissionGuard>} />
+      <Route
+        path="/inventory/stock-count"
+        element={
+          <PermissionGuard permission="inventory.stock_count.view">
+            <WarehouseMapPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/picking"
+        element={
+          <PermissionGuard permission="inventory.picking.view">
+            <PickingListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/transfer-orders"
+        element={
+          <PermissionGuard permission="inventory.adjust">
+            <TransferOrdersPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/scanner"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <WarehouseScannerPage />
+          </PermissionGuard>
+        }
+      />
 
- <Route path="/inventory/grn"
- element={<PermissionGuard permission="inventory.view"><GrnListPage /></PermissionGuard>} />
- <Route path="/inventory/grn/create"
- element={<PermissionGuard permission="inventory.grn.create"><CreateGrnPage /></PermissionGuard>} />
- <Route path="/inventory/grn/:id"
- element={<PermissionGuard permission="inventory.view"><GrnDetailPage /></PermissionGuard>} />
- {/* Incoming-QC notifications historically used the plural /grns path. Keep
+      <Route
+        path="/inventory/grn"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <GrnListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/grn/create"
+        element={
+          <PermissionGuard permission="inventory.grn.create">
+            <CreateGrnPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/grn/:id"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <GrnDetailPage />
+          </PermissionGuard>
+        }
+      />
+      {/* Incoming-QC notifications historically used the plural /grns path. Keep
      it as a live alias so an existing notification remains actionable. */}
- <Route path="/inventory/grns/:id"
- element={<PermissionGuard permission="inventory.view"><GrnDetailPage /></PermissionGuard>} />
+      <Route
+        path="/inventory/grns/:id"
+        element={
+          <PermissionGuard permission="inventory.view">
+            <GrnDetailPage />
+          </PermissionGuard>
+        }
+      />
 
-  <Route path="/inventory/material-issues"
-  element={<PermissionGuard permission="inventory.issue.create"><MaterialIssuesListPage /></PermissionGuard>} />
- <Route path="/inventory/material-issues/create"
- element={<PermissionGuard permission="inventory.issue.create"><CreateMaterialIssuePage /></PermissionGuard>} />
-  <Route path="/inventory/material-issues/:id"
-  element={<PermissionGuard permission="inventory.issue.create"><MaterialIssueDetailPage /></PermissionGuard>} />
+      <Route
+        path="/inventory/material-issues"
+        element={
+          <PermissionGuard permission="inventory.issue.create">
+            <MaterialIssuesListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/material-issues/create"
+        element={
+          <PermissionGuard permission="inventory.issue.create">
+            <CreateMaterialIssuePage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/material-issues/:id"
+        element={
+          <PermissionGuard permission="inventory.issue.create">
+            <MaterialIssueDetailPage />
+          </PermissionGuard>
+        }
+      />
 
- {/* REC-08 — Material Review Board / quarantine workflow */}
- <Route path="/inventory/mrb"
- element={<PermissionGuard permission="inventory.mrb.view"><MrbListPage /></PermissionGuard>} />
- <Route path="/inventory/mrb/:id"
- element={<PermissionGuard permission="inventory.mrb.view"><MrbDetailPage /></PermissionGuard>} />
- </Route>
- </>
+      {/* REC-08 — Material Review Board / quarantine workflow */}
+      <Route
+        path="/inventory/mrb"
+        element={
+          <PermissionGuard permission="inventory.mrb.view">
+            <MrbListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/inventory/mrb/:id"
+        element={
+          <PermissionGuard permission="inventory.mrb.view">
+            <MrbDetailPage />
+          </PermissionGuard>
+        }
+      />
+    </Route>
+  </>
 );

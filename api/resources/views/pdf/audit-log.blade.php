@@ -52,7 +52,7 @@
         @endphp
         <tr>
           <td style="font-family: 'DejaVu Sans Mono', monospace; font-size: 8px;">
-            {{ $log->created_at?->format('Y-m-d H:i') ?? '—' }}
+            {{ $log->created_at?->format('M d, Y g:i A') ?? '—' }}
           </td>
           <td>{{ $log->user?->name ?? 'System' }}</td>
           <td>

@@ -42,6 +42,16 @@ const PAYROLL_USER: MockUser = {
   employee: null,
 };
 
+const PAYROLL_FINALIZER: MockUser = {
+  id: 'u11',
+  name: 'Finance Finalizer',
+  email: 'finance-finalizer@ogami.test',
+  roleSlug: 'finance_officer',
+  roleName: 'Finance Officer',
+  permissions: ['payroll.view', 'payroll.periods.view', 'payroll.periods.finalize', 'payroll.periods.bank_file'],
+  employee: null,
+};
+
 // ── Mock data factories ───────────────────────────────────────────────────
 
 /** Builds a single PayrollPeriod object at the given status. */
@@ -152,6 +162,7 @@ test.describe('Payroll Period Lifecycle', () => {
 
   test('creates a new payroll period with correct date range', async ({ page }) => {
     await mockAuth(page, PAYROLL_USER);
+    let scopePreviewRequested = false;
 
     // List starts empty so the "Create period" empty-state button is shown.
     await page.route(`${API_LIST}?*`, async (route) => {
@@ -159,6 +170,24 @@ test.describe('Payroll Period Lifecycle', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(makeListResponse([])),
+      });
+    });
+
+    await page.route('**/api/v1/payroll-periods/scope-preview', async (route) => {
+      scopePreviewRequested = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            is_company_wide: true,
+            employee_count: 1,
+            already_paid_count: 0,
+            already_paid_sample: [],
+            total_active: 1,
+            estimated_gross: '50000.00',
+          },
+        }),
       });
     });
 
@@ -173,7 +202,7 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // Detail page GET after redirect.
     await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -181,8 +210,8 @@ test.describe('Payroll Period Lifecycle', () => {
       });
     });
 
-    // Payrolls list (empty at draft stage).
-    await page.route(`**/api/v1/payrolls*`, async (route) => {
+    // Period-scoped payroll rows (empty at draft stage).
+    await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}/payrolls*`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -199,10 +228,12 @@ test.describe('Payroll Period Lifecycle', () => {
     await page.getByLabel(/Period start/i).fill('2026-05-01');
     await page.getByLabel(/Period end/i).fill('2026-05-15');
     await page.getByLabel(/Payroll date/i).fill('2026-05-15');
-    // Cycle dropdown defaults to "1st half" — leave as-is
+    // These dates derive the 1st-half cycle.
+    await expect(page.getByRole('button', { name: /Create period/i })).toBeEnabled();
 
     // Submit
     await page.getByRole('button', { name: /Create period/i }).click();
+    expect(scopePreviewRequested).toBe(true);
 
     // After success → redirected to detail page
     await page.waitForURL(`**/payroll/periods/${PERIOD_ID}`);
@@ -220,7 +251,7 @@ test.describe('Payroll Period Lifecycle', () => {
     let processing = false;
 
     await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -239,7 +270,7 @@ test.describe('Payroll Period Lifecycle', () => {
     });
 
     // Empty payrolls list (draft stage, none computed yet).
-    await page.route(`**/api/v1/payrolls*`, async (route) => {
+    await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}/payrolls*`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -284,13 +315,18 @@ test.describe('Payroll Period Lifecycle', () => {
     // Approve button, and driving this test from draft would only assert that
     // the guard is missing.
     const computedPeriod = makePeriod('computed');
-    const approvedPeriod = makePeriod('approved');
-    const finalizedPeriod = makePeriod('finalized');
+    const approvedPeriod = makePeriod('approved', {
+      approver: { id: PAYROLL_USER.id, name: PAYROLL_USER.name },
+    });
+    const finalizedPeriod = makePeriod('finalized', {
+      approver: { id: PAYROLL_USER.id, name: PAYROLL_USER.name },
+      finalizer: { id: PAYROLL_FINALIZER.id, name: PAYROLL_FINALIZER.name },
+    });
 
     let periodState = computedPeriod;
 
     await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -319,7 +355,7 @@ test.describe('Payroll Period Lifecycle', () => {
     });
 
     // Payrolls (45 employees, all computed).
-    await page.route(`**/api/v1/payrolls*`, async (route) => {
+    await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}/payrolls*`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -345,6 +381,29 @@ test.describe('Payroll Period Lifecycle', () => {
       });
     });
 
+    await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}/bank-file/preview**`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            format: 'generic',
+            rows: [
+              ['employee_no', 'full_name', 'bank_name', 'account_number', 'net_pay'],
+              ['OGM-2024-0010', 'Employee 1', 'Example Bank', '0000000010', '28170.56'],
+              ['OGM-2024-0011', 'Employee 2', 'Example Bank', '0000000011', '28170.56'],
+              ['OGM-2024-0012', 'Employee 3', 'Example Bank', '0000000012', '28170.56'],
+            ],
+            total: '2535350.00',
+            count: 45,
+            unbankable_count: 0,
+            unbankable_amount: '0.00',
+            unbankable_sample: [],
+          },
+        }),
+      });
+    });
+
     await page.goto(`/payroll/periods/${PERIOD_ID}`);
     await page.waitForLoadState('networkidle');
 
@@ -362,10 +421,22 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // After invalidation the page re-fetches and shows approved status.
     await expect(page.getByText('Approved', { exact: true }).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('A different finance user must finalize this payroll.')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Finalize/i })).toHaveCount(0);
 
     // ── Step B: Finalize ───────────────────────────────────────────────────
 
-    const finalizeBtn = page.getByRole('button', { name: /Finalize/i });
+    await page.unroute('**/api/v1/auth/user');
+    await mockAuth(page, PAYROLL_FINALIZER);
+    const bankPreviewResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === `/api/v1/payroll-periods/${PERIOD_ID}/bank-file/preview`;
+    });
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: 'Profile menu for Finance Finalizer' })).toBeVisible();
+
+    const finalizeBtn = page.getByRole('button', { name: 'Finalize', exact: true });
     await expect(finalizeBtn).toBeVisible();
     await finalizeBtn.click();
     await page.getByRole('button', { name: 'Finalize', exact: true }).last().click();
@@ -374,9 +445,23 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // Finalized status chip is shown.
     await expect(page.getByText('Finalized', { exact: true }).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/finalized by Finance Finalizer/)).toBeVisible();
 
     // Bank file download action is present (canBankFile = true when finalized).
-    await expect(page.getByRole('button', { name: 'Generate & download' })).toBeVisible();
+    const bankFileButton = page.getByRole('button', { name: 'Generate & download' });
+    await expect(bankFileButton).toBeVisible();
+    const previewResponse = await bankPreviewResponse;
+    expect(previewResponse.status()).toBe(200);
+    expect(await previewResponse.json()).toMatchObject({
+      data: {
+        format: 'generic',
+        count: 45,
+        unbankable_count: 0,
+        unbankable_amount: '0.00',
+        unbankable_sample: [],
+      },
+    });
+    await expect(bankFileButton).toBeEnabled();
 
     // Employee count stat card confirms 45 employees processed.
     const employeeStat = page.getByText('Employees', { exact: true }).first().locator('..');

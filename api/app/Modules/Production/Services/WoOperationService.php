@@ -6,6 +6,8 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\ProductionLogEvent;
 use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -16,10 +18,10 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use Carbon\Carbon;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -97,6 +99,23 @@ class WoOperationService
         });
     }
 
+    public function refreshPendingSchedule(WorkOrder $wo): void
+    {
+        DB::transaction(function () use ($wo) {
+            $operations = $wo->operations()->orderBy('sequence')->with('routingOperation')->lockForUpdate()->get();
+            if ($operations->isEmpty()) {
+                return;
+            }
+            $windows = $this->plannedWindows($wo, $operations);
+            foreach ($operations as $operation) {
+                if ($operation->status === WoOperationStatus::Pending && isset($windows[$operation->id])) {
+                    $operation->update(['planned_start' => $windows[$operation->id]['start'],
+                        'planned_end' => $windows[$operation->id]['end']]);
+                }
+            }
+        });
+    }
+
     /**
      * Start the setup phase for an operation.
      *
@@ -107,11 +126,12 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Pending], 'start setup');
 
         DB::transaction(function () use ($op, $operator) {
+            WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             // Lock-then-guard: re-read the authoritative row so a concurrent
             // transition holding a stale model cannot double-advance it.
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Pending], 'start setup');
-            $this->assertParentInProgress($locked);
+            $this->assertCrewOperator($locked, $operator, setup: true);
 
             $locked->update([
                 'status' => WoOperationStatus::Setup,
@@ -133,9 +153,13 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Setup], 'end setup');
 
         DB::transaction(function () use ($op) {
+            WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Setup], 'end setup');
-            $this->assertParentInProgress($locked);
+            if (! $locked->operator) {
+                throw new BusinessRuleException('Assign a current crew operator before ending setup.');
+            }
+            $this->assertCrewOperator($locked, $locked->operator, setup: true);
 
             $locked->update([
                 'setup_end' => Carbon::now(),
@@ -159,6 +183,7 @@ class WoOperationService
         $this->assertPreviousCompleted($op);
 
         DB::transaction(function () use ($op, $operator) {
+            $this->assertCrewOperator($op, $operator);
             $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             $this->assertMaterialCoverageForOperation($workOrder);
 
@@ -187,6 +212,7 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'pause');
 
         DB::transaction(function () use ($op) {
+            WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'pause');
             $this->assertParentInProgress($locked);
@@ -209,6 +235,7 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Paused], 'resume');
 
         DB::transaction(function () use ($op, $operator) {
+            $this->assertCrewOperator($op, $operator);
             $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             $this->assertMaterialCoverageForOperation($workOrder);
 
@@ -230,11 +257,11 @@ class WoOperationService
      *
      * Only allowed when the operation is InProgress.
      */
-    public function recordOutput(WoOperation $op, float $qty, float $scrap = 0, ?string $scrapReason = null): void
+    public function recordOutput(WoOperation $op, float $qty, float $scrap = 0, ?string $scrapReason = null, ?string $recordingReason = null, array $handover = []): void
     {
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'record output');
 
-        DB::transaction(function () use ($op, $qty, $scrap, $scrapReason) {
+        DB::transaction(function () use ($op, $qty, $scrap, $scrapReason, $recordingReason, $handover) {
             $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
 
             // Lock-then-guard: accumulate on the authoritative row. Without the
@@ -244,6 +271,30 @@ class WoOperationService
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'record output');
             $this->assertParentInProgress($locked);
 
+            $crew = app(WorkOrderAssignmentService::class)->assertReadyForStart($workOrder);
+            if (! $crew->members->contains('employee_id', $locked->operator_id)) {
+                throw new BusinessRuleException('Select an operator from the current WO crew before recording operation output.');
+            }
+
+            try {
+                app(WorkOrderAssignmentService::class)->assertCrewPresent($workOrder, $crew);
+                app(WorkOrderAssignmentService::class)->assertOperatorPresent($workOrder, $locked->operator);
+            } catch (BusinessRuleException $error) {
+                if (! auth()->user()?->is_active || ! auth()->user()?->hasPermission('production.work_orders.lifecycle')
+                    || trim($recordingReason ?? '') === '') {
+                    throw new BusinessRuleException('Crew attendance changed. Production management must enter a reason to report earlier output.');
+                }
+            }
+            $workOrder->assertProcessQualityReleased();
+            $handoverService = app(WorkOrderMaterialHandoverService::class);
+            $actor = auth()->user();
+            if (! $actor && $handoverService->pending($workOrder)->isNotEmpty()) {
+                throw new BusinessRuleException(WorkOrderMaterialHandoverService::OUTPUT_PENDING_MESSAGE);
+            }
+            $handoverException = $actor ? $handoverService->assertForOutput($workOrder, $actor, $handover) : null;
+            if (Inspection::query()->where('wo_operation_id', $locked->id)->where('status', '!=', 'cancelled')->exists()) {
+                throw new BusinessRuleException('Operation output is frozen once its required QC begins. Finish recording output before submitting the operation for inspection.');
+            }
             $this->materialUsage->assertProductionCoverage(
                 $workOrder,
                 pendingOperationId: (int) $locked->id,
@@ -277,7 +328,7 @@ class WoOperationService
 
             $locked->update($updates);
 
-            $this->log($locked, null, ProductionLogEvent::RecordOutput, $qty);
+            $this->log($locked, null, ProductionLogEvent::RecordOutput, $qty, notes: $recordingReason, handoverException: $handoverException);
 
             if ($scrap > 0) {
                 $this->log($locked, null, ProductionLogEvent::RecordScrap, $scrap, $scrapReason);
@@ -299,48 +350,57 @@ class WoOperationService
     {
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'complete');
 
+        // Persist QC before refusing completion so Quality has a record to finish.
+        if ($op->routingOperation?->qc_required) {
+            $inspection = DB::transaction(function () use ($op): Inspection {
+                $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
+                $lockedOperation = WoOperation::query()->lockForUpdate()->findOrFail($op->id);
+                $this->assertStatus($lockedOperation, [WoOperationStatus::InProgress], 'complete');
+                $this->assertParentInProgress($lockedOperation, excludedOperationId: $lockedOperation->id);
+                $this->assertFinalOperationReconciled($lockedOperation);
+                if (! $workOrder->creator) {
+                    throw new BusinessRuleException('Required QC needs an active work-order creator.');
+                }
+
+                $quantity = (string) $lockedOperation->qty_completed;
+                if (bccomp($quantity, '0', 4) <= 0 || bccomp($quantity, bcadd($quantity, '0', 0), 4) !== 0) {
+                    throw new BusinessRuleException('Operation QC requires a positive whole recorded quantity. Record actual pieces before requesting inspection.');
+                }
+                $existing = Inspection::query()->where('wo_operation_id', $lockedOperation->id)
+                    ->where('status', '!=', InspectionStatus::Cancelled->value)->lockForUpdate()->first();
+                if ($existing) {
+                    return $existing;
+                }
+
+                return $this->inspections->create([
+                    'stage' => InspectionStage::InProcess->value,
+                    'product_id' => (int) $workOrder->product_id,
+                    'batch_quantity' => (int) $quantity,
+                    'entity_type' => InspectionEntityType::WorkOrder->value,
+                    'entity_id' => $workOrder->id,
+                    'wo_operation_id' => $op->id,
+                    'notes' => "Required by operation {$op->operation_name} completion.",
+                ], $workOrder->creator);
+            });
+            if ($inspection->status !== InspectionStatus::Passed && ! ($inspection->status === InspectionStatus::Failed && $inspection->ncr?->sorting_approved_at && (int) $inspection->ncr->mrb_accepted_quantity === (int) $inspection->batch_quantity)) {
+                throw new BusinessRuleException("Required QC {$inspection->inspection_number} must pass before this operation completes.");
+            }
+        }
+
         DB::transaction(function () use ($op) {
+            WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'complete');
             $this->assertParentInProgress($locked);
             $this->assertFinalOperationReconciled($locked);
 
-            $workOrder = $locked->load('workOrder.creator')->workOrder;
+            $workOrder = $locked->workOrder;
+            $workOrder->assertProcessQualityReleased();
             if ($locked->routingOperation?->qc_required) {
-                $creator = $workOrder->creator;
-                if (! $creator) {
-                    throw new BusinessRuleException(
-                        "Work order {$workOrder->wo_number} has no creator to attribute the required in-process QC inspection."
-                    );
-                }
-
-                // Two workers completing two qc_required operations of the same
-                // WO concurrently can both pass InspectionService::create()'s
-                // check-then-insert guard; the (stage, entity_type, entity_id)
-                // partial unique index then refuses the loser. Re-read the
-                // winner's row instead of surfacing a raw 500 — one in-process
-                // inspection per WO is the contract, whoever inserted it.
-                try {
-                    $this->inspections->create([
-                        'stage' => InspectionStage::InProcess->value,
-                        'product_id' => (int) $workOrder->product_id,
-                        'batch_quantity' => max(1, (int) ($locked->qty_completed ?: $workOrder->quantity_target)),
-                        'entity_type' => InspectionEntityType::WorkOrder->value,
-                        'entity_id' => $workOrder->id,
-                        'notes' => "Required by operation {$locked->operation_name} completion.",
-                    ], $creator);
-                } catch (QueryException $e) {
-                    $isUnique = str_starts_with((string) $e->getCode(), '23')
-                        || str_contains($e->getMessage(), 'UNIQUE constraint failed');
-                    $alreadyThere = Inspection::query()
-                        ->where('stage', InspectionStage::InProcess->value)
-                        ->where('entity_type', InspectionEntityType::WorkOrder->value)
-                        ->where('entity_id', $workOrder->id)
-                        ->exists();
-
-                    if (! $isUnique || ! $alreadyThere) {
-                        throw $e;
-                    }
+                $qc = Inspection::query()->where('wo_operation_id', $locked->id)
+                    ->where('status', '!=', InspectionStatus::Cancelled->value)->lockForUpdate()->first();
+                if (! $qc || ($qc->status !== InspectionStatus::Passed && ! ($qc->status === InspectionStatus::Failed && $qc->ncr?->sorting_approved_at && (int) $qc->ncr->mrb_accepted_quantity === (int) $qc->batch_quantity))) {
+                    throw new BusinessRuleException('Required operation QC must pass before completion.');
                 }
             }
 
@@ -350,6 +410,7 @@ class WoOperationService
             ]);
 
             $this->log($locked, null, ProductionLogEvent::EndProduction);
+            app(WorkOrderService::class)->autoFinishIfTargetReached($workOrder);
 
             ProductionDashboardService::forgetCache();
         });
@@ -371,6 +432,7 @@ class WoOperationService
         $this->assertSkippable($op);
 
         DB::transaction(function () use ($op, $reason, $operator) {
+            WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertSkippable($locked);
             $this->assertParentInProgress($locked);
@@ -380,6 +442,7 @@ class WoOperationService
             ]);
 
             $this->log($locked, $operator, ProductionLogEvent::Skip, notes: $reason);
+            app(WorkOrderService::class)->autoFinishIfTargetReached($locked->workOrder);
 
             ProductionDashboardService::forgetCache();
         });
@@ -388,6 +451,9 @@ class WoOperationService
     /** A completed operation's record must not be overwritten by a skip. */
     private function assertSkippable(WoOperation $op): void
     {
+        if ($op->routingOperation?->qc_required) {
+            throw new BusinessRuleException('A required QC operation cannot be skipped. Complete its inspection first.');
+        }
         $status = $op->status instanceof WoOperationStatus
             ? $op->status
             : WoOperationStatus::tryFrom((string) $op->status);
@@ -460,7 +526,7 @@ class WoOperationService
         }
     }
 
-    private function assertParentInProgress(WoOperation $op): void
+    private function assertParentInProgress(WoOperation $op, bool $setup = false, ?int $excludedOperationId = null): void
     {
         $workOrder = WorkOrder::query()
             ->lockForUpdate()
@@ -474,6 +540,38 @@ class WoOperationService
             throw new BusinessRuleException(
                 "Cannot execute an operation while the parent work order is '{$workOrder->status?->value}'."
             );
+        }
+        if ($setup) {
+            $active = $workOrder->inspections()->where('stage', InspectionStage::InProcess->value)
+                ->where('status', '!=', InspectionStatus::Cancelled->value)->get();
+            $startup = $active->whereNull('wo_operation_id')->first();
+            if ($workOrder->actual_start && ! $workOrder->parent_wo_id && ! $workOrder->parent_ncr_id
+                && $startup?->startup_trial_required
+                && in_array($startup->status, [InspectionStatus::Draft, InspectionStatus::InProgress], true)
+                && $active->count() === 1) {
+                $this->assertSetupReadiness($workOrder);
+
+                return;
+            }
+        }
+        $workOrder->assertProcessQualityReleased($excludedOperationId);
+    }
+
+    private function assertSetupReadiness(WorkOrder $workOrder): void
+    {
+        if (! $workOrder->machine_id || ! $workOrder->mold_id) {
+            throw new BusinessRuleException('Setup requires both assigned machine and mold.');
+        }
+        $machine = Machine::query()->lockForUpdate()->findOrFail($workOrder->machine_id);
+        $mold = Mold::query()->lockForUpdate()->findOrFail($workOrder->mold_id);
+        app(ProductionResourceService::class)->assertCanAcquire($workOrder, $machine, $mold);
+        if ((int) $machine->current_work_order_id !== $workOrder->id || (int) $mold->current_work_order_id !== $workOrder->id) {
+            throw new BusinessRuleException('Equipment ownership must be acquired before setup.');
+        }
+        $this->materialUsage->assertCoverage($workOrder, includeReservations: false);
+        $this->materialUsage->assertProductionCoverage($workOrder);
+        if (app(WorkOrderMaterialHandoverService::class)->pending($workOrder)->isNotEmpty()) {
+            throw new BusinessRuleException(WorkOrderMaterialHandoverService::OUTPUT_PENDING_MESSAGE);
         }
     }
 
@@ -506,6 +604,7 @@ class WoOperationService
 
         $totals = WorkOrderOutput::query()
             ->where('work_order_id', $op->work_order_id)
+            ->whereNull('trial_inspection_id')
             ->selectRaw('COALESCE(SUM(good_count), 0) AS good, COALESCE(SUM(reject_count), 0) AS reject')
             ->first();
 
@@ -520,19 +619,18 @@ class WoOperationService
     /** @return array<int, array{start: Carbon, end: Carbon}> */
     private function plannedWindows(WorkOrder $wo, Collection $operations): array
     {
-        if (! $wo->planned_start || ! $wo->planned_end) {
+        $schedule = $wo->currentProductionSchedule()->first();
+        $start = $schedule?->scheduled_start ?? ($wo->mrp_plan_id === null ? $wo->planned_start : null);
+        $end = $schedule?->scheduled_end ?? ($wo->mrp_plan_id === null ? $wo->planned_end : null);
+        if (! $start || ! $end || ! $start->lt($end)) {
             return [];
         }
-
-        $start = $wo->planned_start instanceof Carbon
-            ? $wo->planned_start->copy()
-            : Carbon::parse($wo->planned_start);
-        $end = $wo->planned_end instanceof Carbon
-            ? $wo->planned_end->copy()
-            : Carbon::parse($wo->planned_end);
+        $start = $start->copy();
+        $end = $end->copy();
         $windowMinutes = max(0, $start->diffInMinutes($end, true));
         $weights = $operations->mapWithKeys(function ($operation): array {
-            $weight = (float) $operation->setup_time_minutes + (float) $operation->cycle_time_minutes;
+            $definition = $operation instanceof WoOperation ? $operation->routingOperation : $operation;
+            $weight = (float) $definition?->setup_time_minutes + (float) $definition?->cycle_time_minutes;
 
             return [$operation->id => max(0.0001, $weight)];
         });
@@ -546,7 +644,7 @@ class WoOperationService
                 : (int) round($windowMinutes * ((float) $weights[$operation->id] / $totalWeight));
             $operationEnd = $operation === $operations->last()
                 ? $end->copy()
-                : $cursor->copy()->addMinutes(max(0, $duration));
+                : $cursor->copy()->addMinutes(max(0, $duration))->min($end);
             $windows[$operation->id] = ['start' => $cursor->copy(), 'end' => $operationEnd];
             $cursor = $operationEnd;
         }
@@ -557,6 +655,18 @@ class WoOperationService
     /**
      * Create a production log entry.
      */
+    private function assertCrewOperator(WoOperation $op, Employee $operator, bool $setup = false): void
+    {
+        $wo = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
+        $this->assertParentInProgress($op, setup: $setup);
+        $crew = app(WorkOrderAssignmentService::class)->assertReadyForStart($wo);
+        app(WorkOrderAssignmentService::class)->assertCrewPresent($wo, $crew);
+        app(WorkOrderAssignmentService::class)->assertOperatorPresent($wo, $operator);
+        if ($operator->status->value !== 'active' || ! $crew->members->contains('employee_id', $operator->id)) {
+            throw new BusinessRuleException('The operator must be an active employee assigned to this WO crew.');
+        }
+    }
+
     private function log(
         WoOperation $op,
         ?Employee $operator,
@@ -564,6 +674,7 @@ class WoOperationService
         ?float $qtyValue = null,
         ?string $downtimeReason = null,
         ?string $notes = null,
+        ?array $handoverException = null,
     ): void {
         ProductionLog::create([
             'wo_operation_id' => $op->id,
@@ -572,6 +683,7 @@ class WoOperationService
             'qty_value' => $qtyValue,
             'downtime_reason' => $downtimeReason,
             'notes' => $notes,
+            'material_handover_exception' => $handoverException,
             'recorded_at' => Carbon::now(),
         ]);
     }

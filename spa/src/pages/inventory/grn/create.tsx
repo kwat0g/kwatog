@@ -59,19 +59,19 @@ export default function CreateGrnPage() {
   const [errors, setErrors] = useState<FormErrors>({ itemErrors: {} });
   const idempotencyKey = useRef(crypto.randomUUID());
 
-  const { data: openPos } = useQuery({
+  const { data: openPos, isFetching: ordersLoading, isError: ordersError, refetch: refetchOrders } = useQuery({
     queryKey: ['inventory', 'grn', 'receivable-pos'],
     queryFn: () => grnApi.receivablePurchaseOrders(),
   });
   const poList = openPos?.data ?? [];
 
-  const { data: po } = useQuery({
+  const { data: po, isFetching: orderLoading, isError: orderError, refetch: refetchOrder } = useQuery({
     queryKey: ['inventory', 'grn', 'receivable-pos', poId],
     queryFn: () => grnApi.receivablePurchaseOrder(poId),
     enabled: !!poId,
   });
 
-  const { data: warehouses } = useQuery({
+  const { data: warehouses, isFetching: warehousesLoading, isError: warehousesError, refetch: refetchWarehouses } = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
   });
@@ -96,24 +96,26 @@ export default function CreateGrnPage() {
       ),
     [warehouses],
   );
+  const lookupFailed = ordersError || orderError || warehousesError;
+  const lookupPending = ordersLoading || orderLoading || warehousesLoading;
 
   useEffect(() => {
     if (po && po.items) {
       setItems(
         po.items
-          .filter((l) => Number(l.quantity_remaining) > 0)
+          .filter((l) => Number(l.base_quantity_remaining ?? l.quantity_remaining) > 0)
           .map((l) => ({
             purchase_order_item_id: String(l.id),
             item_id: l.item.id,
             item_code: l.item.code,
             item_name: l.item.name,
-            ordered: l.quantity,
-            remaining: l.quantity_remaining,
+            ordered: l.base_quantity_ordered ?? l.quantity,
+            remaining: l.base_quantity_remaining ?? l.quantity_remaining,
             location_id: '',
-            quantity_received: l.quantity_remaining,
+            quantity_received: l.base_quantity_remaining ?? l.quantity_remaining,
             // RFQ lines receive at delivered cost (freight/charges capitalized).
             unit_cost: l.delivered_unit_cost ?? l.unit_price,
-            received_uom_code: '',
+            received_uom_code: l.item.unit_of_measure,
             lot_number: '',
             supplier_lot_reference: '',
             expiry_date: '',
@@ -158,21 +160,18 @@ export default function CreateGrnPage() {
     },
     onError: (err: AxiosError<ApiValidationError | ApiSuccess<unknown>>) => {
       setConfirmOpen(false);
-      const data = err.response?.data;
-      if (err.response?.status === 422 && data && 'errors' in data && data.errors) {
-        toast.error('The server flagged some fields. Please review.');
-      } else {
-        reportMutationError(err, 'Failed to create GRN.');
-      }
+      reportMutationError(err, 'Failed to create GRN.');
     },
   });
 
   const submit = () => {
+    if (lookupFailed || lookupPending) return;
     if (!validate()) return;
     setConfirmOpen(true);
   };
 
   const reallyCreate = () => {
+    if (lookupFailed || lookupPending || !validate()) return;
     m.mutate({
       purchase_order_id: poId,
       received_date: meta.received_date,
@@ -198,13 +197,22 @@ export default function CreateGrnPage() {
   return (
     <div>
       <PageHeader title="New GRN" backTo="/inventory/grn" backLabel="GRNs" />
-      <div className="max-w-5xl mx-auto px-5 py-4 space-y-4">
+      <div className="min-w-0 w-full px-5 py-4 space-y-4">
+        {lookupFailed && <div role="alert" className="text-sm text-danger-fg">
+          Receiving options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+            if (ordersError) void refetchOrders();
+            if (orderError) void refetchOrder();
+            if (warehousesError) void refetchWarehouses();
+          }}>Retry options</Button>
+        </div>}
         <Panel title="Reference">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Select
+              searchable
               label="Purchase order"
               required
               value={poId}
+              disabled={ordersLoading || ordersError}
               onChange={(e) => setPoId(e.target.value)}
               error={errors.poId}
             >
@@ -272,6 +280,7 @@ export default function CreateGrnPage() {
                             aria-label="Receive quantity"
                             value={line.quantity_received}
                             {...numberInputProps()}
+                            step="0.001"
                             onChange={(e) =>
                               setItems(
                                 items.map((it, k) =>
@@ -287,6 +296,7 @@ export default function CreateGrnPage() {
                         </Td>
                         <Td>
                           <Select
+                            searchable
                             fieldSize="sm"
                             containerClassName="w-44"
                             aria-label="Location"
@@ -326,7 +336,8 @@ export default function CreateGrnPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
                             <Input
                               fieldSize="sm"
-                              label="Received UOM"
+                              label="Received UOM (base)"
+                              readOnly
                               placeholder="Base / BAG"
                               value={line.received_uom_code}
                               onChange={(e) =>
@@ -424,7 +435,7 @@ export default function CreateGrnPage() {
           <Button
             variant="primary"
             onClick={submit}
-            disabled={!poId || items.length === 0 || m.isPending}
+            disabled={!poId || items.length === 0 || m.isPending || lookupFailed || lookupPending}
             loading={m.isPending}
           >
             Create GRN

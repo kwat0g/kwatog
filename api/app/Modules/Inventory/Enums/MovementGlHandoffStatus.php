@@ -11,6 +11,11 @@ enum MovementGlHandoffStatus: string
     case ManualRequired = 'manual_required';
     case NotRequired = 'not_required';
 
+    public function isResolved(): bool
+    {
+        return in_array($this, [self::Generated, self::NotRequired], true);
+    }
+
     public function label(): string
     {
         return match ($this) {

@@ -17,6 +17,8 @@ class ItemCategoryResource extends JsonResource
         return [
             'id'        => $this->hash_id,
             'name'      => $this->name,
+            'item_type' => $this->item_type,
+            'item_type_label' => \App\Modules\Inventory\Enums\ItemType::tryFrom($this->item_type ?? '')?->label(),
             'parent_id' => $hasParent ? $this->parent->hash_id : null,
             'parent_name' => $hasParent ? $this->parent->name : null,
             'children'  => self::collection($this->whenLoaded('children')),

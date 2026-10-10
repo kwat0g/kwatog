@@ -37,6 +37,7 @@ class PurchaseRequestResource extends JsonResource
             'po_conversion_note' => $this->po_conversion_note,
             'po_conversion_at' => optional($this->po_conversion_at)->toIso8601String(),
             'is_auto_generated' => (bool) $this->is_auto_generated,
+            'stock_production_work_order_id' => $this->stock_production_work_order_id ? app('hashids')->encode($this->stock_production_work_order_id) : null,
             'auto_generated_reason' => $this->auto_generated_reason,
             'is_urgent' => $isUrgent,
             'urgency_reason' => $this->urgency_reason,

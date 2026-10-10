@@ -14,11 +14,13 @@ class PortalShippingDocumentResource extends JsonResource
         return [
             'id'                => $this->hash_id,
             'purchase_order_id' => $this->purchaseOrder?->hash_id,
+            'supplier_shipment_id' => $this->supplierShipment?->hash_id,
             'document_type'     => $this->document_type,
             'document_type_label' => match ($this->document_type) {
                 'commercial_invoice' => 'Commercial Invoice',
                 'packing_list'       => 'Packing List',
                 'bill_of_lading'     => 'Bill of Lading',
+                'dispatch_photo'     => 'Dispatch photo',
                 'supplier_invoice'   => 'Supplier Invoice',
                 default              => ucfirst(str_replace('_', ' ', (string) $this->document_type)),
             },

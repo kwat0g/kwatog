@@ -82,6 +82,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'production.assignment.review': { icon: LuCalendar, group: 'approvals', label: 'Production' },
   'production.crew.assigned': { icon: LuUsers, group: 'system', label: 'Production' },
   'production.crew.changed': { icon: LuUsers, group: 'system', label: 'Production' },
+  'production.schedule.reminder': { icon: LuCalendar, group: 'alerts', label: 'Production schedule' },
   'chain.outgoing_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'chain.outgoing_qc_missing': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
   'quality.inspection_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
@@ -123,6 +124,9 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   supplier_listing_submitted: { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
   'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
   'supplier.schedule_cancelled': { icon: LuCalendar, group: 'alerts', label: 'Purchasing' },
+  'invoice.payment_submitted': { icon: LuReceipt, group: 'approvals', label: 'Payment review' },
+  'invoice.payment_reviewed': { icon: LuReceipt, group: 'system', label: 'Payment review' },
+  'return.supplier_defect': { icon: LuPackage, group: 'alerts', label: 'Supplier return' },
   'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
   'supplier.po_responded': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
   'portal.order_awaiting_review': { icon: LuFileText, group: 'approvals', label: 'Portal' },
@@ -205,6 +209,9 @@ const PORTAL_BY_TYPE: Record<string, NotificationMeta> = {
   'delivery.in_transit': { icon: LuTruck, group: 'system', label: 'Delivery' },
   'delivery.delivered': { icon: LuTruck, group: 'approvals', label: 'Confirm receipt' },
   'delivery.cancelled': { icon: LuTriangleAlert, group: 'alerts', label: 'Delivery' },
+  'invoice.payment_submitted': { icon: LuReceipt, group: 'system', label: 'Payment review' },
+  'invoice.payment_reviewed': { icon: LuReceipt, group: 'system', label: 'Payment review' },
+  'return.supplier_defect': { icon: LuPackage, group: 'alerts', label: 'Supplier return' },
   'invoice.finalized': { icon: LuReceipt, group: 'system', label: 'Invoice' },
 };
 

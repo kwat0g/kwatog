@@ -1,96 +1,117 @@
 import { useNavigate } from 'react-router-dom';
-import { LuTriangleAlert, LuCircleCheck, LuExternalLink, LuInfo, LuPackage, LuShoppingCart } from '@/lib/icons';
+import {
+  LuTriangleAlert,
+  LuCircleCheck,
+  LuExternalLink,
+  LuInfo,
+  LuPackage,
+  LuShoppingCart,
+} from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { formatInt } from '@/lib/formatNumber';
 import type { SoChainResult, SoChainResultWo } from '@/types/crm';
+import { usePermission } from '@/hooks/usePermission';
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
 function WoRow({ wo }: { wo: SoChainResultWo }) {
- return (
- <div className="flex items-center justify-between text-sm border border-default rounded-md px-3 py-2">
- <div className="flex items-center gap-2 min-w-0">
- <Chip variant={wo.needs_manual_scheduling ? 'warning' : 'success'} className="shrink-0">
- {wo.needs_manual_scheduling ? 'Manual' : 'Scheduled'}
- </Chip>
- <span className="font-mono tabular-nums">{wo.wo_number}</span>
- <span className="text-muted truncate">{wo.product?.name}</span>
- </div>
- <div className="flex items-center gap-3 shrink-0">
- <span className="text-xs text-muted font-mono tabular-nums">
- {formatInt(wo.quantity_target)} pcs
- </span>
- <span className="text-xs text-muted font-mono tabular-nums">
- {wo.machine ?? 'Needs scheduling'}
- </span>
- </div>
- </div>
- );
+  return (
+    <div className="flex items-center justify-between text-sm border border-default rounded-md px-3 py-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <Chip variant={wo.needs_manual_scheduling ? 'warning' : 'success'} className="shrink-0">
+          {wo.needs_manual_scheduling ? 'Manual' : 'Scheduled'}
+        </Chip>
+        <span className="font-mono tabular-nums">{wo.wo_number}</span>
+        <span className="text-muted truncate">{wo.product?.name}</span>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-xs text-muted font-mono tabular-nums">
+          {formatInt(wo.quantity_target)} pcs
+        </span>
+        <span className="text-xs text-muted font-mono tabular-nums">
+          {wo.machine ?? 'Needs scheduling'}
+        </span>
+      </div>
+    </div>
+  );
 }
 
-function SchedulingConflictsSection({ conflicts }: { conflicts: SoChainResult['scheduling_conflicts'] }) {
- if (conflicts.length === 0) return null;
+function SchedulingConflictsSection({
+  conflicts,
+}: {
+  conflicts: SoChainResult['scheduling_conflicts'];
+}) {
+  if (conflicts.length === 0) return null;
 
- return (
- <div>
- <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-warning-fg font-medium mb-2">
- <LuTriangleAlert size={14} />
- Scheduling Conflicts ({conflicts.length})
- </h4>
- <div className="space-y-1.5">
- {conflicts.map((c) => (
- <div key={c.work_order_id} className="border border-warning/20 bg-warning-bg/5 rounded-md px-3 py-2 text-sm">
- <div className="font-mono text-warning-fg">{c.wo_number}</div>
- <ul className="mt-1 space-y-0.5">
- {c.reasons.map((r, i) => (
- <li key={i} className="text-xs text-muted flex items-start gap-1.5">
- <span className="text-warning-fg mt-0.5 shrink-0">-</span>
- {r}
- </li>
- ))}
- </ul>
- </div>
- ))}
- </div>
- </div>
- );
+  return (
+    <div>
+      <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-warning-fg font-medium mb-2">
+        <LuTriangleAlert size={14} />
+        Scheduling Conflicts ({conflicts.length})
+      </h4>
+      <div className="space-y-1.5">
+        {conflicts.map((c) => (
+          <div
+            key={c.work_order_id}
+            className="border border-warning/20 bg-warning-bg/5 rounded-md px-3 py-2 text-sm"
+          >
+            <div className="font-mono text-warning-fg">{c.wo_number}</div>
+            <ul className="mt-1 space-y-0.5">
+              {c.reasons.map((r, i) => (
+                <li key={i} className="text-xs text-muted flex items-start gap-1.5">
+                  <span className="text-warning-fg mt-0.5 shrink-0">-</span>
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function MaterialPlanningSection({ shortages, prs_created }: { shortages: number; prs_created: number }) {
- if (shortages === 0 && prs_created === 0) return null;
+function MaterialPlanningSection({
+  shortages,
+  prs_created,
+}: {
+  shortages: number;
+  prs_created: number;
+}) {
+  if (shortages === 0 && prs_created === 0) return null;
 
- return (
- <div>
- <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted font-medium mb-2">
- <LuShoppingCart size={14} />
- Material Planning
- </h4>
- <div className="text-sm space-y-1">
- {shortages > 0 && (
- <p className="flex items-center gap-1.5 text-warning-fg">
- <LuTriangleAlert size={14} className="shrink-0" />
- {shortages} material shortage{shortages > 1 ? 's' : ''} detected
- </p>
- )}
- {prs_created > 0 && (
- <p className="flex items-center gap-1.5 text-muted">
- <LuCircleCheck size={14} className="shrink-0" />
- {prs_created} Purchase Request{prs_created > 1 ? 's' : ''} auto-created
- </p>
- )}
- </div>
- </div>
- );
+  return (
+    <div>
+      <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted font-medium mb-2">
+        <LuShoppingCart size={14} />
+        Material Planning
+      </h4>
+      <div className="text-sm space-y-1">
+        {shortages > 0 && (
+          <p className="flex items-center gap-1.5 text-warning-fg">
+            <LuTriangleAlert size={14} className="shrink-0" />
+            {shortages} material shortage{shortages > 1 ? 's' : ''} detected
+          </p>
+        )}
+        {prs_created > 0 && (
+          <p className="flex items-center gap-1.5 text-muted">
+            <LuCircleCheck size={14} className="shrink-0" />
+            {prs_created} Purchase Request{prs_created > 1 ? 's' : ''} auto-created
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Main component ────────────────────────────────────────────────────────
 
 interface ChainResultModalProps {
- chainResult: SoChainResult | null;
- onClose: () => void;
+  chainResult: SoChainResult | null;
+  onClose: () => void;
 }
 
 /**
@@ -101,125 +122,158 @@ interface ChainResultModalProps {
  * - Navigation to Work Orders / MRP Plan
  */
 export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps) {
- const navigate = useNavigate();
+  const navigate = useNavigate();
+  const { can } = usePermission();
 
- if (!chainResult) return null;
+  if (!chainResult) return null;
 
- const hasConflicts = chainResult.scheduling_conflicts.length > 0;
- const hasManualWos = chainResult.needs_manual > 0;
- const planningQueued = chainResult.planning_status === 'queued';
- const planningFailed = chainResult.planning_status === 'failed';
+  const hasConflicts = chainResult.scheduling_conflicts.length > 0;
+  const hasManualWos = chainResult.needs_manual > 0;
+  const planningQueued = chainResult.planning_status === 'queued';
+  const planningFailed = chainResult.planning_status === 'failed';
 
- return (
- <Modal
- isOpen={!!chainResult}
- onClose={onClose}
- title="Sales Order Confirmed"
- size="lg"
- >
- <div className="py-4 space-y-4">
- {/* Success header */}
- <div className="flex items-center gap-2 text-sm">
- <LuCircleCheck size={16} className="text-success-fg" />
- <span className="text-success-fg font-medium">{chainResult.so_number} confirmed</span>
- </div>
+  return (
+    <Modal isOpen={!!chainResult} onClose={onClose} title="Sales Order Confirmed" size="lg">
+      <div className="py-4 space-y-4">
+        {/* Success header */}
+        <div className="flex items-center gap-2 text-sm">
+          <LuCircleCheck size={16} className="text-success-fg" />
+          <span className="text-success-fg font-medium">{chainResult.so_number} confirmed</span>
+        </div>
 
- {planningQueued && (
- <div className="flex items-start gap-2 border border-info bg-info-bg rounded-md px-3 py-2.5 text-sm">
- <LuInfo size={16} className="text-info-fg mt-0.5 shrink-0" />
- <span className="text-muted">MRP material and work-order planning is queued and will update shortly.</span>
- </div>
- )}
+        {planningQueued && (
+          <div className="flex items-start gap-2 border border-info bg-info-bg rounded-md px-3 py-2.5 text-sm">
+            <LuInfo size={16} className="text-info-fg mt-0.5 shrink-0" />
+            <span className="text-muted">
+              MRP material and work-order planning is queued and will update shortly.
+            </span>
+          </div>
+        )}
 
- {planningFailed && (
- <div className="flex items-start gap-2 border border-danger/30 bg-danger-bg/5 rounded-md px-3 py-2.5 text-sm">
- <LuTriangleAlert size={16} className="text-danger-fg mt-0.5 shrink-0" />
- <div className="text-muted">
- <span>
- MRP planning failed: {chainResult.planning_error?.message ?? 'no material plan was generated.'}{' '}
- </span>
- {chainResult.planning_error?.recovery_action && (
- <span>{chainResult.planning_error.recovery_action}</span>
- )}
- </div>
- </div>
- )}
+        {planningFailed && (
+          <div className="flex items-start gap-2 border border-danger/30 bg-danger-bg/5 rounded-md px-3 py-2.5 text-sm">
+            <LuTriangleAlert size={16} className="text-danger-fg mt-0.5 shrink-0" />
+            <div className="text-muted">
+              <span>
+                MRP planning failed:{' '}
+                {chainResult.planning_error?.message ?? 'no material plan was generated.'}{' '}
+              </span>
+              {chainResult.planning_error?.recovery_action && (
+                <span>{chainResult.planning_error.recovery_action}</span>
+              )}
+            </div>
+          </div>
+        )}
 
- {/* Warning banner for issues */}
- {(hasConflicts || hasManualWos) && (
- <div className="flex items-start gap-2 border border-warning bg-warning-bg rounded-md px-3 py-2.5 text-sm">
- <LuInfo size={16} className="text-warning-fg mt-0.5 shrink-0" />
- <div className="text-muted">
- {hasManualWos && (
- <span>{chainResult.needs_manual} work order{chainResult.needs_manual > 1 ? 's' : ''} need manual machine assignment. </span>
- )}
- {hasConflicts && (
- <span>{chainResult.scheduling_conflicts.length} scheduling conflict{chainResult.scheduling_conflicts.length > 1 ? 's' : ''} require attention.</span>
- )}
- </div>
- </div>
- )}
+        {/* Warning banner for issues */}
+        {(hasConflicts || hasManualWos) && (
+          <div className="flex items-start gap-2 border border-warning bg-warning-bg rounded-md px-3 py-2.5 text-sm">
+            <LuInfo size={16} className="text-warning-fg mt-0.5 shrink-0" />
+            <div className="text-muted">
+              {hasManualWos && (
+                <span>
+                  {chainResult.needs_manual} work order{chainResult.needs_manual > 1 ? 's' : ''}{' '}
+                  need manual machine assignment.{' '}
+                </span>
+              )}
+              {hasConflicts && (
+                <span>
+                  {chainResult.scheduling_conflicts.length} scheduling conflict
+                  {chainResult.scheduling_conflicts.length > 1 ? 's' : ''} require attention.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
- {/* Work Orders summary */}
- <div>
- <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted font-medium mb-2">
- <LuPackage size={14} />
- Work Orders ({chainResult.work_orders_created})
- </h4>
- {chainResult.work_orders.length > 0 ? (
- <div className="space-y-1.5 max-h-64 overflow-y-auto">
- {chainResult.work_orders.map((wo) => (
- <WoRow key={wo.id} wo={wo} />
- ))}
- </div>
- ) : (
- <p className="text-sm text-muted">No work orders created.</p>
- )}
- </div>
+        {/* Work Orders summary */}
+        <div>
+          <h4 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted font-medium mb-2">
+            <LuPackage size={14} />
+            Work Orders ({chainResult.work_orders_created})
+          </h4>
+          {chainResult.work_orders.length > 0 ? (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {chainResult.work_orders.map((wo) => (
+                <WoRow key={wo.id} wo={wo} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">No work orders created.</p>
+          )}
+        </div>
 
- {/* Material Planning */}
- <MaterialPlanningSection shortages={chainResult.shortages} prs_created={chainResult.prs_created} />
+        {/* Material Planning */}
+        <MaterialPlanningSection
+          shortages={chainResult.shortages}
+          prs_created={chainResult.prs_created}
+        />
 
- {/* Scheduling Conflicts */}
- <SchedulingConflictsSection conflicts={chainResult.scheduling_conflicts} />
+        {/* Scheduling Conflicts */}
+        <SchedulingConflictsSection conflicts={chainResult.scheduling_conflicts} />
 
- {/* Summary line */}
- <div className="text-xs text-muted border-t border-default pt-3 font-mono tabular-nums">
- {chainResult.auto_scheduled} auto-scheduled · {chainResult.needs_manual} need manual scheduling
- </div>
+        {/* Summary line */}
+        <div className="text-xs text-muted border-t border-default pt-3 font-mono tabular-nums">
+          {chainResult.auto_scheduled} auto-scheduled · {chainResult.needs_manual} need manual
+          scheduling
+        </div>
 
- {/* Actions */}
- <ModalFooter>
- <Button variant="secondary" size="sm" icon={<LuExternalLink size={14} />} onClick={() => { onClose(); navigate('/production/work-orders'); }}>
- View Work Orders
- </Button>
- <Button variant="secondary" size="sm" icon={<LuExternalLink size={14} />} onClick={() => { onClose(); navigate('/mrp/plans'); }}>
- View MRP Plan
- </Button>
- <Button variant="primary" size="sm" onClick={onClose}>
- Done
- </Button>
- </ModalFooter>
- </div>
- </Modal>
- );
+        {/* Actions */}
+        <p className="text-sm text-primary">
+          Next: PPC reviews material planning and scheduling. Production starts the linked work
+          orders after materials and QC setup are ready.
+        </p>
+        <ModalFooter>
+          {can('production.work_orders.view') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuExternalLink size={14} />}
+              onClick={() => {
+                onClose();
+                navigate('/production/work-orders');
+              }}
+            >
+              View Work Orders
+            </Button>
+          )}
+          {can('mrp.plans.view') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuExternalLink size={14} />}
+              onClick={() => {
+                onClose();
+                navigate('/mrp/plans');
+              }}
+            >
+              View MRP Plan
+            </Button>
+          )}
+          <Button variant="primary" size="sm" onClick={onClose}>
+            Done
+          </Button>
+        </ModalFooter>
+      </div>
+    </Modal>
+  );
 }
 
 // ─── MRP Failure Error Panel ───────────────────────────────────────────────
 
 interface MrpErrorInfo {
- message: string;
- errors?: Record<string, string[]>;
- /**
-  * Machine-readable rule identifier from BusinessRuleException::errorCode().
-  * Present only for rules the client is expected to branch on.
-  */
- code?: string;
+  message: string;
+  errors?: Record<string, string[]>;
+  /**
+   * Machine-readable rule identifier from BusinessRuleException::errorCode().
+   * Present only for rules the client is expected to branch on.
+   */
+  code?: string;
 }
 
 interface ChainErrorPanelProps {
- error: MrpErrorInfo | null;
- onDismiss: () => void;
+  error: MrpErrorInfo | null;
+  onDismiss: () => void;
 }
 
 /**
@@ -228,67 +282,67 @@ interface ChainErrorPanelProps {
  * Renders structured error details with actionable links where possible.
  */
 export function ChainErrorPanel({ error, onDismiss }: ChainErrorPanelProps) {
- const navigate = useNavigate();
+  const navigate = useNavigate();
 
- if (!error) return null;
+  if (!error) return null;
 
- // These were substring matches on the message — `.includes('bom')`,
- // `.includes('credit limit')` — so rewording a backend sentence silently
- // removed the button that fixes the problem, and a Tagalog or reworded
- // message would have removed all of them at once. The API already identifies
- // these two structurally: a code from BusinessRuleException, and the errors-bag
- // key ValidationException::withMessages() was given.
- const isMissingBom = error.code === 'missing_bom' || Boolean(error.errors?.bom);
- const isCreditLimit = Boolean(error.errors?.credit_limit);
- // No structured signal exists for this one yet, so it stays a text match and
- // says so, rather than looking as reliable as the two above.
- const isNoSupplier = !isMissingBom && error.message.toLowerCase().includes('supplier');
+  // These were substring matches on the message — `.includes('bom')`,
+  // `.includes('credit limit')` — so rewording a backend sentence silently
+  // removed the button that fixes the problem, and a Tagalog or reworded
+  // message would have removed all of them at once. The API already identifies
+  // these two structurally: a code from BusinessRuleException, and the errors-bag
+  // key ValidationException::withMessages() was given.
+  const isMissingBom = error.code === 'missing_bom' || Boolean(error.errors?.bom);
+  const isCreditLimit = Boolean(error.errors?.credit_limit);
+  // No structured signal exists for this one yet, so it stays a text match and
+  // says so, rather than looking as reliable as the two above.
+  const isNoSupplier = !isMissingBom && error.message.toLowerCase().includes('supplier');
 
- return (
- <div className="border border-danger/30 bg-danger-bg/5 rounded-md px-4 py-3 space-y-2">
- <div className="flex items-start justify-between gap-2">
- <div className="flex items-start gap-2">
- <LuTriangleAlert size={16} className="text-danger-fg mt-0.5 shrink-0" />
- <div>
- <p className="text-sm font-medium text-danger-fg">Confirmation Failed</p>
- <p className="text-sm text-muted mt-1">{error.message}</p>
- </div>
- </div>
- <LinkButton tone="muted" onClick={onDismiss} className="text-xs">
- Dismiss
- </LinkButton>
- </div>
+  return (
+    <div className="border border-danger/30 bg-danger-bg/5 rounded-md px-4 py-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <LuTriangleAlert size={16} className="text-danger-fg mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-danger-fg">Confirmation Failed</p>
+            <p className="text-sm text-muted mt-1">{error.message}</p>
+          </div>
+        </div>
+        <LinkButton tone="muted" onClick={onDismiss} className="text-xs">
+          Dismiss
+        </LinkButton>
+      </div>
 
- {error.errors && Object.keys(error.errors).length > 0 && (
- <ul className="text-xs text-muted space-y-0.5 ml-6">
- {Object.entries(error.errors).flatMap(([, msgs]) =>
- msgs.map((m, i) => (
- <li key={i} className="flex items-start gap-1.5">
- <span className="text-danger-fg mt-0.5 shrink-0">-</span>
- {m}
- </li>
- ))
- )}
- </ul>
- )}
+      {error.errors && Object.keys(error.errors).length > 0 && (
+        <ul className="text-xs text-muted space-y-0.5 ml-6">
+          {Object.entries(error.errors).flatMap(([, msgs]) =>
+            msgs.map((m, i) => (
+              <li key={i} className="flex items-start gap-1.5">
+                <span className="text-danger-fg mt-0.5 shrink-0">-</span>
+                {m}
+              </li>
+            )),
+          )}
+        </ul>
+      )}
 
- <div className="flex gap-2 ml-6">
- {isMissingBom && (
- <Button size="sm" variant="secondary" onClick={() => navigate('/mrp/boms')}>
- Manage BOMs
- </Button>
- )}
- {isNoSupplier && (
- <Button size="sm" variant="secondary" onClick={() => navigate('/accounting/vendors')}>
- Manage Suppliers
- </Button>
- )}
- {isCreditLimit && (
- <Button size="sm" variant="secondary" onClick={() => navigate('/crm/customers')}>
- Review Customer
- </Button>
- )}
- </div>
- </div>
- );
+      <div className="flex gap-2 ml-6">
+        {isMissingBom && (
+          <Button size="sm" variant="secondary" onClick={() => navigate('/mrp/boms')}>
+            Manage BOMs
+          </Button>
+        )}
+        {isNoSupplier && (
+          <Button size="sm" variant="secondary" onClick={() => navigate('/accounting/vendors')}>
+            Manage Suppliers
+          </Button>
+        )}
+        {isCreditLimit && (
+          <Button size="sm" variant="secondary" onClick={() => navigate('/crm/customers')}>
+            Review Customer
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }

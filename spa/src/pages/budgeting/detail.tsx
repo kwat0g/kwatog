@@ -129,7 +129,7 @@ export default function BudgetDetailPage() {
   if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
 
   const canSubmit = budget.status === 'draft' && canManage;
-  const canApproveAction = budget.status === 'submitted' && canApprove;
+  const canApproveAction = budget.status === 'submitted' && canApprove && budget.can_approve === true;
   const canReject = budget.status === 'submitted' && canApprove;
   const canDelete = budget.status === 'draft' && canManage;
   const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;

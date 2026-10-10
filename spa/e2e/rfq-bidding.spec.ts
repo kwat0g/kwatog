@@ -211,6 +211,28 @@ async function mockSupplierSession(page: import('@playwright/test').Page): Promi
 }
 
 test.describe('RFQ bidding role workflow', () => {
+  test('PR list hides direct conversion for competitive RFQ requests', async ({ page }) => {
+    await page.route('**/api/v1/purchasing/purchase-requests?*', (route) => route.fulfill({
+      json: {
+        data: [
+          { ...PR, sourcing_method: 'rfq', actions: null },
+          { ...PR, id: 'pr_direct_01', pr_number: 'PR-DIRECT-0001', sourcing_method: 'direct_po', actions: null },
+          { ...PR, id: 'pr_pending_01', pr_number: 'PR-PENDING-0001', status: 'pending', sourcing_method: 'direct_po', actions: null },
+        ],
+        meta: { ...pagination, total: 3, to: 3 },
+      },
+    }));
+    await loginAs(page, 'purchasing', '/purchasing/purchase-requests');
+
+    const rfqRow = page.getByRole('row').filter({ hasText: PR.pr_number });
+    await expect(rfqRow).toBeVisible();
+    await expect(rfqRow.getByRole('button', { name: 'Convert to PO', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('row').filter({ hasText: 'PR-DIRECT-0001' })
+      .getByRole('button', { name: 'Convert to PO', exact: true })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'PR-PENDING-0001' })
+      .getByRole('button', { name: 'Convert to PO', exact: true })).toHaveCount(0);
+  });
+
   test('Purchasing Officer can open the RFQ list and detail', async ({ page }) => {
     await mockRfqApi(page);
     await loginAs(page, 'purchasing', '/purchasing/rfqs');

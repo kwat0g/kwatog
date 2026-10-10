@@ -9,7 +9,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { formatDate } from '@/lib/formatDate';
+import { formatDate, formatTime } from '@/lib/formatDate';
 
 const MONTH_NAMES = [
  'January', 'February', 'March', 'April', 'May', 'June',
@@ -24,13 +24,6 @@ const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' |
  on_leave: 'info',
  holiday: 'neutral',
 };
-
-function fmtTime(value: string | null): string {
- if (!value) return '—';
- const s = String(value);
- if (s.includes('T')) return s.slice(11, 16);
- return s.slice(0, 5);
-}
 
 function fmtHours(value: string | number | null | undefined): string {
  if (value == null || value === '') return '—';
@@ -56,12 +49,12 @@ function attendanceColumns(statusLabels: ReadonlyMap<string, string>): Column<Se
  {
  key: 'time_in',
  header: 'Time in',
- cell: (r) => <NumCell>{fmtTime(r.time_in)}</NumCell>,
+ cell: (r) => <NumCell>{formatTime(r.time_in)}</NumCell>,
  },
  {
  key: 'time_out',
  header: 'Time out',
- cell: (r) => <NumCell>{fmtTime(r.time_out)}</NumCell>,
+ cell: (r) => <NumCell>{formatTime(r.time_out)}</NumCell>,
  },
  {
  key: 'regular_hours',

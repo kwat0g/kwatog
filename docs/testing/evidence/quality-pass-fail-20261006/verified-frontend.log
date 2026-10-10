@@ -1,0 +1,32 @@
+
+> ogami-erp-spa@0.1.0 test:run
+> vitest run src/pages/quality/inspection-specs/editor.test.tsx src/pages/quality/inspections/detail.test.tsx src/pages/quality/inspections/components/InspectionChecklistPanel.test.tsx src/pages/quality/inspections/components/ChecklistDecisionPanel.test.tsx src/pages/inventory/items/quality-plans.test.tsx
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/app[39m
+
+ [32m✓[39m src/pages/quality/inspection-specs/editor.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1320[2mms[22m[39m
+     [33m[2m✓[22m[39m shows written checks without numerical measurement controls [33m 746[2mms[22m[39m
+     [33m[2m✓[22m[39m preserves edits when parameter metadata loads after the spec [33m 311[2mms[22m[39m
+ [32m✓[39m src/pages/inventory/items/quality-plans.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1249[2mms[22m[39m
+     [33m[2m✓[22m[39m requires written criteria and retains them after a server rejection [33m 1053[2mms[22m[39m
+ [32m✓[39m src/pages/quality/inspections/components/ChecklistDecisionPanel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 2197[2mms[22m[39m
+   [33m[2m✓[22m[39m submits one atomic request without numeric measurements or separate zero input [33m 729[2mms[22m[39m
+   [33m[2m✓[22m[39m preserves local failure input after server rejection [33m 373[2mms[22m[39m
+   [33m[2m✓[22m[39m does not leave an invisible defect-count blocker after correcting a failed decision [33m 349[2mms[22m[39m
+ [32m✓[39m src/pages/quality/inspections/detail.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 3549[2mms[22m[39m
+     [33m[2m✓[22m[39m shows critical sample measurements alongside checklist decisions for incoming [33m 1570[2mms[22m[39m
+     [33m[2m✓[22m[39m shows critical sample measurements alongside checklist decisions for in_process [33m 487[2mms[22m[39m
+     [33m[2m✓[22m[39m shows critical sample measurements alongside checklist decisions for outgoing [33m 442[2mms[22m[39m
+ [32m✓[39m src/pages/quality/inspections/components/InspectionChecklistPanel.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 4288[2mms[22m[39m
+     [33m[2m✓[22m[39m offers one decision per unique requirement and submits only after every requirement is answered [33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m requires actual sample coverage and uses the batch gate for lot-checklist submission [33m 685[2mms[22m[39m
+     [33m[2m✓[22m[39m blocks PASS when an unsaved lot-checklist reading is outside tolerance [33m 422[2mms[22m[39m
+     [33m[2m✓[22m[39m requires saved measurements for every sample of a critical dimension before PASS [33m 335[2mms[22m[39m
+     [33m[2m✓[22m[39m searches large checklists and PASS all remaining includes hidden unanswered requirements [33m 658[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m32 passed[39m[22m[90m (32)[39m
+[2m   Start at [22m 11:34:37
+[2m   Duration [22m 8.34s[2m (transform 2.55s, setup 864ms, import 9.66s, tests 12.60s, environment 9.37s)[22m
+

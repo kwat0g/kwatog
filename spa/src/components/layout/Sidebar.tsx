@@ -38,6 +38,7 @@ import {
   LuKeyRound,
   LuDatabase,
   LuListChecks,
+  LuRuler,
   LuStore,
   LuChevronDown,
   LuChevronRight,
@@ -48,7 +49,6 @@ import {
   RequestIcon,
   InvoiceIcon,
   BillIcon,
-  DeliveryIcon,
   WorkOrderIcon,
   ReceivingIcon,
   IssuanceIcon,
@@ -135,14 +135,17 @@ const SECTION_PRIORITY: Record<string, number> = {
 
 /** Role context changes reading order only; permission gates remain authoritative. */
 const ROLE_SECTION_ORDER: Record<string, string[]> = {
+  system_admin: ['Administration'],
+  impex_officer: ['Supply Chain', 'Procurement'],
   vice_president: ['Finance', 'Sales & CRM', 'Production', 'Procurement'],
-  finance_officer: ['Finance', 'Procurement', 'Sales & CRM'],
+  finance_officer: ['Finance', 'Procurement', 'Payroll', 'Assets'],
   purchasing_officer: ['Procurement', 'Warehouse', 'Finance'],
   ppc_head: ['Production Planning (MRP)', 'Production', 'Procurement', 'Warehouse'],
   production_manager: ['Production', 'Production Planning (MRP)', 'Quality', 'Warehouse'],
   warehouse_staff: ['Warehouse', 'Supply Chain', 'Quality'],
   qc_inspector: ['Quality', 'Warehouse', 'Production'],
   maintenance_tech: ['Maintenance', 'Assets', 'Production'],
+  maintenance_supervisor: ['Maintenance', 'Assets', 'Production Planning (MRP)'],
   hr_officer: ['Human Resources', 'Finance'],
   department_head: ['Human Resources', 'Finance', 'Production'],
   sales_officer: ['Sales & CRM', 'Supply Chain'],
@@ -164,7 +167,12 @@ export const SECTIONS: NavSection[] = [
         permission: 'dashboard.action_center.view',
         badgeKey: 'action_center',
       },
-      { to: '/dashboard/scorecard', label: 'KPI Scorecard', description: 'Key performance indicator scorecard', icon: LuChartColumnIncreasing },
+      {
+        to: '/dashboard/scorecard',
+        label: 'KPI Scorecard',
+        description: 'Key performance indicator scorecard',
+        icon: LuChartColumnIncreasing,
+      },
       {
         to: '/chains',
         label: 'Business Chain Tracker',
@@ -185,13 +193,26 @@ export const SECTIONS: NavSection[] = [
         permission: 'approvals.board.view',
         badgeKey: 'approvals',
       },
-      { to: '/notifications', label: 'Notifications', icon: LuBell, work: true, badgeKey: 'unread' },
+      {
+        to: '/notifications',
+        label: 'Notifications',
+        icon: LuBell,
+        work: true,
+        badgeKey: 'unread',
+      },
     ],
   },
   {
     label: 'Sales & CRM',
     description: 'Sales and customer relationship management',
     items: [
+      {
+        to: '/crm/inquiries',
+        label: 'Customer Inquiries',
+        icon: LuInbox,
+        feature: 'crm',
+        permission: 'crm.inquiries.view',
+      },
       {
         to: '/crm/sales-orders',
         label: 'Sales Orders',
@@ -231,7 +252,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Customer Complaints',
         icon: ComplaintIcon,
         feature: 'crm',
-        permission: 'crm.complaints.manage',
+        permission: 'crm.complaints.view',
         badgeKey: 'open_complaints',
       },
       {
@@ -323,24 +344,21 @@ export const SECTIONS: NavSection[] = [
         label: 'Procurement Chain',
         icon: WorkflowIcon,
         feature: 'purchasing',
-        anyPermissions: [
-          'purchasing.pr.create', 'purchasing.pr.approve',
-          'purchasing.po.create', 'purchasing.po.approve',
-        ],
+        permission: 'purchasing.chain.view',
       },
       {
         to: '/purchasing/purchase-orders',
         label: 'Purchase Orders',
         icon: OrderIcon,
         feature: 'purchasing',
-        anyPermissions: ['purchasing.po.create', 'purchasing.po.approve'],
+        permission: 'purchasing.view',
       },
       {
         to: '/purchasing/purchase-requests',
         label: 'Purchase Requests',
         icon: RequestIcon,
         feature: 'purchasing',
-        anyPermissions: ['purchasing.pr.create', 'purchasing.pr.approve'],
+        permission: 'purchasing.view',
         badgeKey: 'purchase_requests',
       },
       {
@@ -379,6 +397,13 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'low_stock',
       },
       {
+        to: '/inventory/uoms',
+        label: 'Units of Measure',
+        icon: LuRuler,
+        feature: 'inventory',
+        permission: 'inventory.items.manage',
+      },
+      {
         to: '/inventory/grn',
         label: 'Goods Receipts (GRN)',
         description: 'Inbound goods receipts',
@@ -393,15 +418,6 @@ export const SECTIONS: NavSection[] = [
         icon: IssuanceIcon,
         feature: 'inventory',
         permission: 'inventory.issue.create',
-      },
-      {
-        to: '/inventory/mrb',
-        label: 'Quarantine Holds (MRB)',
-        description: 'Quality quarantine holds',
-        icon: LuTriangleAlert,
-        feature: 'inventory',
-        permission: 'inventory.mrb.view',
-        badgeKey: 'mrb_holds',
       },
       {
         to: '/inventory/stock-levels',
@@ -436,7 +452,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/inventory/picking',
-        label: 'Order Picking',
+        label: 'Material Handover',
         icon: PickingIcon,
         feature: 'inventory',
         permission: 'inventory.picking.view',
@@ -467,14 +483,6 @@ export const SECTIONS: NavSection[] = [
         icon: LuTruck,
         feature: 'supply_chain',
         permission: 'supply_chain.driver.access',
-      },
-      {
-        to: '/supply-chain/shipments',
-        label: 'Inbound Shipments',
-        icon: DeliveryIcon,
-        feature: 'supply_chain',
-        permission: 'supply_chain.view',
-        badgeKey: 'shipments',
       },
       {
         to: '/supply-chain/fleet',
@@ -524,13 +532,6 @@ export const SECTIONS: NavSection[] = [
   {
     label: 'Finance',
     items: [
-      {
-        to: '/dashboard/finance',
-        label: 'Finance Dashboard',
-        icon: LuLayoutDashboard,
-        feature: 'accounting',
-        permission: 'dashboard.accounting.view',
-      },
       {
         to: '/budgeting',
         label: 'Budgeting',
@@ -582,6 +583,41 @@ export const SECTIONS: NavSection[] = [
     label: 'Human Resources',
     items: [
       {
+        to: '/hr/recruitment',
+        label: 'Recruitment',
+        icon: LuUsers,
+        feature: 'recruitment',
+        permission: 'hr.recruitment.view',
+      },
+      {
+        to: '/hr/trainings',
+        label: 'Training Programs',
+        icon: LuBadgeCheck,
+        feature: 'hr',
+        permission: 'hr.trainings.view',
+      },
+      {
+        to: '/hr/loans',
+        label: 'Employee Loans',
+        icon: LuWallet,
+        feature: 'loans',
+        permission: 'loans.view',
+      },
+      {
+        to: '/hr/separations',
+        label: 'Separation Clearance',
+        icon: LuListChecks,
+        feature: 'hr',
+        permission: 'hr.separation.view',
+      },
+      {
+        to: '/hr/profile-update-requests',
+        label: 'Bank Account Changes',
+        icon: LuLandmark,
+        feature: 'hr',
+        anyPermissions: ['hr.employees.view', 'hr.profile_updates.finance_review'],
+      },
+      {
         to: '/hr/employees',
         label: 'Employees',
         icon: LuUsers,
@@ -627,10 +663,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Payroll Processing',
         icon: LuWallet,
         feature: 'payroll',
-        anyPermissions: [
-          'payroll.periods.create', 'payroll.periods.compute',
-          'payroll.periods.approve', 'payroll.periods.finalize',
-        ],
+        permission: 'payroll.periods.view',
         badgeKey: 'payroll',
       },
       {
@@ -638,7 +671,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Payroll Adjustments',
         icon: LuSettings2,
         feature: 'payroll',
-        permission: 'payroll.adjustments.create',
+        permission: 'payroll.adjustments.view',
       },
       {
         to: '/payroll/statutory',
@@ -684,8 +717,18 @@ export const SECTIONS: NavSection[] = [
   {
     label: 'Administration',
     items: [
-      { to: '/admin/users', label: 'User Accounts', icon: LuUsers, permission: 'admin.users.manage' },
-      { to: '/admin/roles', label: 'Roles & Permissions', icon: LuShieldCheck, permission: 'admin.roles.manage' },
+      {
+        to: '/admin/users',
+        label: 'User Accounts',
+        icon: LuUsers,
+        permission: 'admin.users.manage',
+      },
+      {
+        to: '/admin/roles',
+        label: 'Roles & Permissions',
+        icon: LuShieldCheck,
+        permission: 'admin.roles.manage',
+      },
       {
         to: '/admin/audit-logs',
         label: 'Audit Logs',
@@ -746,6 +789,17 @@ export interface NavVisibilityContext {
  * isAdmin short-circuit — otherwise an admin with an empty permission set would
  * see a thinner menu than the pages they can actually open.
  */
+/** Shared labels keep restricted queues clear in both sidebar and page search. */
+export function navItemForPermissions(item: NavItem, permissions?: ReadonlySet<string>): NavItem {
+  if (item.to === '/hr/employees' && permissions && !permissions.has('hr.employees.view')) {
+    return { ...item, label: 'Salary Adjustments' };
+  }
+  if (item.to === '/hr/profile-update-requests' && permissions?.has('hr.employees.view')) {
+    return { ...item, label: 'Profile Change Requests' };
+  }
+  return item;
+}
+
 export function isNavItemVisible(
   item: NavItem,
   { permissions, features, roleSlug }: NavVisibilityContext,
@@ -793,10 +847,13 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     setHovered(false);
   };
 
-  useEffect(() => () => {
-    clearTimeout(hoverTimer.current);
-    peekTimers.current.forEach(clearTimeout);
-  }, []);
+  useEffect(
+    () => () => {
+      clearTimeout(hoverTimer.current);
+      peekTimers.current.forEach(clearTimeout);
+    },
+    [],
+  );
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const { pathname } = useLocation();
@@ -830,12 +887,15 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         setMobileOpen(false);
       }
       if (e.key === 'Tab' && drawer) {
-        const controls = Array.from(drawer.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        )).filter((control) =>
-          control.tabIndex >= 0
-          && !control.matches(':disabled')
-          && !control.closest('[hidden], [aria-hidden="true"]'),
+        const controls = Array.from(
+          drawer.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter(
+          (control) =>
+            control.tabIndex >= 0 &&
+            !control.matches(':disabled') &&
+            !control.closest('[hidden], [aria-hidden="true"]'),
         );
         const first = controls[0];
         const last = controls[controls.length - 1];
@@ -876,21 +936,58 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     [visibility],
   );
 
-  // Only accessible modules participate in route matching and disclosure.
+  // Finance sees its stock-checker work beside accounting approvals.
   const visibleSections = useMemo(() => {
     const roleOrder = ROLE_SECTION_ORDER[roleSlug ?? ''] ?? [];
     const roleRank = new Map(roleOrder.map((label, index) => [label, index]));
+    const financeApprovalItems =
+      roleSlug === 'finance_officer'
+        ? (SECTIONS.find((section) => section.label === 'Warehouse')?.items.filter(
+            (item) => item.to === '/inventory/stock-adjustments',
+          ) ?? [])
+        : [];
+    const financeReturns =
+      roleSlug === 'finance_officer'
+        ? (SECTIONS.find((section) => section.label === 'Sales & CRM')?.items.filter(
+            (item) => item.to === '/return-management',
+          ) ?? [])
+        : [];
     const sections = SECTIONS.map((section) => ({
       ...section,
-      visibleItems: section.items.filter(isVisible),
+      label:
+        roleSlug === 'finance_officer' && section.label === 'Human Resources'
+          ? 'Payroll'
+          : section.label,
+      visibleItems: [
+        ...section.items.filter(
+          (item) =>
+            isVisible(item) &&
+            (roleSlug !== 'finance_officer' ||
+              item.work ||
+              ['Finance', 'Procurement', 'Assets'].includes(section.label) ||
+              item.to.startsWith('/payroll/') ||
+              ['/hr/profile-update-requests', '/hr/loans', '/hr/separations'].includes(item.to)),
+        ),
+        ...(section.label === 'Finance'
+          ? [...financeApprovalItems, ...financeReturns].filter(isVisible)
+          : []),
+      ].map((item) => navItemForPermissions(item, permissions)),
     })).filter((section) => section.visibleItems.length > 0);
 
     return sections.sort((left, right) => {
-      const leftRank = left.label === 'Overview' ? -1 : roleRank.get(left.label) ?? roleOrder.length + (SECTION_PRIORITY[left.label] ?? Number.MAX_SAFE_INTEGER);
-      const rightRank = right.label === 'Overview' ? -1 : roleRank.get(right.label) ?? roleOrder.length + (SECTION_PRIORITY[right.label] ?? Number.MAX_SAFE_INTEGER);
+      const leftRank =
+        left.label === 'Overview'
+          ? -1
+          : (roleRank.get(left.label) ??
+            roleOrder.length + (SECTION_PRIORITY[left.label] ?? Number.MAX_SAFE_INTEGER));
+      const rightRank =
+        right.label === 'Overview'
+          ? -1
+          : (roleRank.get(right.label) ??
+            roleOrder.length + (SECTION_PRIORITY[right.label] ?? Number.MAX_SAFE_INTEGER));
       return leftRank - rightRank;
     });
-  }, [isVisible, roleSlug]);
+  }, [isVisible, roleSlug, permissions]);
 
   const workItems = useMemo(
     () => visibleSections.flatMap((section) => section.visibleItems.filter((item) => item.work)),
@@ -930,7 +1027,11 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   );
   const activeModuleSectionLabel = matched?.work ? undefined : activeSectionLabel;
 
-  const [modules, setModules] = useState({ pathname, activeSectionLabel, expanded: activeModuleSectionLabel ? [activeModuleSectionLabel] : [] });
+  const [modules, setModules] = useState({
+    pathname,
+    activeSectionLabel,
+    expanded: activeModuleSectionLabel ? [activeModuleSectionLabel] : [],
+  });
   if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel) {
     const expandedAll =
       moduleSections.length > 0 &&
@@ -955,16 +1056,28 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const toggleAll = () => {
     peekTimers.current.forEach(clearTimeout);
     peekTimers.current.clear();
-    setModules({ pathname, activeSectionLabel, expanded: allExpanded
-      ? (activeModuleSectionLabel ? [activeModuleSectionLabel] : [])
-      : moduleSections.map((section) => section.label) });
+    setModules({
+      pathname,
+      activeSectionLabel,
+      expanded: allExpanded
+        ? activeModuleSectionLabel
+          ? [activeModuleSectionLabel]
+          : []
+        : moduleSections.map((section) => section.label),
+    });
   };
 
   const toggleModule = (label: string) => {
     clearTimeout(peekTimers.current.get(label));
     peekTimers.current.delete(label);
     const open = !modules.expanded.includes(label);
-    setModules({ pathname, activeSectionLabel, expanded: open ? [...modules.expanded, label] : modules.expanded.filter((entry) => entry !== label) });
+    setModules({
+      pathname,
+      activeSectionLabel,
+      expanded: open
+        ? [...modules.expanded, label]
+        : modules.expanded.filter((entry) => entry !== label),
+    });
     if (open && !visited.current.has(label)) {
       const expire = () => {
         // Keep the temporary expansion while pointer hovers or keyboard enters its links.
@@ -976,7 +1089,10 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
           peekTimers.current.set(label, setTimeout(expire, 500));
           return;
         }
-        setModules((current) => ({ ...current, expanded: current.expanded.filter((entry) => entry !== label) }));
+        setModules((current) => ({
+          ...current,
+          expanded: current.expanded.filter((entry) => entry !== label),
+        }));
         peekTimers.current.delete(label);
       };
       peekTimers.current.set(label, setTimeout(expire, 5000));
@@ -990,7 +1106,14 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
       const entry = getBadge(item.badgeKey);
       return (
         <li key={item.to}>
-          <NavLink item={item} active={isActive(item.to)} collapsed={compact} badgeOverride={entry?.count} badgeVariant={entry?.severity} badgeDescription={entry?.description} />
+          <NavLink
+            item={item}
+            active={isActive(item.to)}
+            collapsed={compact}
+            badgeOverride={entry?.count}
+            badgeVariant={entry?.severity}
+            badgeDescription={entry?.description}
+          />
         </li>
       );
     };
@@ -1002,11 +1125,19 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         const entry = getBadge(item.badgeKey);
         const count = entry?.count ?? item.badge ?? 0;
         return count > 0
-          ? [{ count, severity: entry?.severity ?? 'accent', description: entry?.description ?? item.label }]
+          ? [
+              {
+                count,
+                severity: entry?.severity ?? 'accent',
+                description: entry?.description ?? item.label,
+              },
+            ]
           : [];
       });
       const sectionBadgeCount = sectionBadges.reduce((total, badge) => total + badge.count, 0);
-      const sectionBadgeVariant: BadgeSeverity | 'accent' = sectionBadges.some((badge) => badge.severity === 'danger')
+      const sectionBadgeVariant: BadgeSeverity | 'accent' = sectionBadges.some(
+        (badge) => badge.severity === 'danger',
+      )
         ? 'danger'
         : sectionBadges.some((badge) => badge.severity === 'warning')
           ? 'warning'
@@ -1024,18 +1155,27 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
               type="button"
               aria-expanded={open}
               aria-controls={id}
-              aria-label={!open && sectionBadgeCount > 0
-                ? `${section.label}: ${sectionBadgeSummary}`
-                : undefined}
+              aria-label={
+                !open && sectionBadgeCount > 0
+                  ? `${section.label}: ${sectionBadgeSummary}`
+                  : undefined
+              }
               disabled={hoverExpanded || active}
               onClick={() => toggleModule(section.label)}
               className={cn(
                 'flex min-h-11 w-full items-center gap-2 rounded-md px-4 py-1.5 text-left text-sm font-normal transition-colors duration-fast md:min-h-9',
                 focusRingInset,
-                active ? 'font-medium text-primary' : 'text-secondary hover:bg-elevated hover:text-primary',
+                active
+                  ? 'font-medium text-primary'
+                  : 'text-secondary hover:bg-elevated hover:text-primary',
               )}
             >
-              <span title={section.description ?? section.label} className="min-w-0 flex-1 truncate">{section.label}</span>
+              <span
+                title={section.description ?? section.label}
+                className="min-w-0 flex-1 truncate"
+              >
+                {section.label}
+              </span>
               {!open && sectionBadgeCount > 0 && (
                 <span aria-hidden title={sectionBadgeSummary} className="shrink-0">
                   <Badge variant={sectionBadgeVariant}>
@@ -1046,11 +1186,18 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
               <LuChevronDown
                 size={14}
                 aria-hidden
-                className={cn('shrink-0 text-muted transition-transform duration-fast', !open && '-rotate-90')}
+                className={cn(
+                  'shrink-0 text-muted transition-transform duration-fast',
+                  !open && '-rotate-90',
+                )}
               />
             </button>
           )}
-          <ul id={id} hidden={!compact && !open} className={cn((compact || open) && 'flex flex-col')}>
+          <ul
+            id={id}
+            hidden={!compact && !open}
+            className={cn((compact || open) && 'flex flex-col')}
+          >
             {section.visibleItems.map(renderNavItem)}
           </ul>
         </div>
@@ -1061,18 +1208,31 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto py-2">
           {workItems.length > 0 && (
             <div role="group" aria-label="Work" className="mb-3">
-              {!compact && <div className="px-4 pb-1 text-2xs font-medium uppercase tracking-wide text-muted">Work</div>}
-              <ul className="flex flex-col">
-                {workItems.map(renderNavItem)}
-              </ul>
+              {!compact && (
+                <div className="px-4 pb-1 text-2xs font-medium uppercase tracking-wide text-muted">
+                  Work
+                </div>
+              )}
+              <ul className="flex flex-col">{workItems.map(renderNavItem)}</ul>
             </div>
           )}
 
           {moduleSections.map(renderModuleSection)}
         </nav>
         {!compact && !hoverExpanded && moduleSections.length > 1 && (
-          <div role="group" aria-label="Module controls" className="flex shrink-0 gap-1 border-t border-default bg-canvas p-2">
-            <button type="button" onClick={toggleAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-sm text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
+          <div
+            role="group"
+            aria-label="Module controls"
+            className="flex shrink-0 gap-1 border-t border-default bg-canvas p-2"
+          >
+            <button
+              type="button"
+              onClick={toggleAll}
+              className={cn(
+                'flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-sm text-muted hover:bg-surface hover:text-primary md:min-h-hit',
+                focusRingInset,
+              )}
+            >
               <LuChevronDown size={14} className={cn(allExpanded && 'rotate-180')} aria-hidden />
               {allExpanded ? 'Collapse all' : 'Expand all'}
             </button>
@@ -1187,7 +1347,10 @@ const NavLink = memo(function NavLink({
 
   useEffect(() => {
     if (active && linkRef.current) {
-      linkRef.current.scrollIntoView({ block: 'nearest', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      linkRef.current.scrollIntoView({
+        block: 'nearest',
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      });
     }
   }, [active]);
 
@@ -1208,10 +1371,7 @@ const NavLink = memo(function NavLink({
       )}
     >
       {active && (
-        <span
-          className="absolute left-1 top-1 bottom-1 w-0.5 rounded-r-md bg-accent"
-          aria-hidden
-        />
+        <span className="absolute left-1 top-1 bottom-1 w-0.5 rounded-r-md bg-accent" aria-hidden />
       )}
       <Icon
         size={collapsed ? 20 : 16}
@@ -1226,7 +1386,9 @@ const NavLink = memo(function NavLink({
       )}
       {!collapsed && (
         <>
-          <span title={item.label} className="min-w-0 flex-1 truncate">{item.label}</span>
+          <span title={item.label} className="min-w-0 flex-1 truncate">
+            {item.label}
+          </span>
           {badgeValue != null && badgeValue > 0 ? (
             <span className="ml-auto shrink-0">
               <Tooltip content={`${badgeDescription ?? item.label} · ${badgeValue}`} side="top">
@@ -1248,5 +1410,7 @@ const NavLink = memo(function NavLink({
     <Tooltip content={item.description ?? collapsedLabel} side="right">
       {link}
     </Tooltip>
-  ) : link;
+  ) : (
+    link
+  );
 });

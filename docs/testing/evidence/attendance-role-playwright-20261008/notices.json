@@ -1,0 +1,46 @@
+{
+  "manager": [
+    {
+      "id": "9976e41e-7829-4a0b-82d4-02a59052fd8b",
+      "type": "production.assignment.review",
+      "data": {
+        "title": "Crew needs review: WO-BROWSER-1008",
+        "message": "Support Browser Test: Worker has clocked out. Review workers before starting new operations.",
+        "link_to": "/production/work-orders/lZQYjvYywx",
+        "entity_type": "work_order",
+        "entity_id": "lZQYjvYywx"
+      },
+      "read_at": null,
+      "created_at": "2026-10-08 10:45:00"
+    },
+    {
+      "id": "d833d783-a4f7-4e76-bd2c-c588d8f5a0ae",
+      "type": "chain.in_process_qc_required",
+      "data": {
+        "title": "In-process QC required",
+        "message": "In-process QC required for WO WO-BROWSER-1008.",
+        "link_to": "/quality/inspections/l49YDNXb3e",
+        "entity_type": "work_order",
+        "entity_id": "lZQYjvYywx",
+        "wo_number": "WO-BROWSER-1008"
+      },
+      "read_at": null,
+      "created_at": "2026-10-08 09:05:00"
+    }
+  ],
+  "ppc": [
+    {
+      "id": "b19fe8ca-61d8-46cf-b793-42a315f797cb",
+      "type": "production.assignment.review",
+      "data": {
+        "title": "Crew needs review: WO-BROWSER-1008",
+        "message": "Support Browser Test: Worker has clocked out. Review workers before starting new operations.",
+        "link_to": "/production/work-orders/lZQYjvYywx",
+        "entity_type": "work_order",
+        "entity_id": "lZQYjvYywx"
+      },
+      "read_at": null,
+      "created_at": "2026-10-08 10:45:00"
+    }
+  ]
+}

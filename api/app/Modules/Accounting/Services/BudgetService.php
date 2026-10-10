@@ -145,9 +145,8 @@ class BudgetService
             // budget-acknowledgment grant; budget activation itself needs a
             // different role (vice_president). Compares raw role ids so the
             // rule holds even when role names change.
-            $submitter = User::query()->find($locked->submitted_by);
             $approver = User::query()->findOrFail($userId);
-            if ($submitter !== null && (int) $submitter->role_id === (int) $approver->role_id) {
+            if (! $this->hasDifferentRoleFromSubmitter($locked, $approver)) {
                 throw new BusinessRuleException('Budget approval requires a different role than the submitting role.');
             }
 
@@ -161,6 +160,13 @@ class BudgetService
 
             return $locked->fresh()->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy']);
         });
+    }
+
+    public function hasDifferentRoleFromSubmitter(Budget $budget, User $approver): bool
+    {
+        $submitter = User::query()->find($budget->submitted_by);
+
+        return $submitter === null || (int) $submitter->role_id !== (int) $approver->role_id;
     }
 
     /** Close an active (or legacy approved) budget. */

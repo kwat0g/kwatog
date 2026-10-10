@@ -34,7 +34,7 @@
         <div class="doc-title">{{ $docTitle }}</div>
       @endif
       <div class="doc-meta">
-        Issued: <span class="val">{{ $generated['at_text'] ?? now()->format('M d, Y H:i') }}</span><br>
+        Issued: <span class="val">{{ $generated['at_text'] ?? now()->format('M d, Y g:i A') }}</span><br>
         Issued By: <span class="val">{{ $generated['by'] ?? 'System' }}</span>
       </div>
     </td>

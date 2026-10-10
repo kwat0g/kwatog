@@ -1,0 +1,9 @@
+Permission catalog: 272
+Statically referenced permissions: 267
+Referenced but not seeded: 0
+Seeded without a static enforcement/UI reference: 5
+  crm.customers.manage
+  crm.so.create
+  crm.view
+  quality.inspections.create
+  quality.inspections.edit

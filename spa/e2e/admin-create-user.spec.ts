@@ -69,10 +69,16 @@ const employeeSelect = (p: import('@playwright/test').Page) =>
   p.getByRole('combobox', { name: /^Employee/ });
 const roleSelect = (p: import('@playwright/test').Page) =>
   p.getByRole('combobox', { name: /^Role/ });
-const searchInput = (p: import('@playwright/test').Page) =>
-  p.getByRole('textbox', { name: /Find employee/ });
 const emailInput = (p: import('@playwright/test').Page) =>
   p.getByRole('textbox', { name: /^Email/ });
+const chooseOption = async (
+  page: import('@playwright/test').Page,
+  control: import('@playwright/test').Locator,
+  label: string,
+) => {
+  await control.click();
+  await page.getByRole('option', { name: label, exact: true }).click();
+};
 
 /**
  * Mock the two admin endpoints the create page reads. Registered before
@@ -158,20 +164,17 @@ async function mockCreatePage(
 
 test.describe('Admin > Create User (department-first)', () => {
 
-  test('locks employee controls until a department is picked', async ({ page }) => {
+test('disables the searchable employee control until a department is picked', async ({ page }) => {
     await mockCreatePage(page, [BOTH_DEPARTMENTS[0]]);
     await loginAs(page, 'admin', '/admin/users/create');
 
     const department = departmentSelect(page);
-    const search = searchInput(page);
     const employee = employeeSelect(page);
 
-    // Before a department: search + employee dropdown are disabled, and the
-    // dropdown explains itself instead of silently listing nothing.
+    // Before a department, the combined search-and-select control is disabled
+    // and explains itself instead of silently listing nothing.
     await expect(department).toBeEnabled();
-    await expect(search).toBeDisabled();
     await expect(employee).toBeDisabled();
-    await expect(employee).toContainText('Select a department first');
     await expect(page.getByText('Pick a department to load its employees.')).toBeVisible();
 
     // No candidates request may fire without a department.
@@ -196,24 +199,25 @@ test.describe('Admin > Create User (department-first)', () => {
 
     await loginAs(page, 'admin', '/admin/users/create');
 
-    await departmentSelect(page).selectOption({ label: 'Finance' });
+    await chooseOption(page, departmentSelect(page), 'Finance');
 
     // The dropdown populates from the department's account-less employees.
     const employee = employeeSelect(page);
     await expect(employee).toBeEnabled();
-    await expect(employee).toContainText('Juan Dela Cruz (OGM-2026-0101)');
-    await expect(employee).toContainText('Maria Santos (OGM-2026-0102)');
+    await employee.click();
+    await expect(page.getByRole('option', { name: 'Juan Dela Cruz (OGM-2026-0101)' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Maria Santos (OGM-2026-0102)' })).toBeVisible();
 
     // The fired request carried the picked department.
     await expect.poll(() => candidateUrls.length).toBeGreaterThan(0);
     expect(new URL(candidateUrls[0]).searchParams.get('department_id')).toBe(DEPARTMENT_ID);
 
     // Search narrows within the department: type the employee number.
-    const search = searchInput(page);
-    await expect(search).toBeEnabled();
-    await search.fill('OGM-2026-0101');
-    await expect(employee).toContainText('Juan Dela Cruz (OGM-2026-0101)');
-    await expect(employee).not.toContainText('Maria Santos (OGM-2026-0102)');
+    await employee.fill('OGM-2026-0101');
+    await expect(page.getByRole('option', { name: 'Juan Dela Cruz (OGM-2026-0101)' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Maria Santos (OGM-2026-0102)' })).toHaveCount(0);
+    await expect.poll(() => candidateUrls.some((url) =>
+      new URL(url).searchParams.get('search') === 'OGM-2026-0101')).toBe(true);
 
     // Every fired request stayed scoped to the department.
     for (const url of candidateUrls) {
@@ -223,30 +227,41 @@ test.describe('Admin > Create User (department-first)', () => {
 
   test('switching departments clears the employee selection and search', async ({ page }) => {
     await mockCreatePage(page);
+    const candidateUrls: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/admin/users/employee-candidates')) {
+        candidateUrls.push(request.url());
+      }
+    });
     await loginAs(page, 'admin', '/admin/users/create');
 
-    await departmentSelect(page).selectOption({ label: 'Finance' });
-    await searchInput(page).fill('OGM-2026-0101');
-    await employeeSelect(page).selectOption({ label: 'Juan Dela Cruz (OGM-2026-0101)' });
+    await chooseOption(page, departmentSelect(page), 'Finance');
+    await employeeSelect(page).fill('OGM-2026-0101');
+    await chooseOption(page, employeeSelect(page), 'Juan Dela Cruz (OGM-2026-0101)');
     await expect(page.getByText('Finance Officer · Finance · regular')).toBeVisible();
 
     // Switch departments: the stale selection must not survive.
-    await departmentSelect(page).selectOption({ label: 'Production' });
+    await chooseOption(page, departmentSelect(page), 'Production');
 
-    await expect(employeeSelect(page)).toHaveValue('');
-    await expect(searchInput(page)).toHaveValue('');
+    // The searchable control displays its blank option label when unselected.
+    await expect(employeeSelect(page)).toHaveValue('— Select —');
     await expect(page.getByText('Finance Officer · Finance · regular')).toHaveCount(0);
+    await expect.poll(() => candidateUrls.some((url) =>
+      new URL(url).searchParams.get('department_id') === OTHER_DEPARTMENT_ID)).toBe(true);
+    const productionCalls = candidateUrls.filter((url) =>
+      new URL(url).searchParams.get('department_id') === OTHER_DEPARTMENT_ID);
+    expect(new URL(productionCalls.at(-1)!).searchParams.get('search')).toBeNull();
   });
 
   test('selecting an employee prefills email from the HR record and shows identity', async ({ page }) => {
     await mockCreatePage(page);
     await loginAs(page, 'admin', '/admin/users/create');
 
-    await departmentSelect(page).selectOption({ label: 'Finance' });
-    await employeeSelect(page).selectOption({ label: 'Juan Dela Cruz (OGM-2026-0101)' });
+    await chooseOption(page, departmentSelect(page), 'Finance');
+    await chooseOption(page, employeeSelect(page), 'Juan Dela Cruz (OGM-2026-0101)');
 
-    // Identity card from the HR record. Scoped to the card's spans because
-    // the selected employee's name also appears inside the dropdown's <option>.
+    // Identity card from the HR record. Scope to the card's spans because the
+    // selected employee's name also appears in the combobox value.
     await expect(page.locator('span.font-medium').filter({ hasText: 'Juan Dela Cruz' })).toBeVisible();
     await expect(page.locator('span.font-mono').filter({ hasText: 'OGM-2026-0101' })).toBeVisible();
     await expect(page.getByText('Finance Officer · Finance · regular')).toBeVisible();
@@ -266,14 +281,14 @@ test.describe('Admin > Create User (department-first)', () => {
     await mockCreatePage(page);
     await loginAs(page, 'admin', '/admin/users/create');
 
-    await departmentSelect(page).selectOption({ label: 'Finance' });
-    await employeeSelect(page).selectOption({ label: 'Maria Santos (OGM-2026-0102)' });
+    await chooseOption(page, departmentSelect(page), 'Finance');
+    await chooseOption(page, employeeSelect(page), 'Maria Santos (OGM-2026-0102)');
 
     const email = emailInput(page);
     await expect(email).toHaveValue('');
 
     // Submitting without an email is blocked client-side with a field error…
-    await roleSelect(page).selectOption({ label: 'Finance Officer' });
+    await chooseOption(page, roleSelect(page), 'Finance Officer');
     await page.getByRole('button', { name: 'Create User' }).click();
     await expect(page.getByText('This employee has no email on record. Enter a login email.')).toBeVisible();
 
@@ -287,9 +302,9 @@ test.describe('Admin > Create User (department-first)', () => {
     await mockCreatePage(page);
     await loginAs(page, 'admin', '/admin/users/create');
 
-    await departmentSelect(page).selectOption({ label: 'Finance' });
-    await employeeSelect(page).selectOption({ label: 'Juan Dela Cruz (OGM-2026-0101)' });
-    await roleSelect(page).selectOption({ label: 'Finance Officer' });
+    await chooseOption(page, departmentSelect(page), 'Finance');
+    await chooseOption(page, employeeSelect(page), 'Juan Dela Cruz (OGM-2026-0101)');
+    await chooseOption(page, roleSelect(page), 'Finance Officer');
 
     const created: Array<{ url: string; body: Record<string, unknown> }> = [];
     page.on('request', (request) => {
@@ -313,7 +328,6 @@ test.describe('Admin > Create User (department-first)', () => {
     // One-time temp password modal.
     await expect(page.getByRole('heading', { name: 'Account Created' })).toBeVisible();
     await expect(page.getByText('TempPass1!')).toBeVisible();
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:5173' });
     await page.getByRole('button', { name: 'Copy temporary password' }).click();
     await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
 
@@ -326,9 +340,9 @@ test.describe('Admin > Create User (department-first)', () => {
     await mockCreatePage(page);
     await loginAs(page, 'admin', '/admin/users/create');
 
-    await departmentSelect(page).selectOption({ label: 'Finance' });
-    await employeeSelect(page).selectOption({ label: 'Juan Dela Cruz (OGM-2026-0101)' });
-    await roleSelect(page).selectOption({ label: 'PPC Head' });
+    await chooseOption(page, departmentSelect(page), 'Finance');
+    await chooseOption(page, employeeSelect(page), 'Juan Dela Cruz (OGM-2026-0101)');
+    await chooseOption(page, roleSelect(page), 'PPC Head');
 
     // Flip the welcome-email switch off. The checkbox input is sr-only, so
     // click its visible label (rendered by <Switch> as a wrapping <label>).

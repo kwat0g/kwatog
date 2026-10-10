@@ -20,11 +20,13 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\HasPassedInProcessQc;
 use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 final class DeliveryCreateIdempotencyTest extends TestCase
 {
+    use HasPassedInProcessQc;
     use ReceivesProductionOutput;
     use RefreshDatabase;
 
@@ -128,6 +130,7 @@ final class DeliveryCreateIdempotencyTest extends TestCase
             'status' => 'completed',
             'created_by' => $user->id,
         ]);
+        $this->passInProcessQc($wo);
         $output = WorkOrderOutput::create([
             'work_order_id' => $wo->id,
             'recorded_by' => $user->id,

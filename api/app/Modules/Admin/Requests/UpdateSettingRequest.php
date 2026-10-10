@@ -19,6 +19,13 @@ class UpdateSettingRequest extends FormRequest
     {
         $key = $this->route('key');
 
+        if (in_array($key, [
+            'accounting.je_self_post_limit',
+            'accounting.je_self_post_limit.retired',
+        ], true)) {
+            return ['value' => ['present', 'prohibited']];
+        }
+
         $base = ['value' => ['present']];
 
         $securityRules = [
@@ -304,6 +311,7 @@ class UpdateSettingRequest extends FormRequest
             'accounting.accounts.discount_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.grni_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.landed_cost_clearing_code' => ['value' => ['required', 'string', 'max:20']],
+            'accounting.accounts.maintenance_consumption_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.inventory_raw_material_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.inventory_finished_goods_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.inventory_packaging_code' => ['value' => ['required', 'string', 'max:20']],
@@ -348,7 +356,6 @@ class UpdateSettingRequest extends FormRequest
             'accounting.statements.current_period_net_income_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.statements.translation_adjustment_code' => ['value' => ['required', 'string', 'max:20']],
             'budgeting.enforcement_mode' => ['value' => ['required', 'in:off,warn,block']],
-            'accounting.je_self_post_limit' => ['value' => ['required', 'numeric', 'min:0']],
             'inventory.adjustment_approval_threshold' => ['value' => ['required', 'numeric', 'min:0']],
             'inventory.over_receipt_tolerance_pct' => ['value' => ['required', 'numeric', 'min:0', 'max:100']],
             'quality.ncr.replacement_work_order_lead_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],

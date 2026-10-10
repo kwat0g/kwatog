@@ -87,6 +87,7 @@ class StatutoryExportsTest extends TestCase
             'name' => 'T', 'email' => 't_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
             'role_id'  => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+            'is_active' => true,
         ]);
 
         $csv = $this->actingAs($user)
@@ -121,6 +122,7 @@ class StatutoryExportsTest extends TestCase
         $user = \App\Modules\Auth\Models\User::create([
             'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
             'role_id' => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+            'is_active' => true,
         ]);
 
         $csv = $this->actingAs($user)
@@ -148,6 +150,7 @@ class StatutoryExportsTest extends TestCase
         $user = \App\Modules\Auth\Models\User::create([
             'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
             'role_id' => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+            'is_active' => true,
         ]);
 
         $csv = $this->actingAs($user)
@@ -175,6 +178,7 @@ class StatutoryExportsTest extends TestCase
         $user = \App\Modules\Auth\Models\User::create([
             'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
             'role_id' => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+            'is_active' => true,
         ]);
 
         $csv = $this->actingAs($user)
@@ -193,6 +197,7 @@ class StatutoryExportsTest extends TestCase
             'name' => 'T', 'email' => 't_'.substr(uniqid(), -8).'@x.test',
             'password' => bcrypt('Password1!'),
             'role_id' => \App\Modules\Auth\Models\Role::query()->where('slug', $slug)->value('id'),
+            'is_active' => true,
         ]);
     }
 

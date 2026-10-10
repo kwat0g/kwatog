@@ -102,6 +102,7 @@ class MrbDoubleReleaseRaceTest extends TestCase
     public function test_second_concurrent_release_is_blocked_with_business_rule(): void
     {
         $warehouse = $this->userWith('warehouse_staff');
+        $checker = $this->userWith('warehouse_staff');
         $mrb = $this->heldMrb($warehouse);
         $this->assertSame(MrbStatus::Held, $mrb->status);
 
@@ -110,7 +111,7 @@ class MrbDoubleReleaseRaceTest extends TestCase
         $releaserB = MaterialReviewRecord::query()->findOrFail($mrb->id);
 
         // Releaser A commits: scrap movement posted, row → scrapped.
-        $this->svc->release($releaserA, 'scrap', $warehouse);
+        $this->svc->release($releaserA, 'scrap', $checker);
         $this->assertSame(MrbStatus::Scrapped, MaterialReviewRecord::query()->findOrFail($mrb->id)->status);
 
         // Releaser B acts on its stale instance — must be a business-rule
@@ -118,15 +119,16 @@ class MrbDoubleReleaseRaceTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('not held');
 
-        $this->svc->release($releaserB, 'scrap', $warehouse);
+        $this->svc->release($releaserB, 'scrap', $checker);
     }
 
     public function test_release_records_exactly_one_release_movement(): void
     {
         $warehouse = $this->userWith('warehouse_staff');
+        $checker = $this->userWith('warehouse_staff');
         $mrb = $this->heldMrb($warehouse);
 
-        $this->svc->release(MaterialReviewRecord::query()->findOrFail($mrb->id), 'scrap', $warehouse);
+        $this->svc->release(MaterialReviewRecord::query()->findOrFail($mrb->id), 'scrap', $checker);
 
         $movements = $mrb->fresh()->releaseMovement;
         $this->assertNotNull($movements);

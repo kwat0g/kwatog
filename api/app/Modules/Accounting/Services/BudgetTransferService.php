@@ -93,10 +93,8 @@ class BudgetTransferService
             if ((int) $locked->requested_by === $userId) {
                 throw new BusinessRuleException('The user who requested a transfer cannot approve it.');
             }
-            // Same maker-checker-by-role rule as BudgetService::approve().
-            $requester = User::query()->find($locked->requested_by);
             $approver = User::query()->findOrFail($userId);
-            if ($requester !== null && (int) $requester->role_id === (int) $approver->role_id) {
+            if (! $this->canApprove($locked, $approver)) {
                 throw new BusinessRuleException('Transfer approval requires a different role than the requesting role.');
             }
 
@@ -117,6 +115,21 @@ class BudgetTransferService
 
             return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver', 'rejecter']);
         });
+    }
+
+    public function canApprove(BudgetTransfer $transfer, User $approver): bool
+    {
+        if ((string) $transfer->status !== BudgetTransferStatus::Pending->value
+            || (int) $transfer->requested_by === (int) $approver->id) {
+            return false;
+        }
+
+        $requester = $transfer->relationLoaded('requester')
+            ? $transfer->getRelation('requester')
+            : User::query()->find($transfer->requested_by);
+
+        // Preserve legacy recovery: a deleted requester does not keep a transfer stuck.
+        return $requester === null || (int) $requester->role_id !== (int) $approver->role_id;
     }
 
     /** Reject a pending transfer; nothing moves. */
@@ -140,7 +153,7 @@ class BudgetTransferService
 
     /**
      * @return array{0:BudgetLineItem,1:BudgetLineItem} locked in id order
-     *         (from, to) so concurrent approvals cannot deadlock.
+     *                                                  (from, to) so concurrent approvals cannot deadlock.
      */
     private function lockedLines(int $fromId, int $toId): array
     {

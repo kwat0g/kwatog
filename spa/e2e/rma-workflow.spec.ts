@@ -1,7 +1,11 @@
-import { expect, test } from './fixtures';
+import { expect, test } from '@playwright/test';
 import { mockAuth } from './helpers';
 
 test('RMA partial receipt preserves quantities and idempotency key across retry', async ({ page }) => {
+  // This test deliberately returns 422; keep unrelated reads local and empty.
+  await page.route('**/api/v1/**', route => route.fulfill({ json: {} }));
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
   await mockAuth(page, {
     id: 'warehouse_receiver', name: 'Warehouse Receiver', email: 'warehouse@ogami.test',
     roleSlug: 'warehouse_receiver', roleName: 'Warehouse Receiver',
@@ -50,4 +54,5 @@ test('RMA partial receipt preserves quantities and idempotency key across retry'
   await expect(page.getByText('2', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Partial installment')).toBeVisible();
   await expect(page.getByText('Page not found')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });

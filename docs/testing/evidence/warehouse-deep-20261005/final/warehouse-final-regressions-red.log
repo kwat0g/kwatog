@@ -1,0 +1,32 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+EF                                                                  2 / 2 (100%)
+
+Time: 00:29.657, Memory: 74.50 MB
+
+There was 1 error:
+
+1) Tests\Feature\Inventory\QuarantineMrbTest::test_legacy_hold_retry_preserves_original_without_accepting_a_changed_lot
+App\Common\Exceptions\BusinessRuleException: This Idempotency-Key was already used for a different MRB hold.
+
+/var/www/app/Modules/Inventory/Services/QuarantineService.php:417
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Inventory/Services/QuarantineService.php:385
+/var/www/tests/Feature/Inventory/QuarantineMrbTest.php:489
+
+--
+
+There was 1 failure:
+
+1) Tests\Feature\Inventory\WarehouseMovementReferenceTest::test_fully_returned_issue_no_longer_prompts_for_handover
+Failed asserting that 1 is identical to 0.
+
+/var/www/tests/Feature/Inventory/WarehouseMovementReferenceTest.php:90
+
+ERRORS!
+Tests: 2, Assertions: 3, Errors: 1, Failures: 1.

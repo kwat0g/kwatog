@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Controllers;
 
-use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
-use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Enums\ContainerSize;
+use App\Modules\SupplyChain\Enums\ContainerType;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Enums\LandedCostAllocationMethod;
+use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
 use App\Modules\SupplyChain\Requests\CreateShipmentRequest;
 use App\Modules\SupplyChain\Resources\ShipmentDocumentResource;
+use App\Modules\SupplyChain\Resources\ShipmentPurchaseOrderOptionResource;
 use App\Modules\SupplyChain\Resources\ShipmentResource;
 use App\Modules\SupplyChain\Services\LandedCostService;
 use App\Modules\SupplyChain\Services\ShipmentService;
@@ -20,6 +23,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -37,6 +41,7 @@ class ShipmentController
                 static function (ShipmentStatus $status): array {
                     $next = collect(ShipmentStatus::cases())
                         ->first(fn (ShipmentStatus $candidate): bool => $status->canTransitionTo($candidate));
+
                     return [
                         'value' => $status->value,
                         'label' => $status->label(),
@@ -61,12 +66,30 @@ class ShipmentController
                     static fn (LandedCostAllocationMethod $method): bool => $method !== LandedCostAllocationMethod::ByWeight,
                 )),
             ),
+            'container_sizes' => array_map(
+                static fn (ContainerSize $size): array => ['value' => $size->value, 'label' => Str::headline($size->value)],
+                ContainerSize::cases(),
+            ),
+            'container_types' => array_map(
+                static fn (ContainerType $type): array => ['value' => $type->value, 'label' => Str::headline($type->value)],
+                ContainerType::cases(),
+            ),
         ]]);
     }
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return ShipmentResource::collection($this->service->list($request->query()));
+    }
+
+    public function purchaseOrderOptions(Request $request): AnonymousResourceCollection
+    {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        return ShipmentPurchaseOrderOptionResource::collection($this->service->purchaseOrderOptions($filters));
     }
 
     public function show(Shipment $shipment): ShipmentResource
@@ -83,8 +106,9 @@ class ShipmentController
     {
         $data = $request->validate([
             'status' => ['required', Rule::in(ShipmentStatus::values())],
-            'note'   => ['nullable', 'string', 'max:500'],
+            'note' => ['nullable', 'string', 'max:500'],
         ]);
+
         return new ShipmentResource($this->service->updateStatus(
             $shipment,
             ShipmentStatus::from((string) $data['status']),
@@ -95,22 +119,22 @@ class ShipmentController
     public function updateMeta(Request $request, Shipment $shipment): ShipmentResource
     {
         $data = $request->validate([
-            'carrier'          => ['nullable', 'string', 'max:100'],
-            'vessel'           => ['nullable', 'string', 'max:100'],
+            'carrier' => ['nullable', 'string', 'max:100'],
+            'vessel' => ['nullable', 'string', 'max:100'],
             'container_number' => ['nullable', 'string', 'max:32'],
-            'bl_number'        => ['nullable', 'string', 'max:32'],
-            'etd'              => ['nullable', 'date'],
-            'freight_cost'     => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
-            'insurance_cost'   => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
-            'duties_amount'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
-            'brokerage_fee'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
-            'other_charges'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'bl_number' => ['nullable', 'string', 'max:32'],
+            'etd' => ['nullable', 'date'],
+            'freight_cost' => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'insurance_cost' => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'duties_amount' => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'brokerage_fee' => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'other_charges' => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             // CreateShipmentRequest enforces ETA >= ETD; this path did not, so a
             // patch could leave a shipment arriving before it departed. Compare
             // against the submitted ETD when one is present, otherwise against
             // the value already on the record — a partial patch of ETA alone must
             // still be checked.
-            'eta'              => ['nullable', 'date', function (string $attribute, mixed $value, callable $fail) use ($request, $shipment): void {
+            'eta' => ['nullable', 'date', function (string $attribute, mixed $value, callable $fail) use ($request, $shipment): void {
                 if ($value === null) {
                     return;
                 }
@@ -121,8 +145,9 @@ class ShipmentController
                     $fail('ETA cannot be before ETD.');
                 }
             }],
-            'notes'            => ['nullable', 'string', 'max:2000'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
         return new ShipmentResource($this->service->updateMeta($shipment, $data));
     }
 
@@ -130,7 +155,7 @@ class ShipmentController
     {
         $data = $request->validate([
             'document_type' => ['required', Rule::in(ShipmentDocumentType::values())],
-            'file'          => [
+            'file' => [
                 'required', 'file', 'mimes:pdf,jpg,jpeg,png,xlsx,csv', 'max:20480', // 20 MB
                 // `shipment_documents.original_filename` is varchar(255) and
                 // ShipmentService::uploadDocument() writes the client name
@@ -145,7 +170,7 @@ class ShipmentController
                     }
                 },
             ],
-            'notes'         => ['nullable', 'string', 'max:500'],
+            'notes' => ['nullable', 'string', 'max:500'],
         ]);
         $doc = $this->service->uploadDocument(
             $shipment,
@@ -154,6 +179,7 @@ class ShipmentController
             $request->user(),
             $data['notes'] ?? null,
         );
+
         return new ShipmentDocumentResource($doc);
     }
 
@@ -170,16 +196,16 @@ class ShipmentController
         }
 
         $contents = $disk->get($document->file_path);
-        $mime     = $document->mime_type ?? $disk->mimeType($document->file_path) ?? 'application/octet-stream';
-        $isImage  = str_starts_with($mime, 'image/');
+        $mime = $document->mime_type ?? $disk->mimeType($document->file_path) ?? 'application/octet-stream';
+        $isImage = str_starts_with($mime, 'image/');
         $filename = $document->original_filename ?? basename($document->file_path);
 
         return response()->stream(
             fn () => print $contents,
             200,
             [
-                'Content-Type'        => $mime,
-                'Cache-Control'       => 'private, no-store, max-age=0',
+                'Content-Type' => $mime,
+                'Cache-Control' => 'private, no-store, max-age=0',
                 'Content-Disposition' => self::contentDisposition(
                     $isImage ? 'inline' : 'attachment',
                     (string) $filename,
@@ -220,12 +246,14 @@ class ShipmentController
     public function destroyDocument(ShipmentDocument $document): JsonResponse
     {
         $this->service->deleteDocument($document);
+
         return response()->json([], 204);
     }
 
     public function restoreDocument(ShipmentDocument $document): JsonResponse
     {
         $this->service->restoreDocument($document);
+
         return response()->json(['message' => 'Shipment document restored.']);
     }
 
@@ -246,12 +274,14 @@ class ShipmentController
     public function destroy(Shipment $shipment): JsonResponse
     {
         $this->service->delete($shipment);
+
         return response()->json([], 204);
     }
 
     public function restore(Shipment $shipment): JsonResponse
     {
         $this->service->restore($shipment);
+
         return response()->json(['message' => 'Shipment restored.']);
     }
 }

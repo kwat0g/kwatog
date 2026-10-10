@@ -9,6 +9,7 @@ use App\Common\Models\AuditLog;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
@@ -19,14 +20,15 @@ use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
-use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
-use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\CRM\Support\SalesOrderTransitionResult;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Enums\MrpRunStatus;
@@ -40,6 +42,9 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\SupplyChain\Models\Delivery;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -103,6 +108,8 @@ class SalesOrderService
         'closed' => [],
         'cancelled' => [],
         'draft' => [],
+        'awaiting_confirmation' => [],
+        'delivery_negotiation' => [],
     ];
 
     /** @return array<string, list<string>> */
@@ -312,7 +319,7 @@ class SalesOrderService
     {
         $q = SalesOrder::query()
             ->with(['customer:id,name', 'creator:id,name,role_id', 'latestResponse.items'])
-            ->withCount('items');
+            ->withCount('items')->with('items.product');
 
         TrashedFilter::apply($q, $filters);
 
@@ -350,9 +357,11 @@ class SalesOrderService
             });
         }
 
-        return $q->orderByDesc('date')
+         $result = $q->orderByDesc('date')
             ->orderByDesc('id')
             ->paginate(min(max((int) ($filters['per_page'] ?? 25), 1), 100));
+        app(SalesOrderSupplyService::class)->prepareCoverage($result->getCollection());
+        return $result;
     }
 
     public function show(SalesOrder $so): SalesOrder
@@ -365,6 +374,7 @@ class SalesOrderService
             'customer',
             'creator:id,name,role_id',
             'latestResponse.items',
+            'deliveryNegotiations',
             'items.product:id,part_number,name,unit_of_measure',
             'mrpPlan:id,mrp_plan_no,version,status,shortages_found,auto_pr_count,draft_wo_count,sales_order_id',
             'workOrders:id,wo_number,product_id,status,quantity_target,quantity_produced,sales_order_id,mrp_plan_id,planned_start',
@@ -440,9 +450,67 @@ class SalesOrderService
         return $so;
     }
 
+    public function quoteOrder(int $customerId, array $items, ?SalesOrder $existing = null, bool $portal = false): array
+    {
+        $oldLines = $existing?->items()->get()->keyBy('product_id') ?? collect();
+        $lines = [];
+        $subtotal = Money::zero();
+        $allUnchanged = $existing !== null && count($items) === $oldLines->count();
+        foreach ($items as $index => $item) {
+            $productId = (int) $item['product_id'];
+            $date = Carbon::parse($item['delivery_date']);
+            $quantity = bcadd((string) $item['quantity'], '0', 2);
+            $old = $oldLines->get($productId);
+            $unchanged = $old !== null && $existing?->customer_id === $customerId
+                && Money::cmp($old->quantity, $quantity) === 0
+                && in_array($date->toDateString(), [optional($old->delivery_date)->toDateString(), optional($old->requested_delivery_date)->toDateString()], true);
+            if ($unchanged) {
+                $price = $old->only(['unit_price', 'price_source', 'price_agreement_id', 'price_tier_min_qty']);
+                $price['pricing_date'] = optional($old->pricing_date)->toDateString();
+                $line = array_merge($price, [
+                    'existing_id' => $old->id, 'product_id' => $productId, 'quantity' => $quantity,
+                    'total' => $old->total, 'quantity_delivered' => $old->quantity_delivered,
+                    'delivery_date' => optional($old->delivery_date)->toDateString(),
+                    'requested_delivery_date' => optional($old->requested_delivery_date)->toDateString(),
+                ]);
+            } else {
+                $allUnchanged = false;
+                try {
+                    $price = $this->prices->quote($customerId, $productId, $date, $quantity, $portal);
+                } catch (ValidationException $e) {
+                    $errors = [];
+                    foreach ($e->errors() as $key => $messages) {
+                        $errors["items.{$index}.{$key}"] = $messages;
+                    }
+                    throw ValidationException::withMessages($errors);
+                }
+                $line = array_merge($price, [
+                    'product_id' => $productId, 'quantity' => $quantity,
+                    'total' => Money::mul($quantity, $price['unit_price']), 'quantity_delivered' => '0.00',
+                    'delivery_date' => $date->toDateString(),
+                ]);
+            }
+            $subtotal = Money::add($subtotal, $line['total']);
+            $lines[] = $line;
+        }
+        $vat = $allUnchanged ? (string) $existing->vat_amount : ($this->taxPolicy->isVatRegistered()
+            ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero());
+        $quote = ['items' => $lines, 'subtotal' => $subtotal, 'vat_amount' => $vat, 'total_amount' => Money::add($subtotal, $vat)];
+        $quote['signature'] = hash_hmac('sha256', json_encode([$customerId, $quote], JSON_THROW_ON_ERROR), (string) config('app.key'));
+
+        return $quote;
+    }
+
+    private function assertQuoteSignature(array $quote, ?string $signature): void
+    {
+        if ($signature !== null && ! hash_equals($quote['signature'], $signature)) {
+            throw ValidationException::withMessages(['quote_signature' => ['Prices changed. Review the refreshed quote before submitting again.']]);
+        }
+    }
+
     /**
      * Create a draft SO. Resolves price-per-line via PriceAgreementService;
-     * throws NoPriceAgreementException (422) if any line has no agreement.
+     * rejects a line if neither a valid agreement nor a base selling price is available.
      *
      * Wrapped in a transaction to keep so_number generation atomic.
      */
@@ -457,41 +525,12 @@ class SalesOrderService
             $this->assertActiveOrderReferences($customerId, $items);
             $this->assertDeliveryDatesNotBeforeOrder($orderDate, $items);
 
-            // Resolve every line's unit_price from the active agreement. Keep
-            // quantities and monetary values as decimal strings throughout so
-            // PHP floating-point arithmetic cannot change persisted totals.
-            $lines = [];
-            $subtotal = Money::zero();
-            foreach ($items as $idx => $item) {
-                $productId = (int) $item['product_id'];
-                $deliveryDate = Carbon::parse($item['delivery_date']);
-                $qty = (string) $item['quantity'];
-
-                // Resolve at delivery_date — that's the date the price applies to.
-                try {
-                    $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
-                } catch (NoPriceAgreementException $e) {
-                    throw new NoPriceAgreementException("items.{$idx}.product_id");
-                }
-                // Volume tier resolution: tiered agreements pick the unit price
-                // for this line's quantity; flat agreements return $agreement->price.
-                $unitPrice = (string) $this->prices->resolveUnitPrice($agreement, $qty);
-                $lineTotal = Money::mul($qty, $unitPrice);
-
-                $lines[] = [
-                    'product_id' => $productId,
-                    'quantity' => $qty,
-                    'unit_price' => $unitPrice,
-                    'total' => $lineTotal,
-                    'quantity_delivered' => 0,
-                    'delivery_date' => $deliveryDate->toDateString(),
-                ];
-                $subtotal = Money::add($subtotal, $lineTotal);
-            }
-
-            $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
-            $total = Money::add($subtotal, $vat);
+            $quote = $this->quoteOrder($customerId, $items, null, ($data['submission_source'] ?? 'internal') === 'customer_portal');
+            $this->assertQuoteSignature($quote, $data['quote_signature'] ?? null);
+            $lines = $quote['items'];
+            $subtotal = $quote['subtotal'];
+            $vat = $quote['vat_amount'];
+            $total = $quote['total_amount'];
 
             $so = SalesOrder::create([
                 'so_number' => $this->sequences->generate('sales_order'),
@@ -500,7 +539,8 @@ class SalesOrderService
                 'subtotal' => $subtotal,
                 'vat_amount' => $vat,
                 'total_amount' => $total,
-                'status' => SalesOrderStatus::Draft->value,
+                'status' => ($data['submission_source'] ?? 'internal') === 'customer_portal'
+                    ? SalesOrderStatus::AwaitingConfirmation->value : SalesOrderStatus::Draft->value,
                 'payment_terms_days' => $data['payment_terms_days']
                     ?? (int) Customer::query()->whereKey($customerId)->value('payment_terms_days'),
                 'delivery_terms' => $data['delivery_terms'] ?? null,
@@ -514,7 +554,7 @@ class SalesOrderService
 
             // Persist lines.
             foreach ($lines as $line) {
-                $so->items()->create($line);
+                $so->items()->create($line + ['fulfillment_policy' => 'stock_first']);
             }
 
             return $this->show($so->fresh());
@@ -526,7 +566,7 @@ class SalesOrderService
     {
         return DB::transaction(function () use ($case, $userId): SalesOrder {
             $lockedCase = ReturnCase::query()->lockForUpdate()->findOrFail($case->id);
-            $approver = \App\Modules\Auth\Models\User::query()->findOrFail($userId);
+            $approver = User::query()->findOrFail($userId);
             abort_unless($approver->hasPermission('return_management.approve'), 403);
             if ($lockedCase->type->value !== 'customer' || $lockedCase->resolution?->value !== 'redelivery'
                 || ! in_array($lockedCase->status->value, ['action_agreed', 'in_progress'], true)) {
@@ -568,6 +608,7 @@ class SalesOrderService
             if (! $so->items()->exists()) {
                 throw new BusinessRuleException('Verified case quantities do not identify a product for replacement.');
             }
+
             return $so->load('items');
         });
     }
@@ -575,9 +616,9 @@ class SalesOrderService
     /**
      * Update a draft SO (recreate line items). Disallowed past draft.
      */
-    public function update(SalesOrder $so, array $data): SalesOrder
+    public function update(SalesOrder $so, array $data, ?CustomerPortalUser $customerActor = null): SalesOrder
     {
-        return DB::transaction(function () use ($so, $data) {
+        return DB::transaction(function () use ($so, $data, $customerActor) {
             // Never trust the route-bound snapshot for the state guard. A
             // concurrent confirm/delete may have changed it after binding.
             $lockedSo = SalesOrder::query()
@@ -586,9 +627,11 @@ class SalesOrderService
             if ($lockedSo->return_case_id !== null) {
                 throw new BusinessRuleException('Approved no-charge replacement orders cannot be edited commercially. Update the linked return case through its approval workflow.');
             }
-            if ($lockedSo->status !== SalesOrderStatus::Draft) {
-                throw new BusinessRuleException('Only draft sales orders can be updated.');
+            if (! $lockedSo->status->isBeforeConfirmation()) {
+                throw new BusinessRuleException('Only unconfirmed sales orders can be updated.');
             }
+
+            $this->assertCustomerOrderMutation($lockedSo, $customerActor);
 
             $customerId = (int) ($data['customer_id'] ?? $lockedSo->customer_id);
             $orderDate = Carbon::parse($data['date'] ?? $lockedSo->date->toDateString());
@@ -598,34 +641,12 @@ class SalesOrderService
             $this->assertActiveOrderReferences($customerId, $items);
             $this->assertDeliveryDatesNotBeforeOrder($orderDate, $items);
 
-            $subtotal = Money::zero();
-            $newLines = [];
-
-            foreach ($items as $idx => $item) {
-                $productId = (int) $item['product_id'];
-                $deliveryDate = Carbon::parse($item['delivery_date']);
-                $qty = (string) $item['quantity'];
-                try {
-                    $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
-                } catch (NoPriceAgreementException $e) {
-                    throw new NoPriceAgreementException("items.{$idx}.product_id");
-                }
-                // Volume tier resolution (see create()).
-                $unitPrice = (string) $this->prices->resolveUnitPrice($agreement, $qty);
-                $lineTotal = Money::mul($qty, $unitPrice);
-                $newLines[] = [
-                    'product_id' => $productId,
-                    'quantity' => $qty,
-                    'unit_price' => $unitPrice,
-                    'total' => $lineTotal,
-                    'quantity_delivered' => 0,
-                    'delivery_date' => $deliveryDate->toDateString(),
-                ];
-                $subtotal = Money::add($subtotal, $lineTotal);
-            }
-            $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
-            $total = Money::add($subtotal, $vat);
+            $quote = $this->quoteOrder($customerId, $items, $lockedSo, $customerActor !== null);
+            $this->assertQuoteSignature($quote, $data['quote_signature'] ?? null);
+            $newLines = $quote['items'];
+            $subtotal = $quote['subtotal'];
+            $vat = $quote['vat_amount'];
+            $total = $quote['total_amount'];
 
             $lockedSo->update([
                 'customer_id' => $customerId,
@@ -645,11 +666,21 @@ class SalesOrderService
                     : $lockedSo->notes,
             ]);
 
-            // Replace items wholesale (draft state — no FK ramifications yet).
-            $lockedSo->items()->forceDelete();
-            foreach ($newLines as $line) {
-                $lockedSo->items()->create($line);
+            $lockedSo->supersedeDeliveryProposals();
+            if ($customerActor !== null) {
+                $lockedSo->update(['status' => SalesOrderStatus::AwaitingConfirmation]);
             }
+            $keepIds = [];
+            foreach ($newLines as $line) {
+                $existingId = $line['existing_id'] ?? null;
+                unset($line['existing_id']);
+                if ($existingId !== null) {
+                    $keepIds[] = $existingId;
+                } else {
+                    $keepIds[] = $lockedSo->items()->create($line + ['fulfillment_policy' => 'stock_first'])->id;
+                }
+            }
+            $lockedSo->items()->whereNotIn('id', $keepIds)->forceDelete();
 
             return $this->show($lockedSo->fresh());
         });
@@ -668,8 +699,11 @@ class SalesOrderService
             $lockedSo = SalesOrder::query()
                 ->lockForUpdate()
                 ->findOrFail($so->id);
-            if ($lockedSo->status !== SalesOrderStatus::Draft) {
-                throw new BusinessRuleException('Only draft sales orders can be confirmed.');
+            if (! $lockedSo->status->isBeforeConfirmation()) {
+                throw new BusinessRuleException('Only unconfirmed sales orders can be confirmed.');
+            }
+            if ($lockedSo->hasPendingDeliveryProposal()) {
+                throw new BusinessRuleException('Wait for the customer to accept or decline the proposed delivery date before confirming.');
             }
             if ($lockedSo->items()->count() === 0) {
                 throw new BusinessRuleException('Cannot confirm a sales order with no items.');
@@ -719,6 +753,8 @@ class SalesOrderService
                 auth()->user(),
             );
 
+            $this->notifyCustomer($fresh, 'confirmed', 'Sales confirmed your order. Production planning is the next step.');
+
             return $this->show($fresh);
         });
     }
@@ -739,7 +775,11 @@ class SalesOrderService
                 throw new BusinessRuleException('Cannot request customer confirmation for a sales order with no items.');
             }
 
+            if ($lockedSo->submission_source === SalesOrderSubmissionSource::CustomerPortal) {
+                throw new BusinessRuleException('Customer-submitted orders are reviewed and confirmed as submitted.');
+            }
             $lockedSo->update(['customer_confirmation_requested_at' => now()]);
+            $this->notifyCustomer($lockedSo, 'review_requested', 'Sales sent an order for your review. Open it to accept, propose changes, or decline.');
 
             return $this->show($lockedSo->fresh());
         });
@@ -783,10 +823,10 @@ class SalesOrderService
         // sync queue driver the failure has already been recorded by now, and
         // reporting it as queued told the operator to wait for a run that was
         // never coming.
-        $planningFailure = $plan === null ? $this->latestPlanningFailure((int) $confirmedSo->id) : null;
+        $planningFailure = $this->latestPlanningFailure((int) $confirmedSo->id);
         $planningStatus = match (true) {
-            $plan !== null => 'completed',
             $planningFailure !== null => 'failed',
+            $plan !== null => 'completed',
             default => 'queued',
         };
 
@@ -796,13 +836,16 @@ class SalesOrderService
             'workOrders.machine:id,machine_code,name',
             'workOrders.mold:id,mold_code,name',
             'workOrders.schedules',
+            'workOrders.schedules.machine:id,machine_code,name',
         ]);
         $workOrders = $confirmedSo->workOrders;
 
         // Build per-WO summaries.
-        $woSummaries = $workOrders->map(function ($wo) use ($schedulingResult) {
-            $schedule = collect($schedulingResult['scheduled'])
-                ->firstWhere('work_order_id', $wo->hash_id);
+        $woSummaries = $workOrders->map(function ($wo) {
+            $schedule = $wo->schedules->filter(fn ($slot) => $slot->rework_ncr_id === null
+                && $slot->reserves_capacity && in_array($slot->status->value, ['pending', 'confirmed', 'executed'], true))
+                ->sortByDesc('id')->first();
+            $machine = $wo->machine ?? $schedule?->machine;
 
             return [
                 'id' => $wo->hash_id,
@@ -813,10 +856,10 @@ class SalesOrderService
                 ] : null,
                 'status' => $wo->status?->value,
                 'quantity_target' => (int) $wo->quantity_target,
-                'machine' => $wo->machine ? $wo->machine->machine_code.' '.$wo->machine->name : null,
-                'scheduled_start' => $schedule['scheduled_start'] ?? optional($wo->planned_start)->toIso8601String(),
-                'scheduled_end' => $schedule['scheduled_end'] ?? optional($wo->planned_end)->toIso8601String(),
-                'needs_manual_scheduling' => $wo->status?->value === 'planned' && ! $wo->machine_id,
+                'machine' => $machine ? $machine->machine_code.' '.$machine->name : null,
+                'scheduled_start' => optional($schedule?->scheduled_start ?? $wo->planned_start)->toIso8601String(),
+                'scheduled_end' => optional($schedule?->scheduled_end ?? $wo->planned_end)->toIso8601String(),
+                'needs_manual_scheduling' => $wo->status?->value === 'planned' && $schedule === null,
             ];
         })->values()->all();
 
@@ -845,9 +888,10 @@ class SalesOrderService
         ];
     }
 
-    public function cancel(SalesOrder $so, ?string $reason = null): SalesOrder
+    public function cancel(SalesOrder $so, ?string $reason = null, ?CustomerPortalUser $customerActor = null): SalesOrder
     {
-        return DB::transaction(function () use ($so, $reason) {
+        return DB::transaction(function () use ($so, $reason, $customerActor) {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             // A stale route-bound SO must not overwrite a delivered/invoiced
             // or already-cancelled order. Re-read and lock before the guard.
             $lockedSo = SalesOrder::query()
@@ -856,7 +900,14 @@ class SalesOrderService
             if (! $lockedSo->is_cancellable) {
                 throw new BusinessRuleException('This sales order cannot be cancelled at its current status.');
             }
+            $this->assertCustomerOrderMutation($lockedSo, $customerActor);
+            foreach (Delivery::where('sales_order_id', $lockedSo->id)->where('status', '!=', 'cancelled')->lockForUpdate()->get() as $delivery) {
+                if (app(\App\Modules\SupplyChain\Services\DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
+                    app(\App\Modules\SupplyChain\Services\DeliveryService::class)->updateStatus($delivery, \App\Modules\SupplyChain\Enums\DeliveryStatus::Cancelled);
+                }
+            }
             $this->assertCancellableDownstreamState($lockedSo);
+            app(SalesOrderSupplyService::class)->releaseUnshipped($lockedSo, \App\Modules\Auth\Models\User::findOrFail($lockedSo->created_by), $reason ?? 'Order cancelled');
 
             $lockedSo->update([
                 'status' => SalesOrderStatus::Cancelled->value,
@@ -894,6 +945,9 @@ class SalesOrderService
                     $woService->cancel($wo, $reason ?? "Sales order {$lockedSo->so_number} cancelled");
                 }
             }
+
+            $lockedSo->supersedeDeliveryProposals();
+            $this->notifyCustomer($lockedSo, 'cancelled', 'This order was cancelled. Production and purchasing demand have been retired where cancellation is allowed.');
 
             // Buying demand must not outlive the order that justified it: a
             // cancelled SO used to leave its MRP auto-PR in the purchasing
@@ -968,6 +1022,32 @@ class SalesOrderService
         return class_exists($cls) ? app($cls) : null;
     }
 
+    private function assertCustomerOrderMutation(SalesOrder $so, ?CustomerPortalUser $customerActor): void
+    {
+        if ($so->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+            if ($customerActor !== null) {
+                throw new BusinessRuleException('Only orders submitted through your customer portal can be changed here.');
+            }
+
+            return;
+        }
+        if ($customerActor === null) {
+            throw new BusinessRuleException('Customer-submitted orders can only be changed or cancelled by the customer before sales confirmation.');
+        }
+        abort_if($so->customer_id !== $customerActor->customer_id, 403);
+        if (! $so->status->isBeforeConfirmation()) {
+            throw new BusinessRuleException('Only unconfirmed customer orders can be changed or cancelled.');
+        }
+    }
+
+    private function notifyCustomer(SalesOrder $so, string $action, string $message): void
+    {
+        app(NotificationService::class)->sendPortalInApp(CustomerPortalUser::where('customer_id', $so->customer_id)->where('is_active', true)->get(), 'sales_order.'.$action, [
+            'title' => $so->so_number.': '.str_replace('_', ' ', $action), 'message' => $message,
+            'link_to' => '/portal/customer/orders/'.$so->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $so->hash_id,
+        ], 'so:'.$so->id.':'.$action.':'.($action === 'review_requested' ? $so->customer_confirmation_requested_at->toISOString() : 'once'));
+    }
+
     public function delete(SalesOrder $so): void
     {
         DB::transaction(function () use ($so): void {
@@ -977,6 +1057,7 @@ class SalesOrderService
             if ($lockedSo->status !== SalesOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft sales orders can be deleted.');
             }
+            $this->assertCustomerOrderMutation($lockedSo, null);
             $lockedSo->delete();
         });
     }
@@ -1245,8 +1326,12 @@ class SalesOrderService
     private function latestPlanningFailure(int $salesOrderId): ?array
     {
         $runs = MrpRun::query()
+            ->where(function ($query) use ($salesOrderId): void {
+                $query->whereJsonContains('summary->per_sales_order', [['so_id' => $salesOrderId]])
+                    ->orWhereJsonContains('summary->sales_order_ids', $salesOrderId);
+            })
             ->orderByDesc('id')
-            ->limit(10)
+            ->limit(1)
             ->get(['id', 'status', 'summary', 'error_message', 'recovery_action']);
 
         foreach ($runs as $run) {
@@ -1256,18 +1341,23 @@ class SalesOrderService
                 }
 
                 if (! isset($row['error'])) {
+                    $warning = collect((array) ($row['warnings'] ?? []))->firstWhere('type', 'missing_bom');
+                    if ($warning) {
+                        return ['message' => (string) $warning['message'], 'recovery_action' => 'Complete the product BOM, then run MRP again.'];
+                    }
+
                     return null; // The newest run that saw this SO planned it cleanly.
                 }
 
                 return [
-                    'message' => (string) $row['error'],
+                    'message' => isset($row['error_code']) ? (string) $row['error'] : 'MRP could not evaluate this sales order. Ask the administrator to review the run logs, then rerun MRP.',
                     'recovery_action' => isset($row['recovery_action']) ? (string) $row['recovery_action'] : null,
                 ];
             }
 
             if ($run->status === MrpRunStatus::Failed) {
                 return [
-                    'message' => (string) ($run->error_message ?: 'Automatic MRP run failed without an error message.'),
+                    'message' => $run->error_code ? (string) ($run->error_message ?: 'Automatic MRP run failed without an error message.') : 'Automatic MRP failed. Ask the administrator to review the run logs, then rerun MRP.',
                     'recovery_action' => $run->recovery_action !== null ? (string) $run->recovery_action : null,
                 ];
             }
@@ -1277,8 +1367,7 @@ class SalesOrderService
     }
 
     /**
-     * Chain payload — qc_outgoing derived from real Inspection state (H-4);
-     * the remaining stages derive from the SO's own lifecycle state.
+     * Chain progress reflects completed quantities and downstream records.
      */
     public function chain(SalesOrder $so): array
     {
@@ -1289,6 +1378,17 @@ class SalesOrderService
         $qc = $isCancelled
             ? ['state' => 'skipped', 'date' => null]
             : $this->deriveOutgoingQcStage($so);
+        $productionCovered = $isCancelled ? false : $this->hasCompletedProduction($so);
+        $stockLines = $so->items()->where('fulfillment_policy', 'stock_first')->get();
+        $supplyLabel = 'In Production';
+        if ($stockLines->isNotEmpty()) {
+            $stockOnly = ! WorkOrder::where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->exists();
+            $supplyLabel = $stockOnly ? 'Ready from stock' : 'Stock + production';
+            if (! $isCancelled && $productionCovered === true) $qc = ['state' => 'done', 'date' => null];
+        }
+        if ($qc['state'] === 'done' && $status === SalesOrderStatus::InProduction && $productionCovered === false) {
+            $qc['state'] = 'active';
+        }
         if ($qc['state'] === 'failed') {
             $qc['state'] = 'rejected';
         }
@@ -1303,23 +1403,29 @@ class SalesOrderService
             ->where('quantity_delivered', '>', 0)
             ->exists();
 
+        $planningFailure = ! $isCancelled && ! $status->isBeforeConfirmation() && $productionCovered !== true
+            ? $this->latestPlanningFailure((int) $so->id) : null;
         $mrpState = match (true) {
             $isCancelled => 'skipped',
-            $status === SalesOrderStatus::Draft => 'pending',
+            $status->isBeforeConfirmation() => 'pending',
+            $productionCovered === true => 'done',
+            $planningFailure !== null => 'rejected',
             (bool) $so->mrp_plan_id => 'done',
             $status === SalesOrderStatus::Confirmed => 'active',
             default => 'done',
         };
         $productionState = match (true) {
             $isCancelled => 'skipped',
-            $status === SalesOrderStatus::Draft, $status === SalesOrderStatus::Confirmed => 'pending',
+            $status->isBeforeConfirmation() => 'pending',
+            $productionCovered => 'done',
+            $status === SalesOrderStatus::Confirmed => 'pending',
             $status === SalesOrderStatus::InProduction => 'active',
             default => 'done',
         };
         $deliveryState = match (true) {
             $isCancelled => 'skipped',
             $fullyDelivered => 'done',
-            $hasDeliveredQuantity => 'active',
+            $hasDeliveredQuantity || ($productionState === 'done' && $qc['state'] === 'done') => 'active',
             default => 'pending',
         };
 
@@ -1336,20 +1442,38 @@ class SalesOrderService
         $invoicedDate = $so->invoiced_at?->toDateString()
             ?? ($invoiced ? $billing->max(static fn (Invoice $invoice): ?string => $invoice->date?->toDateString()) : null);
 
+        $mrpDescription = $planningFailure
+            ? 'MRP planning needs attention. '.$planningFailure['message'].' PPC: '.($planningFailure['recovery_action'] ?? 'Correct the planning data, then run MRP again from MRP Plans. Do not create another sales order.')
+            : ($mrpState === 'active' ? 'Automatic MRP planning is pending. PPC: refresh this record to check for the material plan and work orders. If nothing appears, check MRP Plans for failed runs and ask the administrator to check automation.' : null);
+        $missingQualitySpecs = $mrpState === 'done' && in_array($productionState, ['pending', 'active'], true)
+            ? Product::query()->whereIn('id', WorkOrder::query()->where('sales_order_id', $so->id)
+                ->whereIn('status', ['planned', 'confirmed', 'in_progress', 'paused'])->select('product_id'))
+                ->whereDoesntHave('inspectionSpec', fn ($query) => $query->whereHas('items'))
+                ->pluck('part_number')->all()
+            : [];
+
         return [
             ['key' => 'order_entered', 'label' => 'Order Entered',
                 'date' => $so->created_at?->toDateString(),
                 'state' => 'done'],
             ['key' => 'mrp_planned', 'label' => 'MRP Planned',
                 'date' => $so->confirmed_at?->toDateString(),
-                'state' => $mrpState],
-            ['key' => 'in_production', 'label' => 'In Production',
+                'state' => $mrpState, 'description' => $mrpDescription, 'href' => '/mrp/plans'],
+            ['key' => 'in_production', 'label' => $supplyLabel,
                 'date' => $so->in_production_at?->toDateString(),
-                'state' => $productionState],
-            ['key' => 'qc_outgoing', 'label' => 'QC Outgoing', 'date' => $qc['date'], 'state' => $qc['state']],
+                'state' => $productionState, 'href' => '/production/work-orders',
+                'description' => $missingQualitySpecs !== []
+                    ? 'Production setup needs attention. QC: configure the actual inspection specification for '.implode(', ', $missingQualitySpecs).'. Production cannot start those work orders until QC setup is complete.'
+                    : ($mrpState === 'done' && in_array($productionState, ['pending', 'active'], true)
+                    ? 'Next: PPC reviews material availability and scheduling in the linked MRP plan; Production confirms and starts the linked work orders. Shortages must be purchased and received before material issue.' : null)],
+            ['key' => 'qc_outgoing', 'label' => $supplyLabel === 'Ready from stock' ? 'QC approved stock' : 'QC Outgoing', 'date' => $qc['date'], 'state' => $qc['state'],
+                'href' => '/quality/inspections', 'description' => $qc['state'] === 'rejected'
+                    ? 'Quality hold: QC must record the defect disposition and approve recovery inspection. Production handles required rework; affected goods cannot ship.'
+                    : ($qc['state'] === 'active' ? 'Next: QC records PASS/FAIL for each checklist requirement, then an independent checker reviews the result. Production cannot close the work order until quality is released.' : null)],
             ['key' => 'delivered', 'label' => 'Delivered',
                 'date' => ($so->delivered_at ?? $so->partially_delivered_at)?->toDateString(),
-                'state' => $deliveryState],
+                'state' => $deliveryState, 'description' => ! $isCancelled && $qc['state'] === 'done' && ! $fullyDelivered
+                    ? 'Next: ImpEx prepares the linked deliveries and reserves released stock. Driver uploads proof; customer confirms receipt. Partial shipments keep the remaining quantity open.' : null],
             ['key' => 'invoiced', 'label' => 'Invoiced',
                 'date' => $invoicedDate,
                 'state' => $isCancelled ? 'skipped' : ($invoiced || $isPaid || $isClosed || $status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
@@ -1362,38 +1486,62 @@ class SalesOrderService
         ];
     }
 
+    private function hasCompletedProduction(SalesOrder $so): ?bool
+    {
+        if ($so->items()->where('fulfillment_policy', 'stock_first')->exists()) {
+            return $so->items()->get()->every(function ($line) {
+                $coverage = app(SalesOrderSupplyService::class)->lineCoverage($line);
+                return bccomp($coverage['ready_quantity'], $coverage['demand'], 3) >= 0;
+            });
+        }
+        $demand = SalesOrderItem::query()->where('sales_order_id', $so->id)->get()
+            ->groupBy('product_id')->map(fn ($lines) => $lines->sum('quantity'));
+        if ($demand->isEmpty()) {
+            return null;
+        }
+        $completed = WorkOrder::query()->where('sales_order_id', $so->id)->whereNull('parent_wo_id')
+            ->whereIn('status', [WorkOrderStatus::Completed->value, WorkOrderStatus::Closed->value])
+            ->get(['product_id', 'quantity_good'])->groupBy('product_id')
+            ->map(fn ($orders) => $orders->sum('quantity_good'));
+
+        // Surplus for one product cannot cover another product's demand.
+        return $demand->every(fn ($quantity, $productId) => $completed->get($productId, 0) >= $quantity);
+    }
+
     /**
-     * H-4 — Derive the outgoing-QC chain stage from the latest outgoing
-     * Inspection joined via WO → SO. Single SQL query, no N+1.
-     *
-     * States:
-     *   pending — no outgoing inspection exists for any WO of this SO
-     *   done    — latest outgoing inspection passed; date = completed_at
-     *   failed  — latest outgoing inspection failed; date = completed_at
-     *   active  — latest exists but not yet terminal (draft / in_progress /
-     *             cancelled treated as in-flight); date = started_at
+     * A failed or unfinished batch takes priority over newer passing batches.
+     * Closed scrap/rework dispositions remain resolved without rewriting QC history.
      *
      * @return array{state: string, date: ?string}
      */
     private function deriveOutgoingQcStage(SalesOrder $so): array
     {
-        $row = DB::table('inspections as i')
-            ->join('work_orders as w', function ($j) {
-                $j->on('w.id', '=', 'i.entity_id')
-                    ->where('i.entity_type', '=', InspectionEntityType::WorkOrder->value);
-            })
-            ->where('w.sales_order_id', $so->id)
-            ->where('i.stage', InspectionStage::Outgoing->value)
-            ->orderByDesc('i.id')
-            ->select('i.status', 'i.started_at', 'i.completed_at')
-            ->first();
+        $inspections = Inspection::query()
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->whereIn('entity_id', WorkOrder::query()->where('sales_order_id', $so->id)->where('status', '!=', WorkOrderStatus::Cancelled->value)->select('id'))
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('status', '!=', 'cancelled')->with(['ncr', 'resultAuthors', 'workOrderOutput.workOrder'])->orderByDesc('id')->get();
+        $unresolved = $inspections->filter(static fn ($inspection): bool => ! $inspection->hasResolvedOutgoingDisposition());
+        $row = $unresolved->firstWhere('status', InspectionStatus::Failed)
+            ?? $unresolved->first(static fn ($inspection): bool => ! in_array($inspection->status->value, ['passed', 'failed'], true))
+            ?? $inspections->first();
 
         if ($row === null) {
             return ['state' => 'pending', 'date' => null];
         }
 
-        $status = (string) $row->status;
+        $status = $row->hasResolvedOutgoingDisposition() ? 'passed' : $row->status->value;
         if ($status === 'passed') {
+            $batched = $inspections->whereNotNull('work_order_output_id');
+            if ($batched->isNotEmpty()) {
+                $demand = SalesOrderItem::query()->where('sales_order_id', $so->id)->get()
+                    ->groupBy('product_id')->map(fn ($lines) => $lines->sum('quantity'));
+                $released = $batched->filter(fn (Inspection $inspection) => $inspection->canReleaseOutgoing())
+                    ->groupBy('product_id')->map(fn ($rows) => $rows->sum('accepted_quantity'));
+                if ($demand->isNotEmpty() && ! $demand->every(fn ($quantity, $productId) => $released->get($productId, 0) >= $quantity)) {
+                    return ['state' => 'active', 'date' => null];
+                }
+            }
             return ['state' => 'done', 'date' => optional(Carbon::parse($row->completed_at))->toDateString()];
         }
         if ($status === 'failed') {

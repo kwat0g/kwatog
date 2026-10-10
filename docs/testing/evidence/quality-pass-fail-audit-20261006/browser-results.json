@@ -1,0 +1,830 @@
+[
+  {
+    "role": "qc",
+    "stage": "incoming",
+    "listStatus": 200,
+    "recordsReturned": 4,
+    "selectedStatus": "draft",
+    "selectedMode": "lot_checklist"
+  },
+  {
+    "role": "qc",
+    "stage": "in_process",
+    "listStatus": 200,
+    "recordsReturned": 8,
+    "selectedStatus": "draft",
+    "selectedMode": "lot_checklist"
+  },
+  {
+    "role": "qc",
+    "stage": "outgoing",
+    "listStatus": 200,
+    "recordsReturned": 4,
+    "selectedStatus": "failed",
+    "selectedMode": "lot_checklist"
+  },
+  {
+    "role": "qc",
+    "stage": "customer_return",
+    "listStatus": 200,
+    "recordsReturned": 3,
+    "selectedStatus": "draft",
+    "selectedMode": "lot_checklist"
+  },
+  {
+    "role": "qc",
+    "stage": "supplier_return",
+    "listStatus": 200,
+    "recordsReturned": 1,
+    "selectedStatus": "draft",
+    "selectedMode": "lot_checklist"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspection-specs",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspection specs"
+    ],
+    "numericLanguage": [],
+    "text": "Inspection specs\n6 specs\nNew spec\nStatus: All\nActive\nArchived\nShowing 6 of 6 results, page 1\nPRODUCT\tVERSION\tPARAMETERS\tSTATUS\tUPDATED\t\nRMA-mrbr12-FGCustomer return finished good mrbr12\tv1\t1\tActive\t2026-10-05\t\n\nRMA-r5x9q-FGCustomer return finished good r5x9q\tv1\t1\tActive\t2026-10-05\t\n\nCREW-858223Crew assignment test product\tv1\t1\tActive\t2026-10-05\t\n\nSTART-QC-st118Work-order start QC test st118\tv1\t4\tActive\t2026-10-05\t\n\nE2E-QC-qc118100-piece QC browser test qc118\tv1\t3\tActive\t2026-10-05\t\n\nRMA-rma118-FGCustomer return finished good rma118\tv1\t1\tActive\t2026-10-05\t\n1–6 of 6\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspection-specs",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspection specs"
+    ],
+    "numericLanguage": [],
+    "text": "Inspection specs\n6 specs\nNew spec\nStatus: All\nActive\nArchived\nShowing 6 of 6 results, page 1\nPRODUCT\tVERSION\tPARAMETERS\tSTATUS\tUPDATED\t\nRMA-mrbr12-FGCustomer return finished good mrbr12\tv1\t1\tActive\t2026-10-05\t\n\nRMA-r5x9q-FGCustomer return finished good r5x9q\tv1\t1\tActive\t2026-10-05\t\n\nCREW-858223Crew assignment test product\tv1\t1\tActive\t2026-10-05\t\n\nSTART-QC-st118Work-order start QC test st118\tv1\t4\tActive\t2026-10-05\t\n\nE2E-QC-qc118100-piece QC browser test qc118\tv1\t3\tActive\t2026-10-05\t\n\nRMA-rma118-FGCustomer return finished good rma118\tv1\t1\tActive\t2026-10-05\t\n1–6 of 6\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspections"
+    ],
+    "numericLanguage": [],
+    "text": "Inspections\n20 inspections\nNew inspection\nStage: All\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nStatus: All\nDraft\nIn progress\nAwaiting review\nPassed\nFailed\nCancelled\nDATE\n→\nDRAFT\n6\nin current view\nIN PROGRESS\n0\nin current view\nPASSED\n13\nin current view\nFAILED\n1\nin current view\nShowing 20 of 20 results, page 1\nINSPECTION\tPRODUCT\tSTAGE\tBATCH\tPROBLEM\tSTATUS\tCOMPLETED\nQC-202610-0014\tRMA-mrbr12-FGCustomer return finished good mrbr12\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0013\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0012\tRMA-r5x9q-FGCustomer return finished good r5x9q\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0011\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tDraft\t—\nQC-202610-0010\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tPassed\t2026-10-05\nQC-202610-0009\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tDraft\t—\nQC-202610-0008\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0007\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nE2E-qc118-customer_return\tE2E-QC-qc118100-piece QC browser test qc118\tCustomer Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-supplier_return\tE2E-QC-qc118100-piece QC browser test qc118\tSupplier Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-in_process\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tDraft\t—\nE2E-qc118-incoming\tE2E-QC-qc118100-piece QC browser test qc118\tIncoming\t100\t\n—\n\tDraft\t—\nQC-202610-0006\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\nSurface condition: Crack found in sampled piece. Surface condition: Crack found in sampled piece.\n\tFailed\t2026-10-05\nQC-202610-0005\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0004\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0003\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0002\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0001\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-DP-OUT-dp118\tDP-dp118-KGDelivery precision finished good dp118\tOutgoing\t1\t\n—\n\tPassed\t2026-10-05\nQC-DP-IP-dp118\tDP-dp118-KGDelivery precision finished good dp118\tIn-process\t1\t\n—\n\tPassed\t2026-10-05\n1–20 of 20\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspections"
+    ],
+    "numericLanguage": [],
+    "text": "Inspections\n20 inspections\nNew inspection\nStage: All\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nStatus: All\nDraft\nIn progress\nAwaiting review\nPassed\nFailed\nCancelled\nDATE\n→\nDRAFT\n6\nin current view\nIN PROGRESS\n0\nin current view\nPASSED\n13\nin current view\nFAILED\n1\nin current view\nShowing 20 of 20 results, page 1\nINSPECTION\tPRODUCT\tSTAGE\tBATCH\tPROBLEM\tSTATUS\tCOMPLETED\nQC-202610-0014\tRMA-mrbr12-FGCustomer return finished good mrbr12\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0013\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0012\tRMA-r5x9q-FGCustomer return finished good r5x9q\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0011\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tDraft\t—\nQC-202610-0010\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tPassed\t2026-10-05\nQC-202610-0009\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tDraft\t—\nQC-202610-0008\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0007\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nE2E-qc118-customer_return\tE2E-QC-qc118100-piece QC browser test qc118\tCustomer Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-supplier_return\tE2E-QC-qc118100-piece QC browser test qc118\tSupplier Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-in_process\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tDraft\t—\nE2E-qc118-incoming\tE2E-QC-qc118100-piece QC browser test qc118\tIncoming\t100\t\n—\n\tDraft\t—\nQC-202610-0006\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\nSurface condition: Crack found in sampled piece. Surface condition: Crack found in sampled piece.\n\tFailed\t2026-10-05\nQC-202610-0005\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0004\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0003\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0002\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0001\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-DP-OUT-dp118\tDP-dp118-KGDelivery precision finished good dp118\tOutgoing\t1\t\n—\n\tPassed\t2026-10-05\nQC-DP-IP-dp118\tDP-dp118-KGDelivery precision finished good dp118\tIn-process\t1\t\n—\n\tPassed\t2026-10-05\n1–20 of 20\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/gA2KOyNYop",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Delivery documents (DR/invoice) match the PO item and quantity",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Delivery documents (DR/invoice) match the PO item and quantity",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Certificate of Analysis / mill certificate received and matches the lot",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Certificate of Analysis / mill certificate received and matches the lot",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Packaging sealed and undamaged (no wetness, contamination or tampering)",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Packaging sealed and undamaged (no wetness, contamination or tampering)",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Labels show the correct item code, grade/colour and lot number",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Labels show the correct item code, grade/colour and lot number",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Condition on arrival acceptable (storage/handling)",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Condition on arrival acceptable (storage/handling)",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "QC-202610-0009Draft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nQC-202610-0009Draft\nRM-001 — Plastic Resin Type A (ABS)\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nIncoming\nBatch quantity\n5\nInspect sample\n5\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nCarlos Mendoza\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 8:33 PM\nStarted\n—\nCompleted\n—\n\nNotes\n\nNo active quality plan; fallback verdict for GRN GRN-202610-0002.\n\nLinked records\nINVENTORY ITEM\nRM-001 — Plastic Resin Type A (ABS)\nSOURCE RECORD\nGRN-202610-0002\nPending QC\nInspection checklist\n\nBatch quantity: 5 · Planned sample: 5 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 5 of 5 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nDelivery documents (DR/invoice) match the PO item and quantity\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nCertificate of Analysis / mill certificate received and matches the lot\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nPackaging sealed and undamaged (no wetness, contamination or tampering)\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nLabels show the correct item code, grade/colour and lot number\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nCondition on arrival acceptable (storage/handling)\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/gA2KOyNYop",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Delivery documents (DR/invoice) match the PO item and quantity",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Delivery documents (DR/invoice) match the PO item and quantity",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Certificate of Analysis / mill certificate received and matches the lot",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Certificate of Analysis / mill certificate received and matches the lot",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Packaging sealed and undamaged (no wetness, contamination or tampering)",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Packaging sealed and undamaged (no wetness, contamination or tampering)",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Labels show the correct item code, grade/colour and lot number",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Labels show the correct item code, grade/colour and lot number",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Condition on arrival acceptable (storage/handling)",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Condition on arrival acceptable (storage/handling)",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "QC-202610-0009Draft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nQC-202610-0009Draft\nRM-001 — Plastic Resin Type A (ABS)\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nIncoming\nBatch quantity\n5\nInspect sample\n5\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nCarlos Mendoza\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 8:33 PM\nStarted\n—\nCompleted\n—\n\nNotes\n\nNo active quality plan; fallback verdict for GRN GRN-202610-0002.\n\nLinked records\nINVENTORY ITEM\nRM-001 — Plastic Resin Type A (ABS)\nSOURCE RECORD\nGRN-202610-0002\nPending QC\nInspection checklist\n\nBatch quantity: 5 · Planned sample: 5 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 5 of 5 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nDelivery documents (DR/invoice) match the PO item and quantity\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nCertificate of Analysis / mill certificate received and matches the lot\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nPackaging sealed and undamaged (no wetness, contamination or tampering)\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nLabels show the correct item code, grade/colour and lot number\nCritical\nUnanswered\n\nVisual\n\nPASS\nFAIL\nCondition on arrival acceptable (storage/handling)\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/zq1P04Ppdn",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Surface condition",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "QC-202610-0011Draft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nQC-202610-0011Draft\nCREW-858223 — Crew assignment test product\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nIn-process\nBatch quantity\n50\nInspect sample\n5\nAQL code\n—\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nDr. Adalberto Waters\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 8:41 PM\nStarted\nOct 5, 2026 · 8:41 PM\nCompleted\n—\n\nNotes\n\nAuto-created from WO WO-202610-1866 start.\n\nLinked records\nPRODUCT\nCREW-858223 — Crew assignment test product\nSOURCE RECORD\nWO-202610-1866\nIn Progress\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 50 · Planned sample: 5 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 5 of 50 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nSurface condition\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/zq1P04Ppdn",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Surface condition",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "QC-202610-0011Draft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nQC-202610-0011Draft\nCREW-858223 — Crew assignment test product\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nIn-process\nBatch quantity\n50\nInspect sample\n5\nAQL code\n—\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nDr. Adalberto Waters\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 8:41 PM\nStarted\nOct 5, 2026 · 8:41 PM\nCompleted\n—\n\nNotes\n\nAuto-created from WO WO-202610-1866 start.\n\nLinked records\nPRODUCT\nCREW-858223 — Crew assignment test product\nSOURCE RECORD\nWO-202610-1866\nIn Progress\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 50 · Planned sample: 5 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 5 of 50 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nSurface condition\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/Q05KjnKXwn",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "QC-202610-0006Failed",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nQC-202610-0006Failed\nE2E-QC-qc118 — 100-piece QC browser test qc118\nReport defect\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nOct 5, 2026\nCompleted\nOct 5, 2026\nCancelled\nInspection details\nSampling and record history\nStage\nOutgoing\nBatch quantity\n100\nInspect sample\n20\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\n1\nAccepted quantity\n0\nInspection created by\nRosa Villareal\nResults recorded by\nRosa Villareal\nCreated\nOct 5, 2026 · 7:44 PM\nStarted\nOct 5, 2026 · 7:44 PM\nCompleted\nOct 5, 2026 · 8:42 PM\nReviewed by\nRicardo Tanaka\nReviewed\nOct 5, 2026 · 8:42 PM\n\nChecker remarks\n\nIndependent checker confirms crack.\n\nLinked records\nPRODUCT\nE2E-QC-qc118 — 100-piece QC browser test qc118\nSOURCE RECORD\nE2E-qc118-DRAFT-QC\nCompleted\nOUTPUT BATCH\nE2E-qc118-DRAFT\nE2E-qc118-DRAFT-QC · good 100\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 100 · Planned sample: 20 pieces\n\nInspection failed\nInspected pieces\n20\nDefective pieces\n1\nHeld batch\n100\n\nBatch held for NCR sorting or rework, not scrap.\n\nSurface condition: Crack found in sampled piece.\nSurface condition: Crack found in sampled piece.\n\n3 requirements · decisions apply to each parameter across the planned sample.\n\nSurface condition\n\nCrack found in sampled piece.\n\nFAIL\nColor\nPASS\nPackaging\nPASS"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/Q05KjnKXwn",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "QC-202610-0006Failed",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nQC-202610-0006Failed\nE2E-QC-qc118 — 100-piece QC browser test qc118\nReport defect\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nOct 5, 2026\nCompleted\nOct 5, 2026\nCancelled\nInspection details\nSampling and record history\nStage\nOutgoing\nBatch quantity\n100\nInspect sample\n20\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\n1\nAccepted quantity\n0\nInspection created by\nRosa Villareal\nResults recorded by\nRosa Villareal\nCreated\nOct 5, 2026 · 7:44 PM\nStarted\nOct 5, 2026 · 7:44 PM\nCompleted\nOct 5, 2026 · 8:42 PM\nReviewed by\nRicardo Tanaka\nReviewed\nOct 5, 2026 · 8:42 PM\n\nChecker remarks\n\nIndependent checker confirms crack.\n\nLinked records\nPRODUCT\nE2E-QC-qc118 — 100-piece QC browser test qc118\nSOURCE RECORD\nE2E-qc118-DRAFT-QC\nCompleted\nOUTPUT BATCH\nE2E-qc118-DRAFT\nE2E-qc118-DRAFT-QC · good 100\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 100 · Planned sample: 20 pieces\n\nInspection failed\nInspected pieces\n20\nDefective pieces\n1\nHeld batch\n100\n\nBatch held for NCR sorting or rework, not scrap.\n\nSurface condition: Crack found in sampled piece.\nSurface condition: Crack found in sampled piece.\n\n3 requirements · decisions apply to each parameter across the planned sample.\n\nSurface condition\n\nCrack found in sampled piece.\n\nFAIL\nColor\nPASS\nPackaging\nPASS"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/zQXP9YPGA0",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Packaging",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Packaging",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "E2E-qc118-customer_returnDraft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nE2E-qc118-customer_returnDraft\nE2E-QC-qc118 — 100-piece QC browser test qc118\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nCustomer Return\nBatch quantity\n100\nInspect sample\n20\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nRosa Villareal\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 7:44 PM\nStarted\nOct 5, 2026 · 7:44 PM\nCompleted\n—\nLinked records\nPRODUCT\nE2E-QC-qc118 — 100-piece QC browser test qc118\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 100 · Planned sample: 20 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 20 of 100 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nSurface condition\nUnanswered\n\nVisual\n\nPASS\nFAIL\nColor\nUnanswered\n\nVisual\n\nPASS\nFAIL\nPackaging\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/zQXP9YPGA0",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Packaging",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Packaging",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "E2E-qc118-customer_returnDraft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nE2E-qc118-customer_returnDraft\nE2E-QC-qc118 — 100-piece QC browser test qc118\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nCustomer Return\nBatch quantity\n100\nInspect sample\n20\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nRosa Villareal\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 7:44 PM\nStarted\nOct 5, 2026 · 7:44 PM\nCompleted\n—\nLinked records\nPRODUCT\nE2E-QC-qc118 — 100-piece QC browser test qc118\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 100 · Planned sample: 20 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 20 of 100 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nSurface condition\nUnanswered\n\nVisual\n\nPASS\nFAIL\nColor\nUnanswered\n\nVisual\n\nPASS\nFAIL\nPackaging\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/pW0NqOKMRw",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Packaging",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Packaging",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "E2E-qc118-supplier_returnDraft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nE2E-qc118-supplier_returnDraft\nE2E-QC-qc118 — 100-piece QC browser test qc118\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nSupplier Return\nBatch quantity\n100\nInspect sample\n20\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nRosa Villareal\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 7:44 PM\nStarted\nOct 5, 2026 · 7:44 PM\nCompleted\n—\nLinked records\nPRODUCT\nE2E-QC-qc118 — 100-piece QC browser test qc118\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 100 · Planned sample: 20 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 20 of 100 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nSurface condition\nUnanswered\n\nVisual\n\nPASS\nFAIL\nColor\nUnanswered\n\nVisual\n\nPASS\nFAIL\nPackaging\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "qc",
+    "route": "/quality/inspections/pW0NqOKMRw",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [
+      {
+        "name": "Inspected pieces*",
+        "value": ""
+      },
+      {
+        "name": "Defective pieces found*",
+        "value": ""
+      }
+    ],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [
+      {
+        "name": "",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Surface condition",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Color",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "PASS Packaging",
+        "disabled": false,
+        "height": 28
+      },
+      {
+        "name": "FAIL Packaging",
+        "disabled": false,
+        "height": 28
+      }
+    ],
+    "headings": [
+      "E2E-qc118-supplier_returnDraft",
+      "Record flow",
+      "Inspection details",
+      "Linked records",
+      "Inspection checklist"
+    ],
+    "numericLanguage": [],
+    "text": "Back to inspections\nE2E-qc118-supplier_returnDraft\nE2E-QC-qc118 — 100-piece QC browser test qc118\nCancel\nRecord flow\nOpened\nOct 5, 2026\nIn progress\nChecker review\nCompleted\nCancelled\nInspection details\nSampling and record history\nStage\nSupplier Return\nBatch quantity\n100\nInspect sample\n20\nAQL code\nF\nAcceptance limit\n0\nRejection limit\n1\nSample defects\nNot recorded\nAccepted quantity\n0\nInspection created by\nRosa Villareal\nResults recorded by\nNot recorded\nCreated\nOct 5, 2026 · 7:44 PM\nStarted\nOct 5, 2026 · 7:44 PM\nCompleted\n—\nLinked records\nPRODUCT\nE2E-QC-qc118 — 100-piece QC browser test qc118\nINSPECTION SPEC\nv1\nactive\nInspection checklist\n\nBatch quantity: 100 · Planned sample: 20 pieces\n\nInspect every planned sample. Record one result per requirement, then confirm actual sample coverage and unique defective pieces.\n\nPlanned sample: 20 of 100 pieces. Count each defective piece once.\n\nInspected pieces*\nDefective pieces found*\nI confirm all required checks on the planned sample were completed\nNeeds attention\nPASS all remaining\nSurface condition\nUnanswered\n\nVisual\n\nPASS\nFAIL\nColor\nUnanswered\n\nVisual\n\nPASS\nFAIL\nPackaging\nUnanswered\n\nVisual\n\nPASS\nFAIL\nSave draft\nSubmit result"
+  },
+  {
+    "role": "admin",
+    "route": "/quality/inspection-specs",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspection specs"
+    ],
+    "numericLanguage": [],
+    "text": "Inspection specs\n6 specs\nNew spec\nStatus: All\nActive\nArchived\nShowing 6 of 6 results, page 1\nPRODUCT\tVERSION\tPARAMETERS\tSTATUS\tUPDATED\t\nRMA-mrbr12-FGCustomer return finished good mrbr12\tv1\t1\tActive\t2026-10-05\t\n\nRMA-r5x9q-FGCustomer return finished good r5x9q\tv1\t1\tActive\t2026-10-05\t\n\nCREW-858223Crew assignment test product\tv1\t1\tActive\t2026-10-05\t\n\nSTART-QC-st118Work-order start QC test st118\tv1\t4\tActive\t2026-10-05\t\n\nE2E-QC-qc118100-piece QC browser test qc118\tv1\t3\tActive\t2026-10-05\t\n\nRMA-rma118-FGCustomer return finished good rma118\tv1\t1\tActive\t2026-10-05\t\n1–6 of 6\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/quality/inspection-specs",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspection specs"
+    ],
+    "numericLanguage": [],
+    "text": "Inspection specs\n6 specs\nNew spec\nStatus: All\nActive\nArchived\nShowing 6 of 6 results, page 1\nPRODUCT\tVERSION\tPARAMETERS\tSTATUS\tUPDATED\t\nRMA-mrbr12-FGCustomer return finished good mrbr12\tv1\t1\tActive\t2026-10-05\t\n\nRMA-r5x9q-FGCustomer return finished good r5x9q\tv1\t1\tActive\t2026-10-05\t\n\nCREW-858223Crew assignment test product\tv1\t1\tActive\t2026-10-05\t\n\nSTART-QC-st118Work-order start QC test st118\tv1\t4\tActive\t2026-10-05\t\n\nE2E-QC-qc118100-piece QC browser test qc118\tv1\t3\tActive\t2026-10-05\t\n\nRMA-rma118-FGCustomer return finished good rma118\tv1\t1\tActive\t2026-10-05\t\n1–6 of 6\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/quality/inspections",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1440,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspections"
+    ],
+    "numericLanguage": [],
+    "text": "Inspections\n20 inspections\nNew inspection\nStage: All\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nStatus: All\nDraft\nIn progress\nAwaiting review\nPassed\nFailed\nCancelled\nDATE\n→\nDRAFT\n6\nin current view\nIN PROGRESS\n0\nin current view\nPASSED\n13\nin current view\nFAILED\n1\nin current view\nShowing 20 of 20 results, page 1\nINSPECTION\tPRODUCT\tSTAGE\tBATCH\tPROBLEM\tSTATUS\tCOMPLETED\nQC-202610-0014\tRMA-mrbr12-FGCustomer return finished good mrbr12\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0013\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0012\tRMA-r5x9q-FGCustomer return finished good r5x9q\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0011\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tDraft\t—\nQC-202610-0010\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tPassed\t2026-10-05\nQC-202610-0009\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tDraft\t—\nQC-202610-0008\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0007\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nE2E-qc118-customer_return\tE2E-QC-qc118100-piece QC browser test qc118\tCustomer Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-supplier_return\tE2E-QC-qc118100-piece QC browser test qc118\tSupplier Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-in_process\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tDraft\t—\nE2E-qc118-incoming\tE2E-QC-qc118100-piece QC browser test qc118\tIncoming\t100\t\n—\n\tDraft\t—\nQC-202610-0006\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\nSurface condition: Crack found in sampled piece. Surface condition: Crack found in sampled piece.\n\tFailed\t2026-10-05\nQC-202610-0005\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0004\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0003\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0002\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0001\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-DP-OUT-dp118\tDP-dp118-KGDelivery precision finished good dp118\tOutgoing\t1\t\n—\n\tPassed\t2026-10-05\nQC-DP-IP-dp118\tDP-dp118-KGDelivery precision finished good dp118\tIn-process\t1\t\n—\n\tPassed\t2026-10-05\n1–20 of 20\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/quality/inspections",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 390,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [],
+    "unnamedInputs": [],
+    "decisionButtons": [],
+    "headings": [
+      "Inspections"
+    ],
+    "numericLanguage": [],
+    "text": "Inspections\n20 inspections\nNew inspection\nStage: All\nIncoming\nIn-process\nOutgoing\nSupplier Return\nCustomer Return\nStatus: All\nDraft\nIn progress\nAwaiting review\nPassed\nFailed\nCancelled\nDATE\n→\nDRAFT\n6\nin current view\nIN PROGRESS\n0\nin current view\nPASSED\n13\nin current view\nFAILED\n1\nin current view\nShowing 20 of 20 results, page 1\nINSPECTION\tPRODUCT\tSTAGE\tBATCH\tPROBLEM\tSTATUS\tCOMPLETED\nQC-202610-0014\tRMA-mrbr12-FGCustomer return finished good mrbr12\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0013\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0012\tRMA-r5x9q-FGCustomer return finished good r5x9q\tCustomer Return\t1\t\n—\n\tPassed\t2026-10-05\nQC-202610-0011\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tDraft\t—\nQC-202610-0010\tCREW-858223Crew assignment test product\tIn-process\t50\t\n—\n\tPassed\t2026-10-05\nQC-202610-0009\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tDraft\t—\nQC-202610-0008\tRM-001Plastic Resin Type A (ABS)\tIncoming\t5\t\n—\n\tPassed\t2026-10-05\nQC-202610-0007\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nE2E-qc118-customer_return\tE2E-QC-qc118100-piece QC browser test qc118\tCustomer Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-supplier_return\tE2E-QC-qc118100-piece QC browser test qc118\tSupplier Return\t100\t\n—\n\tDraft\t—\nE2E-qc118-in_process\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tDraft\t—\nE2E-qc118-incoming\tE2E-QC-qc118100-piece QC browser test qc118\tIncoming\t100\t\n—\n\tDraft\t—\nQC-202610-0006\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\nSurface condition: Crack found in sampled piece. Surface condition: Crack found in sampled piece.\n\tFailed\t2026-10-05\nQC-202610-0005\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0004\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0003\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0002\tE2E-QC-qc118100-piece QC browser test qc118\tOutgoing\t100\t\n—\n\tPassed\t2026-10-05\nQC-202610-0001\tE2E-QC-qc118100-piece QC browser test qc118\tIn-process\t100\t\n—\n\tPassed\t2026-10-05\nQC-DP-OUT-dp118\tDP-dp118-KGDelivery precision finished good dp118\tOutgoing\t1\t\n—\n\tPassed\t2026-10-05\nQC-DP-IP-dp118\tDP-dp118-KGDelivery precision finished good dp118\tIn-process\t1\t\n—\n\tPassed\t2026-10-05\n1–20 of 20\nRows\n25\n50\n100\nPage 1 of 1"
+  },
+  {
+    "role": "admin",
+    "route": "/quality/inspection-specs/spec/W2ePgXKXz8",
+    "width": 1440,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 1440,
+    "documentWidth": 1619,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [
+      "Parameter 1 nominal value",
+      "Parameter 1 minimum tolerance",
+      "Parameter 1 maximum tolerance"
+    ],
+    "unnamedInputs": [
+      {
+        "type": "textarea",
+        "placeholder": "Optional context for this revision."
+      },
+      {
+        "type": "select-one"
+      }
+    ],
+    "decisionButtons": [],
+    "headings": [
+      "RMA-mrbr12-FG — Customer return finished good mrbr12v1"
+    ],
+    "numericLanguage": [
+      "Cp / Cpk"
+    ],
+    "text": "Inspection specs\nRMA-mrbr12-FG — Customer return finished good mrbr12\nv1\nNOTES\nPARAMETERS\nPARAMETER\tTYPE\tUOM\tNOMINAL\tMIN\tMAX\tNOTES\tCRITICAL?\t\n\n\t\nDimensional\nVisual\nFunctional\n\t\n—\nBAG\nBOX\nG\nKG\nL\nPALLET\nPCS\nROLL\n\t\n\t\n\t\n\t\n\t\n\t\nAdd parameter\nREVISION HISTORY\n\nThe authoring form above shows the current revision. Select a prior revision below to reconstruct the exact definition used by historical inspection evidence.\n\nv1 — current\nRevision to inspect\nCreated 2026-10-05\nBy Rosa Villareal\nCurrent revision\n\nCustomer return E2E mrbr12\n\nPARAMETER\tTYPE\tUOM\tNOMINAL\tMIN\tMAX\tNOTES\nSurface condition\tVisual\t—\t—\t—\t—\t—\nPROCESS CAPABILITY (SPC)\nNo completed inspection readings from the current revision meet the minimum sample count and measurable-variation requirement for SPC yet.\n\nPopulation: current revision v1 only.\n\nCp / Cpk ≥ 1.33 = capable · 1.0–1.33 = marginal · <1.0 = not capable · Minimum 5 measurements required per parameter\n\nCancel\nSave new version"
+  },
+  {
+    "role": "admin",
+    "route": "/quality/inspection-specs/spec/W2ePgXKXz8",
+    "width": 390,
+    "failures": [],
+    "exceptions": [],
+    "viewportWidth": 390,
+    "documentWidth": 1379,
+    "numericInputs": [],
+    "nominalAndLimitInputs": [
+      "Parameter 1 nominal value",
+      "Parameter 1 minimum tolerance",
+      "Parameter 1 maximum tolerance"
+    ],
+    "unnamedInputs": [
+      {
+        "type": "textarea",
+        "placeholder": "Optional context for this revision."
+      },
+      {
+        "type": "select-one"
+      }
+    ],
+    "decisionButtons": [],
+    "headings": [
+      "RMA-mrbr12-FG — Customer return finished good mrbr12v1"
+    ],
+    "numericLanguage": [
+      "Cp / Cpk"
+    ],
+    "text": "Inspection specs\nRMA-mrbr12-FG — Customer return finished good mrbr12\nv1\nNOTES\nPARAMETERS\nPARAMETER\tTYPE\tUOM\tNOMINAL\tMIN\tMAX\tNOTES\tCRITICAL?\t\n\n\t\nDimensional\nVisual\nFunctional\n\t\n—\nBAG\nBOX\nG\nKG\nL\nPALLET\nPCS\nROLL\n\t\n\t\n\t\n\t\n\t\n\t\nAdd parameter\nREVISION HISTORY\n\nThe authoring form above shows the current revision. Select a prior revision below to reconstruct the exact definition used by historical inspection evidence.\n\nv1 — current\nRevision to inspect\nCreated 2026-10-05\nBy Rosa Villareal\nCurrent revision\n\nCustomer return E2E mrbr12\n\nPARAMETER\tTYPE\tUOM\tNOMINAL\tMIN\tMAX\tNOTES\nSurface condition\tVisual\t—\t—\t—\t—\t—\nPROCESS CAPABILITY (SPC)\nNo completed inspection readings from the current revision meet the minimum sample count and measurable-variation requirement for SPC yet.\n\nPopulation: current revision v1 only.\n\nCp / Cpk ≥ 1.33 = capable · 1.0–1.33 = marginal · <1.0 = not capable · Minimum 5 measurements required per parameter\n\nCancel\nSave new version"
+  }
+]

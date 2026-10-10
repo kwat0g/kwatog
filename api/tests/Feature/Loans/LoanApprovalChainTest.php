@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * LN-01 — the seeded company_loan chain is department_head →
+ * LN-01 — the older company_loan chain was department_head →
  * production_manager → finance_officer → system_admin, but
  * production_manager held no loans permission and the row scope never
  * matched chain participants, so every submitted company loan stalled at

@@ -175,7 +175,7 @@ class SupplierPoCapabilitiesTest extends TestCase
         $this->assertFalse($caps['can_decline']);
         $this->assertTrue($caps['can_update_shipment']);
         $this->assertTrue($caps['can_upload_document']);
-        $this->assertTrue($caps['can_schedule_delivery']);
+        $this->assertFalse($caps['can_schedule_delivery']);
     }
 
     public function test_acknowledged_po_with_no_open_qty_blocks_shipment(): void
@@ -264,7 +264,7 @@ class SupplierPoCapabilitiesTest extends TestCase
 
         $this->assertTrue($caps['can_update_shipment']);
         $this->assertTrue($caps['can_upload_document']);
-        $this->assertTrue($caps['can_schedule_delivery']);
+        $this->assertFalse($caps['can_schedule_delivery']);
         $this->assertTrue($caps['can_submit_invoice']);
     }
 
@@ -441,7 +441,6 @@ class SupplierPoCapabilitiesTest extends TestCase
         $this->actAs($user);
 
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/acknowledge", [
-            'expected_delivery_date' => '2026-10-15',
             'notes' => 'Acknowledged.',
         ])->assertOk()->assertJsonPath('data.type', 'accept');
 

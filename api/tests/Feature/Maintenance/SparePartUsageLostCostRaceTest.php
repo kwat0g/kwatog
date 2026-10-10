@@ -12,6 +12,7 @@ use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Services\SparePartUsageService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -72,6 +73,14 @@ class SparePartUsageLostCostRaceTest extends TestCase
             'cost'              => '0.0000',
             'created_by'        => $this->user()->id,
         ]);
+        MaintenanceLog::query()->create([
+            'work_order_id' => $wo->id,
+            'description' => 'Finding: Bearing wear. Action taken: Replaced bearing. Result: passed.',
+            'finding' => 'Bearing wear.',
+            'action_taken' => 'Replaced bearing.',
+            'result' => 'passed',
+            'logged_by' => $wo->created_by,
+        ]);
 
         return [$item, $location, $wo];
     }
@@ -86,8 +95,9 @@ class SparePartUsageLostCostRaceTest extends TestCase
         $techB = MaintenanceWorkOrder::find($wo->id);
 
         $svc = app(SparePartUsageService::class);
-        $svc->record($techA, ['item_id' => $item->id, 'location_id' => $location->id, 'quantity' => 2], $by);
-        $svc->record($techB, ['item_id' => $item->id, 'location_id' => $location->id, 'quantity' => 2], $by);
+        $workRecordId = $wo->logs()->whereNotNull('finding')->value('id');
+        $svc->record($techA, ['item_id' => $item->id, 'location_id' => $location->id, 'quantity' => 2, 'work_record_id' => $workRecordId], $by);
+        $svc->record($techB, ['item_id' => $item->id, 'location_id' => $location->id, 'quantity' => 2, 'work_record_id' => $workRecordId], $by);
 
         // 2 records x 2 pcs x 25.00 = 100.00 — a stale-model bump loses one.
         $this->assertSame(

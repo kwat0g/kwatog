@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Resources;
 
+use App\Common\Support\HashId;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
-use App\Modules\Quality\Resources\InspectionSpecRevisionResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -15,8 +15,39 @@ class InspectionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $trialOutput = $this->startup_trial_required ? $this->trialOutput : null;
+
         return [
+            'final_work_order_id' => $this->resource->usesFullPieceCapture() ? app('hashids')->encode((int) $this->entity_id) : null,
+            'work_order_quality' => $this->resource->getAttribute('work_order_quality'),
+            'counted_capture' => $this->counted_capture,
+            'historical_held' => (bool) ($this->work_order_output_id && $this->workOrderOutput?->held_quantity > 0),
+            'coverage_confirmed_at' => $this->coverage_confirmed_at?->toISOString(),
+            'startup_trial_required' => (bool) $this->startup_trial_required,
+            'startup_trial' => $this->startup_trial_required ? [
+                'required_quantity' => (int) $this->sample_size,
+                'recorded_quantity' => (int) ($trialOutput?->trial_quantity ?? 0),
+                'settled' => $trialOutput?->trial_settled_at !== null,
+                'captured_at' => $trialOutput?->recorded_at?->toISOString(),
+                'output_id' => $trialOutput?->hash_id,
+            ] : null,
+            'result_version' => (int) $this->result_version,
+            'source_quantity' => $this->source_quantity,
+            'source_uom_code' => $this->source_uom_code,
+            'sampling_basis' => $this->sampling_basis,
+            'capture_method' => $this->capture_method ?? 'measurement',
+            'count_only_incoming' => $this->isCountOnlyIncoming(),
+            'can_manage' => (bool) $request->user()?->hasPermission('quality.inspections.manage'),
+            'replaces_inspection_id' => $this->replaces_inspection_id ? app('hashids')->encode((int) $this->replaces_inspection_id) : null,
+            'can_replace_checklist' => (bool) config('inspection.checklist_capture_enabled')
+                && ! $trialOutput && ! $this->counted_capture
+                && ! $this->usesChecklistCapture()
+                && in_array($this->status, [InspectionStatus::Draft, InspectionStatus::InProgress], true)
+                && (int) $this->accepted_quantity === 0 && $this->ncr === null
+                && $this->relationLoaded('measurements')
+                && ! $this->measurements->contains(fn ($row) => $row->item_result === 'failed' || $row->is_pass === false || $row->evaluate() === false),
             'id' => $this->hash_id,
+            'return_request_item_id' => $this->return_request_item_id ? HashId::encode((int) $this->return_request_item_id) : null,
             'inspection_number' => $this->inspection_number,
             'stage' => $this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage,
             'stage_label' => InspectionStage::tryFrom((string) ($this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage))?->label(),
@@ -32,13 +63,51 @@ class InspectionResource extends JsonResource
                 && (int) $this->inspector_id !== (int) $request->user()?->id
                 && ! $this->hasResultAuthor($request->user()),
             'proposed_result' => $this->proposed_result instanceof \BackedEnum ? $this->proposed_result->value : $this->proposed_result,
+            'recorded_result' => $this->recorded_result instanceof \BackedEnum ? $this->recorded_result->value : $this->recorded_result,
+            'problem_description' => $this->problem_description,
+            'affected_quantity' => $this->affected_quantity,
+            'ncr' => $this->whenLoaded('ncr', fn () => $this->ncr ? [
+                'id' => $this->ncr->hash_id,
+                'ncr_number' => $this->ncr->ncr_number,
+                'status' => $this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status,
+                'status_label' => $this->ncr->status instanceof \BackedEnum && method_exists($this->ncr->status, 'label') ? $this->ncr->status->label() : Str::headline($this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : (string) $this->ncr->status),
+                'disposition' => $this->ncr->disposition instanceof \BackedEnum ? $this->ncr->disposition->value : $this->ncr->disposition,
+                'disposition_label' => $this->ncr->disposition instanceof \BackedEnum && method_exists($this->ncr->disposition, 'label') ? $this->ncr->disposition->label() : null,
+                'href' => $request->user()?->hasPermission('quality.ncr.view') ? "/quality/ncrs/{$this->ncr->hash_id}" : null,
+            ] : null),
+            'incoming_acceptance' => $this->whenLoaded('grnItem', function () {
+                $line = $this->grnItem;
+                if ($this->stage !== InspectionStage::Incoming || ! $line || ! $line->grn) {
+                    return null;
+                }
+                $factor = (string) ($line->received_uom_conversion_factor ?? '1');
+                $originalUnit = $line->received_uom_code !== null && bccomp($factor, '0', 6) > 0;
+
+                return [
+                    'grn_item_id' => $line->hash_id,
+                    'grn_id' => $line->grn->hash_id,
+                    'grn_number' => $line->grn->grn_number,
+                    'quantity_received' => $originalUnit && $line->quantity_received_in_uom !== null ? (string) $line->quantity_received_in_uom : (string) $line->quantity_received,
+                    'quantity_accepted' => $originalUnit ? bcdiv((string) $line->quantity_accepted, $factor, 6) : (string) $line->quantity_accepted,
+                    'unit' => $originalUnit ? $line->received_uom_code : $line->item?->unit_of_measure,
+                    'status' => $line->grn->status instanceof \BackedEnum ? $line->grn->status->value : $line->grn->status,
+                    'status_label' => $line->grn->status instanceof \BackedEnum && method_exists($line->grn->status, 'label') ? $line->grn->status->label() : null,
+                ];
+            }),
+            'sorting_approved_at' => optional($this->ncr?->sorting_approved_at)?->toISOString(),
+            'inspected_quantity' => $this->inspected_quantity,
+            'critical_defect' => $this->critical_defect,
+            'defects_removed_confirmed' => $this->defects_removed_confirmed,
             'reviewed_at' => optional($this->reviewed_at)?->toISOString(),
+            'coc_unavailable_reason' => $this->resource->getAttribute('coc_unavailable_reason'),
             'review_remarks' => $this->review_remarks,
             'entity_type' => $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : $this->entity_type,
             'entity_hash_id' => $this->entity_id ? app('hashids')->encode($this->entity_id) : null,
             'entity_context' => $this->whenLoaded('entityRecord', function () use ($request) {
                 $entity = $this->getRelation('entityRecord');
-                if (! $entity) return null;
+                if (! $entity) {
+                    return null;
+                }
 
                 $type = $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : (string) $this->entity_type;
                 $permission = match ($type) {
@@ -85,7 +154,7 @@ class InspectionResource extends JsonResource
                     'id' => $this->workOrderOutput->workOrder->hash_id,
                     'wo_number' => $this->workOrderOutput->workOrder->wo_number,
                 ] : null,
-                ] : null),
+            ] : null),
             'inspection_mode' => $this->inspection_mode instanceof \BackedEnum ? $this->inspection_mode->value : $this->inspection_mode,
             'sample_size' => (int) $this->sample_size,
             'aql_code' => $this->aql_code,
@@ -105,6 +174,7 @@ class InspectionResource extends JsonResource
                 'id' => $this->item->hash_id,
                 'code' => $this->item->code,
                 'name' => $this->item->name,
+                'unit_of_measure' => $this->item->unit_of_measure,
             ] : null),
             'inspector' => $this->whenLoaded('inspector', fn () => $this->inspector ? [
                 'id' => $this->inspector->hash_id,

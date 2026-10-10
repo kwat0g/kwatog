@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -160,7 +161,8 @@ class GrnRejectionTest extends TestCase
     {
         [$po, $poItem, $item, $location] = $this->buildPurchaseOrder();
 
-        $this->grnSvc->receiveWithQc(
+        $failedParameter = 'Certificate of Analysis / mill certificate received and matches the lot';
+        $result = $this->grnSvc->receiveWithQc(
             po:     $po,
             items:  $this->buildItems($poItem, $item, $location),
             meta:   ['received_date' => now()->toDateString()],
@@ -168,7 +170,19 @@ class GrnRejectionTest extends TestCase
                 'result'          => 'failed',
                 'product_id'      => $this->product->id,
                 'inspector_id'    => $this->user->id,
-                'failure_reason'  => 'Critical dimension out of tolerance',
+                'failure_reason'  => 'Certificate does not match the supplier lot.',
+                'coverage_confirmed' => true, 'inspected_quantity' => 50, 'sample_defect_count' => 1,
+                'defects_removed_confirmed' => false,
+                'checks' => array_map(
+                    static fn (array $check): array => [
+                        'label' => $check['parameter_name'],
+                        'passed' => $check['parameter_name'] !== $failedParameter,
+                        'problem_description' => $check['parameter_name'] === $failedParameter
+                            ? 'Certificate does not match the supplier lot.'
+                            : null,
+                    ],
+                    (array) app(SettingsService::class)->get('quality.incoming.default_checklist', []),
+                ),
                 'disposition'     => 'return_to_supplier',
                 // isQualityFailure defaults to true — NCR MUST be created
             ],
@@ -184,6 +198,8 @@ class GrnRejectionTest extends TestCase
         // Maker-checker: the failed verdict waits for a second user, and the
         // receipt stays in pending_qc until then — no rejection, no NCR yet.
         $this->assertSame('awaiting_review', $inspection->status->value);
+        $this->assertFalse($result['stock_updated']);
+        $this->assertStringContainsString('Certificate does not match', $inspection->problem_description);
         $this->assertSame(0, NonConformanceReport::where('inspection_id', $inspection->id)->count());
         $this->assertSame(
             \App\Modules\Inventory\Enums\GrnStatus::PendingQc,
@@ -192,7 +208,7 @@ class GrnRejectionTest extends TestCase
 
         $checker = User::factory()->create(['is_active' => true]);
         app(\App\Modules\Quality\Services\InspectionService::class)
-            ->review($inspection, 'failed', 'Confirmed out of tolerance', $checker);
+            ->review($inspection, 'failed', 'Confirmed out of tolerance', $checker, (int) $inspection->result_version);
 
         // The review is what makes the failure count: the NCR opens now.
         $ncrCount = NonConformanceReport::where('inspection_id', $inspection->id)->count();

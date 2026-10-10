@@ -1,15 +1,12 @@
 /** Sprint 7 / ADV7 — Delivery detail with Proof-of-Delivery management. */
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import {
-  LuCamera,
   LuCheck,
-  LuArrowRight,
   LuTag,
   LuTrash2,
   LuFileText,
-  LuImage as ImageIcon,
   LuShieldCheck,
   LuArchiveRestore,
   LuTriangleAlert,
@@ -17,44 +14,40 @@ import {
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
-import { deliveriesApi, deliveryProofsApi, vehiclesApi } from '@/api/supply-chain';
+import { deliveriesApi, deliveryProofsApi } from '@/api/supply-chain';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
-import { buildO2cChain } from '@/lib/chains';
+import { buildDeliveryChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
-import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
+import type { DeliveryStatus } from '@/types/supplyChain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { focusRingInset } from '@/lib/focus';
 import { deliveryStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
-import { formatDateTime } from '@/lib/formatDate';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { DeliveryAttemptPanel } from './DeliveryAttemptPanel';
 import { TruckReturnReceiptPanel } from './TruckReturnReceiptPanel';
 import { DeliveryStockCostPanel } from './DeliveryStockCostPanel';
+import { ShipmentPlanDialog } from './ShipmentPlanDialog';
 
 export default function DeliveryDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const fileInput = useRef<HTMLInputElement | null>(null);
 
-  // Proof upload form state.
-  const [proofType, setProofType] = useState<DeliveryProofType | null>(null);
-  const [proofNotes, setProofNotes] = useState('');
   const [cancelDeliveryOpen, setCancelDeliveryOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [receiverName, setReceiverName] = useState('');
@@ -63,10 +56,7 @@ export default function DeliveryDetailPage() {
   const [deleteProofId, setDeleteProofId] = useState<string | null>(null);
   const [restoreProofId, setRestoreProofId] = useState<string | null>(null);
   const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
-  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
-  const [assignmentVehicleId, setAssignmentVehicleId] = useState('');
-  const [assignmentDriverId, setAssignmentDriverId] = useState('');
-  const [assignmentReason, setAssignmentReason] = useState('');
+  const [shipmentPlanOpen, setShipmentPlanOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['supply-chain', 'deliveries', id],
@@ -75,34 +65,19 @@ export default function DeliveryDetailPage() {
     placeholderData: (prev) => prev,
   });
 
-  const { data: proofOptions } = useQuery({
+  const { data: proofOptions, isError: proofOptionsError, refetch: refetchProofOptions } = useQuery({
     queryKey: ['supply-chain', 'deliveries', 'proof-options'],
     queryFn: deliveryProofsApi.options,
     staleTime: 5 * 60_000,
   });
-  const { data: deliveryOptions } = useQuery({
+  const { data: deliveryOptions, isError: deliveryOptionsError, refetch: refetchDeliveryOptions } = useQuery({
     queryKey: ['supply-chain', 'deliveries', 'options'],
     queryFn: deliveriesApi.options,
     staleTime: 5 * 60_000,
   });
   const canEdit = can('supply_chain.deliveries.create');
-  const assignmentEnabled = canEdit && data?.status === 'scheduled';
-  const { data: availableVehicles } = useQuery({
-    queryKey: ['supply-chain', 'vehicles', 'available-for-assignment'],
-    queryFn: () => vehiclesApi.list({ status: 'available', per_page: 100 }),
-    enabled: assignmentEnabled,
-    staleTime: 30_000,
-  });
-  const { data: driverOptions = [] } = useQuery({
-    queryKey: ['supply-chain', 'deliveries', 'driver-options'],
-    queryFn: deliveriesApi.driverOptions,
-    enabled: assignmentEnabled,
-    staleTime: 30_000,
-  });
-  const availableProofTypes = proofOptions?.proof_types ?? [];
-  const selectedProofType = proofType ?? availableProofTypes[0]?.value;
   const proofTypeLabels = new Map(
-    availableProofTypes.map((option) => [option.value, option.label]),
+    (proofOptions?.proof_types ?? []).map((option) => [option.value, option.label]),
   );
 
   // Series C — Task C4. Real-time chain progress.
@@ -117,31 +92,6 @@ export default function DeliveryDetailPage() {
     },
     onError: (e: AxiosError<{ message?: string }>) =>
       toast.error(e.response?.data?.message ?? 'Failed'),
-  });
-
-  const upload = useMutation({
-    mutationFn: (file: File) => deliveriesApi.uploadReceipt(id, file),
-    onSuccess: () => {
-      toast.success('Receipt photo uploaded');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-    },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Upload failed'),
-  });
-
-  const uploadProof = useMutation({
-    mutationFn: (file: File) => {
-      if (!selectedProofType)
-        return Promise.reject(new Error('No delivery proof type is configured.'));
-      return deliveryProofsApi.upload(id, file, selectedProofType, proofNotes || undefined);
-    },
-    onSuccess: () => {
-      toast.success('Proof uploaded');
-      setProofNotes('');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-    },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Proof upload failed'),
   });
 
   const removeProof = useMutation({
@@ -221,25 +171,6 @@ export default function DeliveryDetailPage() {
       toast.error(e.response?.data?.message ?? 'Failed to retry invoice handoff.'),
   });
 
-  const assign = useMutation({
-    mutationFn: () =>
-      deliveriesApi.assign(id, {
-        vehicle_id: assignmentVehicleId,
-        driver_id: assignmentDriverId,
-        reason: assignmentReason.trim(),
-      }),
-    onSuccess: () => {
-      toast.success('Delivery assignment saved.');
-      setAssignmentModalOpen(false);
-      setAssignmentReason('');
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
-      qc.invalidateQueries({ queryKey: ['driver'] });
-    },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to assign delivery'),
-  });
-
   if (isLoading && !data) return <SkeletonDetail />;
   if (isError || !data) {
     return (
@@ -258,14 +189,28 @@ export default function DeliveryDetailPage() {
   const statusOptions = new Map(
     (deliveryOptions?.statuses ?? []).map((option) => [option.value, option]),
   );
-  const next = statusOptions.get(data.status)?.next_status ?? null;
-  const proofs = data.proofs ?? [];
-  const hasProof = proofs.length > 0;
+  const loadingPhotos = (data.proofs ?? []).filter((proof) => proof.proof_type === 'loading_photo' && !proof.deleted_at);
+  const proofs = (data.proofs ?? []).filter((proof) => proof.proof_type !== 'loading_photo');
+  const activeProofs = proofs.filter((proof) => !proof.deleted_at && ['photo', 'signed_dr', 'customer_po_confirmation'].includes(proof.proof_type));
+  const hasProof = activeProofs.length > 0;
+  const hasAnyProof = proofs.length > 0;
   const canConfirm = data.status === 'delivered' && data.can_confirm !== false && !data.billing_hold && can('supply_chain.deliveries.confirm');
-  const canUploadProofNow =
-    ['in_transit', 'delivered', 'confirmed'].includes(data.status) &&
-    canEdit &&
-    Boolean(selectedProofType);
+  const assigned = Boolean(data.vehicle && data.driver);
+  const stockReady = data.stock_reservation_status === 'reserved';
+  const nextInstruction = data.status === 'scheduled'
+    ? !assigned ? 'Arrange the shipment: choose dates, carrier, driver and vehicle, then photograph the loaded goods before dispatch.'
+      : !stockReady ? 'Stock reservation needs attention. Check the approved lots below.'
+        : 'Review the shipment plan and attach a loading photo before dispatch.'
+    : data.status === 'loading' ? 'Review the shipment plan and attach a loading photo before dispatch.'
+      : data.status === 'in_transit' ? 'Assigned driver uploads customer receipt after arrival.'
+        : data.status === 'delivered' ? hasProof ? 'Proof uploaded. Confirm customer receipt to create the invoice.' : 'Assigned driver uploads customer receipt after arrival.'
+          : data.status === 'confirmed' ? 'Customer receipt confirmed. Review the linked invoice.' : null;
+  const quantityByUnit = (data.items ?? []).reduce<Record<string, number>>((totals, line) => {
+    const unit = line.unit_of_measure ?? 'pcs';
+    totals[unit] = (totals[unit] ?? 0) + Number(line.quantity);
+    return totals;
+  }, {});
+  const shipmentQuantity = Object.entries(quantityByUnit).map(([unit, quantity]) => `${quantity.toLocaleString()} ${unit}`).join(' · ');
 
   return (
     <div>
@@ -279,12 +224,12 @@ export default function DeliveryDetailPage() {
             {hasProof && (
               <Chip variant="success" className="ml-2">
                 <LuShieldCheck size={12} className="mr-0.5" />
-                {proofs.length} {proofs.length === 1 ? 'proof' : 'proofs'}
+                {activeProofs.length} {activeProofs.length === 1 ? 'receipt' : 'receipts'}
               </Chip>
             )}
           </span>
         }
-        subtitle={data.sales_order ? `SO ${data.sales_order.so_number}` : undefined}
+        subtitle={data.sales_order ? data.sales_order.so_number : undefined}
         backTo="/supply-chain/deliveries"
         backLabel="Deliveries"
         actions={
@@ -300,56 +245,10 @@ export default function DeliveryDetailPage() {
                 Cancel delivery
               </Button>
             )}
-            {next && canEdit && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<LuArrowRight size={14} />}
-                loading={advance.isPending}
-                onClick={() => advance.mutate(next)}
-              >
-                {next === 'delivered'
-                  ? 'Mark delivered'
-                  : `Mark ${statusOptions.get(next)?.label ?? next.replace('_', ' ')}`}
+            {['scheduled', 'loading'].includes(data.status) && canEdit && (
+              <Button variant="primary" size="sm" onClick={() => setShipmentPlanOpen(true)}>
+                Arrange shipment
               </Button>
-            )}
-            {data.status === 'scheduled' && canEdit && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setAssignmentVehicleId(data.vehicle?.id ?? '');
-                  setAssignmentDriverId(data.driver?.id ?? '');
-                  setAssignmentReason('');
-                  setAssignmentModalOpen(true);
-                }}
-              >
-                {data.vehicle && data.driver ? 'Reassign' : 'Assign driver & vehicle'}
-              </Button>
-            )}
-            {data.status === 'delivered' && canEdit && (
-              <>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) upload.mutate(file);
-                    e.target.value = '';
-                  }}
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<LuCamera size={14} />}
-                  loading={upload.isPending}
-                  onClick={() => fileInput.current?.click()}
-                >
-                  {data.receipt_photo_url ? 'Replace receipt' : 'Quick photo'}
-                </Button>
-              </>
             )}
             {canConfirm && (
               <Button
@@ -375,30 +274,18 @@ export default function DeliveryDetailPage() {
           </div>
         }
       />
-      {/* P1 — Order-to-Cash chain anchored on the Delivery record. 2026-08-08:
-  compact cross-document stepper — SO → Delivery → Invoice → Payment. */}
+      {deliveryOptionsError && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+        Could not load delivery workflow options. <Button variant="secondary" size="sm" onClick={() => refetchDeliveryOptions()}>Retry delivery options</Button>
+      </div>}
+      {proofOptionsError && canEdit && ['in_transit', 'delivered', 'confirmed'].includes(data.status) && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+        Could not load delivery proof types. <Button variant="secondary" size="sm" onClick={() => refetchProofOptions()}>Retry proof types</Button>
+      </div>}
       <div className="px-5 py-3 border-b border-default">
-        <ChainHeader
-          steps={buildO2cChain({
-            so: data.sales_order
-              ? { id: data.sales_order.id, number: data.sales_order.so_number }
-              : null,
-            delivery: { id: data.id, number: data.delivery_number },
-            deliveryStatus: data.status,
-            invoices: data.invoice
-              ? [
-                  {
-                    id: data.invoice.id,
-                    invoice_number: data.invoice.invoice_number,
-                    status: data.invoice.status,
-                  },
-                ]
-              : [],
-          })}
-        />
+        <ChainHeader showStatusMessages={false} steps={buildDeliveryChain(data)} />
       </div>
-      <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="sm:col-span-2 space-y-4">
+      {nextInstruction && <div className="px-5 pt-5"><div className="rounded-lg border border-default bg-subtle px-4 py-3 text-sm"><span className="font-medium">Next: </span>{nextInstruction}</div></div>}
+      <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-5 min-w-0">
+        <div className="lg:col-span-2 space-y-5 min-w-0">
           <DeliveryAttemptPanel key={data.id} deliveryId={data.id} lines={data.items ?? []}
             can_report_attempt_outcome={canEdit && data.can_report_attempt_outcome}
             attempt_outcome_reasons={data.attempt_outcome_reasons} attempt_outcome={data.attempt_outcome}
@@ -411,12 +298,19 @@ export default function DeliveryDetailPage() {
               lines={data.items ?? []} outcome={data.attempt_outcome}
               canReceive={can('return_management.receive') && data.attempt_outcome.lines.some((line) => Number(line.unaccounted_quantity) > 0)} />}
           </>}
-          <DeliveryStockCostPanel key={`stock-cost-${data.id}`} delivery={data} />
-          <Panel title="Schedule">
+          <Panel title="Shipment details">
             <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Scheduled</dt>
-                <dd className="font-mono tabular-nums">{data.scheduled_date ?? '—'}</dd>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Shipment date</dt>
+                <dd className="font-mono tabular-nums">{formatDate(data.scheduled_date)}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Expected arrival</dt>
+                <dd className="font-mono tabular-nums">{formatDate(data.expected_delivery_date)}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Carrier</dt>
+                <dd>{data.carrier ?? 'Not arranged'}</dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Departed</dt>
@@ -429,12 +323,12 @@ export default function DeliveryDetailPage() {
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Vehicle</dt>
                 <dd>
-                  {data.vehicle ? `${data.vehicle.name} (${data.vehicle.plate_number})` : '—'}
+                  {data.vehicle ? `${data.vehicle.name} (${data.vehicle.plate_number})` : 'Not assigned'}
                 </dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Driver</dt>
-                <dd>{data.driver?.name ?? '—'}</dd>
+                <dd>{data.driver?.name ?? 'Not assigned'}</dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Confirmed</dt>
@@ -442,21 +336,97 @@ export default function DeliveryDetailPage() {
               </div>
             </dl>
           </Panel>
+          <Panel
+            title={<span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">Shipment items<span className="font-mono tabular-nums text-muted">{shipmentQuantity}</span></span>}
+            noPadding
+          >
+            {!data.items?.length ? (
+              <div className="px-4 py-3 text-xs text-muted">No items.</div>
+            ) : (
+              <div className="overflow-x-auto"><table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Product / QC reference</Th>
+                    <Th align="right">Quantity</Th>
+                    {data.attempt_outcome && <Th align="right">Customer received</Th>}
+                    <Th align="right">Unit price</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map((i) => (
+                    <tr
+                      key={i.id}
+                      className={trCls}
+                    >
+                      <Td>
+                        {i.product && <div className="mb-1"><span className="font-medium">{i.product.part_number}</span><span className="block text-xs text-muted">{i.product.name}</span></div>}
+                        {i.inspection ? (
+                          can('quality.inspections.view') ? <Link className="font-mono text-accent hover:underline" to={`/quality/inspections/${i.inspection.id}`}>{i.inspection.inspection_number}</Link>
+                          : <span className="font-mono">{i.inspection.inspection_number}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                        {i.stock_movements?.map((movement) => (
+                          <div key={movement.id} className="text-xs text-muted mt-1 font-mono break-words">
+                            {movement.quantity} · {movement.lot_number} · {movement.from_location}
+                          </div>
+                        ))}
+                      </Td>
+                      <Td align="right" mono>
+                        {Number(i.quantity).toLocaleString()}
+                      </Td>
+                      {data.attempt_outcome && <Td align="right" mono>{i.customer_received_quantity ?? '—'}</Td>}
+                      <Td align="right" mono>
+                        {i.unit_price}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </Panel>
+          <DeliveryStockCostPanel key={`stock-cost-${data.id}`} delivery={data} />
+
+          {!!data.preparation?.length && <Panel title="Warehouse preparation">
+            <p className="text-xs text-muted mb-3">Use these approved lots when preparing the load. Availability is checked again when the truck leaves.</p>
+            <ul className="divide-y divide-default">
+              {data.preparation.map((line) => <li key={line.delivery_item_id} className="py-2">
+                <p className="text-sm font-mono break-words">{line.product} · {line.quantity} · {line.lot_number ?? 'Lot unavailable'}</p>
+                {line.locations.map((location) => <p key={location.code} className="text-xs text-muted mt-1 font-mono">{location.code}: {location.quantity}</p>)}
+                {line.message && <p className="text-sm text-danger-fg mt-1">{line.message}</p>}
+              </li>)}
+            </ul>
+          </Panel>}
+
+          {(loadingPhotos.length > 0 || ['in_transit', 'delivered', 'confirmed'].includes(data.status)) && <Panel title="Loading evidence">
+            {loadingPhotos.length > 0 ? <ul className="space-y-3">{loadingPhotos.map((photo) => <li key={photo.id}>
+              <button
+                type="button"
+                disabled={!photo.view_url}
+                aria-label={`Open loading photo ${photo.file_name}`}
+                onClick={() => photo.view_url && void downloadAuthenticatedFile(photo.view_url, { openInNewTab: true, errorMessage: 'Failed to open the loading photo.' })}
+                className={cn('block w-full rounded-md bg-subtle', focusRingInset)}
+              >
+                {photo.view_url && <img src={photo.view_url} alt="Loaded goods before departure" loading="lazy" decoding="async" className="max-h-64 w-full object-contain" />}
+              </button>
+              <p className="mt-1 text-xs text-muted break-words">{photo.file_name} · {photo.uploader?.name ?? '—'} · {formatDateTime(photo.uploaded_at)}</p>
+            </li>)}</ul> : <p className="text-sm text-muted">No loading photo was recorded before departure.</p>}
+          </Panel>}
 
           {/* ADV7 — Proof of Delivery. Required before confirmation. */}
-          {(!['return_pending', 'returned'].includes(data.status) || hasProof) && <Panel
+          {(['in_transit', 'delivered', 'confirmed'].includes(data.status) || hasAnyProof) && <Panel
             title={
               <span className="inline-flex items-center gap-1.5">
                 <LuShieldCheck
                   size={14}
                   className={hasProof ? 'text-success-fg' : 'text-warning-fg'}
                 />
-                Proof of delivery
+                Customer receipt
               </span>
             }
             meta={
               hasProof
-                ? `${proofs.length} file${proofs.length === 1 ? '' : 's'}`
+              ? `${activeProofs.length} file${activeProofs.length === 1 ? '' : 's'}`
                 : 'Required before confirmation'
             }
           >
@@ -475,7 +445,7 @@ export default function DeliveryDetailPage() {
                   <dd className="font-mono tabular-nums">{formatDateTime(data.received_at)}</dd>
                 </div>
                 {data.delivery_remarks && (
-                  <div className="col-span-3">
+                  <div className="sm:col-span-2 lg:col-span-3">
                     <dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt>
                     <dd className="text-sm whitespace-pre-line">{data.delivery_remarks}</dd>
                   </div>
@@ -491,16 +461,14 @@ export default function DeliveryDetailPage() {
                   aria-hidden="true"
                 />
                 <span>
-                  No proof uploaded yet. After delivering the goods, upload the signed delivery
-                  receipt or a photo here. <strong>Required</strong> before the delivery can be
-                  confirmed.
+                  Assigned driver uploads customer receipt after arrival.
                 </span>
               </div>
             )}
 
             {/* Proof gallery */}
-            {hasProof && (
-              <ul className="grid grid-cols-2 gap-3 mb-4">
+            {hasAnyProof && (
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 {proofs.map((p) => (
                   <li
                     key={p.id}
@@ -523,6 +491,8 @@ export default function DeliveryDetailPage() {
                         <img
                           src={p.view_url}
                           alt={p.file_name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover"
                         />
                       </button>
@@ -551,6 +521,7 @@ export default function DeliveryDetailPage() {
                         <Chip variant="neutral">
                           {proofTypeLabels.get(p.proof_type) ?? p.proof_type}
                         </Chip>
+                        {p.deleted_at && <Chip variant="warning">Archived</Chip>}
                       </div>
                       <div className="text-muted mt-0.5">
                         {p.uploader?.name ?? '—'} · {formatDateTime(p.uploaded_at)}
@@ -558,21 +529,28 @@ export default function DeliveryDetailPage() {
                       {p.notes && <div className="mt-1 text-muted line-clamp-2">{p.notes}</div>}
                       {canEdit && (
                         <div className="mt-1.5 flex items-center gap-2">
-                          <LinkButton
-                            onClick={() => setRestoreProofId(p.id)}
-                            icon={<LuArchiveRestore size={12} />}
-                            className="text-2xs"
-                          >
-                            Restore
-                          </LinkButton>
-                          <LinkButton
-                            tone="danger"
-                            onClick={() => setDeleteProofId(p.id)}
-                            icon={<LuTrash2 size={12} />}
-                            className="text-2xs"
-                          >
-                            Archive
-                          </LinkButton>
+                          {p.deleted_at ? (
+                            <LinkButton
+                              onClick={() => setRestoreProofId(p.id)}
+                              icon={<LuArchiveRestore size={12} />}
+                              className="text-2xs"
+                            >
+                              Restore
+                            </LinkButton>
+                          ) : p.can_archive ? (
+                            <LinkButton
+                              tone="danger"
+                              onClick={() => setDeleteProofId(p.id)}
+                              icon={<LuTrash2 size={12} />}
+                              className="text-2xs"
+                            >
+                              Archive
+                            </LinkButton>
+                          ) : (
+                            <span className="min-w-0 break-words text-2xs text-muted leading-snug">
+                              {p.archive_block_reason ?? 'This proof cannot be archived.'}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -581,50 +559,6 @@ export default function DeliveryDetailPage() {
               </ul>
             )}
 
-            {/* Upload form */}
-            {canUploadProofNow && (
-              <div className="border-t border-subtle pt-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-2">
-                  <Select
-                    value={selectedProofType ?? ''}
-                    onChange={(e) => setProofType(e.target.value as DeliveryProofType)}
-                    aria-label="Proof type"
-                  >
-                    {availableProofTypes.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    type="text"
-                    value={proofNotes}
-                    onChange={(e) => setProofNotes(e.target.value)}
-                    placeholder="Notes (optional)"
-                    aria-label="Proof notes"
-                    containerClassName="col-span-2"
-                  />
-                </div>
-                <label className="block w-full">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) uploadProof.mutate(file);
-                      e.target.value = '';
-                    }}
-                  />
-                  <span className="flex items-center justify-center gap-2 cursor-pointer w-full py-3 border-2 border-dashed border-default rounded-md text-sm text-muted hover:border-accent hover:text-accent transition-colors">
-                    <ImageIcon size={16} />
-                    {uploadProof.isPending
-                      ? 'Uploading…'
-                      : 'Tap to upload (camera or file, max 10MB)'}
-                  </span>
-                </label>
-              </div>
-            )}
           </Panel>}
 
           {data.billing_hold && <Panel title="Receipt and billing on hold">
@@ -632,71 +566,14 @@ export default function DeliveryDetailPage() {
             {can('return_management.view') ? <Link className="text-accent hover:underline font-mono" to={`/return-management/cases/${data.billing_hold.case_id}`}>{data.billing_hold.case_number}</Link>
               : <p className="font-mono text-sm mt-1">{data.billing_hold.case_number}</p>}
           </Panel>}
-          {!!data.preparation?.length && <Panel title="Warehouse preparation">
-            <p className="text-xs text-muted mb-3">Use these approved lots when preparing the load. Availability is checked again when the truck leaves.</p>
-            <ul className="divide-y divide-default">
-              {data.preparation.map((line) => <li key={line.delivery_item_id} className="py-2">
-                <p className="text-sm font-mono break-words">{line.product} · {line.quantity} · {line.lot_number ?? 'Lot unavailable'}</p>
-                {line.locations.map((location) => <p key={location.code} className="text-xs text-muted mt-1 font-mono">{location.code}: {location.quantity}</p>)}
-                {line.message && <p className="text-sm text-danger-fg mt-1">{line.message}</p>}
-              </li>)}
-            </ul>
-          </Panel>}
 
-          <Panel
-            title="Items"
-            meta={`${data.items?.length ?? 0} ${(data.items?.length ?? 0) === 1 ? 'line' : 'lines'}`}
-            noPadding
-          >
-            {!data.items?.length ? (
-              <div className="px-4 py-3 text-xs text-muted">No items.</div>
-            ) : (
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Inspection / dispatched stock</Th>
-                    <Th align="right">Dispatched qty</Th>
-                    {data.attempt_outcome && <Th align="right">Customer received</Th>}
-                    <Th align="right">Unit price</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((i) => (
-                    <tr
-                      key={i.id}
-                      className={trCls}
-                    >
-                      <Td>
-                        {i.inspection ? (
-                          can('quality.inspections.view') ? <Link className="font-mono text-accent hover:underline" to={`/quality/inspections/${i.inspection.id}`}>{i.inspection.inspection_number}</Link>
-                          : <span className="font-mono">{i.inspection.inspection_number}</span>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                        {i.stock_movements?.map((movement) => (
-                          <div key={movement.id} className="text-xs text-muted mt-1 font-mono break-words">
-                            {movement.quantity} · {movement.lot_number} · {movement.from_location}
-                          </div>
-                        ))}
-                      </Td>
-                      <Td align="right" mono>
-                        {i.quantity}
-                      </Td>
-                      {data.attempt_outcome && <Td align="right" mono>{i.customer_received_quantity ?? '—'}</Td>}
-                      <Td align="right" mono>
-                        {i.unit_price}
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Panel>
+
+
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5 min-w-0">
           {data.receipt_photo_url && (
-            <Panel title="Quick receipt photo">
+            <Panel title="Customer receipt photo">
               <button
                 type="button"
                 onClick={() =>
@@ -923,11 +800,7 @@ export default function DeliveryDetailPage() {
               ]}
             />
           </Panel>
-          <Panel title="Navigation">
-            <Link to="/supply-chain/deliveries" className="text-xs text-accent hover:underline">
-              ← Back to deliveries
-            </Link>
-          </Panel>
+
         </div>
       </div>
       {/* Confirm modal — captures receiver details. */}
@@ -939,7 +812,7 @@ export default function DeliveryDetailPage() {
         <div className="space-y-3">
           <p className="text-sm text-muted">
             {hasProof
-              ? `${proofs.length} proof file${proofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and attempt to create a draft invoice.`
+              ? `${activeProofs.length} proof file${activeProofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and attempt to create a draft invoice.`
               : 'At least one proof must be uploaded first.'}
           </p>
           <Input
@@ -979,75 +852,11 @@ export default function DeliveryDetailPage() {
         </div>
       </Modal>{' '}
       {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
-      <Modal
-        isOpen={assignmentModalOpen}
-        onClose={() => {
-          if (!assign.isPending) setAssignmentModalOpen(false);
-        }}
-        title={data.vehicle && data.driver ? 'Reassign delivery' : 'Assign delivery'}
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-muted">
-            The assignment is recorded with the operator and reason. Only active drivers and
-            available vehicles can be selected.
-          </p>
-          <Select
-            label="Vehicle"
-            required
-            value={assignmentVehicleId}
-            onChange={(e) => setAssignmentVehicleId(e.target.value)}
-            disabled={assign.isPending}
-          >
-            <option value="">— Select available vehicle —</option>
-            {(availableVehicles?.data ?? []).map((vehicle) => (
-              <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.name} ({vehicle.plate_number})
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Driver"
-            required
-            value={assignmentDriverId}
-            onChange={(e) => setAssignmentDriverId(e.target.value)}
-            disabled={assign.isPending}
-          >
-            <option value="">— Select active driver —</option>
-            {driverOptions.map((driver) => (
-              <option key={driver.id} value={driver.id}>
-                {driver.name}
-              </option>
-            ))}
-          </Select>
-          <Textarea
-            label="Assignment reason"
-            required
-            value={assignmentReason}
-            onChange={(e) => setAssignmentReason(e.target.value)}
-            maxLength={500}
-            placeholder="Why is this driver and vehicle being assigned?"
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              variant="secondary"
-              onClick={() => setAssignmentModalOpen(false)}
-              disabled={assign.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              loading={assign.isPending}
-              disabled={
-                !assignmentVehicleId || !assignmentDriverId || assignmentReason.trim().length < 5
-              }
-              onClick={() => assign.mutate()}
-            >
-              Save assignment
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {shipmentPlanOpen && ['scheduled', 'loading'].includes(data.status) && canEdit && <ShipmentPlanDialog
+        key={data.id}
+        delivery={data}
+        onClose={() => setShipmentPlanOpen(false)}
+      />}
       {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
       <ConfirmDialog
         isOpen={!!finalizeInvoiceId}

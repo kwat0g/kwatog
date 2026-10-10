@@ -6,31 +6,33 @@ namespace App\Modules\ReturnManagement\Controllers;
 
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashId;
-use App\Common\Support\SearchOperator;
-use App\Modules\ReturnManagement\Models\ReturnRequest;
-use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
-use App\Modules\ReturnManagement\Enums\ReturnRequestType;
-use App\Modules\ReturnManagement\Enums\DispositionType;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
-use App\Modules\Accounting\Models\Customer;
-use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\ReturnManagement\Enums\DispositionType;
+use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\ReturnManagement\Requests\CompleteReturnRequest;
 use App\Modules\ReturnManagement\Requests\DisposeReturnRequest;
 use App\Modules\ReturnManagement\Requests\ReceiveReturnRequest;
+use App\Modules\ReturnManagement\Requests\SplitReturnRequestItemRequest;
 use App\Modules\ReturnManagement\Requests\StoreReturnRequestRequest;
 use App\Modules\ReturnManagement\Requests\UpdateReturnRequestRequest;
 use App\Modules\ReturnManagement\Resources\ReturnRequestResource;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReturnRequestController extends Controller
 {
@@ -97,7 +99,7 @@ class ReturnRequestController extends Controller
      * line id. One query per source kind (see
      * `ReturnRequestService::activeAllocationsBySource()`), never per line.
      *
-     * @param  iterable<object> $documents
+     * @param  iterable<object>  $documents
      * @return array<int, string>
      */
     private function reservedFor(string $sourceKind, iterable $documents): array
@@ -126,7 +128,7 @@ class ReturnRequestController extends Controller
      * two fields can therefore differ in trailing zeros on the same line; that
      * is deliberate, not drift.
      *
-     * @param array<int, string> $reserved
+     * @param  array<int, string>  $reserved
      */
     private function remainingOnLine(string $documentQuantity, array $reserved, int $lineId): string
     {
@@ -281,8 +283,8 @@ class ReturnRequestController extends Controller
         }
 
         $sortField = $request->query('sort', 'created_at');
-        $sortDir   = $request->query('dir', 'desc');
-        $allowed   = ['rma_number', 'type', 'status', 'created_at', 'return_date'];
+        $sortDir = $request->query('dir', 'desc');
+        $allowed = ['rma_number', 'type', 'status', 'created_at', 'return_date'];
         if (in_array($sortField, $allowed, true)) {
             $q->orderBy($sortField, $sortDir === 'asc' ? 'asc' : 'desc');
         }
@@ -300,6 +302,7 @@ class ReturnRequestController extends Controller
         $returnRequest->load([
             'items.product',
             'items.item',
+            'items.materialReviewRecord',
             'items.ncr:id,ncr_number',
             // RMA-010 — the detail page is where an operator needs to see which
             // reservation a line holds on its source document.
@@ -352,10 +355,25 @@ class ReturnRequestController extends Controller
     /**
      * Submit for approval.
      */
-    public function submit(ReturnRequest $returnRequest): ReturnRequestResource
+    public function submit(ReturnRequest $returnRequest, Request $request): ReturnRequestResource
     {
-        $rma = $this->service->submit($returnRequest);
+        $needsEvidence = $returnRequest->type === ReturnRequestType::SupplierReturn
+            && str_starts_with((string) $returnRequest->source_key, 'grn-rejection:');
+        $validated = $request->validate([
+            'problem' => ['nullable', 'string', 'min:10', 'max:2000'],
+            'defect_photo' => [$needsEvidence ? 'required' : 'nullable', 'image', 'mimes:jpeg,png,webp', 'max:5120'],
+            'required_delivery_date' => [$needsEvidence ? 'required' : 'nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
+        ]);
+        $rma = $this->service->submit($returnRequest, $request->user(), $validated['problem'] ?? null, $request->file('defect_photo'), $validated['required_delivery_date'] ?? null);
+
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+    }
+
+    public function defectPhoto(ReturnRequest $returnRequest): StreamedResponse
+    {
+        abort_unless($returnRequest->defect_photo_path && Storage::disk('local')->exists($returnRequest->defect_photo_path), 404);
+
+        return Storage::disk('local')->download($returnRequest->defect_photo_path, $returnRequest->defect_photo_name);
     }
 
     /**
@@ -367,6 +385,7 @@ class ReturnRequestController extends Controller
             'remarks' => ['nullable', 'string', 'max:500'],
         ]);
         $rma = $this->service->approve($returnRequest, $request->user(), $validated['remarks'] ?? null);
+
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
@@ -404,6 +423,7 @@ class ReturnRequestController extends Controller
         ]);
 
         $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null, $request->user());
+
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
@@ -418,6 +438,15 @@ class ReturnRequestController extends Controller
     /**
      * Dispose items on an inspected RMA.
      */
+    public function splitItem(SplitReturnRequestItemRequest $request, ReturnRequest $returnRequest, string $line): ReturnRequestResource
+    {
+        $lineId = HashIdFilter::decode($line, ReturnRequestItem::class);
+        abort_unless($lineId, 404);
+        $rma = $this->service->splitItem($returnRequest, (int) $lineId, (string) $request->validated('split_quantity'), $request->user());
+
+        return new ReturnRequestResource($rma->load(['items.product', 'items.item', 'items.sourceAllocations', 'customer', 'vendor', 'inspections.product', 'receipts.items']));
+    }
+
     public function dispose(DisposeReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
         return new ReturnRequestResource(
@@ -427,6 +456,7 @@ class ReturnRequestController extends Controller
                 $request->user(),
                 (bool) ($request->validated()['create_replacement_po'] ?? false),
                 isset($request->validated()['location_id']) ? (int) $request->validated()['location_id'] : null,
+                $request->validated()['required_delivery_date'] ?? null,
             )
         );
     }
@@ -440,7 +470,8 @@ class ReturnRequestController extends Controller
             ? (int) $request->validated()['location_id']
             : null;
         $rma = $this->service->complete($returnRequest, $request->user(), $locationId);
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
+
+        return new ReturnRequestResource($rma->load(['items.materialReviewRecord', 'items', 'customer', 'vendor', 'inspections.product', 'stockMovement.toLocation', 'stockMovement.fromLocation']));
     }
 
     /**
@@ -453,6 +484,7 @@ class ReturnRequestController extends Controller
         ]);
 
         $rma = $this->service->reject($returnRequest, $request->user(), $validated['reason']);
+
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
@@ -466,7 +498,7 @@ class ReturnRequestController extends Controller
         ]);
 
         $rma = $this->service->cancel($returnRequest, $validated['reason'] ?? null);
+
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
-
 }

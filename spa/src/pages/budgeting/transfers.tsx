@@ -145,14 +145,22 @@ export default function BudgetTransferListPage() {
                       <Td><span className="text-sm text-secondary">{transfer.reason}</span></Td>
                       <Td align="center"><Chip variant={STATUS_VARIANT[transfer.status] ?? 'neutral'}>{transfer.status_label ?? transfer.status}</Chip></Td>
                       <Td align="right">
-                        {transfer.status === 'pending' && canApprove ? (
+                        {transfer.status === 'pending' ? (
                           <div className="flex justify-end gap-1.5">
-                            <Button size="xs" variant="primary" onClick={() => approveMutation.mutate(transfer.id)} loading={approveMutation.isPending}>
-                              <LuCircleCheck size={13} /> Approve
-                            </Button>
-                            <Button size="xs" variant="secondary" onClick={() => setRejectId(transfer.id)}>
-                              <LuCircleX size={13} /> Reject
-                            </Button>
+                            {canApprove && transfer.can_approve === true ? (
+                              <Button size="xs" variant="primary" onClick={() => approveMutation.mutate(transfer.id)} loading={approveMutation.isPending}>
+                                <LuCircleCheck size={13} /> Approve
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted">
+                                {canApprove ? 'Approval requires a different role.' : 'Awaiting an eligible approver.'}
+                              </span>
+                            )}
+                            {canApprove && (
+                              <Button size="xs" variant="secondary" onClick={() => setRejectId(transfer.id)}>
+                                <LuCircleX size={13} /> Reject
+                              </Button>
+                            )}
                           </div>
                         ) : (
                           <span className="text-xs text-muted">

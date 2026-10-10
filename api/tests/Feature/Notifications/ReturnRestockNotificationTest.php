@@ -14,6 +14,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -33,12 +34,10 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * 2026-08-08 — warehouse notification on customer-return restock.
+ * Warehouse notification when customer-return stock clears MRB.
  *
- * Disposing a customer-return line as 'restock'/'rework' moves the goods back
- * into sellable stock (AdjustmentIn) and alerts everyone with inventory.view
- * so the shelf team knows to receive and verify them. Best-effort: a failing
- * notification must never roll back the stock movement.
+ * The independent MRB release moves the goods into good stock and alerts
+ * inventory viewers. Notification failure must not roll back that movement.
  */
 class ReturnRestockNotificationTest extends TestCase
 {
@@ -70,6 +69,39 @@ class ReturnRestockNotificationTest extends TestCase
         $role->permissions()->attach($permission);
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+    }
+
+    private function warehouseStaff(): User
+    {
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+            'is_active' => true,
+        ]);
+    }
+
+    private function releaseMrb(ReturnRequest $rma, User $reviewer): MaterialReviewRecord
+    {
+        $line = $rma->items->firstOrFail()->fresh();
+        $mrb = MaterialReviewRecord::query()->where('return_request_item_id', $line->id)->firstOrFail();
+        $quarantine = WarehouseLocation::query()->with('zone')->findOrFail($line->quarantine_location_id);
+        $targetZone = WarehouseZone::factory()->create([
+            'warehouse_id' => $quarantine->zone->warehouse_id,
+            'zone_type' => 'finished_goods',
+        ]);
+        $target = WarehouseLocation::factory()->create(['zone_id' => $targetZone->id]);
+
+        $this->actingAs($reviewer)
+            ->postJson("/api/v1/inventory/mrb/{$mrb->hash_id}/release", [
+                'disposition' => 'use_as_is',
+                'target_location_id' => $target->hash_id,
+                'inspected_quantity' => '8.000',
+                'evidence_reference' => 'NOTIFICATION-REINSPECTION-'.$rma->rma_number,
+                'recovery_passed' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'released');
+
+        return $mrb->fresh();
     }
 
     /** A role with no inventory access at all. */
@@ -175,6 +207,7 @@ class ReturnRestockNotificationTest extends TestCase
     {
         $admin = $this->admin();
         $warehouse = $this->warehouseUser();
+        $reviewer = $this->warehouseStaff();
         $item = Item::factory()->create();
         $loc = WarehouseLocation::factory()->create();
         $rma = $this->inspectedRma($admin, $item);
@@ -188,6 +221,13 @@ class ReturnRestockNotificationTest extends TestCase
                 'location_id'  => $loc->hash_id,
             ])
             ->assertOk();
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $warehouse->id,
+            'type' => 'return.restocked',
+        ]);
+        $this->assertSame('held', MaterialReviewRecord::query()->sole()->status->value);
+        $released = $this->releaseMrb($rma, $reviewer);
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $warehouse->id,
@@ -202,6 +242,21 @@ class ReturnRestockNotificationTest extends TestCase
         $this->assertStringContainsString($rma->rma_number, $data['message']);
         $this->assertStringContainsString('8 unit(s)', $data['message'], 'Quantity renders without trailing decimal zeros.');
         $this->assertSame("/return-management/{$rma->hash_id}", $data['link_to']);
+
+        $this->actingAs($reviewer)
+            ->postJson("/api/v1/inventory/mrb/{$released->hash_id}/release", [
+                'disposition' => 'use_as_is',
+                'target_location_id' => WarehouseLocation::findOrFail($released->release_location_id)->hash_id,
+                'inspected_quantity' => '8.000',
+                'evidence_reference' => 'DUPLICATE-REINSPECTION-'.$rma->rma_number,
+                'recovery_passed' => true,
+            ])
+            ->assertUnprocessable();
+
+        $this->assertSame(1, DB::table('notifications')
+            ->where('notifiable_id', $warehouse->id)
+            ->where('type', 'return.restocked')
+            ->count());
     }
 
     public function test_restock_dispose_notifies_wildcard_system_admin(): void
@@ -209,6 +264,7 @@ class ReturnRestockNotificationTest extends TestCase
         // system_admin holds a '*' permission, not the explicit inventory.view
         // slug — the whereHas on role.permissions must still reach them.
         $admin = $this->admin();
+        $reviewer = $this->warehouseStaff();
         $item = Item::factory()->create();
         $loc = WarehouseLocation::factory()->create();
         $rma = $this->inspectedRma($admin, $item);
@@ -222,6 +278,12 @@ class ReturnRestockNotificationTest extends TestCase
                 'location_id'  => $loc->hash_id,
             ])
             ->assertOk();
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $admin->id,
+            'type' => 'return.restocked',
+        ]);
+        $this->releaseMrb($rma, $reviewer);
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $admin->id,
@@ -233,6 +295,8 @@ class ReturnRestockNotificationTest extends TestCase
     {
         $admin = $this->admin();
         $outsider = $this->outsider();
+        $warehouse = $this->warehouseUser();
+        $reviewer = $this->warehouseStaff();
         $item = Item::factory()->create();
         $loc = WarehouseLocation::factory()->create();
         $rma = $this->inspectedRma($admin, $item);
@@ -246,6 +310,13 @@ class ReturnRestockNotificationTest extends TestCase
                 'location_id'  => $loc->hash_id,
             ])
             ->assertOk();
+
+        $this->releaseMrb($rma, $reviewer);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $warehouse->id,
+            'type' => 'return.restocked',
+        ]);
 
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $outsider->id,

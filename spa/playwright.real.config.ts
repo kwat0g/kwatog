@@ -1,16 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const E2E_BASE_URL = process.env.E2E_BASE_URL;
+if (!E2E_BASE_URL) throw new Error('Set E2E_BASE_URL to the isolated test application.');
+
 /**
  * REAL-backend E2E config (mission harness, Phase 1).
  *
  * Unlike playwright.config.ts (which mocks every API call via page.route),
  * this config exercises the actual UI + actual API + actual database together:
- * baseURL is the Nginx front door (http://localhost) which serves the built /
- * dev SPA and proxies /api/v1 to Laravel. Zero mocks — any page.route() call
+ * E2E_BASE_URL is required and must point to the isolated test app, which
+ * serves the SPA and proxies /api/v1 to Laravel. Zero mocks — any page.route() call
  * in a spec under e2e-real/ is a harness violation.
  *
  * Run (headless, per mission):
- *   npx playwright test -c playwright.real.config.ts --project=real-chromium
+ *   E2E_BASE_URL=http://localhost:18080 npx playwright test -c playwright.real.config.ts --project=real-chromium
  *
  * Notes:
  * - Auth throttle is 5 logins/min/IP, so specs log in via the API helper with
@@ -30,7 +33,7 @@ export default defineConfig({
     ['json', { outputFile: 'e2e-real/results/summary.json' }],
   ],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost',
+    baseURL: E2E_BASE_URL,
     headless: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

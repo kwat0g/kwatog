@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
@@ -146,6 +147,53 @@ class ReturnCaseSupplierQuantityTest extends TestCase
             ->assertCreated()->assertJsonPath('data.lines.0.missing_quantity', '0.000')
             ->assertJsonPath('data.lines.0.defective_quantity', '1.000');
         $this->assertDatabaseCount('stock_movements', 0);
+    }
+
+    public function test_warehouse_reports_a_grn_shortage_for_purchasing_without_resolution_access(): void
+    {
+        [$po, $line, $grn, $grnLine] = $this->receipt();
+        $shipment = SupplierShipment::factory()->create(['purchase_order_id' => $po->id]);
+        $shipment->items()->create(['purchase_order_item_id' => $line->id, 'quantity_shipped' => '2.00']);
+        $grn->forceFill(['supplier_shipment_id' => $shipment->id])->save();
+        $warehouse = User::factory()->create(['role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id')]);
+        $this->actingAs($warehouse);
+
+        $this->getJson('/api/v1/return-management/cases/source-options?source_kind=grn&source_id='.$grn->hash_id)
+            ->assertOk()->assertJsonPath('data.lines.0.expected_quantity', '10.000')
+            ->assertJsonPath('data.lines.0.received_quantity', '6.000');
+        $report = $this->report($grn, $grnLine, '10', '6');
+        $report['preferred_resolution'] = 'advice';
+        $caseHash = $this->postJson('/api/v1/return-management/cases', $report)
+            ->assertCreated()->assertJsonPath('data.lines.0.missing_quantity', '4.000')->json('data.id');
+        $case = ReturnCase::query()->findOrFail(HashIdFilter::decode($caseHash, ReturnCase::class));
+        $this->assertSame($this->buyer->id, $case->assigned_to);
+        $this->postJson('/api/v1/return-management/cases/'.$caseHash.'/actions', [
+            'action' => 'agree', 'resolution' => 'redelivery', 'message' => 'Send the missing material.',
+        ])->assertForbidden();
+        $this->postJson('/api/v1/return-management/cases', $this->report($po, $line, '4', '0'))->assertUnprocessable();
+        $inflated = $this->report($grn, $grnLine, '9', '6');
+        $inflated['preferred_resolution'] = 'advice';
+        $this->postJson('/api/v1/return-management/cases', $inflated)
+            ->assertUnprocessable()->assertJsonValidationErrors('lines.0.expected_quantity');
+        $defect = $this->report($grn, $grnLine, '6', '6', '1');
+        $defect['preferred_resolution'] = 'advice';
+        $this->postJson('/api/v1/return-management/cases', $defect)->assertUnprocessable();
+
+        $supplier = SupplierPortalUser::create([
+            'vendor_id' => $po->vendor_id, 'name' => 'Supplier', 'email' => 'supplier@test.local',
+            'password' => bcrypt('Password1!'), 'is_active' => true, 'password_changed_at' => now(),
+        ]);
+        $this->actingAs($supplier, 'supplier_portal')
+            ->getJson('/api/v1/b2b/supplier/problems')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/b2b/supplier/problems/'.$caseHash)->assertForbidden();
+
+        auth()->forgetGuards();
+        $this->actingAs($this->buyer, 'web')->postJson('/api/v1/return-management/cases/'.$caseHash.'/actions', [
+            'action' => 'start_review',
+        ])->assertOk();
+        $this->actingAs($supplier, 'supplier_portal')
+            ->getJson('/api/v1/b2b/supplier/problems')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/b2b/supplier/problems/'.$caseHash)->assertOk();
     }
 
     public function test_supplier_can_acknowledge_only_its_own_cases(): void

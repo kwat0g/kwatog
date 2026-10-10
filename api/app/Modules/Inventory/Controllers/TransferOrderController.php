@@ -33,9 +33,9 @@ class TransferOrderController
         return HashIdFilter::decode($id, TransferOrder::class) ?? abort(404);
     }
 
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return TransferOrderResource::collection($this->service->list());
+        return TransferOrderResource::collection($this->service->list(min(100, max(1, (int) $request->input('per_page', 50)))));
     }
 
     public function show(string $id): TransferOrderResource
@@ -80,7 +80,7 @@ class TransferOrderController
         }
 
         return (new TransferOrderResource($order->load([
-            'fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'item', 'creator',
+            'fromLocation.zone.warehouse', 'toLocation.zone.warehouse', 'item', 'creator', 'transferrer',
         ])))->response()->setStatusCode(201);
     }
 

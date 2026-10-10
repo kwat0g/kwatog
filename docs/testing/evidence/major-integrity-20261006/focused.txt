@@ -1,0 +1,38 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+................................................................. 65 / 97 ( 67%)
+..E.E...........................                                  97 / 97 (100%)
+
+Time: 03:31.760, Memory: 109.00 MB
+
+There were 2 errors:
+
+1) Tests\Feature\Maintenance\MaintenanceWorkOrderMachineDowntimeTest::test_mold_mwo_does_not_touch_the_machine_downtime_ledger
+Illuminate\Validation\ValidationException: A maintenance work order cannot take a mold with active or unresolved production ownership.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:476
+/var/www/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:318
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:298
+/var/www/tests/Feature/Maintenance/MaintenanceWorkOrderMachineDowntimeTest.php:156
+
+2) Tests\Feature\Maintenance\MaintenanceWorkOrderMachineDowntimeTest::test_completing_a_mold_mwo_does_not_free_a_mold_still_in_use
+Illuminate\Validation\ValidationException: A maintenance work order cannot take a mold with active or unresolved production ownership.
+
+/var/www/vendor/laravel/framework/src/Illuminate/Validation/ValidationException.php:70
+/var/www/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:476
+/var/www/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:318
+/var/www/vendor/laravel/framework/src/Illuminate/Database/Concerns/ManagesTransactions.php:35
+/var/www/vendor/laravel/framework/src/Illuminate/Database/DatabaseManager.php:491
+/var/www/vendor/laravel/framework/src/Illuminate/Support/Facades/Facade.php:363
+/var/www/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:298
+/var/www/tests/Feature/Maintenance/MaintenanceWorkOrderMachineDowntimeTest.php:203
+
+ERRORS!
+Tests: 97, Assertions: 435, Errors: 2.

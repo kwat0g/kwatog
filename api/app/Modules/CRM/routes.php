@@ -31,18 +31,26 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::get('/products/options', [ProductController::class, 'options'])
         ->middleware('permission_any:crm.products.view,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view');
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');
-    Route::get('/products/{product}', [ProductController::class, 'show']) ->middleware('permission:crm.products.view');
+    Route::get('/products/{product}', [ProductController::class, 'show']) ->middleware('permission_any:crm.products.view,inventory.costs.approve');
     Route::post('/products',          [ProductController::class, 'store']) ->middleware('permission:crm.products.manage');
     Route::put('/products/{product}', [ProductController::class, 'update'])->middleware('permission:crm.products.manage');
+    Route::post('/products/{product}/financial-proposal', [ProductController::class, 'proposeFinancialChange'])->middleware('permission:crm.products.manage');
+    Route::post('/products/{product}/financial-decision', [ProductController::class, 'decideFinancialChange'])->middleware('permission:inventory.costs.approve');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->middleware('permission:crm.products.manage');
     Route::patch('/products/{product}/restore', [ProductController::class, 'restore'])
         ->middleware('permission:crm.products.manage')
         ->withTrashed();
 
     /* ─── Price agreements ─── */
+    Route::get('/price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'index'])->middleware('permission_any:crm.price_agreements.view,crm.price_agreements.approve,crm.price_agreements.propose');
+    Route::get('/price-requests/{priceRequest}', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'show'])->middleware('permission_any:crm.price_agreements.view,crm.price_agreements.approve,crm.price_agreements.propose');
+    Route::post('/price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'store'])->middleware('permission:crm.price_agreements.propose');
+    Route::put('/price-requests/{priceRequest}/offer', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'offer'])->middleware('permission:crm.price_agreements.propose');
+    Route::post('/price-requests/{priceRequest}/approve', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'approve'])->middleware('permission:crm.price_agreements.approve');
+    Route::post('/price-requests/{priceRequest}/withdraw', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'withdraw'])->middleware('permission_any:crm.price_agreements.propose,crm.price_agreements.approve');
     Route::get('/price-agreements',                    [PriceAgreementController::class, 'index']) ->middleware('permission:crm.price_agreements.view');
     Route::get('/price-agreements/{priceAgreement}',   [PriceAgreementController::class, 'show']) ->middleware('permission:crm.price_agreements.view');
-    Route::post('/price-agreements',                   [PriceAgreementController::class, 'store']) ->middleware('permission:crm.price_agreements.manage');
+    Route::post('/price-agreements', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'store'])->middleware('permission:crm.price_agreements.propose');
     Route::put('/price-agreements/{priceAgreement}',   [PriceAgreementController::class, 'update'])->middleware('permission:crm.price_agreements.manage');
     Route::delete('/price-agreements/{priceAgreement}', [PriceAgreementController::class, 'destroy'])->middleware('permission:crm.price_agreements.manage');
     Route::patch('/price-agreements/{priceAgreement}/restore', [PriceAgreementController::class, 'restore'])
@@ -61,6 +69,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:crm.sales_orders.confirm');
 
     /* ─── Sales orders (Task 48) ─── */
+    Route::get('/sales-orders/{salesOrder}/fulfillment', [\App\Modules\CRM\Controllers\SalesOrderFulfillmentController::class, 'show'])->middleware('permission_any:crm.sales_orders.view,production.wo.confirm,production.schedule.confirm');
+    Route::put('/sales-orders/{salesOrder}/fulfillment', [\App\Modules\CRM\Controllers\SalesOrderFulfillmentController::class, 'update'])->middleware('permission_any:production.wo.confirm,production.schedule.confirm');
     Route::get('/sales-orders/options',            [SalesOrderController::class, 'options'])->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders',                    [SalesOrderController::class, 'index']) ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'show'])  ->middleware('permission:crm.sales_orders.view');
@@ -72,6 +82,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::patch('/sales-orders/{salesOrder}/restore', [SalesOrderController::class, 'restore'])
         ->withTrashed()
         ->middleware('permission:crm.sales_orders.delete');
+    Route::post('/sales-orders/{salesOrder}/propose-delivery-date', [SalesOrderResponseController::class, 'proposeDeliveryDate'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/request-customer-confirmation', [SalesOrderController::class, 'requestCustomerConfirmation'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');

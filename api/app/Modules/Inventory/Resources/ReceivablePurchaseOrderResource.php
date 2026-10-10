@@ -22,7 +22,13 @@ class ReceivablePurchaseOrderResource extends JsonResource
             ]),
             // Parent set so each line can report its delivered (receipt) cost.
             'items' => PurchaseOrderItemResource::collection($this->whenLoaded('items', fn () => $this->items->each(
-                fn ($item) => $item->setRelation('purchaseOrder', $this->resource),
+                function ($item): void {
+                    $item->setRelation('purchaseOrder', $this->resource);
+                    $ordered = $item->item->convertToBase((string) $item->quantity, $item->unit);
+                    $remaining = bcsub($ordered, (string) $item->quantity_accepted, 3);
+                    $item->setAttribute('base_quantity_ordered', bcadd($ordered, '0', 3));
+                    $item->setAttribute('base_quantity_remaining', bccomp($remaining, '0', 3) > 0 ? $remaining : '0.000');
+                },
             ))),
         ];
     }

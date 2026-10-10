@@ -42,6 +42,7 @@ class RecordLotResultRequest extends FormRequest
             foreach ($checklist as $row) {
                 if (! is_array($row)) {
                     $decoded[] = ['_id' => null];
+
                     continue;
                 }
 
@@ -62,6 +63,7 @@ class RecordLotResultRequest extends FormRequest
             foreach ($measurements as $row) {
                 if (! is_array($row)) {
                     $decoded[] = ['_id' => null];
+
                     continue;
                 }
 
@@ -107,6 +109,8 @@ class RecordLotResultRequest extends FormRequest
                 'min:0',
                 "max:{$sampleSize}",
             ],
+            'coverage_confirmed' => [Rule::requiredIf(fn () => $this->boolean('complete')), 'accepted'],
+            'defects_removed_confirmed' => ['sometimes', 'boolean'],
             'complete' => ['required', 'boolean'],
         ];
     }
@@ -125,6 +129,8 @@ class RecordLotResultRequest extends FormRequest
             'sample_defect_count' => isset($validated['sample_defect_count'])
                 ? (int) $validated['sample_defect_count']
                 : null,
+            'coverage_confirmed' => $this->boolean('coverage_confirmed'),
+            'defects_removed_confirmed' => $this->boolean('defects_removed_confirmed'),
             'complete' => (bool) ($validated['complete'] ?? false),
         ];
     }

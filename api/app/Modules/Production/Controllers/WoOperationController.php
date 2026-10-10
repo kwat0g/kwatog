@@ -168,6 +168,9 @@ class WoOperationController
             'qty' => ['required', 'numeric', 'decimal:0,4', 'min:0.0001', 'max:99999999999'],
             'scrap' => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:99999999999', 'lte:qty'],
             'scrap_reason' => ['nullable', 'string', 'max:500'],
+            'recording_reason' => ['nullable', 'string', 'max:500'],
+            'material_handover_acknowledged' => ['sometimes', 'boolean'],
+            'material_handover_reason' => ['nullable', 'required_if:material_handover_acknowledged,true', 'string', 'max:500'],
         ]);
 
         try {
@@ -176,6 +179,8 @@ class WoOperationController
                 (float) $request->input('qty'),
                 (float) $request->input('scrap', 0),
                 $request->input('scrap_reason'),
+                $request->input('recording_reason'),
+                $request->only(['material_handover_acknowledged', 'material_handover_reason']),
             );
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 409);

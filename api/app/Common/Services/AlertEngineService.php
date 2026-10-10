@@ -18,7 +18,9 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Services\CapacityPlanningService;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use Illuminate\Database\Eloquent\Model;
@@ -308,6 +310,11 @@ class AlertEngineService
                 DB::raw('COALESCE(sl.on_hand, 0) as on_hand'),
             )
             ->chunkById(self::CHECK_CHUNK_SIZE, function ($items): void {
+                $levels = \App\Modules\Inventory\Models\StockLevel::query()->whereIn('item_id', $items->modelKeys())
+                    ->with('location.zone.warehouse')->get();
+                $usable = app(\App\Modules\Inventory\Services\StockLocationSummaryService::class)->availabilityByItem($levels)
+                    ->map(fn ($availability) => $availability['usable_quantity']);
+                foreach ($items as $item) $item->on_hand = $usable[$item->id] ?? '0.000';
                 $lowStockItemIds = $items
                     ->filter(function (Item $item): bool {
                         $onHand = (float) ($item->on_hand ?? 0);
@@ -337,7 +344,7 @@ class AlertEngineService
                             AlertType::StockCritical,
                             AlertSeverity::Critical,
                             "Critical stock: {$item->code}",
-                            "{$item->name} on hand is {$onHand} {$item->unit_of_measure}, below safety stock of {$safety}.",
+                            "{$item->name} usable now is {$onHand} {$item->unit_of_measure}, below safety stock of {$safety}.",
                             $item,
                             ['on_hand' => $onHand, 'safety_stock' => $safety, 'reorder_point' => $reorder],
                         );
@@ -350,7 +357,7 @@ class AlertEngineService
                             AlertType::StockLow,
                             AlertSeverity::Warning,
                             "Low stock: {$item->code}",
-                            "{$item->name} on hand is {$onHand} {$item->unit_of_measure}, below reorder point of {$reorder}.",
+                            "{$item->name} usable now is {$onHand} {$item->unit_of_measure}, below reorder point of {$reorder}.",
                             $item,
                             ['on_hand' => $onHand, 'reorder_point' => $reorder],
                         );
@@ -447,6 +454,42 @@ class AlertEngineService
                         $workOrder,
                         ['hours_overdue' => (int) $hours, 'status' => (string) ($workOrder->status?->value ?? $workOrder->status)],
                     );
+                }
+            });
+
+        // Reuse the operational sweep for invalidated reservations and execution overruns.
+        ProductionSchedule::query()->where('reserves_capacity', true)
+            ->with('workOrder', 'machine', 'mold')->chunkById(self::CHECK_CHUNK_SIZE, function ($slots): void {
+                $audience = User::where('is_active', true)->whereHas('role', fn ($q) => $q->whereIn('slug', ['ppc_head', 'production_manager']))->get();
+                foreach ($slots as $slot) {
+                    if (! $slot->workOrder) {
+                        continue;
+                    }
+                    $readiness = app(CapacityPlanningService::class)->readiness($slot);
+                    // Missing initial crew is a normal task; alert only changed/expired commitments.
+                    $reasons = array_values(array_unique(array_merge(array_filter($readiness['blockers'], fn ($text) => ! str_starts_with($text, 'Assign a Production crew')), in_array($slot->workOrder->status->value, ['in_progress', 'paused'], true) ? ($readiness['execution_blockers'] ?? []) : [])));
+                    if ($slot->workOrder->status->value === 'confirmed' && $slot->scheduled_end->lte(now())) {
+                        $reasons[] = 'Production reservation ended. Open the WO and select Start to check remaining time.';
+                    }
+                    if ($reasons === []) {
+                        continue;
+                    }
+                    $wo = $slot->workOrder;
+                    $message = implode(' ', $reasons).' Slot: '.$slot->scheduled_start->toIso8601String().' to '.$slot->scheduled_end->toIso8601String();
+                    $this->raise(AlertType::MrpScheduleConflict, AlertSeverity::Warning, 'Assignment needs review: '.$wo->wo_number, $message, $slot,
+                        ['work_order_id' => $wo->hash_id, 'link_to' => '/production/work-orders/'.$wo->hash_id, 'reasons' => $reasons]);
+                    $recipients = $audience;
+                    if ($slot->machine_id || $slot->mold_id) {
+                        $recipients = $recipients->merge(User::where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', 'maintenance_tech'))->get());
+                    }
+                    app(NotificationService::class)->sendInApp($recipients, 'production.assignment.review', [
+                        'title' => 'Assignment needs review: '.$wo->wo_number, 'message' => $message,
+                        'link_to' => '/production/work-orders/'.$wo->hash_id, 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,
+                    ], 'assignment-review-'.$slot->id.'-'.sha1($message));
+                    if ($wo->sales_order_id && $wo->planned_end && ($slot->scheduled_end->gt($wo->planned_end) || $slot->scheduled_end->lt(now()))) {
+                        $sales = User::where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', 'sales_officer'))->get();
+                        app(NotificationService::class)->sendInApp($sales, 'production.assignment.review', ['title' => 'Delivery risk: '.$wo->wo_number, 'message' => 'Production assignment needs review. Agreed delivery date remains unchanged.', 'link_to' => '/crm/sales-orders/'.$wo->salesOrder->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $wo->salesOrder->hash_id], 'assignment-delivery-risk-'.$slot->id.'-'.sha1($message));
+                    }
                 }
             });
 

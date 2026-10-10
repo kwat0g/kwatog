@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\CRM\Models\CustomerComplaint;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /** Narrow recovery request for one complaint → NCR handoff. */
-class ComplaintNcrRequested
+class ComplaintNcrRequested implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 

@@ -14,6 +14,9 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { FileInput } from '@/components/ui/FileInput';
+import { Textarea } from '@/components/ui/Textarea';
+import type { ReturnRequestItem } from '@/types/returnManagement';
 import { returnManagementApi } from '@/api/returnManagement';
 import { creditNotesApi } from '@/api/accounting/credit-notes';
 import { ApprovalTimeline } from '@/components/chain';
@@ -21,6 +24,7 @@ import { fromApprovalRecords } from '@/lib/approvals';
 import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw, LuCheck } from '@/lib/icons';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -68,6 +72,7 @@ export default function ReturnRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  const roleSlug = useAuthStore((state) => state.user?.role?.slug);
 
   const [confirm, setConfirm] = useState<
     'submit' | 'approve' | 'receive' | 'inspect' | 'complete' | 'cancel' | null
@@ -79,6 +84,11 @@ export default function ReturnRequestDetailPage() {
   const [receiptFinal, setReceiptFinal] = useState(true);
   const [receiptRequestKey, setReceiptRequestKey] = useState<string | null>(null);
   const [showDispose, setShowDispose] = useState(false);
+  const [splitItem, setSplitItem] = useState<ReturnRequestItem | null>(null);
+  const [splitQuantity, setSplitQuantity] = useState('');
+  const [defectProblem, setDefectProblem] = useState('');
+  const [defectPhoto, setDefectPhoto] = useState<File | null>(null);
+  const [requiredDeliveryDate, setRequiredDeliveryDate] = useState('');
 
   const {
     data: rma,
@@ -90,7 +100,11 @@ export default function ReturnRequestDetailPage() {
     queryFn: () => returnManagementApi.get(id!),
     enabled: !!id,
   });
-  const requiresProductInspection = rma?.items?.some((item) => Boolean(item.product_id)) ?? false;
+  const requiresPhysicalInspection = !rma?.finance_only && (rma?.items?.some((item) => Boolean(item.product_id || item.item_id)) ?? false);
+  const inspectionsForItem = (item: ReturnRequestItem) => (rma?.inspections ?? []).filter(inspection =>
+    inspection.status !== 'cancelled' && (inspection.return_request_item_id
+      ? inspection.return_request_item_id === item.id
+      : Boolean((item.product_id && inspection.product?.id === item.product_id) || (item.item_id && inspection.item?.id === item.item_id))));
   const { data: warehouses } = useQuery({
     queryKey: ['warehouse-tree'],
     queryFn: () => warehouseApi.tree(),
@@ -129,15 +143,44 @@ export default function ReturnRequestDetailPage() {
   const dispositionLabel = new Map(
     (options?.dispositions ?? []).map((option) => [option.value, option.label]),
   );
+  const customerMrbPendingItems = rma?.type === 'customer_return'
+    ? (rma.items ?? []).filter((item) => {
+        if (!['restock', 'rework'].includes(item.disposition ?? '')) return false;
+        const moved = Number(item.moved_quantity ?? 0) > 0;
+        if (!item.mrb) return !moved;
+        return !(['released', 'scrapped'].includes(item.mrb.status)
+          && Boolean(item.mrb.release_movement_id)
+          && moved);
+      })
+    : [];
+  const pendingReturnInspectionItems = rma?.status === 'inspected' && rma.disposition_status !== 'disposed'
+    ? (rma.items ?? []).filter((item) => {
+        if (rma.finance_only || item.reused_incoming_inspection_id || !(item.product_id || item.item_id) || rma.inspection_handoff?.status === 'not_required') return false;
+        const inspections = inspectionsForItem(item);
+        return inspections.length === 0 || inspections.some((inspection) => !['passed', 'failed'].includes(inspection.status));
+      })
+    : [];
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['return-request', id] });
 
+  const splitCountable = Boolean(splitItem?.product_id || splitItem?.item?.unit_of_measure?.trim().toUpperCase() === 'PCS');
+  const splitTotal = Number(splitItem?.received_total ?? splitItem?.returned_quantity ?? 0);
+  const splitValid = /^\d+(?:\.\d{1,3})?$/.test(splitQuantity) && Number(splitQuantity) > 0 && Number(splitQuantity) < splitTotal && (!splitCountable || Number.isInteger(Number(splitQuantity)));
+  const splitMut = useMutation({
+    mutationFn: () => returnManagementApi.splitItem(id!, splitItem!.id, splitQuantity),
+    onSuccess: () => { invalidate(); queryClient.invalidateQueries({ queryKey: ['quality', 'inspections'] }); setSplitItem(null); setSplitQuantity(''); toast.success('Return line split. Review Quality coverage before disposition.'); },
+    onError: error => toast.error(errMsg(error, 'Could not split return line.')),
+  });
+
   const submitMut = useMutation({
-    mutationFn: () => returnManagementApi.submit(id!),
-    onSuccess: () => {
+    mutationFn: (evidence?: FormData) => returnManagementApi.submit(id!, evidence),
+    onSuccess: (updated) => {
       invalidate();
-      toast.success('RMA submitted for approval.');
+      toast.success(updated.status === 'completed' ? 'Supplier return sent. Replacement will ship against the original PO.' : 'RMA submitted for approval.');
       setConfirm(null);
+      setDefectProblem('');
+      setDefectPhoto(null);
+      setRequiredDeliveryDate('');
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to submit RMA.')),
   });
@@ -184,7 +227,7 @@ export default function ReturnRequestDetailPage() {
       invalidate();
       toast.success(
         updated.inspection_handoff?.status === 'not_required'
-          ? 'No product-linked Quality inspection is required. Ready to record disposition.'
+          ? 'No new Quality inspection is required. Ready to record disposition.'
           : updated.inspection_handoff?.status === 'manual_required'
             ? 'Quality inspection needs attention.'
             : 'Quality inspection staged.',
@@ -257,7 +300,7 @@ export default function ReturnRequestDetailPage() {
     switch (status) {
       case 'draft':
         return [
-          { key: 'submit', label: 'Submit for Approval', variant: 'primary' },
+          { key: 'submit', label: rma?.requires_defect_evidence ? 'Send to supplier' : 'Submit for Approval', variant: 'primary' },
           { key: 'cancel', label: 'Cancel', variant: 'danger' },
         ];
       case 'pending_approval':
@@ -267,6 +310,11 @@ export default function ReturnRequestDetailPage() {
           { key: 'cancel', label: 'Cancel', variant: 'danger' },
         ];
       case 'approved':
+        if (rma?.requires_defect_evidence) {
+          return (rma.items ?? []).every((item) => Boolean(item.reused_incoming_inspection_id))
+            ? [{ key: 'dispose', label: 'Finish earlier supplier return', variant: 'primary' }]
+            : [];
+        }
         return [
           { key: 'receive', label: 'Record Receipt', variant: 'primary' },
           { key: 'cancel', label: 'Cancel', variant: 'danger' },
@@ -274,7 +322,7 @@ export default function ReturnRequestDetailPage() {
       case 'received':
         return [{
           key: 'inspect',
-          label: requiresProductInspection ? 'Stage Quality Handoff' : 'Continue to Disposition',
+          label: requiresPhysicalInspection ? 'Stage Quality Handoff' : 'Continue to Disposition',
           variant: 'primary',
         }];
       case 'inspected': {
@@ -282,10 +330,11 @@ export default function ReturnRequestDetailPage() {
         return [
           // Disposition decides scrap vs restock and issues the credit note;
           // completing before it would close the RMA with neither.
-          ...(disposed
+          ...(disposed || pendingReturnInspectionItems.length > 0
             ? []
-            : [{ key: 'dispose', label: 'Dispose Items', variant: 'primary' as const }]),
+            : [{ key: 'dispose', label: rma?.requires_defect_evidence ? 'Finish earlier supplier return' : 'Dispose Items', variant: 'primary' as const }]),
           ...(disposed
+            && customerMrbPendingItems.length === 0
             ? [{ key: 'complete', label: 'Complete RMA', variant: 'primary' as const }]
             : []),
         ];
@@ -304,6 +353,10 @@ export default function ReturnRequestDetailPage() {
       setConfirm('complete');
     } else if (key === 'receive') {
       setConfirm('receive');
+    } else if (key === 'submit' && rma?.requires_defect_evidence) {
+      setDefectProblem(rma.reason_description?.startsWith('QC-') ? rma.reason_description : '');
+      setDefectPhoto(null);
+      setConfirm('submit');
     } else {
       setConfirm(key as typeof confirm);
     }
@@ -312,7 +365,7 @@ export default function ReturnRequestDetailPage() {
   const executeConfirm = () => {
     switch (confirm) {
       case 'submit':
-        submitMut.mutate();
+        submitMut.mutate(undefined);
         break;
       case 'approve':
         approveMut.mutate();
@@ -365,11 +418,11 @@ export default function ReturnRequestDetailPage() {
       variant: 'primary',
     },
     inspect: {
-      title: requiresProductInspection ? 'Stage Quality inspection handoff?' : 'Continue without Quality inspection?',
-      description: requiresProductInspection
-        ? 'Creates the product-level Quality inspection records. Disposition remains blocked until each linked Quality inspection is completed.'
-        : 'No product-linked Quality inspection is required for this return. Continue to record disposition.',
-      label: requiresProductInspection ? 'Stage Handoff' : 'Continue',
+      title: requiresPhysicalInspection ? 'Stage Quality inspection handoff?' : 'Continue without Quality inspection?',
+      description: requiresPhysicalInspection
+        ? 'Creates the item-linked Quality inspection records. Disposition remains blocked until each linked Quality inspection is completed.'
+        : 'No new Quality inspection is required for this return. Continue to record disposition.',
+      label: requiresPhysicalInspection ? 'Stage Handoff' : 'Continue',
       variant: 'primary',
     },
     cancel: {
@@ -410,12 +463,14 @@ export default function ReturnRequestDetailPage() {
   const actions = availableActions(rma.status).filter((action) =>
     action.key === 'approve' || action.key === 'reject'
       ? canDecide
+      : action.key === 'submit' && rma.requires_defect_evidence
+        ? canManage && (roleSlug === 'purchasing_officer' || roleSlug === 'system_admin')
       : action.key === 'receive'
         ? canReceive
         : action.key === 'inspect'
           ? canInspect
           : action.key === 'dispose'
-            ? canDispose
+            ? canDispose && (!rma.requires_defect_evidence || roleSlug === 'purchasing_officer' || roleSlug === 'system_admin')
             : action.key === 'complete'
               ? canComplete
               : canManage,
@@ -442,7 +497,9 @@ export default function ReturnRequestDetailPage() {
     { key: 'received', label: 'Received', at: rma.received_at },
     {
       key: 'inspected',
-      label: rma.inspection_handoff?.status === 'not_required' ? 'Inspection not required' : 'Quality handoff staged',
+      label: rma.requires_defect_evidence && rma.inspection_handoff?.status === 'not_required'
+        ? 'Incoming QC reused'
+        : rma.inspection_handoff?.status === 'not_required' ? 'Inspection not required' : 'Quality handoff staged',
       at: rma.inspected_at,
     },
     { key: 'completed', label: 'Completed', at: rma.completed_at, by: rma.completed_by },
@@ -580,6 +637,17 @@ export default function ReturnRequestDetailPage() {
                   {rma.reason_description && (
                     <dd className="text-muted text-xs mt-0.5">{rma.reason_description}</dd>
                   )}
+                  {rma.defect_photo_name && <dd className="mt-1"><Button size="sm" variant="secondary" onClick={async () => {
+                    try {
+                      const blob = await returnManagementApi.downloadDefectPhoto(rma.id);
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = rma.defect_photo_name ?? 'defect-photo';
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    } catch { toast.error('Could not download the defect photo.'); }
+                  }}>Download defect photo</Button></dd>}
                 </div>
                 <div>
                   <dt className="text-2xs uppercase tracking-wider text-muted">Resolution</dt>
@@ -644,12 +712,35 @@ export default function ReturnRequestDetailPage() {
               </div>
             )}
 
+            {pendingReturnInspectionItems.length > 0 && (
+              <div role="status" className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+                <div className="font-medium">Disposition waiting for Quality review</div>
+                <p className="mt-1 text-muted">
+                  Disposition is blocked until Quality completes and reviews every physical return inspection.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {pendingReturnInspectionItems.map((item) => {
+                    const inspections = inspectionsForItem(item);
+
+                    return (
+                      <li key={item.id}>
+                        {item.product?.part_number ?? 'Product'} ·{' '}
+                        {inspections.length > 0
+                          ? inspections.map((inspection) => `${inspection.inspection_number} (${inspection.status.replaceAll('_', ' ')})`).join(', ')
+                          : 'inspection not staged'}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
             {/* Items */}
             <Panel title={`Items (${rma.items?.length ?? 0})`}>
               {!rma.items || rma.items.length === 0 ? (
                 <div className="text-muted text-sm py-2">No items.</div>
               ) : (
-                <table className={cn(tableCls, 'mt-2')}>
+                <div className="overflow-x-auto"><table className={cn(tableCls, 'mt-2')}>
                   <thead>
                     <tr className={theadTrCls}>
                       <Th>Product</Th>
@@ -659,7 +750,9 @@ export default function ReturnRequestDetailPage() {
                       <Th>Condition</Th>
                       <Th>Reason</Th>
                       <Th>Disposition</Th>
-                      <Th>{rma.type === 'supplier_return' ? 'Return' : 'Restock'}</Th>
+                      <Th>Stock movement</Th>
+                      <Th>MRB release</Th>
+                      <Th>Quality / split</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -704,7 +797,15 @@ export default function ReturnRequestDetailPage() {
                         </Td>
                         <Td>
                           {item.moved_quantity && Number(item.moved_quantity) > 0 ? (
-                            rma.type === 'supplier_return' ? (
+                            item.quarantine_status === 'scrapped' ? (
+                              <Chip variant="danger">
+                                {formatQuantity(item.moved_quantity)} scrapped
+                              </Chip>
+                            ) : rma.type === 'supplier_return' && rma.reversal_already_applied ? (
+                              <Chip variant="neutral">
+                                {formatQuantity(item.moved_quantity)} kept out of stock
+                              </Chip>
+                            ) : rma.type === 'supplier_return' ? (
                               <Chip variant="danger">
                                 {formatQuantity(item.moved_quantity)} out
                               </Chip>
@@ -722,10 +823,37 @@ export default function ReturnRequestDetailPage() {
                             '—'
                           )}
                         </Td>
+                        <Td>
+                          {item.mrb ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {can('inventory.mrb.view') ? (
+                                <Link to={`/inventory/mrb/${item.mrb.id}`} className="font-mono text-accent hover:underline">
+                                  {item.mrb.mrb_number}
+                                </Link>
+                              ) : (
+                                <span className="font-mono">{item.mrb.mrb_number}</span>
+                              )}
+                              <Chip variant={item.mrb.status === 'released' ? 'success' : item.mrb.status === 'held' ? 'warning' : item.mrb.status === 'scrapped' ? 'danger' : 'neutral'}>
+                                {item.mrb.status_label}
+                              </Chip>
+                            </div>
+                          ) : customerMrbPendingItems.some((pending) => pending.id === item.id) ? (
+                            <span className="text-warning-fg">MRB pending</span>
+                          ) : (
+                            '—'
+                          )}
+                        </Td>
+                        <Td>
+                          <div className="space-y-2">
+                            {inspectionsForItem(item).map(inspection => <div key={inspection.id}><Link className="font-mono text-accent hover:underline" to={`/quality/inspections/${inspection.id}`}>{inspection.inspection_number}</Link> · {inspection.status.replaceAll('_', ' ')}</div>)}
+                            {item.reused_incoming_inspection_id ? <Link className="text-accent hover:underline" to={`/quality/inspections/${item.reused_incoming_inspection_id}`}>Checked incoming evidence reused</Link> : rma.inspection_handoff?.status === 'not_required' && <span className="text-muted">No new check required</span>}
+                            {['received', 'inspected'].includes(rma.status) && rma.disposition_status !== 'disposed' && !item.disposition && Number(item.received_total ?? item.returned_quantity) > 0 && can('return_management.dispose') && <Button size="sm" variant="secondary" onClick={() => { setSplitItem(item); setSplitQuantity(''); }}>Split quantity</Button>}
+                          </div>
+                        </Td>
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </Panel>
           </div>
@@ -836,30 +964,59 @@ export default function ReturnRequestDetailPage() {
                   </div>
                 )}
 
-                {/* 2026-08-08 — dispose-time movement: customer restock lines come back into
-      stock, supplier return_to_supplier lines ship out. Show exactly how many
-      units moved and where, so the physical flow is as visible as the credit. */}
+                {/* Show the latest recorded movement without assuming its direction. */}
                 {rma.moved_quantity && Number(rma.moved_quantity) > 0 && (
                   <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
                     <LuPackageCheck size={16} className="shrink-0 text-success-fg" />
                     <div className="flex-1">
                       <div className="font-medium">
                         {rma.type === 'supplier_return'
-                          ? 'Goods shipped back to supplier'
-                          : 'Goods restocked into inventory'}
+                          ? rma.reversal_already_applied ? 'Defective goods kept out of stock' : 'Goods shipped back to supplier'
+                          : 'Returned goods processed from quarantine'}
                       </div>
                       <div className="text-muted">
                         {rma.type === 'supplier_return'
-                          ? `${formatQuantity(rma.moved_quantity)} units left stock${rma.stock_movement?.from_location ? ` at ${rma.stock_movement.from_location.code}` : ''} when the disposition was recorded.`
-                          : `${formatQuantity(rma.moved_quantity)} units received back into stock${rma.stock_movement?.to_location ? ` at ${rma.stock_movement.to_location.code}` : ''} when the disposition was recorded.`}{' '}
-                        <Link
+                          ? rma.reversal_already_applied
+                            ? `${formatQuantity(rma.moved_quantity)} units were rejected at receiving and never entered available stock.`
+                            : `${formatQuantity(rma.moved_quantity)} units left stock${rma.stock_movement?.from_location ? ` at ${rma.stock_movement.from_location.code}` : ''} when the disposition was recorded.`
+                          : `${formatQuantity(rma.moved_quantity)} units moved according to the recorded disposition or MRB release${rma.stock_movement?.to_location ? ` to ${rma.stock_movement.to_location.code}` : ''}.`}{' '}
+                        {!rma.reversal_already_applied && <Link
                           to="/inventory/stock-levels?view=movements"
                           className="text-accent hover:underline"
                         >
                           View stock movements
-                        </Link>
+                        </Link>}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {customerMrbPendingItems.length > 0 && (
+                  <div role="status" className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+                    <div className="font-medium">Independent MRB release required</div>
+                    <p className="mt-1 text-muted">
+                      An Inventory reviewer who did not inspect this return must record reinspection evidence for the full held quantity before this RMA can complete.
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {customerMrbPendingItems.map((item) => (
+                        <li key={item.id}>
+                          {item.mrb && can('inventory.mrb.view') ? (
+                            <Link to={`/inventory/mrb/${item.mrb.id}`} className="text-accent hover:underline">
+                              {item.mrb.mrb_number} · {item.mrb.status_label}
+                            </Link>
+                          ) : item.mrb ? (
+                            <span>{item.mrb.mrb_number} · {item.mrb.status_label}</span>
+                          ) : (
+                            <span>MRB has not been created for this returned line.</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {can('inventory.mrb.view') && (
+                      <Link to="/inventory/mrb?status=held" className="mt-2 inline-block text-accent hover:underline">
+                        Open held MRBs
+                      </Link>
+                    )}
                   </div>
                 )}
 
@@ -893,7 +1050,7 @@ export default function ReturnRequestDetailPage() {
                     </div>
                     <div>
                       <dt className="text-2xs uppercase tracking-wider text-muted">
-                        Replacement PO
+                        {rma.requires_defect_evidence && rma.replacement_due_date && !rma.replacement_purchase_order ? 'Replacement on original PO' : 'Replacement PO'}
                       </dt>
                       <dd>
                         {rma.replacement_purchase_order ? (
@@ -903,9 +1060,11 @@ export default function ReturnRequestDetailPage() {
                           >
                             {rma.replacement_purchase_order.po_number}
                           </Link>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
+                        ) : rma.requires_defect_evidence && rma.replacement_due_date && rma.purchase_order ? (
+                          <Link to={`/purchasing/purchase-orders/${rma.purchase_order.id}`} className="text-accent hover:underline font-mono">{rma.purchase_order.po_number}</Link>
+                        ) : <span className="text-muted">—</span>}
+                        {rma.replacement_purchase_order && <p className="mt-1 text-xs text-muted">{rma.replacement_purchase_order.status.replaceAll('_', ' ')}. Return completion does not confirm replacement receipt.</p>}
+                        {rma.requires_defect_evidence && rma.replacement_due_date && !rma.replacement_purchase_order && <p className="mt-1 text-xs text-muted">Due {formatDate(rma.replacement_due_date)}. Supplier ships replacement against original PO.</p>}
                       </dd>
                     </div>
                     <div>
@@ -979,7 +1138,7 @@ export default function ReturnRequestDetailPage() {
 
       {/* Confirm dialogs for simple actions (submit, approve, inspect, cancel).
      Receive and complete have their own dialogs — they need input. */}
-      {confirm && confirm !== 'complete' && confirm !== 'receive' && CONFIRM_META[confirm] && (
+      {confirm && confirm !== 'complete' && confirm !== 'receive' && !(confirm === 'submit' && rma.requires_defect_evidence) && CONFIRM_META[confirm] && (
         <ConfirmDialog
           isOpen
           onClose={() => setConfirm(null)}
@@ -991,6 +1150,24 @@ export default function ReturnRequestDetailPage() {
           pending={confirmPending}
         />
       )}
+
+      <Modal isOpen={confirm === 'submit' && Boolean(rma.requires_defect_evidence)} onClose={() => { if (!submitMut.isPending) setConfirm(null); }} title="Submit supplier return">
+        <form className="space-y-4" onSubmit={(event) => {
+          event.preventDefault();
+          if (!defectPhoto || defectProblem.trim().length < 10 || !requiredDeliveryDate) return;
+          const evidence = new FormData();
+          if (!rma.reason_description?.startsWith('QC-')) evidence.append('problem', defectProblem.trim());
+          evidence.append('defect_photo', defectPhoto);
+          evidence.append('required_delivery_date', requiredDeliveryDate);
+          submitMut.mutate(evidence);
+        }}>
+          <p className="text-sm text-muted">{rma.reason_description?.startsWith('QC-') ? "QC's recorded problem goes to the supplier with this return." : 'Describe the problem to the supplier.'} Attach a photo and set the replacement due date. Supplier ships against the original PO after you send.</p>
+          <Textarea label={rma.reason_description?.startsWith('QC-') ? 'QC-reported problem' : 'Problem with the items'} required minLength={10} maxLength={2000} readOnly={rma.reason_description?.startsWith('QC-')} helper={rma.reason_description?.startsWith('QC-') ? 'Taken from the completed QC inspection.' : undefined} value={defectProblem} onChange={(event) => setDefectProblem(event.target.value)} placeholder="Describe the defect and affected items" />
+          <FileInput label="Photo of defective items" required accept="image/jpeg,image/png,image/webp" helper="JPG, PNG, or WebP · maximum 5 MB" onChange={(event) => setDefectPhoto(event.target.files?.[0] ?? null)} />
+          <Input label="Required delivery date" type="date" required min={new Date().toISOString().slice(0, 10)} value={requiredDeliveryDate} onChange={(event) => setRequiredDeliveryDate(event.target.value)} />
+          <div className="flex justify-end gap-2"><Button type="button" variant="secondary" disabled={submitMut.isPending} onClick={() => setConfirm(null)}>Cancel</Button><Button type="submit" loading={submitMut.isPending} disabled={submitMut.isPending || !defectPhoto || defectProblem.trim().length < 10 || !requiredDeliveryDate || requiredDeliveryDate < new Date().toISOString().slice(0, 10)}>Send to supplier</Button></div>
+        </form>
+      </Modal>
 
       {/* 2026-08-08 — finalize the draft credit note from the return page. */}
       <ConfirmDialog
@@ -1049,7 +1226,9 @@ export default function ReturnRequestDetailPage() {
             <p className="text-sm text-muted">
               {rma.type === 'supplier_return'
                 ? 'Returned lines were already shipped back when the disposition was recorded. Completing closes the RMA.'
-                : 'Restock and rework lines were already received back into stock when the disposition was recorded. Completing closes the RMA.'}
+                : customerMrbPendingItems.length > 0
+                  ? 'Complete becomes available after an independent Inventory reviewer records the MRB release.'
+                  : 'Returned stock has completed its required MRB disposition. Completing closes the RMA.'}
             </p>
           )}
           <div className="flex justify-end gap-2">
@@ -1068,6 +1247,14 @@ export default function ReturnRequestDetailPage() {
         </div>
       </Modal>
 
+      <Modal isOpen={Boolean(splitItem)} onClose={() => { if (!splitMut.isPending) setSplitItem(null); }} title="Split return line before disposition">
+        <div className="space-y-3">
+          <p className="text-sm text-muted">Separate mixed-quality goods into two lines with the same source. Received quantity stays conserved; each line receives its own disposition and Quality coverage.</p>
+          <Input label="Quantity for the new line" type="number" min={splitCountable ? 1 : 0.001} max={splitTotal} step={splitCountable ? 1 : 0.001} inputMode={splitCountable ? 'numeric' : 'decimal'} value={splitQuantity} onChange={event => setSplitQuantity(event.target.value)} disabled={splitMut.isPending} helper={`Received: ${formatQuantity(splitTotal)}. Enter ${splitCountable ? 'whole pieces' : 'a quantity'} greater than zero and smaller than the received total.`} error={splitQuantity && !splitValid ? 'Enter a valid quantity smaller than the received total.' : undefined} />
+          {splitValid && <p className="font-mono text-sm tabular-nums">Original line: {formatQuantity(splitTotal - Number(splitQuantity))} · New line: {formatQuantity(splitQuantity)}</p>}
+          <div className="flex justify-end gap-2"><Button variant="secondary" disabled={splitMut.isPending} onClick={() => setSplitItem(null)}>Cancel</Button><Button disabled={!splitValid || splitMut.isPending} loading={splitMut.isPending} onClick={() => splitMut.mutate()}>Split line</Button></div>
+        </div>
+      </Modal>
       {/* Receive with per-line quantities */}
       <Modal isOpen={confirm === 'receive'} onClose={() => setConfirm(null)} title="Record receipt">
         <div className="space-y-3">

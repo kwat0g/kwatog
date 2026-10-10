@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Resources;
 
 use App\Modules\Maintenance\Enums\MaintainableType;
+use App\Modules\Maintenance\Enums\MaintenanceScheduleInterval;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
@@ -18,9 +19,24 @@ class MaintenanceScheduleResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $target = $this->maintainable_type === MaintainableType::Machine
-            ? Machine::find($this->maintainable_id)
-            : Mold::find($this->maintainable_id);
+        $target = $this->resource->relationLoaded('target') ? $this->resource->getRelation('target')
+            : ($this->maintainable_type === MaintainableType::Machine
+                ? Machine::find($this->maintainable_id)
+                : Mold::find($this->maintainable_id));
+        $progress = match ($this->interval_type) {
+            MaintenanceScheduleInterval::Hours => [
+                'current' => $target instanceof Machine && $this->running_hours_baseline !== null
+                    ? max(0, round((float) bcsub((string) $target->running_hours_total, (string) $this->running_hours_baseline, 2), 2)) : null,
+                'target' => (int) $this->interval_value,
+                'unit' => 'hours',
+            ],
+            MaintenanceScheduleInterval::Shots => [
+                'current' => $target instanceof Mold ? (int) $target->current_shot_count : null,
+                'target' => (int) $this->interval_value,
+                'unit' => 'shots',
+            ],
+            default => null,
+        };
 
         return [
             'id'                => $this->hash_id,
@@ -35,11 +51,13 @@ class MaintenanceScheduleResource extends JsonResource
             'description'       => $this->description,
             'interval_type'     => $this->interval_type instanceof \BackedEnum ? $this->interval_type->value : $this->interval_type,
             'interval_value'    => (int) $this->interval_value,
+            'estimated_duration_minutes' => (int) $this->estimated_duration_minutes,
             'running_hours_baseline' => $this->running_hours_baseline !== null
                 ? (string) $this->running_hours_baseline
                 : null,
             'last_performed_at' => optional($this->last_performed_at)?->toISOString(),
             'next_due_at'       => optional($this->next_due_at)?->toISOString(),
+            'progress'          => $progress,
             'is_active'         => (bool) $this->is_active,
             'work_orders_count' => $this->when(isset($this->work_orders_count), $this->work_orders_count),
             'created_at'        => optional($this->created_at)?->toISOString(),

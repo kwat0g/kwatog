@@ -1,0 +1,10 @@
+PHPUnit 11.5.56 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.35
+Configuration: /var/www/phpunit.pricing.20261004.xml
+
+.....                                                               5 / 5 (100%)
+
+Time: 00:52.961, Memory: 103.00 MB
+
+OK (5 tests, 369 assertions)

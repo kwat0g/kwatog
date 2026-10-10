@@ -55,9 +55,9 @@ class StockCountController
         return HashIdFilter::decode($id, StockCountItem::class) ?? abort(404);
     }
 
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return StockCountSessionResource::collection($this->service->listSessions());
+        return StockCountSessionResource::collection($this->service->listSessions(min(100, max(1, (int) $request->input('per_page', 50)))));
     }
 
     public function show(string $id): StockCountSessionResource
@@ -144,6 +144,9 @@ class StockCountController
             // `decimal:0,3` + max matches the column and answers 422 instead.
             'counted_quantity' => 'required|decimal:0,3|min:0|max:999999999999.999',
             'lot_number'       => 'nullable|string|max:50',
+            'variance_allocations' => 'nullable|array|max:50',
+            'variance_allocations.*.lot_number' => 'nullable|string|max:50',
+            'variance_allocations.*.quantity' => 'required|decimal:0,3|min:0.001|max:999999999999.999',
             'notes'            => 'nullable|string|max:500',
         ]);
 

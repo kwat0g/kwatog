@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Common\Mail;
 
 use App\Common\Enums\ExportFormat;
+use App\Common\Models\ScheduledExport;
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\Export\ExportRunner;
+use App\Modules\Auth\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -13,6 +16,8 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ScheduledExportMail extends Mailable implements ShouldQueue
 {
@@ -26,6 +31,8 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
         public readonly ExportFormat $format,
         public readonly ?int $ownerId = null,
         bool $artifactPath = false,
+        public readonly ?int $scheduleId = null,
+        public readonly ?string $authorizationContext = null,
     ) {
         // Queue payloads are JSON encoded by the Redis connector. XLSX/CSV
         // output is arbitrary binary data, so carrying it directly in a
@@ -38,7 +45,45 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
     }
 
     private readonly ?string $encodedBytes;
+
     private readonly ?string $artifactPath;
+
+    /** Runs from SendQueuedMailable before any attachment reaches the transport. */
+    public function send($mailer)
+    {
+        // Ownerless explicit system mail remains supported; user mail must
+        // never become a system path when its owner or schedule disappears.
+        if ($this->ownerId !== null || isset($this->scheduleId)) {
+            $schedule = ! isset($this->scheduleId) ? null : ScheduledExport::query()->find($this->scheduleId);
+            try {
+                if (! $schedule || ! $schedule->is_active
+                    || (int) $schedule->owner_id !== $this->ownerId
+                    || $schedule->module !== $this->module || ! isset($this->authorizationContext)) {
+                    throw ValidationException::withMessages(['owner' => 'Scheduled export authorization is no longer valid.']);
+                }
+                $owner = User::query()->find($this->ownerId);
+                if (! $owner) {
+                    throw ValidationException::withMessages(['owner' => 'Export owner no longer exists.']);
+                }
+                $runner = app(ExportRunner::class);
+                $runner->build($schedule->module, (array) $schedule->columns, (array) ($schedule->filters ?? []), $owner);
+                if (! hash_equals($this->authorizationContext, $runner->authorizationContext($owner, (array) $schedule->columns, (array) ($schedule->filters ?? [])))) {
+                    throw ValidationException::withMessages(['owner' => 'Export authorization or row scope changed; review and run a new export.']);
+                }
+            } catch (ValidationException $exception) {
+                if ($schedule) {
+                    $schedule->update(['is_active' => false, 'last_error' => $exception->getMessage()]);
+                }
+                if ($this->artifactPath !== null) {
+                    Storage::disk('local')->delete($this->artifactPath);
+                }
+
+                return null;
+            }
+        }
+
+        return parent::send($mailer);
+    }
 
     public function envelope(): Envelope
     {

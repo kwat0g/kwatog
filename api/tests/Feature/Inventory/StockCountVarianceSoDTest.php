@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Inventory;
 
+use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -20,6 +21,32 @@ use Tests\TestCase;
 class StockCountVarianceSoDTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_variance_at_the_tolerance_does_not_accept_an_unneeded_approval(): void
+    {
+        ['maker' => $maker, 'checker' => $checker, 'session_id' => $sessionId, 'line_id' => $lineId] = $this->createHighVarianceCount();
+        app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 100);
+
+        $before = $this->actingAs($maker)
+            ->getJson("/api/v1/inventory/stock-counts/{$sessionId}")
+            ->assertOk()
+            ->json('data');
+        $auditCount = AuditLog::query()->count();
+        $movementCount = StockMovement::query()->count();
+
+        $this->actingAs($checker)
+            ->postJson("/api/v1/inventory/stock-counts/items/{$lineId}/approve")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'This variance is at or below the approval tolerance.');
+
+        $after = $this->actingAs($maker)
+            ->getJson("/api/v1/inventory/stock-counts/{$sessionId}")
+            ->assertOk()
+            ->json('data');
+        $this->assertSame($before, $after);
+        $this->assertSame($auditCount, AuditLog::query()->count());
+        $this->assertSame($movementCount, StockMovement::query()->count());
+    }
 
     public function test_variance_checker_cannot_complete_the_same_stock_count(): void
     {
@@ -103,7 +130,7 @@ class StockCountVarianceSoDTest extends TestCase
         $maker = $this->warehouseUser($roleId);
         $checker = $this->warehouseUser($roleId);
         $finisher = $this->warehouseUser($roleId);
-        $item = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create(['is_active' => true]);
         StockLevel::query()->create([
             'item_id' => $item->id,

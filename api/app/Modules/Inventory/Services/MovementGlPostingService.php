@@ -13,6 +13,9 @@ use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -70,8 +73,11 @@ class MovementGlPostingService
     /** Retry only the movement → GL handoff; stock quantity never changes. */
     public function retry(StockMovement $movement): StockMovement
     {
+        $workOrderId = $movement->reference_type === 'work_order_output'
+            ? WorkOrderOutput::query()->whereKey($movement->reference_id)->value('work_order_id') : null;
         try {
-            return DB::transaction(function () use ($movement): StockMovement {
+            return DB::transaction(function () use ($movement, $workOrderId): StockMovement {
+                $workOrder = $workOrderId ? WorkOrder::query()->lockForUpdate()->find($workOrderId) : null;
                 $locked = StockMovement::query()
                     ->whereKey($movement->id)
                     ->lockForUpdate()
@@ -81,6 +87,9 @@ class MovementGlPostingService
                 }
 
                 $this->postForLocked($locked);
+                if ($workOrder) {
+                    app(WorkOrderService::class)->autoFinishIfTargetReached($workOrder);
+                }
 
                 return $locked->fresh();
             });
@@ -112,26 +121,31 @@ class MovementGlPostingService
         $type = $movement->movement_type;
         if ($this->isNotRequired($movement)) {
             $this->markNotRequired($movement, 'movement_type_not_posted_to_gl');
+
             return null;
         }
         if ($movement->journal_entry_id) {
             $this->markGenerated($movement, (int) $movement->journal_entry_id);
+
             return (int) $movement->journal_entry_id;
         }
 
         $enabled = $this->settings->get('modules.accounting', false);
         if ($enabled !== true) {
             $this->markNotRequired($movement, 'accounting_module_disabled');
+
             return null;
         }
         if (! Schema::hasTable('journal_entries') || ! Schema::hasTable('accounts')) {
             $this->markManual($movement->id, 'Accounting tables are not available yet. Run the migration, then replay this handoff.');
+
             return null;
         }
 
         $value = Money::round2((string) $movement->total_cost);
         if (Money::isZero($value)) {
             $this->markNotRequired($movement, 'zero_value_movement');
+
             return null;
         }
 
@@ -139,6 +153,7 @@ class MovementGlPostingService
         if (! $item) {
             Log::warning('MovementGlPostingService: item not found; manual handoff required', ['movement_id' => $movement->id]);
             $this->markManual($movement->id);
+
             return null;
         }
 
@@ -150,6 +165,7 @@ class MovementGlPostingService
                 'error' => $e->getMessage(),
             ]);
             $this->markManual($movement->id);
+
             return null;
         }
 
@@ -162,6 +178,7 @@ class MovementGlPostingService
                 'error' => $e->getMessage(),
             ]);
             $this->markManual($movement->id);
+
             return null;
         }
 
@@ -178,11 +195,11 @@ class MovementGlPostingService
 
         try {
             $je = $this->journals->create([
-                'date'           => now()->toDateString(),
-                'description'    => 'Stock movement #' . $movement->id,
+                'date' => now()->toDateString(),
+                'description' => 'Stock movement #'.$movement->id,
                 'reference_type' => 'stock_movement',
-                'reference_id'   => $movement->id,
-                'lines'          => $lines,
+                'reference_id' => $movement->id,
+                'lines' => $lines,
             ]);
         } catch (BusinessRuleException $e) {
             // A physical stock movement is still a valid warehouse fact when
@@ -194,6 +211,7 @@ class MovementGlPostingService
                 'error' => $e->getMessage(),
             ]);
             $this->markManual($movement->id);
+
             return null;
         }
 
@@ -240,6 +258,7 @@ class MovementGlPostingService
 
         if (in_array($type, [StockMovementType::Delivery, StockMovementType::DeliveryReturn], true)) {
             $delivery = $this->sourceDelivery($movement);
+
             return ! $delivery || $delivery->cost_recognition_mode !== DeliveryCostingMode::Transit;
         }
 
@@ -297,6 +316,24 @@ class MovementGlPostingService
             ];
         }
 
+        $adjustmentOffset = (($movement->reference_type === 'work_order' && WorkOrder::find($movement->reference_id)?->rework_source_output_id)
+                || ($movement->reference_type === 'work_order_output' && WorkOrderOutput::find($movement->reference_id)?->rework_source_output_id))
+            ? 'accounting.accounts.material_consumption_code'
+            : 'accounting.accounts.inventory_adjustment_code';
+
+        if ($type === StockMovementType::MaterialIssue && $movement->reference_type === 'maintenance_work_order') {
+            $setting = 'accounting.accounts.maintenance_consumption_code';
+            return [$inventoryCode, $this->settings->requiredString($setting), false, $setting];
+        }
+        if ($type === StockMovementType::MaterialReturn && $movement->reference_type === 'stock_movement') {
+            $source = StockMovement::query()->find($movement->reference_id);
+            if ($source?->movement_type === StockMovementType::MaterialIssue
+                && $source->reference_type === 'maintenance_work_order') {
+                $setting = 'accounting.accounts.maintenance_consumption_code';
+                return [$inventoryCode, $this->settings->requiredString($setting), true, $setting];
+            }
+        }
+
         return match ($type) {
             StockMovementType::AdjustmentIn,
             StockMovementType::CycleCount => [
@@ -307,9 +344,9 @@ class MovementGlPostingService
             ],
             StockMovementType::AdjustmentOut => [
                 $inventoryCode,
-                $this->settings->requiredString('accounting.accounts.inventory_adjustment_code'),
-                false, // DR COGS, CR inventory
-                'accounting.accounts.inventory_adjustment_code',
+                $this->settings->requiredString($adjustmentOffset),
+                false, // DR repair consumption or adjustment, CR inventory
+                $adjustmentOffset,
             ],
             StockMovementType::MaterialIssue,
             StockMovementType::Scrap => [
@@ -350,6 +387,7 @@ class MovementGlPostingService
         }
 
         $deliveryId = DeliveryItem::query()->whereKey($source->reference_id)->value('delivery_id');
+
         return $deliveryId ? Delivery::query()->with('costHandoffs')->find((int) $deliveryId) : null;
     }
 
@@ -361,6 +399,7 @@ class MovementGlPostingService
 
         $returnItem = ReturnRequestItem::query()->with('sourceDeliveryItem')->find((int) $movement->reference_id);
         $deliveryId = $returnItem?->sourceDeliveryItem?->delivery_id;
+
         return $deliveryId ? Delivery::query()->with('costHandoffs')->find((int) $deliveryId) : null;
     }
 }

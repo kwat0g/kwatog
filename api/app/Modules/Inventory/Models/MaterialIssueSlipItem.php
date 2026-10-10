@@ -15,7 +15,8 @@ class MaterialIssueSlipItem extends Model
 
     protected $fillable = [
         'material_issue_slip_id', 'item_id', 'location_id',
-        'quantity_issued', 'unit_cost', 'total_cost',
+        'quantity_issued', 'quantity_issued_in_uom', 'issued_uom_conversion_factor',
+        'unit_cost', 'total_cost',
         'stock_movement_id',
         'issued_uom_code', 'lot_number',
         'material_reservation_id', 'remarks',
@@ -23,8 +24,10 @@ class MaterialIssueSlipItem extends Model
 
     protected $casts = [
         'quantity_issued' => 'decimal:3',
-        'unit_cost'       => 'decimal:4',
-        'total_cost'      => 'decimal:2',
+        'quantity_issued_in_uom' => 'decimal:6',
+        'issued_uom_conversion_factor' => 'decimal:6',
+        'unit_cost' => 'decimal:4',
+        'total_cost' => 'decimal:2',
     ];
 
     public function slip(): BelongsTo

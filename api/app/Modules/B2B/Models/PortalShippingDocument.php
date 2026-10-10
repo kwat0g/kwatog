@@ -22,7 +22,9 @@ class PortalShippingDocument extends Model
 
     protected $fillable = [
         'purchase_order_id',
+        'supplier_shipment_id',
         'bill_id',
+        'supplier_invoice_id',
         'document_type',
         'file_path',
         'original_filename',
@@ -42,6 +44,11 @@ class PortalShippingDocument extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function supplierShipment(): BelongsTo
+    {
+        return $this->belongsTo(SupplierShipment::class);
     }
 
     public function uploader(): BelongsTo
