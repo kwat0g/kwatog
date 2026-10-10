@@ -77,5 +77,8 @@ class MaterialHandoverIndexTest extends TestCase
 
         $this->actingAs($warehouse)->getJson('/api/v1/inventory/material-handovers')
             ->assertOk()->assertJsonCount(3, 'data');
+        // Empty search arrives as null via ConvertEmptyStringsToNull; it must not 500.
+        $this->actingAs($warehouse)->getJson('/api/v1/inventory/material-handovers?status=pending&search=&page=1&per_page=25')
+            ->assertOk()->assertJsonCount(3, 'data');
     }
 }
