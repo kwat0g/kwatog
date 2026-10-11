@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Dashboard\Support\ForecastTrend;
 use App\Modules\Forecasting\Support\ForecastConfidence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -49,22 +50,10 @@ final class CashFlowForecastService
         ];
     }
 
-    /** Linear-regression slope direction; same `forecasting.trend_*` thresholds as `ForecastingDashboardService::computeTrend()`. */
+    /** Linear-regression slope direction via the shared helper (same thresholds as `ForecastingDashboardService::computeTrend()`). */
     private function trend(array $values): string
     {
-        $n = count($values);
-        if ($n < 3) {
-            return 'stable';
-        }
-        $xMean = ($n - 1) / 2; $yMean = array_sum($values) / $n; $num = 0.0; $den = 0.0;
-        foreach ($values as $i => $y) {
-            $dx = $i - $xMean; $num += $dx * ($y - $yMean); $den += $dx * $dx;
-        }
-        if ($den === 0.0) {
-            return 'stable';
-        }
-        $slope = $num / $den; $threshold = $yMean > 0 ? abs($this->settings->requiredFloat('forecasting.trend_slope_ratio', 0, 1) * $yMean) : $this->settings->requiredFloat('forecasting.trend_minimum_slope', 0, 1000000);
-        return $slope > $threshold ? 'up' : ($slope < -$threshold ? 'down' : 'stable');
+        return ForecastTrend::direction($values, $this->settings->requiredFloat('forecasting.trend_slope_ratio', 0, 1), $this->settings->requiredFloat('forecasting.trend_minimum_slope', 0, 1000000));
     }
 
     private function empty(): array

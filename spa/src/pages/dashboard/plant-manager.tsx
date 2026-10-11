@@ -21,6 +21,8 @@ import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWid
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
+import { CapacityPanel } from '@/components/dashboard/CapacityPanel';
+import type { CapacityForecastData } from '@/types/forecasting-dashboard';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { PRODUCTION_MANAGER_KPIS } from '@/lib/dashboardKpis';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
@@ -72,6 +74,7 @@ interface PlantManagerData {
       has_active_wo: boolean;
     }>;
     defect_pareto?: Array<{ code: string; name: string; count: number }>;
+    capacity_forecast?: CapacityForecastData;
     financial_snapshot?: {
       cash_balance: string;
       ar_outstanding: string;
@@ -263,6 +266,15 @@ export default function PlantManagerDashboard() {
                   <DemandForecastPanel />
                   <ForecastAccuracyPanel />
                 </PanelRow>
+              )}
+              {/* Capacity forecast rides the page poll (payload-driven, not a
+                  separate fetch); absent when PanelGate strips it. */}
+              {data.panels.capacity_forecast && (
+                <CapacityPanel
+                  data={data.panels.capacity_forecast}
+                  isLoading={false}
+                  isError={false}
+                />
               )}
             </DashTail>
           </>

@@ -40,11 +40,13 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'production.kpi', 'chain.stage_breakdown', 'machine.utilization',
                 'oee.gauges', 'qc.pareto', 'alerts', 'production.active_wo',
                 'maintenance.open_wos', 'maintenance.due_schedules', 'kpi.oee',
+                'forecast.capacity',
             ],
             'ppc_head' => [
                 'production.gantt_mini', 'mrp.shortages', 'machine.status',
                 'production.wo_breakdown', 'material.reservations',
                 'maintenance.due_schedules', 'kpi.on_time_delivery',
+                'forecast.capacity',
             ],
             'finance_officer' => [
                 'finance.cash_position', 'finance.ar_aging', 'finance.ap_aging',

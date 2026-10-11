@@ -36,7 +36,7 @@ class PlantManagerDashboardService
 
     private const CACHE_TTL = 30;
 
-    public function __construct(private readonly PanelGate $gate) {}
+    public function __construct(private readonly PanelGate $gate, private readonly ForecastingDashboardService $forecasting) {}
 
     public function plantManager(User $user, string $range = 'week'): array
     {
@@ -72,6 +72,9 @@ class PlantManagerDashboardService
                     // only seeded holder of this dashboard — has no accounting
                     // grant at all, so this panel was the leak.
                     'financial_snapshot' => ['accounting.dashboard.view',  fn () => $this->plantFinancialSnapshot()],
+                    // Plant load vs machine capacity. A forecasting read like the
+                    // demand panels below — stripped server-side without it.
+                    'capacity_forecast'  => ['forecasting.view',         fn () => $this->forecasting->capacityForecast()],
                     // Not data — the echo of the caller's own range selection.
                     'range'              => [null,                         fn () => $range],
                 ]),

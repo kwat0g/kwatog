@@ -11,6 +11,7 @@ use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\AssetWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\BudgetWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\CapacityWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CashFlowWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CoreWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CrmWidgetAnalytics;
@@ -53,6 +54,7 @@ class WidgetSeedIntegrityTest extends TestCase
             app(KpiWidgetAnalytics::class),
             app(ApprovalsWidgetAnalytics::class),
             app(CashFlowWidgetAnalytics::class),
+            app(CapacityWidgetAnalytics::class),
         ])->flatMap(fn ($provider) => $provider->handles())->unique();
     }
 

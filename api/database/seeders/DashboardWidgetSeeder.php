@@ -91,6 +91,7 @@ class DashboardWidgetSeeder extends Seeder
         'forecast.revenue'          => '/dashboard/finance',
         'forecast.defect_rate'      => '/dashboard/quality',
         'forecast.cash_flow'        => '/forecasting/demand',
+        'forecast.capacity'         => '/production/schedule',
         'maintenance.open_wos'      => '/maintenance/work-orders',
         'maintenance.due_schedules' => '/maintenance/schedules',
         'assets.under_maintenance'  => '/assets',
@@ -260,6 +261,9 @@ class DashboardWidgetSeeder extends Seeder
             // Cash movement is accounting data, but the projection is a
             // forecasting read (same gate as the finance panel + demand page).
             ['key' => 'forecast.cash_flow',            'name' => 'Cash Flow Forecast',        'module' => 'accounting',  'permission' => 'forecasting.view', 'render_kind' => 'trend'],
+            // Plant load vs machine capacity: a planning read (same gate as
+            // the ppc/plant-manager panels + demand page), grouped with production.
+            ['key' => 'forecast.capacity',             'name' => 'Capacity Forecast',         'module' => 'production',  'permission' => 'forecasting.view', 'render_kind' => 'trend'],
 
             // ─── Maintenance / Assets ──────────────────────────────
             ['key' => 'maintenance.open_wos',          'name' => 'Open Maintenance WOs',      'module' => 'maintenance', 'permission' => 'maintenance.view'],

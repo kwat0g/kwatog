@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Dashboard\Support\ForecastTrend;
 use App\Modules\Forecasting\Services\ForecastingService;
 use App\Modules\Forecasting\Services\StockOutProjectionService;
 use App\Modules\Forecasting\Support\ForecastConfidence;
@@ -28,6 +29,7 @@ class ForecastingDashboardService
         private readonly StockOutProjectionService $stockOut,
         private readonly ForecastingService $forecasting,
         private readonly CashFlowForecastService $cashFlow,
+        private readonly CapacityForecastService $capacity,
     ) {}
     /* ───────────────────────────────────────────────────────────────
      * 1. HR — Headcount forecast
@@ -368,47 +370,34 @@ class ForecastingDashboardService
     }
 
     /* ───────────────────────────────────────────────────────────────
+     * 6. PPC / Plant — Capacity forecast (Task 7)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Thin delegate: the panels and the widget share the one
+     * CapacityForecastService engine (ponytail: one implementation).
+     *
+     * @return array{historical: array, forecast: array, trend: string, kpi: array, months: array, breach: bool, confidence: float|null}
+     */
+    public function capacityForecast(): array
+    {
+        return $this->capacity->forecast();
+    }
+
+    /* ───────────────────────────────────────────────────────────────
      * Shared helpers
      * ─────────────────────────────────────────────────────────────── */
 
     /**
      * Compute trend direction: 'up', 'down', or 'stable'.
-     * Uses linear regression slope normalized by the mean.
+     * Delegates to the shared helper so every forecast agrees on the math.
      */
     private function computeTrend(array $values): string
     {
-        $n = count($values);
-        if ($n < 3) {
-            return 'stable';
-        }
-
-        $xMean = ($n - 1) / 2;
-        $yMean = array_sum($values) / $n;
-
-        $num = 0.0;
-        $den = 0.0;
-        foreach ($values as $i => $y) {
-            $dx = $i - $xMean;
-            $num += $dx * ($y - $yMean);
-            $den += $dx * $dx;
-        }
-
-        if ($den === 0.0) {
-            return 'stable';
-        }
-        $slope = $num / $den;
         $slopeRatio = $this->settings->requiredFloat('forecasting.trend_slope_ratio', 0, 1);
         $minimumSlope = $this->settings->requiredFloat('forecasting.trend_minimum_slope', 0, 1000000);
-        $threshold = $yMean > 0 ? abs($slopeRatio * $yMean) : $minimumSlope;
 
-        if ($slope > $threshold) {
-            return 'up';
-        }
-        if ($slope < -$threshold) {
-            return 'down';
-        }
-
-        return 'stable';
+        return ForecastTrend::direction($values, $slopeRatio, $minimumSlope);
     }
 
     /**
