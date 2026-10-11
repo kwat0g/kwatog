@@ -70,3 +70,28 @@ export interface CapacityForecastData extends ForecastPanelData {
   breach: boolean;
   confidence: number | null;
 }
+
+/** Phase 3 (Task 8) — per-month attendance risk from the approved leave pipeline. */
+export type AttendanceRisk = 'low' | 'medium' | 'high';
+
+/**
+ * Phase 3 (Task 8) — Attendance forecast month. Expected attendance rate is
+ * the flat run-rate of the historical present share; leave load is approved
+ * leave-days overlapping the month as a share of headcount × days in month.
+ */
+export interface AttendanceMonth {
+  year: number;
+  month: number;
+  expected_rate: number;
+  leave_load: number;
+  risk: AttendanceRisk;
+  /** Only present in forecast months (not historical). */
+  confidence?: number | null;
+}
+
+/** Phase 3 (Task 8) — attendance payload: the ForecastPanel rate series plus per-month leave load and horizon risk flag. */
+export interface AttendanceForecastData extends ForecastPanelData {
+  months: AttendanceMonth[];
+  risk: AttendanceRisk;
+  confidence: number | null;
+}

@@ -30,6 +30,7 @@ class ForecastingDashboardService
         private readonly ForecastingService $forecasting,
         private readonly CashFlowForecastService $cashFlow,
         private readonly CapacityForecastService $capacity,
+        private readonly AttendanceForecastService $attendance,
     ) {}
     /* ───────────────────────────────────────────────────────────────
      * 1. HR — Headcount forecast
@@ -382,6 +383,21 @@ class ForecastingDashboardService
     public function capacityForecast(): array
     {
         return $this->capacity->forecast();
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * 7. HR — Attendance forecast (Task 8)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Thin delegate: the panel and the widget share the one
+     * AttendanceForecastService engine (ponytail: one implementation).
+     *
+     * @return array{historical: array, forecast: array, trend: string, kpi: array, months: array, risk: string, confidence: float|null}
+     */
+    public function attendanceForecast(): array
+    {
+        return $this->attendance->forecast();
     }
 
     /* ───────────────────────────────────────────────────────────────

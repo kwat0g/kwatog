@@ -92,6 +92,7 @@ class DashboardWidgetSeeder extends Seeder
         'forecast.defect_rate'      => '/dashboard/quality',
         'forecast.cash_flow'        => '/forecasting/demand',
         'forecast.capacity'         => '/production/schedule',
+        'forecast.attendance'       => '/hr/attendance',
         'maintenance.open_wos'      => '/maintenance/work-orders',
         'maintenance.due_schedules' => '/maintenance/schedules',
         'assets.under_maintenance'  => '/assets',
@@ -264,6 +265,9 @@ class DashboardWidgetSeeder extends Seeder
             // Plant load vs machine capacity: a planning read (same gate as
             // the ppc/plant-manager panels + demand page), grouped with production.
             ['key' => 'forecast.capacity',             'name' => 'Capacity Forecast',         'module' => 'production',  'permission' => 'forecasting.view', 'render_kind' => 'trend'],
+            // Expected attendance vs approved leave pipeline: an attendance
+            // read (same gate as the hr panel + DTR page), grouped with hr.
+            ['key' => 'forecast.attendance',           'name' => 'Attendance Forecast',       'module' => 'hr',          'permission' => 'attendance.view', 'render_kind' => 'trend'],
 
             // ─── Maintenance / Assets ──────────────────────────────
             ['key' => 'maintenance.open_wos',          'name' => 'Open Maintenance WOs',      'module' => 'maintenance', 'permission' => 'maintenance.view'],

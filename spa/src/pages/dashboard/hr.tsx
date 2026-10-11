@@ -7,6 +7,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { AttendanceRiskPanel } from '@/components/dashboard/AttendanceRiskPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { HR_KPIS } from '@/lib/dashboardKpis';
 import { PeriodNote } from '@/components/dashboard/period';
@@ -14,7 +15,7 @@ import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
 import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import type { ApiSuccess } from '@/types';
-import type { ForecastPanelData } from '@/types/forecasting-dashboard';
+import type { AttendanceForecastData, ForecastPanelData } from '@/types/forecasting-dashboard';
 import { formatPeso } from '@/lib/formatNumber';
 
 /**
@@ -77,6 +78,7 @@ interface HrDashboardData {
       total: number;
     };
     headcount_forecast?: ForecastPanelData;
+    attendance_forecast?: AttendanceForecastData;
     // REC-05 — present only for HR users with payroll.view.
     payroll_summary?: {
       latest_period: {
@@ -222,6 +224,16 @@ export default function HrDashboard() {
               unitLabel="employees"
               detailsHref="/hr/employees"
             />
+
+            {/* Row 6.5 — Attendance forecast (read-only composition from the payload —
+            rides the page poll, no separate fetch; absent when PanelGate strips it) */}
+            {panels.attendance_forecast && (
+              <AttendanceRiskPanel
+                data={panels.attendance_forecast}
+                isLoading={false}
+                isError={false}
+              />
+            )}
 
             {/* Row 7 — Payroll snapshot (visible only when payroll.view is granted) */}
             {panels.payroll_summary && <PayrollSummaryPanel data={panels.payroll_summary} />}

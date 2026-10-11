@@ -57,7 +57,7 @@ class DashboardRoleLayoutSeeder extends Seeder
             'hr_officer' => [
                 'hr.headcount', 'hr.on_leave_today', 'approvals.pending',
                 'hr.probation_alerts', 'payroll.upcoming', 'forecast.headcount',
-                'kpi.attendance_rate',
+                'kpi.attendance_rate', 'forecast.attendance',
             ],
             'purchasing_officer' => [
                 'purchasing.open_prs', 'purchasing.open_pos', 'purchasing.supplier_perf',

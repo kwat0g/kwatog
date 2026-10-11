@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\AssetWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\AttendanceWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\BudgetWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CapacityWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CashFlowWidgetAnalytics;
@@ -44,6 +45,7 @@ final class WidgetAnalyticsService
         private readonly ApprovalsWidgetAnalytics $approvals,
         private readonly CashFlowWidgetAnalytics $cashFlow,
         private readonly CapacityWidgetAnalytics $capacity,
+        private readonly AttendanceWidgetAnalytics $attendance,
     ) {}
 
     /**
@@ -92,7 +94,7 @@ final class WidgetAnalyticsService
     }
 
     /**
-     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics|CashFlowWidgetAnalytics|CapacityWidgetAnalytics>
+     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics|CashFlowWidgetAnalytics|CapacityWidgetAnalytics|AttendanceWidgetAnalytics>
       */
     private function providers(): array
     {
@@ -108,6 +110,7 @@ final class WidgetAnalyticsService
             $this->approvals,
             $this->cashFlow,
             $this->capacity,
+            $this->attendance,
         ];
     }
 }
