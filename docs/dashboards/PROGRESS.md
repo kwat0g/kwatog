@@ -322,6 +322,23 @@ grid they landed on resolved to empty.
 | Role defaults | `DashboardRoleLayoutSeeder` — new defaults for `sales_officer` + `customer_service_officer` (they had none); `impex_officer` gains the OTD reading and its shipments card | shipped |
 | New widgets | `logistics.shipments_in_transit` · `sales.open_orders` · `sales.price_requests` (scalar arms in `DashboardWidgetDataService`) | 68 widgets |
 | Tests | `RoleDashboardShell.test.tsx` (5) · `DashboardDispatchTest` provider extended to all 17 roles + maintenance shared-page case · `KpiVisibilityMatrixTest` +2 | **199 backend / 64 SPA** |
+| Drift guard | `scripts/check-dashboard-route-parity.mjs` + `npm run audit:dashboard-routes` — every `DashboardCatalog` entry must have a `<Route>` whose `PermissionGuard` names **the same** permission | **14/14** |
+
+**A gap this increment exposed, and closed.** The catalog docblock has always called the route guard
+"defence in depth" — but nothing checked the two agreed, and none of the existing guards could: the backend
+suite cannot read the SPA tree (the api container mounts only `api/`) and the SPA suite cannot read the PHP
+catalog. A disagreement costs a 403 on the page the server just dispatched the user to, silently. So the
+check lives at the one seam where both halves are visible — a repo-level script beside the other cross-stack
+audits (`audit:tokens`, `audit:rbac`) — and it matches a permission **per route block**, since a whole-file
+search would happily accept a guard that sits on a different route. Proven by mutation rather than asserted:
+swapping `logistics`'s guard to `dashboard.ppc.view` makes it exit **1** naming the entry, and restoring makes
+it exit 0 with the routes file byte-identical.
+
+**Still open, and deliberately not blind-edited:** `scripts/role-dashboard-audit.js` is a Playwright audit
+with a hard-coded nine-role list and their expected landings — the nine roles that had pages *before* this
+increment. It is incomplete rather than wrong (its assertions would still pass), and Chromium is not
+installed in this environment, so the list was left alone and recorded here: extend it to all seventeen when
+a browser is available. The static parity check above covers all fourteen dashboards without one.
 
 **The grants migration was round-tripped on dev, not just applied** (`up` → `migrate:rollback --path` →
 `up`), because "applies and reverses" is a claim about `down()` and only the rollback exercises it. Holder
