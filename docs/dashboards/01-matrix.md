@@ -386,11 +386,18 @@ role-name branch anywhere.
 
 ### D4. Open questions for the reviewer (stop point)
 
-1. G-P2-1: re-gate the three shared-slug widgets, or document the broad visibility?
-2. G-P2-2: grant `production.dashboard.view` to PPC, or re-gate the four production widgets?
+1. G-P2-1: re-gate the three shared-slug widgets, or document the broad visibility? — **OPEN**
+2. G-P2-2: grant `production.dashboard.view` to PPC, or re-gate the four production widgets? — **OPEN**
 3. G-P3-2: extend `MODULE_PERMISSIONS` to slug sets, or add new KPI definitions for OTD/attendance
-   audiences?
+   audiences? — **DECIDED 2026-10-11: slug sets.** `MODULE_PERMISSIONS` is now
+   `array<string, list<string>>` (any-one admits) and `dashboard_widgets.permission_any` carries the same
+   set on the tile side, so the scorecard and the widget cannot disagree. A new
+   `dashboard.company.view` slug (held by system_admin + vice_president) appears in every module's set,
+   which is what lets one grant admit all seven modules instead of handing the executive four whole
+   module dashboards. See `PROGRESS.md` "Phase 2 — A". Still open from this item: `impex_officer` and
+   `department_head` (OTD / attendance rate) need a surface that renders those KPIs, not a grant.
 4. G-D-1: confirm **one** executive page (`dashboard.company.view` → `/dashboard/company`) replacing the
-   `/dashboard/vp` proposal, and confirm the VP landing change (plant-manager → company).
+   `/dashboard/vp` proposal, and confirm the VP landing change (plant-manager → company) — **the slug is
+   decision 3's; the page + landing move are still OPEN** and are the next increment (B).
 5. Which of the five proposed new pages ship first inside the D3 order (client-facing
-   customer-service/sales, or internal logistics/maintenance)?
+   customer-service/sales, or internal logistics/maintenance)? — **OPEN**

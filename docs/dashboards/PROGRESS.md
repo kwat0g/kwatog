@@ -134,6 +134,37 @@ modules). `npm run build` as written fails on this host at `prepare-out-dir` —
 owned by `root` from an earlier container build, an environment permission issue unrelated to this
 diff; the same bundle builds clean to a writable `--outDir`.
 
+### Phase 2 — A: KPI gate map is now a slug set (shipped)
+
+Resolves `01-matrix.md` §D4 #3 ("extend `MODULE_PERMISSIONS` to slug sets, or add new KPI
+definitions") in favour of slug sets, and unblocks the company-overview shell.
+
+| Deliverable | Files | State |
+|---|---|---|
+| Gate map is a set | `KpiSnapshotService::MODULE_PERMISSIONS` → `array<string, list<string>>` + `::moduleGates()`; `userCanSeeModule()` admits ANY of the set | shipped |
+| Set-capable widget gate | `dashboard_widgets.permission_any` (jsonb, migration `0575_`, with an up/down backfill) · `DashboardLayoutService::canSeeWidget()` as the ONE rule, used by all three strip sites | shipped |
+| Company-wide read | `dashboard.company.view` (migration `2026_10_11_100000` + `RolePermissionSeeder`), held by **system_admin + vice_president** — decided 2026-10-11, locked by test | shipped |
+| Tests | `KpiVisibilityMatrixTest` (6: every module admitted to the company read, health strip fully readable, a no-gate role reads none, a module holder reads only its own module, every gate slug exists, holders are exactly the decided two) · `WidgetSeedIntegrityTest` +2 and patched (its leak check and its KPI gate check both had to learn `permission_any`, or they would have scored every `kpi.*` tile as ungated and stopped guarding them) | 192 passed / 967 assertions in `tests/Feature/Dashboard` |
+
+**Why the widget registry needed a column.** `dashboard_widgets.permission` held ONE slug and the scorecard
+held one per module; had only the scorecard become a set, a `kpi.*` tile and the page it links to would have
+disagreed about the same KPI. `permission_any` (any-of, wins over `permission`) is the same rule on both sides.
+
+**Membership rule, no role names:** the module's own dashboard slug, plus any page whose KPI strip actually
+renders that module's codes (`/dashboard/plant-manager` draws OEE + WO completion rate + first-pass yield, so it
+qualifies for `production` and `quality`), plus `dashboard.company.view`.
+
+**Measured on the running app** (`/dashboard/kpi/scorecard`, live HTTPS): vice_president **0 → 11 codes** (the
+executive health strip was 0 of 6 tiles, not 1 — the old map's values were module slugs and the VP held none of
+them); driver 0; qc_inspector 3, quality only; ppc_head 1, supply_chain only; production_manager 2 → 5, gaining
+the three quality codes their own landing page's strip already listed. `/dashboard/widgets` agrees: VP 0 → 11 KPI
+tiles, driver 0, qc 3.
+
+**Still open:** `impex_officer` and `department_head` remain unable to read OTD / attendance rate — they need a
+surface that renders those KPIs (proposed `/dashboard/logistics`) or a grant, and neither exists yet, so this is
+recorded rather than papered over with a grant that widens a whole module. G-P2-3 (strip code lists chosen per
+page vs gates per module: PPC still reads 1 of its 4 strip codes) is unchanged.
+
 ## Later phases — PENDING
 
 Awaiting mission phasing past Phase 2 (role pages, forecasting wiring, approval centre, DSS tiles).

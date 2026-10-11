@@ -12,6 +12,7 @@ function item(overrides: Partial<DashboardLayoutItem>): DashboardLayoutItem {
     description: null,
     module: 'platform',
     permission: null,
+    permission_any: null,
     render_kind: 'scalar',
     link_path: '/self-service',
     data: null,

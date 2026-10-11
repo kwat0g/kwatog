@@ -114,10 +114,16 @@ class DashboardWidgetSeeder extends Seeder
      * KpiStrip hard-coded onto the seven bespoke dashboard pages, so the five
      * roles that land on the generic dashboard could not see a single KPI.
      *
-     * Each row's permission is taken from KpiSnapshotService::MODULE_PERMISSIONS
-     * — the SAME boundary /dashboard/kpi/scorecard already enforces. A widget
-     * over a dataset is no less sensitive than the dataset (the rule the
-     * forecast.* widgets follow).
+     * Each row's gate is the module's slug SET from
+     * KpiSnapshotService::moduleGates — the SAME boundary
+     * /dashboard/kpi/scorecard already enforces. A widget over a dataset is no
+     * less sensitive than the dataset (the rule the forecast.* widgets follow).
+     *
+     * It is a set, not one slug, because a KPI's audience is genuinely several
+     * roles: the module's own dashboard holder and a company-wide reader. It
+     * travels in `permission_any` (the any-of column) with `permission` left
+     * null, so the tile and the scorecard it mirrors apply one rule instead of
+     * two that can disagree.
      *
      * Kept as an explicit list, not derived from `kpi_definitions` at seed
      * time: seeder order would then decide whether widgets exist at all.
@@ -149,19 +155,20 @@ class DashboardWidgetSeeder extends Seeder
     }
 
     /**
-     * @return array<int, array{key: string, name: string, module: string, permission: ?string, render_kind?: string, default_w?: int, default_h?: int, description?: string}>
+     * @return array<int, array{key: string, name: string, module: string, permission: ?string, permission_any: list<string>|null, render_kind?: string, default_w?: int, default_h?: int, description?: string}>
      */
     private function kpiWidgets(): array
     {
         return array_map(fn (array $kpi): array => [
-            'key'         => self::kpiWidgetKey($kpi['code']),
-            'name'        => $kpi['name'],
-            'module'      => $kpi['module'],
+            'key'            => self::kpiWidgetKey($kpi['code']),
+            'name'           => $kpi['name'],
+            'module'         => $kpi['module'],
             // A module with no entry in the map is ungated on the scorecard;
             // keep the widget ungated too rather than inventing a stricter
             // rule the scorecard does not apply.
-            'permission'  => KpiSnapshotService::MODULE_PERMISSIONS[$kpi['module']] ?? null,
-            'render_kind' => 'trend',
+            'permission'     => null,
+            'permission_any' => KpiSnapshotService::moduleGates($kpi['module']),
+            'render_kind'    => 'trend',
             // A KPI sparkline reads fine at a third of the row; the 8-column
             // default for `trend` is for a 14-day production series.
             'default_w'   => 4,
@@ -309,8 +316,9 @@ class DashboardWidgetSeeder extends Seeder
     }
 
     /**
-     * Owning role dashboard per KPI module, mirroring
-     * KpiSnapshotService::MODULE_PERMISSIONS (the grant that gates the KPI).
+     * Owning role dashboard per KPI module, mirroring the primary slug in
+     * KpiSnapshotService::MODULE_PERMISSIONS (the module's own dashboard — the
+     * company-wide reader's link is the company page, not a module dashboard).
      */
     private const KPI_DASHBOARD_BY_MODULE = [
         'production'   => '/dashboard/plant-manager',
@@ -341,11 +349,12 @@ class DashboardWidgetSeeder extends Seeder
             DashboardWidget::updateOrCreate(
                 ['key' => $w['key']],
                 [
-                    'name'        => $w['name'],
-                    'description' => $w['description'] ?? null,
-                    'module'      => $w['module'],
-                    'permission'  => $w['permission'],
-                    'render_kind' => $kind,
+                    'name'           => $w['name'],
+                    'description'    => $w['description'] ?? null,
+                    'module'         => $w['module'],
+                    'permission'     => $w['permission'],
+                    'permission_any' => $w['permission_any'] ?? null,
+                    'render_kind'    => $kind,
                     'link_path'   => self::linkFor($w['key']),
                     'default_w'   => $w['default_w'] ?? self::WIDTH_BY_KIND[$kind] ?? 4,
                     'default_h'   => $w['default_h'] ?? 4,

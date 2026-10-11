@@ -67,7 +67,13 @@ export interface DashboardWidgetMeta {
  name: string;
  description: string | null;
  module: string;
+ /**
+  * A widget's gate is EITHER one slug or any-of a set. `permission_any` wins
+  * when populated. The strip is server-side, so the SPA never evaluates it —
+  * these fields exist so the picker and tests can explain why a tile is there.
+  */
  permission: string | null;
+ permission_any: string[] | null;
  render_kind: WidgetRenderKind;
  /** Where the tile's "Open →" goes. Server-owned; null when there is no deeper page. */
  link_path: string | null;
@@ -80,7 +86,9 @@ export interface DashboardLayoutItem {
  name: string;
  description: string | null;
  module: string;
+ /** See {@link DashboardWidgetMeta.permission_any} — the set wins when present. */
  permission: string | null;
+ permission_any: string[] | null;
  render_kind: WidgetRenderKind;
  /**
   * Where the tile's "Open →" goes, from `dashboard_widgets.link_path`.

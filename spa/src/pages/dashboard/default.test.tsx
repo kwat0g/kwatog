@@ -14,6 +14,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 it('warns when refreshing widget values fails and retries without hiding the layout', async () => {
   vi.mocked(dashboardLayoutApi.layout).mockResolvedValue({ version: 'v1', items: [{
     key: 'stock', name: 'Stock', description: null, module: 'inventory', permission: null,
+    permission_any: null,
     render_kind: 'scalar', link_path: null, data: null, x: 0, y: 0, w: 1, h: 1, source: 'role',
   }] });
   vi.mocked(dashboardLayoutApi.data).mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValue({});

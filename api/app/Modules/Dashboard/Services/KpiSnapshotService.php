@@ -27,26 +27,52 @@ class KpiSnapshotService
     ) {}
 
     /**
-     * The read boundary for each KPI module.
+     * The read boundary for each KPI module: holding ANY ONE of the listed
+     * slugs admits the reader.
      *
      * Public because it is the ONE definition of who may see a KPI, and the
-     * widget registry has to gate `kpi.*` tiles on exactly the same grant the
-     * scorecard endpoint enforces (DashboardWidgetSeeder::kpiWidgets). A second
-     * copy would let a tile and the page it links to disagree.
+     * widget registry has to gate `kpi.*` tiles on exactly the same set the
+     * scorecard endpoint enforces (`DashboardWidgetSeeder::kpiWidgets`). A
+     * second copy would let a tile and the page it links to disagree.
      *
      * A module absent from this map is ungated on the scorecard.
      *
-     * @var array<string, string>
+     * Membership rule, applied without naming a role: the module's own
+     * dashboard slug, plus any other page whose KPI strip actually renders that
+     * module's codes (`/dashboard/plant-manager` draws OEE, WO completion rate
+     * and first-pass yield, so it qualifies for `production` and `quality`),
+     * plus `dashboard.company.view` — a company-wide read is by definition a
+     * read of every module's aggregates. That last entry is why the map is a
+     * set: the executive overview needed one grant that admits all seven
+     * modules instead of being handed four whole module dashboards
+     * (DSS 01-matrix §D4 #3 / G-P3-2).
+     *
+     * @var array<string, list<string>>
      */
     public const MODULE_PERMISSIONS = [
-        'production' => 'production.dashboard.view',
-        'quality' => 'dashboard.quality.view',
-        'supply_chain' => 'dashboard.ppc.view',
-        'purchasing' => 'dashboard.purchasing.view',
-        'attendance' => 'dashboard.hr.view',
-        'accounting' => 'accounting.dashboard.view',
-        'inventory' => 'dashboard.warehouse.view',
+        'production' => ['production.dashboard.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
+        'quality' => ['dashboard.quality.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
+        'supply_chain' => ['dashboard.ppc.view', 'dashboard.company.view'],
+        'purchasing' => ['dashboard.purchasing.view', 'dashboard.company.view'],
+        'attendance' => ['dashboard.hr.view', 'dashboard.company.view'],
+        'accounting' => ['accounting.dashboard.view', 'dashboard.company.view'],
+        'inventory' => ['dashboard.warehouse.view', 'dashboard.company.view'],
     ];
+
+    /**
+     * The slugs that admit a reader to one module's KPIs, or null when the
+     * module is ungated.
+     *
+     * The registry reads this rather than the const so a `kpi.*` widget and the
+     * scorecard cannot drift, and so the ungated case (null) is answered in one
+     * place instead of by an `?? null` at each call site.
+     *
+     * @return list<string>|null
+     */
+    public static function moduleGates(string $module): ?array
+    {
+        return self::MODULE_PERMISSIONS[$module] ?? null;
+    }
 
     /**
      * Compute every active definition while preserving per-definition
@@ -261,12 +287,19 @@ class KpiSnapshotService
 
     private function userCanSeeModule(Authenticatable $user, string $module): bool
     {
-        $permission = self::MODULE_PERMISSIONS[$module] ?? null;
-        if ($permission === null) {
+        $gates = self::moduleGates($module);
+
+        if ($gates === null) {
             return true;
         }
 
-        return $user->can($permission);
+        foreach ($gates as $slug) {
+            if ($user->hasPermission($slug)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function determineTrend(float $actual, ?string $previous): KpiTrend

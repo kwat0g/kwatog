@@ -440,6 +440,17 @@ class RolePermissionSeeder extends Seeder
                 // auth-only (Dashboard/routes.php). The SPA gates the Reset
                 // button on this slug (pages/dashboard/default.tsx).
                 ['slug' => 'dashboard.layout.reset',          'name' => 'Reset Own Dashboard Layout'],
+                // Phase 2 — the company-overview read. One slug meaning "may
+                // read company-wide aggregates", and the ONLY gate that appears
+                // in every module's KPI set (KpiSnapshotService::moduleGates),
+                // so an executive reads company KPIs without being handed each
+                // module's dashboard. Without it the executive page's health
+                // strip was empty — 0 of its 6 tiles, since the VP held no
+                // module dashboard slug at all (01-matrix §D4 #3 / G-P3-2).
+                // Held by system_admin + vice_president: decided 2026-10-11 and
+                // locked by KpiVisibilityMatrixTest, so widening it is a
+                // deliberate act rather than a drive-by grant.
+                ['slug' => 'dashboard.company.view',        'name' => 'View Company Overview Dashboard'],
             ],
             'platform' => [
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
@@ -661,6 +672,11 @@ class RolePermissionSeeder extends Seeder
                         'crm.view',
                         'crm.complaints.view',
                         'dashboard.plant_manager.view',
+                        // 2026-10-11 — company-wide read. The executive page and
+                        // every module's KPI set answer to this one slug, which
+                        // is why the VP no longer needs the four module
+                        // dashboards to see company KPIs.
+                        'dashboard.company.view',
                         'dashboard.view_bottlenecks',
                         'search.global',
                         'notifications.preferences.manage',

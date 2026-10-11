@@ -20,9 +20,9 @@ use Illuminate\Support\Facades\DB;
  *   2. Role default       (rows where owner_type='role', owner_id=$user->role_id)
  *   3. Empty fallback
  *
- * Widgets the user can't see (their `permission` is missing from the
- * effective set) are stripped at render time so a leaky default doesn't
- * surface a forbidden widget.
+ * Widgets the user can't see (their gate is missing from the effective set) are
+ * stripped at render time so a leaky default doesn't surface a forbidden
+ * widget.
  */
 class DashboardLayoutService
 {
@@ -31,7 +31,36 @@ class DashboardLayoutService
     ) {}
 
     /**
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
+     * The ONE widget visibility rule — used by the layout, the picker and the
+     * rich payload so none of them can widen or narrow access on its own.
+     *
+     * A widget's gate is either a single slug (`permission`, where null means
+     * ungated) or any-of a set (`permission_any`). The set wins when present,
+     * which is what lets a `kpi.*` tile admit both the module's own dashboard
+     * holder and a company-wide reader — the same any-of rule
+     * `KpiSnapshotService::userCanSeeModule` applies to the scorecard those
+     * tiles mirror. Before this, a tile and the page it links to could disagree
+     * about one KPI.
+     */
+    private function canSeeWidget(DashboardWidget $widget, User $user): bool
+    {
+        $anyOf = $widget->permission_any;
+
+        if (is_array($anyOf) && $anyOf !== []) {
+            foreach ($anyOf as $slug) {
+                if (is_string($slug) && $user->hasPermission($slug)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return $widget->permission === null || $user->hasPermission($widget->permission);
+    }
+
+    /**
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string, permission_any: list<string>|null, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
      */
     public function getEffectiveLayout(User $user): array
     {
@@ -167,9 +196,7 @@ class DashboardLayoutService
 
             $allowed = DashboardWidget::query()
                 ->get()
-                ->filter(fn (DashboardWidget $widget): bool =>
-                    $widget->permission === null || $user->hasPermission($widget->permission)
-                )
+                ->filter(fn (DashboardWidget $widget): bool => $this->canSeeWidget($widget, $user))
                 ->keyBy('key');
             $now = now();
             $rows = [];
@@ -240,7 +267,7 @@ class DashboardLayoutService
     }
 
     /**
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string, render_kind: string, link_path: ?string, default_w: int, default_h: int}>
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string, permission_any: list<string>|null, render_kind: string, link_path: ?string, default_w: int, default_h: int}>
      */
     public function listAvailableWidgets(User $user): array
     {
@@ -248,19 +275,18 @@ class DashboardLayoutService
             ->orderBy('module')
             ->orderBy('key')
             ->get()
-            ->filter(fn (DashboardWidget $w) =>
-                $w->permission === null || $user->hasPermission($w->permission)
-            )
+            ->filter(fn (DashboardWidget $w): bool => $this->canSeeWidget($w, $user))
             ->map(fn (DashboardWidget $w) => [
-                'key'         => $w->key,
-                'name'        => $w->name,
-                'description' => $w->description,
-                'module'      => $w->module,
-                'permission'  => $w->permission,
-                'render_kind' => $w->render_kind->value,
-                'link_path'   => $w->link_path,
-                'default_w'   => (int) $w->default_w,
-                'default_h'   => (int) $w->default_h,
+                'key'            => $w->key,
+                'name'           => $w->name,
+                'description'    => $w->description,
+                'module'         => $w->module,
+                'permission'     => $w->permission,
+                'permission_any' => $w->permission_any,
+                'render_kind'    => $w->render_kind->value,
+                'link_path'      => $w->link_path,
+                'default_w'      => (int) $w->default_w,
+                'default_h'      => (int) $w->default_h,
             ])
             ->values()
             ->all();
@@ -272,7 +298,7 @@ class DashboardLayoutService
      * the exact same visibility boundary.
      *
      * @param Collection<int, DashboardLayout> $layout
-     * @return array<int, array{key: string, name: string, description: ?string, module: string, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
+     * @return array<int, array{key: string, name: string, description: ?string, module: string, permission: ?string, permission_any: list<string>|null, render_kind: string, link_path: ?string, x: int, y: int, w: int, h: int, source: string}>
      */
     private function hydrateVisibleLayout(User $user, Collection $layout, string $source): array
     {
@@ -289,17 +315,18 @@ class DashboardLayoutService
         foreach ($layout as $row) {
             /** @var DashboardWidget|null $widget */
             $widget = $widgetMap->get($row->widget_key);
-            if (! $widget || ($widget->permission !== null && ! $user->hasPermission($widget->permission))) {
+            if (! $widget || ! $this->canSeeWidget($widget, $user)) {
                 continue;
             }
 
             $rows[] = [
-                'key'         => $widget->key,
-                'name'        => $widget->name,
-                'description' => $widget->description,
-                'module'      => $widget->module,
-                'permission'  => $widget->permission,
-                'render_kind' => $widget->render_kind->value,
+                'key'            => $widget->key,
+                'name'           => $widget->name,
+                'description'    => $widget->description,
+                'module'         => $widget->module,
+                'permission'     => $widget->permission,
+                'permission_any' => $widget->permission_any,
+                'render_kind'    => $widget->render_kind->value,
                 // The widget's own "Open →" target. Previously a hard-coded map
                 // in the SPA with nothing binding it to this table.
                 'link_path'   => $widget->link_path,

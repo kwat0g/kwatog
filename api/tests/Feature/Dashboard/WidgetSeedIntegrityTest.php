@@ -148,6 +148,12 @@ class WidgetSeedIntegrityTest extends TestCase
         $this->seed(DashboardRoleLayoutSeeder::class);
 
         $permissionByKey = DashboardWidget::query()->pluck('permission', 'key');
+        // A widget's gate is EITHER one slug or any-of a set, so a leak check
+        // that only reads `permission` would score every `kpi.*` tile as
+        // ungated and quietly stop guarding them.
+        $anyByKey = DashboardWidget::query()
+            ->get()
+            ->mapWithKeys(fn (DashboardWidget $w): array => [$w->key => $w->permission_any ?? []]);
         $leaks = [];
 
         foreach (Role::query()->get() as $role) {
@@ -162,12 +168,24 @@ class WidgetSeedIntegrityTest extends TestCase
                 ->pluck('widget_key');
 
             foreach ($keys as $key) {
-                $needed = $permissionByKey[$key] ?? null;
-                if ($needed !== null && ! in_array($needed, $held, true)) {
-                    $leaks[] = "{$role->slug} → {$key} (needs {$needed})";
-                }
                 if (! $permissionByKey->has($key)) {
                     $leaks[] = "{$role->slug} → {$key} (no such widget)";
+                    continue;
+                }
+
+                $anyOf = $anyByKey[$key] ?? [];
+
+                if ($anyOf !== []) {
+                    if (array_intersect($anyOf, $held) === []) {
+                        $leaks[] = "{$role->slug} → {$key} (needs any of ".implode(', ', $anyOf).')';
+                    }
+
+                    continue;
+                }
+
+                $needed = $permissionByKey[$key];
+                if ($needed !== null && ! in_array($needed, $held, true)) {
+                    $leaks[] = "{$role->slug} → {$key} (needs {$needed})";
                 }
             }
         }
@@ -220,10 +238,10 @@ class WidgetSeedIntegrityTest extends TestCase
     }
 
     /**
-     * A KPI tile must be gated by exactly the grant its own scorecard enforces
-     * (KpiSnapshotService::getScorecard → ::userCanSeeModule). A looser
-     * permission here would publish a KPI on a dashboard that the page it links
-     * to then refuses to show.
+     * A KPI tile must be gated by exactly the grant set its own scorecard
+     * enforces (KpiSnapshotService::getScorecard → ::userCanSeeModule). A looser
+     * gate here would publish a KPI on a dashboard that the page it links to
+     * then refuses to show.
      */
     public function test_kpi_widgets_reuse_the_scorecard_permission(): void
     {
@@ -233,10 +251,40 @@ class WidgetSeedIntegrityTest extends TestCase
                 ->firstOrFail();
 
             $this->assertSame(
-                KpiSnapshotService::MODULE_PERMISSIONS[$kpi['module']] ?? null,
-                $widget->permission,
+                KpiSnapshotService::moduleGates($kpi['module']),
+                $widget->permission_any,
                 "kpi widget {$widget->key} does not match the scorecard boundary",
             );
+            // The set IS the gate. A single slug left alongside it would be a
+            // second rule that can disagree with the scorecard.
+            $this->assertNull($widget->permission);
         }
+    }
+
+    /**
+     * A gate naming a slug no role can hold hides its widget from every viewer
+     * forever: the row is seeded, the SPA registry knows it, the picker offers
+     * it, and it never renders. Silent, so it needs an assertion rather than a
+     * reader noticing.
+     */
+    public function test_every_widget_gate_slug_exists_in_the_permission_catalog(): void
+    {
+        $catalog = DB::table('permissions')->pluck('slug')->all();
+        $missing = [];
+
+        foreach (DashboardWidget::query()->get() as $widget) {
+            $anyOf = $widget->permission_any ?? [];
+            $slugs = $anyOf !== []
+                ? $anyOf
+                : ($widget->permission === null ? [] : [$widget->permission]);
+
+            foreach ($slugs as $slug) {
+                if (! in_array($slug, $catalog, true)) {
+                    $missing[] = "{$widget->key} → {$slug}";
+                }
+            }
+        }
+
+        $this->assertSame([], $missing, "widget gates naming unknown permissions:\n".implode("\n", $missing));
     }
 }
