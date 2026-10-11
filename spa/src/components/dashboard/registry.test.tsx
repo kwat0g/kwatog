@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
@@ -184,5 +184,113 @@ describe('LiveDashboardWidget', () => {
     } finally {
       warning.mockRestore();
     }
+  });
+
+  /**
+   * Task 2 — the approvals tile is a link-out table, not a scalar. Linked rows
+   * navigate to the entity page; overdue rows count down past the SLA.
+   */
+  function approvalsItem() {
+    return item({
+      key: 'approvals.pending',
+      render_kind: 'table',
+      link_path: '/approvals',
+      data: {
+        columns: [
+          { key: 'document', label: 'Document' },
+          { key: 'type', label: 'Type' },
+          { key: 'waiting_h', label: 'Waiting', align: 'right', numeric: true },
+        ],
+        rows: [
+          {
+            document: 'PR-202604-0015',
+            type: 'pr',
+            type_label: 'Purchase requests',
+            waiting_h: 50,
+            overdue_hours: 26,
+            link: '/purchasing/purchase-requests/abc',
+            delegation_badge: null,
+          },
+          {
+            document: 'LR-202604-0045',
+            type: 'leave',
+            type_label: 'Leave',
+            waiting_h: 5,
+            overdue_hours: 0,
+            link: '/hr/leaves/def',
+            delegation_badge: null,
+          },
+        ],
+        total_count: 2,
+        sla_hours: 24,
+      },
+    });
+  }
+
+  it('renders the approvals tile as a Document|Type|Waiting link-out table', () => {
+    wrap(<LiveDashboardWidget widget={approvalsItem()} loading={false} />);
+
+    expect(screen.getByText('Document')).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'PR-202604-0015' })).toHaveAttribute(
+      'href',
+      '/purchasing/purchase-requests/abc',
+    );
+    expect(screen.getByText(/overdue 26h/)).toBeInTheDocument();
+    expect(screen.getByText(/19h left/)).toBeInTheDocument();
+  });
+
+  /**
+   * A delegation outside the caller's module row scope renders as a badge,
+   * never a link — the board is read-only and there is no way in.
+   */
+  it('renders a Restricted approvals row as a badge without a link', () => {
+    wrap(
+      <LiveDashboardWidget
+        widget={item({
+          key: 'approvals.pending',
+          render_kind: 'table',
+          link_path: '/approvals',
+          data: {
+            columns: [
+              { key: 'document', label: 'Document' },
+              { key: 'type', label: 'Type' },
+              { key: 'waiting_h', label: 'Waiting', align: 'right', numeric: true },
+            ],
+            rows: [
+              {
+                document: 'Restricted',
+                type: 'pr',
+                type_label: 'Purchase requests',
+                waiting_h: 30,
+                overdue_hours: 6,
+                link: null,
+                delegation_badge: 'Delegated',
+              },
+            ],
+            total_count: 1,
+            sla_hours: 24,
+          },
+        })}
+        loading={false}
+      />,
+    );
+
+    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.getByText('Delegated')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Restricted' })).not.toBeInTheDocument();
+  });
+
+  it('filters the approvals tile client-side by type', () => {
+    wrap(<LiveDashboardWidget widget={approvalsItem()} loading={false} />);
+
+    expect(screen.getByText('PR-202604-0015')).toBeInTheDocument();
+    expect(screen.getByText('LR-202604-0045')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Leave/ }));
+
+    expect(screen.queryByText('PR-202604-0015')).not.toBeInTheDocument();
+    expect(screen.getByText('LR-202604-0045')).toBeInTheDocument();
   });
 });

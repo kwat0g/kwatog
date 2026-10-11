@@ -33,9 +33,14 @@ export interface WidgetTrendData {
 }
 
 export interface WidgetTableData {
- columns: Array<{ key: string; label: string; numeric?: boolean; align?: 'left' | 'center' | 'right' }>;
- rows: Array<Record<string, string | number | null>>;
- total_count: number;
+  columns: Array<{ key: string; label: string; numeric?: boolean; align?: 'left' | 'center' | 'right' }>;
+  rows: Array<Record<string, string | number | null>>;
+  total_count: number;
+  /**
+   * Only on `approvals.pending` (ApprovalsWidgetAnalytics): the SLA clock the
+   * `overdue_hours` column counts past, so the tile never hardcodes it.
+   */
+  sla_hours?: number;
 }
 
 export interface WidgetGaugeData {

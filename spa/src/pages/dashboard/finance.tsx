@@ -294,11 +294,11 @@ function PayrollPipelinePanel({
  { label: 'Disbursed', value: pipeline.disbursed, tone: 'success' },
  ];
  return (
- <Panel
- title="Payroll pipeline"
- meta={<PeriodNote days={historyDays} />}
- actions={<Link className="text-xs text-link hover:underline" to="/payroll/periods">Open approvals →</Link>}
- >
+  <Panel
+  title="Payroll pipeline"
+  meta={<PeriodNote days={historyDays} />}
+  actions={<span className="flex items-center gap-3"><Link className="text-xs text-link hover:underline" to="/payroll/periods">Open approvals →</Link><Link className="text-xs text-link hover:underline" to="/approvals">Board →</Link></span>}
+  >
  <div className="space-y-2">
  {stages.map((s) => (
  <div key={s.label} className="flex items-center justify-between text-sm">

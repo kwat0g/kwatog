@@ -125,11 +125,17 @@ class ApprovalsWidgetTest extends TestCase
         $this->assertSame(2, $data['total_count']);
         $this->assertSame(
             [$oldest->pr_number, $newest->pr_number],
-            array_column($data['rows'], 'number'),
+            array_column($data['rows'], 'document'),
             'the queue must lead with what has waited longest',
         );
-        $this->assertSame(72, $data['rows'][0]['waiting_hours']);
+        $this->assertSame(72, $data['rows'][0]['waiting_h']);
         $this->assertSame('pr', $data['rows'][0]['type']);
+        $this->assertSame(48, $data['rows'][0]['overdue_hours']);
+        $this->assertSame(
+            '/purchasing/purchase-requests/'.$oldest->hash_id,
+            $data['rows'][0]['link'],
+        );
+        $this->assertNull($data['rows'][0]['delegation_badge']);
     }
 
     /** Another role's queue is not this caller's work. */
@@ -144,7 +150,7 @@ class ApprovalsWidgetTest extends TestCase
         $data = $this->widgetRow()['data'];
 
         $this->assertSame(1, $data['total_count']);
-        $this->assertSame([$mine->pr_number], array_column($data['rows'], 'number'));
+        $this->assertSame([$mine->pr_number], array_column($data['rows'], 'document'));
     }
 
     /**

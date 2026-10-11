@@ -1,9 +1,12 @@
-import { Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { SparkLine } from '@/components/charts/SparkLine';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { Chip } from '@/components/ui/Chip';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { formatDate, formatTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { WidgetBreakdown } from './WidgetBreakdown';
@@ -101,21 +104,127 @@ function RichTrend({ points, delta, kind, target, status }: WidgetTrendData) {
 }
 
 function renderRichWidget(widget: DashboardLayoutItem): React.ReactNode | null {
- const data = widget.data as WidgetData | null;
- if (!data) return null;
+  const data = widget.data as WidgetData | null;
+  if (!data) return null;
 
- switch (widget.render_kind) {
- case 'breakdown':
- return <WidgetBreakdown {...(data as WidgetBreakdownData)} />;
- case 'trend':
- return <RichTrend {...(data as WidgetTrendData)} />;
- case 'table':
- return <WidgetTable {...(data as WidgetTableData)} />;
- case 'gauge':
- return <RichGauge {...(data as WidgetGaugeData)} />;
- default:
- return null;
- }
+  switch (widget.render_kind) {
+  case 'breakdown':
+  return <WidgetBreakdown {...(data as WidgetBreakdownData)} />;
+  case 'trend':
+  return <RichTrend {...(data as WidgetTrendData)} />;
+  case 'table':
+  // The approvals tile carries per-row links and delegation badges, which the
+  // generic WidgetTable cannot render — so it gets its own renderer. Read-only:
+  // rows navigate to the entity page or the board, act lives there.
+  if (widget.key === 'approvals.pending') {
+  return <ApprovalsPendingTable data={data as WidgetTableData} />;
+  }
+  return <WidgetTable {...(data as WidgetTableData)} />;
+  case 'gauge':
+  return <RichGauge {...(data as WidgetGaugeData)} />;
+  default:
+  return null;
+  }
+}
+
+/**
+ * The `approvals.pending` tile: the caller's top-8 queue as Document|Type|Waiting.
+ *
+ * Rows come from `ApprovalsWidgetAnalytics` via the board's row scope, so a
+ * Restricted row is a delegation outside the caller's module scope — badge, no
+ * link, no way in. Overdue rows count down past the approval SLA.
+ */
+function ApprovalsPendingTable({ data }: { data: WidgetTableData }) {
+  const navigate = useNavigate();
+  const rows = useMemo(
+    () =>
+      data.rows.map((raw) => ({
+        document: String(raw.document ?? '—'),
+        type: String(raw.type ?? ''),
+        typeLabel: raw.type_label != null && raw.type_label !== '' ? String(raw.type_label) : String(raw.type ?? ''),
+        waitingH: typeof raw.waiting_h === 'number' ? raw.waiting_h : Number(raw.waiting_h ?? 0),
+        overdueH: typeof raw.overdue_hours === 'number' ? raw.overdue_hours : Number(raw.overdue_hours ?? 0),
+        link: raw.link != null && raw.link !== '' ? String(raw.link) : null,
+        badge: raw.delegation_badge != null && raw.delegation_badge !== '' ? String(raw.delegation_badge) : null,
+      })),
+    [data.rows],
+  );
+  const slaHours = typeof data.sla_hours === 'number' ? data.sla_hours : null;
+
+  const types = useMemo(() => [...new Set(rows.map((r) => r.typeLabel))], [rows]);
+  const [filter, setFilter] = useState<string>('all');
+  const visible = filter === 'all' ? rows : rows.filter((r) => r.typeLabel === filter);
+
+  if (rows.length === 0) {
+    return <p className="text-xs text-muted">Nothing outstanding.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {types.length > 1 && (
+        <SegmentedControl
+          size="sm"
+          label="Approval type"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: 'All', count: rows.length },
+            ...types.map((t) => ({
+              value: t,
+              label: t,
+              count: rows.filter((r) => r.typeLabel === t).length,
+            })),
+          ]}
+        />
+      )}
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-subtle text-left">
+            <th scope="col" className="pb-1 font-medium text-muted">Document</th>
+            <th scope="col" className="pb-1 font-medium text-muted">Type</th>
+            <th scope="col" className="pb-1 font-medium text-muted text-right">Waiting</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-subtle">
+          {visible.map((row, index) => (
+            <tr
+              key={`${row.document}-${index}`}
+              onClick={row.link ? () => navigate(row.link as string) : undefined}
+              className={row.link ? 'cursor-pointer hover:bg-subtle transition-colors duration-fast' : undefined}
+            >
+              <td className="py-1.5 text-primary">
+                {row.link ? (
+                  <Link to={row.link} className="text-link hover:underline font-mono tabular-nums">
+                    {row.document}
+                  </Link>
+                ) : (
+                  <span className="font-mono tabular-nums">{row.document}</span>
+                )}
+                {row.badge && (
+                  <Chip variant="info" className="ml-1">{row.badge}</Chip>
+                )}
+              </td>
+              <td className="py-1.5 text-primary">{row.typeLabel}</td>
+              <td className="py-1.5 text-primary text-right font-mono tabular-nums">
+                {row.waitingH}h
+                {row.overdueH > 0 ? (
+                  <span className="text-danger-fg"> · overdue {row.overdueH}h</span>
+                ) : slaHours !== null ? (
+                  <span className="text-subtle"> · {slaHours - row.waitingH}h left</span>
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {data.total_count > rows.length && (
+        <p className="text-2xs text-subtle">
+          Showing {rows.length} of {data.total_count.toLocaleString()}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function LiveDashboardWidget({
