@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Forecasting\Services\ForecastingService;
+use App\Modules\Forecasting\Services\StockOutProjectionService;
 use App\Modules\Forecasting\Support\ForecastConfidence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +23,11 @@ use Illuminate\Support\Facades\Schema;
  */
 class ForecastingDashboardService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly StockOutProjectionService $stockOut,
+        private readonly ForecastingService $forecasting,
+    ) {}
     /* ───────────────────────────────────────────────────────────────
      * 1. HR — Headcount forecast
      * ─────────────────────────────────────────────────────────────── */
@@ -293,6 +299,55 @@ class ForecastingDashboardService
                 'unit' => 'pct',
                 'trend' => $trend,
             ],
+        ];
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * 4. Purchasing — Supplier-risk composition (Task 5)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Supplier risk as a COMPOSITION, not a new engine: stock-out rows from
+     * StockOutProjectionService plus the demand MAPE/bias from
+     * ForecastingService. Read-only by construction — a fixed key set with no
+     * override or mutate fields (override + MRP toggle stay on /forecasting).
+     *
+     * @return array{at_risk_count: int, critical_count: int, high_count: int, horizon_days: int, mape: float|null, bias: float|null, periods_evaluated: int, top_items: array<int, array{item_id: string, code: string, name: string, days_until_stockout: int|null, risk: string}>}
+     */
+    public function supplierRisk(?int $horizonDays = null): array
+    {
+        $rows = $this->stockOut->projectAll($horizonDays);
+        $atRisk = array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => $row['risk'] !== 'ok',
+        ));
+        $accuracy = $this->forecasting->accuracy(Carbon::now()->year);
+
+        $countRisk = static fn (string $risk): int => count(array_filter(
+            $atRisk,
+            static fn (array $row): bool => $row['risk'] === $risk,
+        ));
+
+        return [
+            'at_risk_count' => count($atRisk),
+            'critical_count' => $countRisk('critical'),
+            'high_count' => $countRisk('high'),
+            'horizon_days' => $horizonDays ?? $this->settings->requiredInt('inventory.stockout.default_horizon_days', 1),
+            'mape' => $accuracy['mape'],
+            'bias' => $accuracy['bias'],
+            'periods_evaluated' => $accuracy['periods_evaluated'],
+            // projectAll sorts worst-first, so the first five are the five
+            // most urgent. Item ids are HashIDs, safe to link from the SPA.
+            'top_items' => array_map(
+                static fn (array $row): array => [
+                    'item_id' => $row['item_id'],
+                    'code' => $row['code'],
+                    'name' => $row['name'],
+                    'days_until_stockout' => $row['days_until_stockout'],
+                    'risk' => $row['risk'],
+                ],
+                array_slice($atRisk, 0, 5),
+            ),
         ];
     }
 

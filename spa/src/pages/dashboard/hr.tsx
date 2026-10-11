@@ -220,6 +220,7 @@ export default function HrDashboard() {
               title="Headcount Forecast"
               formatValue={(v) => String(v)}
               unitLabel="employees"
+              detailsHref="/hr/employees"
             />
 
             {/* Row 7 — Payroll snapshot (visible only when payroll.view is granted) */}

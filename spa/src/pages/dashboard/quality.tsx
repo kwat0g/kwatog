@@ -380,15 +380,16 @@ export default function QcDashboard() {
  </Panel>
  </PanelRow>
 
- {/* ── Row 5: Defect Rate Forecast ── */}
- <ForecastPanel
- data={panels?.defect_rate_forecast}
- isLoading={false}
- isError={false}
- title={`Defect Rate Forecast (${panels?.defect_rate_forecast?.forecast.length ?? 0} months)`}
- formatValue={(v) => `${v.toFixed(1)}%`}
- unitLabel="%"
- />
+  {/* ── Row 5: Defect Rate Forecast ── */}
+  <ForecastPanel
+  data={panels?.defect_rate_forecast}
+  isLoading={false}
+  isError={false}
+  title={`Defect Rate Forecast (${panels?.defect_rate_forecast?.forecast.length ?? 0} months)`}
+  formatValue={(v) => `${v.toFixed(1)}%`}
+  unitLabel="%"
+  detailsHref="/quality/ncrs"
+  />
  </>
  );
  }}

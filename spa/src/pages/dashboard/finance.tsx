@@ -143,15 +143,16 @@ export default function FinanceDashboardPage() {
  </Panel>
  </PanelRow>
 
- {/* Row 5 — Revenue forecast */}
- <ForecastPanel
- data={data.revenue_forecast}
- isLoading={false}
- isError={false}
- title="Revenue Forecast (6 months)"
- formatValue={(v) => formatPeso(String(v))}
- unitLabel={data.revenue_forecast?.kpi?.unit}
- />
+  {/* Row 5 — Revenue forecast */}
+  <ForecastPanel
+  data={data.revenue_forecast}
+  isLoading={false}
+  isError={false}
+  title="Revenue Forecast (6 months)"
+  formatValue={(v) => formatPeso(String(v))}
+  unitLabel={data.revenue_forecast?.kpi?.unit}
+  detailsHref="/accounting/income-statement"
+  />
 
  {/* Row 6 — Top overdue customers. */}
  {data.top_overdue_customers && data.top_overdue_customers.length > 0 && (

@@ -90,6 +90,17 @@ export function DemandForecastPanel({
 
   const forecasts = data ?? [];
 
+  // Mean of the per-row confidence levels the forecasting engine already
+  // attaches. Display only — the panel stays read-only, no recompute here.
+  const confidences = forecasts
+    .map((f) => f.confidence_level)
+    .filter((c): c is number => typeof c === 'number' && Number.isFinite(c));
+  const avgConfidence =
+    confidences.length > 0
+      ? Math.round(confidences.reduce((sum, c) => sum + c, 0) / confidences.length)
+      : null;
+  const meta = `${forecasts.length} entries · ${year}${avgConfidence != null ? ` · ${avgConfidence}% avg conf` : ''}`;
+
   if (forecasts.length === 0) {
     if (hideWhenEmpty) return null;
     return (
@@ -125,7 +136,7 @@ export function DemandForecastPanel({
   const entries = Array.from(byProduct.values()).slice(0, maxRows);
 
   return (
-    <Panel title={title} meta={`${forecasts.length} entries · ${year}`} actions={refreshAction}>
+    <Panel title={title} meta={meta} actions={refreshAction}>
       <div className="space-y-3">
         {entries.map(({ product, forecasts: prods }) => {
           const totalQty = prods.reduce((s, f) => s + f.forecasted_quantity, 0);

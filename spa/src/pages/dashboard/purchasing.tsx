@@ -11,12 +11,13 @@ import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { usePermission } from '@/hooks/usePermission';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { PURCHASING_KPIS } from '@/lib/dashboardKpis';
@@ -58,14 +59,37 @@ interface UpcomingDelivery {
 }
 
 interface PurchasingDashboardData {
- kpis: Array<{ label: string; value: string; unit: string }>;
- panels: {
- pr_action_queue: PrActionItem[];
- po_pipeline: PoPipelineItem[];
- supplier_performance: SupplierScoreItem[];
- upcoming_deliveries: UpcomingDelivery[];
- delivery_horizon_days?: number;
- };
+  kpis: Array<{ label: string; value: string; unit: string }>;
+  panels: {
+  pr_action_queue: PrActionItem[];
+  po_pipeline: PoPipelineItem[];
+  supplier_performance: SupplierScoreItem[];
+  upcoming_deliveries: UpcomingDelivery[];
+  delivery_horizon_days?: number;
+  /**
+   * Supplier-risk composition (stock-out + demand MAPE). OPTIONAL: the server
+   * omits it without `forecasting.view` (PanelGate) — render what arrives.
+   */
+  supplier_risk?: SupplierRiskData;
+  };
+}
+
+/** Mirrors `ForecastingDashboardService::supplierRisk()` — read-only, no override keys. */
+interface SupplierRiskData {
+  at_risk_count: number;
+  critical_count: number;
+  high_count: number;
+  horizon_days: number;
+  mape: number | null;
+  bias: number | null;
+  periods_evaluated: number;
+  top_items: Array<{
+  item_id: string;
+  code: string;
+  name: string;
+  days_until_stockout: number | null;
+  risk: string;
+  }>;
 }
 
 /* ───────────────────────── Sub-panel components ───────────────────────── */
@@ -243,10 +267,100 @@ function UpcomingDeliveriesPanel({ items, horizonDays }: { items: UpcomingDelive
  );
 }
 
+/**
+ * Supplier Risk — read-only composition of the stock-out projection and the
+ * demand-forecast accuracy (MAPE/bias). Data rides the page payload; the worst
+ * five items link out, detail lives in the StockOutPanel below. No override
+ * inputs: override + MRP toggle stay on the /forecasting pages.
+ */
+function SupplierRiskPanel({ data }: { data: SupplierRiskData }) {
+  const outlookLink = (
+  <Link className="text-xs text-link hover:underline" to="/forecasting/stock-out">
+  Stock-out outlook →
+  </Link>
+  );
+
+  if (data.at_risk_count === 0) {
+  return (
+  <Panel
+  title="Supplier Risk"
+  meta={`${data.horizon_days}d horizon`}
+  actions={outlookLink}
+  >
+  <EmptyState
+  icon="check-circle"
+  title="No items at risk"
+  description={`No items projected to run out within ${data.horizon_days} days.`}
+  />
+  </Panel>
+  );
+  }
+
+  return (
+  <Panel
+  title="Supplier Risk"
+  meta={`${data.at_risk_count} at risk · ${data.horizon_days}d horizon`}
+  actions={
+  <span className="flex items-center gap-2">
+  {outlookLink}
+  <Link className="text-xs text-link hover:underline" to="/forecasting/accuracy">
+  Accuracy →
+  </Link>
+  </span>
+  }
+  >
+  <div className="flex flex-wrap items-center gap-2 text-sm">
+  <Chip variant="danger">
+  <span className="font-mono tabular-nums">{data.critical_count}</span>
+  {' '}critical
+  </Chip>
+  <Chip variant="warning">
+  <span className="font-mono tabular-nums">{data.high_count}</span>
+  {' '}high
+  </Chip>
+  <span className="ml-auto font-mono tabular-nums text-xs text-muted">
+  {data.mape != null && data.periods_evaluated > 0
+  ? `Demand MAPE ${data.mape.toFixed(1)}% · bias ${data.bias != null && data.bias > 0 ? '+' : ''}${data.bias?.toFixed(1) ?? '—'}% · ${data.periods_evaluated} periods`
+  : 'No reconciled accuracy yet'}
+  </span>
+  </div>
+  <ul className="mt-2 divide-y divide-subtle">
+  {data.top_items.map((item) => (
+  <li key={item.item_id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+  <Link
+  to={`/inventory/items/${item.item_id}`}
+  className="min-w-0 truncate font-mono text-xs text-link hover:underline"
+  aria-label={`View item ${item.code} - ${item.name}`}
+  >
+  {item.code}
+  <span className="ml-1 text-muted">{item.name}</span>
+  </Link>
+  <span className="flex shrink-0 items-center gap-2">
+  <span className="font-mono tabular-nums text-xs text-muted">
+  {item.days_until_stockout != null ? `${item.days_until_stockout}d left` : 'no demand signal'}
+  </span>
+  <Chip variant={SUPPLIER_RISK_VARIANT[item.risk] ?? 'neutral'}>{item.risk}</Chip>
+  </span>
+  </li>
+  ))}
+  </ul>
+  </Panel>
+  );
+}
+
+const SUPPLIER_RISK_VARIANT: Record<string, ChipVariant> = {
+  critical: 'danger',
+  high: 'warning',
+  medium: 'info',
+  low: 'neutral',
+  ok: 'success',
+};
+
 /* ───────────────────────── Page component ───────────────────────── */
 
 export default function PurchasingDashboard() {
- const q = useQuery({
+  const { can } = usePermission();
+  const q = useQuery({
  queryKey: ['dashboard', 'purchasing'],
  queryFn: () => dashboardsApi.purchasing<PurchasingDashboardData>(),
  refetchInterval: DASHBOARD_REFRESH_MS,
@@ -335,11 +449,18 @@ export default function PurchasingDashboard() {
  </Panel>
  </PanelRow>
 
- {/* ── Row 5: Forecasting ── */}
- <PanelRow>
- <StockOutPanel hideWhenEmpty />
- <DemandForecastPanel hideWhenEmpty />
- </PanelRow>
+  {/* ── Row 4.5: Supplier risk (read-only composition from the payload — rides
+  the page poll, no separate fetch; absent when PanelGate strips it) ── */}
+  {panels?.supplier_risk && <SupplierRiskPanel data={panels.supplier_risk} />}
+
+  {/* ── Row 5: Forecasting (consulted, not monitored — manual refresh only;
+  hidden without the forecasting read so a denied viewer gets no 403 tiles) ── */}
+  {can('forecasting.view') && (
+  <PanelRow>
+  <StockOutPanel hideWhenEmpty />
+  <DemandForecastPanel hideWhenEmpty />
+  </PanelRow>
+  )}
  </>
  );
  }}

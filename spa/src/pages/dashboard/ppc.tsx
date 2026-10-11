@@ -602,12 +602,16 @@ export default function PpcDashboard() {
  </Panel>
  </PanelRow>
 
- {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
- <PanelRow cols={3}>
- <DemandForecastPanel />
- <StockOutPanel />
- <ForecastAccuracyPanel />
- </PanelRow>
+  {/* ── Row 7: Demand Forecast + Stock-out Risk + Accuracy (consulted, not
+  monitored — manual refresh only; hidden without the forecasting read so a
+  permission-less viewer gets no 403 error tiles) ── */}
+  {can('forecasting.view') && (
+  <PanelRow cols={3}>
+  <DemandForecastPanel />
+  <StockOutPanel />
+  <ForecastAccuracyPanel />
+  </PanelRow>
+  )}
 
  {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
  {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}
