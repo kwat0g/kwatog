@@ -89,6 +89,11 @@ gaps → index migrations → finance authority pick.
 
 ## Phase 2 status — FOUNDATION SHIPPED (analytics layer + indexes + dictionary)
 
+**Reading the sub-sections below:** each one's test counts are what was measured **at that increment's
+commit**, not the running total — B says 192 backend because that is what `tests/Feature/Dashboard`
+reported when B shipped, C says 196, E says 199. Read them as a timeline. The current state of the tree is
+the HEAD commit's own verification block, not the highest number in this file.
+
 Branch `docs/dss-discovery-phase0`. Feature code this time (the mission's Phase 2 is a build phase);
 role pages and DSS tiles are still NOT built.
 
@@ -316,7 +321,14 @@ grid they landed on resolved to empty.
 | Pages | `spa/src/pages/dashboard/{logistics,maintenance,department,sales,customer-service}.tsx` | shipped |
 | Role defaults | `DashboardRoleLayoutSeeder` — new defaults for `sales_officer` + `customer_service_officer` (they had none); `impex_officer` gains the OTD reading and its shipments card | shipped |
 | New widgets | `logistics.shipments_in_transit` · `sales.open_orders` · `sales.price_requests` (scalar arms in `DashboardWidgetDataService`) | 68 widgets |
-| Tests | `RoleDashboardShell.test.tsx` (5) · `DashboardDispatchTest` provider extended to all 17 roles + maintenance shared-page case · `KpiVisibilityMatrixTest` +2 | **197 backend / 59 SPA** |
+| Tests | `RoleDashboardShell.test.tsx` (5) · `DashboardDispatchTest` provider extended to all 17 roles + maintenance shared-page case · `KpiVisibilityMatrixTest` +2 | **199 backend / 64 SPA** |
+
+**The grants migration was round-tripped on dev, not just applied** (`up` → `migrate:rollback --path` →
+`up`), because "applies and reverses" is a claim about `down()` and only the rollback exercises it. Holder
+counts per slug: after `up` 2·2·2·3·2 (maintenance has two roles plus the wildcard); after `down` **1 each**
+— the `system_admin` wildcard, which holds every permission independently of this migration — and after
+re-applying, the same 2·2·2·3·2. So `down` removes exactly the grants this migration added and leaves
+nothing behind.
 
 **G-P3-2 closed for impex.** `dashboard.logistics.view` was added to the supply_chain KPI gate SET, so the
 officer accountable for OTD can finally read it. That is the resolution the matrix specified — "a second
@@ -411,11 +423,17 @@ Remaining after E/F, from the docs and in their own order:
 ## Coverage checklist skeleton
 
 **Phase 1 status of this checklist:** every role, module area and approval type below has a *spec* in
-`01-matrix.md` (+ `M-p1/2/3`). Boxes track **built** coverage, which started in Phase 2 — the Roles list
-below is therefore ticked as of Phase 2 E, and the Module / Approval lists stay unchecked until each has a
-built surface rather than a spec. Ticking a role means it lands on a purpose-built dashboard, not that
-every item in its `M-p*.md` spec is done; the per-role gaps are recorded in those specs and in
-`FINDINGS.md`.
+`01-matrix.md` (+ `M-p1/2/3`). Boxes track **built** coverage, which started in Phase 2. Ticking a role
+means it lands on a purpose-built dashboard, not that every item in its `M-p*.md` spec is done; ticking a
+module means it has a built surface, not that every reading `B-modules-data.md` asked for exists. The
+per-role and per-module gaps are recorded in those specs and in `FINDINGS.md`.
+
+**The Approval-chains list stays unchecked on purpose, and it is not waiting on this mission.** Every box
+there is blocked by §D1 blocker 1 — board-blind card sourcing: `payroll` is a dead ledger kind and all 14
+custom single-step types write no `approval_records` rows, so a card for them has nothing to source. That
+is a per-type card-sourcing change in each owning module, tracked as F-001/F-002 and reachable from
+`/approvals`; the dashboards mission built the approvals *surface* (the top-8 SLA worklist on every role
+dashboard, Phase 2 D/T2) and correctly did not turn a missing ledger into a dashboard fix.
 
 ### Spec coverage delivered in Phase 1
 
@@ -452,26 +470,31 @@ answer. The five that had no page until Phase 2 E are marked with the increment 
 
 ### Modules / data areas (from B §1)
 
-- [ ] HR
-- [ ] Attendance
-- [ ] Leave
-- [ ] Payroll
-- [ ] Loans
-- [ ] Accounting (incl. budgeting)
-- [ ] Inventory
-- [ ] Purchasing
-- [ ] SupplyChain
-- [ ] Production
-- [ ] MRP
-- [ ] CRM
-- [ ] B2B
-- [ ] Forecasting
-- [ ] ReturnManagement
-- [ ] Assets
-- [ ] Quality
-- [ ] Maintenance
-- [ ] Dashboard (KPI/widgets/layout/action-center)
-- [ ] Auth/Admin (roles, overrides, audit, delegations)
+**19/20 as of 2026-10-11.** A tick means the module has a **built** surface (a dashboard, page or widget
+that renders it), named here so the tick is checkable rather than a claim; §C2 is the mapping this follows.
+Ticking a module does **not** mean every reading its `B-modules-data.md` verdict asked for exists — the
+sub-month KPI grain, historical snapshots and the per-module gaps stand as recorded.
+
+- [x] HR — `/dashboard/hr`, `/dashboard/department`
+- [x] Attendance — `/dashboard/hr`, `/dashboard/department` (team DTR), `/hr/attendance`
+- [x] Leave — `/dashboard/hr`, `/dashboard/department` (team leave), `/hr/leaves`
+- [x] Payroll — `/dashboard/hr` (pipeline), `/dashboard/finance`, `/payroll/periods`
+- [x] Loans — `loans.outstanding` widget (VP / finance / HR / PM / department_head) · `/hr/loans`
+- [x] Accounting (incl. budgeting) — `/dashboard/finance` + `budget.utilization` · `/budgeting/budget-vs-actual`
+- [x] Inventory — `/dashboard/warehouse` · `/inventory/stock-levels`
+- [x] Purchasing — `/dashboard/purchasing`, `/dashboard/finance`
+- [x] SupplyChain — `/dashboard/warehouse` (deliveries), `/dashboard/logistics` (shipments, OTD)
+- [x] Production — `/dashboard/plant-manager`, `/dashboard/ppc`, `/production/dashboard`, `/factory` PWA
+- [x] MRP — `/dashboard/ppc`, `/dashboard/plant-manager`, `/mrp/plans`
+- [x] CRM — `/dashboard/customer-service`, `/dashboard/sales`, `/dashboard/quality`, `/dashboard/plant-manager`
+- [ ] **B2B — deliberately not covered on internal dashboards.** The portal is a separate principal model (supplier/customer self-service); internal visibility is limited to supplier shipments feeding GRN and portal RMAs feeding returns (§C2 "not covered, with reason"). Left unchecked because that is the decision, not because the work is pending.
+- [x] Forecasting — 7 forecast panels across `/dashboard/{ppc,hr,finance,quality,plant-manager,purchasing}`
+- [x] ReturnManagement — `/dashboard/quality`, `/dashboard/purchasing`, `/dashboard/warehouse`, `/dashboard/customer-service`
+- [x] Assets — `assets.under_maintenance` widget only. **Partial by design**: §C2's proposed asset-disposal queue on the finance page is NOT built.
+- [x] Quality — `/dashboard/quality`, `/quality/dashboard`
+- [x] Maintenance — `/dashboard/maintenance` (shared page, Phase 2 E)
+- [x] Dashboard (KPI/widgets/layout/action-center) — `/dashboard/admin`, `/dashboard/default`, `/action-center`
+- [x] Auth/Admin (roles, overrides, audit, delegations) — `/dashboard/admin`, `/admin/operations-health`
 
 ### Approval chains (from C §1a ledger + §1b custom)
 
