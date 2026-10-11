@@ -12,6 +12,7 @@ import { HR_KPIS } from '@/lib/dashboardKpis';
 import { PeriodNote } from '@/components/dashboard/period';
 import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
+import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import type { ApiSuccess } from '@/types';
 import type { ForecastPanelData } from '@/types/forecasting-dashboard';
 import { formatPeso } from '@/lib/formatNumber';
@@ -97,7 +98,7 @@ export default function HrDashboard() {
     queryKey: ['dashboard', 'hr'],
     queryFn: (): Promise<HrDashboardData> =>
       client.get<ApiSuccess<HrDashboardData>>('/dashboards/hr').then((r) => r.data.data),
-    refetchInterval: 60_000,
+    refetchInterval: DASHBOARD_REFRESH_MS,
   });
 
   return (
@@ -106,6 +107,7 @@ export default function HrDashboard() {
       subtitle="Workforce, attendance, leave, and compliance overview."
       query={q}
       refreshingQueryKey={['dashboard', 'hr']}
+      header={<KpiStrip codes={HR_KPIS} compact />}
     >
       {({ kpis, panels }) => {
         /*
@@ -139,9 +141,6 @@ export default function HrDashboard() {
                 <StatCard key={kpi.label} label={kpi.label} value={kpi.value} helper={kpi.unit} />
               ))}
             </KpiGrid>
-
-            {/* KPI Scorecard strip */}
-            <KpiStrip codes={HR_KPIS} compact />
 
             {/* Row 2 — Attendance summary + pending my action */}
             <PanelRow>

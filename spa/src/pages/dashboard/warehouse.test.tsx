@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { dashboardsApi } from '@/api/dashboards';
 import WarehouseDashboard from './warehouse';
 
-vi.mock('@/api/dashboards', () => ({ dashboardsApi: { warehouse: vi.fn() } }));
+vi.mock('@/api/dashboards', () => ({ dashboardsApi: { warehouse: vi.fn() }, DASHBOARD_REFRESH_MS: 60_000 }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
 vi.mock('@/components/dashboard/KpiStrip', () => ({ KpiStrip: () => null }));
 

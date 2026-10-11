@@ -15,6 +15,7 @@ import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { LuRefreshCw } from '@/lib/icons';
 
 interface Props {
   /** Max rows to show. Default 8. */
@@ -36,16 +37,32 @@ export function DemandForecastPanel({
   hideWhenEmpty = false,
   year = new Date().getFullYear(),
 }: Props) {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['forecasting', 'demand', year, productId],
     queryFn: () => forecastingApi.list({ product_id: productId, year }),
-    refetchInterval: 120_000,
+    // Manual refresh only — forecasts are consulted, not monitored. Polling a
+    // heavy forecast endpoint on a timer hammers the API for numbers nobody
+    // watches tick (roles-dashboard polish: poll contract in api/dashboards).
     staleTime: 60_000,
   });
 
+  // Forecasts never poll, so every settled state carries an explicit Refresh.
+  const refreshAction = (
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={<LuRefreshCw size={14} />}
+      loading={isFetching}
+      onClick={() => refetch()}
+      aria-label="Refresh demand forecast"
+    >
+      Refresh
+    </Button>
+  );
+
   if (isLoading) {
     return (
-      <Panel title={title} meta="Refreshes every 2 min">
+      <Panel title={title} meta={String(year)}>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <SkeletonBlock key={i} className="h-10 w-full rounded-md" />
@@ -57,7 +74,7 @@ export function DemandForecastPanel({
 
   if (isError) {
     return (
-      <Panel title={title}>
+      <Panel title={title} meta={String(year)} actions={refreshAction}>
         <EmptyState
           icon="alert-circle"
           title="Failed to load forecasts"
@@ -76,7 +93,7 @@ export function DemandForecastPanel({
   if (forecasts.length === 0) {
     if (hideWhenEmpty) return null;
     return (
-      <Panel title={title} meta="Refreshes every 2 min">
+      <Panel title={title} meta={String(year)} actions={refreshAction}>
         <EmptyState
           icon="inbox"
           title="No forecasts yet"
@@ -108,7 +125,7 @@ export function DemandForecastPanel({
   const entries = Array.from(byProduct.values()).slice(0, maxRows);
 
   return (
-    <Panel title={title} meta={`${forecasts.length} entries · ${year}`}>
+    <Panel title={title} meta={`${forecasts.length} entries · ${year}`} actions={refreshAction}>
       <div className="space-y-3">
         {entries.map(({ product, forecasts: prods }) => {
           const totalQty = prods.reduce((s, f) => s + f.forecasted_quantity, 0);

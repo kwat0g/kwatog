@@ -12,7 +12,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { chainApi } from '@/api/chain';
 import type { ChainBottleneckGroup, ChainBottleneckRow, ChainBottlenecks } from '@/types/chain';
 import { StatCard } from '@/components/ui/StatCard';
@@ -489,25 +489,26 @@ export default function PpcDashboard() {
 
  const q = useQuery({
  queryKey: ['dashboard', 'ppc'],
- queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
- refetchInterval: 60_000,
- });
+  queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
+  refetchInterval: DASHBOARD_REFRESH_MS,
+  });
 
  const bottlenecks = useQuery({
  queryKey: ['chain-bottlenecks', 'ppc_head'],
  queryFn: (): Promise<ChainBottlenecks> => chainApi.bottlenecks('ppc_head'),
- enabled: can('dashboard.view_bottlenecks'),
- refetchInterval: 60_000,
- staleTime: 60_000,
- });
+  enabled: can('dashboard.view_bottlenecks'),
+  refetchInterval: DASHBOARD_REFRESH_MS,
+  staleTime: 60_000,
+  });
 
- return (
- <DashboardShell<PpcDashboardData>
- title="PPC Dashboard"
- subtitle="Live · refreshes every 60s"
- query={q}
- refreshingQueryKey={['dashboard', 'ppc']}
- >
+  return (
+  <DashboardShell<PpcDashboardData>
+  title="PPC Dashboard"
+  subtitle="Live · refreshes every 60s"
+  query={q}
+  refreshingQueryKey={['dashboard', 'ppc']}
+  header={<KpiStrip codes={PPC_KPIS} compact />}
+  >
  {({ kpis, panels }) => {
  const woStatusChartData =
  panels?.wo_status_breakdown?.map((i) => ({
@@ -532,12 +533,9 @@ export default function PpcDashboard() {
  return (
  <>
  {/* ── Row 1: KPIs ── */}
- <KpiRow kpis={kpis} />
+  <KpiRow kpis={kpis} />
 
-  {/* KPI Scorecard strip */}
-  <KpiStrip codes={PPC_KPIS} compact />
-
- {/* ── Row 2: Chain stages + Alerts ── */}
+  {/* ── Row 2: Chain stages + Alerts ── */}
  <PanelRow>
  {Array.isArray(panels?.chain_stages) && panels.chain_stages.length > 0 ? (
  <ChainStagePanel stages={panels.chain_stages} />

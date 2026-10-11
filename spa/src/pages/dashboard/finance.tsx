@@ -10,6 +10,7 @@ import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { PeriodNote } from '@/components/dashboard/period';
 import { financeDashboardApi } from '@/api/accounting/dashboard';
+import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
@@ -35,7 +36,7 @@ export default function FinanceDashboardPage() {
  const summary = useQuery({
  queryKey: ['dashboard', 'finance'],
  queryFn: () => financeDashboardApi.summary(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  type FinanceSummary = NonNullable<typeof summary.data>;
@@ -46,6 +47,7 @@ export default function FinanceDashboardPage() {
  subtitle="Liquidity, receivables, payables, payroll, and budget hygiene at a glance."
  query={summary}
  refreshingQueryKey={['dashboard', 'finance']}
+ header={<KpiStrip codes={FINANCE_KPIS} compact />}
  >
  {(data) => {
  /*
@@ -85,9 +87,6 @@ export default function FinanceDashboardPage() {
  <StatCard label="AP outstanding" value={formatPeso(data.ap_outstanding)} linkTo="/accounting/bills" />
  <StatCard label="Revenue (MTD)" value={formatPeso(data.revenue_mtd)} linkTo="/accounting/income-statement" />
  </KpiGrid>
-
-  {/* KPI Scorecard strip */}
-  <KpiStrip codes={FINANCE_KPIS} compact />
 
  {/* Finance controls formerly exposed as standalone navigation. */}
  {(data.current_accounting_period || data.pending_credit_notes) && (

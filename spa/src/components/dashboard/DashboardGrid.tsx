@@ -26,11 +26,17 @@ export function DashboardGridItem({
   height,
   children,
   className,
+  onRetry,
+  resetKeys,
 }: {
   width: number;
   height: number;
   children: ReactNode;
   className?: string;
+  /** Re-fires the owning query from the cell fallback. Omitted = reload fallback. */
+  onRetry?: () => void;
+  /** Clears a tripped cell when these change (fresh data arrived). */
+  resetKeys?: unknown[];
 }) {
   const safeWidth = Math.max(1, Math.min(12, Math.round(width)));
   const safeHeight = Math.max(4, Math.min(12, Math.round(height)));
@@ -42,7 +48,7 @@ export function DashboardGridItem({
           a widget that throws should cost the user that widget, not the whole
           dashboard. WidgetErrorBoundary existed for exactly this and was wired
           into one widget on one of eleven dashboards. */}
-      <WidgetErrorBoundary>{children}</WidgetErrorBoundary>
+      <WidgetErrorBoundary onRetry={onRetry} resetKeys={resetKeys}>{children}</WidgetErrorBoundary>
     </div>
   );
 }

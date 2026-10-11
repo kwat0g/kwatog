@@ -17,6 +17,7 @@ import { ADMIN_KPIS } from '@/lib/dashboardKpis';
 import { SparkLine } from '@/components/charts/SparkLine';
 import {
  dashboardsApi,
+ DASHBOARD_REFRESH_FAST_MS,
  type AdminDashboardData,
  type AdminSession,
  type AdminLockedAccount,
@@ -47,29 +48,28 @@ const kpiAccent: Record<KpiUnit, string> = {
 export default function AdminDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'admin'],
- queryFn: () => dashboardsApi.admin(),
- refetchInterval: 30_000,
- placeholderData: (prev) => prev,
- });
+  queryFn: () => dashboardsApi.admin(),
+  refetchInterval: DASHBOARD_REFRESH_FAST_MS,
+  placeholderData: (prev) => prev,
+  });
 
- return (
- <DashboardShell<AdminDashboardData>
- title="System Administrator"
- subtitle="Platform health, security events, and account monitoring."
- query={q}
- refreshingQueryKey={['dashboard', 'admin']}
- >
-  {({ kpis, panels }) => (
-  <>
-   {/* Shared KPI strip slot. ADMIN_KPIS is intentionally empty — the admin
-       surface gets the Compute KPIs panel instead (Task 3) — so this renders
-       nothing, but every dashboard mounts the strip from the same place. */}
-   <KpiStrip codes={ADMIN_KPIS} compact />
-
-   {/* KPI compute lives here only, now the standalone scorecard page is gone.
-       Route-guarded on dashboard.admin.view; the panel double-checks so the
-       button never renders for a role that reached this shell without it. */}
-   <ComputeKpisPanel />
+  return (
+  <DashboardShell<AdminDashboardData>
+  title="System Administrator"
+  subtitle="Platform health, security events, and account monitoring."
+  query={q}
+  refreshingQueryKey={['dashboard', 'admin']}
+  // Shared KPI strip slot. ADMIN_KPIS is intentionally empty — the admin
+  // surface gets the Compute KPIs panel instead — so this renders nothing,
+  // but every dashboard mounts the strip from the same place.
+  header={<KpiStrip codes={ADMIN_KPIS} compact />}
+  >
+   {({ kpis, panels }) => (
+   <>
+    {/* KPI compute lives here only, now the standalone scorecard page is gone.
+        Route-guarded on dashboard.admin.view; the panel double-checks so the
+        button never renders for a role that reached this shell without it. */}
+    <ComputeKpisPanel />
 
   {/* Row 1 — 4 system KPI stat cards */}
  <KpiGrid count={kpis.length}>

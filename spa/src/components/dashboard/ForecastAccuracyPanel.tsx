@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { LuRefreshCw } from '@/lib/icons';
 
 interface Props {
  year?: number;
@@ -16,27 +17,47 @@ function percentage(value: number | null | undefined, signed = false): string {
 }
 
 export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props) {
- const query = useQuery({
- queryKey: ['forecasting', 'accuracy', 'summary', year],
- queryFn: () => forecastingApi.accuracySummary(year),
- staleTime: 5 * 60_000,
- refetchInterval: 10 * 60_000,
- });
- const policyQuery = useQuery({
- queryKey: ['forecasting', 'options'],
- queryFn: () => forecastingApi.options(),
- staleTime: 300_000,
- });
+  const query = useQuery({
+  queryKey: ['forecasting', 'accuracy', 'summary', year],
+  queryFn: () => forecastingApi.accuracySummary(year),
+  // Manual refresh only — consulted, not monitored (poll contract in api/dashboards).
+  staleTime: 5 * 60_000,
+  });
+  const policyQuery = useQuery({
+  queryKey: ['forecasting', 'options'],
+  queryFn: () => forecastingApi.options(),
+  staleTime: 300_000,
+  });
 
- const detailsLink = (
- <Link to="/forecasting/accuracy" className="text-xs text-accent hover:underline">
- Details →
- </Link>
- );
+  const detailsLink = (
+  <Link to="/forecasting/accuracy" className="text-xs text-accent hover:underline">
+  Details →
+  </Link>
+  );
+
+  const refreshAction = (
+  <Button
+  variant="ghost"
+  size="sm"
+  icon={<LuRefreshCw size={14} />}
+  loading={query.isFetching || policyQuery.isFetching}
+  onClick={() => { void query.refetch(); void policyQuery.refetch(); }}
+  aria-label="Refresh forecast accuracy"
+  >
+  Refresh
+  </Button>
+  );
+
+  const panelActions = (
+  <span className="flex items-center gap-2">
+    {refreshAction}
+    {detailsLink}
+  </span>
+  );
 
  if (query.isLoading) {
  return (
- <Panel title="Forecast Accuracy" meta={String(year)} actions={detailsLink}>
+ <Panel title="Forecast Accuracy" meta={String(year)} actions={panelActions}>
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
  {[1, 2, 3].map((item) => <SkeletonBlock key={item} className="h-14 rounded-md" />)}
  </div>
@@ -46,7 +67,7 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
 
  if (query.isError) {
  return (
- <Panel title="Forecast Accuracy" meta={String(year)} actions={detailsLink}>
+ <Panel title="Forecast Accuracy" meta={String(year)} actions={panelActions}>
  <EmptyState
  size="compact"
  icon="alert-circle"
@@ -60,7 +81,7 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
  const accuracy = query.data;
  if (!accuracy || accuracy.periods_evaluated === 0) {
  return (
- <Panel title="Forecast Accuracy" meta={String(year)} actions={detailsLink}>
+ <Panel title="Forecast Accuracy" meta={String(year)} actions={panelActions}>
  <EmptyState
  size="compact"
  icon="bar-chart"
@@ -82,7 +103,7 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
  : 'Needs review';
 
  return (
- <Panel title="Forecast Accuracy" meta={String(year)} actions={detailsLink}>
+ <Panel title="Forecast Accuracy" meta={String(year)} actions={panelActions}>
  <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
  <div className="rounded-md bg-subtle px-3 py-2">
  <dt className="text-2xs uppercase tracking-wide text-muted">MAPE</dt>

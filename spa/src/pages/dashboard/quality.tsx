@@ -7,7 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -299,7 +299,7 @@ export default function QcDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'quality'],
  queryFn: () => dashboardsApi.quality<QualityDashboardData>(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
@@ -308,6 +308,7 @@ export default function QcDashboard() {
  subtitle="Live · refreshes every 60s"
  query={q}
  refreshingQueryKey={['dashboard', 'quality']}
+ header={<KpiStrip codes={QC_KPIS} compact />}
  >
  {({ kpis, panels, display_policy }) => {
  const stageCounts: Record<string, number> = {};
@@ -339,9 +340,6 @@ export default function QcDashboard() {
  />
  ))}
  </KpiGrid>
-
-  {/* KPI Scorecard strip */}
-  <KpiStrip codes={QC_KPIS} compact />
 
  {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
  <PanelRow>

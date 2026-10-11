@@ -7,8 +7,10 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Chip } from '@/components/ui/Chip';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
 import { formatDate, formatTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { isStaleTimestamp } from '@/api/dashboard-layout';
 import { WidgetBreakdown } from './WidgetBreakdown';
 import { WidgetTable } from './WidgetTable';
 import type {
@@ -231,13 +233,17 @@ export function LiveDashboardWidget({
   widget,
   summary,
   loading,
+  onRetry,
 }: {
   widget: DashboardLayoutItem;
   summary?: DashboardWidgetSummary;
   loading: boolean;
+  /** Re-fires the widget-data query from the tile fallback. Omitted = reload fallback. */
+  onRetry?: () => void;
 }) {
   const href = widget.link_path;
   const richContent = !loading ? renderRichWidget(widget) : null;
+  const stale = isStaleTimestamp(summary?.updated_at);
 
   return (
     <Panel
@@ -255,25 +261,36 @@ export function LiveDashboardWidget({
           <SkeletonBlock className="h-8 w-28 rounded" />
           <SkeletonBlock className="h-4 w-44 rounded" />
         </div>
-      ) : richContent ? (
-        richContent
-      ) : !summary || !summary.available ? (
-        <EmptyState
-          size="compact"
-          icon="alert-circle"
-          title="Live data unavailable"
-          description={summary?.helper ?? 'This widget has no live response.'}
-        />
       ) : (
-        <div className="space-y-1.5">
-          <div className="text-2xl font-mono tabular-nums font-medium text-primary">
-            {formatValue(summary)}
-          </div>
-          {summary.helper && <p className="text-xs text-muted">{summary.helper}</p>}
-          <p className="text-2xs text-subtle">
-            Updated {formatTime(summary.updated_at)}
-          </p>
-        </div>
+        <WidgetErrorBoundary onRetry={onRetry} resetKeys={[widget.data, summary ?? null]}>
+          {richContent ?? (!summary || !summary.available ? (
+            <EmptyState
+              size="compact"
+              icon="alert-circle"
+              title="Live data unavailable"
+              description={summary?.helper ?? 'This widget has no live response.'}
+            />
+          ) : (
+            <div className="space-y-1.5">
+              <div className="text-2xl font-mono tabular-nums font-medium text-primary">
+                {formatValue(summary)}
+              </div>
+              {summary.helper && <p className="text-xs text-muted">{summary.helper}</p>}
+            </div>
+          ))}
+          {/* Freshness footer on every tile that carries a scalar summary —
+              rich or scalar. Stale is words (Chip), never colour alone. */}
+          {summary?.updated_at ? (
+            <p className="text-2xs text-subtle mt-1">
+              Updated {formatTime(summary.updated_at)}
+              {stale && (
+                <Chip variant="warning" className="ml-1">
+                  Stale
+                </Chip>
+              )}
+            </p>
+          ) : null}
+        </WidgetErrorBoundary>
       )}
     </Panel>
   );

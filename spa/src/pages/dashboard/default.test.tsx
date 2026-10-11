@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { dashboardLayoutApi } from '@/api/dashboard-layout';
 import DashboardDefaultPage from './default';
 
-vi.mock('@/api/dashboard-layout', () => ({ dashboardLayoutApi: { layout: vi.fn(), data: vi.fn() } }));
+vi.mock('@/api/dashboard-layout', () => ({ dashboardLayoutApi: { layout: vi.fn(), data: vi.fn() }, WIDGET_STALE_AFTER_MS: 120_000, isStaleTimestamp: () => false }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }));
 vi.mock('@/components/dashboard/DashboardPicker', () => ({ DashboardPicker: () => null }));
 vi.mock('@/components/dashboard/registry', () => ({ LiveDashboardWidget: () => <div>Widget</div> }));

@@ -81,14 +81,22 @@ export function KpiStrip({ codes, className, linkByCode, compact }: KpiStripProp
   const { data, isLoading, isError } = useQuery({
     queryKey: ['kpi', 'scorecard', year, month],
     queryFn: () => kpiApi.scorecard(year, month),
+    // Nothing requested (admin compute panel, default widget home) — skip the
+    // fetch. The early return below already renders null; without this the
+    // query still fires on every mount of those pages.
+    enabled: codes.length > 0,
     staleTime: 5 * 60_000,
     retry: 1,
   });
 
   const { data: trends } = useQuery({
-    queryKey: ['kpi', 'trends', codes],
+    // Joined to a string: a fresh `codes` array identity per render would
+    // otherwise re-key the query and refetch in a loop.
+    queryKey: ['kpi', 'trends', codes.join(',')],
     queryFn: () => kpiApi.trends(codes, 6),
-    enabled: codes.length > 0,
+    // The 6-pt sparkline is a compact-strip feature — non-compact callers get
+    // status dot + delta only, no trends fetch.
+    enabled: (compact ?? false) && codes.length > 0,
     staleTime: 5 * 60_000,
     retry: 1,
   });

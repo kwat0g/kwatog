@@ -7,7 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -249,7 +249,7 @@ export default function PurchasingDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'purchasing'],
  queryFn: () => dashboardsApi.purchasing<PurchasingDashboardData>(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
@@ -258,6 +258,7 @@ export default function PurchasingDashboard() {
  subtitle="Live · refreshes every 60s"
  query={q}
  refreshingQueryKey={['dashboard', 'purchasing']}
+ header={<KpiStrip codes={PURCHASING_KPIS} compact />}
  >
  {({ kpis, panels }) => {
  const poStatusChartData =
@@ -294,9 +295,6 @@ export default function PurchasingDashboard() {
  />
  ))}
  </KpiGrid>
-
-  {/* KPI Scorecard strip */}
-  <KpiStrip codes={PURCHASING_KPIS} compact />
 
  {/* ── Row 2: PR Action Queue + PO Pipeline ── */}
  <PanelRow>

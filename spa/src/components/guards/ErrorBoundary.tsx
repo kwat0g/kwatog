@@ -3,8 +3,15 @@ import { LuTriangleAlert } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 
 interface Props {
- children: ReactNode;
- fallback?: ReactNode;
+  children: ReactNode;
+  fallback?: ReactNode;
+  /**
+   * When any entry changes (Object.is), a tripped boundary clears and
+   * re-renders its children. Lets a Retry button that re-fires a query recover
+   * the moment fresh data lands, without remounting healthy children on every
+   * poll. Omitted = previous behaviour (stays tripped until reload/reset).
+   */
+  resetKeys?: unknown[];
 }
 
 interface State {
@@ -35,9 +42,19 @@ export class ErrorBoundary extends Component<Props, State> {
  return { hasError: true, error, reference: makeReference() };
  }
 
- componentDidCatch(error: Error, info: ErrorInfo) {
- console.error(`[ErrorBoundary] ${this.state.reference ?? ''}`, error, info.componentStack);
- }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+  console.error(`[ErrorBoundary] ${this.state.reference ?? ''}`, error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: Props) {
+  if (!this.state.hasError) return;
+  const prev = prevProps.resetKeys;
+  const next = this.props.resetKeys;
+  if (prev === next || next === undefined) return;
+  if (prev?.length !== next.length || next.some((k, i) => !Object.is(k, prev?.[i]))) {
+  this.setState({ hasError: false, error: null, reference: null });
+  }
+  }
 
  render() {
  if (this.state.hasError) {

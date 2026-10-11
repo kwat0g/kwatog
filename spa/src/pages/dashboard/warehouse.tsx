@@ -7,7 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -237,7 +237,7 @@ export default function WarehouseDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'warehouse'],
  queryFn: () => dashboardsApi.warehouse<WarehouseDashboardData>(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
@@ -246,6 +246,7 @@ export default function WarehouseDashboard() {
  subtitle="Live · refreshes every 60s"
  query={q}
  refreshingQueryKey={['dashboard', 'warehouse']}
+ header={<KpiStrip codes={WAREHOUSE_KPIS} compact />}
  >
  {({ kpis, panels }) => {
  const zoneUtilChartData =
@@ -269,9 +270,6 @@ export default function WarehouseDashboard() {
  />
  ))}
  </KpiGrid>
-
-  {/* KPI Scorecard strip */}
-  <KpiStrip codes={WAREHOUSE_KPIS} compact />
 
  {/* ── Row 2: Incoming + Outgoing queue ── */}
  <PanelRow>

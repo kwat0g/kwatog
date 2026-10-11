@@ -3,9 +3,18 @@ import type { ApiSuccess } from '@/types';
 
 export interface DashboardKpi { label: string; value: string; unit: string; }
 export interface DashboardEnvelope {
- kpis: DashboardKpi[];
- panels: Record<string, unknown>;
+  kpis: DashboardKpi[];
+  panels: Record<string, unknown>;
 }
+
+/**
+ * Dashboard poll contract (roles-dashboard polish). Approvals/KPI tiles poll
+ * every 30–60s (`RoleDashboard` 60s precedent, approvals board 30s) — never
+ * faster, so background polling cannot hammer the API. Forecast panels never
+ * poll; they refresh from an explicit Refresh button only.
+ */
+export const DASHBOARD_REFRESH_MS = 60_000;
+export const DASHBOARD_REFRESH_FAST_MS = 30_000;
 
 export interface AdminSession {
  user: string;
