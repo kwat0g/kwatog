@@ -40,16 +40,59 @@ Conflicts noted during synthesis (see `00-discovery.md` "Discrepancies" for deta
 2. Widget scalar count 54 (D) vs 55 (F) — recount `DashboardWidgetSeeder.php:48-105`
    before citing. No other cross-section conflicts.
 
-## Phase 1 status — PENDING
+## Phase 1 status — COMPLETE, AWAITING REVIEW (spec only; no feature code)
 
-Not started. Suggested entry order from ranked blockers (`00-discovery.md`):
-board-blind card sourcing → notification gaps → index migrations → finance authority pick.
+| Part | File | Covers |
+|---|---|---|
+| Roles 1–6 (+ §0 shared contracts) | `docs/dashboards/phase0/M-p1.md` | system_admin, hr_officer, finance_officer, vice_president, customer_service_officer, sales_officer |
+| Roles 7–12 | `docs/dashboards/phase0/M-p2.md` | production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech |
+| Roles 13–17 | `docs/dashboards/phase0/M-p3.md` | maintenance_supervisor, impex_officer, department_head, employee, driver |
+| **Synthesis** | `docs/dashboards/01-matrix.md` | canonical shared contracts · company-overview spec · 4 matrices (role×widget, module×dashboard, approval-type×role, metric→source→cadence) · gaps · build order · open questions |
+
+Counts: roles specified **17/17** · matrices **4/4** · new pages proposed **5**
+(`/dashboard/company` (VP, replaces the earlier `/dashboard/vp` proposal), `/dashboard/logistics`,
+`/dashboard/maintenance`, `/dashboard/department`, driver landing → existing `/driver` PWA) ·
+UNVERIFIED 19 · data-not-available 44.
+
+New gaps found while writing the matrix (all logged in `01-matrix.md` §D2):
+G-P2-1/G-P3-1 shared self-service slugs used as global widget gates (team DTR/leave/attendance
+forecast visible to every role) · G-P2-2 `ppc_head` lacks `production.dashboard.view` (4 widgets +
+2 KPI tiles stripped) · G-P2-3 KPI strip codes ≠ KPI gates (PPC 1/4, PM 2/3, purchasing 1/2,
+warehouse 1/2) · G-P2-4 `forecasting.view` leaks cash-flow/capacity tiles to buyers and warehouse ·
+G-P3-2 the KPI gate map allows one slug per module, so impex/department_head cannot read OTD or
+attendance rate · G-P3-3/G-P3-4 landing + role-default mismatches · G-D-1 two competing executive-page
+proposals (resolve to one) · G-D-2 adding a dispatch slug moves a landing · G-D-3 every proposed queue
+card needs index work first.
+
+**Five decisions are parked for review** (`01-matrix.md` §D4): re-gate vs document the shared-slug
+widgets · grant vs re-gate `production.dashboard.view` for PPC · extend `MODULE_PERMISSIONS` to slug
+sets vs new KPI definitions · confirm the single executive page + VP landing change · which of the five
+new pages ships first.
+
+Suggested build order (after those decisions) — build order and blockers: foundation (cache + index
+migrations + metric dictionary + company shell) → system_admin/finance/vice_president →
+production_manager/ppc_head → purchasing_officer/warehouse_staff → qc_inspector → hr_officer →
+maintenance pair → impex_officer → department_head → sales_officer → customer_service_officer →
+employee → driver. Ranked blockers from Phase 0 unchanged: board-blind card sourcing → notification
+gaps → index migrations → finance authority pick.
 
 ## Later phases — PENDING
 
 Awaiting mission phasing past Phase 1.
 
-## Coverage checklist skeleton (unchecked — check off as later phases cover each)
+## Coverage checklist skeleton
+
+**Phase 1 status of this checklist:** every role, module area and approval type below has a *spec* in
+`01-matrix.md` (+ `M-p1/2/3`). The boxes stay unchecked because they track **built** coverage, which
+starts in Phase 2.
+
+### Spec coverage delivered in Phase 1
+
+- Roles spec'd: **17/17** (M-p1 6 · M-p2 6 · M-p3 5)
+- Matrices: **4/4** (role×widget · module×role-dashboards · approval-type×role · metric→source→cadence)
+- Company-overview spec: **1/1**
+- Approval types spec'd: **8 live ledger + 1 dead (payroll) + 14 custom = 23/23**
+- Module areas with a matrix row: **20/20** (B2B marked "not covered on internal dashboards: reason")
 
 ### Roles (from A §1)
 
@@ -126,8 +169,10 @@ Custom single-step:
 ## How a fresh session resumes
 
 1. Read this file (`docs/dashboards/PROGRESS.md`) for mission state.
-2. Read the synthesis (`docs/dashboards/00-discovery.md`) for the full picture.
-3. Drop into section files (`docs/dashboards/phase0/A–F`) only for the detail a task needs.
+2. Read the synthesis (`docs/dashboards/00-discovery.md`) for the full picture, then the Phase 1
+   synthesis (`docs/dashboards/01-matrix.md`) for the specs and the parked decisions.
+3. Drop into section files (`docs/dashboards/phase0/A–F`) only for the detail a task needs; drop into
+   `phase0/M-p1.md` / `M-p2.md` / `M-p3.md` for a specific role's 10-item spec.
 4. Check `docs/dashboards/FINDINGS.md` for the open bug/gap relevant to the task.
 5. Respect the resource constraints above (serial DB access, private test DBs, targeted tests).
 6. Before touching chains/permissions: run
