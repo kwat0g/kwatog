@@ -19,6 +19,8 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\CRM\Enums\PriceRequestStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -149,6 +151,26 @@ class DashboardWidgetDataService
             'inventory.low_stock' => $this->number($this->lowStockCount(), 'items at or below reorder point'),
             'inventory.pending_grns' => $this->number(DB::table('goods_receipt_notes')->whereNotIn('status', [GrnStatus::Accepted->value, GrnStatus::Rejected->value])->count(), 'receipts awaiting completion'),
             'inventory.pending_issues' => $this->number(DB::table('material_issue_slips')->where('status', MaterialIssueStatus::Draft->value)->count(), 'material issues not completed'),
+
+            // The five role pages' own cards (§D3). Kept in this match rather
+            // than in a bespoke page query so the picker, the layout strip and
+            // the widget-data endpoint all read one number.
+            'logistics.shipments_in_transit' => $this->number(
+                $this->shipmentsInTransit(),
+                'not yet received or cancelled',
+            ),
+            'sales.open_orders' => $this->number(
+                DB::table('sales_orders')->whereNotIn('status', SalesOrderStatus::terminalForPipeline())->count(),
+                'orders not yet closed, cancelled or paid',
+            ),
+            'sales.price_requests' => $this->number(
+                DB::table('price_requests')->whereIn('status', [
+                    PriceRequestStatus::Requested->value,
+                    PriceRequestStatus::PendingFinance->value,
+                    PriceRequestStatus::Offered->value,
+                ])->count(),
+                'awaiting an offer or a decision',
+            ),
 
             'self.payslip_summary' => $this->latestPayslip($employeeId),
             'self.leave_balance' => $employeeId
@@ -343,6 +365,21 @@ class DashboardWidgetDataService
                 Str::headline((string) $snapshot->status),
             ),
         ];
+    }
+
+    /**
+     * Shipments nobody has received or cancelled yet: the in-flight set, derived
+     * from the enum rather than a hardcoded status list, so adding a status to
+     * `ShipmentStatus` cannot silently drop it out of this count.
+     */
+    private function shipmentsInTransit(): int
+    {
+        $inFlight = array_values(array_map(
+            static fn (ShipmentStatus $status): string => $status->value,
+            array_filter(ShipmentStatus::cases(), static fn (ShipmentStatus $s): bool => ! $s->isTerminal()),
+        ));
+
+        return DB::table('shipments')->whereIn('status', $inFlight)->count();
     }
 
     private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }    private function decimal(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'decimal', 'helper' => $helper]; }

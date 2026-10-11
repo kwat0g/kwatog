@@ -11,6 +11,15 @@ const DashboardDefaultPage = lazy(() => import('@/pages/dashboard/default'));
 // by `dashboard.company.view`; the vice president's landing moved here from
 // /dashboard/plant-manager, which it still reaches from the switcher.
 const CompanyDashboardPage = lazy(() => import('@/pages/dashboard/company'));
+// 2026-10-11 — the five remaining role dashboards (DSS 01-matrix §D3). Each
+// role held no dashboard slug and landed on the generic widget grid; each
+// route repeats its catalog permission as defence in depth, and the catalog
+// entry and this guard must agree or the page is unreachable.
+const LogisticsDashboardPage = lazy(() => import('@/pages/dashboard/logistics'));
+const MaintenanceDashboardPage = lazy(() => import('@/pages/dashboard/maintenance'));
+const DepartmentDashboardPage = lazy(() => import('@/pages/dashboard/department'));
+const SalesDashboardPage = lazy(() => import('@/pages/dashboard/sales'));
+const CustomerServiceDashboardPage = lazy(() => import('@/pages/dashboard/customer-service'));
 
 // Sprint 8 dashboards (Tasks 72 + 73)
 const PlantManagerDashboardPage = lazy(() => import('@/pages/dashboard/plant-manager'));
@@ -60,6 +69,20 @@ export const dashboardRoutes = (
  defence in depth (the catalog entry and this guard must agree). */}
  <Route path="/dashboard/company"
  element={<PermissionGuard permission="dashboard.company.view"><Suspense fallback={<SkeletonDashboard />}><CompanyDashboardPage /></Suspense></PermissionGuard>} />
+
+ {/* The five role dashboards (§D3). One page, one permission each — except
+ maintenance, which two roles share and which therefore serves two
+ permission-derived views rather than branching on a role name. */}
+ <Route path="/dashboard/logistics"
+ element={<PermissionGuard permission="dashboard.logistics.view"><Suspense fallback={<SkeletonDashboard />}><LogisticsDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/maintenance"
+ element={<PermissionGuard permission="dashboard.maintenance.view"><Suspense fallback={<SkeletonDashboard />}><MaintenanceDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/department"
+ element={<PermissionGuard permission="dashboard.department.view"><Suspense fallback={<SkeletonDashboard />}><DepartmentDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/sales"
+ element={<PermissionGuard permission="dashboard.sales.view"><Suspense fallback={<SkeletonDashboard />}><SalesDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/customer-service"
+ element={<PermissionGuard permission="dashboard.customer_service.view"><Suspense fallback={<SkeletonDashboard />}><CustomerServiceDashboardPage /></Suspense></PermissionGuard>} />
 
  {/* Sprint 8 dashboards */}
  <Route path="/dashboard/plant-manager"

@@ -44,8 +44,11 @@ class DashboardDispatchTest extends TestCase
             // the landing moves off plant-manager — an access-model change made
             // deliberately, with every other role's landing asserted below.
             'vice_president' => ['vice_president', '/dashboard/company'],
-            'sales_officer' => ['sales_officer', '/dashboard/default'],
-            'customer_service_officer' => ['customer_service_officer', '/dashboard/default'],
+            // 2026-10-11 (§D3): every role now holds a dashboard slug of its
+            // own, so `/dashboard/default` is reached only by a user with no
+            // qualifying permission at all — not by a whole tier of roles.
+            'sales_officer' => ['sales_officer', '/dashboard/sales'],
+            'customer_service_officer' => ['customer_service_officer', '/dashboard/customer-service'],
             'production_manager' => ['production_manager', '/dashboard/plant-manager'],
             'hr_officer'         => ['hr_officer',         '/dashboard/hr'],
             'ppc_head'           => ['ppc_head',           '/dashboard/ppc'],
@@ -57,9 +60,11 @@ class DashboardDispatchTest extends TestCase
             'system_admin'       => ['system_admin',       '/dashboard/admin'],
             // No purpose-built dashboard — these five were missing from the
             // old role map entirely and rendered nothing useful.
-            'department_head'    => ['department_head',    '/dashboard/default'],
-            'maintenance_tech'   => ['maintenance_tech',   '/dashboard/default'],
-            'impex_officer'      => ['impex_officer',      '/dashboard/default'],
+            'department_head'    => ['department_head',    '/dashboard/department'],
+            // ONE page for two roles: same path, two permission-derived views.
+            'maintenance_tech'   => ['maintenance_tech',   '/dashboard/maintenance'],
+            'maintenance_supervisor' => ['maintenance_supervisor', '/dashboard/maintenance'],
+            'impex_officer'      => ['impex_officer',      '/dashboard/logistics'],
             'employee'           => ['employee',           '/dashboard/default'],
             'driver'             => ['driver',             '/dashboard/default'],
         ];
@@ -130,10 +135,14 @@ class DashboardDispatchTest extends TestCase
             ->assertOk();
 
         $candidates = $resp->json('data.candidates');
-        // Nine since the company-overview page joined the catalog; the
-        // wildcard holder qualifies for all of them and still lands on the
-        // rarest, `admin`.
-        $this->assertCount(9, $candidates);
+        // Fourteen since the five role pages joined the catalog. The wildcard
+        // holder qualifies for all of them, and this assertion is load-bearing
+        // rather than bookkeeping: those five each have exactly ONE non-admin
+        // holder, so for the admin they tie on rarity with `admin` itself and
+        // the tie-break is the catalog KEY. `admin` sorting first is the only
+        // reason adding five single-holder dashboards did not move the
+        // administrator's landing page off their own dashboard.
+        $this->assertCount(14, $candidates);
         $this->assertSame('admin', $candidates[0]['key']);
 
         $counts = array_column($candidates, 'holder_count');

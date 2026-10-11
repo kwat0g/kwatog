@@ -60,7 +60,12 @@ class KpiSnapshotService
     public const MODULE_PERMISSIONS = [
         'production' => ['production.dashboard.view', 'production.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
         'quality' => ['dashboard.quality.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
-        'supply_chain' => ['dashboard.ppc.view', 'dashboard.company.view'],
+        // `dashboard.logistics.view` is G-P3-2's resolution — a SECOND qualified
+        // gate, not a role-name branch. OTD is a supply-chain reading and the
+        // officer who owns deliveries could not read it: `dashboard.ppc.view`
+        // belongs to the planner, and the logistics page shipped without the one
+        // number it is judged on. The set keeps the decision a grant.
+        'supply_chain' => ['dashboard.ppc.view', 'dashboard.logistics.view', 'dashboard.company.view'],
         'purchasing' => ['dashboard.purchasing.view', 'dashboard.company.view'],
         'attendance' => ['dashboard.hr.view', 'dashboard.company.view'],
         'accounting' => ['accounting.dashboard.view', 'dashboard.company.view'],

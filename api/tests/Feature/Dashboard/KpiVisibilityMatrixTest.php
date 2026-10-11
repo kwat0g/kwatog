@@ -169,6 +169,52 @@ class KpiVisibilityMatrixTest extends TestCase
     }
 
     /**
+     * The officer who owns deliveries can read the on-time-delivery rate.
+     *
+     * G-P3-2's resolution, and the reason `dashboard.logistics.view` sits in the
+     * supply_chain set: `on_time_delivery` was gated on `dashboard.ppc.view`, so
+     * the role accountable for OTD could not read it, and the logistics page
+     * shipped as a surface for a number it was forbidden to show.
+     *
+     * The fix is a SECOND qualified gate, not a role-name branch — the check
+     * below is on the grant, so who may read OTD stays a `role_permissions` row.
+     */
+    public function test_the_delivery_owner_can_read_on_time_delivery(): void
+    {
+        $readable = $this->readableCodes($this->userWithRole('impex_officer'));
+
+        $this->assertContains('on_time_delivery', $readable);
+
+        // …and it stops there: a supply-chain gate must not carry the whole
+        // scorecard. impex_officer holds no `quality.*` or `production.*` read.
+        $modules = KpiDefinition::query()
+            ->whereIn('code', $readable)
+            ->pluck('module')
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->assertSame(['supply_chain'], $modules);
+    }
+
+    /**
+     * The second gate did not become a company-wide one: holders of the
+     * logistics page are the only roles the supply_chain set admits beyond PPC,
+     * and the company read is asserted separately above.
+     */
+    public function test_the_logistics_gate_is_held_only_by_its_page_role(): void
+    {
+        $holders = Role::query()
+            ->whereHas('permissions', fn ($query) => $query->where('permissions.slug', 'dashboard.logistics.view'))
+            ->pluck('slug')
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(['impex_officer', 'system_admin'], $holders);
+    }
+
+    /**
      * Every declared gate is a slug some role can hold.
      *
      * A gate naming a permission that does not exist refuses everyone: the KPI

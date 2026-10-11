@@ -108,6 +108,15 @@ class DashboardRoleLayoutSeeder extends Seeder
             // company-wide `hr.headcount` / `hr.on_leave_today` readings it
             // also qualifies for duplicate the team-scoped widgets below at a
             // breadth a single department's head has no use for.
+            // Now lands on `/dashboard/department` (2026-10-11). The set is
+            // unchanged and deliberately so: it is already the department-scoped
+            // approver's card list (M-p3 R15 §2), and the new page is a body to
+            // render it in rather than a reason to add tiles. The two cards that
+            // role still cannot have are recorded, not faked — a department
+            // attendance RATE would need `kpi.attendance_rate`, whose gate is the
+            // HR planning read this role does not hold, and the matrix's other
+            // option (a dept-rollup card) has no dept-scoped KPI source. Left
+            // open rather than granted, because that KPI is company-wide.
             'department_head' => [
                 'approvals.pending', 'hr.team_dtr_today', 'hr.team_on_leave_today',
                 'purchasing.open_prs', 'hr.probation_alerts', 'loans.outstanding',
@@ -136,10 +145,35 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],
+            // Now lands on `/dashboard/logistics` (2026-10-11). Shipments in
+            // transit is the one card here that had no widget; the other four
+            // are the supply/purchasing reads this role already qualified for.
+            // `kpi.on_time_delivery` is the addition the logistics page existed
+            // for — OTD is the reading ImpEx is judged on, and the supply_chain
+            // KPI gate now admits `dashboard.logistics.view` (G-P3-2).
             'impex_officer' => [
+                'kpi.on_time_delivery',
                 'supply.overdue_deliveries', 'supply.delivery_schedule',
+                'logistics.shipments_in_transit',
                 'purchasing.open_prs', 'purchasing.open_pos',
                 'approvals.pending',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
+            ],
+            // The last two roles with no default at all — they resolved to an
+            // empty grid, so their new page body would have been empty too.
+            // `crm.open_complaints` is the one widget that already covered this
+            // data; the two sales cards are new.
+            'sales_officer' => [
+                'sales.open_orders', 'sales.price_requests',
+                'crm.open_complaints', 'alerts',
+                'self.payslip_summary', 'self.leave_balance',
+                'self.dtr_today', 'self.pending_requests',
+            ],
+            // Complaints and return cases are the two queues this role owns.
+            'customer_service_officer' => [
+                'crm.open_complaints', 'rma.open_returns', 'rma.pending_approval',
+                'alerts', 'approvals.pending',
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],

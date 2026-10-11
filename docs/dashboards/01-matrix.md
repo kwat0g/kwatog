@@ -204,16 +204,16 @@ finance and HR were already clean. See G-P2-3.
 | Accounting + budgeting | `/dashboard/finance` | 18 panels (cash, AR/AP aging, JEs, budget-vs-actual, credit notes) |
 | Inventory | `/dashboard/warehouse`, `/dashboard/purchasing`, `/dashboard/quality` | incoming/outgoing queues, low stock, MRB |
 | Purchasing | `/dashboard/purchasing`, `/dashboard/finance` | PR queue, PO pipeline, supplier score, budget-ack queue |
-| Supply chain | `/dashboard/warehouse` (deliveries), `/dashboard/logistics` (proposed) | outgoing queue, delivery/OTD panels |
+| Supply chain | `/dashboard/warehouse` (deliveries), `/dashboard/logistics` | outgoing queue, delivery/OTD panels |
 | Production | `/dashboard/plant-manager`, `/dashboard/ppc`, `/factory` PWA | OEE, WO mix, Gantt, output |
 | MRP | `/dashboard/ppc`, `/dashboard/plant-manager` | shortages, reservations, Gantt, capacity |
-| CRM | `/dashboard/customer-service` (proposed), `/dashboard/quality`, `/dashboard/plant-manager` | complaints, defect Pareto, price-request queue |
+| CRM | `/dashboard/customer-service`, `/dashboard/sales`, `/dashboard/quality`, `/dashboard/plant-manager` | complaints, order book, price-request queue, defect Pareto |
 | B2B portal | **not covered on any dashboard** — portal is a separate principal surface (supplier/customer self-service); dashboard visibility of portal activity is limited to supplier shipments feeding GRN + portal RMAs feeding returns | — |
 | Forecasting | `/dashboard/ppc`, `/dashboard/hr`, `/dashboard/finance`, `/dashboard/quality`, `/dashboard/plant-manager`, `/dashboard/purchasing` | 7 forecast panels + demand/stock-out/accuracy pages |
 | Return management | `/dashboard/quality`, `/dashboard/purchasing`, `/dashboard/warehouse`, `/dashboard/customer-service` | RMA widgets, inspection staging, receiving |
 | Assets | `assets.under_maintenance` widget; VP/PM/PPC/tech/supervisor only | no dedicated asset dashboard (proposed: asset-disposal queue on the finance page) |
 | Quality | `/dashboard/quality` | inspection queue, Pareto, NCR list, chain coverage, display policy |
-| Maintenance | `/dashboard/maintenance` (proposed) | open MWOs, due schedules, downtime Pareto, PM windows |
+| Maintenance | `/dashboard/maintenance` | open MWOs, due schedules, downtime Pareto, PM windows |
 | Dashboard (KPI/widget/layout/action center) | `/dashboard/admin` (rollout health, widgets, layouts) | `WidgetSeedIntegrityTest`, `dashboard:rollout-health` |
 | Auth/Admin | `/dashboard/admin` | sessions, locked accounts, failed logins, queue health, audit |
 | Budgeting (module 17) | `/dashboard/finance` | budget-vs-actual, enforcement modes; budget/transfer custom approvals |
@@ -416,4 +416,11 @@ role-name branch anywhere.
    2026-10-11: yes to both.** `/dashboard/vp` is not shipped. The landing move was verified against every
    demo account: only the VP's path changed. See `PROGRESS.md` "Phase 2 — B".
 5. Which of the five proposed new pages ship first inside the D3 order (client-facing
-   customer-service/sales, or internal logistics/maintenance)? — **OPEN**
+   customer-service/sales, or internal logistics/maintenance)? — **DECIDED 2026-10-11: all five
+   shipped together.** Sequencing them would have been false economy: each is the same permission-derived
+   shell over widgets that already existed, so the marginal cost of the last four was a catalog entry, a
+   grant and a route apiece, while the cost of NOT shipping one is that a role keeps a landing page with
+   nothing sized to its decisions. `dashboard/*.view` slugs + holders are recorded in `PROGRESS.md`
+   "Phase 2 — E"; the dispatch consequence was checked against all 17 seeded roles, not just the five.
+   What remains open from this item is not which page, but the §B blocks on the company page that still
+   need grants or new SQL (see §B "Contents" and PROGRESS "Phase 2 — C"/"E").

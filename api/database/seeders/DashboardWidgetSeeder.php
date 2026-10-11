@@ -99,6 +99,9 @@ class DashboardWidgetSeeder extends Seeder
         'rma.open_returns'          => '/return-management',
         'rma.pending_approval'      => '/return-management',
         'crm.open_complaints'       => '/crm/complaints',
+        'logistics.shipments_in_transit' => '/supply-chain/shipments',
+        'sales.open_orders'         => '/crm/sales-orders',
+        'sales.price_requests'      => '/crm/price-agreements/requests',
         'budget.utilization'        => '/budgeting/budget-vs-actual',
         'loans.outstanding'         => '/hr/loans',
         'alerts'                    => '/alerts',
@@ -318,6 +321,19 @@ class DashboardWidgetSeeder extends Seeder
             ['key' => 'rma.open_returns',              'name' => 'Open Return Requests',      'module' => 'return_management', 'permission' => 'return_management.view', 'render_kind' => 'breakdown'],
             ['key' => 'rma.pending_approval',          'name' => 'Returns Awaiting Approval', 'module' => 'return_management', 'permission' => 'return_management.view', 'render_kind' => 'table'],
             ['key' => 'crm.open_complaints',           'name' => 'Open Customer Complaints',  'module' => 'crm',         'permission' => 'crm.view', 'render_kind' => 'breakdown'],
+            // ─── The five role pages (DSS 01-matrix §D3) ────────────
+            // Only the cards that had no existing widget over the same data are
+            // new; every other block on those pages reuses a widget above, which
+            // is why `dashboard.logistics` is four existing tiles plus one.
+            //
+            // NOT built, and NOT faked: M-p3 R14 §2 asks for a "docs expiring
+            // ≤ 30d" card. `shipment_documents` records document_type, file and
+            // uploader — there is no expiry column and no document-expiry sweep
+            // behind it, so the card would have had no source. Recorded as
+            // data-not-available rather than shipped as a permanent zero.
+            ['key' => 'logistics.shipments_in_transit', 'name' => 'Shipments In Transit',     'module' => 'supply_chain', 'permission' => 'supply_chain.view'],
+            ['key' => 'sales.open_orders',             'name' => 'Open Sales Orders',         'module' => 'crm',         'permission' => 'crm.sales_orders.view'],
+            ['key' => 'sales.price_requests',          'name' => 'Open Price Requests',       'module' => 'crm',         'permission' => 'crm.price_agreements.view'],
             ['key' => 'budget.utilization',            'name' => 'Budget Utilization',        'module' => 'budgeting',   'permission' => 'budgeting.view', 'render_kind' => 'gauge'],
             // Resolver scopes to the caller's department unless they hold a
             // company-wide loans read — see ::outstandingLoans.

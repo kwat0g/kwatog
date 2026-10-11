@@ -28,6 +28,28 @@ enum SalesOrderStatus: string
         return in_array($this, [self::Draft, self::AwaitingConfirmation, self::DeliveryNegotiation], true);
     }
 
+    /**
+     * The statuses past which an order is no longer part of the live order book.
+     *
+     * `Paid` counts as finished for a pipeline count: the money is in, so
+     * nothing is owed action. It stays distinct from `Closed` because the two
+     * are separate milestones, and callers that care about the difference read
+     * the status itself.
+     *
+     * Derived from the enum rather than written as a literal `whereNotIn` at the
+     * call site, so a future status has to make a decision here instead of
+     * silently inheriting "open" by omission.
+     *
+     * @return list<string>
+     */
+    public static function terminalForPipeline(): array
+    {
+        return array_map(
+            static fn (self $status): string => $status->value,
+            [self::Paid, self::Closed, self::Cancelled],
+        );
+    }
+
     public function label(): string
     {
         return match ($this) {

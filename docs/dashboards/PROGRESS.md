@@ -291,9 +291,77 @@ entity controllers only), and the strip is mounted per role rather than derived 
 `KpiSnapshotService::MODULE_PERMISSIONS` — that derivation is G-P2-3, addressed in C by hand for PPC and
 recorded for purchasing/warehouse.
 
+### Phase 2 — E: the five remaining role pages (shipped)
+
+Resolves `01-matrix.md` §D4 #5 in favour of shipping all five together. Before this, **five of the
+seventeen seeded roles had no dashboard of their own**: each held no `dashboard.*.view` slug, so
+`DashboardDispatchService` fell through to `/dashboard/default` — a landing page, not a surface. Two of
+them (`sales_officer`, `customer_service_officer`) had **no role-default rows either**, so the generic
+grid they landed on resolved to empty.
+
+| Key | Path | Permission | Role(s) |
+|---|---|---|---|
+| `logistics` | `/dashboard/logistics` | `dashboard.logistics.view` | impex_officer |
+| `maintenance` | `/dashboard/maintenance` | `dashboard.maintenance.view` | maintenance_tech **+** maintenance_supervisor |
+| `department` | `/dashboard/department` | `dashboard.department.view` | department_head |
+| `sales` | `/dashboard/sales` | `dashboard.sales.view` | sales_officer |
+| `customer-service` | `/dashboard/customer-service` | `dashboard.customer_service.view` | customer_service_officer |
+
+| Deliverable | Files | State |
+|---|---|---|
+| Catalog entries | `DashboardCatalog` — 9 → **14** entries | shipped |
+| Grants | `2026_10_11_120000_grant_role_dashboard_reads.php` (applies + reverses) · `RolePermissionSeeder` catalog rows + role grants | applied |
+| Routes | `spa/src/routes/dashboardRoutes.tsx` — five lazy pages, each repeating its catalog permission as defence in depth | shipped |
+| Shared shell | `spa/src/components/dashboard/RoleDashboardShell.tsx` — extracted from `company.tsx`, now shared by **all six** role pages; `company.tsx` refactored onto it rather than left as a second copy of the same strip/registry/stale logic | shipped |
+| Pages | `spa/src/pages/dashboard/{logistics,maintenance,department,sales,customer-service}.tsx` | shipped |
+| Role defaults | `DashboardRoleLayoutSeeder` — new defaults for `sales_officer` + `customer_service_officer` (they had none); `impex_officer` gains the OTD reading and its shipments card | shipped |
+| New widgets | `logistics.shipments_in_transit` · `sales.open_orders` · `sales.price_requests` (scalar arms in `DashboardWidgetDataService`) | 68 widgets |
+| Tests | `RoleDashboardShell.test.tsx` (5) · `DashboardDispatchTest` provider extended to all 17 roles + maintenance shared-page case · `KpiVisibilityMatrixTest` +2 | **197 backend / 59 SPA** |
+
+**G-P3-2 closed for impex.** `dashboard.logistics.view` was added to the supply_chain KPI gate SET, so the
+officer accountable for OTD can finally read it. That is the resolution the matrix specified — "a second
+qualified gate", not a role-name branch — and it keeps the decision a `role_permissions` row.
+`KpiVisibilityMatrixTest` now asserts both that impex reads OTD and that its readable modules are exactly
+`['supply_chain']`, so the second gate cannot quietly become a whole-scorecard grant.
+
+**The dispatch risk, checked rather than reasoned about.** Landing is rarity-ranked, and adding five
+single-holder dashboards is an access-model change. Measured live on the running app, all 17 seeded
+accounts: **0 mismatches.** The one that could have broken is `system_admin` — the wildcard qualifies for
+all fourteen, and the five new ones each have exactly one non-admin holder, so they tie with `admin` on
+rarity and the tie-break is the catalog KEY. `admin` sorting first is the only reason the administrator
+stays on `/dashboard/admin`, and `DashboardDispatchTest` now asserts the candidate count (14) with that
+reason written down, so a sixth single-holder page cannot silently move it.
+
+**Built as shells, deliberately.** Every block on these pages is an existing gated widget or KPI reading;
+re-deriving them would have produced a second, differently-gated copy of numbers the modules already
+publish. Only three widgets are new, because only three cards had no widget over the same data:
+
+| Card the specs asked for | State |
+|---|---|
+| Shipments in transit (M-p3 R14 §2) | **built** — `logistics.shipments_in_transit`, live value 2 |
+| Open sales orders / price requests (M-p1 R6) | **built** — live values 14 and 0 |
+| Maintenance's six cards (M-p2 R12 §2) | **already existed** — the role default is exactly that list, which is why the maintenance page needed no new widget |
+| Docs expiring ≤ 30d (M-p3 R14 §2) | **not built, and not faked**: `shipment_documents` has no expiry column and no expiry sweep behind it, so the card would have rendered a permanent zero. Data-not-available. |
+| Department attendance RATE (M-p3 R15 §2) | **not built**: needs `kpi.attendance_rate`, whose gate is the HR planning read this role does not hold. The matrix's alternative (a department rollup card) has no department-scoped KPI source, and the KPI is a company-wide figure — granting it would widen a company number to every department head. Left open rather than granted. |
+| Maintenance forecast panels (M-p2 R12 §4) | **not built**: no maintenance forecast series exists and the role holds no `forecasting.view`. Phase 3 candidate, recorded in the specs already. |
+
+The shared maintenance page is the one place two roles meet: `maintenance_tech` and
+`maintenance_supervisor` hold the same page permission and see different cards, permission-derived. Its
+gate is deliberately **not** `maintenance.work.assigned` — the technician does not hold that slug, so
+using it would have hidden the page from half the roles it exists for (the M6 trap the specs name).
+
+**Dev-DB side effects:** the migration applied, plus `RolePermissionSeeder`, `DashboardWidgetSeeder` and
+`DashboardRoleLayoutSeeder` re-run on dev.
+
 ## Later phases — PENDING
 
-Awaiting mission phasing past Phase 2 (role pages, forecasting wiring, approval centre, DSS tiles).
+Remaining after E, from the docs and in their own order: the §B blocks that still need work (quality panel
+= grant decision; chain-stage donut = register a rich provider in `WidgetAnalyticsService::providers()`
+**and** `WidgetSeedIntegrityTest::handledKeys()`; AP due ≤3d + chain-recovery backlog = new SQL), §B's
+Risks & opportunities / Weekly briefing (Phase 5 by spec), the DSS recommendation tiles, and the D1
+blockers that are not dashboard work at all (board-blind approval card sourcing, notification darkness,
+finance dual-slug authority, `ApprovalRecord` audit trait, sub-month KPI grain). `driver` and `employee`
+keep `/dashboard/default` by design — their primary surfaces are the driver PWA and `/self-service`.
 
 ## Coverage checklist skeleton
 
@@ -311,23 +379,28 @@ starts in Phase 2.
 
 ### Roles (from A §1)
 
-- [ ] system_admin
-- [ ] hr_officer
-- [ ] finance_officer
-- [ ] vice_president
-- [ ] customer_service_officer
-- [ ] sales_officer
-- [ ] production_manager
-- [ ] ppc_head
-- [ ] purchasing_officer
-- [ ] warehouse_staff
-- [ ] qc_inspector
-- [ ] maintenance_tech
-- [ ] maintenance_supervisor
-- [ ] impex_officer
-- [ ] department_head
-- [ ] employee
-- [ ] driver
+**Built coverage 17/17 as of 2026-10-11.** Fifteen roles land on a purpose-built dashboard; `employee`
+and `driver` land on `/dashboard/default` **by design** (their primary surfaces are `/self-service` and
+the `/driver` PWA) and are ticked on that basis, not because the generic grid was left as their
+answer. The five that had no page until Phase 2 E are marked with the increment that gave them one.
+
+- [x] system_admin (`/dashboard/admin`)
+- [x] hr_officer (`/dashboard/hr`)
+- [x] finance_officer (`/dashboard/finance`)
+- [x] vice_president (`/dashboard/company` — Phase 2 B)
+- [x] customer_service_officer (`/dashboard/customer-service` — Phase 2 E)
+- [x] sales_officer (`/dashboard/sales` — Phase 2 E)
+- [x] production_manager (`/dashboard/plant-manager`)
+- [x] ppc_head (`/dashboard/ppc`)
+- [x] purchasing_officer (`/dashboard/purchasing`)
+- [x] warehouse_staff (`/dashboard/warehouse`)
+- [x] qc_inspector (`/dashboard/quality`)
+- [x] maintenance_tech (`/dashboard/maintenance` — Phase 2 E, shared page)
+- [x] maintenance_supervisor (`/dashboard/maintenance` — Phase 2 E, shared page)
+- [x] impex_officer (`/dashboard/logistics` — Phase 2 E)
+- [x] department_head (`/dashboard/department` — Phase 2 E)
+- [x] employee (`/dashboard/default` + `/self-service` — by design)
+- [x] driver (`/dashboard/default` + `/driver` PWA — by design)
 
 ### Modules / data areas (from B §1)
 

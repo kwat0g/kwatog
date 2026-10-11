@@ -451,6 +451,17 @@ class RolePermissionSeeder extends Seeder
                 // locked by KpiVisibilityMatrixTest, so widening it is a
                 // deliberate act rather than a drive-by grant.
                 ['slug' => 'dashboard.company.view',        'name' => 'View Company Overview Dashboard'],
+                // The five role dashboards (DSS 01-matrix §D3). Each role that
+                // held no dashboard slug fell through to the generic widget
+                // grid; these are its own surface. Maintained as rows here so a
+                // reseed cannot strand a page nobody can reach, and mirrored by
+                // migration 2026_10_11_120000 so a migrate-without-reseed deploy
+                // cannot advertise a slug nobody holds.
+                ['slug' => 'dashboard.logistics.view',        'name' => 'View ImpEx Logistics Dashboard'],
+                ['slug' => 'dashboard.maintenance.view',      'name' => 'View Maintenance Dashboard'],
+                ['slug' => 'dashboard.department.view',       'name' => 'View Department Dashboard'],
+                ['slug' => 'dashboard.sales.view',            'name' => 'View Sales Dashboard'],
+                ['slug' => 'dashboard.customer_service.view', 'name' => 'View Customer Service Dashboard'],
             ],
             'platform' => [
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
@@ -708,6 +719,10 @@ class RolePermissionSeeder extends Seeder
                         'return_management.complete',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
+                        // The CSO's own surface (DSS 01-matrix §D3): complaints
+                        // and return cases are the two queues they own, and
+                        // neither had a page sized to them.
+                        'dashboard.customer_service.view',
                     ],
                 ),
             ],
@@ -730,6 +745,8 @@ class RolePermissionSeeder extends Seeder
                         'crm.sales_orders.cancel',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
+                        // Owns the order book; had no page for it.
+                        'dashboard.sales.view',
                     ],
                 ),
             ],
@@ -917,6 +934,11 @@ class RolePermissionSeeder extends Seeder
                         'hr.separation.view',
                         'hr.clearance.sign', 'hr.clearance.work_company',
                         'search.global', 'notifications.preferences.manage',
+                        // Shares the ONE maintenance page with the supervisor.
+                        // NOT `maintenance.work.assigned` — the tech does not
+                        // hold that slug, so gating the page on it would hide
+                        // the page from half the roles it exists for (M6).
+                        'dashboard.maintenance.view',
                     ],
                 ),
             ],
@@ -926,6 +948,7 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => array_merge($this->selfService(), [
                     'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.assign',
                     'maintenance.wo.verify', 'maintenance.schedules.manage', 'mrp.machines.view', 'assets.view', 'search.global',
+                    'dashboard.maintenance.view',
                 ]),
             ],
             'impex_officer' => [
@@ -949,6 +972,11 @@ class RolePermissionSeeder extends Seeder
                         'supply_chain.deliveries.create',
                         'supply_chain.deliveries.confirm',
                         'purchasing.view',
+                        // Owns shipments, dispatch, documents and fleet. This slug
+                        // is ALSO in the supply_chain KPI gate set, which is what
+                        // lets the page carry the OTD reading it is judged on
+                        // (G-P3-2's "second qualified gate").
+                        'dashboard.logistics.view',
                     ],
                 ),
             ],
@@ -981,6 +1009,10 @@ class RolePermissionSeeder extends Seeder
                         'hr.separation.view',
                         'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
+                        // Five approval types were five module pages and a board
+                        // that omits the custom family (OT). One surface for the
+                        // department-scoped approver (DSS §D3).
+                        'dashboard.department.view',
                     ],
                 ),
             ],
