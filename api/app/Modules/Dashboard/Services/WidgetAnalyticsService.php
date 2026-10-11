@@ -9,6 +9,7 @@ use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\AssetWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\BudgetWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\CashFlowWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CoreWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CrmWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
@@ -40,6 +41,7 @@ final class WidgetAnalyticsService
         private readonly LoanWidgetAnalytics $loans,
         private readonly KpiWidgetAnalytics $kpis,
         private readonly ApprovalsWidgetAnalytics $approvals,
+        private readonly CashFlowWidgetAnalytics $cashFlow,
     ) {}
 
     /**
@@ -88,7 +90,7 @@ final class WidgetAnalyticsService
     }
 
     /**
-     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics>
+     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics|CashFlowWidgetAnalytics>
      */
     private function providers(): array
     {
@@ -102,6 +104,7 @@ final class WidgetAnalyticsService
             $this->loans,
             $this->kpis,
             $this->approvals,
+            $this->cashFlow,
         ];
     }
 }

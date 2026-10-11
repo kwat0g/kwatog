@@ -29,3 +29,23 @@ export interface ForecastPanelData {
  trend: TrendDirection;
  };
 }
+
+/**
+ * Phase 3 (Task 6) — Cash-flow forecast month. The engine projects flat
+ * run-rates, so every month carries the split behind the net figure.
+ */
+export interface CashFlowMonth {
+ year: number;
+ month: number;
+ inflow: number;
+ outflow: number;
+ net: number;
+ /** Only present in forecast months (not historical). */
+ confidence?: number | null;
+}
+
+/** Phase 3 (Task 6) — cash-flow payload: the ForecastPanel net series plus the per-month split. */
+export interface CashFlowForecastData extends ForecastPanelData {
+ months: CashFlowMonth[];
+ confidence: number | null;
+}

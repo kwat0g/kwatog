@@ -27,6 +27,7 @@ class ForecastingDashboardService
         private readonly SettingsService $settings,
         private readonly StockOutProjectionService $stockOut,
         private readonly ForecastingService $forecasting,
+        private readonly CashFlowForecastService $cashFlow,
     ) {}
     /* ───────────────────────────────────────────────────────────────
      * 1. HR — Headcount forecast
@@ -349,6 +350,21 @@ class ForecastingDashboardService
                 array_slice($atRisk, 0, 5),
             ),
         ];
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * 5. Finance — Cash-flow forecast (Task 6)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Thin delegate: the panel and the widget share the one
+     * CashFlowForecastService engine (ponytail: one implementation).
+     *
+     * @return array{historical: array, forecast: array, trend: string, kpi: array, months: array, confidence: float|null}
+     */
+    public function cashFlowForecast(): array
+    {
+        return $this->cashFlow->forecast();
     }
 
     /* ───────────────────────────────────────────────────────────────

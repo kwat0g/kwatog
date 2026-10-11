@@ -90,6 +90,7 @@ class DashboardWidgetSeeder extends Seeder
         'forecast.headcount'        => '/dashboard/hr',
         'forecast.revenue'          => '/dashboard/finance',
         'forecast.defect_rate'      => '/dashboard/quality',
+        'forecast.cash_flow'        => '/forecasting/demand',
         'maintenance.open_wos'      => '/maintenance/work-orders',
         'maintenance.due_schedules' => '/maintenance/schedules',
         'assets.under_maintenance'  => '/assets',
@@ -256,6 +257,9 @@ class DashboardWidgetSeeder extends Seeder
             ['key' => 'forecast.headcount',            'name' => 'Headcount Forecast',        'module' => 'hr',          'permission' => 'hr.employees.view'],
             ['key' => 'forecast.revenue',              'name' => 'Revenue Forecast',          'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
             ['key' => 'forecast.defect_rate',          'name' => 'Defect Rate Forecast',      'module' => 'quality',     'permission' => 'quality.view'],
+            // Cash movement is accounting data, but the projection is a
+            // forecasting read (same gate as the finance panel + demand page).
+            ['key' => 'forecast.cash_flow',            'name' => 'Cash Flow Forecast',        'module' => 'accounting',  'permission' => 'forecasting.view', 'render_kind' => 'trend'],
 
             // ─── Maintenance / Assets ──────────────────────────────
             ['key' => 'maintenance.open_wos',          'name' => 'Open Maintenance WOs',      'module' => 'maintenance', 'permission' => 'maintenance.view'],

@@ -50,6 +50,7 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'finance.cash_position', 'finance.ar_aging', 'finance.ap_aging',
                 'finance.revenue_mtd', 'finance.unpaid_invoices', 'finance.upcoming_payables',
                 'forecast.revenue', 'budget.utilization', 'kpi.ar_aging_60d',
+                'forecast.cash_flow',
             ],
             'hr_officer' => [
                 'hr.headcount', 'hr.on_leave_today', 'approvals.pending',

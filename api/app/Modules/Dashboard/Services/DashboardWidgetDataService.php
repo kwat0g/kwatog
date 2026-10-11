@@ -163,6 +163,7 @@ class DashboardWidgetDataService
             'forecast.headcount'   => $this->forecast($this->forecasts->headcountForecast(), 'number'),
             'forecast.revenue'     => $this->forecast($this->forecasts->revenueForecast(), 'currency'),
             'forecast.defect_rate' => $this->forecast($this->forecasts->defectRateForecast(), 'percent'),
+            'forecast.cash_flow'   => $this->forecast($this->forecasts->cashFlowForecast(), 'currency'),
 
             'maintenance.open_wos' => $this->number(DB::table('maintenance_work_orders')->whereIn('status', [
                 MaintenanceWorkOrderStatus::Open->value,

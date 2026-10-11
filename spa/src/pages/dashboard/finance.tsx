@@ -15,6 +15,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { CashFlowPanel } from '@/components/dashboard/CashFlowPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { FINANCE_KPIS } from '@/lib/dashboardKpis';
 import { BarComparison } from '@/components/charts';
@@ -153,6 +154,18 @@ export default function FinanceDashboardPage() {
   unitLabel={data.revenue_forecast?.kpi?.unit}
   detailsHref="/accounting/income-statement"
   />
+
+  {/* Row 5.5 — Cash-flow forecast (read-only composition from the payload —
+  rides the page poll, no separate fetch; absent when PanelGate strips it). */}
+  {data.cash_flow_forecast && (
+  <CashFlowPanel
+  data={data.cash_flow_forecast}
+  isLoading={false}
+  isError={false}
+  title="Cash Flow Forecast (3 months)"
+  formatValue={(v) => formatPeso(String(v))}
+  />
+  )}
 
  {/* Row 6 — Top overdue customers. */}
  {data.top_overdue_customers && data.top_overdue_customers.length > 0 && (
