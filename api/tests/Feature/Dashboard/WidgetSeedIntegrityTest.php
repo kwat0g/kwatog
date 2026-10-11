@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Models\DashboardWidget;
 use App\Modules\Dashboard\Models\KpiDefinition;
@@ -20,6 +21,7 @@ use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\LoanWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\ReturnWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\SupplyChainWidgetAnalytics;
+use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\KpiSnapshotService;
 use Database\Seeders\DashboardRoleLayoutSeeder;
 use Database\Seeders\DashboardWidgetSeeder;
@@ -286,5 +288,101 @@ class WidgetSeedIntegrityTest extends TestCase
         }
 
         $this->assertSame([], $missing, "widget gates naming unknown permissions:\n".implode("\n", $missing));
+    }
+
+    /**
+     * A widget is gated by who may read its DATA — not by a page grant or a
+     * self-service slug that happened to be nearby (01-matrix §D2 G-P2-1/2/4).
+     *
+     * Three shape errors are pinned here, each fixed in
+     * 2026_10_11_110000_regate_dashboard_widgets_on_dataset_reads:
+     *
+     *  - production tiles on `production.dashboard.view`, a PAGE grant held by
+     *    production_manager and the admin wildcard, so the role that owns the
+     *    production schedule had its own tiles stripped from its dashboard;
+     *  - a finance projection and a production projection on `forecasting.view`,
+     *    held by six roles including purchasing_officer and warehouse_staff —
+     *    buyers rendering finance's cash forecast;
+     *  - the org-wide attendance/leave projection on `attendance.view`, a
+     *    self-service slug every role holds.
+     */
+    public function test_widget_gates_follow_the_dataset_read(): void
+    {
+        $expected = [
+            'production.kpi' => 'production',
+            'machine.utilization' => 'production',
+            'oee.gauges' => 'production',
+            'forecast.cash_flow' => 'accounting',
+            'forecast.capacity' => 'production',
+            'forecast.attendance' => 'attendance',
+            'forecast.revenue' => 'accounting',
+        ];
+
+        foreach ($expected as $key => $module) {
+            $widget = DashboardWidget::query()->where('key', $key)->firstOrFail();
+
+            $this->assertSame(
+                KpiSnapshotService::moduleGates($module),
+                $widget->permission_any,
+                "widget {$key} is gated by the wrong dataset read",
+            );
+            // The set IS the gate. A single slug left alongside it would be a
+            // second rule that can disagree with the tiles over the same data.
+            $this->assertNull($widget->permission, "widget {$key} carries a second gate");
+        }
+    }
+
+    /**
+     * …and the gates produce that audience when the real path reads them.
+     *
+     * The column check above would still pass if `canSeeWidget` ignored
+     * `permission`, so the audience is asserted through
+     * `listAvailableWidgets` — the method the picker and the layout endpoint
+     * both use. Both directions matter: the schedule owner must GAIN its
+     * production tiles, and the buyer and the floor must LOSE the finance one.
+     */
+    public function test_regated_widgets_reach_the_intended_audience(): void
+    {
+        $service = app(DashboardLayoutService::class);
+
+        $visible = fn (string $role): array => array_column(
+            $service->listAvailableWidgets($this->userWithRole($role)),
+            'key',
+        );
+
+        $ppc = $visible('ppc_head');
+        foreach (['production.kpi', 'machine.utilization', 'oee.gauges', 'forecast.capacity'] as $key) {
+            $this->assertContains($key, $ppc, "ppc_head cannot see {$key}");
+        }
+
+        foreach (['purchasing_officer', 'warehouse_staff'] as $role) {
+            foreach (['forecast.cash_flow', 'forecast.capacity', 'production.kpi', 'oee.gauges'] as $key) {
+                $this->assertNotContains($key, $visible($role), "{$role} can see {$key}");
+            }
+        }
+
+        // The company-wide reader holds ONE slug — `dashboard.company.view` —
+        // and it is what makes their landing page work. A gate written as a
+        // single module slug would pass every assertion above and leave the
+        // executive's finance family drawing empty, which is the silent half of
+        // this defect.
+        $executive = $visible('vice_president');
+        foreach (['forecast.cash_flow', 'forecast.capacity', 'forecast.revenue', 'production.kpi', 'oee.gauges'] as $key) {
+            $this->assertContains($key, $executive, "vice_president cannot see {$key}");
+        }
+
+        $this->assertContains('forecast.cash_flow', $visible('finance_officer'));
+
+        $this->assertContains('forecast.attendance', $visible('hr_officer'));
+        $this->assertContains('forecast.attendance', $visible('vice_president'));
+        $this->assertNotContains('forecast.attendance', $visible('driver'));
+    }
+
+    private function userWithRole(string $slug): User
+    {
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', $slug)->value('id'),
+            'email' => 'widget+'.substr(uniqid(), -8).'@t.test',
+        ]);
     }
 }

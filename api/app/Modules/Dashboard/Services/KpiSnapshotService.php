@@ -38,7 +38,8 @@ class KpiSnapshotService
      * A module absent from this map is ungated on the scorecard.
      *
      * Membership rule, applied without naming a role: the module's own
-     * dashboard slug, plus any other page whose KPI strip actually renders that
+     * dashboard slug, plus the module's DATA read where that differs from the
+     * page grant, plus any other page whose KPI strip actually renders that
      * module's codes (`/dashboard/plant-manager` draws OEE, WO completion rate
      * and first-pass yield, so it qualifies for `production` and `quality`),
      * plus `dashboard.company.view` — a company-wide read is by definition a
@@ -47,10 +48,17 @@ class KpiSnapshotService
      * modules instead of being handed four whole module dashboards
      * (DSS 01-matrix §D4 #3 / G-P3-2).
      *
+     * `production.view` is the data-read entry: `production.dashboard.view`
+     * means "may open /production/dashboard", which only the plant manager holds
+     * besides the admin wildcard, so the role that owns the schedule was denied
+     * OEE and WO completion rate — two of the four codes its own strip declares
+     * (G-P2-2 / G-P2-3). The data read is held by exactly ppc_head,
+     * production_manager and system_admin.
+     *
      * @var array<string, list<string>>
      */
     public const MODULE_PERMISSIONS = [
-        'production' => ['production.dashboard.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
+        'production' => ['production.dashboard.view', 'production.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
         'quality' => ['dashboard.quality.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
         'supply_chain' => ['dashboard.ppc.view', 'dashboard.company.view'],
         'purchasing' => ['dashboard.purchasing.view', 'dashboard.company.view'],

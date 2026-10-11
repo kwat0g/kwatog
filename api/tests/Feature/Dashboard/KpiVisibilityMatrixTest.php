@@ -123,6 +123,52 @@ class KpiVisibilityMatrixTest extends TestCase
     }
 
     /**
+     * The role that owns the production schedule can read its own production
+     * numbers.
+     *
+     * `production.dashboard.view` is a PAGE grant ("may open
+     * /production/dashboard") held by production_manager and the admin wildcard,
+     * so gating the production KPIs on it left ppc_head — which plans every work
+     * order — reading 1 of the 4 codes on its own strip (G-P2-2 / G-P2-3).
+     * `production.view` is the production DATA read, so the schedule owner gains
+     * oee and wo_completion_rate.
+     */
+    public function test_the_production_data_read_admits_the_schedule_owner(): void
+    {
+        $readable = $this->readableCodes($this->userWithRole('ppc_head'));
+
+        $this->assertContains('oee', $readable);
+        $this->assertContains('wo_completion_rate', $readable);
+    }
+
+    /**
+     * …and stops there: a module's DATA read must not reach into another module.
+     *
+     * ppc_head holds no `quality.*` grant, so first_pass_yield stays unreadable.
+     * That is why `PPC_KPIS` no longer lists it (G-P2-3): the strip renders an
+     * empty message for a code the viewer cannot read, so a strip tile is only
+     * honest if the code is readable by the role holding the page. Reading it
+     * there is a GRANT decision, and this test is what makes granting it a
+     * deliberate edit rather than a side effect of a data-read slug.
+     */
+    public function test_the_data_read_does_not_widen_a_role_beyond_its_own_modules(): void
+    {
+        $readable = $this->readableCodes($this->userWithRole('ppc_head'));
+
+        $this->assertNotContains('first_pass_yield', $readable);
+
+        $modules = KpiDefinition::query()
+            ->whereIn('code', $readable)
+            ->pluck('module')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(['production', 'supply_chain'], $modules);
+    }
+
+    /**
      * Every declared gate is a slug some role can hold.
      *
      * A gate naming a permission that does not exist refuses everyone: the KPI

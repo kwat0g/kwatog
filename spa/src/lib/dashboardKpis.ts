@@ -10,11 +10,29 @@
  * `default` intentionally passes `[]`: the widget home shows its own widgets.
  */
 export const PRODUCTION_MANAGER_KPIS = ['oee', 'wo_completion_rate', 'first_pass_yield'];
-export const PPC_KPIS = ['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield'];
+// `oee` and `wo_completion_rate` are readable because the production KPI gate
+// includes the production DATA read — `production.dashboard.view` is a page grant
+// ppc_head does not hold, and gating the KPIs on it stripped two of the four
+// codes this strip used to list from the role that owns the schedule
+// (G-P2-2 / G-P2-3) — it drew 1 of 4. All three below now render.
+//
+// `first_pass_yield` is gone rather than granted: it is a QUALITY reading, and
+// ppc_head holds no `quality.*` grant. The strip renders an empty message for a
+// code the viewer cannot read, so leaving it here would have promised a tile
+// that could never draw. Reading it on this dashboard is a grant decision, not a
+// list edit.
+export const PPC_KPIS = ['oee', 'wo_completion_rate', 'on_time_delivery'];
 export const FINANCE_KPIS = ['ar_aging_60d', 'budget_utilization'];
 export const HR_KPIS = ['attendance_rate'];
+// `on_time_delivery` is a SUPPLY-CHAIN reading (gated by the PPC dashboard read),
+// which purchasing_officer does not hold — so this strip draws 1 of its 2 codes.
+// Left in the list deliberately: unlike PPC's quality code, supplier on-time
+// performance is squarely purchasing's concern, so the fix is the grant, and
+// that is recorded as a decision rather than silently dropped here.
 export const PURCHASING_KPIS = ['supplier_quality', 'on_time_delivery'];
 export const QC_KPIS = ['dppm', 'first_pass_yield', 'ncr_closure_days'];
+// Same shape as purchasing: `supplier_quality` is a purchasing reading the floor
+// has no grant for, so this strip draws 1 of 2.
 export const WAREHOUSE_KPIS = ['inventory_turnover', 'supplier_quality'];
 export const ADMIN_KPIS: string[] = [];
 export const DEFAULT_KPIS: string[] = [];

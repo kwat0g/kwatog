@@ -183,13 +183,29 @@ class DashboardWidgetSeeder extends Seeder
     {
         return [
             // ─── Production / Plant ────────────────────────────────
-            ['key' => 'production.kpi',                'name' => 'Production KPIs',           'module' => 'production',  'permission' => 'production.dashboard.view', 'render_kind' => 'trend'],
+            // Data read, not the page grant. `production.dashboard.view` means
+            // "may open /production/dashboard", and the only role holding it
+            // besides the admin wildcard is the plant manager — so the role that
+            // OWNS the schedule (ppc_head) had its own production widgets
+            // stripped (G-P2-2). `production.view` is the production data read
+            // and is held by exactly ppc_head + production_manager + system_admin,
+            // so re-gating here adds that role and nobody else.
+            //
+            // The gate is the module's READ SET (KpiSnapshotService::moduleGates),
+            // not one slug, for the same reason every `kpi.*` tile uses it: the
+            // audience for a production dataset is genuinely two roles — the
+            // module's own holder AND the holder of the company-wide read. A
+            // single data-read slug would have been correct for ppc_head and
+            // silent for the executive, whose entire authority is
+            // `dashboard.company.view`: their company page would have advertised
+            // a production family it then drew empty. One rule, expressed once.
+            ['key' => 'production.kpi',                'name' => 'Production KPIs',           'module' => 'production',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('production'), 'render_kind' => 'trend'],
             ['key' => 'production.active_wo',          'name' => 'Active Work Orders',        'module' => 'production',  'permission' => 'production.work_orders.view'],
             ['key' => 'production.wo_breakdown',       'name' => 'WO Status Breakdown',       'module' => 'production',  'permission' => 'production.work_orders.view', 'render_kind' => 'breakdown'],
             ['key' => 'production.gantt_mini',         'name' => 'Production Schedule (Gantt)', 'module' => 'production', 'permission' => 'production.schedule.view'],
-            ['key' => 'machine.utilization',           'name' => 'Machine Utilization',       'module' => 'production',  'permission' => 'production.dashboard.view', 'render_kind' => 'gauge'],
+            ['key' => 'machine.utilization',           'name' => 'Machine Utilization',       'module' => 'production',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('production'), 'render_kind' => 'gauge'],
             ['key' => 'machine.status',                'name' => 'Machine Status',            'module' => 'production',  'permission' => 'mrp.machines.view'],
-            ['key' => 'oee.gauges',                    'name' => 'OEE Gauges',                'module' => 'production',  'permission' => 'production.dashboard.view', 'render_kind' => 'gauge'],
+            ['key' => 'oee.gauges',                    'name' => 'OEE Gauges',                'module' => 'production',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('production'), 'render_kind' => 'gauge'],
             ['key' => 'chain.stage_breakdown',         'name' => 'Chain Stage Breakdown',     'module' => 'production',  'permission' => 'dashboard.view_bottlenecks'],
 
             // ─── Quality ────────────────────────────────────────────
@@ -264,17 +280,34 @@ class DashboardWidgetSeeder extends Seeder
             // (hr.headcount, finance.revenue_mtd, qc.pareto) — a projection
             // of a dataset is no less sensitive than the dataset.
             ['key' => 'forecast.headcount',            'name' => 'Headcount Forecast',        'module' => 'hr',          'permission' => 'hr.employees.view'],
-            ['key' => 'forecast.revenue',              'name' => 'Revenue Forecast',          'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
+            // Same defect as the cash-flow tile below, on the one forecast that
+            // had been left behind: a PAGE grant used as a data gate, so the
+            // projection was visible to whoever could open /dashboard/finance and
+            // invisible to the company-wide reader the projected numbers are for.
+            ['key' => 'forecast.revenue',              'name' => 'Revenue Forecast',          'module' => 'accounting',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('accounting')],
             ['key' => 'forecast.defect_rate',          'name' => 'Defect Rate Forecast',      'module' => 'quality',     'permission' => 'quality.view'],
             // Cash movement is accounting data, but the projection is a
             // forecasting read (same gate as the finance panel + demand page).
-            ['key' => 'forecast.cash_flow',            'name' => 'Cash Flow Forecast',        'module' => 'accounting',  'permission' => 'forecasting.view', 'render_kind' => 'trend'],
+            // "A projection of a dataset is gated by the dataset's read" — the
+            // rule the revenue/defect/headcount tiles already followed.
+            // `forecasting.view` is held by six roles including purchasing and
+            // warehouse, so it exposed a FINANCE projection to buyers (G-P2-4).
+            ['key' => 'forecast.cash_flow',            'name' => 'Cash Flow Forecast',        'module' => 'accounting',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('accounting'), 'render_kind' => 'trend'],
             // Plant load vs machine capacity: a planning read (same gate as
             // the ppc/plant-manager panels + demand page), grouped with production.
-            ['key' => 'forecast.capacity',             'name' => 'Capacity Forecast',         'module' => 'production',  'permission' => 'forecasting.view', 'render_kind' => 'trend'],
+            // Production dataset → the production data read. ppc_head keeps the
+            // tile that plans their schedule; purchasing and warehouse stop
+            // seeing production capacity (G-P2-4).
+            ['key' => 'forecast.capacity',             'name' => 'Capacity Forecast',         'module' => 'production',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('production'), 'render_kind' => 'trend'],
             // Expected attendance vs approved leave pipeline: an attendance
             // read (same gate as the hr panel + DTR page), grouped with hr.
-            ['key' => 'forecast.attendance',           'name' => 'Attendance Forecast',       'module' => 'hr',          'permission' => 'attendance.view', 'render_kind' => 'trend'],
+            // An ORG-WIDE attendance/leave pipeline projection, and
+            // `attendance.view` is a self-service slug every one of the 17 roles
+            // holds — so it was readable by all of them (G-P2-1's one real
+            // instance; the two `hr.team_*` tiles are department-scoped and
+            // null-safe by construction, so they are documented instead).
+            // `dashboard.hr.view` is the HR planning read.
+            ['key' => 'forecast.attendance',           'name' => 'Attendance Forecast',       'module' => 'hr',          'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('attendance'), 'render_kind' => 'trend'],
 
             // ─── Maintenance / Assets ──────────────────────────────
             ['key' => 'maintenance.open_wos',          'name' => 'Open Maintenance WOs',      'module' => 'maintenance', 'permission' => 'maintenance.view'],

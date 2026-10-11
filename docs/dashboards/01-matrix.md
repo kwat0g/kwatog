@@ -145,7 +145,7 @@ visibility.
 
 | Widget key | Permission | Qualifying roles |
 |---|---|---|
-| `production.kpi`, `machine.utilization`, `oee.gauges` | `production.dashboard.view` | adm, production_manager |
+| `production.kpi`, `machine.utilization`, `oee.gauges` | *set*: production read (G-P2-2 fixed) | adm, PM, PPC, VP |
 | `production.active_wo`, `production.wo_breakdown` | `production.work_orders.view` | adm, PM, PPC |
 | `production.gantt_mini` | `production.schedule.view` | adm, PM, PPC |
 | `machine.status` | `mrp.machines.view` | adm, PM, PPC, maintenance_tech, maintenance_supervisor |
@@ -161,8 +161,8 @@ visibility.
 | `finance.revenue_mtd` | `accounting.dashboard.view` | adm, finance |
 | `hr.headcount`, `hr.probation_alerts` | `hr.employees.view` | adm, HR, department_head (dept-scoped) |
 | `hr.on_leave_today` | `hr.employees.view_sensitive` | adm, HR |
-| `hr.team_dtr_today` | `attendance.view` | **all 17** (self-service slug — G-P2-1 leak) |
-| `hr.team_on_leave_today` | `leave.view` | **all 17** (same leak) |
+| `hr.team_dtr_today` | `attendance.view` | all 17 — **documented, not a leak**: dept-scoped and null-safe (G-P2-1) |
+| `hr.team_on_leave_today` | `leave.view` | all 17 — same, dept-scoped (G-P2-1) |
 | `payroll.upcoming` | `payroll.periods.view` | adm, HR, finance |
 | `approvals.pending` | none (self-scoped) | all 17 (empty for non-approvers) |
 | `purchasing.open_prs`, `purchasing.open_pos` | `purchasing.view` | adm, VP, finance, PM, purchasing, impex, department_head |
@@ -178,22 +178,19 @@ visibility.
 | `budget.utilization` | `budgeting.view` | adm, VP, finance |
 | `loans.outstanding` | `loans.view` | adm, VP, finance, HR, PM, department_head (dept-scoped unless `loans.write_off`) |
 | `forecast.headcount` | `hr.employees.view` | adm, HR, department_head |
-| `forecast.revenue` | `accounting.dashboard.view` | adm, finance |
+| `forecast.revenue` | *set*: accounting read (G-P2-4 fixed) | adm, finance, VP |
 | `forecast.defect_rate` | `quality.view` | adm, PM, QC |
-| `forecast.capacity` | `forecasting.view` | adm, finance, PM, PPC, purchasing, warehouse |
-| `forecast.cash_flow` | `forecasting.view` | adm, finance, PM, PPC, purchasing, warehouse (G-P2-4) |
-| `forecast.attendance` | `attendance.view` | **all 17** (G-P2-1) |
-| `kpi.oee`, `kpi.wo_completion_rate` | `production.dashboard.view` | adm, PM |
-| `kpi.dppm`, `kpi.first_pass_yield`, `kpi.ncr_closure_days` | `dashboard.quality.view` | adm, QC |
-| `kpi.on_time_delivery` | `dashboard.ppc.view` | adm, PPC |
-| `kpi.supplier_quality` | `dashboard.purchasing.view` | adm, purchasing |
-| `kpi.attendance_rate` | `dashboard.hr.view` | adm, HR |
-| `kpi.ar_aging_60d`, `kpi.budget_utilization` | `accounting.dashboard.view` | adm, finance |
-| `kpi.inventory_turnover` | `dashboard.warehouse.view` | adm, warehouse |
+| `forecast.capacity` | *set*: production read (G-P2-4 fixed) | adm, PM, PPC, VP |
+| `forecast.cash_flow` | *set*: accounting read (G-P2-4 fixed) | adm, finance, VP |
+| `forecast.attendance` | *set*: attendance planning read (G-P2-1 fixed) | adm, HR, VP |
+| `kpi.*` (all) | *set*: `KpiSnapshotService::moduleGates(module)` | the module's own dashboard holder **+ `dashboard.company.view`** |
 
 **Strip vs tile.** The per-page KPI strips (Task 1) pass role-chosen code lists to
-`GET /dashboard/kpi/trends`, which enforces the same module gate map — so strips and gates disagree for
-PM (2/3), PPC (1/4), purchasing (1/2), warehouse (1/2). QC/finance/HR strips are clean. See G-P2-3.
+`GET /dashboard/kpi/trends`, which enforces the same module gate map. After 2026-10-11 the strips that
+still draw fewer tiles than they list are purchasing (1/2) and warehouse (1/2) — both because
+`on_time_delivery` / `supplier_quality` read the other module, i.e. a GRANT question recorded as such
+rather than a list edit. PPC is clean again (3/3) now that its production codes are readable; PM, QC,
+finance and HR were already clean. See G-P2-3.
 
 ### C2. Module × role dashboards (every module must appear at least once)
 
@@ -328,24 +325,36 @@ operational queues, not approval cards.
 
 ### D2. Gaps discovered while writing this matrix (new)
 
-- **G-P2-1 / G-P3-1 (leak).** `attendance.view` and `leave.view` are self-service slugs held by all 17
-  roles but used as **global** widget gates for `hr.team_dtr_today`, `hr.team_on_leave_today` and
-  `forecast.attendance`. Every role, including `driver` and `warehouse_staff`, can mount
-  department-wide team tiles. Fix by re-gating on management slugs (`dashboard.hr.view` /
-  `attendance.*`) **or** by documenting the broad visibility as intentional (payload stays
-  dept-scoped and null-safe). Pin the outcome with a visibility-matrix test — this is the CLAUDE.md
-  self-scoped-permission-as-global-gate class.
+- **G-P2-1 (leak).** `attendance.view` and `leave.view` are self-service slugs held by all 17 roles but
+  used as **global** widget gates for `hr.team_dtr_today`, `hr.team_on_leave_today` and
+  `forecast.attendance`. — **FIXED 2026-10-11.** Measured, the two `hr.team_*` tiles are not a leak:
+  both payloads are department-scoped and null-safe by construction (`WidgetScope`), so no role reads
+  another department's names. They are documented as broad-but-harmless. `forecast.attendance` WAS the
+  real instance — an org-wide attendance/leave pipeline projection readable by all 17 — and is re-gated
+  on the attendance planning read. Pinned by
+  `WidgetSeedIntegrityTest::test_regated_widgets_reach_the_intended_audience` (driver: no).
 - **G-P2-2 (gate outage).** `ppc_head` holds `production.view`/`wo.*`/`schedule.view` but **not**
   `production.dashboard.view`, so `production.kpi`, `machine.utilization`, `oee.gauges`, `kpi.oee` and
-  `kpi.wo_completion_rate` are stripped from the role that owns the schedule. Either add the slug or
-  re-gate those widgets on `production.view`.
+  `kpi.wo_completion_rate` are stripped from the role that owns the schedule. — **FIXED 2026-10-11:**
+  re-gated on the production data read. `production.view` is held by exactly ppc_head +
+  production_manager + system_admin, so the fix adds that role and nobody else (measured: PPC 27 → 28
+  available widgets, +3 production tiles).
 - **G-P2-3 (strip ≠ gate).** Strip code lists were chosen per page, gates per module: PPC 1/4 of its
-  codes survive, PM 2/3, purchasing 1/2, warehouse 1/2. Failure is silent (empty-message branch). Fix by
-  deriving strips from `MODULE_PERMISSIONS` or asserting the pairs in a test.
+  codes survive, PM 2/3, purchasing 1/2, warehouse 1/2. Failure is silent (empty-message branch). —
+  **PPC FIXED 2026-10-11** (3/3 after the gate fix; the fourth code was a quality reading it holds no
+  grant for and was removed from the list rather than promised). Purchasing and warehouse remain 1/2 by
+  DESIGN and are commented at the list: the missing code is the other module's reading, so the fix is a
+  grant decision, not a list edit. `KpiVisibilityMatrixTest` pins both the readable set and that a
+  data-read slug does not widen a role past its own modules.
 - **G-P2-4 (dataset gate drift).** `forecasting.view` is held by finance, PM, PPC, purchasing and
   warehouse, exposing `forecast.cash_flow` (finance dataset) and `forecast.capacity` (production
-  dataset) to buyers and warehouse staff. Apply the documented "projection of a dataset = the dataset's
-  gate" rule uniformly and settings-drive the capacity-90% / attendance-8%/15% constants.
+  dataset) to buyers and warehouse staff. — **FIXED 2026-10-11:** every forecast is now gated on its
+  dataset's read SET, the same `moduleGates()` the `kpi.*` tiles use. Measured available-widget deltas:
+  purchasing 24 → 21, warehouse 18 → 15 (the three leaked forecasts each), ppc_head 27 → 28 (gained the
+  three production tiles, lost the finance projection). `forecast.revenue` was the one left behind on a
+  page grant and was fixed in the same migration, which is what puts §B's Demand-vs-supply family on the
+  executive page. Still open from this item: settings-driving the capacity-90% / attendance-8%/15%
+  constants.
 - **G-P3-2 (gate map can't express two qualified owners).** OTD is gated `dashboard.ppc.view`, attendance
   rate `dashboard.hr.view`; `impex_officer` and `department_head` need one of each and hold neither.
   `MODULE_PERMISSIONS` maps module→**one** slug; extend it to a set (or add new KPI definitions) rather
@@ -386,8 +395,14 @@ role-name branch anywhere.
 
 ### D4. Open questions for the reviewer (stop point)
 
-1. G-P2-1: re-gate the three shared-slug widgets, or document the broad visibility? — **OPEN**
-2. G-P2-2: grant `production.dashboard.view` to PPC, or re-gate the four production widgets? — **OPEN**
+1. G-P2-1: re-gate the three shared-slug widgets, or document the broad visibility? — **DECIDED
+   2026-10-11: split.** Measured rather than assumed: the two `hr.team_*` tiles stay on the self-service
+   slug and are documented (dept-scoped + null-safe by construction); `forecast.attendance` was the one
+   genuine org-wide leak and moved to the attendance planning read. A blanket re-gate would have traded a
+   non-leak for a dashboard outage.
+2. G-P2-2: grant `production.dashboard.view` to PPC, or re-gate the four production widgets? — **DECIDED
+   2026-10-11: re-gate.** Granting the page slug would have handed ppc_head a page it does not land on
+   and widened its surface for a read it already held; the data read is the narrower and truer gate.
 3. G-P3-2: extend `MODULE_PERMISSIONS` to slug sets, or add new KPI definitions for OTD/attendance
    audiences? — **DECIDED 2026-10-11: slug sets.** `MODULE_PERMISSIONS` is now
    `array<string, list<string>>` (any-one admits) and `dashboard_widgets.permission_any` carries the same

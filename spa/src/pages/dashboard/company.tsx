@@ -27,12 +27,19 @@ import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
  *   body         → the effective layout (personal → role default), stripped by
  *                  DashboardLayoutService against each widget's own gate
  *
- * That is why a block can simply be absent. Money, chain health, alerts and the
- * approvals worklist render for an executive; quality and demand-vs-supply do
- * not, because §B's panels for those draw on `quality.*` and `forecasting.view`
- * grants the executive does not hold — and omitting a panel is the documented
- * rule. Nothing here names a role, so granting one of those slugs adds the block
- * with no code change.
+ * That is why a block can simply be absent. Money, chain health, alerts, demand
+ * vs supply and the approvals worklist render for an executive; §B's quality
+ * panel does not, because it draws on `quality.*` grants the executive does not
+ * hold — and omitting a panel is the documented rule. Nothing here names a role,
+ * so granting that slug adds the block with no code change.
+ *
+ * Demand-vs-supply is the block that proved the rule rather than dodging it. It
+ * was absent because its two forecasts were gated on module PAGE slugs
+ * (`forecasting.view`, `accounting.dashboard.view`) that the executive does not
+ * hold and has no reason to; re-gating them on the datasets' read SETS — which
+ * admit `dashboard.company.view` — put the block here without granting a single
+ * new authority. A widget's gate is the read of its data, and this page is where
+ * that stops being a slogan.
  *
  * Unlike `/dashboard/default` there is no picker or reset: this is a survey of
  * the company, and its block set is the role default rather than a personal

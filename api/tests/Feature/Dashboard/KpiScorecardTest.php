@@ -43,7 +43,22 @@ class KpiScorecardTest extends TestCase
         $items = $response->json('data');
         $this->assertIsArray($items);
         $this->assertTrue(array_is_list($items), 'Role-filtered KPI data must encode as a JSON array.');
-        $this->assertSame('on_time_delivery', $items[0]['definition']['code']);
+
+        // The contract is the ORDER, not one code. This used to assert the
+        // single row ppc_head happened to be able to read (`on_time_delivery`),
+        // which made a filtering COINCIDENCE the test's subject: it broke the
+        // moment ppc_head gained the production read it should always have had
+        // (G-P2-3, the production KPI gate was a page grant it does not hold).
+        // A one-row role list also cannot test ordering at all, so the
+        // assertion is now the ordering rule itself.
+        $codes = array_column(array_column($items, 'definition'), 'code');
+        $this->assertContains('oee', $codes, 'ppc_head must read the production KPIs');
+        $this->assertContains('on_time_delivery', $codes, 'ppc_head must read the supply-chain KPIs');
+
+        $orders = array_column(array_column($items, 'definition'), 'display_order');
+        $sorted = $orders;
+        sort($sorted);
+        $this->assertSame($sorted, $orders, 'the scorecard must stay ordered by display_order');
     }
 
     public function test_compute_defaults_to_previous_calendar_month_across_year_boundary(): void

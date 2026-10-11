@@ -39,18 +39,25 @@ class DashboardRoleLayoutSeeder extends Seeder
             // Company overview (DSS 01-matrix §B) — this role had NO default at
             // all, so its generic layout resolved to empty and the dashboard
             // switcher had nothing to add. The blocks it can read are money
-            // (AR/AP/unpaid/upcoming payables), chain health, alerts and the
-            // approvals worklist; it holds no `quality.*` or `forecasting.view`
-            // grant, so the quality and demand-vs-supply panels are omitted the
-            // same way every other dashboard omits a panel it may not read. The
-            // six health-strip readings arrive through `KpiStrip`, not as
+            // (AR/AP/unpaid/upcoming payables), chain health, demand vs supply
+            // (revenue + capacity forecasts) and the approvals worklist.
+            //
+            // It holds no `quality.*` grant, so §B's quality panel stays omitted.
+            // Demand-vs-supply is present because those two forecasts are gated on
+            // their DATASET reads, which admit the company-wide read; gating them
+            // on a module page grant (`forecasting.view`, `accounting.dashboard.view`)
+            // had hidden them from the one reader the page is built for. This role
+            // does not hold |forecasting.view` and never needed to.
+            //
+            // The six health-strip readings arrive through `KpiStrip`, not as
             // widgets here, because the strip already names them and a tile that
             // duplicates the strip's own number is noise.
             'vice_president' => [
                 'chain.stage_breakdown', 'alerts',
                 'finance.ar_aging', 'finance.ap_aging',
                 'finance.unpaid_invoices', 'finance.upcoming_payables',
-                'budget.utilization', 'approvals.pending',
+                'budget.utilization', 'forecast.revenue', 'forecast.capacity',
+                'approvals.pending',
             ],
             'production_manager' => [
                 'production.kpi', 'chain.stage_breakdown', 'machine.utilization',

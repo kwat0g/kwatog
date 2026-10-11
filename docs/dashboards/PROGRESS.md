@@ -198,9 +198,51 @@ the strip. Absent:
 | Missing | Reason |
 |---|---|
 | Quality (defect Pareto, NCR aging, 8D SLA burn) | The executive holds no `quality.view` / `quality.ncr.view`. Omission is the documented rule; adding it is a grant decision, not a code change. The strip still carries DPPM and first-pass yield. |
-| Demand vs supply | Needs `forecasting.view` (or `accounting.dashboard.view`); same call. |
+| Demand vs supply | **Built in C below** — this was not a grant call after all, it was a gate written on a page slug. Both forecasts now read the datasets they project. |
 | Chain-stage *donut*, AP due ≤3d, chain-recovery backlog card | `chain.stage_breakdown` is a `scalar` widget today, so it renders one figure; enriching it means registering a rich provider in `WidgetAnalyticsService::providers()` **and** `WidgetSeedIntegrityTest::handledKeys()`. The other two are new SQL. |
 | Risks & opportunities, Weekly briefing | Phase 5 by §B. |
+
+### Phase 2 — C: widget gates follow the dataset read (shipped)
+
+Closes §D2 G-P2-1, G-P2-2 and G-P2-4, and the PPC half of G-P2-3. Resolves §D4 #1 and #2. One cause
+behind all of them: **a widget's gate was chosen by which permission happened to be nearby** — a page
+grant, or a self-service slug — rather than by who may read the data behind it.
+
+| Deliverable | Files | State |
+|---|---|---|
+| Re-gate migration | `2026_10_11_110000_regate_dashboard_widgets_on_dataset_reads.php` — 7 keys, applies **and** reverses, sourced from `KpiSnapshotService::moduleGates()` so the tiles and the widgets cannot disagree | applied |
+| Seeder | `DashboardWidgetSeeder` — the 7 rows now carry `permission_any` (the module's read set) with `permission` null | shipped |
+| Executive page | `DashboardRoleLayoutSeeder` VP default gains `forecast.revenue` + `forecast.capacity` → §B's Demand-vs-supply family | 8 → 10 blocks |
+| Strip honesty | `spa/src/lib/dashboardKpis.ts` — `PPC_KPIS` drops `first_pass_yield` (a quality reading ppc_head holds no grant for, so the tile could never draw); purchasing/warehouse kept at 1/2 with the reason commented at the list | shipped |
+| Drift guards | `WidgetSeedIntegrityTest::test_widget_gates_follow_the_dataset_read` + `::test_regated_widgets_reach_the_intended_audience` (both directions: who GAINS and who LOSES) · `KpiVisibilityMatrixTest` +2 (the production data read admits the schedule owner; it does not widen them past their own modules) | 196 backend pass |
+
+**Measured, not asserted — available widgets before → after** (migration rolled back, probed through
+`DashboardLayoutService::listAvailableWidgets`, then re-applied; the same round trip is the migration's
+own up/down proof):
+
+| Role | Before | After | What moved |
+|---|---|---|---|
+| `vice_president` | 31 | **37** | +6: the three production tiles, revenue/capacity forecasts, attendance forecast |
+| `ppc_head` | 27 | 28 | +3 production tiles and the capacity forecast; −2 (the finance cash-flow projection and the org-wide attendance forecast, which were never its read) |
+| `purchasing_officer` | 24 | **21** | −3: both forecasts and the attendance projection — a buyer was rendering finance's cash forecast (G-P2-4) |
+| `warehouse_staff` | 18 | **15** | −3: same three |
+| `driver` | 8 | **7** | −1: the org-wide attendance/leave projection |
+
+**The hole in the naive fix, caught before shipping:** gating on a single data-read slug is correct for the
+module's own holder and **silent for the executive**, whose entire authority is `dashboard.company.view`.
+`forecast.cash_flow` would have been visible to `finance_officer` and invisible to the VP — the company page
+advertising a finance family it then drew empty. The gate is the module's read **set**, the same one the
+`kpi.*` tiles use, which is why the VP is the biggest gainer above. `forecast.revenue` was the last
+forecast still on a page grant and was fixed in the same migration.
+
+**G-P2-1 is documented, not re-gated.** Measured: the two `hr.team_*` tiles are department-scoped and
+null-safe by construction (`WidgetScope`), so no role reads another department's roster — re-gating them
+would have traded a non-leak for a dashboard outage. `forecast.attendance` was the one genuine org-wide
+leak and moved.
+
+**Dev-DB side effects:** the migration applied, plus `DashboardWidgetSeeder` and
+`DashboardRoleLayoutSeeder` re-run on dev. The demo VP account keeps its **8 saved personal blocks** —
+personal rows win over the role default by design, so its page shows 8 while the default now carries 10.
 
 ## Later phases — PENDING
 
