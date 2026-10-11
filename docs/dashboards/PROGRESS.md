@@ -32,13 +32,24 @@
 | E | Frontend (deps, 30 widgets, tokens, gaps) | `docs/dashboards/phase0/E-frontend.md` | done |
 | F | Realtime/perf (14 events, 32 cache keys, 15 risks, test constraints) | `docs/dashboards/phase0/F-realtime-perf.md` | done |
 | S | Executive synthesis | `docs/dashboards/00-discovery.md` | done |
-| S | Bug/gap log (68 items, all open) | `docs/dashboards/FINDINGS.md` | done |
+| S | Bug/gap log (68 items — 7 closed + 1 partial since synthesis, see below) | `docs/dashboards/FINDINGS.md` | done |
 | S | This file | `docs/dashboards/PROGRESS.md` | done |
 
 Conflicts noted during synthesis (see `00-discovery.md` "Discrepancies" for detail):
 1. "9 ledger types" = 8 live + 1 dead (`payroll` never writes rows).
 2. Widget scalar count 54 (D) vs 55 (F) — recount `DashboardWidgetSeeder.php:48-105`
    before citing. No other cross-section conflicts.
+
+**Findings statuses updated 2026-10-11 (Phase 2).** `FINDINGS.md` was written with all 68 items `open` and
+stayed that way after work landed, so the log read as 68 live blockers when 8 were already fixed. Closed,
+everified against the live `ogami` schema rather than against a migration's own output: F-030 (returns
+fact-table indexes — `return_requests` + all six provenance FKs on `return_request_items`) and F-031…F-036
+(the whole index-debt batch — `wo_operations`, `production_logs`, `grn_items`, `budgets`/
+`budget_transfers`/`credit_note_lines`, PR/PO dates, delivery·WO·MWO timestamps — each column confirmed
+present in `pg_indexes`, and each attributed to the one migration that creates it). **F-037 is partial**: `invoices.sales_order_id`/`delivery_id`,
+`deliveries.invoice_id` and `official_receipts.invoice_id` are indexed;
+`invoice_items.source_delivery_item_id` still is not. The remaining 60 stay open — nothing was marked
+closed on the strength of a commit message alone.
 
 ## Phase 1 status — COMPLETE, AWAITING REVIEW (spec only; no feature code)
 
@@ -243,6 +254,42 @@ leak and moved.
 **Dev-DB side effects:** the migration applied, plus `DashboardWidgetSeeder` and
 `DashboardRoleLayoutSeeder` re-run on dev. The demo VP account keeps its **8 saved personal blocks** —
 personal rows win over the role default by design, so its page shows 8 while the default now carries 10.
+
+### Phase 2 — D: role-dashboard polish, Tasks 1–8 (shipped)
+
+Plan: `docs/superpowers/plans/2026-10-11-roles-dashboard-polish.md` (its own spec record — the grilling
+session of 2026-10-11 is filed there, not in a separate spec doc). **This increment was implemented and
+committed across 9 commits but never recorded here until now** — it is the reason `PROGRESS.md` could be
+read as "only A/B/C exist". Commits: `a3c7d6b4`, `dcd56028`, `42b3e3e9`, `5c972807`, `0ca24d35`,
+`8248c0b8`, `a33cb6bd`, `ca8c4ffd`, `122fcbb1`.
+
+| Task | Deliverable | Files |
+|---|---|---|
+| T1 | Consistent compact KPI strip on all 9 role surfaces (status dot + 6-pt sparkline + MoM delta; empty message, never a crash, for a permission-stripped code) | `spa/src/components/dashboard/KpiStrip.tsx` (+`.test.tsx`) · `spa/src/lib/dashboardKpis.ts` (new — the per-role code lists) · mounted in `plant-manager`, `hr`, `ppc`, `finance`, `purchasing`, `warehouse`, `quality`, `admin`, `default` |
+| T2 | Top-8 SLA-sorted approvals link-out on every dashboard, replacing the bare count | `api/app/Modules/Dashboard/Services/Analytics/ApprovalsWidgetAnalytics.php` · `spa/src/components/dashboard/registry.tsx` · `spa/src/api/dashboard-layout.ts` · `ApprovalBoardScopeTest` + `ApprovalsWidgetTest` |
+| T3 | Standalone KPI scorecard page **deleted** (KPIs distributed per role); `/dashboard/scorecard` redirects to the dispatch target rather than 404s; admin gains a Compute panel | `spa/src/pages/dashboard/{scorecard,scorecard.test}.tsx` removed in `5c972807` · `spa/src/routes/dashboardRoutes.tsx` (+`.test.tsx`) · `spa/src/pages/dashboard/admin.tsx` · `DashboardWidgetSeeder` |
+| T4 | Freshness + 5-state polish: `WIDGET_STALE_AFTER_MS` / `staleAfterMs`, stale badge in `DashboardShell`, and widget-level error isolation | `spa/src/components/dashboard/DashboardShell.tsx` (+`.test.tsx`) · `spa/src/api/dashboard-layout.ts` · `spa/src/api/dashboards.ts` · `spa/src/components/ui/WidgetErrorBoundary.tsx` · `spa/src/components/guards/ErrorBoundary.tsx` |
+| T5 | Existing forecasts surfaced inline (read-only) on finance / hr / ppc / purchasing / quality / warehouse | `ForecastingDashboardService`, `PurchasingDashboardService` · `spa/src/components/dashboard/{ForecastPanel,DemandForecastPanel}.tsx` (+ tests) |
+| T6 | **New** cash-flow forecast (finance) | `Dashboard/Services/CashFlowForecastService.php` · `Analytics/CashFlowWidgetAnalytics.php` · `spa/src/components/dashboard/CashFlowPanel.tsx` (+ test) · `CashFlowForecastTest` |
+| T7 | **New** capacity forecast (ppc + plant-manager) | `Dashboard/Services/CapacityForecastService.php` · `Analytics/CapacityWidgetAnalytics.php` · `Support/ForecastTrend.php` · `spa/src/components/dashboard/CapacityPanel.tsx` (+ test) · `CapacityForecastTest` |
+| T8 | **New** attendance forecast (hr) | `Dashboard/Services/AttendanceForecastService.php` · `Analytics/AttendanceWidgetAnalytics.php` · `spa/src/components/dashboard/AttendanceRiskPanel.tsx` (+ test) · `AttendanceForecastTest` |
+
+Each forecast task landed the same four edits — service, analytics provider, seeder gate, SPA panel —
+and registered the provider in **both** `WidgetAnalyticsService::providers()` and
+`WidgetSeedIntegrityTest::handledKeys()`, which is the drift guard that keeps the rich↔provider bijection
+honest. **T1/T3 were re-verified during Phase 2 C:** all 8 tasks are genuinely implemented (T1's strip is
+mounted in 9 pages, T2 carries `LIMIT=8` + SLA sort, T3's redirect and admin panel exist with tests, T4's
+stale badge has `DashboardShell.test.tsx`), so nothing here is a plan checkbox without code behind it.
+
+Interaction with C, worth knowing: C changed the gate on `forecast.cash_flow`, `forecast.capacity` and
+`forecast.attendance` — three tiles D created. D gated them on `forecasting.view` (the slug its own plan
+named); C re-gated them on their datasets' read sets. D's provider/seeder wiring is unchanged by that, but
+a reader of D alone would conclude the gates are `forecasting.view`.
+
+**Not done in D, and why:** no inline approve anywhere (the approval board stays read-only; act lives on
+entity controllers only), and the strip is mounted per role rather than derived from
+`KpiSnapshotService::MODULE_PERMISSIONS` — that derivation is G-P2-3, addressed in C by hand for PPC and
+recorded for purchasing/warehouse.
 
 ## Later phases — PENDING
 

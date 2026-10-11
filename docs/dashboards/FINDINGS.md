@@ -5,6 +5,12 @@ Bug/gap log. Every item extracted from the six section files in
 (`blocks-dashboard` / `high` / `medium` / `low`) · evidence (`file:line`) · status.
 All statuses `open` at synthesis time. Source section noted per item (A–F).
 
+**Status column maintained since 2026-10-11.** The log sat with all 68 items `open` after work started
+landing, which made it unreadable as a live blocker list. A closure here means the fix was verified
+against the running schema or a passing test, and names what it was verified against — never inferred
+from a commit subject. 7 closed, 1 partial, 60 untouched; see `PROGRESS.md` "Findings statuses updated
+2026-10-11". Closed rows keep their original text so the symptom stays searchable.
+
 ---
 
 ## Approval ledger / chains (C)
@@ -45,19 +51,19 @@ All statuses `open` at synthesis time. Source section noted per item (A–F).
 | F-027 | low | F9: inspections dual addressing (legacy `entity_type/entity_id` + typed FKs) — dashboards must prefer typed FKs | `inspections` table (B §2.6-F9) | open |
 | F-028 | medium | F10: NCR-close WO creation can fail logged-only — reconcile `disposition=rework` + NULL WO ids | `Quality/Services/NcrService.php:1124` (B §2.6-F10) | open |
 | F-029 | medium | F11: stock tables (`StockLevel`, `StockMovement`) have no audit rows — movement ledger is the only history | verified grep=0 vs 136 models with trait (B §2.6-F11) | open |
-| F-030 | blocks-dashboard | F12: returns fact tables nearly unindexed — no status/type/date/counterparty index on `return_requests`; all six provenance FKs + quarantine cols on items unindexed | `return_requests`, `return_request_items` (B §1.15/§4 rows 10-15) | open |
+| F-030 | blocks-dashboard | F12: returns fact tables nearly unindexed — no status/type/date/counterparty index on `return_requests`; all six provenance FKs + quarantine cols on items unindexed | `return_requests`, `return_request_items` (B §1.15/§4 rows 10-15) | **closed 2026-10-11** — index batch `2026_10_11_090200`; all six provenance FKs + quarantine cols + status/type/return_date confirmed in `pg_indexes` |
 
 ## Index debt blocking aggregations (B §4, F §2)
 
 | ID | Severity | Finding | Evidence | Status |
 |---|---|---|---|---|
-| F-031 | high | `wo_operations.work_order_id` unindexed — table has NO non-PK index at all (operation→WO join scans) | B §4a rows 2,5,6 | open |
-| F-032 | high | `production_logs.wo_operation_id` + `operator_id` unindexed — only-pkey table (OEE/downtime joins scan) | B §4a rows 3,4 | open |
-| F-033 | high | `grn_items.goods_receipt_note_id` unindexed (line→header join) | B §4a row 1 | open |
-| F-034 | high | `budgets` has ONLY pkey (fiscal_year/department/status unfiltered); `budget_transfers` line-item FKs unindexed; `credit_note_lines` pkey-only | B §4a rows 39-41 | open |
-| F-035 | high | `purchase_requests.date` + `purchase_orders.date` unindexed (aging/cycle-time trends scan) | B §4a rows 25,26 | open |
-| F-036 | high | `deliveries.delivered_at/confirmed_at/received_at` unindexed (OTD/lead-time); `work_orders.actual_start/end` unindexed (WO lead-time); MWO `started_at` unindexed (MTTR) | B §4a rows 23,44,45 | open |
-| F-037 | medium | `invoices.sales_order_id` / `delivery_id`, `deliveries.invoice_id`, `invoice_items.source_delivery_item_id`, `official_receipts.invoice_id` unindexed (AR chain joins) | B §4a rows 17-21 | open |
+| F-031 | high | `wo_operations.work_order_id` unindexed — table has NO non-PK index at all (operation→WO join scans) | B §4a rows 2,5,6 | **closed 2026-10-11** — `2026_10_11_090000`; `work_order_id` (+ machine/mold/operator/status) in `pg_indexes` |
+| F-032 | high | `production_logs.wo_operation_id` + `operator_id` unindexed — only-pkey table (OEE/downtime joins scan) | B §4a rows 3,4 | **closed 2026-10-11** — both columns indexed (`2026_10_11_090000`) |
+| F-033 | high | `grn_items.goods_receipt_note_id` unindexed (line→header join) | B §4a row 1 | **closed 2026-10-11** — `2026_10_11_090100` |
+| F-034 | high | `budgets` has ONLY pkey (fiscal_year/department/status unfiltered); `budget_transfers` line-item FKs unindexed; `credit_note_lines` pkey-only | B §4a rows 39-41 | **closed 2026-10-11** — `2026_10_11_090300`: `budgets(department_id, fiscal_year_id, status)`, `budget_transfers(from/to_line_item_id)`, `credit_note_lines(credit_note_id)` |
+| F-035 | high | `purchase_requests.date` + `purchase_orders.date` unindexed (aging/cycle-time trends scan) | B §4a rows 25,26 | **closed 2026-10-11** — `2026_10_11_090300` |
+| F-036 | high | `deliveries.delivered_at/confirmed_at/received_at` unindexed (OTD/lead-time); `work_orders.actual_start/end` unindexed (WO lead-time); MWO `started_at` unindexed (MTTR) | B §4a rows 23,44,45 | **closed 2026-10-11** — three migrations, one per table: `090400` (deliveries), `090000` (`work_orders.actual_start/end`), `090100` (MWO `started_at`); all confirmed in `pg_indexes` |
+| F-037 | medium | `invoices.sales_order_id` / `delivery_id`, `deliveries.invoice_id`, `invoice_items.source_delivery_item_id`, `official_receipts.invoice_id` unindexed (AR chain joins) | B §4a rows 17-21 | **partial 2026-10-11** — four of five indexed (`invoices`, `deliveries`, `official_receipts` confirmed in `pg_indexes`); **`invoice_items.source_delivery_item_id` is still unindexed** |
 | F-038 | medium | Line-item date gap: `sales_order_items`, `purchase_order_items`, `invoice_items`, `bill_items`, `work_order_defects`, `payroll_deduction_details` carry NO timestamps — time-series must join parents | B §5.3-G1 | open |
 
 ## Backend↔frontend gating bugs (A §2)
