@@ -19,6 +19,7 @@ import { PeriodNote } from '@/components/dashboard/period';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { QC_KPIS } from '@/lib/dashboardKpis';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -339,8 +340,8 @@ export default function QcDashboard() {
  ))}
  </KpiGrid>
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days']} />
+  {/* KPI Scorecard strip */}
+  <KpiStrip codes={QC_KPIS} compact />
 
  {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
  <PanelRow>

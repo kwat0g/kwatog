@@ -18,6 +18,7 @@ import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/Dashbo
 import { DonutBreakdown } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { WAREHOUSE_KPIS } from '@/lib/dashboardKpis';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -269,8 +270,8 @@ export default function WarehouseDashboard() {
  ))}
  </KpiGrid>
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['inventory_turnover', 'supplier_quality']} />
+  {/* KPI Scorecard strip */}
+  <KpiStrip codes={WAREHOUSE_KPIS} compact />
 
  {/* ── Row 2: Incoming + Outgoing queue ── */}
  <PanelRow>

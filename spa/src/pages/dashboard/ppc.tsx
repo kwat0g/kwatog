@@ -30,6 +30,7 @@ import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel'
 import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { PPC_KPIS } from '@/lib/dashboardKpis';
 
 import { LuCheck, LuMinus, LuCircle, LuX } from '@/lib/icons';
 /* ───────────────────────── Typed interface ───────────────────────── */
@@ -533,8 +534,8 @@ export default function PpcDashboard() {
  {/* ── Row 1: KPIs ── */}
  <KpiRow kpis={kpis} />
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
+  {/* KPI Scorecard strip */}
+  <KpiStrip codes={PPC_KPIS} compact />
 
  {/* ── Row 2: Chain stages + Alerts ── */}
  <PanelRow>

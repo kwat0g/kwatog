@@ -21,6 +21,7 @@ import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { PRODUCTION_MANAGER_KPIS } from '@/lib/dashboardKpis';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -163,7 +164,8 @@ export default function PlantManagerDashboard() {
 
               {/* The OEE card drills into the full OEE report; the rest go to the scorecard. */}
               <KpiStrip
-                codes={['oee', 'dppm', 'first_pass_yield', 'on_time_delivery']}
+                codes={PRODUCTION_MANAGER_KPIS}
+                compact
                 linkByCode={{ oee: '/production/oee' }}
               />
             </DashSection>

@@ -15,6 +15,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { FINANCE_KPIS } from '@/lib/dashboardKpis';
 import { BarComparison } from '@/components/charts';
 
 /**
@@ -85,8 +86,8 @@ export default function FinanceDashboardPage() {
  <StatCard label="Revenue (MTD)" value={formatPeso(data.revenue_mtd)} linkTo="/accounting/income-statement" />
  </KpiGrid>
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['ar_aging_60d', 'budget_utilization']} />
+  {/* KPI Scorecard strip */}
+  <KpiStrip codes={FINANCE_KPIS} compact />
 
  {/* Finance controls formerly exposed as standalone navigation. */}
  {(data.current_accounting_period || data.pending_credit_notes) && (

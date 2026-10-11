@@ -19,6 +19,7 @@ import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { PURCHASING_KPIS } from '@/lib/dashboardKpis';
 import { formatPeso } from '@/lib/formatNumber';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
@@ -294,8 +295,8 @@ export default function PurchasingDashboard() {
  ))}
  </KpiGrid>
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['supplier_quality', 'on_time_delivery']} />
+  {/* KPI Scorecard strip */}
+  <KpiStrip codes={PURCHASING_KPIS} compact />
 
  {/* ── Row 2: PR Action Queue + PO Pipeline ── */}
  <PanelRow>

@@ -6,6 +6,8 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { DEFAULT_KPIS } from '@/lib/dashboardKpis';
 import { DashboardGrid, DashboardGridItem } from '@/components/dashboard/DashboardGrid';
 import { FinanceSection } from '@/components/dashboard/FinanceSection';
 import { LiveDashboardWidget } from '@/components/dashboard/registry';
@@ -89,11 +91,16 @@ export default function DashboardDefaultPage() {
  </div>
  ) : undefined}
  >
- {(snapshot) => {
- const widgets = snapshot.items;
- return (
- <>
- {widgetData.isError && <div role="alert" className="text-sm text-danger-fg">
+  {(snapshot) => {
+  const widgets = snapshot.items;
+  return (
+  <>
+  {/* Shared KPI strip slot. DEFAULT_KPIS is intentionally empty — the widget
+      home shows its own permission-derived widgets — so this renders nothing,
+      but every dashboard mounts the strip from the same place. */}
+  <KpiStrip codes={DEFAULT_KPIS} compact />
+
+  {widgetData.isError && <div role="alert" className="text-sm text-danger-fg">
  Dashboard values could not be refreshed. Displayed values may be outdated. <Button variant="secondary" size="sm" onClick={() => void widgetData.refetch()}>Retry dashboard values</Button>
  </div>}
  {widgets.length === 0 ? (

@@ -5,6 +5,8 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { ADMIN_KPIS } from '@/lib/dashboardKpis';
 import { SparkLine } from '@/components/charts/SparkLine';
 import {
  dashboardsApi,
@@ -50,9 +52,14 @@ export default function AdminDashboard() {
  query={q}
  refreshingQueryKey={['dashboard', 'admin']}
  >
- {({ kpis, panels }) => (
- <>
- {/* Row 1 — 4 system KPI stat cards */}
+  {({ kpis, panels }) => (
+  <>
+  {/* Shared KPI strip slot. ADMIN_KPIS is intentionally empty — the admin
+      surface gets the Compute KPIs panel instead (Task 3) — so this renders
+      nothing, but every dashboard mounts the strip from the same place. */}
+  <KpiStrip codes={ADMIN_KPIS} compact />
+
+  {/* Row 1 — 4 system KPI stat cards */}
  <KpiGrid count={kpis.length}>
  {kpis.map((kpi) => (
  <StatCard

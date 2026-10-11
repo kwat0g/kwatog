@@ -8,6 +8,7 @@ import { Chip } from '@/components/ui/Chip';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { HR_KPIS } from '@/lib/dashboardKpis';
 import { PeriodNote } from '@/components/dashboard/period';
 import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
@@ -140,7 +141,7 @@ export default function HrDashboard() {
             </KpiGrid>
 
             {/* KPI Scorecard strip */}
-            <KpiStrip codes={['attendance_rate']} />
+            <KpiStrip codes={HR_KPIS} compact />
 
             {/* Row 2 — Attendance summary + pending my action */}
             <PanelRow>
