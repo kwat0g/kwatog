@@ -11,6 +11,7 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\Production\Services\ProductionDashboardService;
 use App\Modules\Quality\Services\DefectParetoService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ final class CoreWidgetAnalytics
     public function __construct(
         private readonly WidgetScope $scope,
         private readonly DefectParetoService $pareto,
+        private readonly ProductionDashboardService $production,
     ) {}
 
     /** @return list<string> */
@@ -41,6 +43,11 @@ final class CoreWidgetAnalytics
             'finance.ar_aging',
             'hr.headcount',
             'purchasing.open_pos',
+            // §B's "chain health" block. This widget used to be a scalar count of
+            // active order-to-cash chains, which is a number with no decision in
+            // it — §B asks for the stage breakdown, because "how much is stuck in
+            // QC" is actionable where "14 active" is not.
+            'chain.stage_breakdown',
         ];
     }
 
@@ -57,8 +64,44 @@ final class CoreWidgetAnalytics
             'finance.ar_aging' => $this->arAging(),
             'hr.headcount' => $this->headcount($user),
             'purchasing.open_pos' => $this->poStatusMix($user),
+            'chain.stage_breakdown' => $this->chainStageMix(),
             default => [],
         };
+    }
+
+    /**
+     * Active order-to-cash chains by stage (§B "chain health").
+     *
+     * Delegates to ProductionDashboardService::chainStageBreakdown() rather than
+     * re-deriving the stage map: that method owns the SO-status-to-stage
+     * mapping, and a second copy here would disagree with `/production/dashboard`
+     * the first time a status moved.
+     *
+     * The source is a COUNT per stage over active sales orders — the same
+     * aggregate, and the same audience, as the scalar this replaced (gate
+     * `dashboard.view_bottlenecks`). No customer, order number or amount is
+     * carried, so splitting the total into stages does not widen who sees what.
+     *
+     * NOT included: `manual_required` (a PR/PO conversion state and a
+     * delivery→invoice handoff state, neither of them a sales-order stage) and the
+     * chain-recovery backlog (a `chain_listener_runs` count that belongs with the
+     * recovery surface, not inside a stage breakdown). Both were dropped from §B's
+     * wording rather than folded in as stages they are not.
+     *
+     * @return array<string, mixed>
+     */
+    private function chainStageMix(): array
+    {
+        $stages = $this->production->chainStageBreakdown();
+
+        return [
+            'total' => array_sum(array_column($stages, 'count')),
+            'segments' => array_map(static fn (array $stage): array => [
+                'label' => $stage['label'],
+                'value' => $stage['count'],
+                'tone' => $stage['color'],
+            ], $stages),
+        ];
     }
 
     /**

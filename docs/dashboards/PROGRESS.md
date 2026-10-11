@@ -210,7 +210,7 @@ the strip. Absent:
 |---|---|
 | Quality (defect Pareto, NCR aging, 8D SLA burn) | The executive holds no `quality.view` / `quality.ncr.view`. Omission is the documented rule; adding it is a grant decision, not a code change. The strip still carries DPPM and first-pass yield. |
 | Demand vs supply | **Built in C below** — this was not a grant call after all, it was a gate written on a page slug. Both forecasts now read the datasets they project. |
-| Chain-stage *donut*, AP due ≤3d, chain-recovery backlog card | `chain.stage_breakdown` is a `scalar` widget today, so it renders one figure; enriching it means registering a rich provider in `WidgetAnalyticsService::providers()` **and** `WidgetSeedIntegrityTest::handledKeys()`. The other two are new SQL. |
+| Chain-stage *donut*, AP due ≤3d, chain-recovery backlog card | **Chain health built in F below.** AP due ≤3d is served by the existing `finance.upcoming_payables` (its horizon is the `dashboard.widgets.payables_horizon_days` setting); the recovery backlog card is still open, with its reason recorded in F. |
 | Risks & opportunities, Weekly briefing | Phase 5 by §B. |
 
 ### Phase 2 — C: widget gates follow the dataset read (shipped)
@@ -353,21 +353,69 @@ using it would have hidden the page from half the roles it exists for (the M6 tr
 **Dev-DB side effects:** the migration applied, plus `RolePermissionSeeder`, `DashboardWidgetSeeder` and
 `DashboardRoleLayoutSeeder` re-run on dev.
 
+### Phase 2 — F: §B chain health is a real breakdown (shipped)
+
+`chain.stage_breakdown` was a **scalar** — a single count of active order-to-cash chains. §B asks for the
+stage breakdown, and it is right that it does: "14 active" is a number with no decision in it, while "9
+still in Order Entered, 2 In Production" is where the bottleneck is.
+
+| Deliverable | Files | State |
+|---|---|---|
+| Rich provider | `CoreWidgetAnalytics` handles `chain.stage_breakdown` → `{total, segments[]}` — the same shape `qc.pareto` and `production.wo_breakdown` already produce, so the SPA's existing `WidgetBreakdown` renders it with no new component | shipped |
+| Shared source | `ProductionDashboardService::chainStageBreakdown()` — `private` → **public**, so the widget and `/production/dashboard` read ONE stage map. A re-derived copy would disagree the first time a sales-order status moved | shipped |
+| Render kind | `DashboardWidgetSeeder` — `chain.stage_breakdown` scalar → `breakdown` | 68 widgets |
+| Drift guards | `WidgetSeedIntegrityTest` — rich↔provider bijection **and** "every handled key is seeded rich": the second is what fails if the seeder render kind is not moved with the provider | passed |
+
+**Live, on the VP's layout:** `kind=breakdown total=13 segments=7` — Order Entered 9 (success), MRP Planned
+2 (success), In Production 2 (info), QC Pending 0, Ready to Ship 0, Delivered Unpaid 0 (warning), At Risk
+0 (danger). Tones come from the source's own colour map, and the whole set is counts — no customer, order
+number or amount — so splitting the total into stages does not widen who sees what.
+
+**Two §B chain words were dropped rather than folded in, and that is deliberate.** `manual_required` is
+not a sales-order stage at all — it is a PR/PO *conversion* state and a delivery→invoice *handoff* state,
+so making it a segment of this donut would have labelled a stalled procurement as a production stage. The
+chain-recovery backlog is a `chain_listener_runs` count that belongs on the recovery surface.
+
+**Still open from §B's chain-health row:** the recovery-backlog card. `ChainListenerRecoveryService`
+already owns "which runs need attention" (it is the `attention` query its index endpoint filters on), and
+that query is built inline inside the service. Shipping the card means extracting it into one shared
+builder first — the alternative, re-expressing "needs attention" in the dashboard, is exactly the
+divergence the row-scope doctrine in CLAUDE.md forbids. Deliberately not done in a session's last hour
+against a working, tested recovery surface; recorded so the next pass does it with the reuse intact.
+
 ## Later phases — PENDING
 
-Remaining after E, from the docs and in their own order: the §B blocks that still need work (quality panel
-= grant decision; chain-stage donut = register a rich provider in `WidgetAnalyticsService::providers()`
-**and** `WidgetSeedIntegrityTest::handledKeys()`; AP due ≤3d + chain-recovery backlog = new SQL), §B's
-Risks & opportunities / Weekly briefing (Phase 5 by spec), the DSS recommendation tiles, and the D1
-blockers that are not dashboard work at all (board-blind approval card sourcing, notification darkness,
-finance dual-slug authority, `ApprovalRecord` audit trait, sub-month KPI grain). `driver` and `employee`
-keep `/dashboard/default` by design — their primary surfaces are the driver PWA and `/self-service`.
+Remaining after E/F, from the docs and in their own order:
+
+1. **§B's quality panel — a grant decision, not code.** It needs `quality.view` / `quality.ncr.view`,
+   which the executive does not hold. The docs are explicit that adding it is a deliberate widening of
+   executive access to quality records, so it is left for the reviewer rather than taken by a build pass.
+   Note the strip already carries DPPM and first-pass yield through the company read.
+2. **§B's chain-recovery backlog card** — extract `ChainListenerRecoveryService`'s attention query into one
+   shared builder first (see Phase 2 — F), then the card is a scalar over it.
+3. **§B's Risks & opportunities and Weekly briefing** — Phase 5 by spec.
+4. **The DSS recommendation tiles** — the Phase 5 capability behind them does not exist yet.
+5. **The D1 blockers that are not dashboard work at all:** board-blind approval card sourcing (payroll +
+   14 custom types), notification darkness, finance dual-slug authority (F-039), the `ApprovalRecord` audit
+   trait, sub-month KPI grain, and the top-step escalation gap.
+6. **Pre-existing red surfaces found while verifying, not fixed here:** `LateProductionReportTest` and 96
+   other `tests/Feature/Production` tests fail on a `produced_count` / `good_count` validation mismatch in
+   `RecordOutputRequest` + `StoreLateProductionReportRequest` (both last changed by `943e27ff`, a
+   consolidation commit dated 2026-10-10 — not by this mission), and `spa/src/lib/notificationMeta.test.ts`
+   fails on 7 missing `maintenance.*` notification types. Neither is a dashboard defect and neither is in
+   this mission's diffs; recorded because a red suite hides the next real signal.
+
+`driver` and `employee` keep `/dashboard/default` by design — their primary surfaces are the driver PWA and
+`/self-service`.
 
 ## Coverage checklist skeleton
 
 **Phase 1 status of this checklist:** every role, module area and approval type below has a *spec* in
-`01-matrix.md` (+ `M-p1/2/3`). The boxes stay unchecked because they track **built** coverage, which
-starts in Phase 2.
+`01-matrix.md` (+ `M-p1/2/3`). Boxes track **built** coverage, which started in Phase 2 — the Roles list
+below is therefore ticked as of Phase 2 E, and the Module / Approval lists stay unchecked until each has a
+built surface rather than a spec. Ticking a role means it lands on a purpose-built dashboard, not that
+every item in its `M-p*.md` spec is done; the per-role gaps are recorded in those specs and in
+`FINDINGS.md`.
 
 ### Spec coverage delivered in Phase 1
 

@@ -209,7 +209,12 @@ class DashboardWidgetSeeder extends Seeder
             ['key' => 'machine.utilization',           'name' => 'Machine Utilization',       'module' => 'production',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('production'), 'render_kind' => 'gauge'],
             ['key' => 'machine.status',                'name' => 'Machine Status',            'module' => 'production',  'permission' => 'mrp.machines.view'],
             ['key' => 'oee.gauges',                    'name' => 'OEE Gauges',                'module' => 'production',  'permission' => null, 'permission_any' => KpiSnapshotService::moduleGates('production'), 'render_kind' => 'gauge'],
-            ['key' => 'chain.stage_breakdown',         'name' => 'Chain Stage Breakdown',     'module' => 'production',  'permission' => 'dashboard.view_bottlenecks'],
+            // Rich since §B's "chain health" block: the scalar was a single count of
+            // active chains, and a count is not a decision. The stage split comes
+            // from ProductionDashboardService::chainStageBreakdown(), i.e. the same
+            // mapping /production/dashboard shows, so the two cannot disagree.
+            // Gate unchanged — same aggregate, same audience as the scalar was.
+            ['key' => 'chain.stage_breakdown',         'name' => 'Chain Stage Breakdown',     'module' => 'production',  'permission' => 'dashboard.view_bottlenecks', 'render_kind' => 'breakdown'],
 
             // ─── Quality ────────────────────────────────────────────
             ['key' => 'qc.pareto',                     'name' => 'QC Defect Pareto',          'module' => 'quality',     'permission' => 'quality.view', 'render_kind' => 'breakdown'],

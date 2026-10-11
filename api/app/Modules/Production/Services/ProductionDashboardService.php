@@ -116,7 +116,20 @@ class ProductionDashboardService
      * Stage breakdown payload for the StageBreakdown component.
      * Aggregates SOs by their derived chain stage.
      */
-    private function chainStageBreakdown(): array
+    /**
+     * Active order-to-cash chains grouped by the stage each one is sitting in,
+     * with the share of the live book and a severity tone per stage.
+     *
+     * Public because the dashboard's `chain.stage_breakdown` widget renders this
+     * same breakdown (see `CoreWidgetAnalytics`). It was private while the widget
+     * showed only a total count of active chains, and the two definitions of
+     * "which stage is this SO in" must not be allowed to diverge — a stage map
+     * re-derived in the dashboard would disagree with this page the first time a
+     * sales-order status moved.
+     *
+     * @return list<array{label: string, count: int, percent: float, color: string}>
+     */
+    public function chainStageBreakdown(): array
     {
         // SOs that have not been delivered/invoiced/paid/closed/cancelled.
         $sos = SalesOrder::query()
