@@ -76,9 +76,43 @@ maintenance pair → impex_officer → department_head → sales_officer → cus
 employee → driver. Ranked blockers from Phase 0 unchanged: board-blind card sourcing → notification
 gaps → index migrations → finance authority pick.
 
+## Phase 2 status — FOUNDATION SHIPPED (analytics layer + indexes + dictionary)
+
+Branch `docs/dss-discovery-phase0`. Feature code this time (the mission's Phase 2 is a build phase);
+role pages and DSS tiles are still NOT built.
+
+| Deliverable | Files | State |
+|---|---|---|
+| Analytics service layer | `api/app/Modules/Dashboard/Support/Analytics/{MetricDefinition,MetricRegistry,AnalyticsPeriod}.php` · `Services/Analytics/{AnalyticsCache,AnalyticsService}.php` · `Services/Analytics/Domains/{DomainMetric,ReturnsPipelineAnalytics,WorkOrderLeadTimeAnalytics}.php` | shipped |
+| Thin controller + routes | `Controllers/MetricController.php` · `Requests/{ListMetricsRequest,ShowMetricRequest}.php` · `routes.php` (`GET /dashboard/metrics`, `GET /dashboard/metrics/{metric}`) | shipped |
+| Index batch (Phase 0 B §4 cheapest wins) | 6 migrations `2026_10_11_0900xx_*` → **75 indexes across 20 tables** (production/WO-log joins, GRN+QC joins, all of returns, budgets/credit lines, PR/PO dates, delivery OTD timestamps, chain links) | shipped |
+| Metric dictionary | `docs/dashboards/METRICS.md` — **generated** by `php artisan metrics:doc` from `MetricRegistry` | shipped |
+| Settings | `dashboard.analytics.cache_ttl_seconds` = 60 (migration `2026_10_11_090500`) | shipped |
+| Tests | `tests/Feature/Dashboard/AnalyticsLayerTest.php` (16) · `tests/Feature/Dashboard/Phase0IndexMigrationTest.php` (4) | 20 passed / 136 assertions |
+
+Contract the layer enforces: `{data, meta}` envelope (period + previous window, generated_at, cache_ttl,
+scope, sources, indexes, caveats) · gate = the metric's ONE permission, permission-derived (no role-name
+branch) · payload cached per `metric + scope + filters` with a version counter (`flush($code)` /
+`flush()`), which works on the array store as well as Redis · aggregation in SQL `GROUP BY` /
+`date_trunc`, never a PHP row loop · sources and declared indexes are asserted against the migrated
+schema, so a renamed column or a skipped index fails the suite.
+
+Open items (deliberately NOT in this increment): materialized views / summary tables, snapshot-history
+tables (daily stock/AR/AP/WIP), per-metric invalidation observers, endpoint p95 query-budget assertions,
+Reverb streaming for metric changes, SPA types/API client for the two endpoints, and the remaining
+~11 rows of the Phase 0 §4a index list (portal, MRP-run, payroll and admin tables).
+
+Verification done: migrations ran on a scratch DB `ogami_test_an` (up → `migrate:rollback --step=6` →
+up, all 6 reversible); `tests/Feature/Dashboard` 185 passed with 1 pre-existing failure
+(`WidgetAnalyticsServiceTest::test_provider_failure_degrades_instead_of_throwing` — the test drops
+`inspection_measurements`, which now has dependents from `2026_10_08_236000_add_finish_first_wo_qc`,
+recorded as failing at base commit earlier in this mission); drift guards (`WidgetSeedIntegrityTest`,
+`ApprovalChainRolePermissionDriftTest`, dispatch/layout tests) 46 passed. The app database `ogami` has
+NOT been migrated — run `php artisan migrate` to apply the batch.
+
 ## Later phases — PENDING
 
-Awaiting mission phasing past Phase 1.
+Awaiting mission phasing past Phase 2 (role pages, forecasting wiring, approval centre, DSS tiles).
 
 ## Coverage checklist skeleton
 
@@ -170,7 +204,9 @@ Custom single-step:
 
 1. Read this file (`docs/dashboards/PROGRESS.md`) for mission state.
 2. Read the synthesis (`docs/dashboards/00-discovery.md`) for the full picture, then the Phase 1
-   synthesis (`docs/dashboards/01-matrix.md`) for the specs and the parked decisions.
+   synthesis (`docs/dashboards/01-matrix.md`) for the specs and the parked decisions, and
+   `docs/dashboards/METRICS.md` for the analytics dictionary (generated — regenerate with
+   `php artisan metrics:doc`).
 3. Drop into section files (`docs/dashboards/phase0/A–F`) only for the detail a task needs; drop into
    `phase0/M-p1.md` / `M-p2.md` / `M-p3.md` for a specific role's 10-item spec.
 4. Check `docs/dashboards/FINDINGS.md` for the open bug/gap relevant to the task.
