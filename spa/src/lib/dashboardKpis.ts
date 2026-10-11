@@ -18,3 +18,37 @@ export const QC_KPIS = ['dppm', 'first_pass_yield', 'ncr_closure_days'];
 export const WAREHOUSE_KPIS = ['inventory_turnover', 'supplier_quality'];
 export const ADMIN_KPIS: string[] = [];
 export const DEFAULT_KPIS: string[] = [];
+
+/**
+ * Owning role dashboard per KPI module. A KPI tile's default drill-down is
+ * the dashboard that renders that KPI's strip, scrolled to the card —
+ * there is no standalone scorecard page anymore.
+ */
+export const KPI_DASHBOARD_PATH: Record<string, string> = {
+  production: '/dashboard/plant-manager',
+  quality: '/dashboard/quality',
+  supply_chain: '/dashboard/ppc',
+  purchasing: '/dashboard/purchasing',
+  attendance: '/dashboard/hr',
+  accounting: '/dashboard/finance',
+  inventory: '/dashboard/warehouse',
+};
+
+/** In-dashboard anchor link for a KPI code, e.g. `/dashboard/quality#kpi-dppm`. */
+export function kpiDashboardLink(code: string, module?: string): string {
+  const byCode: Record<string, string> = {
+    oee: '/dashboard/plant-manager',
+    wo_completion_rate: '/dashboard/plant-manager',
+    dppm: '/dashboard/quality',
+    first_pass_yield: '/dashboard/quality',
+    ncr_closure_days: '/dashboard/quality',
+    on_time_delivery: '/dashboard/ppc',
+    supplier_quality: '/dashboard/purchasing',
+    attendance_rate: '/dashboard/hr',
+    ar_aging_60d: '/dashboard/finance',
+    budget_utilization: '/dashboard/finance',
+    inventory_turnover: '/dashboard/warehouse',
+  };
+  const base = byCode[code] ?? (module ? KPI_DASHBOARD_PATH[module] : undefined) ?? '/dashboard';
+  return `${base}#kpi-${code}`;
+}

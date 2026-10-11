@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { kpiApi } from '@/api/kpi';
 import { cn } from '@/lib/cn';
 import { SparkLine } from '@/components/charts/SparkLine';
+import { kpiDashboardLink } from '@/lib/dashboardKpis';
 import { kpiGridCols } from './DashboardShell';
 import type { KpiScorecardItem } from '@/types/dashboard/kpi';
 
@@ -65,7 +66,7 @@ function momDeltaTone(
 interface KpiStripProps {
   codes: string[];
   className?: string;
-  /** Per-code drill-down overrides. Any code missing from this map links to the KPI Scorecard. */
+  /** Per-code drill-down overrides. Any code missing from this map links to the KPI's owning dashboard anchor (`#kpi-{code}`). */
   linkByCode?: Record<string, string>;
   /** Compact density used by every role dashboard: tighter cards + 6-pt sparkline. */
   compact?: boolean;
@@ -145,7 +146,8 @@ export function KpiStrip({ codes, className, linkByCode, compact }: KpiStripProp
         return (
           <Link
             key={item.definition.code}
-            to={linkByCode?.[item.definition.code] ?? '/dashboard/scorecard'}
+            id={`kpi-${item.definition.code}`}
+            to={linkByCode?.[item.definition.code] ?? kpiDashboardLink(item.definition.code, item.definition.module)}
             className={cn(
               'bg-surface border border-default rounded-md hover:bg-elevated transition-colors duration-fast flex items-start justify-between gap-2',
               compact ? 'px-2.5 py-2' : 'p-3',

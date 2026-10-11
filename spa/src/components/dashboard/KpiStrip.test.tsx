@@ -77,7 +77,7 @@ describe('KpiStrip', () => {
     );
 
     expect(await screen.findByText('On-Time Delivery Rate')).toBeInTheDocument();
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/dashboard/scorecard');
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/dashboard/ppc#kpi-on_time_delivery');
   });
 
   it('renders status dot + 6-pt sparkline + MoM delta for a compact KPI', async () => {

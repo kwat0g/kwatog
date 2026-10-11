@@ -1,6 +1,13 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { LuRefreshCw } from '@/lib/icons';
+import { usePermission } from '@/hooks/usePermission';
+import { kpiApi } from '@/api/kpi';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
@@ -54,10 +61,15 @@ export default function AdminDashboard() {
  >
   {({ kpis, panels }) => (
   <>
-  {/* Shared KPI strip slot. ADMIN_KPIS is intentionally empty — the admin
-      surface gets the Compute KPIs panel instead (Task 3) — so this renders
-      nothing, but every dashboard mounts the strip from the same place. */}
-  <KpiStrip codes={ADMIN_KPIS} compact />
+   {/* Shared KPI strip slot. ADMIN_KPIS is intentionally empty — the admin
+       surface gets the Compute KPIs panel instead (Task 3) — so this renders
+       nothing, but every dashboard mounts the strip from the same place. */}
+   <KpiStrip codes={ADMIN_KPIS} compact />
+
+   {/* KPI compute lives here only, now the standalone scorecard page is gone.
+       Route-guarded on dashboard.admin.view; the panel double-checks so the
+       button never renders for a role that reached this shell without it. */}
+   <ComputeKpisPanel />
 
   {/* Row 1 — 4 system KPI stat cards */}
  <KpiGrid count={kpis.length}>
@@ -95,6 +107,76 @@ export default function AdminDashboard() {
  </>
  )}
  </DashboardShell>
+ );
+}
+
+/* ── Compute KPIs ──────────────────────────────────────────────────────── */
+
+const MONTHS = [
+ 'January', 'February', 'March', 'April', 'May', 'June',
+ 'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function ComputeKpisPanel() {
+ const { can } = usePermission();
+ const queryClient = useQueryClient();
+
+ const now = new Date();
+ const [year, setYear] = useState(now.getFullYear());
+ const [month, setMonth] = useState(now.getMonth() + 1);
+
+ const computeMut = useMutation({
+ mutationFn: () => kpiApi.compute(year, month),
+ onSuccess: (res) => {
+ toast.success(res.data.message);
+ queryClient.invalidateQueries({ queryKey: ['kpi'] });
+ },
+ onError: () => {
+ toast.error('Failed to compute KPIs');
+ },
+ });
+
+ if (!can('dashboard.admin.view')) return null;
+
+ const yearOptions = Array.from({ length: 4 }, (_, i) => now.getFullYear() - 3 + i);
+
+ return (
+ <Panel
+ title="Compute KPIs"
+ meta={`${MONTHS[month - 1]} ${year}`}
+ >
+ <div className="flex flex-wrap items-center gap-2">
+ <Select
+ value={month}
+ onChange={(e) => setMonth(Number(e.target.value))}
+ aria-label="Month"
+ >
+ {MONTHS.map((m, i) => (
+ <option key={i} value={i + 1}>{m}</option>
+ ))}
+ </Select>
+ <Select
+ value={year}
+ onChange={(e) => setYear(Number(e.target.value))}
+ aria-label="Year"
+ >
+ {yearOptions.map((y) => (
+ <option key={y} value={y}>{y}</option>
+ ))}
+ </Select>
+ <Button
+ variant="secondary"
+ onClick={() => computeMut.mutate()}
+ loading={computeMut.isPending}
+ icon={<LuRefreshCw size={14} />}
+ >
+ {computeMut.isPending ? 'Computing…' : 'Compute KPIs'}
+ </Button>
+ </div>
+ <p className="text-2xs text-muted mt-2">
+ Recomputes every KPI snapshot for the selected month. Strips refresh on next load.
+ </p>
+ </Panel>
  );
 }
 

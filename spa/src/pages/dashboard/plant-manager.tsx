@@ -162,7 +162,7 @@ export default function PlantManagerDashboard() {
                 ))}
               </KpiGrid>
 
-              {/* The OEE card drills into the full OEE report; the rest go to the scorecard. */}
+              {/* The OEE card drills into the full OEE report; the rest go to their owning dashboard KPI anchor. */}
               <KpiStrip
                 codes={PRODUCTION_MANAGER_KPIS}
                 compact

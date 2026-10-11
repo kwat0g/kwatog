@@ -21,8 +21,9 @@ const WarehouseDashboardPage = lazy(() => import('@/pages/dashboard/warehouse'))
 const QcDashboardPage = lazy(() => import('@/pages/dashboard/quality'));
 const AdminDashboardPage = lazy(() => import('@/pages/dashboard/admin'));
 
-// Task 15 — KPI Scorecard
-const ScorecardPage = lazy(() => import('@/pages/dashboard/scorecard'));
+// KPI Scorecard page removed — every KPI renders on its owning role
+// dashboard strip. The shim keeps old bookmarks off a 404 by landing them
+// on the permission-derived role router instead.
 
 // Cross-module pages (no specific module guard)
 const CalendarPage = lazy(() => import('@/pages/calendar'));
@@ -73,9 +74,9 @@ export const dashboardRoutes = (
  element={<PermissionGuard permission="dashboard.quality.view"><Suspense fallback={<SkeletonDashboard />}><QcDashboardPage /></Suspense></PermissionGuard>} />
  <Route path="/dashboard/admin"
  element={<PermissionGuard permission="dashboard.admin.view"><Suspense fallback={<SkeletonDashboard />}><AdminDashboardPage /></Suspense></PermissionGuard>} />
- {/* Task 15 — KPI Scorecard (any authenticated user) */}
- <Route path="/dashboard/scorecard"
- element={<Suspense fallback={<SkeletonDashboard />}><ScorecardPage /></Suspense>} />
+  {/* KPI Scorecard page removed; shim for old bookmarks → role router. */}
+  <Route path="/dashboard/scorecard"
+  element={<Navigate to="/dashboard" replace />} />
 
  {/* Series F / Task F1 — Cross-module calendar */}
  <Route

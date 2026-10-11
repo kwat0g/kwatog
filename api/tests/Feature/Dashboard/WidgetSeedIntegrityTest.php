@@ -185,11 +185,11 @@ class WidgetSeedIntegrityTest extends TestCase
         $this->assertSame([], $unlinked, 'widgets with no link_path: '.implode(', ', $unlinked));
     }
 
-    /** Every link must be an in-app absolute path, not an external URL. */
+    /** Every link must be an in-app absolute path, not an external URL. KPI tiles carry an in-dashboard `#kpi-{code}` anchor. */
     public function test_link_paths_are_in_app_absolute_paths(): void
     {
         foreach (DashboardWidget::query()->pluck('link_path', 'key') as $key => $path) {
-            $this->assertMatchesRegularExpression('#^/[a-z0-9\-/]*$#', (string) $path, "widget {$key} has a non-app link");
+            $this->assertMatchesRegularExpression('~^/[a-z0-9\-/]*(#[a-z0-9\-_]+)?$~', (string) $path, "widget {$key} has a non-app link");
         }
     }
 

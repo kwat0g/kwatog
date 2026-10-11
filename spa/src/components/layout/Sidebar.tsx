@@ -168,12 +168,6 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'action_center',
       },
       {
-        to: '/dashboard/scorecard',
-        label: 'KPI Scorecard',
-        description: 'Key performance indicator scorecard',
-        icon: LuChartColumnIncreasing,
-      },
-      {
         to: '/chains',
         label: 'Business Chain Tracker',
         icon: WorkflowIcon,

@@ -286,13 +286,37 @@ class DashboardWidgetSeeder extends Seeder
     /** The "Open →" target for a key, or null when it has no deeper page. */
     public static function linkFor(string $key): ?string
     {
-        // Every KPI resolves to the scorecard, which carries the full monthly
-        // table and the target/threshold columns a tile cannot show.
+        // Every KPI resolves to its owning role dashboard, scrolled to the
+        // strip card — the standalone scorecard page is gone, and the tile
+        // cannot show the monthly table anyway.
         if (str_starts_with($key, 'kpi.')) {
-            return '/dashboard/scorecard';
+            return self::kpiLinkFor(substr($key, strlen('kpi.')));
         }
 
         return self::LINK_BY_KEY[$key] ?? null;
+    }
+
+    /**
+     * Owning role dashboard per KPI module, mirroring
+     * KpiSnapshotService::MODULE_PERMISSIONS (the grant that gates the KPI).
+     */
+    private const KPI_DASHBOARD_BY_MODULE = [
+        'production'   => '/dashboard/plant-manager',
+        'quality'      => '/dashboard/quality',
+        'supply_chain' => '/dashboard/ppc',
+        'purchasing'   => '/dashboard/purchasing',
+        'attendance'   => '/dashboard/hr',
+        'accounting'   => '/dashboard/finance',
+        'inventory'    => '/dashboard/warehouse',
+    ];
+
+    /** In-dashboard anchor link for a KPI code, e.g. `/dashboard/quality#kpi-dppm`. */
+    public static function kpiLinkFor(string $code): string
+    {
+        $module = collect(self::kpiCatalog())->firstWhere('code', $code)['module'] ?? null;
+        $base = self::KPI_DASHBOARD_BY_MODULE[$module] ?? '/dashboard';
+
+        return $base.'#kpi-'.$code;
     }
 
     public function run(): void

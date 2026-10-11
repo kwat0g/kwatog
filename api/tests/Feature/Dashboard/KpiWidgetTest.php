@@ -240,7 +240,8 @@ class KpiWidgetTest extends TestCase
 
     /**
      * The tile's "Open →" comes from the widget row, not from a map in the SPA.
-     * KPI tiles resolve to the scorecard, which carries the columns a tile can't.
+     * KPI tiles resolve to the owning role dashboard anchor, which carries the
+     * strip card a tile can't.
      */
     public function test_layout_rows_carry_the_server_owned_link_path(): void
     {
@@ -250,7 +251,7 @@ class KpiWidgetTest extends TestCase
         $row = collect($this->getJson('/api/v1/dashboard/layout')->assertOk()->json('data'))
             ->firstWhere('key', 'kpi.oee');
 
-        $this->assertSame('/dashboard/scorecard', $row['link_path']);
+        $this->assertSame('/dashboard/plant-manager#kpi-oee', $row['link_path']);
     }
 
     public function test_widget_picker_metadata_carries_link_path(): void
