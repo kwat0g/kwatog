@@ -397,7 +397,8 @@ role-name branch anywhere.
    module dashboards. See `PROGRESS.md` "Phase 2 — A". Still open from this item: `impex_officer` and
    `department_head` (OTD / attendance rate) need a surface that renders those KPIs, not a grant.
 4. G-D-1: confirm **one** executive page (`dashboard.company.view` → `/dashboard/company`) replacing the
-   `/dashboard/vp` proposal, and confirm the VP landing change (plant-manager → company) — **the slug is
-   decision 3's; the page + landing move are still OPEN** and are the next increment (B).
+   `/dashboard/vp` proposal, and confirm the VP landing change (plant-manager → company) — **DECIDED
+   2026-10-11: yes to both.** `/dashboard/vp` is not shipped. The landing move was verified against every
+   demo account: only the VP's path changed. See `PROGRESS.md` "Phase 2 — B".
 5. Which of the five proposed new pages ship first inside the D3 order (client-facing
    customer-service/sales, or internal logistics/maintenance)? — **OPEN**

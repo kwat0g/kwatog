@@ -36,6 +36,22 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'hr.headcount', 'qc.pareto', 'alerts',
                 'kpi.oee',
             ],
+            // Company overview (DSS 01-matrix §B) — this role had NO default at
+            // all, so its generic layout resolved to empty and the dashboard
+            // switcher had nothing to add. The blocks it can read are money
+            // (AR/AP/unpaid/upcoming payables), chain health, alerts and the
+            // approvals worklist; it holds no `quality.*` or `forecasting.view`
+            // grant, so the quality and demand-vs-supply panels are omitted the
+            // same way every other dashboard omits a panel it may not read. The
+            // six health-strip readings arrive through `KpiStrip`, not as
+            // widgets here, because the strip already names them and a tile that
+            // duplicates the strip's own number is noise.
+            'vice_president' => [
+                'chain.stage_breakdown', 'alerts',
+                'finance.ar_aging', 'finance.ap_aging',
+                'finance.unpaid_invoices', 'finance.upcoming_payables',
+                'budget.utilization', 'approvals.pending',
+            ],
             'production_manager' => [
                 'production.kpi', 'chain.stage_breakdown', 'machine.utilization',
                 'oee.gauges', 'qc.pareto', 'alerts', 'production.active_wo',

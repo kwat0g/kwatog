@@ -165,6 +165,43 @@ surface that renders those KPIs (proposed `/dashboard/logistics`) or a grant, an
 recorded rather than papered over with a grant that widens a whole module. G-P2-3 (strip code lists chosen per
 page vs gates per module: PPC still reads 1 of its 4 strip codes) is unchanged.
 
+### Phase 2 — B: company-overview shell (shipped)
+
+Resolves `01-matrix.md` §D4 #4 as recommended by §B: **one** executive page at `/dashboard/company`
+(the `/dashboard/vp` proposal from M-p1 R4 is retired, not shipped alongside), and the VP landing moves
+from `/dashboard/plant-manager` to it.
+
+| Deliverable | Files | State |
+|---|---|---|
+| Dispatched page | `DashboardCatalog` entry `company` → `/dashboard/company` + `dashboard.company.view` | shipped |
+| Route + guard | `spa/src/routes/dashboardRoutes.tsx` (`PermissionGuard permission="dashboard.company.view"`) — repeats the catalog permission as defence in depth | shipped |
+| The page | `spa/src/pages/dashboard/company.tsx` — `DashboardShell` + `KpiStrip codes={COMPANY_KPIS}` + the registry renderer | shipped |
+| Health strip | `COMPANY_KPIS` in `spa/src/lib/dashboardKpis.ts` (oee, on_time_delivery, first_pass_yield, dppm, ar_aging_60d, budget_utilization) | shipped |
+| Role default | `DashboardRoleLayoutSeeder` gains `vice_president` — **this role had no default at all**, which is why its effective layout was empty | 8 blocks |
+| Tests | `spa/src/pages/dashboard/company.test.tsx` (3) · `DashboardDispatchTest` provider updated | 59 SPA / 192 backend pass |
+
+**It is a shell by design, not a new analytics layer.** Every §B block already exists as a gated widget;
+re-deriving them would have produced a second, differently-gated copy of numbers the modules already
+publish. So the page is thin and the value is the *dispatch + strip + default set*: the health strip is the
+KPI scorecard (readable only because A made its gate a set), and the body is the widget registry stripped
+against each widget's own gate.
+
+**Measured on the running app:** `/dashboard/dispatch` for all twelve demo accounts — **only the VP's landing
+moved** (`Company Overview /dashboard/company`); production_manager, system_admin, hr, ppc, finance,
+purchasing, warehouse, qc, impex, depthead and employee are all unchanged. That is the G-D-2 check, and it is
+the reason this was held for an explicit decision. The VP's effective layout resolves 8 blocks (3 rich, 5
+scalar) with `layout_version` served; the strip reads all 6 codes.
+
+**Not built (deliberately, and why).** §B lists 8 blocks; this ships 4 block families for the executive plus
+the strip. Absent:
+
+| Missing | Reason |
+|---|---|
+| Quality (defect Pareto, NCR aging, 8D SLA burn) | The executive holds no `quality.view` / `quality.ncr.view`. Omission is the documented rule; adding it is a grant decision, not a code change. The strip still carries DPPM and first-pass yield. |
+| Demand vs supply | Needs `forecasting.view` (or `accounting.dashboard.view`); same call. |
+| Chain-stage *donut*, AP due ≤3d, chain-recovery backlog card | `chain.stage_breakdown` is a `scalar` widget today, so it renders one figure; enriching it means registering a rich provider in `WidgetAnalyticsService::providers()` **and** `WidgetSeedIntegrityTest::handledKeys()`. The other two are new SQL. |
+| Risks & opportunities, Weekly briefing | Phase 5 by §B. |
+
 ## Later phases — PENDING
 
 Awaiting mission phasing past Phase 2 (role pages, forecasting wiring, approval centre, DSS tiles).

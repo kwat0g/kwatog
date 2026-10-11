@@ -38,7 +38,12 @@ class DashboardDispatchTest extends TestCase
     public static function roleLandingProvider(): array
     {
         return [
-            'vice_president' => ['vice_president', '/dashboard/plant-manager'],
+            // 2026-10-11 (01-matrix §D4 #4): the VP gains the company-overview
+            // page. `dashboard.company.view` has 2 holders against
+            // `dashboard.plant_manager.view`'s 3, and rarer is more specific, so
+            // the landing moves off plant-manager — an access-model change made
+            // deliberately, with every other role's landing asserted below.
+            'vice_president' => ['vice_president', '/dashboard/company'],
             'sales_officer' => ['sales_officer', '/dashboard/default'],
             'customer_service_officer' => ['customer_service_officer', '/dashboard/default'],
             'production_manager' => ['production_manager', '/dashboard/plant-manager'],
@@ -48,7 +53,7 @@ class DashboardDispatchTest extends TestCase
             'purchasing_officer' => ['purchasing_officer', '/dashboard/purchasing'],
             'warehouse_staff'    => ['warehouse_staff',    '/dashboard/warehouse'],
             'qc_inspector'       => ['qc_inspector',       '/dashboard/quality'],
-            // Qualifies for all eight; the rarest permission wins.
+            // Qualifies for all nine; the rarest permission wins.
             'system_admin'       => ['system_admin',       '/dashboard/admin'],
             // No purpose-built dashboard — these five were missing from the
             // old role map entirely and rendered nothing useful.
@@ -125,7 +130,10 @@ class DashboardDispatchTest extends TestCase
             ->assertOk();
 
         $candidates = $resp->json('data.candidates');
-        $this->assertCount(8, $candidates);
+        // Nine since the company-overview page joined the catalog; the
+        // wildcard holder qualifies for all of them and still lands on the
+        // rarest, `admin`.
+        $this->assertCount(9, $candidates);
         $this->assertSame('admin', $candidates[0]['key']);
 
         $counts = array_column($candidates, 'holder_count');

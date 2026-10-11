@@ -7,6 +7,10 @@ const DashboardPage = lazy(() => import('@/pages/dashboard'));
 // Task D1 — direct escape hatch to the generic widget-layout home, so users
 // whose role redirects them away can still reach it explicitly.
 const DashboardDefaultPage = lazy(() => import('@/pages/dashboard/default'));
+// 2026-10-11 — cross-functional executive surface (DSS 01-matrix §B). Dispatched
+// by `dashboard.company.view`; the vice president's landing moved here from
+// /dashboard/plant-manager, which it still reaches from the switcher.
+const CompanyDashboardPage = lazy(() => import('@/pages/dashboard/company'));
 
 // Sprint 8 dashboards (Tasks 72 + 73)
 const PlantManagerDashboardPage = lazy(() => import('@/pages/dashboard/plant-manager'));
@@ -51,6 +55,11 @@ export const dashboardRoutes = (
  is the explicit escape hatch to the generic widget-layout page. */}
  <Route path="/dashboard" element={<Suspense fallback={<SkeletonDashboard />}><DashboardPage /></Suspense>} />
  <Route path="/dashboard/default" element={<Suspense fallback={<SkeletonDashboard />}><DashboardDefaultPage /></Suspense>} />
+
+ {/* Cross-functional executive dashboard — repeats the dispatch permission as
+ defence in depth (the catalog entry and this guard must agree). */}
+ <Route path="/dashboard/company"
+ element={<PermissionGuard permission="dashboard.company.view"><Suspense fallback={<SkeletonDashboard />}><CompanyDashboardPage /></Suspense></PermissionGuard>} />
 
  {/* Sprint 8 dashboards */}
  <Route path="/dashboard/plant-manager"

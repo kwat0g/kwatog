@@ -33,6 +33,15 @@ final class DashboardCatalog
     public static function all(): array
     {
         return [
+            // Cross-functional executive surface (DSS 01-matrix §B). It lists
+            // ahead of nothing — the winner is decided by live rarity, not
+            // order — but it is deliberately the ONLY catalog entry whose
+            // permission is a company-wide READ rather than a module's own
+            // dashboard. `dashboard.company.view` has two holders
+            // (system_admin, vice_president), so system_admin keeps landing on
+            // `admin` (one holder) while the vice president moves here from
+            // `/dashboard/plant-manager` (three holders).
+            ['key' => 'company',       'path' => '/dashboard/company',       'permission' => 'dashboard.company.view',       'name' => 'Company Overview'],
             ['key' => 'admin',         'path' => '/dashboard/admin',         'permission' => 'dashboard.admin.view',         'name' => 'System Administrator'],
             ['key' => 'plant-manager', 'path' => '/dashboard/plant-manager', 'permission' => 'dashboard.plant_manager.view', 'name' => 'Plant Manager'],
             ['key' => 'hr',            'path' => '/dashboard/hr',            'permission' => 'dashboard.hr.view',            'name' => 'HR'],

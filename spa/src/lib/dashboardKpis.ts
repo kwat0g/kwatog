@@ -20,6 +20,25 @@ export const ADMIN_KPIS: string[] = [];
 export const DEFAULT_KPIS: string[] = [];
 
 /**
+ * The company-overview health strip (01-matrix §B), in reading order.
+ *
+ * The six codes span four modules the executive holds no dashboard for. That
+ * works because the server's KPI gate is a set that includes
+ * `dashboard.company.view` (KpiSnapshotService::moduleGates), so this strip is
+ * the one place those readings are readable without four module grants — before
+ * that, every code here was stripped and the strip rendered empty rather than
+ * "no data".
+ */
+export const COMPANY_KPIS = [
+  'oee',
+  'on_time_delivery',
+  'first_pass_yield',
+  'dppm',
+  'ar_aging_60d',
+  'budget_utilization',
+];
+
+/**
  * Owning role dashboard per KPI module. A KPI tile's default drill-down is
  * the dashboard that renders that KPI's strip, scrolled to the card —
  * there is no standalone scorecard page anymore.
