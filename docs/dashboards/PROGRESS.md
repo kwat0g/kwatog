@@ -88,7 +88,9 @@ role pages and DSS tiles are still NOT built.
 | Index batch (Phase 0 B §4 cheapest wins) | 6 migrations `2026_10_11_0900xx_*` → **75 indexes across 20 tables** (production/WO-log joins, GRN+QC joins, all of returns, budgets/credit lines, PR/PO dates, delivery OTD timestamps, chain links) | shipped |
 | Metric dictionary | `docs/dashboards/METRICS.md` — **generated** by `php artisan metrics:doc` from `MetricRegistry` | shipped |
 | Settings | `dashboard.analytics.cache_ttl_seconds` = 60 (migration `2026_10_11_090500`) | shipped |
-| Tests | `tests/Feature/Dashboard/AnalyticsLayerTest.php` (16) · `tests/Feature/Dashboard/Phase0IndexMigrationTest.php` (4) | 20 passed / 136 assertions |
+| SPA consumer | `spa/src/types/analytics.ts` (envelope contract) · `spa/src/api/metrics.ts` (catalog + one-metric read) · `spa/src/hooks/useMetric.ts` (refresh-bucket polling + stale flag) · `spa/src/lib/metricValue.ts` · `spa/src/components/dashboard/MetricPanel.tsx` | shipped |
+| SPA mounts | `returns.pipeline` on `/return-management`, `production.wo_lead_time` on `/production/dashboard` — each page's own route guard is the metric's own gate, so the panel cannot 403 where the page opens | shipped |
+| Tests | `tests/Feature/Dashboard/AnalyticsLayerTest.php` (16) · `tests/Feature/Dashboard/Phase0IndexMigrationTest.php` (4) · `spa/src/components/dashboard/MetricPanel.test.tsx` (5) | 20 passed / 136 assertions · 5 passed |
 
 Contract the layer enforces: `{data, meta}` envelope (period + previous window, generated_at, cache_ttl,
 scope, sources, indexes, caveats) · gate = the metric's ONE permission, permission-derived (no role-name
@@ -99,16 +101,38 @@ schema, so a renamed column or a skipped index fails the suite.
 
 Open items (deliberately NOT in this increment): materialized views / summary tables, snapshot-history
 tables (daily stock/AR/AP/WIP), per-metric invalidation observers, endpoint p95 query-budget assertions,
-Reverb streaming for metric changes, SPA types/API client for the two endpoints, and the remaining
-~11 rows of the Phase 0 §4a index list (portal, MRP-run, payroll and admin tables).
+Reverb streaming for metric changes, the catalog (`GET /dashboard/metrics`) consumer — the API client
+exposes `metricsApi.catalog()` but no surface reads it yet — and the remaining ~11 rows of the Phase 0
+§4a index list (portal, MRP-run, payroll and admin tables). Only two metrics are mounted; the remaining
+role pages are D3 build-order work.
+
+SPA wiring notes (2026-10-11): `MetricPanel` takes a metric CODE and fetches, so body selection is
+driven by `definition.render_kind` (breakdown → `WidgetBreakdown`; trend → `SparkLine`) and any other
+top-level scalars are listed as a secondary stat row (nested number objects flattened one level, so
+`handoff.awaiting_inspection` reaches the tile). Poll cadence comes from the metric's own `meta.refresh`
+(live 60s — the rate the role dashboards already poll at; monthly never polls, since `kpi_snapshots` is
+rewritten once on the 2nd). Read-only by construction: no inputs, no recompute. End-to-end verified
+against the running app over the real HTTPS entrypoint (`production@ogami.test` → 200 with the payload
+the TS types describe; `employee@ogami.test` → catalog count 0 and 403 on the specific metric, which is
+the error state the panel renders).
 
 Verification done: migrations ran on a scratch DB `ogami_test_an` (up → `migrate:rollback --step=6` →
 up, all 6 reversible); `tests/Feature/Dashboard` 185 passed with 1 pre-existing failure
 (`WidgetAnalyticsServiceTest::test_provider_failure_degrades_instead_of_throwing` — the test drops
 `inspection_measurements`, which now has dependents from `2026_10_08_236000_add_finish_first_wo_qc`,
 recorded as failing at base commit earlier in this mission); drift guards (`WidgetSeedIntegrityTest`,
-`ApprovalChainRolePermissionDriftTest`, dispatch/layout tests) 46 passed. The app database `ogami` has
-NOT been migrated — run `php artisan migrate` to apply the batch.
+`ApprovalChainRolePermissionDriftTest`, dispatch/layout tests) 46 passed. The app database `ogami` WAS
+migrated on 2026-10-11 (all 6 applied; all 75 declared indexes confirmed present in `pg_indexes`,
+transcribed from the migration files rather than read back from the migration output). Note: commit
+`9b818111` shipped only 1 of the 6 index migrations — the other five sat untracked, so a clean checkout
+created 13 of the 75 indexes the batch declares and `Phase0IndexMigrationTest` would have failed on 62.
+Fixed in `77cfe246`.
+
+SPA verification: `tsc --noEmit` clean, `eslint --max-warnings 0` clean on every touched file, token
+audit clean, `src/components/dashboard` + `src/pages/dashboard` 54 passed, `vite build` exit 0 (8161
+modules). `npm run build` as written fails on this host at `prepare-out-dir` — `spa/dist/assets` is
+owned by `root` from an earlier container build, an environment permission issue unrelated to this
+diff; the same bundle builds clean to a writable `--outDir`.
 
 ## Later phases — PENDING
 

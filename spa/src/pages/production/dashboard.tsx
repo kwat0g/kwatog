@@ -16,6 +16,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { MetricPanel } from '@/components/dashboard/MetricPanel';
 import { OeeGauge } from '@/components/production/OeeGauge';
 import { BreakdownAlertCard } from '@/components/production/BreakdownAlertCard';
 import { ShopFloorMap } from '@/components/production/ShopFloorMap';
@@ -125,6 +126,10 @@ export default function ProductionDashboardPage() {
             linkTo="/production/oee"
           />
         </div>
+
+        {/* Phase 2 analytics layer: average lead time per month, which the
+            work_orders.actual_start/actual_end index pair now serves. */}
+        <MetricPanel code="production.wo_lead_time" detailsHref="/production/work-orders" />
 
         {/* Row 2: chain breakdown + alerts */}
         <div className="grid gap-4 lg:grid-cols-3">
