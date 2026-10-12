@@ -10,6 +10,27 @@ import type {
   RecommendationListParams,
 } from '@/types/dss';
 
+export interface DssDetectorState {
+  id: string;
+  domain: string;
+  version: string;
+  owner_permissions: string[];
+  enabled: boolean;
+  mode: 'shadow' | 'advisory' | 'assisted';
+  open_count: number;
+  last_run: {
+    status: string;
+    finished_at: string | null;
+    duration_ms: number | null;
+    emitted: number;
+  } | null;
+}
+
+export interface DssEngineState {
+  enabled: boolean;
+  default_mode: 'shadow' | 'advisory' | 'assisted';
+}
+
 export const dssApi = {
   list: (params?: RecommendationListParams) =>
     client.get<PaginatedRecommendations>('/dss/recommendations', { params }).then((r) => r.data),
@@ -30,4 +51,20 @@ export const dssApi = {
     client
       .post<{ data: Recommendation }>(`/dss/recommendations/${id}/outcome`, { outcome })
       .then((r) => r.data.data),
+
+  detectors: () =>
+    client.get<{ data: DssDetectorState[] }>('/dss/admin/detectors').then((r) => r.data.data),
+
+  updateDetector: (id: string, data: { enabled?: boolean; mode?: DssDetectorState['mode'] }) =>
+    client
+      .patch<{ data: DssDetectorState }>(`/dss/admin/detectors/${id}`, data)
+      .then((r) => r.data.data),
+
+  runDetector: (id: string) =>
+    client.post<{ data: unknown }>(`/dss/admin/detectors/${id}/run`).then((r) => r.data.data),
+
+  engine: () => client.get<{ data: DssEngineState }>('/dss/admin/engine').then((r) => r.data.data),
+
+  updateEngine: (data: { enabled?: boolean; default_mode?: DssEngineState['default_mode'] }) =>
+    client.patch<{ data: DssEngineState }>('/dss/admin/engine', data).then((r) => r.data.data),
 };

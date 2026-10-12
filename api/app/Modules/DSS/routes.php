@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\DSS\Controllers\DssAdminController;
 use App\Modules\DSS\Controllers\RecommendationController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,4 +21,22 @@ Route::middleware(['auth:sanctum', 'feature:dss'])->prefix('dss')->group(functio
         ->middleware('permission:dss.view');
     Route::post('/recommendations/{recommendation}/outcome', [RecommendationController::class, 'outcome'])
         ->middleware('permission:dss.view');
+});
+
+/* ─── Admin console (W0-6): detector fleet + kill switch + parameters ─── */
+Route::middleware(['auth:sanctum', 'feature:dss'])->prefix('dss/admin')->group(function () {
+    Route::get('/detectors', [DssAdminController::class, 'detectors'])
+        ->middleware('permission:dss.manage');
+    Route::patch('/detectors/{id}', [DssAdminController::class, 'updateDetector'])
+        ->middleware('permission:dss.manage');
+    Route::post('/detectors/{id}/run', [DssAdminController::class, 'runDetector'])
+        ->middleware('permission:dss.manage');
+    Route::get('/engine', [DssAdminController::class, 'engine'])
+        ->middleware('permission:dss.manage');
+    Route::patch('/engine', [DssAdminController::class, 'updateEngine'])
+        ->middleware('permission:dss.admin');
+    Route::get('/parameters', [DssAdminController::class, 'parameters'])
+        ->middleware('permission:dss.manage');
+    Route::put('/parameters', [DssAdminController::class, 'setParameter'])
+        ->middleware('permission:dss.manage');
 });

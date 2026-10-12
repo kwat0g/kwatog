@@ -28,6 +28,8 @@ const AlertsListPage = lazy(() => import('@/pages/alerts'));
 // DSS Wave 0-4 — Decision Center (cross-cutting, like Alerts: PermissionGuard only)
 const DecisionCenterPage = lazy(() => import('@/pages/decision-center'));
 const RecommendationDetailPage = lazy(() => import('@/pages/decision-center/detail'));
+// DSS Wave 0-6 — admin console (detector fleet + kill switch)
+const DssAdminPage = lazy(() => import('@/pages/admin/dss'));
 
 // Gov tables
 const AdminGovTablesPage = lazy(() => import('@/pages/admin/gov-tables'));
@@ -201,6 +203,14 @@ export const adminRoutes = (
  element={
  <PermissionGuard permission="dss.view">
  <RecommendationDetailPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/dss"
+ element={
+ <PermissionGuard permission="dss.manage">
+ <DssAdminPage />
  </PermissionGuard>
  }
  />
