@@ -33,7 +33,7 @@ class DssRunnerService
     ) {}
 
     /**
-     * @param array{limit?: int, time_budget_ms?: int} $context
+     * @param  array{limit?: int, time_budget_ms?: int}  $context
      * @return array{engine: string, detectors: array<string, array{status: string, emitted: int, updated: int, error: ?string}>, failed: list<string>}
      */
     public function run(?string $detectorId = null, array $context = []): array
