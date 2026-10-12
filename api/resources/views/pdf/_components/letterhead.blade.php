@@ -1,13 +1,21 @@
 {{--
-    Series E (E1) shared letterhead component — executive corporate layout.
-    Reads from `$company` (injected by PdfRenderService).
+    Phase 2 (PDF foundation) letterhead — Atelier chrome.
+    Reads from `$company` (injected by PdfRenderService). Every element hides
+    gracefully when its setting is empty; a missing logo never breaks layout
+    (DomPDF has enable_remote=false, so only an embedded data URI is used).
 --}}
 <div class="brand-bar"></div>
 <table class="header-table">
   <tr>
     <td style="width: 58%;">
+      @if (!empty($company['logo_data_uri']))
+        <img class="company-logo" src="{{ $company['logo_data_uri'] }}" alt="Company logo">
+      @endif
       @if (!empty($company['name']))
         <div class="company-title">{{ $company['name'] }}</div>
+      @endif
+      @if (!empty($company['tagline']))
+        <div class="company-tagline">{{ $company['tagline'] }}</div>
       @endif
       <div class="company-sub">
         @if (!empty($company['address']))
@@ -19,13 +27,16 @@
           @if (!empty($company['email'])) {{ $company['email'] }} @endif
           <br>
         @endif
+        @if (!empty($company['public_url']))
+          {{ $company['public_url'] }}<br>
+        @endif
         @if (!empty($company['tin']))
           TIN: {{ $company['tin'] }}
           @if (!empty($company['vat_status'])) &middot; {{ $company['vat_status'] }} @endif
           &middot;
         @endif
         @if (!empty($company['certification']))
-          <span style="font-weight:bold; color:#475569;">{{ $company['certification'] }}</span>
+          <span style="font-weight:bold; color:#4a4239;">{{ $company['certification'] }}</span>
         @endif
       </div>
     </td>
