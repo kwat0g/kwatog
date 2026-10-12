@@ -49,9 +49,9 @@ export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { can } = usePermission();
+  const { can, canApprove } = usePermission();
   const canManage = can('budgeting.manage');
-  const canApprove = can('budgeting.approve');
+  const canApproveBudget = canApprove('budgeting.approve');
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
@@ -129,8 +129,8 @@ export default function BudgetDetailPage() {
   if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
 
   const canSubmit = budget.status === 'draft' && canManage;
-  const canApproveAction = budget.status === 'submitted' && canApprove && budget.can_approve === true;
-  const canReject = budget.status === 'submitted' && canApprove;
+  const canApproveAction = budget.status === 'submitted' && canApproveBudget && budget.can_approve === true;
+  const canReject = budget.status === 'submitted' && canApproveBudget;
   const canDelete = budget.status === 'draft' && canManage;
   const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
 

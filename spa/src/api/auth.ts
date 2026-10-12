@@ -19,7 +19,6 @@ export interface AuthUser {
  name: string;
  email: string;
  is_active: boolean;
- is_superuser?: boolean;
  must_change_password: boolean;
  theme_mode: 'light' | 'dark' | 'system';
  sidebar_collapsed: boolean;
@@ -28,6 +27,7 @@ export interface AuthUser {
  /** Linked HR employee, when this user account is wired to one. */
  employee: AuthEmployee | null;
  permissions: string[];
+ delegated_approvals: string[];
  features: string[];
 }
 

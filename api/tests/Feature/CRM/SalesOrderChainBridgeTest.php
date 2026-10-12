@@ -27,6 +27,7 @@ use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
@@ -114,6 +115,38 @@ class SalesOrderChainBridgeTest extends TestCase
             $this->assertArrayHasKey('quantity_target', $woSummary);
             $this->assertArrayHasKey('needs_manual_scheduling', $woSummary);
         }
+    }
+
+    public function test_completed_production_without_outgoing_inspection_stays_pending_in_order_funnel(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::InProduction);
+        $product = Product::factory()->create();
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $so->id,
+            'product_id' => $product->id,
+            'quantity' => 100,
+        ]);
+        $wo = WorkOrder::factory()->create([
+            'sales_order_id' => $so->id,
+            'product_id' => $product->id,
+            'status' => 'completed',
+            'quantity_target' => 100,
+            'quantity_produced' => 100,
+            'quantity_good' => 100,
+        ]);
+        WorkOrderOutput::create([
+            'work_order_id' => $wo->id,
+            'recorded_by' => $wo->created_by,
+            'recorded_at' => now(),
+            'good_count' => 100,
+            'reject_count' => 0,
+        ]);
+
+        $steps = collect($this->soService->chain($so->fresh()));
+
+        $this->assertSame('done', $steps->firstWhere('key', 'in_production')['state']);
+        $this->assertSame('pending', $steps->firstWhere('key', 'qc_outgoing')['state']);
+        $this->assertSame('pending', $steps->firstWhere('key', 'delivered')['state']);
     }
 
     public function test_confirm_so_creates_auto_prs_for_shortages(): void

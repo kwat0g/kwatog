@@ -45,8 +45,16 @@ class RolloutHealthService
             ->where('status', 'pending_qc')
             ->where('created_at', '<=', now()->subMinutes($grace))
             ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('inspections')
-                ->whereColumn('inspections.entity_id', 'goods_receipt_notes.id')
-                ->where('inspections.entity_type', 'grn'))
+                ->leftJoin('grn_items as inspection_grn_items', 'inspection_grn_items.id', '=', 'inspections.grn_item_id')
+                ->where(fn ($source) => $source
+                    ->whereColumn('inspection_grn_items.goods_receipt_note_id', 'goods_receipt_notes.id')
+                    ->orWhere(fn ($legacy) => $legacy
+                        ->whereNull('inspections.grn_item_id')
+                        ->whereNull('inspections.work_order_output_id')
+                        ->whereNull('inspections.return_request_item_id')
+                        ->whereNull('inspections.wo_operation_id')
+                        ->where('inspections.entity_type', 'grn')
+                        ->whereColumn('inspections.entity_id', 'goods_receipt_notes.id'))))
             ->count();
 
         $since = now()->subDay();

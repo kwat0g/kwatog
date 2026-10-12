@@ -168,16 +168,10 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'action_center',
       },
       {
-        to: '/dashboard/scorecard',
-        label: 'KPI Scorecard',
-        description: 'Key performance indicator scorecard',
-        icon: LuChartColumnIncreasing,
-      },
-      {
         to: '/chains',
         label: 'Business Chain Tracker',
         icon: WorkflowIcon,
-        permission: 'crm.sales_orders.view',
+        anyPermissions: ['crm.sales_orders.view', 'dashboard.view_bottlenecks'],
       },
       {
         to: '/chains/recovery',
@@ -198,6 +192,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Notifications',
         icon: LuBell,
         work: true,
+        permission: 'notifications.view',
         badgeKey: 'unread',
       },
     ],

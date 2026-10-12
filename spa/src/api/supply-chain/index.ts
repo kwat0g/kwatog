@@ -100,6 +100,7 @@ export const shipmentContainersApi = {
 export interface DeliveryListParams extends ListParams {
  status?: DeliveryStatus | '';
  sales_order_id?: string;
+ invoice_handoff_status?: 'not_started' | 'generated' | 'manual_required' | 'not_required' | '';
 }
 
 export interface CreateDeliveryItemData {

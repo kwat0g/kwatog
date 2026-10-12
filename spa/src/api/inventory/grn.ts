@@ -63,6 +63,7 @@ export const grnApi = {
   list: (
     params?: ListParams & {
       status?: string;
+      qc_handoff?: string;
       vendor_id?: string;
       purchase_order_id?: string;
       from?: string;

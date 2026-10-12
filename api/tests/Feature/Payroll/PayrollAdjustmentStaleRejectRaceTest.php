@@ -8,12 +8,14 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollAdjustmentService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -30,6 +32,7 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        Mail::fake();
     }
 
     private function pendingAdjustment(): array
@@ -59,7 +62,7 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
     public function test_stale_reject_cannot_flip_an_approved_adjustment(): void
     {
         [$adjustment, $requester] = $this->pendingAdjustment();
-        $approver = User::factory()->create();
+        $approver = User::factory()->withRole('system_admin')->create();
 
         // Approver and rejecter each fetched the row while it was pending.
         $approveSnapshot = PayrollAdjustment::find($adjustment->id);
@@ -78,5 +81,63 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
         }
 
         $this->assertSame(PayrollAdjustmentStatus::Approved, $adjustment->refresh()->status);
+    }
+
+    public function test_create_and_approve_notify_payroll_adjustment_actors(): void
+    {
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized])->save();
+        $employee = Employee::factory()->create();
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $requester = User::factory()->withRole('system_admin')->create();
+        $approver = User::factory()->withRole('system_admin')->create();
+        $service = app(PayrollAdjustmentService::class);
+
+        $adjustment = $service->create([
+            'original_payroll_id' => $payroll->id,
+            'type' => 'underpayment',
+            'amount' => '500.00',
+            'reason' => 'Missed overtime line',
+        ], $requester);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $approver->id,
+            'type' => 'approval.action_required',
+        ]);
+
+        $service->approve($adjustment, $approver);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.completed',
+        ]);
+    }
+
+    public function test_rejecting_payroll_adjustment_notifies_requester(): void
+    {
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized])->save();
+        $employee = Employee::factory()->create();
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $requester = User::factory()->withRole('system_admin')->create();
+        $approver = User::factory()->withRole('system_admin')->create();
+        $service = app(PayrollAdjustmentService::class);
+        $adjustment = $service->create([
+            'original_payroll_id' => $payroll->id,
+            'type' => 'underpayment',
+            'amount' => '500.00',
+            'reason' => 'Missed overtime line',
+        ], $requester);
+
+        $service->reject($adjustment, $approver, 'Supporting record is missing.');
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.rejected',
+        ]);
     }
 }

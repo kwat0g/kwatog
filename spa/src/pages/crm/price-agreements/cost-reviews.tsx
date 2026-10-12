@@ -17,7 +17,7 @@ import type { ItemCostReview } from '@/types/pricing';
 import { PricingNavigation } from './PricingNavigation';
 
 export default function CostReviewsPage() {
-  const { can } = usePermission();
+  const { can, canApprove } = usePermission();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ItemCostReview | null>(null);
   const [notes, setNotes] = useState('');
@@ -123,7 +123,7 @@ export default function CostReviewsPage() {
             setError('');
           }}
         >
-          {r.status === 'pending' && can('inventory.costs.approve')
+          {r.status === 'pending' && canApprove('inventory.costs.approve')
             ? 'Review'
             : r.status === 'rejected' && can('inventory.costs.review')
               ? 'Renew review'
@@ -132,7 +132,7 @@ export default function CostReviewsPage() {
       ),
     },
   ];
-  const canDecide = selected?.status === 'pending' && can('inventory.costs.approve');
+  const canDecide = selected?.status === 'pending' && canApprove('inventory.costs.approve');
   const canRenew = selected?.status === 'rejected' && can('inventory.costs.review');
   return (
     <div className="min-w-0 w-full">

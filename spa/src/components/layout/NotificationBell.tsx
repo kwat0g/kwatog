@@ -27,7 +27,7 @@ import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
 import { focusRingInset } from '@/lib/focus';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 
-const POLL_MS = 30_000;
+const POLL_MS = 60_000;
 const PEEK_COUNT = 8;
 
 const DEFAULT_QUERY_KEY = ['notifications'];

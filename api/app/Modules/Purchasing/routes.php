@@ -116,12 +116,12 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
         ->withTrashed();
 
     /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
-    Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.supplier_listings.review');
+    Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.supplier_listings.view');
     // Literal bulk segments BEFORE the {supplierItemListing} binding routes.
-    Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('permission:purchasing.supplier_listings.review');
-    Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('permission:purchasing.supplier_listings.review');
-    Route::patch('/supplier-listings/{supplierItemListing}/approve', [SupplierListingController::class, 'approve'])->middleware('permission:purchasing.supplier_listings.review');
-    Route::patch('/supplier-listings/{supplierItemListing}/reject', [SupplierListingController::class, 'reject'])->middleware('permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('approval_permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('approval_permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/{supplierItemListing}/approve', [SupplierListingController::class, 'approve'])->middleware('approval_permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/{supplierItemListing}/reject', [SupplierListingController::class, 'reject'])->middleware('approval_permission:purchasing.supplier_listings.review');
 
     /* ─── 3-way match ─── */
     Route::get('/three-way-match/{bill}', [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');

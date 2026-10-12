@@ -7,6 +7,19 @@ const DashboardPage = lazy(() => import('@/pages/dashboard'));
 // Task D1 — direct escape hatch to the generic widget-layout home, so users
 // whose role redirects them away can still reach it explicitly.
 const DashboardDefaultPage = lazy(() => import('@/pages/dashboard/default'));
+// 2026-10-11 — cross-functional executive surface (DSS 01-matrix §B). Dispatched
+// by `dashboard.company.view`; the vice president's landing moved here from
+// /dashboard/plant-manager, which it still reaches from the switcher.
+const CompanyDashboardPage = lazy(() => import('@/pages/dashboard/company'));
+// 2026-10-11 — the five remaining role dashboards (DSS 01-matrix §D3). Each
+// role held no dashboard slug and landed on the generic widget grid; each
+// route repeats its catalog permission as defence in depth, and the catalog
+// entry and this guard must agree or the page is unreachable.
+const LogisticsDashboardPage = lazy(() => import('@/pages/dashboard/logistics'));
+const MaintenanceDashboardPage = lazy(() => import('@/pages/dashboard/maintenance'));
+const DepartmentDashboardPage = lazy(() => import('@/pages/dashboard/department'));
+const SalesDashboardPage = lazy(() => import('@/pages/dashboard/sales'));
+const CustomerServiceDashboardPage = lazy(() => import('@/pages/dashboard/customer-service'));
 
 // Sprint 8 dashboards (Tasks 72 + 73)
 const PlantManagerDashboardPage = lazy(() => import('@/pages/dashboard/plant-manager'));
@@ -21,8 +34,9 @@ const WarehouseDashboardPage = lazy(() => import('@/pages/dashboard/warehouse'))
 const QcDashboardPage = lazy(() => import('@/pages/dashboard/quality'));
 const AdminDashboardPage = lazy(() => import('@/pages/dashboard/admin'));
 
-// Task 15 — KPI Scorecard
-const ScorecardPage = lazy(() => import('@/pages/dashboard/scorecard'));
+// KPI Scorecard page removed — every KPI renders on its owning role
+// dashboard strip. The shim keeps old bookmarks off a 404 by landing them
+// on the permission-derived role router instead.
 
 // Cross-module pages (no specific module guard)
 const CalendarPage = lazy(() => import('@/pages/calendar'));
@@ -51,6 +65,25 @@ export const dashboardRoutes = (
  <Route path="/dashboard" element={<Suspense fallback={<SkeletonDashboard />}><DashboardPage /></Suspense>} />
  <Route path="/dashboard/default" element={<Suspense fallback={<SkeletonDashboard />}><DashboardDefaultPage /></Suspense>} />
 
+ {/* Cross-functional executive dashboard — repeats the dispatch permission as
+ defence in depth (the catalog entry and this guard must agree). */}
+ <Route path="/dashboard/company"
+ element={<PermissionGuard permission="dashboard.company.view"><Suspense fallback={<SkeletonDashboard />}><CompanyDashboardPage /></Suspense></PermissionGuard>} />
+
+ {/* The five role dashboards (§D3). One page, one permission each — except
+ maintenance, which two roles share and which therefore serves two
+ permission-derived views rather than branching on a role name. */}
+ <Route path="/dashboard/logistics"
+ element={<PermissionGuard permission="dashboard.logistics.view"><Suspense fallback={<SkeletonDashboard />}><LogisticsDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/maintenance"
+ element={<PermissionGuard permission="dashboard.maintenance.view"><Suspense fallback={<SkeletonDashboard />}><MaintenanceDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/department"
+ element={<PermissionGuard permission="dashboard.department.view"><Suspense fallback={<SkeletonDashboard />}><DepartmentDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/sales"
+ element={<PermissionGuard permission="dashboard.sales.view"><Suspense fallback={<SkeletonDashboard />}><SalesDashboardPage /></Suspense></PermissionGuard>} />
+ <Route path="/dashboard/customer-service"
+ element={<PermissionGuard permission="dashboard.customer_service.view"><Suspense fallback={<SkeletonDashboard />}><CustomerServiceDashboardPage /></Suspense></PermissionGuard>} />
+
  {/* Sprint 8 dashboards */}
  <Route path="/dashboard/plant-manager"
  element={<PermissionGuard permission="dashboard.plant_manager.view"><Suspense fallback={<SkeletonDashboard />}><PlantManagerDashboardPage /></Suspense></PermissionGuard>} />
@@ -73,9 +106,9 @@ export const dashboardRoutes = (
  element={<PermissionGuard permission="dashboard.quality.view"><Suspense fallback={<SkeletonDashboard />}><QcDashboardPage /></Suspense></PermissionGuard>} />
  <Route path="/dashboard/admin"
  element={<PermissionGuard permission="dashboard.admin.view"><Suspense fallback={<SkeletonDashboard />}><AdminDashboardPage /></Suspense></PermissionGuard>} />
- {/* Task 15 — KPI Scorecard (any authenticated user) */}
- <Route path="/dashboard/scorecard"
- element={<Suspense fallback={<SkeletonDashboard />}><ScorecardPage /></Suspense>} />
+  {/* KPI Scorecard page removed; shim for old bookmarks → role router. */}
+  <Route path="/dashboard/scorecard"
+  element={<Navigate to="/dashboard" replace />} />
 
  {/* Series F / Task F1 — Cross-module calendar */}
  <Route
@@ -100,7 +133,7 @@ export const dashboardRoutes = (
  />
  <Route
  path="/chains"
- element={<PermissionGuard permission="crm.sales_orders.view"><Suspense fallback={<SkeletonDashboard />}><ChainTrackerPage /></Suspense></PermissionGuard>}
+ element={<PermissionGuard anyOf={["crm.sales_orders.view", "dashboard.view_bottlenecks"]}><Suspense fallback={<SkeletonDashboard />}><ChainTrackerPage /></Suspense></PermissionGuard>}
  />
 
  {/* Series F / Task F7 — System activity feed */}

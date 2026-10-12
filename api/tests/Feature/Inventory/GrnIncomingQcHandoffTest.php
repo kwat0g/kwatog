@@ -6,14 +6,13 @@ namespace Tests\Feature\Inventory;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ChainListenerRun;
-use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
-use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
+use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
-use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
@@ -24,7 +23,6 @@ use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class GrnIncomingQcHandoffTest extends TestCase
@@ -80,6 +78,58 @@ class GrnIncomingQcHandoffTest extends TestCase
             $retried->qc_inspection_id,
             $grn->fresh()->qc_inspection_id,
         );
+    }
+
+    public function test_retry_command_recovers_a_manual_incoming_qc_handoff(): void
+    {
+        $user = User::factory()->create();
+        $failing = \Mockery::mock(InspectionService::class);
+        $failing->shouldReceive('createIncomingForItem')
+            ->zeroOrMoreTimes()
+            ->andThrow(new BusinessRuleException('Quality setup is temporarily unavailable.'));
+        $this->app->instance(InspectionService::class, $failing);
+        $grn = $this->createGrn($user);
+        $this->app->forgetInstance(InspectionService::class);
+
+        $this->artisan('grn:retry-pending-incoming-qc')
+            ->expectsOutput('Retried incoming-QC handoff for 1 GRN(s).')
+            ->assertExitCode(0);
+
+        $retried = $grn->fresh();
+        $this->assertSame(IncomingQcHandoffStatus::Generated, $retried->incoming_qc_handoff_status);
+        $this->assertNotNull($retried->qc_inspection_id);
+        $this->assertSame(
+            1,
+            Inspection::query()->where('entity_type', 'grn')->where('entity_id', $grn->id)->count(),
+        );
+    }
+
+    public function test_grn_list_filter_returns_only_pending_qc_handoffs_requiring_retry(): void
+    {
+        $user = User::factory()->create();
+        $failing = \Mockery::mock(InspectionService::class);
+        $failing->shouldReceive('createIncomingForItem')
+            ->zeroOrMoreTimes()
+            ->andThrow(new BusinessRuleException('Quality setup is temporarily unavailable.'));
+        $this->app->instance(InspectionService::class, $failing);
+        $manual = $this->createGrn($user);
+        $this->app->forgetInstance(InspectionService::class);
+
+        $notStarted = GoodsReceiptNote::factory()->create([
+            'status' => GrnStatus::PendingQc->value,
+            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::NotStarted->value,
+        ]);
+        GoodsReceiptNote::factory()->create([
+            'status' => GrnStatus::PendingQc->value,
+            'incoming_qc_handoff_status' => IncomingQcHandoffStatus::Generated->value,
+        ]);
+
+        $ids = app(GrnService::class)->list([
+            'status' => GrnStatus::PendingQc->value,
+            'qc_handoff' => 'action_required',
+        ])->getCollection()->modelKeys();
+
+        $this->assertEqualsCanonicalizing([$manual->id, $notStarted->id], $ids);
     }
 
     public function test_hashed_retry_route_requires_quality_manage_permission(): void

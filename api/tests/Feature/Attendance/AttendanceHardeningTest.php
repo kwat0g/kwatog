@@ -7,6 +7,7 @@ namespace Tests\Feature\Attendance;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Modules\Attendance\Enums\OvertimeStatus;
+use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\EmployeeShiftAssignment;
 use App\Modules\Attendance\Models\Holiday;
@@ -33,6 +34,31 @@ use Tests\TestCase;
 class AttendanceHardeningTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_attendance_view_list_remains_scoped_to_employee_for_self_service_roles(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+
+        $ownEmployee = Employee::factory()->create();
+        $otherEmployee = Employee::factory()->create();
+        Attendance::create([
+            'employee_id' => $ownEmployee->id,
+            'date' => now()->toDateString(),
+            'status' => AttendanceStatus::Present->value,
+        ]);
+        Attendance::create([
+            'employee_id' => $otherEmployee->id,
+            'date' => now()->toDateString(),
+            'status' => AttendanceStatus::Present->value,
+        ]);
+        $employee = User::factory()->withRole('employee')->create(['employee_id' => $ownEmployee->id]);
+
+        $this->actingAs($employee)
+            ->getJson('/api/v1/attendance/attendances')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.employee.id', $ownEmployee->hash_id);
+    }
 
     public function test_overtime_decisions_are_scoped_to_the_approvers_department(): void
     {

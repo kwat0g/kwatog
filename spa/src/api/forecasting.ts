@@ -15,7 +15,11 @@ import type {
 import type { Product } from '@/types/crm';
 
 export const forecastingApi = {
- options: () => client.get<{ data: { methods: Array<{ value: ComputedForecastMethod; label: string }>; demand_sources: Array<{ value: string; label: string }>; accuracy_policy: { excellent_mape: number; acceptable_mape: number } } }>('/forecasting/demand-forecasts/options').then((r) => r.data.data),
+  options: () => client.get<{ data: { methods: Array<{ value: ComputedForecastMethod; label: string }>; demand_sources: Array<{ value: string; label: string }>; accuracy_policy: { excellent_mape: number; acceptable_mape: number } } }>('/forecasting/demand-forecasts/options').then((r) => r.data.data),
+  customerOptions: () =>
+    client
+      .get<{ data: Array<{ id: string; name: string }> }>('/forecasting/customers/options')
+      .then((r) => r.data.data),
  settings: () => client.get<{ data: ForecastingSettings }>('/forecasting/settings').then((r) => r.data.data),
  list: (params?: {
  product_id?: string;

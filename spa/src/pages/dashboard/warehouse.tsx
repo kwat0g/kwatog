@@ -7,17 +7,20 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
+import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { DonutBreakdown } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { WAREHOUSE_KPIS } from '@/lib/dashboardKpis';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -236,7 +239,7 @@ export default function WarehouseDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'warehouse'],
  queryFn: () => dashboardsApi.warehouse<WarehouseDashboardData>(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
@@ -245,6 +248,7 @@ export default function WarehouseDashboard() {
  subtitle="Live · refreshes every 60s"
  query={q}
  refreshingQueryKey={['dashboard', 'warehouse']}
+ header={<KpiStrip codes={WAREHOUSE_KPIS} compact />}
  >
  {({ kpis, panels }) => {
  const zoneUtilChartData =
@@ -268,9 +272,6 @@ export default function WarehouseDashboard() {
  />
  ))}
  </KpiGrid>
-
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['inventory_turnover', 'supplier_quality']} />
 
  {/* ── Row 2: Incoming + Outgoing queue ── */}
  <PanelRow>
@@ -299,8 +300,16 @@ export default function WarehouseDashboard() {
  )}
  </Panel>
 
- {/* ── Row 5: Stock-out forecast ── */}
- {can('forecasting.view') && <StockOutPanel hideWhenEmpty />}
+  {/* ── Row 5: Demand forecast + stock-out risk + accuracy (consulted, not
+      monitored — each panel refreshes manually; the page poll does not refire
+      them. Gated on the forecasting read like the stock panel always was.) ── */}
+  {can('forecasting.view') && (
+  <PanelRow cols={3}>
+  <DemandForecastPanel />
+  <StockOutPanel hideWhenEmpty />
+  <ForecastAccuracyPanel />
+  </PanelRow>
+  )}
  </>
  );
  }}

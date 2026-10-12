@@ -536,6 +536,7 @@ export interface FinanceDashboardSummary {
     variance_pct: number | null;
   }> | null;
   revenue_forecast?: import('./forecasting-dashboard').ForecastPanelData;
+  cash_flow_forecast?: import('./forecasting-dashboard').CashFlowForecastData;
 }
 
 // ─── REC-13 — Credit notes (AR/AP) ─────────────────────────

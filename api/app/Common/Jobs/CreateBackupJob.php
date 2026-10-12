@@ -21,7 +21,11 @@ class CreateBackupJob implements ShouldQueue
 
     public int $timeout = 3600;
 
-    public function __construct(public readonly string $operationId) {}
+    public function __construct(public readonly string $operationId)
+    {
+        // Lane: low — hour-scale runtime must never block high/default.
+        $this->onQueue('low');
+    }
 
     /** @return array<int, object> */
     public function middleware(): array

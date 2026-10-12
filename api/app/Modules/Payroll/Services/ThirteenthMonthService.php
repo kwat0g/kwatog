@@ -368,6 +368,11 @@ class ThirteenthMonthService
                     'tax_reconciliation_signed_at' => now(),
                 ])->save();
 
+                app(PayrollPeriodService::class)->notifyPendingApproval(
+                    $period,
+                    (string) $period->tax_reconciliation_hash,
+                );
+
                 return $period->fresh();
             });
         } catch (QueryException $e) {

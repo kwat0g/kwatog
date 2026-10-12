@@ -31,7 +31,7 @@ export const selfServiceRoutes = (
  <Route path="/self-service/profile" element={<SelfServiceProfilePage />} />
  <Route path="/self-service/me" element={<SelfServiceMePage />} />
  <Route path="/self-service/documents" element={<SelfServiceDocumentsPage />} />
- <Route path="/self-service/notification-preferences" element={<SelfServiceNotifPrefsPage />} />
+ <Route path="/self-service/notification-preferences" element={<PermissionGuard permission="notifications.preferences.manage"><SelfServiceNotifPrefsPage /></PermissionGuard>} />
 
  <Route element={<ModuleGuard module="production" />}>
  <Route path="/self-service/work-orders" element={<MyWorkOrdersPage />} />

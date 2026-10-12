@@ -16,6 +16,7 @@ const authenticatedUser = {
  role: { id: 'r1', name: 'Administrator', slug: 'system_admin' },
  employee: null,
  permissions: [],
+ delegated_approvals: [],
  features: [],
 } satisfies AuthUser;
 

@@ -48,7 +48,7 @@ class OvertimeController
         $canView = $user && $this->decisionPolicy->isAllRecordActor($user)
             || (int) $user?->employee_id === (int) $overtime->employee_id;
 
-        if (! $canView && $user?->hasPermission('attendance.ot.approve') && $user->employee_id) {
+        if (! $canView && $user && \App\Common\Models\ApprovalDelegation::canActForPermission($user, 'attendance.ot.approve') && $user->employee_id) {
             $ownDepartment = Employee::query()
                 ->whereKey($user->employee_id)
                 ->value('department_id');

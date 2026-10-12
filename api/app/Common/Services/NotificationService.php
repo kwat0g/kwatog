@@ -46,6 +46,38 @@ class NotificationService
     /** Postgres handles far more, but a single INSERT has a bind-param ceiling. */
     private const INSERT_CHUNK = 500;
 
+    /** @return Collection<int, User> Active users who currently hold a permission. */
+    public function usersWithPermission(string $permission): Collection
+    {
+        $permissionId = DB::table('permissions')->where('slug', $permission)->value('id');
+        if ($permissionId === null) {
+            return collect();
+        }
+
+        $roleIds = DB::table('role_permissions')->where('permission_id', $permissionId)->pluck('role_id');
+        $overrideIds = DB::table('user_permission_overrides')
+            ->where('permission_id', $permissionId)
+            ->whereNull('deleted_at')
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->pluck('user_id');
+
+        return User::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($roleIds, $overrideIds): void {
+                $query->whereHas('role', fn ($role) => $role->where('slug', 'system_admin'));
+                if ($roleIds->isNotEmpty()) {
+                    $query->orWhereIn('role_id', $roleIds);
+                }
+                if ($overrideIds->isNotEmpty()) {
+                    $query->orWhereIn('id', $overrideIds);
+                }
+            })
+            ->with('role')
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission($permission))
+            ->values();
+    }
+
     /** Store portal notices without internal-user preferences, email, or broadcast channels. */
     public function sendPortalInApp(iterable $recipients, string $type, array $data, ?string $dedupeKey = null): void
     {

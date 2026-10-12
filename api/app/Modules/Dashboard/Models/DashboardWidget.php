@@ -19,6 +19,7 @@ class DashboardWidget extends Model
         'description',
         'module',
         'permission',
+        'permission_any',
         'render_kind',
         'link_path',
         'default_w',
@@ -27,6 +28,10 @@ class DashboardWidget extends Model
 
     protected $casts = [
         'render_kind' => RenderKind::class,
+        // A widget's gate is either one slug (`permission`) or any-of a set
+        // (`permission_any`). When both are present the set wins — see
+        // DashboardLayoutService::canSeeWidget().
+        'permission_any' => 'array',
         'default_w' => 'integer',
         'default_h' => 'integer',
     ];

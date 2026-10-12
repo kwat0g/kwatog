@@ -139,6 +139,25 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
         self::assertSame([], $missing, "Enforced approval chains missing from ApprovalTypeRegistry (board drops their cards):\n".implode("\n", $missing));
     }
 
+    public function test_reserved_workflows_stay_inactive_and_off_the_approval_board(): void
+    {
+        $reserved = [
+            'department_transfer',
+            'separation_clearance',
+            'maintenance_request',
+            '8d_report',
+            'work_order',
+            'ncr',
+        ];
+        $workflows = WorkflowDefinition::query()->whereIn('workflow_type', $reserved)->get()->keyBy('workflow_type');
+
+        $this->assertCount(count($reserved), $workflows);
+        foreach ($reserved as $workflowType) {
+            $this->assertFalse($workflows[$workflowType]->is_active, "Reserved workflow [{$workflowType}] must stay inactive.");
+            $this->assertNull(ApprovalTypeRegistry::forKind($workflowType), "Reserved workflow [{$workflowType}] must not appear on the approval board.");
+        }
+    }
+
     public function test_chain_participants_hold_their_route_permissions(): void
     {
         // The roles this audit found broken: production_manager (company_loan

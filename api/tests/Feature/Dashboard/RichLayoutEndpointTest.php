@@ -49,11 +49,13 @@ class RichLayoutEndpointTest extends TestCase
         }
     }
 
-    public function test_supervisor_visibility_migration_is_repeatable_and_preserves_personal_layouts(): void
+    public function test_supervisor_permission_migrations_are_repeatable_and_preserve_personal_layouts(): void
     {
         $user = $this->actingAsRole('maintenance_supervisor');
-        $permissionId = DB::table('permissions')->where('slug', 'mrp.machines.view')->value('id');
-        DB::table('role_permissions')->where('role_id', $user->role_id)->where('permission_id', $permissionId)->delete();
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', ['maintenance.wo.verify', 'mrp.machines.view'])
+            ->pluck('id');
+        DB::table('role_permissions')->where('role_id', $user->role_id)->whereIn('permission_id', $permissionIds)->delete();
         DB::table('dashboard_layouts')->where('owner_type', 'role')->where('owner_id', $user->role_id)->delete();
         DB::table('dashboard_layouts')->insert([
             'owner_type' => 'user', 'owner_id' => $user->id, 'widget_key' => 'self.leave_balance',
@@ -61,9 +63,13 @@ class RichLayoutEndpointTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         Cache::forget("auth:role_perms:{$user->role_id}");
+        $verificationMigration = require database_path('migrations/2026_10_09_230300_grant_maintenance_verification.php');
         $migration = require database_path('migrations/2026_10_10_000500_restore_maintenance_supervisor_visibility.php');
+        $verificationMigration->up();
+        $verificationMigration->up();
         $migration->up();
         $migration->up();
+        $this->assertTrue($user->fresh()->hasPermission('maintenance.wo.verify'));
         $this->assertTrue($user->fresh()->hasPermission('mrp.machines.view'));
         $this->assertSame(9, DB::table('dashboard_layouts')->where('owner_type', 'role')->where('owner_id', $user->role_id)->count());
         $this->assertSame(['self.leave_balance'], DB::table('dashboard_layouts')->where('owner_type', 'user')->where('owner_id', $user->id)->pluck('widget_key')->all());

@@ -139,7 +139,7 @@ export const purchasingRoutes = (
       <Route
         path="/purchasing/supplier-listings"
         element={
-          <PermissionGuard permission="purchasing.supplier_listings.review">
+          <PermissionGuard permission="purchasing.supplier_listings.view">
             <SupplierListingsReviewPage />
           </PermissionGuard>
         }

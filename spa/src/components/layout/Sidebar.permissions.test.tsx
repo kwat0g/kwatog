@@ -30,6 +30,20 @@ const allFeatures = new Set([
 ]);
 
 describe('role-aligned sidebar permissions', () => {
+  it('shows notifications only to users who can open the notification page', () => {
+    const notifications = item('/notifications');
+    expect(isNavItemVisible(notifications, { permissions: new Set() })).toBe(false);
+    expect(isNavItemVisible(notifications, { permissions: new Set(['notifications.view']) })).toBe(true);
+    expect(isNavItemVisible(notifications, { permissions: new Set(), roleSlug: 'system_admin' })).toBe(true);
+  });
+
+  it('shows the chain tracker to sales-order or bottleneck viewers only', () => {
+    const tracker = item('/chains');
+    expect(isNavItemVisible(tracker, { permissions: new Set(['crm.sales_orders.view']) })).toBe(true);
+    expect(isNavItemVisible(tracker, { permissions: new Set(['dashboard.view_bottlenecks']) })).toBe(true);
+    expect(isNavItemVisible(tracker, { permissions: new Set() })).toBe(false);
+  });
+
   it('shows supervisor machine and maintenance navigation through explicit read permissions', () => {
     const context = {
       permissions: new Set(['maintenance.view', 'maintenance.wo.assign', 'maintenance.wo.verify', 'mrp.machines.view', 'assets.view']),

@@ -51,6 +51,7 @@ class FinanceDashboardService
         'accounting.credit_notes.view',
         'payroll.periods.view',
         'budgeting.view',
+        'forecasting.view',
     ];
 
     public function summary(User $user): array
@@ -96,6 +97,9 @@ class FinanceDashboardService
                     'budget_vs_actual_top'   => ['budgeting.view',            fn () => $this->budgetVsActualTop()],
                     // A projection of revenue, gated like revenue.
                     'revenue_forecast'       => ['accounting.dashboard.view', fn () => $this->forecastingService->revenueForecast()],
+                    // Net cash movement (AR inflow − AP outflow), gated on the
+                    // forecasting read — stripped server-side without it.
+                    'cash_flow_forecast'     => ['forecasting.view',            fn () => $this->forecastingService->cashFlowForecast()],
                     // Configured windows, not data.
                     'payroll_pipeline_history_days' => [null,                 fn () => $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1)],
                     'ap_due_horizon_days'    => [null,                        fn () => $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0)],

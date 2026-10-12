@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Dashboard\Support\ForecastTrend;
+use App\Modules\Forecasting\Services\ForecastingService;
+use App\Modules\Forecasting\Services\StockOutProjectionService;
 use App\Modules\Forecasting\Support\ForecastConfidence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +24,14 @@ use Illuminate\Support\Facades\Schema;
  */
 class ForecastingDashboardService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly StockOutProjectionService $stockOut,
+        private readonly ForecastingService $forecasting,
+        private readonly CashFlowForecastService $cashFlow,
+        private readonly CapacityForecastService $capacity,
+        private readonly AttendanceForecastService $attendance,
+    ) {}
     /* ───────────────────────────────────────────────────────────────
      * 1. HR — Headcount forecast
      * ─────────────────────────────────────────────────────────────── */
@@ -297,47 +307,113 @@ class ForecastingDashboardService
     }
 
     /* ───────────────────────────────────────────────────────────────
+     * 4. Purchasing — Supplier-risk composition (Task 5)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Supplier risk as a COMPOSITION, not a new engine: stock-out rows from
+     * StockOutProjectionService plus the demand MAPE/bias from
+     * ForecastingService. Read-only by construction — a fixed key set with no
+     * override or mutate fields (override + MRP toggle stay on /forecasting).
+     *
+     * @return array{at_risk_count: int, critical_count: int, high_count: int, horizon_days: int, mape: float|null, bias: float|null, periods_evaluated: int, top_items: array<int, array{item_id: string, code: string, name: string, days_until_stockout: int|null, risk: string}>}
+     */
+    public function supplierRisk(?int $horizonDays = null): array
+    {
+        $rows = $this->stockOut->projectAll($horizonDays);
+        $atRisk = array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => $row['risk'] !== 'ok',
+        ));
+        $accuracy = $this->forecasting->accuracy(Carbon::now()->year);
+
+        $countRisk = static fn (string $risk): int => count(array_filter(
+            $atRisk,
+            static fn (array $row): bool => $row['risk'] === $risk,
+        ));
+
+        return [
+            'at_risk_count' => count($atRisk),
+            'critical_count' => $countRisk('critical'),
+            'high_count' => $countRisk('high'),
+            'horizon_days' => $horizonDays ?? $this->settings->requiredInt('inventory.stockout.default_horizon_days', 1),
+            'mape' => $accuracy['mape'],
+            'bias' => $accuracy['bias'],
+            'periods_evaluated' => $accuracy['periods_evaluated'],
+            // projectAll sorts worst-first, so the first five are the five
+            // most urgent. Item ids are HashIDs, safe to link from the SPA.
+            'top_items' => array_map(
+                static fn (array $row): array => [
+                    'item_id' => $row['item_id'],
+                    'code' => $row['code'],
+                    'name' => $row['name'],
+                    'days_until_stockout' => $row['days_until_stockout'],
+                    'risk' => $row['risk'],
+                ],
+                array_slice($atRisk, 0, 5),
+            ),
+        ];
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * 5. Finance — Cash-flow forecast (Task 6)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Thin delegate: the panel and the widget share the one
+     * CashFlowForecastService engine (ponytail: one implementation).
+     *
+     * @return array{historical: array, forecast: array, trend: string, kpi: array, months: array, confidence: float|null}
+     */
+    public function cashFlowForecast(): array
+    {
+        return $this->cashFlow->forecast();
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * 6. PPC / Plant — Capacity forecast (Task 7)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Thin delegate: the panels and the widget share the one
+     * CapacityForecastService engine (ponytail: one implementation).
+     *
+     * @return array{historical: array, forecast: array, trend: string, kpi: array, months: array, breach: bool, confidence: float|null}
+     */
+    public function capacityForecast(): array
+    {
+        return $this->capacity->forecast();
+    }
+
+    /* ───────────────────────────────────────────────────────────────
+     * 7. HR — Attendance forecast (Task 8)
+     * ─────────────────────────────────────────────────────────────── */
+
+    /**
+     * Thin delegate: the panel and the widget share the one
+     * AttendanceForecastService engine (ponytail: one implementation).
+     *
+     * @return array{historical: array, forecast: array, trend: string, kpi: array, months: array, risk: string, confidence: float|null}
+     */
+    public function attendanceForecast(): array
+    {
+        return $this->attendance->forecast();
+    }
+
+    /* ───────────────────────────────────────────────────────────────
      * Shared helpers
      * ─────────────────────────────────────────────────────────────── */
 
     /**
      * Compute trend direction: 'up', 'down', or 'stable'.
-     * Uses linear regression slope normalized by the mean.
+     * Delegates to the shared helper so every forecast agrees on the math.
      */
     private function computeTrend(array $values): string
     {
-        $n = count($values);
-        if ($n < 3) {
-            return 'stable';
-        }
-
-        $xMean = ($n - 1) / 2;
-        $yMean = array_sum($values) / $n;
-
-        $num = 0.0;
-        $den = 0.0;
-        foreach ($values as $i => $y) {
-            $dx = $i - $xMean;
-            $num += $dx * ($y - $yMean);
-            $den += $dx * $dx;
-        }
-
-        if ($den === 0.0) {
-            return 'stable';
-        }
-        $slope = $num / $den;
         $slopeRatio = $this->settings->requiredFloat('forecasting.trend_slope_ratio', 0, 1);
         $minimumSlope = $this->settings->requiredFloat('forecasting.trend_minimum_slope', 0, 1000000);
-        $threshold = $yMean > 0 ? abs($slopeRatio * $yMean) : $minimumSlope;
 
-        if ($slope > $threshold) {
-            return 'up';
-        }
-        if ($slope < -$threshold) {
-            return 'down';
-        }
-
-        return 'stable';
+        return ForecastTrend::direction($values, $slopeRatio, $minimumSlope);
     }
 
     /**

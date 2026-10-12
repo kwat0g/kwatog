@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Accounting\Enums\BudgetTransferStatus;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\BudgetTransfer;
@@ -151,7 +152,7 @@ class BudgetTransferController extends Controller
         $transfer->setAttribute(
             'can_approve',
             $actor instanceof User
-                && $actor->hasPermission('budgeting.approve')
+                && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $transfer->requested_by])
                 && $this->transfers->canApprove($transfer, $actor),
         );
     }

@@ -9,6 +9,7 @@ use App\Common\Services\ApprovalBoardService;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
@@ -260,12 +261,23 @@ class ApprovalBoardScopeTest extends TestCase
     public function test_payroll_cards_stay_permission_gated(): void
     {
         $hr = $this->user('hr_officer');
+        $finance = $this->user('finance_officer');
         $employee = $this->user('employee', $this->deptA->id);
 
-        $period = PayrollPeriod::factory()->create();
-        $this->pendingStep(PayrollPeriod::class, $period->id, 'finance_officer');
+        $period = PayrollPeriod::factory()->create(['created_by' => $hr->id]);
+        $period->forceFill(['status' => 'computed', 'computed_by' => $hr->id])->save();
+        $financeMadePeriod = PayrollPeriod::factory()->create(['created_by' => $hr->id]);
+        $financeMadePeriod->forceFill(['status' => 'computed', 'computed_by' => $finance->id])->save();
 
-        $this->assertCount(1, $this->board($hr)['awaiting_others']);
+        $financeBoard = $this->board($finance);
+        $this->assertSame([
+            $period->period_start->toDateString().' – '.$period->period_end->toDateString(),
+        ], $this->numbers($financeBoard['my_action']));
+        $this->assertSame('payroll', $financeBoard['my_action'][0]['type']);
+        $this->assertSame([], $this->board($employee)['my_action']);
+        $this->assertSame('computed', $period->fresh()->status->value);
+        $this->assertDatabaseCount('approval_records', 0);
+        $this->assertCount(2, $this->board($hr)['awaiting_others']);
         $this->assertSame([], $this->board($employee)['awaiting_others']);
     }
 
@@ -360,5 +372,63 @@ class ApprovalBoardScopeTest extends TestCase
         $this->assertSame('Restricted', $board['my_action'][0]['number']);
         $this->assertNull($board['my_action'][0]['amount']);
         $this->assertNull($board['my_action'][0]['requester']);
+    }
+
+    /**
+     * Task 2 — the `approvals.pending` tile reuses the board's row scope, so a
+     * delegate outside the module scope gets the Restricted card with a
+     * delegation badge and NO link. The board stays read-only; act lives on
+     * the entity controllers, and a redacted row must not offer a way in.
+     */
+    public function test_widget_passes_restricted_card_without_link(): void
+    {
+        $delegator = $this->user('department_head', $this->deptA->id);
+        $delegate = $this->user('employee', $this->deptB->id);
+        $pr = PurchaseRequest::factory()->create(['department_id' => $this->deptA->id]);
+        $this->pendingStep(PurchaseRequest::class, $pr->id, 'department_head');
+
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $payload = app(ApprovalsWidgetAnalytics::class)->payload('approvals.pending', $delegate);
+
+        $this->assertSame(1, $payload['total_count']);
+        $this->assertSame('Restricted', $payload['rows'][0]['document']);
+        $this->assertNull($payload['rows'][0]['link']);
+        $this->assertNotNull($payload['rows'][0]['delegation_badge']);
+    }
+
+    /**
+     * Task 2 — the tile leads with what breached the approval SLA
+     * (`approvals.reminder_hours`, 24 by default), not merely what arrived
+     * first. Rows carry their overdue hours so the tile can count down.
+     */
+    public function test_widget_sorts_sla_overdue_first(): void
+    {
+        $head = $this->user('department_head', $this->deptA->id);
+        $fresh = PurchaseRequest::factory()->create(['department_id' => $this->deptA->id]);
+        $stale = PurchaseRequest::factory()->create(['department_id' => $this->deptA->id]);
+        $this->pendingStep(PurchaseRequest::class, $fresh->id, 'department_head', ['created_at' => now()->subHours(5)]);
+        $this->pendingStep(PurchaseRequest::class, $stale->id, 'department_head', ['created_at' => now()->subHours(72)]);
+
+        $payload = app(ApprovalsWidgetAnalytics::class)->payload('approvals.pending', $head);
+
+        $this->assertSame(2, $payload['total_count']);
+        $this->assertSame(
+            [$stale->pr_number, $fresh->pr_number],
+            array_column($payload['rows'], 'document'),
+        );
+        $this->assertSame(48, $payload['rows'][0]['overdue_hours']);
+        $this->assertSame(0, $payload['rows'][1]['overdue_hours']);
+        $this->assertSame(
+            '/purchasing/purchase-requests/'.$stale->hash_id,
+            $payload['rows'][0]['link'],
+        );
     }
 }

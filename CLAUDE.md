@@ -66,7 +66,7 @@ Fully decoupled. API at `/api/v1/*`, SPA at `/*`, WebSocket at `/ws`. Docker Com
 | 14 | Forecasting (demand forecasts) | 1, 2 |
 | 15 | Return Management (RMA / return requests) | 1, 2 |
 | 16 | Assets (fixed assets, depreciation, QR tracking) | 2 |
-| 17 | Budgeting (budgets, budget line items, revisions, transfers, fiscal year) | 6 |
+| 17 | Budgeting (Accounting subdomain: budgets, line items, transfers, fiscal year; no revisions table) | 6 |
 
 > **Scope note (2026-06):** Modules 13–17 were added beyond the original 12. They
 > are intentional scope expansion and are maintained/tested like the rest.
@@ -531,7 +531,7 @@ So when you use this convention:
 
 ### Cron inventory
 
-Authoritative list is `api/routes/console.php` (43 scheduled commands as of 2026-08-25) —
+Authoritative list is `api/routes/console.php` (63 scheduled commands as of 2026-10-12) —
 read it rather than trusting a copy here. One scheduling gotcha worth knowing without looking:
 
 - `kpi:compute-monthly` (2nd @ 03:00) is the **only** thing that fills `kpi_snapshots`, so every
@@ -539,7 +539,7 @@ read it rather than trusting a copy here. One scheduling gotcha worth knowing wi
   not a bug.
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-09-06 = **0481** (`0479_harden_capacity_plan_invariants`, `0480_create_supplier_item_listings_table`, `0481_action_center_drop_approvals_and_exceptions_permission` — the last from the Action Center / Approval Queue visibility audit). Confirm the real max before using it — `ls api/database/migrations | grep -E '^04' | sort | tail -3` — rather than trusting this number, which goes out of date exactly when several sessions are landing work. The sequence is contiguous through 0481: `0472_add_link_path_to_dashboard_widgets` used to be missing from `main` because it lived on an unmerged frontend branch, and that branch has now merged. Mixed timestamp-style migrations (`2026_06_09_*`, `2026_08_16_*`, and a run of `2026_08_26_*`) coexist for older HR/Payroll changes, recent BOM-costing work, and anything that must run after a timestamp-named migration — see the dependency rule below.
+The numeric migration prefix currently reaches **0575**; timestamped migrations through `2026_10_12_110000` also exist (verified 2026-10-12). Confirm filenames and dependencies before naming a migration; this snapshot will age. Laravel sorts full filenames, so every `0NNN_` migration runs before every `2026_*` migration — see the dependency rule below.
 
 **"highest + 1" is WRONG when your migration depends on a timestamp-named one.**
 The migrator sorts by full filename, and `'0'` < `'2'`, so **every** `0NNN_` file
@@ -589,7 +589,7 @@ confirming the prefix is unused (`ls api/database/migrations | grep '^0475_'`)
 rather than trusting a max.
 
 ### Test runner + suite size
-Full suite as of 2026-08-17: **1900 tests / 0 fail / ~28 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+Suite size and runtime change with the tree. Use `php artisan test --list-tests` for the current count and `--filter='Foo|Bar'` for tight loops. Run the full suite for a release or when the change requires it.
 
 **Two agents cannot share `ogami_test`.** `RefreshDatabase` runs `migrate:fresh`, so a second suite tears the schema down under the first: you get `relation "roles" does not exist`, `column roles.deleted_at does not exist`, `SQLSTATE[40P01] deadlock detected` — hundreds of failures with ZERO assertion failures among them, which is the tell. Run on your own database instead of guessing:
 ```

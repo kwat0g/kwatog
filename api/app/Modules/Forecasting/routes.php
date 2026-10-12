@@ -17,6 +17,10 @@ Route::middleware(['auth:sanctum', 'feature:forecasting'])->prefix('forecasting'
     Route::get('/demand-forecasts/options', [DemandForecastController::class, 'options'])
         ->middleware('permission:forecasting.view');
 
+    /* ─── Demand-page customer dropdown (id + name only, no accounting read) ─── */
+    Route::get('/customers/options', [DemandForecastController::class, 'customerOptions'])
+        ->middleware('permission:forecasting.view');
+
     /* ─── Demand forecasts ─── */
     Route::get('/settings',
         [DemandForecastController::class, 'settings'])

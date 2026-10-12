@@ -5,18 +5,24 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Models\DashboardWidget;
 use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Services\Analytics\ApprovalsWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\AssetWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\AttendanceWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\BudgetWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\CapacityWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\CashFlowWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CoreWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CrmWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\ExecutiveWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\LoanWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\ReturnWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\SupplyChainWidgetAnalytics;
+use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\KpiSnapshotService;
 use Database\Seeders\DashboardRoleLayoutSeeder;
 use Database\Seeders\DashboardWidgetSeeder;
@@ -51,6 +57,10 @@ class WidgetSeedIntegrityTest extends TestCase
             app(LoanWidgetAnalytics::class),
             app(KpiWidgetAnalytics::class),
             app(ApprovalsWidgetAnalytics::class),
+            app(CashFlowWidgetAnalytics::class),
+            app(CapacityWidgetAnalytics::class),
+            app(AttendanceWidgetAnalytics::class),
+            app(ExecutiveWidgetAnalytics::class),
         ])->flatMap(fn ($provider) => $provider->handles())->unique();
     }
 
@@ -115,6 +125,116 @@ class WidgetSeedIntegrityTest extends TestCase
         }
     }
 
+    public function test_every_seeded_role_has_default_dashboard_widgets(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+
+        $rolesWithoutDefaults = Role::query()
+            ->whereNotIn('id', DB::table('dashboard_layouts')
+                ->where('owner_type', 'role')
+                ->select('owner_id'))
+            ->orderBy('slug')
+            ->pluck('slug')
+            ->all();
+
+        $this->assertSame([], $rolesWithoutDefaults);
+    }
+
+    public function test_sales_dashboard_defaults_include_order_and_queue_analytics(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+        $salesRoleId = Role::query()->where('slug', 'sales_officer')->value('id');
+        $keys = DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')
+            ->where('owner_id', $salesRoleId)
+            ->pluck('widget_key')
+            ->all();
+
+        $this->assertContains('sales.order_intake', $keys);
+        $this->assertContains('sales.open_orders', $keys);
+        $this->assertContains('sales.price_requests', $keys);
+        $this->assertNotContains('crm.open_complaints', $keys);
+    }
+
+    public function test_sales_analytics_migration_updates_existing_layouts_and_rolls_back(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+        $salesRoleId = Role::query()->where('slug', 'sales_officer')->value('id');
+        $salesUser = User::factory()->create(['role_id' => $salesRoleId]);
+
+        DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')
+            ->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'sales.order_intake')
+            ->delete();
+        DB::table('dashboard_widgets')->where('key', 'crm.open_complaints')->update(['permission' => 'crm.view']);
+        DB::table('dashboard_layouts')->insert([
+            'owner_type' => 'role', 'owner_id' => $salesRoleId, 'widget_key' => 'crm.open_complaints',
+            'position_x' => 8, 'position_y' => 0, 'width' => 4, 'height' => 4,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('dashboard_layouts')
+            ->where('owner_type', 'user')
+            ->where('owner_id', $salesUser->id)
+            ->delete();
+        DB::table('dashboard_layouts')->insert([
+            [
+                'owner_type' => 'user', 'owner_id' => $salesUser->id, 'widget_key' => 'sales.open_orders',
+                'position_x' => 0, 'position_y' => 0, 'width' => 4, 'height' => 4,
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'owner_type' => 'user', 'owner_id' => $salesUser->id, 'widget_key' => 'sales.price_requests',
+                'position_x' => 4, 'position_y' => 0, 'width' => 4, 'height' => 4,
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'owner_type' => 'user', 'owner_id' => $salesUser->id, 'widget_key' => 'crm.open_complaints',
+                'position_x' => 8, 'position_y' => 0, 'width' => 4, 'height' => 4,
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+        ]);
+        DB::table('dashboard_widgets')->whereIn('key', ['sales.open_orders', 'sales.price_requests'])->update([
+            'render_kind' => 'scalar', 'default_w' => 4,
+        ]);
+
+        $migration = require database_path('migrations/2026_10_12_100000_add_sales_dashboard_analytics.php');
+        $migration->up();
+
+        $this->assertSame(
+            1,
+            DB::table('dashboard_layouts')
+                ->where('owner_type', 'user')
+                ->where('owner_id', $salesUser->id)
+                ->where('widget_key', 'sales.order_intake')
+                ->count(),
+        );
+        $this->assertSame('breakdown', DB::table('dashboard_widgets')->where('key', 'sales.open_orders')->value('render_kind'));
+        $this->assertSame(
+            'crm.complaints.view',
+            DB::table('dashboard_widgets')->where('key', 'crm.open_complaints')->value('permission'),
+        );
+        $this->assertSame(0, DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'crm.open_complaints')->count());
+        $effectiveKeys = collect(app(DashboardLayoutService::class)->getEffectiveLayout($salesUser))
+            ->pluck('key')->all();
+        $this->assertNotContains('crm.open_complaints', $effectiveKeys);
+
+        $migration->down();
+
+        $this->assertSame(0, DB::table('dashboard_widgets')->where('key', 'sales.order_intake')->count());
+        $this->assertSame(0, DB::table('dashboard_layouts')->where('widget_key', 'sales.order_intake')->count());
+        $this->assertSame('scalar', DB::table('dashboard_widgets')->where('key', 'sales.open_orders')->value('render_kind'));
+        $this->assertSame('crm.view', DB::table('dashboard_widgets')->where('key', 'crm.open_complaints')->value('permission'));
+        $this->assertSame(1, DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'crm.open_complaints')->count());
+        $this->assertSame(4, (int) DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'sales.open_orders')->value('width'));
+    }
+
     /** No role's row may overflow the 12-column grid. */
     public function test_no_role_row_exceeds_twelve_columns(): void
     {
@@ -142,6 +262,12 @@ class WidgetSeedIntegrityTest extends TestCase
         $this->seed(DashboardRoleLayoutSeeder::class);
 
         $permissionByKey = DashboardWidget::query()->pluck('permission', 'key');
+        // A widget's gate is EITHER one slug or any-of a set, so a leak check
+        // that only reads `permission` would score every `kpi.*` tile as
+        // ungated and quietly stop guarding them.
+        $anyByKey = DashboardWidget::query()
+            ->get()
+            ->mapWithKeys(fn (DashboardWidget $w): array => [$w->key => $w->permission_any ?? []]);
         $leaks = [];
 
         foreach (Role::query()->get() as $role) {
@@ -156,12 +282,25 @@ class WidgetSeedIntegrityTest extends TestCase
                 ->pluck('widget_key');
 
             foreach ($keys as $key) {
-                $needed = $permissionByKey[$key] ?? null;
-                if ($needed !== null && ! in_array($needed, $held, true)) {
-                    $leaks[] = "{$role->slug} → {$key} (needs {$needed})";
-                }
                 if (! $permissionByKey->has($key)) {
                     $leaks[] = "{$role->slug} → {$key} (no such widget)";
+
+                    continue;
+                }
+
+                $anyOf = $anyByKey[$key] ?? [];
+
+                if ($anyOf !== []) {
+                    if (array_intersect($anyOf, $held) === []) {
+                        $leaks[] = "{$role->slug} → {$key} (needs any of ".implode(', ', $anyOf).')';
+                    }
+
+                    continue;
+                }
+
+                $needed = $permissionByKey[$key];
+                if ($needed !== null && ! in_array($needed, $held, true)) {
+                    $leaks[] = "{$role->slug} → {$key} (needs {$needed})";
                 }
             }
         }
@@ -185,11 +324,11 @@ class WidgetSeedIntegrityTest extends TestCase
         $this->assertSame([], $unlinked, 'widgets with no link_path: '.implode(', ', $unlinked));
     }
 
-    /** Every link must be an in-app absolute path, not an external URL. */
+    /** Every link must be an in-app absolute path, not an external URL. KPI tiles carry an in-dashboard `#kpi-{code}` anchor. */
     public function test_link_paths_are_in_app_absolute_paths(): void
     {
         foreach (DashboardWidget::query()->pluck('link_path', 'key') as $key => $path) {
-            $this->assertMatchesRegularExpression('#^/[a-z0-9\-/]*$#', (string) $path, "widget {$key} has a non-app link");
+            $this->assertMatchesRegularExpression('~^/[a-z0-9\-/]*(?:\?[a-z0-9_=&%.%-]+)?(?:#[a-z0-9\-_]+)?$~', (string) $path, "widget {$key} has a non-app link");
         }
     }
 
@@ -214,10 +353,10 @@ class WidgetSeedIntegrityTest extends TestCase
     }
 
     /**
-     * A KPI tile must be gated by exactly the grant its own scorecard enforces
-     * (KpiSnapshotService::getScorecard → ::userCanSeeModule). A looser
-     * permission here would publish a KPI on a dashboard that the page it links
-     * to then refuses to show.
+     * A KPI tile must be gated by exactly the grant set its own scorecard
+     * enforces (KpiSnapshotService::getScorecard → ::userCanSeeModule). A looser
+     * gate here would publish a KPI on a dashboard that the page it links to
+     * then refuses to show.
      */
     public function test_kpi_widgets_reuse_the_scorecard_permission(): void
     {
@@ -227,10 +366,136 @@ class WidgetSeedIntegrityTest extends TestCase
                 ->firstOrFail();
 
             $this->assertSame(
-                KpiSnapshotService::MODULE_PERMISSIONS[$kpi['module']] ?? null,
-                $widget->permission,
+                KpiSnapshotService::moduleGates($kpi['module']),
+                $widget->permission_any,
                 "kpi widget {$widget->key} does not match the scorecard boundary",
             );
+            // The set IS the gate. A single slug left alongside it would be a
+            // second rule that can disagree with the scorecard.
+            $this->assertNull($widget->permission);
         }
+    }
+
+    /**
+     * A gate naming a slug no role can hold hides its widget from every viewer
+     * forever: the row is seeded, the SPA registry knows it, the picker offers
+     * it, and it never renders. Silent, so it needs an assertion rather than a
+     * reader noticing.
+     */
+    public function test_every_widget_gate_slug_exists_in_the_permission_catalog(): void
+    {
+        $catalog = DB::table('permissions')->pluck('slug')->all();
+        $missing = [];
+
+        foreach (DashboardWidget::query()->get() as $widget) {
+            $anyOf = $widget->permission_any ?? [];
+            $slugs = $anyOf !== []
+                ? $anyOf
+                : ($widget->permission === null ? [] : [$widget->permission]);
+
+            foreach ($slugs as $slug) {
+                if (! in_array($slug, $catalog, true)) {
+                    $missing[] = "{$widget->key} → {$slug}";
+                }
+            }
+        }
+
+        $this->assertSame([], $missing, "widget gates naming unknown permissions:\n".implode("\n", $missing));
+    }
+
+    /**
+     * A widget is gated by who may read its DATA — not by a page grant or a
+     * self-service slug that happened to be nearby (01-matrix §D2 G-P2-1/2/4).
+     *
+     * Three shape errors are pinned here, each fixed in
+     * 2026_10_11_110000_regate_dashboard_widgets_on_dataset_reads:
+     *
+     *  - production tiles on `production.dashboard.view`, a PAGE grant held by
+     *    production_manager and the admin wildcard, so the role that owns the
+     *    production schedule had its own tiles stripped from its dashboard;
+     *  - a finance projection and a production projection on `forecasting.view`,
+     *    held by six roles including purchasing_officer and warehouse_staff —
+     *    buyers rendering finance's cash forecast;
+     *  - the org-wide attendance/leave projection on `attendance.view`, a
+     *    self-service slug every role holds.
+     */
+    public function test_widget_gates_follow_the_dataset_read(): void
+    {
+        $expected = [
+            'production.kpi' => 'production',
+            'machine.utilization' => 'production',
+            'oee.gauges' => 'production',
+            'forecast.cash_flow' => 'accounting',
+            'forecast.capacity' => 'production',
+            'forecast.attendance' => 'attendance',
+            'forecast.revenue' => 'accounting',
+        ];
+
+        foreach ($expected as $key => $module) {
+            $widget = DashboardWidget::query()->where('key', $key)->firstOrFail();
+
+            $this->assertSame(
+                KpiSnapshotService::moduleGates($module),
+                $widget->permission_any,
+                "widget {$key} is gated by the wrong dataset read",
+            );
+            // The set IS the gate. A single slug left alongside it would be a
+            // second rule that can disagree with the tiles over the same data.
+            $this->assertNull($widget->permission, "widget {$key} carries a second gate");
+        }
+    }
+
+    /**
+     * …and the gates produce that audience when the real path reads them.
+     *
+     * The column check above would still pass if `canSeeWidget` ignored
+     * `permission`, so the audience is asserted through
+     * `listAvailableWidgets` — the method the picker and the layout endpoint
+     * both use. Both directions matter: the schedule owner must GAIN its
+     * production tiles, and the buyer and the floor must LOSE the finance one.
+     */
+    public function test_regated_widgets_reach_the_intended_audience(): void
+    {
+        $service = app(DashboardLayoutService::class);
+
+        $visible = fn (string $role): array => array_column(
+            $service->listAvailableWidgets($this->userWithRole($role)),
+            'key',
+        );
+
+        $ppc = $visible('ppc_head');
+        foreach (['production.kpi', 'machine.utilization', 'oee.gauges', 'forecast.capacity'] as $key) {
+            $this->assertContains($key, $ppc, "ppc_head cannot see {$key}");
+        }
+
+        foreach (['purchasing_officer', 'warehouse_staff'] as $role) {
+            foreach (['forecast.cash_flow', 'forecast.capacity', 'production.kpi', 'oee.gauges'] as $key) {
+                $this->assertNotContains($key, $visible($role), "{$role} can see {$key}");
+            }
+        }
+
+        // The company-wide reader holds ONE slug — `dashboard.company.view` —
+        // and it is what makes their landing page work. A gate written as a
+        // single module slug would pass every assertion above and leave the
+        // executive's finance family drawing empty, which is the silent half of
+        // this defect.
+        $executive = $visible('vice_president');
+        foreach (['forecast.cash_flow', 'forecast.capacity', 'forecast.revenue', 'production.kpi', 'oee.gauges'] as $key) {
+            $this->assertContains($key, $executive, "vice_president cannot see {$key}");
+        }
+
+        $this->assertContains('forecast.cash_flow', $visible('finance_officer'));
+
+        $this->assertContains('forecast.attendance', $visible('hr_officer'));
+        $this->assertContains('forecast.attendance', $visible('vice_president'));
+        $this->assertNotContains('forecast.attendance', $visible('driver'));
+    }
+
+    private function userWithRole(string $slug): User
+    {
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', $slug)->value('id'),
+            'email' => 'widget+'.substr(uniqid(), -8).'@t.test',
+        ]);
     }
 }

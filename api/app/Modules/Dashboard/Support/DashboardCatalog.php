@@ -33,6 +33,28 @@ final class DashboardCatalog
     public static function all(): array
     {
         return [
+            // Cross-functional executive surface (DSS 01-matrix §B). It lists
+            // ahead of nothing — the winner is decided by live rarity, not
+            // order — but it is deliberately the ONLY catalog entry whose
+            // permission is a company-wide READ rather than a module's own
+            // dashboard. `dashboard.company.view` has two holders
+            // (system_admin, vice_president), so system_admin keeps landing on
+            // `admin` (one holder) while the vice president moves here from
+            // `/dashboard/plant-manager` (three holders).
+            ['key' => 'company',       'path' => '/dashboard/company',       'permission' => 'dashboard.company.view',       'name' => 'Company Overview'],
+            // The five role dashboards DSS 01-matrix §D3 specifies for roles that
+            // had no slug of their own and therefore fell through to the generic
+            // widget grid. Each is held by exactly one role (maintenance by two),
+            // so nothing else in the catalog can out-rank it for them — and the
+            // admin wildcard holds all five while still landing on `admin`, since
+            // rarity then ties and `admin` sorts ahead of every other one-holder
+            // key. That is asserted in DashboardDispatchTest rather than left to
+            // arithmetic.
+            ['key' => 'logistics',     'path' => '/dashboard/logistics',     'permission' => 'dashboard.logistics.view',     'name' => 'ImpEx Logistics'],
+            ['key' => 'maintenance',   'path' => '/dashboard/maintenance',   'permission' => 'dashboard.maintenance.view',   'name' => 'Maintenance'],
+            ['key' => 'department',    'path' => '/dashboard/department',    'permission' => 'dashboard.department.view',    'name' => 'Department'],
+            ['key' => 'sales',         'path' => '/dashboard/sales',         'permission' => 'dashboard.sales.view',         'name' => 'Sales'],
+            ['key' => 'customer-service', 'path' => '/dashboard/customer-service', 'permission' => 'dashboard.customer_service.view', 'name' => 'Customer Service'],
             ['key' => 'admin',         'path' => '/dashboard/admin',         'permission' => 'dashboard.admin.view',         'name' => 'System Administrator'],
             ['key' => 'plant-manager', 'path' => '/dashboard/plant-manager', 'permission' => 'dashboard.plant_manager.view', 'name' => 'Plant Manager'],
             ['key' => 'hr',            'path' => '/dashboard/hr',            'permission' => 'dashboard.hr.view',            'name' => 'HR'],

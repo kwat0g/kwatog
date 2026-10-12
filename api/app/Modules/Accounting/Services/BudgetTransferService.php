@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BudgetTransferStatus;
 use App\Modules\Accounting\Models\Budget;
@@ -70,7 +72,7 @@ class BudgetTransferService
             $this->assertMovablePair($from, $to);
             $this->assertHeadroom($from, $month, $amount);
 
-            return BudgetTransfer::create([
+            $transfer = BudgetTransfer::create([
                 'transfer_number' => $this->sequences->generate('budget_transfer'),
                 'from_line_item_id' => $from->getKey(),
                 'to_line_item_id' => $to->getKey(),
@@ -78,7 +80,19 @@ class BudgetTransferService
                 'amount' => Money::round2($amount),
                 'reason' => $reason,
                 'requested_by' => $userId,
-            ])->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester']);
+            ]);
+            $requester = User::query()->whereKey($userId)->first();
+            $audience = ApprovalDelegation::approvalAudience('budgeting.approve')
+                ->filter(fn (User $user): bool => $requester === null || (int) $user->role_id !== (int) $requester->role_id);
+            app(NotificationService::class)->send($audience, 'approval.action_required', [
+                'title' => "Budget transfer {$transfer->transfer_number} needs approval",
+                'message' => 'A budget transfer is waiting for review.',
+                'link_to' => "/budgeting/transfers/{$transfer->hash_id}",
+                'entity_type' => 'budget_transfer',
+                'entity_id' => $transfer->hash_id,
+            ], "budget-transfer:approval-required:{$transfer->id}");
+
+            return $transfer->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester']);
         });
     }
 
@@ -94,6 +108,9 @@ class BudgetTransferService
                 throw new BusinessRuleException('The user who requested a transfer cannot approve it.');
             }
             $approver = User::query()->findOrFail($userId);
+            if (! ApprovalDelegation::canActForPermission($approver, 'budgeting.approve', [(int) $locked->requested_by])) {
+                throw new BusinessRuleException('You do not have permission to approve budget transfers.');
+            }
             if (! $this->canApprove($locked, $approver)) {
                 throw new BusinessRuleException('Transfer approval requires a different role than the requesting role.');
             }
@@ -113,6 +130,8 @@ class BudgetTransferService
                 'approved_at' => now(),
             ])->save();
 
+            $this->notifyRequester($locked, 'approval.completed', 'Budget transfer approved');
+
             return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver', 'rejecter']);
         });
     }
@@ -129,7 +148,12 @@ class BudgetTransferService
             : User::query()->find($transfer->requested_by);
 
         // Preserve legacy recovery: a deleted requester does not keep a transfer stuck.
-        return $requester === null || (int) $requester->role_id !== (int) $approver->role_id;
+        return ApprovalDelegation::hasDifferentPermissionRole(
+            $approver,
+            'budgeting.approve',
+            $requester?->role_id === null ? null : (int) $requester->role_id,
+            [(int) $transfer->requested_by],
+        );
     }
 
     /** Reject a pending transfer; nothing moves. */
@@ -140,6 +164,13 @@ class BudgetTransferService
             if ((string) $locked->status !== BudgetTransferStatus::Pending->value) {
                 throw new BusinessRuleException('Only pending transfers can be rejected.');
             }
+            if ((int) $locked->requested_by === $userId) {
+                throw new BusinessRuleException('The user who requested a transfer cannot reject it.');
+            }
+            $actor = User::query()->findOrFail($userId);
+            if (! ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $locked->requested_by])) {
+                throw new BusinessRuleException('You do not have permission to reject budget transfers.');
+            }
 
             $locked->forceFill([
                 'status' => BudgetTransferStatus::Rejected->value,
@@ -147,8 +178,26 @@ class BudgetTransferService
                 'rejected_at' => now(),
             ])->save();
 
+            $this->notifyRequester($locked, 'approval.rejected', 'Budget transfer rejected');
+
             return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver', 'rejecter']);
         });
+    }
+
+    private function notifyRequester(BudgetTransfer $transfer, string $type, string $title): void
+    {
+        $requester = User::query()->whereKey($transfer->requested_by)->where('is_active', true)->first();
+        if (! $requester) {
+            return;
+        }
+
+        app(NotificationService::class)->send($requester, $type, [
+            'title' => $title,
+            'message' => $type === 'approval.rejected' ? 'Your budget transfer was rejected.' : 'Your budget transfer was approved.',
+            'link_to' => "/budgeting/transfers/{$transfer->hash_id}",
+            'entity_type' => 'budget_transfer',
+            'entity_id' => $transfer->hash_id,
+        ], "budget-transfer:decision:{$transfer->id}:".($transfer->rejected_at?->timestamp ?? $transfer->approved_at?->timestamp));
     }
 
     /**

@@ -19,6 +19,7 @@ use Database\Seeders\LeaveTypeSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -40,12 +41,12 @@ class LeaveRequestBulkApproveTest extends TestCase
     {
         foreach ([(int) now()->year, (int) now()->year + 1] as $year) {
             EmployeeLeaveBalance::create([
-                'employee_id'   => $employee->id,
+                'employee_id' => $employee->id,
                 'leave_type_id' => $type->id,
-                'year'          => $year,
+                'year' => $year,
                 'total_credits' => $credits,
-                'used'          => 0,
-                'remaining'     => $credits,
+                'used' => 0,
+                'remaining' => $credits,
             ]);
         }
     }
@@ -64,29 +65,29 @@ class LeaveRequestBulkApproveTest extends TestCase
         $department = Department::query()->firstOrFail();
         $approverEmployee = Employee::factory()->create(['department_id' => $department->id]);
         $approver = User::factory()->create([
-            'role_id'   => $deptHeadRole->id,
+            'role_id' => $deptHeadRole->id,
             'employee_id' => $approverEmployee->id,
             'is_active' => true,
         ]);
 
         $svc = app(LeaveRequestService::class);
 
-        $emp  = Employee::factory()->create(['department_id' => $department->id]);
+        $emp = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = $this->workDate();
         $this->balanceFor($emp, $type);
 
         // r1: properly submitted -> PendingDept with approval records.
         $r1 = $svc->submit($emp->id, [
-            'start_date'    => $date,
-            'end_date'      => $date,
+            'start_date' => $date,
+            'end_date' => $date,
             'leave_type_id' => $type->id,
         ]);
 
         // r2: wrong-state row (PendingHr) without approval records -> should fail.
         $r2 = LeaveRequest::factory()->create([
             'employee_id' => $emp->id,
-            'status'      => LeaveRequestStatus::PendingHr->value,
+            'status' => LeaveRequestStatus::PendingHr->value,
         ]);
 
         $result = $svc->bulkApproveDept([$r1->id, $r2->id, 999999], $approver, 'batch ok');
@@ -125,9 +126,9 @@ class LeaveRequestBulkApproveTest extends TestCase
             WorkflowSeeder::class,
         ]);
 
-        $svc  = app(LeaveRequestService::class);
+        $svc = app(LeaveRequestService::class);
         $department = Department::query()->firstOrFail();
-        $emp  = Employee::factory()->create(['department_id' => $department->id]);
+        $emp = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = $this->workDate();
         $this->balanceFor($emp, $type);
@@ -136,14 +137,20 @@ class LeaveRequestBulkApproveTest extends TestCase
         // resolves the submitter through `users.employee_id`, so linking the
         // department head to this employee is what arms the SoD guard.
         $approver = User::factory()->create([
-            'role_id'     => Role::query()->where('slug', 'department_head')->value('id'),
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
             'employee_id' => $emp->id,
-            'is_active'   => true,
+            'is_active' => true,
+        ]);
+        $peerEmployee = Employee::factory()->create(['department_id' => $department->id]);
+        User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => $peerEmployee->id,
+            'is_active' => true,
         ]);
 
         $own = $svc->submit($emp->id, [
-            'start_date'    => $date,
-            'end_date'      => $date,
+            'start_date' => $date,
+            'end_date' => $date,
             'leave_type_id' => $type->id,
         ]);
 
@@ -177,23 +184,23 @@ class LeaveRequestBulkApproveTest extends TestCase
         ]);
 
         $department = Department::query()->firstOrFail();
-        $emp  = Employee::factory()->create(['department_id' => $department->id]);
+        $emp = Employee::factory()->create(['department_id' => $department->id]);
         $type = LeaveType::query()->first();
         $date = $this->workDate();
+
+        $approverEmployee = Employee::factory()->create(['department_id' => $department->id]);
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => $approverEmployee->id,
+            'is_active' => true,
+        ]);
 
         $svc = app(LeaveRequestService::class);
         $this->balanceFor($emp, $type);
         $req = $svc->submit($emp->id, [
-            'start_date'    => $date,
-            'end_date'      => $date,
+            'start_date' => $date,
+            'end_date' => $date,
             'leave_type_id' => $type->id,
-        ]);
-
-        $approverEmployee = Employee::factory()->create(['department_id' => $department->id]);
-        $approver = User::factory()->create([
-            'role_id'   => Role::query()->where('slug', 'department_head')->value('id'),
-            'employee_id' => $approverEmployee->id,
-            'is_active' => true,
         ]);
 
         // Stand in for any non-HTTP, non-business-rule failure. Binding the
@@ -203,7 +210,7 @@ class LeaveRequestBulkApproveTest extends TestCase
         {
             public function __construct() {}
 
-            public function approve(\Illuminate\Database\Eloquent\Model $approvable, User $user, ?string $remarks = null): void
+            public function approve(Model $approvable, User $user, ?string $remarks = null): void
             {
                 throw new \RuntimeException(
                     'SQLSTATE[23505]: Unique violation: 7 ERROR: duplicate key value violates unique constraint "approval_records_pkey"',
@@ -223,7 +230,8 @@ class LeaveRequestBulkApproveTest extends TestCase
         );
     }
 
-    public function test_list_search_filters_by_request_no_and_employee(): void    {
+    public function test_list_search_filters_by_request_no_and_employee(): void
+    {
         $this->seed([
             RolePermissionSeeder::class,
             DepartmentSeeder::class,
@@ -236,19 +244,19 @@ class LeaveRequestBulkApproveTest extends TestCase
             'role_id' => Role::where('slug', 'system_admin')->value('id'),
         ]);
 
-        $emp  = Employee::factory()->create(['first_name' => 'Ana', 'last_name' => 'Dela Cruz']);
+        $emp = Employee::factory()->create(['first_name' => 'Ana', 'last_name' => 'Dela Cruz']);
         $type = LeaveType::query()->first();
-        $svc  = app(LeaveRequestService::class);
+        $svc = app(LeaveRequestService::class);
         $this->balanceFor($emp, $type);
 
         $r1 = $svc->submit($emp->id, [
-            'start_date'    => $this->workDate(),
-            'end_date'      => $this->workDate(),
+            'start_date' => $this->workDate(),
+            'end_date' => $this->workDate(),
             'leave_type_id' => $type->id,
         ]);
         $r2 = $svc->submit($emp->id, [
-            'start_date'    => $this->workDate(21),
-            'end_date'      => $this->workDate(21),
+            'start_date' => $this->workDate(21),
+            'end_date' => $this->workDate(21),
             'leave_type_id' => $type->id,
         ]);
 
@@ -258,7 +266,7 @@ class LeaveRequestBulkApproveTest extends TestCase
             ->assertJsonCount(2, 'data');
 
         $this->actingAs($admin)
-            ->getJson('/api/v1/leaves/requests?search=' . $r1->leave_request_no)
+            ->getJson('/api/v1/leaves/requests?search='.$r1->leave_request_no)
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $r1->hash_id);

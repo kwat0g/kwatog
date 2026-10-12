@@ -35,7 +35,12 @@ class SendPayslipEmailJob implements ShouldQueue
     /** @var list<int> */
     public array $backoff = [60, 300];
 
-    public function __construct(public int $payrollId) {}
+    public function __construct(public int $payrollId)
+    {
+        // Lane: low — finalize fans out ~200 of these; they must not flood
+        // the default lane that approvals and realtime share.
+        $this->onQueue('low');
+    }
 
     public function handle(PayslipPdfService $pdf, ?PayrollPublicationPolicy $publication = null): void
     {

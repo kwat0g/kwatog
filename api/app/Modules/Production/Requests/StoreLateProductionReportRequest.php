@@ -29,6 +29,26 @@ class StoreLateProductionReportRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $workOrder = $this->route('workOrder');
+        if (! $workOrder instanceof WorkOrder || ! $workOrder->usesFinishFirstQc()
+            || $this->exists('produced_count') || ! $this->exists('good_count')) {
+            return;
+        }
+
+        if (($this->exists('reject_count') && filter_var($this->input('reject_count'), FILTER_VALIDATE_INT) !== 0)
+            || ($this->exists('defects') && $this->input('defects') !== [])) {
+            return;
+        }
+
+        // Older finish-first clients send good_count; this endpoint stores produced_count.
+        $this->merge(['produced_count' => $this->input('good_count')]);
+        $this->getInputSource()->remove('good_count');
+        $this->getInputSource()->remove('reject_count');
+        $this->getInputSource()->remove('defects');
+    }
+
     protected function hashIdFields(): array
     {
         return ['crew_id' => WorkOrderCrew::class, 'defects.*.defect_type_id' => DefectType::class];

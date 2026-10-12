@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
@@ -1031,6 +1032,17 @@ class BillService
 
         $fresh = $bill->fresh();
         app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by);
+
+        $requester = User::query()->whereKey($payment->created_by)->where('is_active', true)->first();
+        if ($requester) {
+            app(NotificationService::class)->send($requester, 'bill_payment.posted', [
+                'title' => 'Bill payment posted',
+                'message' => "Payment for bill {$bill->bill_number} was posted to the ledger.",
+                'link_to' => "/accounting/bills/{$bill->hash_id}",
+                'entity_type' => 'bill_payment',
+                'entity_id' => $payment->hash_id,
+            ], "bill-payment:posted:{$payment->id}");
+        }
 
         return $payment->fresh(['cashAccount', 'journalEntry', 'approvalRecords.approver:id,name']);
     }

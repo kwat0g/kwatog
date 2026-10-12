@@ -7,6 +7,7 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Dashboard\Support\PanelGate;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
@@ -27,6 +28,7 @@ class PurchasingDashboardService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly PanelGate $gate,
+        private readonly ForecastingDashboardService $forecastingService,
     ) {}
 
     private const CACHE_TTL = 30;
@@ -55,6 +57,12 @@ class PurchasingDashboardService
                     'supplier_performance' => ['purchasing.suppliers.performance.view',   fn () => $this->purchasingTopSuppliers()],
                     // purchase_orders + vendor names, despite the name.
                     'upcoming_deliveries'  => ['purchasing.view',                         fn () => $this->purchasingUpcomingDeliveries()],
+                    // Supplier risk is a projection of buyer-relevant data
+                    // (stock-out + demand accuracy), gated on the forecasting
+                    // read — purchasing_officer holds it, so the panel arrives
+                    // for the role it is for and is stripped server-side for
+                    // anyone without it. Read-only composition, no new math.
+                    'supplier_risk'        => ['forecasting.view',                        fn () => $this->forecastingService->supplierRisk()],
                 ]),
             ];
         });

@@ -16,6 +16,7 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { LuRefreshCw } from '@/lib/icons';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 interface Props {
@@ -44,61 +45,75 @@ export function StockOutPanel({
  hideWhenEmpty = false,
 }: Props) {
  
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['forecasting', 'stock-out', horizonDays],
- queryFn: () => forecastingApi.stockOut({ horizon_days: horizonDays }),
- refetchInterval: 120_000,
- staleTime: 60_000,
- });
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+  queryKey: ['forecasting', 'stock-out', horizonDays],
+  queryFn: () => forecastingApi.stockOut({ horizon_days: horizonDays }),
+  // Manual refresh only — consulted, not monitored (poll contract in api/dashboards).
+  staleTime: 60_000,
+  });
 
- if (isLoading) {
- return (
- <Panel title={title} meta="Refreshes every 2 min">
- <div className="space-y-2">
- {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-10 w-full rounded-md" />)}
- </div>
- </Panel>
- );
- }
+  const refreshAction = (
+  <Button
+  variant="ghost"
+  size="sm"
+  icon={<LuRefreshCw size={14} />}
+  loading={isFetching}
+  onClick={() => refetch()}
+  aria-label="Refresh stock-out risk"
+  >
+  Refresh
+  </Button>
+  );
 
- if (isError) {
- return (
- <Panel title={title}>
- <EmptyState
- icon="alert-circle"
- title="Failed to load stock-out data"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
- />
- </Panel>
- );
- }
+  if (isLoading) {
+  return (
+  <Panel title={title}>
+  <div className="space-y-2">
+  {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-10 w-full rounded-md" />)}
+  </div>
+  </Panel>
+  );
+  }
+
+  if (isError) {
+  return (
+  <Panel title={title} actions={refreshAction}>
+  <EmptyState
+  icon="alert-circle"
+  title="Failed to load stock-out data"
+  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+  />
+  </Panel>
+  );
+  }
 
  const atRisk = (data?.data ?? [])
  .filter((r) => r.risk !== 'ok')
  .slice(0, maxRows);
  const effectiveHorizon = data?.meta.horizon_days ?? horizonDays;
 
- if (atRisk.length === 0) {
- if (hideWhenEmpty) return null;
- return (
- <Panel title={title} meta="Refreshes every 2 min">
- <EmptyState
- icon="check-circle"
- title="Stock levels OK"
- description={`No items projected to run out within ${effectiveHorizon ?? 'the configured'} days.`}
- />
- </Panel>
- );
- }
+  if (atRisk.length === 0) {
+  if (hideWhenEmpty) return null;
+  return (
+  <Panel title={title} actions={refreshAction}>
+  <EmptyState
+  icon="check-circle"
+  title="Stock levels OK"
+  description={`No items projected to run out within ${effectiveHorizon ?? 'the configured'} days.`}
+  />
+  </Panel>
+  );
+  }
 
- const totalAtRisk = (data?.data ?? []).filter((r) => r.risk !== 'ok').length;
+  const totalAtRisk = (data?.data ?? []).filter((r) => r.risk !== 'ok').length;
 
- return (
- <Panel
- title={title}
- meta={`${totalAtRisk} at risk · ${effectiveHorizon ?? 'configured'}d horizon`}
- bodyClassName="p-0"
- >
+  return (
+  <Panel
+  title={title}
+  meta={`${totalAtRisk} at risk · ${effectiveHorizon ?? 'configured'}d horizon`}
+  actions={refreshAction}
+  bodyClassName="p-0"
+  >
  <div className="overflow-x-auto">
  <table className={tableCls}>
  <thead>

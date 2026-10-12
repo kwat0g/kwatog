@@ -7,24 +7,54 @@ namespace App\Modules\Production\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Production\Models\DefectType;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderCrew;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
 class RecordOutputRequest extends FormRequest
 {
-    use ResolvesHashIds;
+    use ResolvesHashIds {
+        prepareForValidation as private resolveHashIdFields;
+    }
 
     public function authorize(): bool
     {
-        if ($this->user()?->hasPermission('production.wo.record')) { return true; }
-        if (! $this->user()) { return false; }
-        app(\App\Modules\Production\Services\WorkOrderAssignmentService::class)->internal($this->user());
+        if ($this->user()?->hasPermission('production.wo.record')) {
+            return true;
+        }
+        if (! $this->user()) {
+            return false;
+        }
+        app(WorkOrderAssignmentService::class)->internal($this->user());
+
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->resolveHashIdFields();
+        $workOrder = $this->route('workOrder');
+        if (! $workOrder instanceof WorkOrder || ! $workOrder->usesFinishFirstQc() || $this->route('ncr') !== null
+            || $this->exists('produced_count') || ! $this->exists('good_count')) {
+            return;
+        }
+
+        if (($this->exists('reject_count') && filter_var($this->input('reject_count'), FILTER_VALIDATE_INT) !== 0)
+            || ($this->exists('defects') && $this->input('defects') !== [])) {
+            return;
+        }
+
+        // Older finish-first clients send good_count; this endpoint stores produced_count.
+        $this->merge(['produced_count' => $this->input('good_count')]);
+        $this->getInputSource()->remove('good_count');
+        $this->getInputSource()->remove('reject_count');
+        $this->getInputSource()->remove('defects');
     }
 
     protected function hashIdFields(): array
     {
-        return ['defects.*.defect_type_id' => DefectType::class, 'crew_id' => \App\Modules\Production\Models\WorkOrderCrew::class];
+        return ['defects.*.defect_type_id' => DefectType::class, 'crew_id' => WorkOrderCrew::class];
     }
 
     public function rules(): array

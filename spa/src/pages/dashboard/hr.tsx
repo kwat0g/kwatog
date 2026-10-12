@@ -7,12 +7,15 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { AttendanceRiskPanel } from '@/components/dashboard/AttendanceRiskPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { HR_KPIS } from '@/lib/dashboardKpis';
 import { PeriodNote } from '@/components/dashboard/period';
 import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
+import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import type { ApiSuccess } from '@/types';
-import type { ForecastPanelData } from '@/types/forecasting-dashboard';
+import type { AttendanceForecastData, ForecastPanelData } from '@/types/forecasting-dashboard';
 import { formatPeso } from '@/lib/formatNumber';
 
 /**
@@ -75,6 +78,7 @@ interface HrDashboardData {
       total: number;
     };
     headcount_forecast?: ForecastPanelData;
+    attendance_forecast?: AttendanceForecastData;
     // REC-05 — present only for HR users with payroll.view.
     payroll_summary?: {
       latest_period: {
@@ -96,7 +100,7 @@ export default function HrDashboard() {
     queryKey: ['dashboard', 'hr'],
     queryFn: (): Promise<HrDashboardData> =>
       client.get<ApiSuccess<HrDashboardData>>('/dashboards/hr').then((r) => r.data.data),
-    refetchInterval: 60_000,
+    refetchInterval: DASHBOARD_REFRESH_MS,
   });
 
   return (
@@ -105,6 +109,7 @@ export default function HrDashboard() {
       subtitle="Workforce, attendance, leave, and compliance overview."
       query={q}
       refreshingQueryKey={['dashboard', 'hr']}
+      header={<KpiStrip codes={HR_KPIS} compact />}
     >
       {({ kpis, panels }) => {
         /*
@@ -138,9 +143,6 @@ export default function HrDashboard() {
                 <StatCard key={kpi.label} label={kpi.label} value={kpi.value} helper={kpi.unit} />
               ))}
             </KpiGrid>
-
-            {/* KPI Scorecard strip */}
-            <KpiStrip codes={['attendance_rate']} />
 
             {/* Row 2 — Attendance summary + pending my action */}
             <PanelRow>
@@ -220,7 +222,18 @@ export default function HrDashboard() {
               title="Headcount Forecast"
               formatValue={(v) => String(v)}
               unitLabel="employees"
+              detailsHref="/hr/employees"
             />
+
+            {/* Row 6.5 — Attendance forecast (read-only composition from the payload —
+            rides the page poll, no separate fetch; absent when PanelGate strips it) */}
+            {panels.attendance_forecast && (
+              <AttendanceRiskPanel
+                data={panels.attendance_forecast}
+                isLoading={false}
+                isError={false}
+              />
+            )}
 
             {/* Row 7 — Payroll snapshot (visible only when payroll.view is granted) */}
             {panels.payroll_summary && <PayrollSummaryPanel data={panels.payroll_summary} />}

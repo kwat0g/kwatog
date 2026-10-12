@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
@@ -285,6 +286,12 @@ class StockCountService
             }
             if ($item->status !== StockCountItemStatus::Counted) {
                 throw new BusinessRuleException('Item must be counted first.');
+            }
+            if (! ApprovalDelegation::canActForPermission($user, 'inventory.stock_count.manage', array_values(array_filter([
+                (int) $item->counted_by,
+                (int) $session->created_by,
+            ])))) {
+                throw new BusinessRuleException('You are not authorized to approve this stock-count variance.');
             }
             $varianceTolerance = (string) $this->settings->requiredFloat('inventory.stock_count.variance_tolerance_pct', 0);
             if (bccomp(ltrim((string) $item->variance_percent, '-'), $varianceTolerance, 2) <= 0) {

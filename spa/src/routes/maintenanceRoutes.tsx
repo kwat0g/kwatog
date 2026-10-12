@@ -19,7 +19,7 @@ export const maintenanceRoutes = (
  <>
  {/* Maintenance module (Sprint 8 — Task 69 + ADV8) */}
  <Route element={<ModuleGuard module="maintenance" />}>
- <Route path="/maintenance" element={<MaintenanceHomePage />} />
+ <Route path="/maintenance" element={<PermissionGuard permission="maintenance.view"><MaintenanceHomePage /></PermissionGuard>} />
  {/* ADV8 — Downtime analytics (machine-health page removed 2026-08-08, scope cut — page file kept) */}
  <Route path="/maintenance/downtime"
  element={<PermissionGuard permission="maintenance.view"><DowntimeAnalyticsPage /></PermissionGuard>} />
@@ -28,7 +28,7 @@ export const maintenanceRoutes = (
  <Route path="/maintenance/work-orders/create"
  element={<PermissionGuard permission="maintenance.wo.create"><CreateMaintenanceWorkOrderPage /></PermissionGuard>} />
  <Route path="/maintenance/work-orders/:id"
- element={<PermissionGuard anyOf={["maintenance.view", "maintenance.work.assigned"]}><MaintenanceWorkOrderDetailPage /></PermissionGuard>} />
+ element={<PermissionGuard permission="maintenance.view"><MaintenanceWorkOrderDetailPage /></PermissionGuard>} />
  <Route path="/maintenance/schedules"
  element={<PermissionGuard permission="maintenance.view"><MaintenanceSchedulesListPage /></PermissionGuard>} />
  <Route path="/maintenance/schedules/create"

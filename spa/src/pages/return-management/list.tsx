@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { MetricPanel } from '@/components/dashboard/MetricPanel';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { ReturnRequest } from '@/types/returnManagement';
@@ -127,6 +128,12 @@ export default function ReturnManagementListPage() {
  onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
  searchPlaceholder="Search RMA number…"
  />
+ {/* Phase 2 analytics layer: the pipeline counts were sequential scans
+     before the index batch, and the payload states its own caveats. */}
+ <div className="px-5 pt-4">
+ <MetricPanel code="returns.pipeline" />
+ </div>
+
  {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
  {isError && (
  <EmptyState

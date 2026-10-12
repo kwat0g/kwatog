@@ -33,6 +33,7 @@ class PpcDashboardService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly PanelGate $gate,
+        private readonly ForecastingDashboardService $forecasting,
     ) {}
 
     public function ppc(User $user): array
@@ -67,6 +68,9 @@ class PpcDashboardService
                     'production_gantt'     => ['production.schedule.view',     fn () => $this->productionGantt()],
                     'mrp_shortages'        => ['mrp.plans.view',               fn () => $this->ppcMrpShortages()],
                     'machine_availability' => ['mrp.machines.view',            fn () => $this->machineAvailabilityGrid()],
+                    // A projection of plant load vs machine capacity, gated like the
+                    // other forecasts — stripped server-side without the read.
+                    'capacity_forecast'    => ['forecasting.view',           fn () => $this->forecasting->capacityForecast()],
                     // A configured horizon, not data.
                     'gantt_horizon_days'   => [null,                           fn () => $this->ganttHorizonDays()],
                     'wo_status_breakdown'  => ['production.work_orders.view',  fn () => $this->woStatusBreakdown()],

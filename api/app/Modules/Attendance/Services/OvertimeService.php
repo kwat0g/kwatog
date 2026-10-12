@@ -232,21 +232,8 @@ class OvertimeService
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
 
-        // HR/admin see all records; department-head approvers see their own
-        // department; everyone else sees only their own records.
         if ($user) {
-            $roleSlug = $user->role?->slug;
-            $isAllRecord = in_array($roleSlug, ['system_admin', 'hr_officer'], true);
-            $isApprover = $user->hasPermission('attendance.ot.approve');
-            if (! $isAllRecord && ! $isApprover) {
-                $q->where('employee_id', $user->employee_id);
-            } elseif (! $isAllRecord && $isApprover) {
-                $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($user->employee_id)->value('department_id');
-                $q->where(function ($qq) use ($user, $deptId) {
-                    $qq->where('employee_id', $user->employee_id);
-                    if ($deptId) $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
-                });
-            }
+            $this->decisionPolicy->visibleTo($q, $user);
         }
 
         return $q->orderByDesc('date')->paginate(min((int) ($filters['per_page'] ?? 25), 100));

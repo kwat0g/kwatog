@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Resources;
 
 use App\Common\Services\ApprovalService;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Support\HashId;
 use App\Modules\Loans\Support\LoanRate;
 use App\Modules\Loans\Models\EmployeeLoan;
@@ -110,7 +111,7 @@ class EmployeeLoanResource extends JsonResource
                 && app(LoanAccessPolicy::class)->canDecide($user, $loan),
             'can_approve_write_off' => $user !== null
                 && $loan->status?->value === 'write_off_pending'
-                && $user->can('loans.write_off.approve')
+                && ApprovalDelegation::canActForPermission($user, 'loans.write_off.approve', [(int) $loan->write_off_requested_by])
                 && (int) $loan->write_off_requested_by !== (int) $user->id
                 && app(LoanAccessPolicy::class)->canDecide($user, $loan),
         ];

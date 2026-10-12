@@ -14,6 +14,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class InvoicePrebillApprovalTest extends TestCase
@@ -25,6 +26,7 @@ class InvoicePrebillApprovalTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
+        Mail::fake();
     }
 
     private function user(string $role): User
@@ -87,12 +89,17 @@ class InvoicePrebillApprovalTest extends TestCase
     public function test_prebill_creation_does_not_record_the_maker_as_approver(): void
     {
         $maker = $this->user('finance_officer');
+        $approver = $this->user('finance_officer');
         $invoice = $this->createPrebill($maker);
 
         $this->assertSame($maker->id, $invoice->created_by);
         $this->assertNull($invoice->prebill_approved_by);
         $this->assertNull($invoice->prebill_approved_at);
         $this->assertNull($invoice->journal_entry_id);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $approver->id,
+            'type' => 'approval.action_required',
+        ]);
     }
 
     public function test_display_history_is_not_persisted_as_an_invoice_attribute(): void
@@ -251,6 +258,10 @@ class InvoicePrebillApprovalTest extends TestCase
         $this->assertSame('draft', $approved->status->value);
         $this->assertNull($approved->journal_entry_id);
         $this->assertSame(0, JournalEntry::query()->count());
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.completed',
+        ]);
 
         $approvalAuditCount = DB::table('audit_logs')
             ->where('model_type', $invoice->getMorphClass())

@@ -79,26 +79,42 @@ class ForecastAccuracyTest extends TestCase
         $this->assertCount(2, $data['monthly']);
     }
 
+    public function test_accuracy_omits_periods_whose_actuals_are_not_reconciled(): void
+    {
+        DemandForecast::factory()->createMany([
+            ['forecast_year' => 2026, 'forecast_month' => 1, 'forecasted_quantity' => 100, 'actual_quantity' => 90],
+            ['forecast_year' => 2026, 'forecast_month' => 2, 'forecasted_quantity' => 100, 'actual_quantity' => null],
+        ]);
+
+        $response = $this->actingAs($this->makeAdmin())
+            ->getJson('/api/v1/forecasting/accuracy/summary?year=2026')
+            ->assertOk()
+            ->assertJsonPath('data.periods_evaluated', 1)
+            ->assertJsonCount(1, 'data.monthly');
+
+        $this->assertSame(11.11, $response->json('data.mape'));
+    }
+
     public function test_accuracy_by_product_filters_active_products(): void
     {
         $active = Product::factory()->create(['is_active' => true]);
         $inactive = Product::factory()->create(['is_active' => false]);
 
         DemandForecast::factory()->create([
-            'product_id'          => $active->id,
-            'forecast_year'       => 2026,
-            'forecast_month'      => 1,
+            'product_id' => $active->id,
+            'forecast_year' => 2026,
+            'forecast_month' => 1,
             'forecasted_quantity' => 100,
-            'actual_quantity'     => 90,
-            'variance'            => -10,
+            'actual_quantity' => 90,
+            'variance' => -10,
         ]);
         DemandForecast::factory()->create([
-            'product_id'          => $inactive->id,
-            'forecast_year'       => 2026,
-            'forecast_month'      => 1,
+            'product_id' => $inactive->id,
+            'forecast_year' => 2026,
+            'forecast_month' => 1,
             'forecasted_quantity' => 100,
-            'actual_quantity'     => 80,
-            'variance'            => -20,
+            'actual_quantity' => 80,
+            'variance' => -20,
         ]);
 
         $response = $this->actingAs($this->makeAdmin())
@@ -115,11 +131,11 @@ class ForecastAccuracyTest extends TestCase
     {
         // Create a forecast for a past month without actuals
         DemandForecast::factory()->create([
-            'forecast_year'       => 2025,
-            'forecast_month'      => 1,
+            'forecast_year' => 2025,
+            'forecast_month' => 1,
             'forecasted_quantity' => 100,
-            'actual_quantity'     => null,
-            'variance'            => null,
+            'actual_quantity' => null,
+            'variance' => null,
         ]);
 
         $this->artisan('forecasting:reconcile-actuals')
@@ -144,11 +160,11 @@ class ForecastAccuracyTest extends TestCase
     public function test_accuracy_summary_defaults_to_current_year(): void
     {
         DemandForecast::factory()->create([
-            'forecast_year'       => (int) now()->year,
-            'forecast_month'      => 1,
+            'forecast_year' => (int) now()->year,
+            'forecast_month' => 1,
             'forecasted_quantity' => 100,
-            'actual_quantity'     => 95,
-            'variance'            => -5,
+            'actual_quantity' => 95,
+            'variance' => -5,
         ]);
 
         $response = $this->actingAs($this->makeAdmin())

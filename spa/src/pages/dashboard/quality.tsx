@@ -7,7 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -19,6 +19,7 @@ import { PeriodNote } from '@/components/dashboard/period';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { QC_KPIS } from '@/lib/dashboardKpis';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -298,7 +299,7 @@ export default function QcDashboard() {
  const q = useQuery({
  queryKey: ['dashboard', 'quality'],
  queryFn: () => dashboardsApi.quality<QualityDashboardData>(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  return (
@@ -307,6 +308,7 @@ export default function QcDashboard() {
  subtitle="Live · refreshes every 60s"
  query={q}
  refreshingQueryKey={['dashboard', 'quality']}
+ header={<KpiStrip codes={QC_KPIS} compact />}
  >
  {({ kpis, panels, display_policy }) => {
  const stageCounts: Record<string, number> = {};
@@ -338,9 +340,6 @@ export default function QcDashboard() {
  />
  ))}
  </KpiGrid>
-
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days']} />
 
  {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
  <PanelRow>
@@ -381,15 +380,16 @@ export default function QcDashboard() {
  </Panel>
  </PanelRow>
 
- {/* ── Row 5: Defect Rate Forecast ── */}
- <ForecastPanel
- data={panels?.defect_rate_forecast}
- isLoading={false}
- isError={false}
- title={`Defect Rate Forecast (${panels?.defect_rate_forecast?.forecast.length ?? 0} months)`}
- formatValue={(v) => `${v.toFixed(1)}%`}
- unitLabel="%"
- />
+  {/* ── Row 5: Defect Rate Forecast ── */}
+  <ForecastPanel
+  data={panels?.defect_rate_forecast}
+  isLoading={false}
+  isError={false}
+  title={`Defect Rate Forecast (${panels?.defect_rate_forecast?.forecast.length ?? 0} months)`}
+  formatValue={(v) => `${v.toFixed(1)}%`}
+  unitLabel="%"
+  detailsHref="/quality/ncrs"
+  />
  </>
  );
  }}

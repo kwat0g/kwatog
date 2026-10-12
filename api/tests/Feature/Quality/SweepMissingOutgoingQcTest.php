@@ -196,6 +196,7 @@ class SweepMissingOutgoingQcTest extends TestCase
 
     public function test_replaces_cancelled_output_qc_without_removing_its_audit_record(): void
     {
+        config(['inspection.finish_first_wo_enabled' => false]);
         $wo = $this->completedWoWithOutput();
         $output = $wo->outputs()->firstOrFail();
         $service = app(InspectionService::class);

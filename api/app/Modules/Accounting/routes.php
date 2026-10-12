@@ -123,7 +123,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::get('/{invoice}', [InvoiceController::class, 'show'])->middleware('permission:accounting.invoices.view');
         Route::post('/', [InvoiceController::class, 'store'])->middleware('permission:accounting.invoices.create');
         Route::put('/{invoice}', [InvoiceController::class, 'update'])->middleware('permission:accounting.invoices.update');
-        Route::post('/{invoice}/approve-prebill', [InvoiceController::class, 'approvePrebill'])->middleware('permission:accounting.invoices.prebill_approve');
+        Route::post('/{invoice}/approve-prebill', [InvoiceController::class, 'approvePrebill'])->middleware('approval_permission:accounting.invoices.prebill_approve');
         Route::patch('/{invoice}/finalize', [InvoiceController::class, 'finalize'])->middleware('permission:accounting.invoices.create');
         Route::patch('/{invoice}/cancel', [InvoiceController::class, 'cancel'])->middleware('permission:accounting.invoices.update');
         Route::post('/{invoice}/collections', [InvoiceController::class, 'recordCollection'])->middleware('permission:accounting.invoices.collect_manual');
@@ -169,8 +169,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::post('/', [BudgetController::class, 'store'])->middleware('permission:budgeting.manage');
             Route::put('/{budget}', [BudgetController::class, 'update'])->middleware('permission:budgeting.manage');
             Route::post('/{budget}/submit', [BudgetController::class, 'submit'])->middleware('permission:budgeting.manage');
-            Route::post('/{budget}/approve', [BudgetController::class, 'approve'])->middleware('permission:budgeting.approve');
-            Route::post('/{budget}/reject', [BudgetController::class, 'reject'])->middleware('permission:budgeting.approve');
+            Route::post('/{budget}/approve', [BudgetController::class, 'approve'])->middleware('approval_permission:budgeting.approve');
+            Route::post('/{budget}/reject', [BudgetController::class, 'reject'])->middleware('approval_permission:budgeting.approve');
             Route::post('/{budget}/close', [BudgetController::class, 'close'])->middleware('permission:budgeting.manage');
             Route::delete('/{budget}', [BudgetController::class, 'destroy'])->middleware('permission:budgeting.manage');
         });
@@ -179,8 +179,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::get('/', [BudgetTransferController::class, 'index'])->middleware('permission:budgeting.view');
             Route::get('/{budgetTransfer}', [BudgetTransferController::class, 'show'])->middleware('permission:budgeting.view');
             Route::post('/', [BudgetTransferController::class, 'store'])->middleware('permission:budgeting.manage');
-            Route::post('/{budgetTransfer}/approve', [BudgetTransferController::class, 'approve'])->middleware('permission:budgeting.approve');
-            Route::post('/{budgetTransfer}/reject', [BudgetTransferController::class, 'reject'])->middleware('permission:budgeting.approve');
+            Route::post('/{budgetTransfer}/approve', [BudgetTransferController::class, 'approve'])->middleware('approval_permission:budgeting.approve');
+            Route::post('/{budgetTransfer}/reject', [BudgetTransferController::class, 'reject'])->middleware('approval_permission:budgeting.approve');
         });
 
     });

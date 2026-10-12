@@ -10,7 +10,7 @@ use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Services\WidgetAnalyticsService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WidgetAnalyticsServiceTest extends TestCase
@@ -86,7 +86,7 @@ class WidgetAnalyticsServiceTest extends TestCase
      */
     public function test_provider_failure_degrades_instead_of_throwing(): void
     {
-        Schema::drop('inspection_measurements');
+        DB::statement('DROP TABLE inspection_measurements CASCADE');
 
         $payload = app(WidgetAnalyticsService::class)
             ->payload('qc.pareto', RenderKind::Breakdown, $this->admin);

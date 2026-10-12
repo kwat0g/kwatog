@@ -44,6 +44,21 @@ class DemandForecastController extends Controller
     }
 
     /**
+     * GET /forecasting/customers/options
+     * Minimal customer dropdown for the demand page (id + name only, no
+     * credit/TIN payload) so forecast viewers need no accounting read.
+     */
+    public function customerOptions(): JsonResponse
+    {
+        $options = Customer::query()->orderBy('name')->limit(200)
+            ->get(['id', 'name'])
+            ->map(static fn (Customer $c): array => ['id' => $c->hash_id, 'name' => $c->name])
+            ->values();
+
+        return response()->json(['data' => $options]);
+    }
+
+    /**
      * GET /forecasting/demand-forecasts
      * Filters: product_id, customer_id, year, method.
      */

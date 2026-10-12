@@ -39,7 +39,7 @@ const statusVariant = (s: string | null | undefined): ChipVariant => {
 export default function PayrollAdjustmentsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can } = usePermission();
+  const { can, canApprove } = usePermission();
   const [filters, setFilters] = useUrlFilters<AdjustmentListParams>({
     page: 1,
     per_page: 25,
@@ -159,9 +159,9 @@ export default function PayrollAdjustmentsPage() {
       key: 'actions',
       header: 'Actions',
       cell: (r) =>
-        r.status === 'pending' && (can('payroll.adjustments.approve') || can('payroll.adjustments.reject')) ? (
+        r.status === 'pending' && (canApprove('payroll.adjustments.approve') || canApprove('payroll.adjustments.reject')) ? (
           <div className="flex items-center gap-1">
-            {can('payroll.adjustments.approve') && (
+            {canApprove('payroll.adjustments.approve') && (
               <Button
                 size="xs"
                 variant="ghost"
@@ -172,7 +172,7 @@ export default function PayrollAdjustmentsPage() {
                 Approve
               </Button>
             )}
-            {can('payroll.adjustments.reject') && (
+            {canApprove('payroll.adjustments.reject') && (
               <Button
                 size="xs"
                 variant="ghost"

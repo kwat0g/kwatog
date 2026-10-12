@@ -7,8 +7,10 @@ namespace Tests\Feature\Production;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Services\OeeService;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class OeeServiceReportTest extends TestCase
@@ -28,6 +30,27 @@ class OeeServiceReportTest extends TestCase
 
         $this->assertCount(1, $rows);
         $this->assertSame($active->hash_id, $rows->first()['machine_id']);
+    }
+
+    public function test_dashboard_oee_aggregates_outputs_and_downtime_once_for_all_machines(): void
+    {
+        Machine::factory()->count(3)->create(['status' => MachineStatus::Idle->value]);
+        $reads = ['machine_downtimes' => 0, 'work_order_outputs' => 0];
+        DB::listen(static function (QueryExecuted $query) use (&$reads): void {
+            foreach (array_keys($reads) as $table) {
+                if (str_contains(strtolower($query->sql), $table)) {
+                    $reads[$table]++;
+                }
+            }
+        });
+
+        $rows = app(OeeService::class)->calculateForAllMachines(
+            Carbon::parse('2026-09-18 00:00:00'),
+            Carbon::parse('2026-09-18 23:59:59'),
+        );
+
+        $this->assertCount(3, $rows);
+        $this->assertSame(['machine_downtimes' => 1, 'work_order_outputs' => 1], $reads);
     }
 
     public function test_long_oee_report_returns_weekly_trend_buckets_instead_of_empty_trend(): void

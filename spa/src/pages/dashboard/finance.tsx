@@ -10,11 +10,14 @@ import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { PeriodNote } from '@/components/dashboard/period';
 import { financeDashboardApi } from '@/api/accounting/dashboard';
+import { DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { CashFlowPanel } from '@/components/dashboard/CashFlowPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { FINANCE_KPIS } from '@/lib/dashboardKpis';
 import { BarComparison } from '@/components/charts';
 
 /**
@@ -34,7 +37,7 @@ export default function FinanceDashboardPage() {
  const summary = useQuery({
  queryKey: ['dashboard', 'finance'],
  queryFn: () => financeDashboardApi.summary(),
- refetchInterval: 60_000,
+ refetchInterval: DASHBOARD_REFRESH_MS,
  });
 
  type FinanceSummary = NonNullable<typeof summary.data>;
@@ -45,12 +48,13 @@ export default function FinanceDashboardPage() {
  subtitle="Liquidity, receivables, payables, payroll, and budget hygiene at a glance."
  query={summary}
  refreshingQueryKey={['dashboard', 'finance']}
+ header={<KpiStrip codes={FINANCE_KPIS} compact />}
  >
  {(data) => {
  /*
   * FinanceDashboardService gates each panel on the caller's own grant and
   * omits what they may not read (PanelGate) — reaching this page needs
-  * accounting.dashboard.view, which does not itself carry the AR, AP,
+  * dashboard.accounting.view, which does not itself carry the AR, AP,
   * journal, payroll or budget reads. Every block below renders only if its
   * data arrived; a missing panel must not draw as ₱0.00.
   */
@@ -84,9 +88,6 @@ export default function FinanceDashboardPage() {
  <StatCard label="AP outstanding" value={formatPeso(data.ap_outstanding)} linkTo="/accounting/bills" />
  <StatCard label="Revenue (MTD)" value={formatPeso(data.revenue_mtd)} linkTo="/accounting/income-statement" />
  </KpiGrid>
-
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['ar_aging_60d', 'budget_utilization']} />
 
  {/* Finance controls formerly exposed as standalone navigation. */}
  {(data.current_accounting_period || data.pending_credit_notes) && (
@@ -143,15 +144,28 @@ export default function FinanceDashboardPage() {
  </Panel>
  </PanelRow>
 
- {/* Row 5 — Revenue forecast */}
- <ForecastPanel
- data={data.revenue_forecast}
- isLoading={false}
- isError={false}
- title="Revenue Forecast (6 months)"
- formatValue={(v) => formatPeso(String(v))}
- unitLabel={data.revenue_forecast?.kpi?.unit}
- />
+  {/* Row 5 — Revenue forecast */}
+  <ForecastPanel
+  data={data.revenue_forecast}
+  isLoading={false}
+  isError={false}
+  title="Revenue Forecast (6 months)"
+  formatValue={(v) => formatPeso(String(v))}
+  unitLabel={data.revenue_forecast?.kpi?.unit}
+  detailsHref="/accounting/income-statement"
+  />
+
+  {/* Row 5.5 — Cash-flow forecast (read-only composition from the payload —
+  rides the page poll, no separate fetch; absent when PanelGate strips it). */}
+  {data.cash_flow_forecast && (
+  <CashFlowPanel
+  data={data.cash_flow_forecast}
+  isLoading={false}
+  isError={false}
+  title="Cash Flow Forecast (3 months)"
+  formatValue={(v) => formatPeso(String(v))}
+  />
+  )}
 
  {/* Row 6 — Top overdue customers. */}
  {data.top_overdue_customers && data.top_overdue_customers.length > 0 && (
@@ -293,11 +307,11 @@ function PayrollPipelinePanel({
  { label: 'Disbursed', value: pipeline.disbursed, tone: 'success' },
  ];
  return (
- <Panel
- title="Payroll pipeline"
- meta={<PeriodNote days={historyDays} />}
- actions={<Link className="text-xs text-link hover:underline" to="/payroll/periods">Open approvals →</Link>}
- >
+  <Panel
+  title="Payroll pipeline"
+  meta={<PeriodNote days={historyDays} />}
+  actions={<span className="flex items-center gap-3"><Link className="text-xs text-link hover:underline" to="/payroll/periods">Open approvals →</Link><Link className="text-xs text-link hover:underline" to="/approvals">Board →</Link></span>}
+  >
  <div className="space-y-2">
  {stages.map((s) => (
  <div key={s.label} className="flex items-center justify-between text-sm">

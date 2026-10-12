@@ -39,6 +39,9 @@ class CompanyLoanThresholdTest extends TestCase
     {
         $employee = Employee::factory()->create(['basic_monthly_salary' => '100000.00', 'pay_type' => 'monthly']);
         $borrower = User::factory()->withRole('employee')->create(['employee_id' => $employee->id]);
+        $head = User::factory()->withRole('department_head')->create([
+            'employee_id' => Employee::factory()->create(['department_id' => $employee->department_id])->id,
+        ]);
         $response = $this->actingAs($borrower)->postJson('/api/v1/hr/self-service/loans', [
             'loan_type' => 'company_loan', 'amount' => $principal, 'periods' => 6,
             'reason' => 'Threshold regression',
@@ -49,9 +52,6 @@ class CompanyLoanThresholdTest extends TestCase
         $this->assertSame($requiresVp ? 'pending' : 'skipped', $records->last()->action);
         $this->assertNull($loan->disbursement_journal_entry_id);
 
-        $head = User::factory()->withRole('department_head')->create([
-            'employee_id' => Employee::factory()->create(['department_id' => $employee->department_id])->id,
-        ]);
         $hr = User::factory()->withRole('hr_officer')->create();
         $finance = User::factory()->withRole('finance_officer')->create();
         $vp = User::factory()->withRole('vice_president')->create();
@@ -87,10 +87,10 @@ class CompanyLoanThresholdTest extends TestCase
         ];
         $workflow->update(['steps' => $oldSteps]);
         $employee = Employee::factory()->create(['basic_monthly_salary' => '20000.00']);
-        $loan = app(LoanService::class)->request($employee->id, LoanType::CompanyLoan, ['principal' => '6000.00', 'pay_periods' => 6]);
         $head = User::factory()->withRole('department_head')->create([
             'employee_id' => Employee::factory()->create(['department_id' => $employee->department_id])->id,
         ]);
+        $loan = app(LoanService::class)->request($employee->id, LoanType::CompanyLoan, ['principal' => '6000.00', 'pay_periods' => 6]);
         app(LoanService::class)->approve($loan, $head);
         $before = $loan->approvalRecords()->get()->toArray();
         $cashAdvance = WorkflowDefinition::where('workflow_type', 'cash_advance')->firstOrFail()->toArray();

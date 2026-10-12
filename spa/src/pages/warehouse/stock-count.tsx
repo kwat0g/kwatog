@@ -68,7 +68,7 @@ const countSchema = z.object({
  */
 export function StockCountManager() {
   const qc = useQueryClient();
-  const { can } = usePermission();
+  const { can, canApprove: canAct } = usePermission();
   const canManage = can('inventory.stock_count.manage');
   const actorId = useAuthStore((state) => state.user?.id);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -594,7 +594,7 @@ export function StockCountManager() {
                                   stockCountOptions?.variance_tolerance_pct != null &&
                                   Math.abs(Number(item.variance_percent)) >
                                     stockCountOptions.variance_tolerance_pct &&
-                                  canManage &&
+                                  canAct('inventory.stock_count.manage') &&
                                   !isSessionCreator &&
                                   item.counted_by?.id !== actorId && (
                                     <Button

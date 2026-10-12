@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Models;
 
+use App\Common\Services\NotificationService;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
@@ -11,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 
 /**
  * OGAMI-013 — Approval delegation.
@@ -46,6 +48,36 @@ class ApprovalDelegation extends Model
         'starts_at' => 'date',
         'ends_at' => 'date',
         'is_active' => 'boolean',
+    ];
+
+    /** @var list<string> */
+    private const CUSTOM_APPROVAL_PERMISSIONS = [
+        'attendance.ot.approve',
+        'inventory.adjust.approve',
+        'inventory.costs.approve',
+        'inventory.stock_count.manage',
+        'payroll.adjustments.approve',
+        'payroll.adjustments.reject',
+        'payroll.periods.approve',
+        'budgeting.approve',
+        'accounting.invoices.prebill_approve',
+        'purchasing.supplier_listings.review',
+        'loans.write_off.approve',
+    ];
+
+    /** @var array<string, list<string>> */
+    private const CUSTOM_APPROVAL_READ_PERMISSIONS = [
+        'attendance.ot.approve' => ['attendance.view'],
+        'inventory.adjust.approve' => ['inventory.adjust'],
+        'inventory.costs.approve' => ['inventory.costs.review'],
+        'inventory.stock_count.manage' => ['inventory.stock_count.view'],
+        'payroll.adjustments.approve' => ['payroll.adjustments.view'],
+        'payroll.adjustments.reject' => ['payroll.adjustments.view'],
+        'payroll.periods.approve' => ['payroll.periods.view'],
+        'budgeting.approve' => ['budgeting.view'],
+        'accounting.invoices.prebill_approve' => ['accounting.invoices.view'],
+        'purchasing.supplier_listings.review' => ['purchasing.supplier_listings.view'],
+        'loans.write_off.approve' => ['loans.view'],
     ];
 
     public function delegator(): BelongsTo
@@ -134,5 +166,124 @@ class ApprovalDelegation extends Model
         }
 
         return array_values(array_unique($slugs));
+    }
+
+    /** @return Collection<int, User> Active delegators who grant this approval permission. */
+    public static function delegatorsForPermission(User $delegate, string $permission, ?Carbon $on = null, array $exceptUserIds = []): Collection
+    {
+        return static::coveringQuery($on ?? now())
+            ->where('delegate_user_id', $delegate->id)
+            ->with(['delegator.role', 'delegate'])
+            ->get()
+            ->filter(function (self $delegation) use ($permission, $exceptUserIds): bool {
+                $delegator = $delegation->delegator;
+                $roleSlug = $delegator?->role?->slug;
+
+                return $delegator !== null
+                    && self::mayReadCustomApproval($delegation->delegate, $permission)
+                    && ! in_array((int) $delegator->id, $exceptUserIds, true)
+                    && $roleSlug !== null
+                    && $roleSlug !== 'system_admin'
+                    && ($delegation->role_slug === null || $delegation->role_slug === $roleSlug)
+                    && $delegator->hasPermission($permission);
+            })
+            ->map(fn (self $delegation): User => $delegation->delegator)
+            ->unique('id')
+            ->values();
+    }
+
+    /** A delegation grants only this permission, never the delegate's other module permissions. */
+    public static function canActForPermission(User $actor, string $permission, array $exceptDelegatorIds = []): bool
+    {
+        return $actor->hasPermission($permission)
+            || static::delegatorsForPermission($actor, $permission, now(), $exceptDelegatorIds)->isNotEmpty();
+    }
+
+    public static function hasDifferentPermissionRole(User $actor, string $permission, ?int $otherRoleId, array $exceptDelegatorIds = []): bool
+    {
+        if ($otherRoleId === null) {
+            return true;
+        }
+        if ($actor->hasPermission($permission) && (int) $actor->role_id !== $otherRoleId) {
+            return true;
+        }
+
+        return static::delegatorsForPermission($actor, $permission, now(), $exceptDelegatorIds)
+            ->contains(static fn (User $delegator): bool => (int) $delegator->role_id !== $otherRoleId);
+    }
+
+    /** @return list<int> */
+    public static function permissionRoleIds(User $actor, string $permission): array
+    {
+        $ids = $actor->hasPermission($permission) ? [(int) $actor->role_id] : [];
+
+        return array_values(array_unique([
+            ...$ids,
+            ...static::delegatorsForPermission($actor, $permission)->pluck('role_id')->map(static fn ($id): int => (int) $id)->all(),
+        ]));
+    }
+
+    /** @return list<string> */
+    public static function delegatedApprovalPermissions(User $delegate): array
+    {
+        $delegators = static::coveringQuery(now())
+            ->where('delegate_user_id', $delegate->id)
+            ->with('delegator.role')
+            ->get()
+            ->filter(static fn (self $row): bool => $row->delegator !== null
+                && $row->delegator->role?->slug !== 'system_admin'
+                && ($row->role_slug === null || $row->role_slug === $row->delegator->role?->slug))
+            ->map(fn (self $row): User => $row->delegator)
+            ->filter()
+            ->unique('id');
+
+        return array_values(array_filter(self::CUSTOM_APPROVAL_PERMISSIONS, static function (string $permission) use ($delegate, $delegators): bool {
+            foreach ($delegators as $delegator) {
+                if ($delegator->role?->slug !== 'system_admin'
+                    && $delegator->hasPermission($permission)
+                    && self::mayReadCustomApproval($delegate, $permission)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+    }
+
+    private static function mayReadCustomApproval(User $delegate, string $permission): bool
+    {
+        foreach (self::CUSTOM_APPROVAL_READ_PERMISSIONS[$permission] ?? [] as $readPermission) {
+            if ($delegate->hasPermission($readPermission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return Collection<int, User> Direct checkers plus active delegates for this approval permission. */
+    public static function approvalAudience(string $permission): Collection
+    {
+        $direct = app(NotificationService::class)->usersWithPermission($permission);
+        $rows = static::coveringQuery(now())
+            ->with(['delegator.role', 'delegate'])
+            ->get();
+        $delegates = $rows
+            ->filter(function (self $delegation) use ($permission): bool {
+                $delegator = $delegation->delegator;
+                $roleSlug = $delegator?->role?->slug;
+
+                return $delegator !== null
+                    && self::mayReadCustomApproval($delegation->delegate, $permission)
+                    && $roleSlug !== null
+                    && $roleSlug !== 'system_admin'
+                    && ($delegation->role_slug === null || $delegation->role_slug === $roleSlug)
+                    && $delegator->hasPermission($permission);
+            })
+            ->map(fn (self $delegation): ?User => $delegation->delegate)
+            ->filter()
+            ->unique('id');
+
+        return $direct->merge($delegates)->unique('id')->values();
     }
 }

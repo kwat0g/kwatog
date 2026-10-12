@@ -295,4 +295,20 @@ class DashboardPanelGateTest extends TestCase
             ->getJson('/api/v1/dashboards/finance')
             ->assertForbidden();
     }
+
+    public function test_finance_endpoint_uses_page_gate_and_keeps_panel_gates(): void
+    {
+        $pageOnly = $this->userWithPermissions(['dashboard.accounting.view']);
+        $dataOnly = $this->userWithPermissions(['accounting.dashboard.view']);
+
+        $this->actingAs($pageOnly)
+            ->getJson('/api/v1/dashboards/finance')
+            ->assertOk()
+            ->assertJsonMissingPath('data.cash_balance')
+            ->assertJsonMissingPath('data.ar_aging_summary');
+
+        $this->actingAs($dataOnly)
+            ->getJson('/api/v1/dashboards/finance')
+            ->assertForbidden();
+    }
 }

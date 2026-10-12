@@ -117,32 +117,95 @@ class OeeService
      */
     public function calculateForAllMachines(Carbon $from, Carbon $to): Collection
     {
-        return Machine::query()
+        $machines = Machine::query()
             ->whereIn('status', self::ACTIVE_MACHINE_STATUSES)
             ->with('currentWorkOrder.mold')
             ->orderBy('machine_code')
-            ->get()
-            ->map(function ($m) use ($from, $to) {
-                $currentWorkOrder = $m->currentWorkOrder;
+            ->get();
 
-                return [
-                    'machine_id' => $m->hash_id,
-                    'machine_code' => $m->machine_code,
-                    'name' => $m->name,
-                    'tonnage' => $m->tonnage,
-                    'status' => (string) $m->status?->value,
-                    'status_label' => MachineStatus::tryFrom((string) $m->status?->value)?->label() ?? (string) $m->status?->value,
-                    'active_wo' => $currentWorkOrder?->wo_number,
-                    'active_mold' => $currentWorkOrder?->mold?->mold_code,
-                    'current_output' => $currentWorkOrder?->quantity_produced !== null
-                        ? (int) $currentWorkOrder->quantity_produced
-                        : null,
-                    'target_output' => $currentWorkOrder?->quantity_target !== null
-                        ? (int) $currentWorkOrder->quantity_target
-                        : null,
-                    'cycle_time_sec' => $currentWorkOrder?->mold?->cycle_time_seconds,
-                ] + $this->calculate($m, $from, $to);
-            });
+        if ($machines->isEmpty()) {
+            return $machines;
+        }
+
+        $machineIds = $machines->modelKeys();
+        $plannedCategories = [
+            MachineDowntimeCategory::PlannedMaintenance->value,
+            MachineDowntimeCategory::Changeover->value,
+        ];
+        $unplannedCategories = [
+            MachineDowntimeCategory::Breakdown->value,
+            MachineDowntimeCategory::MaterialShortage->value,
+            MachineDowntimeCategory::NoOrder->value,
+        ];
+        $downtimeByMachine = [];
+        $now = Carbon::now();
+        $downtimes = DB::table('machine_downtimes')
+            ->whereIn('machine_id', $machineIds)
+            ->whereIn('category', array_merge($plannedCategories, $unplannedCategories))
+            ->where('start_time', '<=', $to)
+            ->where(fn ($query) => $query->whereNull('end_time')->orWhere('end_time', '>=', $from))
+            ->get(['machine_id', 'category', 'start_time', 'end_time']);
+
+        foreach ($downtimes as $downtime) {
+            $start = Carbon::parse($downtime->start_time);
+            $end = $downtime->end_time
+                ? Carbon::parse($downtime->end_time)
+                : ($to->lessThan($now) ? $to : $now);
+            $effectiveStart = $start->greaterThan($from) ? $start : $from;
+            $effectiveEnd = $end->lessThan($to) ? $end : $to;
+            if (! $effectiveEnd->greaterThan($effectiveStart)) {
+                continue;
+            }
+
+            $bucket = in_array($downtime->category, $plannedCategories, true) ? 'planned' : 'unplanned';
+            $downtimeByMachine[$downtime->machine_id][$bucket] = ($downtimeByMachine[$downtime->machine_id][$bucket] ?? 0)
+                + (int) $effectiveStart->diffInMinutes($effectiveEnd, true);
+        }
+
+        $outputsByMachine = DB::table('work_order_outputs as output')
+            ->join('work_orders as wo', 'wo.id', '=', 'output.work_order_id')
+            ->leftJoin('molds as mold', function ($join): void {
+                $join->on('mold.id', '=', 'wo.mold_id')->whereNull('mold.deleted_at');
+            })
+            ->whereIn('wo.machine_id', $machineIds)
+            ->whereBetween('output.recorded_at', [$from, $to])
+            ->select('wo.machine_id')
+            ->selectRaw('COALESCE(SUM(output.good_count), 0) AS good')
+            ->selectRaw('COALESCE(SUM(output.reject_count), 0) AS reject')
+            ->selectRaw('COALESCE(AVG(NULLIF(mold.cycle_time_seconds, 0)), 0) AS ideal_cycle')
+            ->groupBy('wo.machine_id')
+            ->get()
+            ->keyBy('machine_id');
+
+        return $machines->map(function (Machine $machine) use ($from, $to, $downtimeByMachine, $outputsByMachine): array {
+            $currentWorkOrder = $machine->currentWorkOrder;
+            $output = $outputsByMachine->get($machine->id);
+            $downtime = $downtimeByMachine[$machine->id] ?? [];
+
+            return [
+                'machine_id' => $machine->hash_id,
+                'machine_code' => $machine->machine_code,
+                'name' => $machine->name,
+                'tonnage' => $machine->tonnage,
+                'status' => (string) $machine->status?->value,
+                'status_label' => MachineStatus::tryFrom((string) $machine->status?->value)?->label() ?? (string) $machine->status?->value,
+                'active_wo' => $currentWorkOrder?->wo_number,
+                'active_mold' => $currentWorkOrder?->mold?->mold_code,
+                'current_output' => $currentWorkOrder?->quantity_produced !== null ? (int) $currentWorkOrder->quantity_produced : null,
+                'target_output' => $currentWorkOrder?->quantity_target !== null ? (int) $currentWorkOrder->quantity_target : null,
+                'cycle_time_sec' => $currentWorkOrder?->mold?->cycle_time_seconds,
+            ] + $this->metrics(
+                $machine,
+                $from,
+                $to,
+                $this->scheduledMinutes($machine, $from, $to),
+                $downtime['planned'] ?? 0,
+                $downtime['unplanned'] ?? 0,
+                (int) ($output->good ?? 0),
+                (int) ($output->reject ?? 0),
+                (float) ($output->ideal_cycle ?? 0),
+            );
+        });
     }
 
     public function calculateForToday(Machine $m): array

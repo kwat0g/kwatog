@@ -8,6 +8,7 @@
  * Data shape matches {@link ForecastPanelData} from '@/types/forecasting-dashboard'.
  */
 import { LuTrendingUp, LuTrendingDown, LuMinus } from '@/lib/icons';
+import { Link } from 'react-router-dom';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -33,6 +34,13 @@ interface Props {
   hideWhenEmpty?: boolean;
   /** Whether to show the mini-KPI card above the chart. */
   showKpi?: boolean;
+  /**
+   * Read-only link-out to the data surface behind the projection (e.g. the
+   * employee list for headcount). These projections are computed inline by
+   * ForecastingDashboardService and own no /forecasting page, so the link
+   * goes to the data, not the forecasting section. Omitted = no link.
+   */
+  detailsHref?: string;
 }
 
 const TREND_ICON: Record<TrendDirection, typeof LuTrendingUp> = {
@@ -57,6 +65,7 @@ export function ForecastPanel({
   unitLabel,
   hideWhenEmpty = false,
   showKpi = true,
+  detailsHref,
 }: Props) {
   if (isLoading) {
     return (
@@ -105,6 +114,16 @@ export function ForecastPanel({
   const TrendIcon = TREND_ICON[data.trend];
   const trendColor = TREND_COLOR[data.trend];
 
+  // Mean of the per-point confidences the service already attaches. Display
+  // only — no new math, and null when the series carries none.
+  const confidences = data.forecast
+    .map((p) => p.confidence)
+    .filter((c): c is number => typeof c === 'number' && Number.isFinite(c));
+  const avgConfidence =
+    confidences.length > 0
+      ? Math.round(confidences.reduce((sum, c) => sum + c, 0) / confidences.length)
+      : null;
+
   // Combine all points for the chart.
   const allPoints: Array<ForecastPoint & { isForecast: boolean }> = [
     ...data.historical.map((p) => ({ ...p, isForecast: false })),
@@ -125,6 +144,13 @@ export function ForecastPanel({
             <TrendIcon size={12} className={`text-${trendColor}`} />
             <Chip variant={trendColor}>{data.trend}</Chip>
           </span>
+        ) : undefined
+      }
+      actions={
+        detailsHref ? (
+          <Link to={detailsHref} className="text-xs text-link hover:underline">
+            Open →
+          </Link>
         ) : undefined
       }
     >
@@ -194,6 +220,11 @@ export function ForecastPanel({
 
         {/* Legend */}
         <div className="flex items-center justify-end gap-3 text-xs text-muted">
+          {avgConfidence != null && (
+            <span className="mr-auto font-mono tabular-nums">
+              Avg confidence {avgConfidence}%
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm bg-accent/60" />
             Historical

@@ -70,6 +70,14 @@ class ChainListenerRecoveryService
         ];
     }
 
+    public function attentionCount(): int
+    {
+        $query = ChainListenerRun::query();
+        $this->applyAttentionFilter($query);
+
+        return $query->count();
+    }
+
     /**
      * @return array{status: string, source_run_id: string, outbox_id: string, event_type: string, listener_class: string, listener_method: string, replay_count: int}
      */
@@ -290,27 +298,7 @@ class ChainListenerRecoveryService
     {
         $attention = $request->has('attention') ? $request->boolean('attention') : true;
         if ($attention) {
-            $staleAt = now()->subMinutes(self::STALE_PROCESSING_MINUTES);
-            $query
-                ->whereNull('resolved_at')
-                ->where(function (Builder $attentionQuery) use ($staleAt): void {
-                    $attentionQuery
-                        ->where('status', ChainListenerRun::STATUS_FAILED)
-                        ->orWhereIn('outcome_status', [
-                            ChainListenerRun::OUTCOME_MANUAL_REQUIRED,
-                            ChainListenerRun::OUTCOME_FAILED,
-                        ])
-                        ->orWhere('status', ChainListenerRun::STATUS_RETRYING)
-                        ->orWhere(function (Builder $staleQuery) use ($staleAt): void {
-                            $staleQuery
-                                ->where('status', ChainListenerRun::STATUS_PROCESSING)
-                                ->where(function (Builder $attemptQuery) use ($staleAt): void {
-                                    $attemptQuery
-                                        ->where('last_attempt_at', '<=', $staleAt)
-                                        ->orWhereNull('last_attempt_at');
-                                });
-                        });
-                });
+            $this->applyAttentionFilter($query);
         }
 
         $status = $request->query('status');
@@ -354,6 +342,31 @@ class ChainListenerRecoveryService
                     ->orWhere('outbox_id', 'like', $like);
             });
         }
+    }
+
+    private function applyAttentionFilter(Builder $query): void
+    {
+        $staleAt = now()->subMinutes(self::STALE_PROCESSING_MINUTES);
+        $query
+            ->whereNull('resolved_at')
+            ->where(function (Builder $attentionQuery) use ($staleAt): void {
+                $attentionQuery
+                    ->where('status', ChainListenerRun::STATUS_FAILED)
+                    ->orWhereIn('outcome_status', [
+                        ChainListenerRun::OUTCOME_MANUAL_REQUIRED,
+                        ChainListenerRun::OUTCOME_FAILED,
+                    ])
+                    ->orWhere('status', ChainListenerRun::STATUS_RETRYING)
+                    ->orWhere(function (Builder $staleQuery) use ($staleAt): void {
+                        $staleQuery
+                            ->where('status', ChainListenerRun::STATUS_PROCESSING)
+                            ->where(function (Builder $attemptQuery) use ($staleAt): void {
+                                $attemptQuery
+                                    ->where('last_attempt_at', '<=', $staleAt)
+                                    ->orWhereNull('last_attempt_at');
+                            });
+                    });
+            });
     }
 
     private function assertReplayable(ChainListenerRun $run): void

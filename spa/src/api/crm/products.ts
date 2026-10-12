@@ -7,7 +7,7 @@ export interface ProductListParams extends ListParams {
   has_bom?: boolean | string;
 }
 
-export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure'>;
+export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure' | 'include_forecast_in_mrp'>;
 
 export const productsApi = {
   options: (params?: ProductListParams, signal?: AbortSignal) =>

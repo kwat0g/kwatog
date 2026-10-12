@@ -28,11 +28,11 @@ class NotifyOnLeavePendingHR implements ShouldQueue
                 ->get();
 
             $this->notifications->send($audience, 'leave.pending_hr', [
-                'title'       => "Leave Needs HR Approval — {$emp->full_name}",
-                'message'     => "{$req->leaveType?->name} — {$req->days} day(s). Dept head approved.",
-                'link_to'     => "/hr/leaves/{$req->hash_id}",
+                'title' => "Leave Needs HR Approval — {$emp->full_name}",
+                'message' => "{$req->leaveType?->name} — {$req->days} day(s). Leave request is awaiting HR approval.",
+                'link_to' => "/hr/leaves/{$req->hash_id}",
                 'entity_type' => 'leave_request',
-                'entity_id'   => $req->hash_id,
+                'entity_id' => $req->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLeavePendingHR failed', ['error' => $e->getMessage()]);

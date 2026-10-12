@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { dashboardLayoutApi } from '@/api/dashboard-layout';
 import DashboardDefaultPage from './default';
 
-vi.mock('@/api/dashboard-layout', () => ({ dashboardLayoutApi: { layout: vi.fn(), data: vi.fn() } }));
+vi.mock('@/api/dashboard-layout', () => ({ dashboardLayoutApi: { layout: vi.fn(), data: vi.fn() }, WIDGET_STALE_AFTER_MS: 120_000, isStaleTimestamp: () => false }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }));
 vi.mock('@/components/dashboard/DashboardPicker', () => ({ DashboardPicker: () => null }));
 vi.mock('@/components/dashboard/registry', () => ({ LiveDashboardWidget: () => <div>Widget</div> }));
@@ -14,6 +14,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 it('warns when refreshing widget values fails and retries without hiding the layout', async () => {
   vi.mocked(dashboardLayoutApi.layout).mockResolvedValue({ version: 'v1', items: [{
     key: 'stock', name: 'Stock', description: null, module: 'inventory', permission: null,
+    permission_any: null,
     render_kind: 'scalar', link_path: null, data: null, x: 0, y: 0, w: 1, h: 1, source: 'role',
   }] });
   vi.mocked(dashboardLayoutApi.data).mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValue({});

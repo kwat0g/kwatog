@@ -22,6 +22,12 @@ class GeneratePreventiveMaintenanceOnRequested implements ShouldQueue
 
     public int $timeout = GeneratePreventiveMaintenanceJob::TIMEOUT_SECONDS;
 
+    // Lane: low — the sweep runs inline here (daily bulk).
+    public function viaQueue(): string
+    {
+        return 'low';
+    }
+
     /** @return array<int, WithoutOverlapping> */
     public function middleware(PreventiveMaintenanceGenerationRequested $event): array
     {

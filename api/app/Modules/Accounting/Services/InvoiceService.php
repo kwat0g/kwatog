@@ -6,6 +6,8 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Services\NotificationService;
 use App\Common\Support\SearchOperator;
 
 use App\Common\Services\ChainBroadcaster;
@@ -162,6 +164,18 @@ class InvoiceService
                 InvoiceItem::create(array_merge($row, ['invoice_id' => $invoice->id]));
             }
 
+            if ($lifecycle === 'prebill') {
+                $audience = ApprovalDelegation::approvalAudience('accounting.invoices.prebill_approve')
+                    ->reject(fn (User $approver): bool => (int) $approver->id === (int) $by->id);
+                app(NotificationService::class)->send($audience, 'approval.action_required', [
+                    'title' => 'Prebill invoice needs approval',
+                    'message' => 'A manual invoice is waiting for prebill approval.',
+                    'link_to' => "/accounting/invoices/{$invoice->hash_id}",
+                    'entity_type' => 'invoice',
+                    'entity_id' => $invoice->hash_id,
+                ], "prebill:approval-required:{$invoice->id}");
+            }
+
             return $this->show($invoice->fresh());
         });
     }
@@ -253,6 +267,9 @@ class InvoiceService
             if ($lockedInvoice->lifecycle_type !== 'prebill') {
                 throw new BusinessRuleException('Only prebill invoices require prebill approval.');
             }
+            if (! ApprovalDelegation::canActForPermission($by, 'accounting.invoices.prebill_approve', [(int) $lockedInvoice->created_by])) {
+                throw new ForbiddenActionException('You do not have permission to approve prebill invoices.');
+            }
             if ((int) $lockedInvoice->created_by === (int) $by->id) {
                 throw new ForbiddenActionException(
                     'You cannot approve a prebill invoice you created. A different user must approve it (segregation of duties).',
@@ -289,6 +306,14 @@ class InvoiceService
                 fn (object $update): bool => (int) $update->id > $lastApprovalId
                     && (int) $update->user_id === (int) $by->id,
             );
+            if (! $by->hasPermission('accounting.invoices.prebill_approve')) {
+                $delegatorIds = ApprovalDelegation::delegatorsForPermission($by, 'accounting.invoices.prebill_approve')
+                    ->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+                $hasEditedSinceApproval = $hasEditedSinceApproval || $updates->contains(
+                    fn (object $update): bool => (int) $update->id > $lastApprovalId
+                        && in_array((int) $update->user_id, $delegatorIds, true),
+                );
+            }
             if ($hasEditedSinceApproval) {
                 throw new ForbiddenActionException(
                     'You cannot approve a prebill invoice you edited after its last approval. A different user must review it (segregation of duties).',
@@ -299,6 +324,17 @@ class InvoiceService
                 'prebill_approved_by' => $by->id,
                 'prebill_approved_at' => now(),
             ])->save();
+
+            $requester = User::query()->whereKey($lockedInvoice->created_by)->where('is_active', true)->first();
+            if ($requester) {
+                app(NotificationService::class)->send($requester, 'approval.completed', [
+                    'title' => 'Prebill invoice approved',
+                    'message' => 'Your manual invoice was approved for prebilling.',
+                    'link_to' => "/accounting/invoices/{$lockedInvoice->hash_id}",
+                    'entity_type' => 'invoice',
+                    'entity_id' => $lockedInvoice->hash_id,
+                ], "prebill:decision:{$lockedInvoice->id}:{$lockedInvoice->prebill_approved_at->timestamp}");
+            }
 
             return $this->show($lockedInvoice->fresh());
         });

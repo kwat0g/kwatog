@@ -26,9 +26,9 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'neutral' | 'danger
 };
 
 export default function BudgetTransferListPage() {
-  const { can } = usePermission();
+  const { can, canApprove } = usePermission();
   const canManage = can('budgeting.manage');
-  const canApprove = can('budgeting.approve');
+  const canApproveTransfer = canApprove('budgeting.approve');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
@@ -147,16 +147,16 @@ export default function BudgetTransferListPage() {
                       <Td align="right">
                         {transfer.status === 'pending' ? (
                           <div className="flex justify-end gap-1.5">
-                            {canApprove && transfer.can_approve === true ? (
+                            {canApproveTransfer && transfer.can_approve === true ? (
                               <Button size="xs" variant="primary" onClick={() => approveMutation.mutate(transfer.id)} loading={approveMutation.isPending}>
                                 <LuCircleCheck size={13} /> Approve
                               </Button>
                             ) : (
                               <span className="text-xs text-muted">
-                                {canApprove ? 'Approval requires a different role.' : 'Awaiting an eligible approver.'}
+                                {canApproveTransfer ? 'Approval requires a different role.' : 'Awaiting an eligible approver.'}
                               </span>
                             )}
-                            {canApprove && (
+                            {canApproveTransfer && (
                               <Button size="xs" variant="secondary" onClick={() => setRejectId(transfer.id)}>
                                 <LuCircleX size={13} /> Reject
                               </Button>

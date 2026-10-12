@@ -20,6 +20,7 @@ import type { GoodsReceiptNote, GrnStatus } from '@/types/inventory';const varia
 
 interface GrnListParams extends ListParams {
   status?: string;
+  qc_handoff?: string;
   vendor_id?: string;
   purchase_order_id?: string;
   from?: string;
@@ -27,7 +28,7 @@ interface GrnListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: GrnListParams = {
-  page: 1, per_page: 25, status: '',
+  page: 1, per_page: 25, status: '', qc_handoff: '',
 };
 
 export default function GrnListPage() {
@@ -59,6 +60,7 @@ export default function GrnListPage() {
  { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor?.name ?? '—' },
  { key: 'date', header: 'Received', cell: (r) => <span className="font-mono">{formatDate(r.received_date)}</span> },
  { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
+ { key: 'qcHandoff', header: 'QC Handoff', cell: (r) => r.incoming_qc_handoff?.status_label ?? '—' },
  { key: 'rec', header: 'By', cell: (r) => r.receiver?.name ?? '—' },
  ];
 
@@ -66,6 +68,10 @@ export default function GrnListPage() {
  { key: 'status', label: 'Status', type: 'select', options: [
  { value: '', label: 'All' },
  ...(grnOptions?.statuses ?? []),
+ ]},
+ { key: 'qc_handoff', label: 'QC Handoff', type: 'select', options: [
+ { value: '', label: 'All' },
+ { value: 'action_required', label: 'Needs retry' },
  ]},
  ];
 

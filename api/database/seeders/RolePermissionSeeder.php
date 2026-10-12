@@ -252,6 +252,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
                 ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
                 // Supplier Item Listings — supplier-submitted offers reviewed here.
+                ['slug' => 'purchasing.supplier_listings.view', 'name' => 'View Supplier Item Listings'],
                 ['slug' => 'purchasing.supplier_listings.review', 'name' => 'Review Supplier Item Listings'],
                 ['slug' => 'purchasing.rfq.view',       'name' => 'View Supplier RFQs'],
                 ['slug' => 'purchasing.rfq.manage',     'name' => 'Run Supplier RFQs (create, publish, award)'],
@@ -440,6 +441,28 @@ class RolePermissionSeeder extends Seeder
                 // auth-only (Dashboard/routes.php). The SPA gates the Reset
                 // button on this slug (pages/dashboard/default.tsx).
                 ['slug' => 'dashboard.layout.reset',          'name' => 'Reset Own Dashboard Layout'],
+                // Phase 2 — the company-overview read. One slug meaning "may
+                // read company-wide aggregates", and the ONLY gate that appears
+                // in every module's KPI set (KpiSnapshotService::moduleGates),
+                // so an executive reads company KPIs without being handed each
+                // module's dashboard. Without it the executive page's health
+                // strip was empty — 0 of its 6 tiles, since the VP held no
+                // module dashboard slug at all (01-matrix §D4 #3 / G-P3-2).
+                // Held by system_admin + vice_president: decided 2026-10-11 and
+                // locked by KpiVisibilityMatrixTest, so widening it is a
+                // deliberate act rather than a drive-by grant.
+                ['slug' => 'dashboard.company.view',        'name' => 'View Company Overview Dashboard'],
+                // The five role dashboards (DSS 01-matrix §D3). Each role that
+                // held no dashboard slug fell through to the generic widget
+                // grid; these are its own surface. Maintained as rows here so a
+                // reseed cannot strand a page nobody can reach, and mirrored by
+                // migration 2026_10_11_120000 so a migrate-without-reseed deploy
+                // cannot advertise a slug nobody holds.
+                ['slug' => 'dashboard.logistics.view',        'name' => 'View ImpEx Logistics Dashboard'],
+                ['slug' => 'dashboard.maintenance.view',      'name' => 'View Maintenance Dashboard'],
+                ['slug' => 'dashboard.department.view',       'name' => 'View Department Dashboard'],
+                ['slug' => 'dashboard.sales.view',            'name' => 'View Sales Dashboard'],
+                ['slug' => 'dashboard.customer_service.view', 'name' => 'View Customer Service Dashboard'],
             ],
             'platform' => [
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
@@ -581,7 +604,6 @@ class RolePermissionSeeder extends Seeder
                     $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
-                    $this->module('crm_commissions'),
                     $this->selfService(),
                     [
                         'dashboard.accounting.view',
@@ -625,7 +647,8 @@ class RolePermissionSeeder extends Seeder
             // across all seeded money workflows. Replaces the previous system_admin
             // stand-in, which put IT inside the business approval matrix (SoD: the
             // role that authors workflow definitions cannot also execute them).
-            // No dashboard of its own — reads what it signs.
+            // Company Overview is a read-only cross-functional surface; business
+            // decisions remain in their owning modules.
             'vice_president' => [
                 'name' => 'Vice President',
                 'description' => 'Reviews financial statements, budgets, supplier quotations and customer complaints; provides executive approval for purchases, payments, loans, salary adjustments and asset disposals without running sourcing, payroll preparation or HR records.',
@@ -660,8 +683,17 @@ class RolePermissionSeeder extends Seeder
                         'budgeting.approve',
                         'crm.view',
                         'crm.complaints.view',
+                        // Executive quality panels are read-only. NCR listing
+                        // and Pareto access add no create, edit, or disposition rights.
+                        'quality.view', 'quality.ncr.view',
                         'dashboard.plant_manager.view',
+                        // 2026-10-11 — company-wide read. The executive page and
+                        // every module's KPI set answer to this one slug, which
+                        // is why the VP no longer needs the four module
+                        // dashboards to see company KPIs.
+                        'dashboard.company.view',
                         'dashboard.view_bottlenecks',
+                        'dashboard.chain_recovery.view',
                         'search.global',
                         'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -692,6 +724,10 @@ class RolePermissionSeeder extends Seeder
                         'return_management.complete',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
+                        // The CSO's own surface (DSS 01-matrix §D3): complaints
+                        // and return cases are the two queues they own, and
+                        // neither had a page sized to them.
+                        'dashboard.customer_service.view',
                     ],
                 ),
             ],
@@ -714,6 +750,8 @@ class RolePermissionSeeder extends Seeder
                         'crm.sales_orders.cancel',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
+                        // Owns the order book; had no page for it.
+                        'dashboard.sales.view',
                     ],
                 ),
             ],
@@ -901,6 +939,11 @@ class RolePermissionSeeder extends Seeder
                         'hr.separation.view',
                         'hr.clearance.sign', 'hr.clearance.work_company',
                         'search.global', 'notifications.preferences.manage',
+                        // Shares the ONE maintenance page with the supervisor.
+                        // NOT `maintenance.work.assigned` — the tech does not
+                        // hold that slug, so gating the page on it would hide
+                        // the page from half the roles it exists for (M6).
+                        'dashboard.maintenance.view',
                     ],
                 ),
             ],
@@ -910,6 +953,7 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => array_merge($this->selfService(), [
                     'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.assign',
                     'maintenance.wo.verify', 'maintenance.schedules.manage', 'mrp.machines.view', 'assets.view', 'search.global',
+                    'dashboard.maintenance.view',
                 ]),
             ],
             'impex_officer' => [
@@ -933,6 +977,11 @@ class RolePermissionSeeder extends Seeder
                         'supply_chain.deliveries.create',
                         'supply_chain.deliveries.confirm',
                         'purchasing.view',
+                        // Owns shipments, dispatch, documents and fleet. This slug
+                        // is ALSO in the supply_chain KPI gate set, which is what
+                        // lets the page carry the OTD reading it is judged on
+                        // (G-P3-2's "second qualified gate").
+                        'dashboard.logistics.view',
                     ],
                 ),
             ],
@@ -965,6 +1014,10 @@ class RolePermissionSeeder extends Seeder
                         'hr.separation.view',
                         'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
+                        // Five approval types were five module pages and a board
+                        // that omits the custom family (OT). One surface for the
+                        // department-scoped approver (DSS §D3).
+                        'dashboard.department.view',
                     ],
                 ),
             ],
@@ -1059,6 +1112,9 @@ class RolePermissionSeeder extends Seeder
                     ? '*'
                     : array_values(array_unique(array_merge(
                         (array) $def['permissions'],
+                        in_array('purchasing.supplier_listings.review', (array) $def['permissions'], true)
+                            ? ['purchasing.supplier_listings.view']
+                            : [],
                         [
                             'notifications.view',
                             // Every profile links to per-user notification

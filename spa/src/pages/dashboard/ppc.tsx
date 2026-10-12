@@ -12,7 +12,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { dashboardsApi } from '@/api/dashboards';
+import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { chainApi } from '@/api/chain';
 import type { ChainBottleneckGroup, ChainBottleneckRow, ChainBottlenecks } from '@/types/chain';
 import { StatCard } from '@/components/ui/StatCard';
@@ -28,8 +28,11 @@ import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
+import { CapacityPanel } from '@/components/dashboard/CapacityPanel';
+import type { CapacityForecastData } from '@/types/forecasting-dashboard';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { PPC_KPIS } from '@/lib/dashboardKpis';
 
 import { LuCheck, LuMinus, LuCircle, LuX } from '@/lib/icons';
 /* ───────────────────────── Typed interface ───────────────────────── */
@@ -104,11 +107,12 @@ interface PpcDashboardData {
  mrp_last_run?: string;
  unplanned_wos?: number;
  production_gantt?: ProductionGanttRow[];
- mrp_shortages?: MrpShortage[];
- machine_availability?: GanttRow[];
- wo_status_breakdown?: WoStatusItem[];
- gantt_horizon_days?: number;
- };
+  mrp_shortages?: MrpShortage[];
+  machine_availability?: GanttRow[];
+  wo_status_breakdown?: WoStatusItem[];
+  gantt_horizon_days?: number;
+  capacity_forecast?: CapacityForecastData;
+  };
 }
 
 /* ───────────────────────── Inline sub-panel components ───────────────────────── */
@@ -488,25 +492,26 @@ export default function PpcDashboard() {
 
  const q = useQuery({
  queryKey: ['dashboard', 'ppc'],
- queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
- refetchInterval: 60_000,
- });
+  queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
+  refetchInterval: DASHBOARD_REFRESH_MS,
+  });
 
  const bottlenecks = useQuery({
  queryKey: ['chain-bottlenecks', 'ppc_head'],
  queryFn: (): Promise<ChainBottlenecks> => chainApi.bottlenecks('ppc_head'),
- enabled: can('dashboard.view_bottlenecks'),
- refetchInterval: 60_000,
- staleTime: 60_000,
- });
+  enabled: can('dashboard.view_bottlenecks'),
+  refetchInterval: DASHBOARD_REFRESH_MS,
+  staleTime: 60_000,
+  });
 
- return (
- <DashboardShell<PpcDashboardData>
- title="PPC Dashboard"
- subtitle="Live · refreshes every 60s"
- query={q}
- refreshingQueryKey={['dashboard', 'ppc']}
- >
+  return (
+  <DashboardShell<PpcDashboardData>
+  title="PPC Dashboard"
+  subtitle="Live · refreshes every 60s"
+  query={q}
+  refreshingQueryKey={['dashboard', 'ppc']}
+  header={<KpiStrip codes={PPC_KPIS} compact />}
+  >
  {({ kpis, panels }) => {
  const woStatusChartData =
  panels?.wo_status_breakdown?.map((i) => ({
@@ -531,12 +536,9 @@ export default function PpcDashboard() {
  return (
  <>
  {/* ── Row 1: KPIs ── */}
- <KpiRow kpis={kpis} />
+  <KpiRow kpis={kpis} />
 
- {/* KPI Scorecard strip */}
- <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
-
- {/* ── Row 2: Chain stages + Alerts ── */}
+  {/* ── Row 2: Chain stages + Alerts ── */}
  <PanelRow>
  {Array.isArray(panels?.chain_stages) && panels.chain_stages.length > 0 ? (
  <ChainStagePanel stages={panels.chain_stages} />
@@ -573,8 +575,18 @@ export default function PpcDashboard() {
  <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
  </PanelRow>
 
- {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
- <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
+  {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
+  <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
+
+  {/* ── Row 6.5: Capacity forecast (read-only composition from the payload —
+  rides the page poll, no separate fetch; absent when PanelGate strips it) ── */}
+  {panels?.capacity_forecast && (
+  <CapacityPanel
+  data={panels.capacity_forecast}
+  isLoading={false}
+  isError={false}
+  />
+  )}
 
  {/* ── Row 6.5: Chart visualizations ── */}
  <PanelRow>
@@ -603,12 +615,16 @@ export default function PpcDashboard() {
  </Panel>
  </PanelRow>
 
- {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
- <PanelRow cols={3}>
- <DemandForecastPanel />
- <StockOutPanel />
- <ForecastAccuracyPanel />
- </PanelRow>
+  {/* ── Row 7: Demand Forecast + Stock-out Risk + Accuracy (consulted, not
+  monitored — manual refresh only; hidden without the forecasting read so a
+  permission-less viewer gets no 403 error tiles) ── */}
+  {can('forecasting.view') && (
+  <PanelRow cols={3}>
+  <DemandForecastPanel />
+  <StockOutPanel />
+  <ForecastAccuracyPanel />
+  </PanelRow>
+  )}
 
  {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
  {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}

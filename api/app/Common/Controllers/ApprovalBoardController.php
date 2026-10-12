@@ -6,7 +6,6 @@ namespace App\Common\Controllers;
 
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\SettingsService;
-use App\Common\Support\ApprovalTypeRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,7 +13,7 @@ use Illuminate\Validation\Rule;
 /**
  * Series F — Task F2. Approvals Kanban board.
  *
- * GET /api/v1/approvals/board?type=leave|pr|po|loan|payroll
+ * GET /api/v1/approvals/board?type=<approval-kind>
  */
 class ApprovalBoardController
 {
@@ -26,7 +25,7 @@ class ApprovalBoardController
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'type' => ['nullable', 'string', Rule::in(array_column(ApprovalTypeRegistry::all(), 'kind'))],
+            'type' => ['nullable', 'string', Rule::in(array_column($this->service->kindOptions(), 'value'))],
             'pending_limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'history_limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'pending_page' => ['nullable', 'integer', 'min:1'],

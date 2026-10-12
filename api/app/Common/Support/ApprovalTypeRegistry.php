@@ -7,15 +7,29 @@ namespace App\Common\Support;
 use App\Modules\Auth\Models\User;
 
 /**
- * Single source of truth for approval-board type metadata.
+ * Source of truth for ledger types and approval-board filter labels.
  *
  * The board, escalation links, and visibility policy must agree on the
- * polymorphic class, source table, URL, and module permissions. Keeping that
- * contract here prevents a newly-supported approvable from silently falling
- * back to an audit-log URL or leaking through the broad board permission.
+ * polymorphic class, source table, URL, and module permissions. Custom queue
+ * labels stay separate because those workflows do not write approval_records
+ * and are queried directly by ApprovalBoardService.
  */
 final class ApprovalTypeRegistry
 {
+    /** @var array<string, string> */
+    private const CUSTOM_KINDS = [
+        'overtime' => 'Overtime',
+        'stock_adjustment' => 'Stock adjustments',
+        'item_cost_review' => 'Item cost reviews',
+        'stock_count_variance' => 'Stock-count variances',
+        'payroll_adjustment' => 'Payroll adjustments',
+        'budget' => 'Budgets',
+        'budget_transfer' => 'Budget transfers',
+        'invoice_prebill' => 'Invoice prebill',
+        'supplier_listing' => 'Supplier listings',
+        'loan_write_off' => 'Loan write-offs',
+    ];
+
     /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,link_record?:bool,permissions:array<int,string>}> */
     private const TYPES = [
         'App\\Modules\\Leave\\Models\\LeaveRequest' => [
@@ -130,6 +144,11 @@ final class ApprovalTypeRegistry
         return null;
     }
 
+    public static function kindLabel(string $kind): ?string
+    {
+        return self::forKind($kind)['label'] ?? self::CUSTOM_KINDS[$kind] ?? null;
+    }
+
     /** @return array<int, array{value:string,label:string}> */
     public static function kindOptions(): array
     {
@@ -139,6 +158,9 @@ final class ApprovalTypeRegistry
                 'value' => $meta['kind'],
                 'label' => $meta['label'],
             ];
+        }
+        foreach (self::CUSTOM_KINDS as $kind => $label) {
+            $options[$kind] = ['value' => $kind, 'label' => $label];
         }
 
         return array_values($options);

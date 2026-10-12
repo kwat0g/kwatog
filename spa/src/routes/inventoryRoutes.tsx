@@ -125,7 +125,7 @@ export const inventoryRoutes = (
       <Route
         path="/inventory/warehouse"
         element={
-          <PermissionGuard permission="inventory.warehouse.manage">
+          <PermissionGuard permission="inventory.view">
             <WarehousePage />
           </PermissionGuard>
         }

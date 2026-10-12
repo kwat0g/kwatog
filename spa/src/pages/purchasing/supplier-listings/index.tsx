@@ -36,8 +36,8 @@ type ReviewFilters = { search: string; status: SupplierListingStatus | ''; page:
 
 export default function SupplierListingsReviewPage() {
   const qc = useQueryClient();
-  const { can } = usePermission();
-  const canReview = can('purchasing.supplier_listings.review');
+  const { canApprove } = usePermission();
+  const canReview = canApprove('purchasing.supplier_listings.review');
   const [filters, setFilters] = useUrlFilters<ReviewFilters>({ search: '', status: '', page: 1, per_page: 25 });
   const [rejecting, setRejecting] = useState<SupplierItemListing | null>(null);
   const [bulkRejectRows, setBulkRejectRows] = useState<SupplierItemListing[]>([]);

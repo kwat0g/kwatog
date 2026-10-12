@@ -9,16 +9,17 @@ and repay through automatic salary deductions — with zero interest.
 |---|---|---|
 | Employee (requester) | `employee@ogami.test` | Files the request |
 | Department Head (step 1) | `depthead@ogami.test` | First approval |
-| Manager (company-loan step 2 only) | `production@ogami.test` | Second approval for company loans |
+| HR Officer (company-loan step 2 only) | `hr@ogami.test` | Second approval for company loans |
 | Finance Officer | `finance@ogami.test` | Reviews the money |
 | Vice President | `vp@ogami.test` | Final approval |
 
 **The two loan types and their chains:**
 
-- **Cash advance** — `Dept Head → Accounting → VP` (3 steps).
-- **Company loan** — `Dept Head → Manager → Accounting → VP` (4 steps).
-- HR (`hr@ogami.test`) can file and view loans but is **not**
-  an approver in either chain.
+- **Cash advance** — `Dept Head → Finance → VP` (3 steps).
+- **Company loan** — `Dept Head → HR → Finance → VP` for principal
+  amounts of at least ₱50,000; smaller company loans skip the VP step.
+- HR (`hr@ogami.test`) approves company loans at step 2 and can file and
+  view loans.
 
 ## 1. The three rules (say these out loud in the demo)
 
@@ -84,23 +85,24 @@ and repay through automatic salary deductions — with zero interest.
 6. The request moves to the next step. One approval is never enough —
    the chain needs every step below.
 
-## 5. Approve a company loan as Manager (step 2, company loans only)
+## 5. Approve a company loan as HR (step 2, company loans only)
 
-1. Log in as `production@ogami.test` (password `password`).
+1. Log in as `hr@ogami.test` (password `password`).
 2. Open `/hr/loans`, click the same loan row.
 3. Click **"Approve"** and confirm.
 4. Cash advances skip this step entirely — they go straight
    from the Department Head to Finance.
 
-## 6. Review as Finance (second-to-last step)
+## 6. Review as Finance (last step or next-to-last)
 
 1. Log in as `finance@ogami.test` (password `password`).
 2. Open `/hr/loans`, click the loan row.
 3. Check Principal, Monthly amortization, and repayment months.
 4. Click **"Approve"** and confirm.
-5. The loan is now waiting only for the Vice President.
+5. Cash advances and company loans of at least ₱50,000 then wait for the VP.
+   Smaller company loans become active after Finance approves.
 
-## 7. Final approval as VP (last step — money moves here)
+## 7. Final approval as VP (cash advances and company loans ≥ ₱50,000)
 
 1. Log in as `vp@ogami.test` (password `password`).
 2. Open `/hr/loans`, click the loan row.
@@ -135,10 +137,10 @@ and repay through automatic salary deductions — with zero interest.
    **"Submit request"**.
 2. Log in as `depthead@ogami.test` → `/hr/loans` → open it →
    **"Approve"**.
-3. (Company loan only) Log in as `production@ogami.test` →
+3. (Company loan only) Log in as `hr@ogami.test` →
    **"Approve"**.
 4. Log in as `finance@ogami.test` → **"Approve"**.
-5. Log in as `vp@ogami.test` → **"Approve"** → show the
-   amortization schedule and the 0% interest line.
+5. Log in as `vp@ogami.test` → **"Approve"** when the chain includes
+   the VP threshold step; show the amortization schedule and 0% interest line.
 6. Say the three rules: zero interest, one at a time,
    auto-deducted in payroll.

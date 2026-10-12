@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
@@ -208,6 +210,16 @@ class StockAdjustmentService
                 $adj->status = StockAdjustmentStatus::Pending;
                 $adj->save();
 
+                $audience = ApprovalDelegation::approvalAudience('inventory.adjust.approve')
+                    ->reject(fn (User $user): bool => (int) $user->id === (int) $by->id);
+                app(NotificationService::class)->send($audience, 'approval.action_required', [
+                    'title' => 'Stock adjustment needs approval',
+                    'message' => 'A high-value stock adjustment is waiting for review.',
+                    'link_to' => '/inventory/stock-adjustments?status=pending',
+                    'entity_type' => 'stock_adjustment',
+                    'entity_id' => $adj->hash_id,
+                ], "stock-adjustment:approval-required:{$adj->id}");
+
                 return $adj;
             }
 
@@ -249,10 +261,6 @@ class StockAdjustmentService
      */
     public function approve(StockAdjustment $adj, User $by): StockAdjustment
     {
-        if (! ($by->hasPermission('inventory.adjust.approve'))) {
-            throw new BusinessRuleException('You are not authorized to approve stock adjustments.');
-        }
-
         return DB::transaction(function () use ($adj, $by) {
             // Lock-then-guard: re-read the authoritative row under a row lock
             // so a concurrent approval holding a stale model cannot slip past
@@ -263,6 +271,9 @@ class StockAdjustmentService
             }
             if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
                 throw new BusinessRuleException('Adjustment is no longer pending.');
+            }
+            if (! ApprovalDelegation::canActForPermission($by, 'inventory.adjust.approve', [(int) $locked->requested_by])) {
+                throw new BusinessRuleException('You are not authorized to approve stock adjustments.');
             }
             if ((int) $locked->requested_by === (int) $by->id) {
                 throw new BusinessRuleException('The requester cannot approve their own adjustment.');
@@ -294,16 +305,14 @@ class StockAdjustmentService
             $locked->forceFill(['status' => StockAdjustmentStatus::Approved->value]);
             $locked->save();
 
+            $this->notifyRequester($locked, 'approval.completed', 'Stock adjustment approved');
+
             return $locked->fresh();
         });
     }
 
     public function reject(StockAdjustment $adj, User $by, string $reason): StockAdjustment
     {
-        if (! $by->hasPermission('inventory.adjust.approve')) {
-            throw new BusinessRuleException('You are not authorized to reject stock adjustments.');
-        }
-
         $reason = trim($reason);
         if ($reason === '' || mb_strlen($reason) > 500) {
             throw new BusinessRuleException('Enter a rejection reason of 1 to 500 characters.');
@@ -313,6 +322,9 @@ class StockAdjustmentService
             $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
             if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
                 throw new BusinessRuleException('Adjustment is no longer pending.');
+            }
+            if (! ApprovalDelegation::canActForPermission($by, 'inventory.adjust.approve', [(int) $locked->requested_by])) {
+                throw new BusinessRuleException('You are not authorized to reject stock adjustments.');
             }
             if ((int) $locked->requested_by === (int) $by->id) {
                 throw new BusinessRuleException('The requester cannot reject their own adjustment.');
@@ -324,6 +336,8 @@ class StockAdjustmentService
                 'resolved_at' => now(),
                 'resolution_reason' => $reason,
             ])->save();
+
+            $this->notifyRequester($locked, 'approval.rejected', 'Stock adjustment rejected');
 
             return $locked->fresh();
         });
@@ -353,6 +367,22 @@ class StockAdjustmentService
 
             return $locked->fresh();
         });
+    }
+
+    private function notifyRequester(StockAdjustment $adjustment, string $type, string $title): void
+    {
+        $requester = User::query()->whereKey($adjustment->requested_by)->where('is_active', true)->first();
+        if (! $requester) {
+            return;
+        }
+
+        app(NotificationService::class)->send($requester, $type, [
+            'title' => $title,
+            'message' => $type === 'approval.rejected' ? 'Your stock adjustment was rejected.' : 'Your stock adjustment was approved.',
+            'link_to' => '/inventory/stock-adjustments',
+            'entity_type' => 'stock_adjustment',
+            'entity_id' => $adjustment->hash_id,
+        ], "stock-adjustment:decision:{$adjustment->id}:{$type}");
     }
 
     // ── Internals ────────────────────────────────────────────────────────────

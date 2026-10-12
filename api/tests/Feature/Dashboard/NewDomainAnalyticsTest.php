@@ -6,7 +6,10 @@ namespace Tests\Feature\Dashboard;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Dashboard\Enums\RenderKind;
 use App\Modules\Dashboard\Services\WidgetAnalyticsService;
 use App\Modules\HR\Models\Department;
@@ -14,6 +17,7 @@ use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -36,6 +40,9 @@ class NewDomainAnalyticsTest extends TestCase
     {
         return [
             'complaints' => ['crm.open_complaints', RenderKind::Breakdown, 'segments'],
+            'sales_orders' => ['sales.open_orders', RenderKind::Breakdown, 'segments'],
+            'sales_price_requests' => ['sales.price_requests', RenderKind::Breakdown, 'segments'],
+            'sales_order_intake' => ['sales.order_intake', RenderKind::Trend, 'points'],
             'assets' => ['assets.under_maintenance', RenderKind::Breakdown, 'segments'],
             'deliveries' => ['supply.overdue_deliveries', RenderKind::Table, 'rows'],
             'delivery_sch' => ['supply.delivery_schedule', RenderKind::Table, 'rows'],
@@ -73,6 +80,82 @@ class NewDomainAnalyticsTest extends TestCase
             app(WidgetAnalyticsService::class)
                 ->payload('budget.utilization', RenderKind::Gauge, $this->admin),
         );
+    }
+
+    public function test_sales_pipeline_and_price_request_breakdowns_use_only_open_work(): void
+    {
+        foreach (['draft', 'confirmed', 'paid', 'cancelled'] as $status) {
+            SalesOrder::factory()->create(['status' => $status]);
+        }
+
+        foreach (['requested', 'pending_finance', 'offered', 'accepted'] as $status) {
+            DB::table('price_requests')->insert([
+                'customer_id' => \App\Modules\Accounting\Models\Customer::factory()->create()->id,
+                'product_id' => Product::factory()->create()->id,
+                'notes' => 'Dashboard test request',
+                'status' => $status,
+                'history' => '[]',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $analytics = app(WidgetAnalyticsService::class);
+        $orders = $analytics->payload('sales.open_orders', RenderKind::Breakdown, $this->admin);
+        $priceRequests = $analytics->payload('sales.price_requests', RenderKind::Breakdown, $this->admin);
+
+        $this->assertSame(2, $orders['total']);
+        $this->assertEqualsCanonicalizing(['Draft', 'Confirmed'], array_column($orders['segments'], 'label'));
+        $this->assertSame(3, $priceRequests['total']);
+        $this->assertEqualsCanonicalizing(['Requested', 'Pending Finance', 'Offered'], array_column($priceRequests['segments'], 'label'));
+    }
+
+    public function test_sales_order_intake_returns_zero_filled_trailing_12_months(): void
+    {
+        $month = now()->startOfMonth();
+        SalesOrder::factory()->create([
+            'date' => $month->copy()->subMonth()->addDays(2)->toDateString(),
+        ]);
+        SalesOrder::factory()->create([
+            'date' => $month->copy()->subMonths(13)->addDays(2)->toDateString(),
+        ]);
+
+        $payload = app(WidgetAnalyticsService::class)
+            ->payload('sales.order_intake', RenderKind::Trend, $this->admin);
+
+        $this->assertCount(12, $payload['points']);
+        $this->assertSame($month->copy()->subMonth()->format('M y'), $payload['points'][10]['label']);
+        $this->assertSame(1, $payload['points'][10]['value']);
+        $this->assertSame(0, $payload['points'][11]['value']);
+        $this->assertNull($payload['delta']);
+    }
+
+    public function test_ar_aging_uses_indexable_due_date_buckets_and_open_balances(): void
+    {
+        foreach ([
+            [0, '100.00', InvoiceStatus::Finalized->value],
+            [10, '50.00', InvoiceStatus::Partial->value],
+            [40, '30.00', InvoiceStatus::Finalized->value],
+            [61, '20.00', InvoiceStatus::Partial->value],
+            [10, '900.00', InvoiceStatus::Cancelled->value],
+        ] as [$daysOverdue, $balance, $status]) {
+            Invoice::factory()->create([
+                'due_date' => now()->subDays($daysOverdue)->toDateString(),
+                'balance' => $balance,
+                'status' => $status,
+            ]);
+        }
+
+        Cache::forget("dashboard:widget:rich:{$this->admin->id}:breakdown:finance.ar_aging");
+        $payload = app(WidgetAnalyticsService::class)
+            ->payload('finance.ar_aging', RenderKind::Breakdown, $this->admin);
+        $segments = collect($payload['segments'])->keyBy('label');
+
+        $this->assertSame(200.0, $payload['total']);
+        $this->assertSame(100.0, $segments['Current']['value']);
+        $this->assertSame(50.0, $segments['1-30']['value']);
+        $this->assertSame(30.0, $segments['31-60']['value']);
+        $this->assertSame(20.0, $segments['60+']['value']);
     }
 
     /**

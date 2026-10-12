@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Dashboard\Enums\KpiDirection;
@@ -12,7 +15,6 @@ use App\Modules\Dashboard\Enums\KpiTrend;
 use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Models\KpiSnapshot;
 use App\Modules\Inventory\Enums\StockMovementType;
-use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use Carbon\Carbon;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -27,26 +29,65 @@ class KpiSnapshotService
     ) {}
 
     /**
-     * The read boundary for each KPI module.
+     * The read boundary for each KPI module: holding ANY ONE of the listed
+     * slugs admits the reader.
      *
      * Public because it is the ONE definition of who may see a KPI, and the
-     * widget registry has to gate `kpi.*` tiles on exactly the same grant the
-     * scorecard endpoint enforces (DashboardWidgetSeeder::kpiWidgets). A second
-     * copy would let a tile and the page it links to disagree.
+     * widget registry has to gate `kpi.*` tiles on exactly the same set the
+     * scorecard endpoint enforces (`DashboardWidgetSeeder::kpiWidgets`). A
+     * second copy would let a tile and the page it links to disagree.
      *
      * A module absent from this map is ungated on the scorecard.
      *
-     * @var array<string, string>
+     * Membership rule, applied without naming a role: the module's own
+     * dashboard slug, plus the module's DATA read where that differs from the
+     * page grant, plus any other page whose KPI strip actually renders that
+     * module's codes (`/dashboard/plant-manager` draws OEE, WO completion rate
+     * and first-pass yield, so it qualifies for `production` and `quality`),
+     * plus `dashboard.company.view` — a company-wide read is by definition a
+     * read of every module's aggregates. That last entry is why the map is a
+     * set: the executive overview needed one grant that admits all seven
+     * modules instead of being handed four whole module dashboards
+     * (DSS 01-matrix §D4 #3 / G-P3-2).
+     *
+     * `production.view` is the data-read entry: `production.dashboard.view`
+     * means "may open /production/dashboard", which only the plant manager holds
+     * besides the admin wildcard, so the role that owns the schedule was denied
+     * OEE and WO completion rate — two of the four codes its own strip declares
+     * (G-P2-2 / G-P2-3). The data read is held by exactly ppc_head,
+     * production_manager and system_admin.
+     *
+     * @var array<string, list<string>>
      */
     public const MODULE_PERMISSIONS = [
-        'production' => 'production.dashboard.view',
-        'quality' => 'dashboard.quality.view',
-        'supply_chain' => 'dashboard.ppc.view',
-        'purchasing' => 'dashboard.purchasing.view',
-        'attendance' => 'dashboard.hr.view',
-        'accounting' => 'accounting.dashboard.view',
-        'inventory' => 'dashboard.warehouse.view',
+        'production' => ['production.dashboard.view', 'production.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
+        'quality' => ['dashboard.quality.view', 'dashboard.plant_manager.view', 'dashboard.company.view'],
+        // `dashboard.logistics.view` is G-P3-2's resolution — a SECOND qualified
+        // gate, not a role-name branch. OTD is a supply-chain reading and the
+        // officer who owns deliveries could not read it: `dashboard.ppc.view`
+        // belongs to the planner, and the logistics page shipped without the one
+        // number it is judged on. The set keeps the decision a grant.
+        'supply_chain' => ['dashboard.ppc.view', 'dashboard.logistics.view', 'dashboard.company.view'],
+        'purchasing' => ['dashboard.purchasing.view', 'dashboard.company.view'],
+        'attendance' => ['dashboard.hr.view', 'dashboard.company.view'],
+        'accounting' => ['accounting.dashboard.view', 'dashboard.company.view'],
+        'inventory' => ['dashboard.warehouse.view', 'dashboard.company.view'],
     ];
+
+    /**
+     * The slugs that admit a reader to one module's KPIs, or null when the
+     * module is ungated.
+     *
+     * The registry reads this rather than the const so a `kpi.*` widget and the
+     * scorecard cannot drift, and so the ungated case (null) is answered in one
+     * place instead of by an `?? null` at each call site.
+     *
+     * @return list<string>|null
+     */
+    public static function moduleGates(string $module): ?array
+    {
+        return self::MODULE_PERMISSIONS[$module] ?? null;
+    }
 
     /**
      * Compute every active definition while preserving per-definition
@@ -106,7 +147,7 @@ class KpiSnapshotService
         }
 
         if ($def->target_value === null) {
-            throw new \App\Common\Exceptions\BusinessRuleException(
+            throw new BusinessRuleException(
                 "KPI [{$def->code}] has no configured target value. Configure it before computing a snapshot."
             );
         }
@@ -224,7 +265,7 @@ class KpiSnapshotService
                 continue;
             }
             if ($user && ! $this->userCanSeeModule($user, $definition->module)) {
-                abort(403, 'You do not have permission to view this KPI.');
+                continue;
             }
             $definitionIds[$code] = (int) $definition->id;
         }
@@ -261,12 +302,19 @@ class KpiSnapshotService
 
     private function userCanSeeModule(Authenticatable $user, string $module): bool
     {
-        $permission = self::MODULE_PERMISSIONS[$module] ?? null;
-        if ($permission === null) {
+        $gates = self::moduleGates($module);
+
+        if ($gates === null) {
             return true;
         }
 
-        return $user->can($permission);
+        foreach ($gates as $slug) {
+            if ($user->hasPermission($slug)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function determineTrend(float $actual, ?string $previous): KpiTrend
@@ -345,7 +393,9 @@ class KpiSnapshotService
             $totalGood += $good;
             $totalProduced += $produced;
             $totalActual += max(1, (int) Carbon::parse($wo->actual_start)->diffInMinutes(Carbon::parse($wo->actual_end), true));
-            if ($wo->machine_id !== null) $machineIds[(int) $wo->machine_id] = true;
+            if ($wo->machine_id !== null) {
+                $machineIds[(int) $wo->machine_id] = true;
+            }
         }
 
         if ($totalPlanned == 0 || $totalActual == 0 || $totalProduced == 0) {
@@ -360,7 +410,9 @@ class KpiSnapshotService
             $cursor = Carbon::create($year, $month, 1)->startOfDay();
             $end = $cursor->copy()->endOfMonth();
             while ($cursor->lte($end)) {
-                if (! $cursor->isWeekend()) $workingDays++;
+                if (! $cursor->isWeekend()) {
+                    $workingDays++;
+                }
                 $cursor->addDay();
             }
             $hours = (float) DB::table('machines')->whereIn('id', array_keys($machineIds))->sum('available_hours_per_day');
@@ -495,7 +547,7 @@ class KpiSnapshotService
         // invoices are not receivables. Historical balance movements are not
         // available in this module, so the stored balance is evaluated against
         // the period-end invoice population.
-        $lookbackDays = app(\App\Common\Services\SettingsService::class)->requiredInt('dashboard.kpi_snapshot_lookback_days', 1, 3650);
+        $lookbackDays = app(SettingsService::class)->requiredInt('dashboard.kpi_snapshot_lookback_days', 1, 3650);
         $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
         $cutoff = $periodEnd->copy()->subDays($lookbackDays)->toDateString();
         $openStatuses = [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value];
@@ -600,14 +652,9 @@ class KpiSnapshotService
      *
      * KNOWN metric-contract gaps left for a decision, NOT schema issues — see
      * the M007-13/M007-14 entries in the audit fix log:
-     *   1. The denominator counts work due in the month (`planned_end`) while
-     *      the numerator counts work finished in the month (`actual_end`), so a
-     *      WO planned for July but finished in August is a July miss AND an
-     *      August hit. The ratio can therefore exceed 100%.
-     *   2. `work_orders` is soft-deleted and these raw queries ignore
-     *      `deleted_at`, so cancelled-and-deleted work still lands in the
-     *      denominator. computeAttendanceRate excludes soft deletes; this does
-     *      not.
+     * Both counts use the same due-in-month cohort. A late completion stays a
+     *     miss in its due month and cannot inflate a later month's numerator.
+     * `work_orders` is soft-deleted, so raw queries must exclude deleted rows.
      */
     private function computeWoCompletionRate(int $year, int $month): ?float
     {
@@ -635,6 +682,7 @@ class KpiSnapshotService
                 WorkOrderStatus::Completed->value,
                 WorkOrderStatus::Closed->value,
             ])
+            ->whereBetween('planned_end', [$from, $to])
             ->whereBetween('actual_end', [$from, $to])
             ->count();
 

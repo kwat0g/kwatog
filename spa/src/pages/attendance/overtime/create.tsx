@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { employeesApi } from '@/api/hr/employees';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermission } from '@/hooks/usePermission';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -42,6 +43,8 @@ export default function OvertimeCreatePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const { can } = usePermission();
+  const canChooseEmployee = can('hr.employees.view');
 
   const {
     data: options,
@@ -56,6 +59,7 @@ export default function OvertimeCreatePage() {
   const { data: employeesResp } = useQuery({
     queryKey: ['hr', 'employees', 'all'],
     queryFn: () => employeesApi.list({ per_page: 100, status: 'active' }),
+    enabled: canChooseEmployee,
   });
   const employees = employeesResp?.data ?? [];
 
@@ -140,19 +144,28 @@ export default function OvertimeCreatePage() {
             meta={options ? `Max ${options.maximum_hours} hours/day` : undefined}
           >
             <div className="grid grid-cols-2 gap-3">
-              <Select searchable
-                label="Employee"
-                required
-                {...register('employee_id')}
-                error={errors.employee_id?.message}
-              >
-                <option value="">— Select —</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.full_name} ({e.employee_no})
-                  </option>
-                ))}
-              </Select>
+              {canChooseEmployee ? (
+                <Select searchable
+                  label="Employee"
+                  required
+                  {...register('employee_id')}
+                  error={errors.employee_id?.message}
+                >
+                  <option value="">— Select —</option>
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.full_name} ({e.employee_no})
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <div className="flex items-end text-sm text-secondary">
+                  <input type="hidden" {...register('employee_id')} />
+                  {user?.employee
+                    ? `Requesting for ${user.employee.full_name}.`
+                    : 'This account is not linked to an employee record.'}
+                </div>
+              )}
               <Input
                 label="Date"
                 type="date"
@@ -203,7 +216,7 @@ export default function OvertimeCreatePage() {
             type="submit"
             variant="primary"
             disabled={
-              isSubmitting || mutation.isPending || optionsLoading || optionsError || !options
+              isSubmitting || mutation.isPending || optionsLoading || optionsError || !options || (!canChooseEmployee && !user?.employee?.id)
             }
             loading={mutation.isPending}
           >

@@ -65,6 +65,10 @@ class HrDashboardService
                 // forecast.headcount widget follows. hr_officer holds no
                 // forecasting grant and must still see its own forecast.
                 'headcount_forecast' => ['hr.employees.view',     fn () => $this->forecastingService->headcountForecast()],
+                // A projection OF attendance, gated like attendance — the rule
+                // the hr.team_dtr_today widget follows. forecasting.view would
+                // hide this from hr_officer, who holds no forecasting grant.
+                'attendance_forecast' => ['attendance.view',        fn () => $this->forecastingService->attendanceForecast()],
                 'payroll_summary'    => ['payroll.periods.view',   fn () => $this->hrPayrollSummary()],
             ]);
 

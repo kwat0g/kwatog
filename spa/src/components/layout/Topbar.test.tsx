@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Topbar's siblings each pull their own data/WebSocket stack. None of them is
 // under test here — the search affordances are.
-vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }));
+vi.mock('./NotificationBell', () => ({
+  NotificationBell: () => <div data-testid="notification-bell" />,
+}));
 vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => null }));
 vi.mock('./Breadcrumbs', () => ({ Breadcrumbs: () => null }));
 vi.mock('@/components/brand/BrandLogo', () => ({ BrandLogo: () => null }));
@@ -15,12 +17,12 @@ vi.mock('@/api/landing', () => ({
 
 import { Topbar } from './Topbar';
 
-function renderTopbar() {
+function renderTopbar(canViewNotifications = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <Topbar />
+        <Topbar canViewNotifications={canViewNotifications} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -56,5 +58,19 @@ describe('Topbar search entry points', () => {
 
     // Lazily imported — the dialog resolves a tick later.
     expect(await screen.findByRole('dialog', { name: /global search/i })).toBeInTheDocument();
+  });
+});
+
+describe('Topbar notification access', () => {
+  it('does not mount the notification request without its read permission', () => {
+    renderTopbar();
+
+    expect(screen.queryByTestId('notification-bell')).not.toBeInTheDocument();
+  });
+
+  it('shows notifications when the viewer holds the read permission', () => {
+    renderTopbar(true);
+
+    expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
   });
 });

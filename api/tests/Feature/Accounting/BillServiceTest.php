@@ -23,6 +23,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Tests\TestCase;
@@ -177,6 +179,8 @@ class BillServiceTest extends TestCase
 
     public function test_bill_total_at_50000_requires_only_vp_even_for_smaller_installments(): void
     {
+        Mail::fake();
+        Queue::fake();
         $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
         $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
         $vendor = Vendor::create(['name' => 'VP Threshold Vendor']);
@@ -196,6 +200,10 @@ class BillServiceTest extends TestCase
         ], $finance);
         $this->assertSame(BillPaymentStatus::PendingApproval, $first->status);
         $this->assertSame(['vice_president'], $first->approvalRecords->pluck('role_slug')->all());
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $vp->id,
+            'type' => 'approval.action_required',
+        ]);
         $this->assertSame('0.00', (string) $bill->fresh()->amount_paid);
 
         ApprovalRecord::create([
@@ -228,6 +236,14 @@ class BillServiceTest extends TestCase
         }
 
         $service->approvePayment($bill->fresh(), $first, $vp);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $finance->id,
+            'type' => 'approval.completed',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $finance->id,
+            'type' => 'bill_payment.posted',
+        ]);
         $this->assertSame('20000.00', (string) $bill->fresh()->balance);
         $last = $service->recordPayment($bill->fresh(), [
             'cash_account_id' => $cashId, 'payment_date' => '2026-04-15',
@@ -236,6 +252,49 @@ class BillServiceTest extends TestCase
         $this->assertSame(BillPaymentStatus::PendingApproval, $last->status);
         $service->approvePayment($bill->fresh(), $last, $vp);
         $this->assertSame(BillStatus::Paid, $bill->fresh()->status);
+    }
+
+    public function test_rejected_bill_payment_notifies_requester_without_posting(): void
+    {
+        Mail::fake();
+        Queue::fake();
+        $requester = $this->newUser();
+        $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
+        $vendor = Vendor::create(['name' => 'Rejected Payment Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-REJECT-'.substr(uniqid(), -6),
+            'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10',
+            'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '50000.00']],
+        ], $requester);
+        $payment = $service->recordPayment($bill, [
+            'cash_account_id' => $cashId,
+            'payment_date' => '2026-04-12',
+            'amount' => '30000.00',
+            'payment_method' => PaymentMethod::BankTransfer->value,
+        ], $requester);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $vp->id,
+            'type' => 'approval.action_required',
+        ]);
+
+        $service->rejectPayment($bill->fresh(), $payment, $vp, 'Incorrect supporting documents.');
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.rejected',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'bill_payment.posted',
+        ]);
+        $this->assertSame(BillPaymentStatus::Rejected, $payment->fresh()->status);
     }
 
     public function test_payment_date_before_bill_date_is_rejected(): void

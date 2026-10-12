@@ -8,6 +8,7 @@ use App\Modules\Dashboard\Controllers\ActionCenterTaskController;
 use App\Modules\Dashboard\Controllers\DashboardController;
 use App\Modules\Dashboard\Controllers\DashboardLayoutController;
 use App\Modules\Dashboard\Controllers\KpiController;
+use App\Modules\Dashboard\Controllers\MetricController;
 use App\Modules\Dashboard\Controllers\RolloutHealthController;
 use App\Modules\Accounting\Controllers\FinanceDashboardController;
 use Illuminate\Support\Facades\Route;
@@ -63,11 +64,11 @@ Route::middleware('auth:sanctum')->prefix('dashboards')->group(function () {
     Route::get('/rollout-health', [RolloutHealthController::class, 'index'])
         ->middleware('permission:dashboard.admin.view');
 
-    // P4.3 — Finance dashboard unified under /dashboards prefix (canonical).
-    // The old /dashboard/finance route in Accounting/routes.php is kept as a
-    // temporary alias until the SPA is updated (see spa/src/api/accounting/dashboard.ts).
+    // Finance page access matches the SPA/catalog grant. Individual panels
+    // still self-gate against their accounting data permissions.
+    // The legacy /accounting/dashboard/finance route remains for compatibility.
     Route::get('/finance',         [FinanceDashboardController::class, 'summary'])
-        ->middleware('permission:accounting.dashboard.view');
+        ->middleware('permission:dashboard.accounting.view');
 });
 
 /*
@@ -103,4 +104,20 @@ Route::middleware('auth:sanctum')->prefix('dashboard/kpi')->group(function () {
     Route::get('/trend/{code}', [KpiController::class, 'trend']);
     Route::post('/compute', [KpiController::class, 'compute'])
         ->middleware('permission:dashboard.admin.view');
+});
+
+/*
+ * Phase 2 — analytics layer.
+ *
+ * `metrics` is the machine-readable metric dictionary; `metrics/{metric}`
+ * resolves one metric for the caller. No `permission:` middleware here on
+ * purpose: the gate lives ON the metric definition (one permission per metric,
+ * permission-derived), and ShowMetricRequest enforces it. A route-level gate
+ * would have to name one permission for every metric at once — the exact shape
+ * that let the /chains page and its bottleneck API answer to different
+ * authorities (A M10).
+ */
+Route::middleware('auth:sanctum')->prefix('dashboard/metrics')->group(function () {
+    Route::get('/', [MetricController::class, 'index']);
+    Route::get('/{metric}', [MetricController::class, 'show']);
 });

@@ -33,9 +33,14 @@ export interface WidgetTrendData {
 }
 
 export interface WidgetTableData {
- columns: Array<{ key: string; label: string; numeric?: boolean; align?: 'left' | 'center' | 'right' }>;
- rows: Array<Record<string, string | number | null>>;
- total_count: number;
+  columns: Array<{ key: string; label: string; numeric?: boolean; align?: 'left' | 'center' | 'right' }>;
+  rows: Array<Record<string, string | number | null>>;
+  total_count: number;
+  /**
+   * Only on `approvals.pending` (ApprovalsWidgetAnalytics): the SLA clock the
+   * `overdue_hours` column counts past, so the tile never hardcodes it.
+   */
+  sla_hours?: number;
 }
 
 export interface WidgetGaugeData {
@@ -62,7 +67,13 @@ export interface DashboardWidgetMeta {
  name: string;
  description: string | null;
  module: string;
+ /**
+  * A widget's gate is EITHER one slug or any-of a set. `permission_any` wins
+  * when populated. The strip is server-side, so the SPA never evaluates it —
+  * these fields exist so the picker and tests can explain why a tile is there.
+  */
  permission: string | null;
+ permission_any: string[] | null;
  render_kind: WidgetRenderKind;
  /** Where the tile's "Open →" goes. Server-owned; null when there is no deeper page. */
  link_path: string | null;
@@ -75,7 +86,9 @@ export interface DashboardLayoutItem {
  name: string;
  description: string | null;
  module: string;
+ /** See {@link DashboardWidgetMeta.permission_any} — the set wins when present. */
  permission: string | null;
+ permission_any: string[] | null;
  render_kind: WidgetRenderKind;
  /**
   * Where the tile's "Open →" goes, from `dashboard_widgets.link_path`.
@@ -113,12 +126,32 @@ interface DashboardLayoutEnvelope extends ApiSuccess<DashboardLayoutItem[]> {
 }
 
 export interface DashboardWidgetSummary {
- key: string;
- value: string | null;
- kind: WidgetValueKind;
- helper: string | null;
- available: boolean;
- updated_at: string;
+  key: string;
+  value: string | null;
+  kind: WidgetValueKind;
+  helper: string | null;
+  available: boolean;
+  updated_at: string;
+}
+
+/**
+ * Freshness contract (roles-dashboard polish). Scalar + approvals tiles poll
+ * every 30–60s, so data older than two missed polls reads stale, not current.
+ * Forecast panels never poll (manual refresh) and are exempt — do not apply
+ * this to them.
+ */
+export const WIDGET_STALE_AFTER_MS = 2 * 60_000;
+
+/** True when `updatedAt` is older than `staleAfterMs`. Blank/unparseable never counts as stale. */
+export function isStaleTimestamp(
+  updatedAt: string | null | undefined,
+  staleAfterMs: number = WIDGET_STALE_AFTER_MS,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!updatedAt) return false;
+  const t = Date.parse(updatedAt);
+  if (!Number.isFinite(t)) return false;
+  return nowMs - t > staleAfterMs;
 }
 
 export interface DashboardTarget {
