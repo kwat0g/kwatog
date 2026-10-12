@@ -396,6 +396,10 @@ class UpdateSettingRequest extends FormRequest
             'leave.request.past_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'leave.request.future_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'inventory.safety_stock.issue_movement_types' => ['value' => ['required', 'array', 'min:1']],
+            // DSS W0-5 (F-02) — DemandBasis tunables, one per consumer.
+            'inventory.demand.replenishment_movement_types' => ['value' => ['required', 'array', 'min:1']],
+            'inventory.demand.safety_stock_movement_types' => ['value' => ['required', 'array', 'min:1']],
+            'inventory.demand.projection_movement_types' => ['value' => ['required', 'array', 'min:1']],
             'quality.aql.sample_plan' => ['value' => ['required', 'array']],
             'quality.incoming.default_checklist' => ['value' => ['required', 'array', 'min:1']],
             'quality.incoming.measured_pieces' => ['value' => ['required', 'integer', 'min:1', 'max:1000']],
