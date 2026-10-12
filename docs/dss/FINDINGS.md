@@ -111,3 +111,28 @@ decisions, proposed fix track (S = small, M = medium).
 - `DowntimeAnalyticsService` MTBF uses `windowMinutes×machineCount` (correct for fleet, misleading
   per-machine cards); `work_orders.quantity_* decimal(10,0)` — no partial-unit precision.
 - Fix: label fleet vs per-machine explicitly in DSS cards; no schema change proposed now.
+
+## F-15 Projection demand types match no enum case [data-semantics, MEDIUM] — found W0-5
+
+- Location: `api/app/Modules/Forecasting/Services/StockOutProjectionService.php:72`
+  (now via `DemandBasis::PROJECTION`).
+- `whereIn('movement_type', ['material_issue', 'consume', 'production_issue'])` — but
+  `StockMovementType` has no `consume` or `production_issue` cases, so the projection has
+  effectively counted `material_issue` only. Same item gets a thinner "demand" here than in
+  replenishment/safety-stock (extends F-02).
+- Preserved verbatim in W0-5 (changing it alters projections — a behavior change, not a
+  drive-by fix). Centralized in `DemandBasis`, so the fix is one settings-seed + seed-value
+  change with a backtest.
+- Fix (S, Wave 1): confirm the intended set with PPC (likely add `delivery` for FG items),
+  update `inventory.demand.projection_movement_types`, backtest projection accuracy before/after.
+
+## F-12 / F-13 closed in W0-6 (no code)
+
+- F-12: admin settings path already audited with redaction (`updateFromAdmin` +
+  `SettingsGovernanceTest::test_an_update_writes_an_immutable_before_and_after_audit_row`);
+  DSS parameter writes audited via `DssParameter::HasAuditLog` (pinned by
+  `DssParameterServiceTest` + `DssAdminTest::test_parameter_set_is_audited`). `set()` callers
+  are seeders/services (bootstrap writes) — acceptable unaudited.
+- F-13: `DssRouteGuardTest` (every `api/v1/dss` route carries auth + feature + permission)
+  + `scripts/check-dss-route-parity.mjs` (`audit:dss-routes`, exit 0: 11 backend routes,
+  3 SPA guards, all catalogued). Project-wide SPA audit still open — unchanged.
