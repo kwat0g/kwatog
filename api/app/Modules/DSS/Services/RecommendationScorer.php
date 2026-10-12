@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\DSS\Services;
 
 use App\Modules\DSS\Contracts\DetectorEmission;
-use App\Modules\DSS\Services\DssParameterService;
 
 /**
  * Transparent priority formula (02-plan §2): urgency × impact × confidence,
