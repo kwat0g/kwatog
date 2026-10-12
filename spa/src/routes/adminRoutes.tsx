@@ -25,6 +25,10 @@ const AdminCreateUserPage = lazy(() => import('@/pages/admin/users/create'));
 // Alerts (Task A2)
 const AlertsListPage = lazy(() => import('@/pages/alerts'));
 
+// DSS Wave 0-4 — Decision Center (cross-cutting, like Alerts: PermissionGuard only)
+const DecisionCenterPage = lazy(() => import('@/pages/decision-center'));
+const RecommendationDetailPage = lazy(() => import('@/pages/decision-center/detail'));
+
 // Gov tables
 const AdminGovTablesPage = lazy(() => import('@/pages/admin/gov-tables'));
 
@@ -181,6 +185,22 @@ export const adminRoutes = (
  element={
  <PermissionGuard permission="alerts.view">
  <AlertsListPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/decision-center"
+ element={
+ <PermissionGuard permission="dss.view">
+ <DecisionCenterPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/decision-center/:id"
+ element={
+ <PermissionGuard permission="dss.view">
+ <RecommendationDetailPage />
  </PermissionGuard>
  }
  />
