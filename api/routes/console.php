@@ -369,6 +369,13 @@ Schedule::command('inventory:reconcile-replenishment --limit=100')
     ->withoutOverlapping(120)
     ->onOneServer();
 
+// DSS Wave 0-5 — daily stock snapshot AFTER the overnight safety-stock (02:15)
+// and replenishment (02:30) batches, so the position reflects settled state.
+Schedule::command('dss:snapshot-stock')
+    ->dailyAt('03:45')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
 // T1.5 — AR dunning emails. Daily at 07:00 (after overnight batch jobs).
 Schedule::command('ar:run-dunning')
     ->dailyAt('07:00')
