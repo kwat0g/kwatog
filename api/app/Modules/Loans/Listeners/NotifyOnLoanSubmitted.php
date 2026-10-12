@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Listeners;
 
-use App\Common\Services\NotificationService;
 use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Loans\Enums\LoanType;
@@ -25,8 +25,10 @@ class NotifyOnLoanSubmitted implements ShouldQueue
     {
         try {
             $loan = $event->loan->loadMissing('employee');
-            $emp  = $loan->employee;
-            if (! $emp) return;
+            $emp = $loan->employee;
+            if (! $emp) {
+                return;
+            }
 
             $typeLabel = $loan->loan_type === LoanType::CashAdvance
                 ? 'Cash Advance'
@@ -40,11 +42,11 @@ class NotifyOnLoanSubmitted implements ShouldQueue
 
             $currency = $this->currency ?? app(CurrencyDisplayService::class);
             $this->notifications->send($audience, 'loans.submitted', [
-                'title'       => "{$typeLabel} Request from {$emp->full_name}",
-                'message'     => $currency->format($loan->principal) . " — awaiting Finance approval.",
-                'link_to'     => "/hr/loans/{$loan->hash_id}",
+                'title' => "{$typeLabel} Request from {$emp->full_name}",
+                'message' => $currency->format($loan->principal).' — awaiting approval.',
+                'link_to' => "/hr/loans/{$loan->hash_id}",
                 'entity_type' => 'employee_loan',
-                'entity_id'   => $loan->hash_id,
+                'entity_id' => $loan->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLoanSubmitted failed', ['error' => $e->getMessage()]);

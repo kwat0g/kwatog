@@ -3681,7 +3681,11 @@ class ReturnRequestService
                     ->where('approvable_id', $locked->getKey())
                     ->where('is_current', true)
                     ->whereIn('action', ['pending', 'skipped'])
-                    ->update(['action' => 'superseded', 'is_current' => false]);
+                    ->get()
+                    ->each(static fn (ApprovalRecord $record) => $record->update([
+                        'action' => 'superseded',
+                        'is_current' => false,
+                    ]));
             }
             if ($locked->status === ReturnRequestStatus::Approved) {
                 ApprovalRecord::query()
@@ -3689,12 +3693,17 @@ class ReturnRequestService
                     ->where('approvable_id', $locked->getKey())
                     ->where('is_current', true)
                     ->whereIn('action', ['pending', 'skipped'])
-                    ->update(['action' => 'superseded', 'is_current' => false]);
+                    ->get()
+                    ->each(static fn (ApprovalRecord $record) => $record->update([
+                        'action' => 'superseded',
+                        'is_current' => false,
+                    ]));
                 ApprovalRecord::query()
                     ->where('approvable_type', $locked->getMorphClass())
                     ->where('approvable_id', $locked->getKey())
                     ->where('is_current', true)
-                    ->update(['is_current' => false]);
+                    ->get()
+                    ->each(static fn (ApprovalRecord $record) => $record->update(['is_current' => false]));
             }
             $this->states->transition($locked, ReturnRequestStatus::Cancelled);
             $this->releaseSourceAllocations($locked);

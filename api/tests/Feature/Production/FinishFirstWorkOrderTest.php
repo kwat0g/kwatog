@@ -149,6 +149,26 @@ class FinishFirstWorkOrderTest extends TestCase
         $this->assertSame('completed', $this->wo->fresh()->status->value);
     }
 
+    public function test_finish_first_output_accepts_legacy_good_count_payload(): void
+    {
+        $this->prepareAutomaticStockReceipt();
+        $crew = app(WorkOrderAssignmentService::class)->currentCrew($this->wo);
+
+        $response = $this->withHeader('X-Idempotency-Key', 'finish-first-legacy-good-count')
+            ->postJson('/api/v1/production/work-orders/'.$this->wo->hash_id.'/outputs', [
+                'crew_id' => $crew->hash_id,
+                'good_count' => 200,
+                'reject_count' => 0,
+                'defects' => [],
+                'recording_reason' => 'Manager verifying legacy client payload',
+            ]);
+        $this->assertTrue($response->isSuccessful(), $response->getContent());
+
+        $this->assertSame('completed', $this->wo->fresh()->status->value);
+        $this->assertSame(200, (int) $this->wo->fresh()->quantity_produced);
+        $this->assertSame(1, $this->wo->outputs()->count());
+    }
+
     public function test_stock_receipt_recovery_finishes_target_without_recording_output_twice(): void
     {
         $service = app(WorkOrderOutputService::class);

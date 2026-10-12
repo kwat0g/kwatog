@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/** Phase 3 — Attendance forecast (Task 8). Read-only: no transaction, no writes. Plant-level aggregate only (ponytail: threshold consts, per-department split later if needed). */
+/** Phase 3 — Attendance forecast (Task 8). Read-only plant aggregate; shortcut: keep 8%/15% risk thresholds fixed until policy owners need runtime changes. */
 final class AttendanceForecastService
 {
     private const HIGH_LEAVE_PCT = 15.0;

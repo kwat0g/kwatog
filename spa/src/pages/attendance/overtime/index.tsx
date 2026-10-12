@@ -27,7 +27,7 @@ const DEFAULT_FILTERS: OvertimeListParams = {
 };
 
 export default function OvertimeListPage() {
- const { can } = usePermission();
+ const { can, canApprove } = usePermission();
  const navigate = useNavigate();
  const qc = useQueryClient();
  const [view, setView] = useState<'list' | 'kanban'>('list');
@@ -158,7 +158,7 @@ export default function OvertimeListPage() {
  {r.is_auto_detected && <Chip variant="info">Auto</Chip>}
  </div>
  ) },
- ...(can('attendance.ot.approve') ? [{
+ ...(canApprove('attendance.ot.approve') ? [{
  key: 'actions',
  header: '',
  align: 'right' as const,
@@ -187,7 +187,7 @@ export default function OvertimeListPage() {
  subtitle={data ? `${data.meta.total} total · ${counts.pending} pending` : undefined}
  actions={
  <>
- {can('attendance.ot.approve') && counts.pending > 0 && (
+ {canApprove('attendance.ot.approve') && counts.pending > 0 && (
  <Button
  variant="secondary"
  size="sm"
@@ -200,9 +200,9 @@ export default function OvertimeListPage() {
  <Button variant="secondary" size="xs" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
  {view === 'list' ? 'Kanban view' : 'List view'}
  </Button>
- <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
+ {can('attendance.ot.create') && <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
  New OT request
- </Button>
+ </Button>}
  </>
  }
  />
@@ -259,14 +259,14 @@ export default function OvertimeListPage() {
  meta={data.meta}
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
- selectable={can('attendance.ot.approve')}
- bulkActions={can('attendance.ot.approve') ? bulkActions : undefined}
+ selectable={canApprove('attendance.ot.approve')}
+ bulkActions={canApprove('attendance.ot.approve') ? bulkActions : undefined}
  /></div>
  )}
 
  {data && all.length > 0 && view === 'kanban' && (
  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-5 py-4">
- <KanbanColumn title={statusLabel('pending')} variant="warning" items={grouped.pending} onApprove={(id) => setConfirmApprove(id)} onReject={setReject} canApprove={can('attendance.ot.approve')} approving={approveMutation.isPending} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
+ <KanbanColumn title={statusLabel('pending')} variant="warning" items={grouped.pending} onApprove={(id) => setConfirmApprove(id)} onReject={setReject} canApprove={canApprove('attendance.ot.approve')} approving={approveMutation.isPending} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  <KanbanColumn title={statusLabel('approved')} variant="success" items={grouped.approved} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  <KanbanColumn title={statusLabel('rejected')} variant="danger" items={grouped.rejected} onOpen={(r) => navigate(`/hr/attendance/overtime/${r.id}`)} />
  </div>

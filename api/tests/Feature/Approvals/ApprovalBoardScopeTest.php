@@ -261,12 +261,23 @@ class ApprovalBoardScopeTest extends TestCase
     public function test_payroll_cards_stay_permission_gated(): void
     {
         $hr = $this->user('hr_officer');
+        $finance = $this->user('finance_officer');
         $employee = $this->user('employee', $this->deptA->id);
 
-        $period = PayrollPeriod::factory()->create();
-        $this->pendingStep(PayrollPeriod::class, $period->id, 'finance_officer');
+        $period = PayrollPeriod::factory()->create(['created_by' => $hr->id]);
+        $period->forceFill(['status' => 'computed', 'computed_by' => $hr->id])->save();
+        $financeMadePeriod = PayrollPeriod::factory()->create(['created_by' => $hr->id]);
+        $financeMadePeriod->forceFill(['status' => 'computed', 'computed_by' => $finance->id])->save();
 
-        $this->assertCount(1, $this->board($hr)['awaiting_others']);
+        $financeBoard = $this->board($finance);
+        $this->assertSame([
+            $period->period_start->toDateString().' – '.$period->period_end->toDateString(),
+        ], $this->numbers($financeBoard['my_action']));
+        $this->assertSame('payroll', $financeBoard['my_action'][0]['type']);
+        $this->assertSame([], $this->board($employee)['my_action']);
+        $this->assertSame('computed', $period->fresh()->status->value);
+        $this->assertDatabaseCount('approval_records', 0);
+        $this->assertCount(2, $this->board($hr)['awaiting_others']);
         $this->assertSame([], $this->board($employee)['awaiting_others']);
     }
 

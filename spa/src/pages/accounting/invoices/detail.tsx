@@ -51,7 +51,7 @@ export default function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can } = usePermission();
+  const { can, canApprove } = usePermission();
   const user = useAuthStore((state) => state.user);
   const [showCollect, setShowCollect] = useState(false);
   const [showPaymentReview, setShowPaymentReview] = useState(false);
@@ -192,7 +192,7 @@ export default function InvoiceDetailPage() {
   const prebillPending = isPrebill && isDraft && !invoice.prebill_approved_by;
   const isMaker = invoice.created_by?.id === user?.id;
   const isPrebillApprover = invoice.prebill_approved_by?.id === user?.id;
-  const canApprovePrebill = prebillPending && !isMaker && can('accounting.invoices.prebill_approve');
+  const canApprovePrebill = prebillPending && !isMaker && canApprove('accounting.invoices.prebill_approve');
   const canEditPrebill = isDraft && isPrebill && can('accounting.invoices.update');
   const canFinalize = isDraft
     && can('accounting.invoices.create')

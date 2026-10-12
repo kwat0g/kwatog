@@ -24,7 +24,7 @@ Primary files cited inline as `path:line`. Line numbers refer to the current bra
   `system_admin` bypass by role slug) (`api/app/Common/Middleware/CheckPermission.php:18-30`).
   Row-level visibility is separate per-module policy code (see §1 "Dept?" notes and §2).
 - Frontend: `usePermission().can()` = `isAdmin || permissions.has(slug)` where
-  `isAdmin = is_superuser === true || role.slug === 'system_admin'`
+  `isAdmin = role.slug === 'system_admin'` (aligned 2026-10-12)
   (`spa/src/hooks/usePermission.ts:3-12`). Identity bootstrap is `GET /auth/user`
   (`spa/src/api/auth.ts:73-75`) shaped by `UserResource`
   (`api/app/Modules/Auth/Resources/UserResource.php:13-45`), which sends `role {id,name,slug}`,
@@ -37,11 +37,10 @@ Primary files cited inline as `path:line`. Line numbers refer to the current bra
   (`api/app/Modules/Dashboard/Services/DashboardDispatchService.php:45-80`).
   Rarity counts roles in `role_permissions`, not per-user overrides
   (`api/app/Modules/Dashboard/Services/DashboardDispatchService.php:89-104`).
-- Dashboard catalog (8 purpose-built + default fallback `/dashboard/default`):
-  `admin → /dashboard/admin`, `plant-manager → /dashboard/plant-manager`, `hr → /dashboard/hr`,
-  `ppc → /dashboard/ppc`, `finance → /dashboard/finance` (permission slug keeps old name
-  `dashboard.accounting.view`), `purchasing`, `warehouse`, `quality`
-  (`api/app/Modules/Dashboard/Support/DashboardCatalog.php:33-47`).
+- Dashboard catalog (14 purpose-built + default fallback `/dashboard/default`):
+  `admin`, `company`, `plant-manager`, `hr`, `ppc`, `finance`, `purchasing`, `warehouse`, `quality`,
+  `logistics`, `maintenance`, `department`, `sales`, `customer-service`
+  (`api/app/Modules/Dashboard/Support/DashboardCatalog.php`).
 - All seeded roles are `is_system = true` (cannot be edited/deleted via admin UI):
   seeder sets it (`api/database/seeders/RolePermissionSeeder.php:1054`),
   migration `0126` backfilled the original 12 (`api/database/migrations/0126_add_is_system_to_roles_table.php:23-36`).
@@ -80,7 +79,7 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   (`api/database/seeders/RolePermissionSeeder.php:504-508`).
 - Dept?: No (global everywhere; `hasPermission` short-circuit,
   `api/app/Modules/Auth/Models/User.php:161-167`).
-- Landing: `/dashboard/admin` — holds all 8 dashboard permissions; `dashboard.admin.view`
+- Landing: `/dashboard/admin` — qualifies for all 14 dashboards; `dashboard.admin.view`
   is the rarest (1 holder: itself) so it wins the rarity sort
   (`api/app/Modules/Dashboard/Services/DashboardDispatchService.php:45-50`).
 - Sees/can do: every SPA page (all `PermissionGuard`s pass via `isAdmin`,
@@ -147,9 +146,9 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 - Dept?: No. Clearance signing is per-department-item gated in `SeparationService`
   (comment at `api/database/seeders/RolePermissionSeeder.php:611-616`); Finance is step 4 of
   separation clearance (`api/database/seeders/WorkflowSeeder.php:153-159`).
-- Landing: `/dashboard/finance` (`dashboard.accounting.view`, 2 holders). Holds BOTH
-  `dashboard.accounting.view` (route gate) and `accounting.dashboard.view` (data endpoint) —
-  see M1.
+- Landing: `/dashboard/finance` (`dashboard.accounting.view`, 2 holders). The SPA endpoint
+  `/dashboards/finance` uses the same page/catalog gate; individual finance panels retain source-data
+  gates. Legacy `/accounting/dashboard/finance` alias keeps `accounting.dashboard.view`.
 - Sees/can do — frontend: `/dashboard/finance` (`spa/src/routes/dashboardRoutes.tsx:64-67`);
   accounting COA/journal/vendors/bills/customers/invoices/statements/periods/credit-notes/portal-access
   (`spa/src/routes/accountingRoutes.tsx:44-114`); budgeting (`spa/src/routes/advancedRoutes.tsx:59-124`);
@@ -175,15 +174,14 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   `purchasing.view/pr.approve/po.approve/po.view_all/rfq.view`; `loans.view/approve`;
   `hr.salary_adjustments.view/act`; `assets.view/dispose.approve`;
   `accounting.view/coa.view/bills.view/bills.payment_approve/invoices.view/statements.view`;
-  `budgeting.view/approve`; `crm.view/complaints.view`; `dashboard.plant_manager.view`,
-  `dashboard.view_bottlenecks`; `search.global`; `alerts.view/dismiss`. No bespoke dashboard
-  ("reads what it signs", `api/database/seeders/RolePermissionSeeder.php:624-628`).
+  `budgeting.view/approve`; `crm.view/complaints.view`; read-only `quality.view/ncr.view`;
+  `dashboard.plant_manager.view`, `dashboard.company.view`, `dashboard.view_bottlenecks`, read-only
+  `dashboard.chain_recovery.view`; `search.global`; `alerts.view/dismiss`. VP does not receive
+  `dashboard.chain_recovery.manage`.
 - Dept?: No.
-- Landing: `/dashboard/plant-manager` (`dashboard.plant_manager.view`, 3 holders:
-  system_admin, vice_president, production_manager). No VP-specific page exists.
-- Sees/can do — frontend: `/dashboard/plant-manager` route + API
-  (`spa/src/routes/dashboardRoutes.tsx:56-57`,
-  `api/app/Modules/Dashboard/routes.php:21-22`); PR/PO approve affordances on detail pages;
+- Landing: `/dashboard/company` (`dashboard.company.view`, system_admin + vice_president).
+  The VP can still switch to `/dashboard/plant-manager` through `dashboard.plant_manager.view`.
+- Sees/can do — frontend: `/dashboard/company` plus the plant-manager dashboard; PR/PO approve affordances on detail pages;
   bills/invoices/statements/budgets read pages; complaints read; salary-adjustment queue tab
   on `/hr/employees` (route `anyOf` includes `hr.salary_adjustments.view`,
   `spa/src/routes/hrRoutes.tsx:77-80`); asset detail/disposal approve.
@@ -198,9 +196,9 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   `crm.view`, `accounting.customers.view/manage`, `crm.products.view`,
   `crm.price_agreements.view/manage/propose`, `crm.sales_orders.view`, `crm.complaints.view/manage`,
   `crm.inquiries.view/manage`, `return_management.view/manage/dispose/complete`,
-  `search.global`, `alerts.view/dismiss`. No `dashboard.*.view`.
+  `dashboard.customer_service.view`, `search.global`, `alerts.view/dismiss`.
 - Dept?: No.
-- Landing: `/dashboard/default` (fallback — qualifies for no catalog dashboard).
+- Landing: `/dashboard/customer-service` (`dashboard.customer_service.view`).
 - Sees/can do — frontend: CRM products/customers/price-agreements/sales-orders (read)/complaints/inquiries
   (`spa/src/routes/crmRoutes.tsx:39-235`); return-management list/detail/create/edit/complete
   (not receive/inspect — those are warehouse/QC, `spa/src/routes/advancedRoutes.tsx:127-184`);
@@ -213,12 +211,12 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 - Key permissions (`api/database/seeders/RolePermissionSeeder.php:698-719`):
   `crm.view`, `accounting.customers.view`, `crm.products.view`,
   `crm.price_agreements.view/propose`, `crm.sales_orders.view/create/update/delete/confirm/cancel`,
-  `search.global`, `alerts.view/dismiss`. No `dashboard.*.view`. No complaints/inquiries/RMA.
+  `dashboard.sales.view`, `search.global`, `alerts.view/dismiss`. No complaints/inquiries/RMA.
 - Dept?: No.
-- Landing: `/dashboard/default` (fallback).
+- Landing: `/dashboard/sales` (`dashboard.sales.view`).
 - Sees/can do — frontend: `/chains` tracker (holds `crm.sales_orders.view`,
-  `spa/src/routes/dashboardRoutes.tsx:102-105`) but NOT its bottleneck data (lacks
-  `dashboard.view_bottlenecks` — see M10); CRM products/pricing-requests/sales-orders pages;
+  `spa/src/routes/dashboardRoutes.tsx`) with sales lookup; bottleneck section hidden without
+  `dashboard.view_bottlenecks` (M10); CRM products/pricing-requests/sales-orders pages;
   self-service. Backend: SO full lifecycle (create/update/delete/confirm/cancel) + price-request
   propose (`api/app/Modules/CRM/routes.php:33-58`).
   Demo account: `crm@ogami.test` (`api/database/seeders/DemoAccountSeeder.php:40`).
@@ -274,8 +272,8 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   schedule, routings authoring (`spa/src/routes/productionRoutes.tsx:22-57`); finished-good catalog
   (`spa/src/routes/crmRoutes.tsx:60-91`); forecasting (`spa/src/routes/advancedRoutes.tsx:31-56`).
   Backend: MRP run/schedule, BOM/machine/mold master data, WO create/confirm, routing versions.
-  Cannot open `/chains` (lacks `crm.sales_orders.view`) though it can call the bottleneck API
-  (holds `dashboard.view_bottlenecks` — see M10).
+  Opens `/chains` in bottleneck-only mode (holds `dashboard.view_bottlenecks`, lacks
+  `crm.sales_orders.view` — M10); SO search/detail remain unavailable.
   Demo account: `ppc@ogami.test` (`api/database/seeders/DemoAccountSeeder.php:30`).
 
 ### 1.9 `purchasing_officer` — Purchasing Officer
@@ -346,15 +344,15 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 ### 1.12 `maintenance_tech` — Maintenance Technician
 
 - Key permissions (`api/database/seeders/RolePermissionSeeder.php:888-906`):
-  `maintenance.view/wo.create/wo.complete`; `mrp.machines.view`; `assets.view`;
+  `maintenance.view/wo.create/wo.complete`; `dashboard.maintenance.view`; `mrp.machines.view`; `assets.view`;
   `hr.separation.view`, `hr.clearance.sign`, `hr.clearance.work_company`;
-  `search.global`. NO `dashboard.*.view`. NOTE: does NOT hold `maintenance.work.assigned`
+  `search.global`. NOTE: does NOT hold `maintenance.work.assigned`
   (only `employee` does, §1.16) and does NOT hold `maintenance.wo.assign` or
   `maintenance.schedules.manage`.
 - Dept?: Clearance signing per-department gated (comment at
   `api/database/seeders/RolePermissionSeeder.php:898-902`).
-- Landing: `/dashboard/default` (fallback).
-- Sees/can do — frontend: maintenance home (unguarded, see M5), work-orders list
+- Landing: `/dashboard/maintenance` (`dashboard.maintenance.view`; shared with maintenance_supervisor).
+- Sees/can do — frontend: maintenance home (`maintenance.view`, M5), work-orders list
   (`maintenance.view`), create (`wo.create`), detail (via `maintenance.view`;
   `anyOf` also names `work.assigned` which this role lacks,
   `spa/src/routes/maintenanceRoutes.tsx:21-40`); schedules read-only; self-service
@@ -370,30 +368,28 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 
 - Key permissions (`api/database/seeders/RolePermissionSeeder.php:907-914`):
   `maintenance.view/wo.create/wo.assign/wo.verify/schedules.manage`;
-  `mrp.machines.view`; `assets.view`; `search.global`. NO `dashboard.*.view`,
+  `dashboard.maintenance.view`; `mrp.machines.view`; `assets.view`; `search.global`;
   NO `maintenance.wo.complete`.
 - Dept?: No.
-- Landing: `/dashboard/default` (fallback).
-- Sees/can do — frontend: maintenance home, work-orders list/detail/assignee-suggestions,
+- Landing: `/dashboard/maintenance` (`dashboard.maintenance.view`; shared with maintenance_tech).
+- Sees/can do — frontend: maintenance home (`maintenance.view`), work-orders list/detail/assignee-suggestions,
   schedules full CRUD (`spa/src/routes/maintenanceRoutes.tsx:21-40`).
   Backend: assign, verify, schedule manage, window confirm
   (`api/app/Modules/Maintenance/routes.php:28-71`); start/complete/submit-repair/cancel
   via `permission_any:wo.complete,wo.assign` (holds `assign`,
   `api/app/Modules/Maintenance/routes.php:62-73`).
-  DEPLOYMENT DIVERGENCE: the `2026_10_09` migration grants a SMALLER set (no `wo.verify`,
-  no `mrp.machines.view`) than the seeder
-  (`api/database/migrations/2026_10_09_230100_add_maintenance_supervisor_role.php:39-46`
-  vs `api/database/seeders/RolePermissionSeeder.php:910-913`) — migrated databases lack those
-  two grants until the seeder re-runs (see §5).
+  Follow-up migrations grant `maintenance.wo.verify` and `mrp.machines.view` on migrated databases
+  (`api/database/migrations/2026_10_09_230300_grant_maintenance_verification.php`,
+  `api/database/migrations/2026_10_10_000500_restore_maintenance_supervisor_visibility.php`; see §5).
   Demo account: `maintenancehead@ogami.test` (`api/database/seeders/DemoAccountSeeder.php:49`).
 
 ### 1.14 `impex_officer` — ImpEx Officer
 
 - Key permissions (`api/database/seeders/RolePermissionSeeder.php:915-938`):
   `supply_chain.view`, `supply_chain.shipments.manage`, `supply_chain.deliveries.view/create/confirm`,
-  `supply_chain.fleet.manage`; `purchasing.view` (read-only). NO `dashboard.*.view`.
+  `supply_chain.fleet.manage`; `purchasing.view` (read-only); `dashboard.logistics.view`.
 - Dept?: No.
-- Landing: `/dashboard/default` (fallback).
+- Landing: `/dashboard/logistics` (`dashboard.logistics.view`).
 - Sees/can do — frontend: shipments + deliveries + fleet
   (`spa/src/routes/supplyChainRoutes.tsx:18-37`); PR/PO read. CANNOT open driver PWA
   (lacks `supply_chain.driver.access`, `spa/src/routes/driverRoutes.tsx:20-35`).
@@ -407,7 +403,7 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   `hr.employees.view`, `hr.employees.trainings.view`, `attendance.ot.approve`,
   `leave.approve_dept`, `loans.view/approve`, `purchasing.view`, `purchasing.pr.create`,
   `return_management.view/approve`, `hr.separation.view`, `hr.clearance.sign`,
-  `search.global`. Creation-only on PRs (no chain step names this role since the 2026-09-10
+  `dashboard.department.view`, `search.global`. Creation-only on PRs (no chain step names this role since the 2026-09-10
   redesign, `api/database/seeders/RolePermissionSeeder.php:953-958`).
 - Dept?: YES — the department-scoped role: PR list adds own-department rows
   (`api/app/Modules/Purchasing/Policies/PurchaseRequestAccessPolicy.php:63-65`);
@@ -419,7 +415,7 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   `api/app/Common/Support/ApprovalSourceScope.php:89-98`); clearance signs only own-department
   items (comment at `api/database/seeders/RolePermissionSeeder.php:961-966`).
   All read `users.employee.department_id` (`api/app/Modules/Auth/Resources/UserResource.php:38`).
-- Landing: `/dashboard/default` (fallback) with a department-scoped default widget set
+- Landing: `/dashboard/department` (`dashboard.department.view`) with a department-scoped default widget set
   (`api/database/seeders/DashboardRoleLayoutSeeder.php:82-94`).
 - Sees/can do — frontend: employees list (read) + salary-adjustment queue label
   (`spa/src/routes/hrRoutes.tsx:77-80`, relabeled when lacking `hr.employees.view`,
@@ -427,7 +423,7 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
   loans + PR create + RMA approve; separations read + sign; RFQ detail via `purchasing.view`
   anyOf (`spa/src/routes/purchasingRoutes.tsx:99-108`) but NOT RFQ list/compare
   (require `rfq.view`, not held).
-  Backend: leave dept approve, loan step 1 (both chains), PR submit (as creator),
+  Backend: leave dept approve, loan step 1 when another active dept head is available (both chains), PR submit (as creator),
   return_request step 1, separation clearance step 1
   (`api/database/seeders/WorkflowSeeder.php:24-40`, `:41-50`, `:150-160`, `:169-178`).
   Demo account: `depthead@ogami.test` (`api/database/seeders/DemoAccountSeeder.php:45`).
@@ -442,9 +438,8 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 - Landing: `/dashboard/default` with self-only widgets
   (`api/database/seeders/DashboardRoleLayoutSeeder.php:95-98`).
 - Sees/can do — frontend: self-service home/DTR/overtime/leave(s)/loans/payslips/me/profile/documents
-  (`spa/src/routes/selfServiceRoutes.tsx:29-75`); assigned maintenance work detail
-  (`maintenance.work.assigned`, `spa/src/routes/selfServiceRoutes.tsx:41-44`,
-  `spa/src/routes/maintenanceRoutes.tsx:30-31`); approvals board + action center + calendar
+  (`spa/src/routes/selfServiceRoutes.tsx:29-75`); assigned maintenance work list/detail
+  (`maintenance.work.assigned`, `spa/src/routes/selfServiceRoutes.tsx:41-44`); approvals board + action center + calendar
   (cross-cutting). CANNOT open any `/hr/*` management list (all require approve/manage perms
   this role lacks — see M2/M3). Backend: self-scoped reads (controllers scope to
   `auth.user.employee_id`, seeder comment at
@@ -469,142 +464,101 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 
 | Role | Dispatch permission (holders) | Landing path |
 |---|---|---|
-| system_admin | all 8 (admin.view: 1 holder) | `/dashboard/admin` |
+| system_admin | all 14 (admin.view: 1 holder) | `/dashboard/admin` |
 | hr_officer | `dashboard.hr.view` (2) | `/dashboard/hr` |
 | finance_officer | `dashboard.accounting.view` (2) | `/dashboard/finance` |
-| vice_president | `dashboard.plant_manager.view` (3) | `/dashboard/plant-manager` |
+| vice_president | `dashboard.company.view` (2; also qualifies for plant-manager) | `/dashboard/company` |
 | production_manager | `dashboard.plant_manager.view` (3) | `/dashboard/plant-manager` |
 | ppc_head | `dashboard.ppc.view` (2) | `/dashboard/ppc` |
 | purchasing_officer | `dashboard.purchasing.view` (2) | `/dashboard/purchasing` |
 | warehouse_staff | `dashboard.warehouse.view` (2) | `/dashboard/warehouse` |
 | qc_inspector | `dashboard.quality.view` (2) | `/dashboard/quality` |
-| customer_service_officer | none | `/dashboard/default` |
-| sales_officer | none | `/dashboard/default` |
-| maintenance_tech | none | `/dashboard/default` |
-| maintenance_supervisor | none | `/dashboard/default` |
-| impex_officer | none | `/dashboard/default` |
-| department_head | none | `/dashboard/default` |
+| customer_service_officer | `dashboard.customer_service.view` (2) | `/dashboard/customer-service` |
+| sales_officer | `dashboard.sales.view` (2) | `/dashboard/sales` |
+| maintenance_tech | `dashboard.maintenance.view` (3) | `/dashboard/maintenance` |
+| maintenance_supervisor | `dashboard.maintenance.view` (3) | `/dashboard/maintenance` |
+| impex_officer | `dashboard.logistics.view` (2) | `/dashboard/logistics` |
+| department_head | `dashboard.department.view` (2) | `/dashboard/department` |
 | employee | none | `/dashboard/default` |
 | driver | none | `/dashboard/default` |
 
 Holder counts computed from the seeder grants above; the live source is `role_permissions`
 (`api/app/Modules/Dashboard/Services/DashboardDispatchService.php:89-104`).
-No non-admin seeded role holds two dispatch permissions, so every non-admin landing is
-single-candidate deterministic.
+The vice president qualifies for both company and plant-manager dashboards; the rarer company
+permission wins. Every other non-admin seeded role has one candidate or uses the generic fallback.
 
 ---
 
-## 2. Backend-vs-frontend gating mismatches (12)
+## 2. Backend-vs-frontend gating mismatches (12 recorded; M1 aligned 2026-10-11)
 
 Convention: backend denies with 403 (`CheckPermission`), frontend denies with a 404-lookalike
 (`PermissionGuard`, `spa/src/components/guards/PermissionGuard.tsx:12-24`). "Frontend allows,
 backend denies" = page opens, API call fails. "Frontend denies, backend allows" = 404 page for
 an API the user could call directly.
 
-- **M1 — Finance dashboard: route guard and data endpoint use DIFFERENT permissions.**
-  Frontend `/dashboard/finance` guards `dashboard.accounting.view`
-  (`spa/src/routes/dashboardRoutes.tsx:64-65`); the page's data call
-  `financeDashboardApi.summary()` hits `GET /dashboards/finance`
-  (`spa/src/api/accounting/dashboard.ts:5-8`), which requires `accounting.dashboard.view`
-  (`api/app/Modules/Dashboard/routes.php:69-70`, also aliased at `GET /dashboard/finance`,
-  `api/app/Modules/Accounting/routes.php:151-152`). The page even documents reaching it with
-  `accounting.dashboard.view` (`spa/src/pages/dashboard/finance.tsx:54-60`), contradicting its
-  own route guard. `finance_officer` holds both (module grant
-  `api/database/seeders/RolePermissionSeeder.php:163` + explicit `:587`), so seeded roles show
-  no break; any custom/override user holding exactly one of the two slugs gets page-without-data
-  or data-without-page. The sibling `GET /dashboards/accounting` (guard `dashboard.accounting.view`,
-  `api/app/Modules/Dashboard/routes.php:27-28`) matches the route guard but is not what the SPA
-  finance page calls.
+- **M1 — Finance dashboard endpoint gate — aligned 2026-10-11.** Frontend `/dashboard/finance`
+  guards `dashboard.accounting.view`; its canonical data call `GET /dashboards/finance` now uses
+  that same gate (`api/app/Modules/Dashboard/routes.php`). Finance panels and widgets still apply
+  source-data permissions, including `accounting.dashboard.view` where required. The legacy
+  `/accounting/dashboard/finance` alias keeps its old gate for compatibility.
 
-- **M2 — Leave management list requires approver perms in SPA, only `leave.view` in API.**
-  Frontend `/hr/leaves`, `/hr/leaves/calendar`, `/hr/leaves/create`, `/hr/leaves/:id` all require
-  `leave.approve_dept` / `leave.approve_hr` / `leave.types.manage`
-  (`spa/src/routes/hrRoutes.tsx:136-153`); backend `GET /requests` and `GET /requests/{leaveRequest}`
-  require only `leave.view` (`api/app/Modules/Leave/routes.php:36`, `:40`), which EVERY role holds
-  via `selfService()` (`api/database/seeders/RolePermissionSeeder.php:1011-1019`).
-  Frontend denies what backend allows for all non-approvers (by design they use
-  `/self-service/leaves`, but the divergence is real at the guard layer).
+- **M2 — resolved 2026-10-12:** HR leave pages remain approver-only. The generic API's `leave.view`
+  gate returns own/department rows via `DepartmentScope`, covered by `LeaveRequestVisibilityTest`;
+  users use `/self-service/leaves` for their own requests.
 
-- **M3 — Attendance register requires manager perms in SPA, only `attendance.view` in API.**
-  Frontend `/hr/attendance` requires `attendance.edit` / `attendance.import` / `attendance.ot.approve`
-  (`spa/src/routes/hrRoutes.tsx:101-104`); backend `GET /attendances` and `GET /attendances/{attendance}`
-  require only `attendance.view` (`api/app/Modules/Attendance/routes.php:39`, `:41`), held by every
-  role via `selfService()`. Same shape as M2.
+- **M3 — resolved 2026-10-12:** HR attendance register remains manager-only. The generic API's
+  `attendance.view` gate returns own/department rows by role; `AttendanceHardeningTest` verifies
+  self-service users cannot read another employee's attendance.
 
-- **M4 — OT create page and OT store endpoint check DIFFERENT slugs.**
-  Frontend `/hr/attendance/overtime/create` requires `attendance.edit`
-  (`spa/src/routes/hrRoutes.tsx:124-128`); backend `POST /overtime-requests` requires
-  `attendance.ot.create` (`api/app/Modules/Attendance/routes.php:55`). A user granted `edit`
-  without `ot.create` opens the form then 403s on submit; a user granted `ot.create` without
-  `edit` is 404'd off a form the API would accept. No seeded role splits them (both live only in
-  `hr_officer`'s full `attendance` module grant), so this bites custom roles/overrides only.
+- **M4 — resolved 2026-10-12:** overtime create route and list action require
+  `attendance.ot.create`, matching `POST /overtime-requests`. The employee list query requires
+  `hr.employees.view`; without it, the form is self-only and uses the linked employee from the
+  authenticated profile. No employee read grant is added.
 
-- **M5 — `/maintenance` home page has NO permission guard at all.**
-  Frontend renders for any authenticated user (`spa/src/routes/maintenanceRoutes.tsx:22`);
-  every backend maintenance endpoint is gated (`maintenance.view`, `schedules.manage`,
-  `wo.create/assign/verify/complete`, or `CheckMaintenanceWorkAccess`,
-  `api/app/Modules/Maintenance/routes.php:16-127`). Users with none of these (e.g. `driver`,
-  `sales_officer`) open an empty shell whose data calls all fail.
+- **M5 — resolved 2026-10-12:** `/maintenance` now requires `maintenance.view` before redirecting
+  to the work-order list, so roles without maintenance read access do not enter its shell.
 
-- **M6 — Maintenance WO detail guard is broader than the backend read gate.**
-  Frontend `/maintenance/work-orders/:id` allows `maintenance.view` OR `maintenance.work.assigned`
-  (`spa/src/routes/maintenanceRoutes.tsx:30-31`); backend `show` uses
-  `CheckMaintenanceWorkAccess:read`, which for `work.assigned`-only holders additionally requires
-  assignment to THAT order and answers 404 otherwise
-  (`api/app/Modules/Maintenance/Middleware/CheckMaintenanceWorkAccess.php:20-36`).
-  Any `work.assigned` holder (i.e. every `employee`) can open arbitrary order URLs the API then
-  404s. (Note the inverse trap: `maintenance_tech` does NOT hold `work.assigned` at all — §1.12 —
-  so the `anyOf` second arm never fires for the very role that does the repairs; it enters via
-  `maintenance.view`.)
+- **M6 — resolved 2026-10-12:** internal `/maintenance/work-orders/:id` requires `maintenance.view`.
+  Assigned-only employees keep access through `/self-service/maintenance-work-orders/:id`, where
+  `CheckMaintenanceWorkAccess:read` enforces assignment to that specific order and keeps 404
+  behavior for unassigned records (`api/app/Modules/Maintenance/Middleware/CheckMaintenanceWorkAccess.php:20-36`).
 
-- **M7 — Self-service pages are guard-free; the API is not.**
-  `/self-service`, `/profile`, `/me`, `/documents`, `/notification-preferences` carry no
-  `PermissionGuard`, and DTR/overtime/leave(s)/loans/work-orders carry only `ModuleGuard`
-  (`spa/src/routes/selfServiceRoutes.tsx:29-75`). Backend endpoints behind them still require
-  their permissions (e.g. payslips page itself re-guards `payroll.view`, `:69-72`, while DTR does
-  not re-guard `attendance.view`). A user whose self-service slug is revoked via override keeps
-  the page and eats API 403s. Self-scoping to `employee_id` is backend-side
-  (`api/database/seeders/RolePermissionSeeder.php:1004-1008`).
+- **M7 — resolved 2026-10-12:** self-service reads and writes are authentication-only and resolve
+  the current employee server-side; they do not depend on the shared `attendance.view`, `leave.view`,
+  or `payroll.view` slugs. Payslips and leave detail already have matching SPA guards. The
+  notification-preferences API does require `notifications.preferences.manage`; its route and
+  profile link now use that same permission. (`spa/src/routes/selfServiceRoutes.tsx`,
+  `spa/src/pages/self-service/profile.tsx`, `api/app/Modules/HR/routes.php:227-252`,
+  `api/app/Modules/Auth/routes.php:61-69`)
 
-- **M8 — `/approvals/delegations` has no frontend guard; backend is auth + service-scoped.**
-  Route renders for any authenticated user (`spa/src/routes/dashboardRoutes.tsx:92-95`);
-  backend allows managing only own delegations unless holding `admin.delegations.manage_any`
-  (`api/app/Modules/Admin/routes.php:231-244`,
-  `api/app/Modules/Admin/Services/ApprovalDelegationService.php:29-31`, `:152-157`).
-  Non-delegator users open a page whose mutations the service refuses.
+- **M8 — resolved 2026-10-12:** approval cover is intentionally self-service for every authenticated
+  user. The service lists only delegations where the user is delegator or delegate and only lets
+  the delegator revoke; `admin.delegations.manage_any` grants the wider scope. The route needs no
+  additional permission (`api/app/Modules/Admin/routes.php:231-244`,
+  `api/app/Modules/Admin/Services/ApprovalDelegationService.php`).
 
 - **M9 — Warehouse structure pages are narrower in SPA than in API.**
-  Frontend `/inventory/warehouse` and `/inventory/warehouse-map` require
-  `inventory.warehouse.manage` (`spa/src/routes/inventoryRoutes.tsx:125-132`, `:161-169`);
-  backend `GET /warehouse/options`, `GET /warehouses` require only `inventory.view`
-  (`api/app/Modules/Inventory/routes.php:90`, `:92`). `inventory.view`-only holders
-  (e.g. `production_manager`, `qc_inspector`, `purchasing_officer`) can call the structure APIs
-  but are 404'd off the pages.
+  **Resolved 2026-10-12.** `/inventory/warehouse` now requires `inventory.view`, matching its
+  read APIs, while mutations remain hidden unless `inventory.warehouse.manage` is held. The Warehouse
+  Map stays manager-only because its API endpoints require `inventory.warehouse.manage`.
+  (`spa/src/routes/inventoryRoutes.tsx:125-132,161-169`,
+  `api/app/Modules/Inventory/routes.php:90,140-141`,
+  `spa/src/routes/inventoryRoutes.permissions.test.tsx`)
 
-- **M10 — `/chains` page gate and bottleneck API gate diverge BOTH ways for seeded roles.**
-  Frontend `/chains` requires `crm.sales_orders.view` (`spa/src/routes/dashboardRoutes.tsx:102-105`,
-  sidebar likewise `spa/src/components/layout/Sidebar.tsx:170-175`); backend
-  `GET /chain/bottlenecks` requires `dashboard.view_bottlenecks` (`api/routes/api.php:118-121`).
-  `sales_officer` holds the former but not the latter (opens the tracker, bottleneck widget 403s);
-  `ppc_head` holds the latter but not the former (can call the API, 404'd off the page).
-  (`sales_officer` grants `api/database/seeders/RolePermissionSeeder.php:698-719`;
-  `ppc_head` grants `:772-811`.)
+- **M10 — resolved 2026-10-12:** `/chains` route and sidebar accept either
+  `crm.sales_orders.view` or `dashboard.view_bottlenecks`; SO search/detail only query for the CRM
+  permission, while bottleneck data retains its API permission and row-level module filtering. PPC
+  deep links do not issue SO reads. No role grants changed.
 
-- **M11 — `is_superuser` bypass exists only in the SPA.**
-  `usePermission` grants everything when `user.is_superuser === true`
-  (`spa/src/hooks/usePermission.ts:6`, type at `spa/src/api/auth.ts:22`), but the API never
-  sends `is_superuser` (`api/app/Modules/Auth/Resources/UserResource.php:13-45` has no such
-  field) and neither backend authority checks it (`api/app/Modules/Auth/Models/User.php:161-167`,
-  `api/app/Common/Middleware/CheckPermission.php:23-25` check only `role.slug`). A principal
-  carrying that flag would pass every SPA guard and fail every gated backend route. Currently
-  inert (no sender), but the two authorities disagree on what "admin" means.
+- **M11 — resolved 2026-10-12:** SPA admin bypass now uses only `role.slug === 'system_admin'`,
+  matching `User::hasPermission()` and `CheckPermission`; removed the unused `AuthUser.is_superuser`
+  field. (`spa/src/hooks/usePermission.ts`, `spa/src/api/auth.ts`,
+  `api/app/Modules/Auth/Models/User.php:161-167`,
+  `api/app/Common/Middleware/CheckPermission.php:23-25`)
 
-- **M12 — Sidebar shows `/notifications` to everyone; the route requires `notifications.view`.**
-  Sidebar item has no `permission` field (`spa/src/components/layout/Sidebar.tsx:190-196`;
-  visibility helper `:797-812`); route guards `notifications.view`
-  (`spa/src/routes/dashboardRoutes.tsx:119`). All seeded roles hold it via the cross-cutting
-  merge (`api/database/seeders/RolePermissionSeeder.php:1063`), so this diverges only under a
-  per-user revoke override — sidebar link renders, page 404s.
+- **M12 — resolved 2026-10-12:** sidebar now requires `notifications.view`, matching the route;
+  a revoked user no longer sees a link that opens a 404. (`spa/src/components/layout/Sidebar.tsx`,
+  `spa/src/routes/dashboardRoutes.tsx:151`, `Sidebar.permissions.test.tsx`)
 
 Verified MATCHES (checked, not mismatches — do not regress):
 RFQ detail `anyOf[rfq.view, rfq.manage, purchasing.view]` both sides
@@ -677,10 +631,8 @@ CLAUDE.md lists 14 slugs and states "NO plant_manager — use production_manager
   documented (`api/database/seeders/WorkflowSeeder.php` steps; migration
   `api/database/migrations/0483_grant_chain_step_roles_their_route_permissions.php`).
 - Session-timeout doc ("Employee 15 min, others 30 min") matches seeds + middleware (§0).
-- Stale reference: `finance_officer` includes `$this->module('crm_commissions')`
-  (`api/database/seeders/RolePermissionSeeder.php:584`), but no `crm_commissions` key exists in
-  `permissionCatalog()` (`:20-494`) — `module()` returns `[]` for it (`:993-1002`), so the line
-  grants nothing.
+- **Resolved 2026-10-12:** removed the stale `$this->module('crm_commissions')` reference from the
+  `finance_officer` seeder; it had no catalog key and granted nothing.
 - `0126` backfill names "12 originally-seeded roles" predating `vice_president`,
   `customer_service_officer`, `sales_officer`, `maintenance_supervisor`
   (`api/database/migrations/0126_add_is_system_to_roles_table.php:23-36`); harmless since the
@@ -690,32 +642,26 @@ CLAUDE.md lists 14 slugs and states "NO plant_manager — use production_manager
 
 ## 5. Gaps / blockers for dashboard work
 
-1. **8 of 17 roles land on `/dashboard/default`.** `customer_service_officer`, `sales_officer`,
-   `maintenance_tech`, `maintenance_supervisor`, `impex_officer`, `department_head`, `employee`,
-   `driver` hold no `dashboard.*.view` grant (§1 table). Any dashboard-coverage matrix must treat
-   the generic widget home as these roles' primary surface, not an edge case.
-2. **3 roles have NO role-default layout rows.** `DashboardRoleLayoutSeeder::roleWidgets()` covers
-   14 roles and omits `vice_president`, `customer_service_officer`, `sales_officer`
-   (`api/database/seeders/DashboardRoleLayoutSeeder.php:31-129`); first login clones nothing for
-   them (clone is per-role-default, `api/app/Modules/Auth/Services/AuthService.php:157-171`).
-   Its comment "five roles with no `dashboard.*.view` grant" is stale — the actual count is eight.
-3. **`vice_president` has no dashboard of its own** by design ("reads what it signs",
-   `api/database/seeders/RolePermissionSeeder.php:624-628`) yet lands on the Plant Manager
-   dashboard via a shared permission — executive vs operations readings are not separated.
-4. **M1 blocks finance-widget reuse by permission.** The two finance slugs
-   (`dashboard.accounting.view` for page/catalog/dispatch vs `accounting.dashboard.view` for data)
-   mean widget/panel gating (`PanelGate`, `DashboardWidgetSeeder` uses `accounting.dashboard.view`,
-   `api/database/seeders/DashboardWidgetSeeder.php:199-202`) and page gating answer to different
-   authorities; any new finance surface must pick deliberately.
-5. **`maintenance_supervisor` grants differ between migration and seeder.**
-   Migration set lacks `maintenance.wo.verify` + `mrp.machines.view`
-   (`api/database/migrations/2026_10_09_230100_add_maintenance_supervisor_role.php:39-46`);
-   seeder adds both (`api/database/seeders/RolePermissionSeeder.php:910-913`). Deployed databases
-   migrated but never re-seeded show a thinner supervisor than fresh installs.
-6. **Factory PWA (`production.operator.access`) is held only by `production_manager` (+ admin).**
-   No operator-rank role holds it (catalog `:300`, sole grant via `module('production')` at `:732`);
-   shift operators on `employee`/`department_head` cannot open `/factory`
-   (`spa/src/routes/factoryRoutes.tsx:12-25`) and must use `/self-service/work-orders` instead.
+1. **Two of 17 roles use `/dashboard/default`: `employee` and `driver`.** The other 15 have a
+   permission-derived role dashboard; `DashboardDispatchTest` covers all 17 seeded roles.
+2. **Resolved 2026-10-12 — role defaults.** `DashboardRoleLayoutSeeder` now provides rows for all
+   17 seeded roles; `WidgetSeedIntegrityTest` verifies coverage and permission consistency.
+   `DatabaseSeeder` runs this seeder, and first login clones role rows without overwriting
+   user-owned layouts (`api/app/Modules/Auth/Services/AuthService.php:131-173`).
+3. **Resolved 2026-10-11:** `vice_president` now holds `dashboard.company.view`, lands on
+   `/dashboard/company`, and has a default layout. The company page grants access to executive
+   aggregates and read-only quality signals; it does not grant quality write or disposition access.
+4. **M1 canonical endpoint aligned.** The page gate and `/dashboards/finance` gate both use
+   `dashboard.accounting.view`; panel and widget gates remain source-specific by design.
+5. **Resolved 2026-10-12 — `maintenance_supervisor` migration grants.** Follow-up migrations grant
+   `maintenance.wo.verify` and `mrp.machines.view`; a regression removes and reapplies both grants
+   twice without rerunning the role seeder. (`api/database/migrations/2026_10_09_230300_grant_maintenance_verification.php`,
+   `api/database/migrations/2026_10_10_000500_restore_maintenance_supervisor_visibility.php`,
+   `api/tests/Feature/Dashboard/RichLayoutEndpointTest.php`)
+6. **Resolved 2026-10-12 — factory PWA boundary.** The role catalog has no production-operator role;
+   keep `production.operator.access` on `production_manager` (+ admin) rather than granting the PWA
+   to general employees. Assigned workers use `/self-service/work-orders`, whose API enforces crew
+   membership (`WorkOrderCrewTest::test_unassigned_employee_cannot_read_wo_or_general_production_list`).
 7. **Driver PWA (`supply_chain.driver.access`) is held only by `driver` (+ admin)**
    (sole grant at `api/database/seeders/RolePermissionSeeder.php:984`); ImpEx/warehouse cannot
    preview the driver surface.

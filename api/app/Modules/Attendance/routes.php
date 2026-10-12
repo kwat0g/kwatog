@@ -56,8 +56,8 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
     // Literal segment MUST precede the {overtime} binding below.
     Route::get('/overtime-requests/options', [OvertimeController::class, 'options'])->middleware('permission:attendance.view');
     Route::get('/overtime-requests/{overtime}', [OvertimeController::class, 'show'])->middleware('permission:attendance.view');
-    Route::patch('/overtime-requests/{overtime}/approve', [OvertimeController::class, 'approve'])->middleware('permission:attendance.ot.approve');
-    Route::patch('/overtime-requests/{overtime}/reject', [OvertimeController::class, 'reject'])->middleware('permission:attendance.ot.approve');
+    Route::patch('/overtime-requests/{overtime}/approve', [OvertimeController::class, 'approve'])->middleware('approval_permission:attendance.ot.approve');
+    Route::patch('/overtime-requests/{overtime}/reject', [OvertimeController::class, 'reject'])->middleware('approval_permission:attendance.ot.approve');
     Route::delete('/overtime-requests/{overtime}', [OvertimeController::class, 'cancel'])->middleware('permission:attendance.view');
-    Route::post('/overtime-requests/bulk-approve', [OvertimeController::class, 'bulkApprove'])->middleware('permission:attendance.ot.approve');
+    Route::post('/overtime-requests/bulk-approve', [OvertimeController::class, 'bulkApprove'])->middleware('approval_permission:attendance.ot.approve');
 });

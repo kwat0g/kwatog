@@ -3,6 +3,7 @@
 Executive synthesis for a reviewer who will not read the six section files.
 Compiled strictly from the sections — no new codebase research.
 Code-citing section wins ties; conflicts are noted explicitly, never silently picked.
+This is the Phase 0 baseline; current implementation status is maintained in `FINDINGS.md` and `PROGRESS.md`.
 
 - Branch: `docs/dss-discovery-phase0`
 - Method: read-only primary-source discovery (seeders, migrations, models, policies,
@@ -44,23 +45,24 @@ Source: `docs/dashboards/phase0/` (all six files; per-section paths at each § e
 | 1 | `system_admin` | Wildcard superuser (IT-only; top step of no workflow, cannot award RFQs) |
 | 2 | `hr_officer` | HR/attendance/leave/loans operator; payroll maker (create/compute, never approver) |
 | 3 | `finance_officer` | Accounting/budgeting owner; payroll checker; PR/PO/bill/asset step approver |
-| 4 | `vice_president` | Executive terminal approver on all money chains; no dashboard of its own |
-| 5 | `customer_service_officer` | CRM complaints/inquiries/RMA lifecycle; lands on `/dashboard/default` |
-| 6 | `sales_officer` | SO full lifecycle + price propose; default landing; sees `/chains`, not its bottleneck data |
+| 4 | `vice_president` | Executive terminal approver on all money chains; `/dashboard/company` |
+| 5 | `customer_service_officer` | CRM complaints/inquiries/RMA lifecycle; `/dashboard/customer-service` |
+| 6 | `sales_officer` | SO full lifecycle + price propose; `/dashboard/sales`; `/chains` bottlenecks remain hidden |
 | 7 | `production_manager` | Production/WO lifecycle + plant-manager dashboard; sole factory-PWA holder |
 | 8 | `ppc_head` | MRP/forecasting + WO create/confirm + routings; PPC dashboard; bottleneck API but no `/chains` page |
 | 9 | `purchasing_officer` | Sourcing runner (RFQ award yes, PR/PO approve no); purchasing dashboard |
 | 10 | `warehouse_staff` | GRN/issues/stock-count/MRB/transfer; warehouse dashboard; no fleet/shipments-create |
 | 11 | `qc_inspector` | Quality specs/inspections/NCR/calibration/PPAP + return inspect; quality dashboard |
-| 12 | `maintenance_tech` | MWO executor (create/complete, no verify/assign); no dashboard; ironically lacks `work.assigned` |
-| 13 | `maintenance_supervisor` | MWO assign/verify + schedule manage; no dashboard; migration grants lag seeder grants |
-| 14 | `impex_officer` | Shipments/deliveries/fleet; no dashboard; cannot open driver PWA |
-| 15 | `department_head` | Dept-scoped approver/creator (leave/loan/PR/RMA step 1); default landing |
+| 12 | `maintenance_tech` | MWO executor (create/complete, no verify/assign); `/dashboard/maintenance`; lacks `work.assigned` |
+| 13 | `maintenance_supervisor` | MWO assign/verify + schedule manage; `/dashboard/maintenance`; grant migrations aligned |
+| 14 | `impex_officer` | Shipments/deliveries/fleet; `/dashboard/logistics`; cannot open driver PWA |
+| 15 | `department_head` | Dept-scoped approver/creator (leave/loan/PR/RMA step 1); `/dashboard/department` |
 | 16 | `employee` | Self-service baseline only; 15-min session timeout |
 | 17 | `driver` | Driver PWA (`driver.access`) + self-service; nothing else |
 
-8 of 17 land on `/dashboard/default` (5, 6, 12, 13, 14, 15, 16, 17). 3 roles have no
-role-default layout rows (`vice_president`, `customer_service_officer`, `sales_officer`).
+Only `employee` and `driver` land on `/dashboard/default`; all other 15 seeded roles have
+permission-derived dashboards. `DashboardRoleLayoutSeeder` provides defaults for all 17 roles;
+`WidgetSeedIntegrityTest` checks coverage and permission consistency.
 
 ### Authority chain (5 lines)
 
@@ -71,21 +73,22 @@ role-default layout rows (`vice_president`, `customer_service_officer`, `sales_o
 3. Backend denies with 403 (`CheckPermission`); row visibility is per-module policy code;
    frontend is a 3-layer UX guard (`AuthGuard` → `ModuleGuard` → `PermissionGuard`, 404-lookalike denials).
 4. Landing is server-side (`GET /dashboard/dispatch`, rarest-permission-wins counted live
-   from `role_permissions`); 8 bespoke dashboards keyed by permission, `/dashboard/default` fallback.
+   from `role_permissions`); 14 bespoke dashboards keyed by permission, `/dashboard/default` fallback.
 5. Approval delegations add step-roles windowed (exact-role or blanket); portal principals
    are separate guards rejected from internal endpoints.
 
 ### The 12 mismatches (grouped by severity, with file refs)
 
 **Break seeded-role flows:**
-- M10 — `/chains` page (`crm.sales_orders.view`) vs bottleneck API (`dashboard.view_bottlenecks`)
-  diverge both ways: `sales_officer` opens page/403s data, `ppc_head` can call API but is 404'd off page.
-  (`spa/src/routes/dashboardRoutes.tsx:102-105`, `api/routes/api.php:118-121`)
-- M5 — `/maintenance` home has no guard; `driver`/`sales_officer` open an empty shell whose calls all fail.
-  (`spa/src/routes/maintenanceRoutes.tsx:22`)
-- M6 — WO detail `anyOf[view, work.assigned]` is broader than backend `CheckMaintenanceWorkAccess:read`;
-  every `employee` can open arbitrary order URLs the API 404s.
-  (`spa/src/routes/maintenanceRoutes.tsx:30-31`,
+- M10 — **resolved 2026-10-12:** `/chains` accepts either read grant, then gates SO lookup/detail on
+  `crm.sales_orders.view` and bottleneck data on `dashboard.view_bottlenecks`. No role grant widened;
+  PPC deep links cannot issue SO reads. (`spa/src/routes/dashboardRoutes.tsx`,
+  `spa/src/pages/chains/index.tsx`, `api/routes/api.php:118-121`)
+- M5 — **resolved 2026-10-12:** `/maintenance` landing requires `maintenance.view` before redirecting
+  to its work-order list. (`spa/src/routes/maintenanceRoutes.tsx`)
+- M6 — **resolved 2026-10-12:** internal work-order detail requires `maintenance.view`; assigned-only
+  employees use the existing self-service detail path, with backend row-level checks retained.
+  (`spa/src/routes/maintenanceRoutes.tsx`, `spa/src/routes/selfServiceRoutes.tsx`,
   `api/app/Modules/Maintenance/Middleware/CheckMaintenanceWorkAccess.php:20-36`)
 
 **Bite custom roles / overrides only (no seeded role splits them):**
@@ -93,31 +96,45 @@ role-default layout rows (`vice_president`, `customer_service_officer`, `sales_o
   `accounting.dashboard.view` (and the page doc contradicts its own guard).
   (`spa/src/routes/dashboardRoutes.tsx:64-65`, `spa/src/api/accounting/dashboard.ts:5-8`,
   `api/app/Modules/Dashboard/routes.php:69-70`, `spa/src/pages/dashboard/finance.tsx:54-60`)
-- M4 — OT create page checks `attendance.edit`, store endpoint checks `attendance.ot.create`.
-  (`spa/src/routes/hrRoutes.tsx:124-128`, `api/app/Modules/Attendance/routes.php:55`)
-- M7 — self-service pages are guard-free while the API is not (revoked users keep pages, eat 403s).
-  (`spa/src/routes/selfServiceRoutes.tsx:29-75`)
-- M8 — `/approvals/delegations` unguarded; backend is service-scoped.
-  (`spa/src/routes/dashboardRoutes.tsx:92-95`, `api/app/Modules/Admin/routes.php:231-244`)
-- M12 — sidebar shows `/notifications` to everyone; route needs `notifications.view` (diverges only on revoke).
-  (`spa/src/components/layout/Sidebar.tsx:190-196`, `spa/src/routes/dashboardRoutes.tsx:119`)
+- M4 — **resolved 2026-10-12:** overtime create route and list action require
+  `attendance.ot.create`; employee directory is queried only with `hr.employees.view`, otherwise
+  the form submits for the signed-in user's linked employee. (`spa/src/routes/hrRoutes.tsx`,
+  `spa/src/pages/attendance/overtime/create.tsx`, `api/app/Modules/Attendance/routes.php:55`)
+- M7 — **resolved 2026-10-12:** self-service data routes use authenticated, employee-scoped API
+  endpoints; payslips and leave detail already have matching guards. Notification preferences is
+  permission-gated at both route and profile link. (`spa/src/routes/selfServiceRoutes.tsx`,
+  `spa/src/pages/self-service/profile.tsx`, `api/app/Modules/Auth/routes.php:61-69`)
+- M8 — **resolved 2026-10-12:** approval cover is intentionally self-service for every authenticated
+  user; service scopes rows and revocation to the delegator, with `admin.delegations.manage_any` as
+  the explicit wider scope. (`spa/src/routes/dashboardRoutes.tsx:125-126`,
+  `api/app/Modules/Admin/routes.php:231-244`,
+  `api/app/Modules/Admin/Services/ApprovalDelegationService.php`)
+- M12 — **resolved 2026-10-12:** sidebar and route both require `notifications.view`, including when
+  a per-user revoke override removes the grant. (`spa/src/components/layout/Sidebar.tsx`,
+  `spa/src/routes/dashboardRoutes.tsx:151`, `Sidebar.permissions.test.tsx`)
 
-**Narrower-SPA-than-API by design (404 for APIs the user could call):**
-- M2 — leave management list needs approver perms in SPA, `leave.view` in API.
-  (`spa/src/routes/hrRoutes.tsx:136-153`, `api/app/Modules/Leave/routes.php:36`)
-- M3 — attendance register needs manager perms in SPA, `attendance.view` in API.
-  (`spa/src/routes/hrRoutes.tsx:101-104`, `api/app/Modules/Attendance/routes.php:39`)
-- M9 — warehouse structure pages need `warehouse.manage`, APIs need `inventory.view`.
-  (`spa/src/routes/inventoryRoutes.tsx:125-132`, `api/app/Modules/Inventory/routes.php:90`)
+**Intentional SPA restrictions over row-scoped read endpoints:**
+- M2 — **resolved 2026-10-12:** leave management pages stay limited to approvers; the generic API
+  grants `leave.view` but returns only own/department rows according to `DepartmentScope`.
+  `LeaveRequestVisibilityTest` proves the read matrix.
+- M3 — **resolved 2026-10-12:** attendance management page stays limited to managers; the generic
+  API grants `attendance.view` but returns own/department rows according to role. A feature test
+  verifies self-service users cannot read another employee's attendance.
+- M9 — **resolved 2026-10-12:** `/inventory/warehouse` now uses `inventory.view`, matching its read APIs;
+  management controls remain gated by `inventory.warehouse.manage`. Warehouse Map remains manager-only
+  because both map endpoints require that grant. (`spa/src/routes/inventoryRoutes.tsx:125-132,161-169`,
+  `api/app/Modules/Inventory/routes.php:90,140-141`, `inventoryRoutes.permissions.test.tsx`)
 
-**Inert but diverged:**
-- M11 — `is_superuser` bypass exists only in SPA; the API never sends or checks it.
-  (`spa/src/hooks/usePermission.ts:6`, `api/app/Modules/Auth/Resources/UserResource.php:13-45`)
+**Resolved authority mismatch:**
+- M11 — **resolved 2026-10-12:** SPA admin bypass now uses only `role.slug === 'system_admin'`,
+  matching API behavior; removed the dead `is_superuser` auth field.
+  (`spa/src/hooks/usePermission.ts`, `spa/src/api/auth.ts`,
+  `api/app/Modules/Auth/Resources/UserResource.php:13-45`)
 
 Doc-vs-code extras: seeder defines 17 roles vs CLAUDE.md's 14 (missing
-`customer_service_officer`, `sales_officer`, `maintenance_supervisor`); stale
-`crm_commissions` grant line grants nothing; `maintenance_supervisor` migration set is
-thinner than the seeder set (migrated-not-reseeded DBs lack `wo.verify` + `mrp.machines.view`).
+`customer_service_officer`, `sales_officer`, `maintenance_supervisor`; tracked by F-067). The
+stale `crm_commissions` lookup was removed (F-054), and follow-up migrations now add both missing
+maintenance-supervisor grants on migrated databases (F-050).
 
 Source: `docs/dashboards/phase0/A-roles-access.md`
 
@@ -135,7 +152,7 @@ Source: `docs/dashboards/phase0/A-roles-access.md`
 | Payroll (11) | periods, rows, claims, deductions, adjustments, anomalies, 13th, bank, proofs, de-minimis, gov tables | claims UQ = no-double-pay guard; periods STATUS-MACHINE (7 statuses) |
 | Loans (2) | loans, payments | balances mutated; history = `loan_payments` LEDGER |
 | Accounting+budget (23) | COA, JE, vendors/customers, bills, invoices, collections, OR, credit notes, budgets, fiscal years | GL ref polymorphic (convention); budgets table has ONLY pkey |
-| Inventory (22) | items, warehouse tree, stock levels/movements, GRN, issues, MRB, adjustments, counts, transfers | movements LEDGER; levels OVERWRITE, no audit rows |
+| Inventory (22) | items, warehouse tree, stock levels/movements, GRN, issues, MRB, adjustments, counts, transfers | movements LEDGER; level changes now audited (F11) |
 | Purchasing (18) | PR/PO, RFQ/quotes/awards, suppliers, listings, snapshots, dispatches | money computed once (`RfqCommercialCalculator`); quote history not kept |
 | SupplyChain (19) | shipments, containers, docs, lots, vehicles, deliveries+items, attempts, reservations | delivery→invoice lossy by design; actual_* timestamps unindexed |
 | Production (14) | WOs, operations, outputs, materials, defects, crews, downtime, schedules, routings, logs | `wo_operations` has NO non-PK index; `sales_order_item_id` unenforced |
@@ -190,8 +207,8 @@ exists because the gap is real) · F4 completed WOs without outgoing inspection 
 F5/F8 GL + stock-movement references polymorphic by convention · F6 MRP run→order trace
 only via summary-json + plans bridge (run_id unindexed) · F7 forecast actuals late-filled ·
 F9 inspections dual addressing (prefer typed FKs) · F10 NCR-close WO creation can fail
-logged-only (reconcile `disposition=rework` + NULL WO ids) · F11 stock tables have no audit
-rows (ledger only) · F12 returns fact tables nearly unindexed.
+logged-only (reconcile `disposition=rework` + NULL WO ids) · F11 stock tables now emit audit
+rows; movement ledger remains event history · F12 returns fact tables nearly unindexed.
 
 ### Forecastability verdicts (80 rows)
 
@@ -201,7 +218,7 @@ Rule of thumb: anything needing a line-item date, a status history, or sub-month
 must join the parent/ledger — never the header alone. Line-item tables mostly lack dates
 (`sales_order_items`, `purchase_order_items`, `invoice_items`, `bill_items`,
 `work_order_defects`, `payroll_deduction_details`); status history = `audit_logs`
-(136 models; stock tables excluded); KPI grain is monthly (2nd @ 03:00 compute).
+(138 models, including stock tables); KPI grain is monthly (2nd @ 03:00 compute).
 
 ### Index gaps (86 across ~45 tables + ~300 intentional audit-FK omissions)
 
@@ -225,12 +242,12 @@ Source: `docs/dashboards/phase0/B-modules-data.md`
 
 | Type | Chain | Notes |
 |---|---|---|
-| Leave | `department_head` → `hr_officer` (separate arms) | No draft; dept-arm scope-checked; sole-head's own leave always stalls |
+| Leave | `department_head` → `hr_officer` (separate arms) | No draft; dept-arm scope-checked; skips to HR if no active head or scoped delegate other than requester can act |
 | Purchase request | `finance_officer` → `vice_president` ≥ ₱50k | RFQ-sourced skips chain; budget-ack gate; money-only so self-guard can't strand |
 | Purchase order | `finance_officer` → `vice_president` ≥ ₱50k | Buyer never a step; +vendor-SoD/PPAP/budget gates at approve |
 | Bill payment | single `vice_president` ≥ ₱50k, else auto-posts | Changed under CLAUDE.md text (was Finance→VP) |
 | Loan / cash advance | CA 3-step (dept→finance→VP); company 4-step (+`hr_officer`, VP ≥ ₱50k) | Step 2 now HR (was PM); row-scoped decide |
-| Salary adjustment | `production_manager` → `vice_president` | One pending/employee; PM self-request stalls |
+| Salary adjustment | `production_manager` → `vice_president` | One pending/employee; PM lacks request permission by default, so self-request is blocked at the route (F-013); a per-user grant can expose the self-stall |
 | Asset disposal | `finance_officer` → `vice_president` | No disposal status; JE posts on final approve inside tx |
 | Return request | `department_head` → `production_manager`; finance-only single | Step 1 unscoped (any head); QC supplier returns auto-approve |
 | Payroll period | **No chain — custom maker-checker, unwired workflow** | Approver ≠ creator ≠ computer; **board `payroll` kind is dead (never any rows)** |
@@ -247,21 +264,17 @@ budget transfer · invoice prebill (+portal payment submissions) · supplier lis
 asset transfer (**service exists, unrouted by design — undecidable via API**) ·
 return case · loan write-off · PPAP / late production report.
 
-### 6 stuck risks
+### 3 remaining default stuck risks
 
-1. Leave: department with no active head (step 1 is head-only; escalation notifies
-   `production_manager`, who cannot act); sole head's own leave stalls unconditionally.
-2. Bill payment: VP seat empty + above-threshold = permanent stall; escalation resolves
+1. Bill payment: VP seat empty + above-threshold = permanent stall; escalation resolves
    to nobody (`resolveSuperior` null at VP).
-3. Loans: borrower's department with no head stalls at step 1 (both chains).
-4. Salary adjustment: PM self-request self-blocks step 1 (single-holder by default).
-5. Payroll period: one person creates+computes with no second `approve` holder and no
+2. Payroll period: one person creates+computes with no second `approve` holder and no
    override grant = silent stall (no notification fires at all).
-6. Custom single-step family (systemic): no timeout, no delegation, no sweep — a sole
-   eligible checker on leave = silent stall. Self-guards hold everywhere, so the failure
-   mode is stall, never self-approval.
+3. Custom single-step family (systemic): delegated coverage and notify-only reminder/escalation
+   sweep now reduce silent stalls; a queue with no eligible checker or delegate still waits for a
+   human. Self-guards hold everywhere, so failure mode remains stall, never self-approval.
 
-### Notification gaps
+### Notification gaps at discovery time
 
 Missing entirely: bill-payment submit/decide, salary-adjustment request/decide,
 asset-disposal request/decide, stock/payroll-adjustment, budget + transfers, invoice
@@ -294,14 +307,15 @@ Source: `docs/dashboards/phase0/C-approvals.md`
 
 ### Pages / widgets / forecasts (counts)
 
-- **Pages:** 8 bespoke (`admin`, `plant-manager`, `hr`, `ppc`, `finance`, `purchasing`,
-  `warehouse`, `quality`) + `/dashboard/default` fallback + employee self-service
+- **Pages:** 14 bespoke (`admin`, `company`, `plant-manager`, `hr`, `ppc`, `finance`, `purchasing`,
+  `warehouse`, `quality`, `logistics`, `maintenance`, `department`, `sales`, `customer-service`)
+  + `/dashboard/default` fallback + employee self-service
   (`GET /dashboards/employee`, auth-only) + admin system-health page (sessions, auth,
   queue, audit — no business KPIs). Every bespoke payload returns `{kpis, panels}`
   with per-item `PanelGate` permission filtering (refused = omitted, not zeroed), 30s
   per-user cache. Branch additions: KPI strip on every bespoke header, top-8 approvals
   worklist widget, freshness polish (per-widget `updated_at`, 2-min stale badge, 5 states).
-- **Widgets:** 65-key catalog (54 scalar + 11 `kpi.*`), each row declaring permission /
+- **Widgets:** 76-key catalog (65 non-KPI + 11 `kpi.*`), each row declaring permission /
   render_kind (scalar/breakdown/trend/table/gauge) / `link_path` / module; scalar miss →
   `available:false`, rich miss → scalar + `data_unavailable`. `WidgetSeedIntegrityTest`
   pins registry↔provider↔link bijection.
@@ -320,10 +334,10 @@ Source: `docs/dashboards/phase0/C-approvals.md`
 3. Tiles read snapshots — **one month behind by design**; daily/weekly trends must query sources.
 4. Read boundary `KpiSnapshotService::MODULE_PERMISSIONS`, enforced identically on all
    endpoints and reused as `kpi.*` widget permission; no role-name branches.
-5. Known calculator gaps: OEE ignores shifts/holidays/downtime calendars; WO completion can
-   exceed 100% (numerator/denominator month mismatch); turnover divides by *current* stock
-   (no historical snapshot); budget is a fiscal-year figure (month ignored); AR-aging is a
-   current-balance snapshot, not historical aging.
+5. Known calculator gaps: OEE ignores shifts/holidays/downtime calendars; turnover divides by
+   *current* stock (no historical snapshot); budget is a fiscal-year figure (month ignored);
+   AR-aging is a current-balance snapshot, not historical aging. WO completion now uses one due-
+   month cohort; late completions stay misses in their due month.
 
 ### 38 DSS behaviors (grouped)
 
@@ -360,11 +374,8 @@ Source: `docs/dashboards/phase0/C-approvals.md`
 9. SO commit-date feasibility + expedite ranking · 10. Budget-transfer proposals ·
 11. Collector worklist by recoverability · 12. Auto-select/blend forecast method per product.
 
-Doc gaps: scorecard endpoint + `getScorecard` still live/tested while SPA page deleted
-(`docs/e2e-audit.md` still cites it); KPI strip-vs-tile windows undocumented; forecast-gate
-rule (dataset gate vs `forecasting.view`) lives only in code comments; capacity/attendance
-panels have no history (trend ≈ flat arithmetic); capacity-90% + attendance-8%/15% are
-hardcoded consts, not settings.
+Doc gaps: capacity has no historical utilization series. Capacity-90% and attendance-8%/15% are accepted
+code defaults; move them to settings if policy owners require runtime changes.
 
 Source: `docs/dashboards/phase0/D-dashboard-dss.md`
 
@@ -412,7 +423,7 @@ Source: `docs/dashboards/phase0/E-frontend.md`
   ChainStepAdvanced (only `ShouldBroadcastNow`) · 8 production/MRP events on
   `production.dashboard` (+ per-WO/machine channels) consumed by the production dashboard ·
   MaintenanceWorkOrderCreated · PayrollProgressEvent (per-period channel, 3s poll fallback +
-  cached snapshot). Declared-but-unlistened: `inventory.stock` (authorised, zero subscribers).
+  cached snapshot). The unused `inventory.stock` authorization was removed (F-062).
 - **32 cache key patterns:** procurement-chain 5 (60/120s, TTL-only, unscoped counts) ·
   `dashboard:production` + `inv:dashboard:summary` (30s) · `mrp:plant-run` lock (1200s) +
   `payroll:progress:*` (3600s) · gov-table active/version/effective sets · auth role/user
@@ -471,18 +482,17 @@ Source: `docs/dashboards/phase0/F-realtime-perf.md`
 (Assumptions = the discovery mission's expected counts, verified against sections.)
 
 - **Verified as stated:** 12 backend↔frontend mismatches (A) · 9 ledger + 14 custom approval
-  types (C) · 8 bespoke dashboards (A/D) · 38 DSS behaviors (D §4, numbered 1–38) ·
+  types (C) · 14 bespoke dashboards (A/D) · 38 DSS behaviors (D §4, numbered 1–38) ·
   12 DSS opportunities (D §5) · 30 frontend widgets (E §2a) · 14 events / 32 cache keys /
   15 query risks (F) · dead payroll board kind, VP escalation gap, bill-payment drift,
   asset-transfer unrouted, ApprovalRecord audit gap, custom-approval notification gaps,
-  scorecard leftovers, B-F1…F12 links, A-M1…M12 bugs — all present as briefed.
+  KPI endpoint reuse after standalone-page removal, B-F1…F12 links, A-M1…M12 bugs — all present as briefed.
 - **Nuance 1 — "9 ledger types": only 8 ever write rows.** `payroll` is a registry kind with a
   seeded-but-unwired workflow; zero `approval_records` rows can ever exist for it (C §1a/§5.1,
   A §5.9). Count as 8 live + 1 dead, not 9 live.
-- **Nuance 2 — widget scalar count 54 vs 55.** D §1.3 reports 65 keys (54 + 11 KPI) from the
-  seeder catalog; F §3 reports 55 scalar keys in `LINK_BY_KEY`. Both count the same seeder file
-  at different line windows — recount `DashboardWidgetSeeder.php:48-105` before citing either
-  number. Code-citing section wins no tie here (both cite code); flagged, not resolved.
+- **Nuance 2 — widget count reconciled.** `DashboardWidgetSeeder::catalog()` and `LINK_BY_KEY` each
+  contain 65 non-KPI entries; `kpiCatalog()` adds 11, for 76 widgets. Runtime reflection verified all
+  three counts; `WidgetSeedIntegrityTest` verifies every catalog key has a link.
 - **No other cross-section conflicts found.** A/D dispatch rules agree; B/C/F chain, sweep,
   and schedule claims agree (63 scheduled entries; 43/42-figure comments stale everywhere).
 

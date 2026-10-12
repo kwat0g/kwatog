@@ -32,7 +32,7 @@
 | E | Frontend (deps, 30 widgets, tokens, gaps) | `docs/dashboards/phase0/E-frontend.md` | done |
 | F | Realtime/perf (14 events, 32 cache keys, 15 risks, test constraints) | `docs/dashboards/phase0/F-realtime-perf.md` | done |
 | S | Executive synthesis | `docs/dashboards/00-discovery.md` | done |
-| S | Bug/gap log (68 items — 7 closed + 1 partial since synthesis, see below) | `docs/dashboards/FINDINGS.md` | done |
+| S | Bug/gap log (68 findings; current statuses in `FINDINGS.md`) | `docs/dashboards/FINDINGS.md` | done |
 | S | This file | `docs/dashboards/PROGRESS.md` | done |
 
 Conflicts noted during synthesis (see `00-discovery.md` "Discrepancies" for detail):
@@ -42,14 +42,60 @@ Conflicts noted during synthesis (see `00-discovery.md` "Discrepancies" for deta
 
 **Findings statuses updated 2026-10-11 (Phase 2).** `FINDINGS.md` was written with all 68 items `open` and
 stayed that way after work landed, so the log read as 68 live blockers when 8 were already fixed. Closed,
-everified against the live `ogami` schema rather than against a migration's own output: F-030 (returns
+verified against the live `ogami` schema rather than against a migration's own output: F-030 (returns
 fact-table indexes — `return_requests` + all six provenance FKs on `return_request_items`) and F-031…F-036
 (the whole index-debt batch — `wo_operations`, `production_logs`, `grn_items`, `budgets`/
 `budget_transfers`/`credit_note_lines`, PR/PO dates, delivery·WO·MWO timestamps — each column confirmed
 present in `pg_indexes`, and each attributed to the one migration that creates it). **F-037 is partial**: `invoices.sales_order_id`/`delivery_id`,
 `deliveries.invoice_id` and `official_receipts.invoice_id` are indexed;
-`invoice_items.source_delivery_item_id` still is not. The remaining 60 stay open — nothing was marked
-closed on the strength of a commit message alone.
+`invoice_items.source_delivery_item_id` still is not. At that update, the remaining 60 stayed open —
+nothing was marked closed on the strength of a commit message alone.
+
+**Current finding status (2026-10-12):** 61 closed, 4 partial, 3 implemented pending runtime
+verification, and 0 open. The remaining partials are F-002 (uncovered queues and notification delivery),
+F-024 (polymorphic references lack database FKs), F-060 (remaining KPI definition gaps), and F-064
+(inventory aggregation cost). F-010/F-014/F-015 have working paths and passing tests, but live notification
+delivery remains unverified. F-001 payroll cards use a separate maker-checker source and are verified;
+F-003 VP escalation, F-005 audit metadata, F-006 bill-payment notices, F-007 salary-adjustment notices,
+F-008 asset-disposal notices, F-009 custom queue notices, F-011 leave fallback, F-012 loan fallback and F-039 finance page/API access are verified through feature tests;
+F-013 is unreachable under seeded permissions (production_manager has view/act, not request); its
+submit-route 403 is covered by `SalaryAdjustmentGateTest`. A deliberate per-user request grant can
+still expose the self-stall. F-021 is confirmed and surfaced through Finance's delivery-invoice
+handoff count and filtered list; booked revenue stays based on posted ledger entries. `AutoInvoiceOnDeliveryConfirmTest` checks the count, link, and filtered rows. The widget is seeded into the Finance role default; existing personal layouts remain unchanged and can add it from the picker. F-022 is covered by the 15-minute retry sweep and the Warehouse default's `inventory.qc_handoff_issues` count/filter; failure, recovery, count, and filtered-list tests pass. F-023 keeps the order funnel's QC stage pending when completed output lacks outgoing inspection; the hourly sweep repairs or alerts unresolved cases. Chain and sweep tests pass. F-024 remains partial: service writes use `SourceReferenceRegistry`, and `audit:source-references` found zero unresolved ledger links; polymorphic records still lack database FKs. F-025 adds an index to `mrp_plans.mrp_run_id`; migration applied and index test passes. F-026's monthly reconciler backfills closed periods, and forecast accuracy omits rows with null actuals; regression and dashboard tests pass. F-014/F-015 have permission-scoped delegation and notify-only SLA reminders/escalations across payroll
+periods and ten custom queues. F-016/F-017 approval guides now match seeded workflows.
+Targeted delegation, board-scope, custom-sweep, auto-resolve, notification-service/catalog and
+finish-first compatibility tests pass; live notification delivery remains unverified.
+F-027 is closed: rollout health resolves incoming inspections through `grn_item_id` and the GRN-line
+foreign key, using legacy entity links only for inspections without typed source links; the conflicting-link
+regression test passes.
+Dashboard login checks then found `GET /dashboard/kpi/trends` returned 403 for purchasing and warehouse:
+their strips request mixed KPI codes, while scorecard already omits codes outside each viewer's data grants.
+Batch trends now applies that same filter. The API regression covers both roles. The 2026-10-12 Chromium
+and Firefox role-dashboard audit found no dashboard API errors or permission toasts for the 16 available
+demo login accounts; `maintenance_supervisor` has no matching demo login credentials in the running database,
+and its permission-derived landing is covered by `DashboardDispatchTest`. Role records currently hold both
+`notifications.view` and `business_policies.view`. The topbar now mounts its notification bell only when the
+effective permission set contains `notifications.view`, with a regression for both grant states. F-028 is
+closed: failed rework work-order creation rolls back the NCR
+disposition; Quality's `Unlinked Rework NCRs` KPI and filtered list expose non-cancelled rework reports
+missing both work-order links. Tests cover rollback, KPI count, and list rows; the live database audit found
+24 historical unlinked rework NCRs and no closed outgoing-rework repair gaps. F-029 is closed:
+`StockLevel` and `StockMovement` now emit `HasAuditLog` rows on Eloquent writes; `StockAuditTrailTest`
+verifies actor attribution and before/after values through the inventory service. No history was backfilled;
+the movement ledger remains the canonical source for physical stock events. F-037 is closed: the
+missing `invoice_items.source_delivery_item_id` index was added by `2026_10_12_090000`, applied to the
+running database, and verified by `Phase0IndexMigrationTest` and `pg_indexes`. F-038 is closed as a
+date-grain rule: PO lines already have timestamps; no-timestamp lines use their parent business date or
+output event date. `ForecastManualOverrideGuardTest` and `ProductionDashboardServiceTest` pass for the
+sales-demand and production-defect joins. No item-level edit history is claimed.
+
+F-063 is closed: widget summaries and rich payloads cache successful reads for 30 seconds under
+viewer-specific keys, with failures retryable and no cross-user cache reuse. F-064 is partial: R1–R4 now
+use SQL aggregation and batched OEE reads; inventory summary and low-stock calculations still process the
+full relevant stock set to preserve location, hold, reservation, and availability rules. F-065 is closed:
+cash position uses configured account codes, output trends filter an indexed `recorded_at` range, and AR
+aging uses direct indexed due-date ranges. The recorded-at index migration is applied and asserted by
+`Phase0IndexMigrationTest`.
 
 ## Phase 1 status — COMPLETE, AWAITING REVIEW (spec only; no feature code)
 
@@ -60,32 +106,27 @@ closed on the strength of a commit message alone.
 | Roles 13–17 | `docs/dashboards/phase0/M-p3.md` | maintenance_supervisor, impex_officer, department_head, employee, driver |
 | **Synthesis** | `docs/dashboards/01-matrix.md` | canonical shared contracts · company-overview spec · 4 matrices (role×widget, module×dashboard, approval-type×role, metric→source→cadence) · gaps · build order · open questions |
 
-Counts: roles specified **17/17** · matrices **4/4** · new pages proposed **5**
-(`/dashboard/company` (VP, replaces the earlier `/dashboard/vp` proposal), `/dashboard/logistics`,
-`/dashboard/maintenance`, `/dashboard/department`, driver landing → existing `/driver` PWA) ·
+Counts: roles specified **17/17** · matrices **4/4** · six new pages shipped: `/dashboard/company` in
+Phase 2 B and five role pages in Phase 2 E (`/dashboard/logistics`, `/dashboard/maintenance`,
+`/dashboard/department`, `/dashboard/sales`, `/dashboard/customer-service`) · driver PWA dispatch remains
+deferred; current driver home stays `/dashboard/default` ·
 UNVERIFIED 19 · data-not-available 44.
 
-New gaps found while writing the matrix (all logged in `01-matrix.md` §D2):
-G-P2-1/G-P3-1 shared self-service slugs used as global widget gates (team DTR/leave/attendance
-forecast visible to every role) · G-P2-2 `ppc_head` lacks `production.dashboard.view` (4 widgets +
-2 KPI tiles stripped) · G-P2-3 KPI strip codes ≠ KPI gates (PPC 1/4, PM 2/3, purchasing 1/2,
-warehouse 1/2) · G-P2-4 `forecasting.view` leaks cash-flow/capacity tiles to buyers and warehouse ·
-G-P3-2 the KPI gate map allows one slug per module, so impex/department_head cannot read OTD or
-attendance rate · G-P3-3/G-P3-4 landing + role-default mismatches · G-D-1 two competing executive-page
-proposals (resolve to one) · G-D-2 adding a dispatch slug moves a landing · G-D-3 every proposed queue
-card needs index work first.
+The initial gaps are recorded with current resolution in `01-matrix.md` §D2: shared widget gates were
+reviewed for row scope; production and forecast gates now follow dataset reads; PPC and PM KPI strips
+match their readable codes; ImpEx now reads OTD through a qualified gate; five role pages shipped. The
+department attendance KPI source, some cross-module strip codes, and future queue indexes remain explicit
+gaps rather than broad permission grants.
 
-**Five decisions are parked for review** (`01-matrix.md` §D4): re-gate vs document the shared-slug
-widgets · grant vs re-gate `production.dashboard.view` for PPC · extend `MODULE_PERMISSIONS` to slug
-sets vs new KPI definitions · confirm the single executive page + VP landing change · which of the five
-new pages ships first.
+The five Phase 1 decisions were resolved and recorded in `01-matrix.md` §D4: shared-slug widget scope,
+PPC dataset gates, KPI permission sets, the company page/VP landing, and the five additional role pages.
 
-Suggested build order (after those decisions) — build order and blockers: foundation (cache + index
-migrations + metric dictionary + company shell) → system_admin/finance/vice_president →
+Phase 1's planned build order and blockers at that point were: foundation (cache + index
+migrations + metric dictionary) → system_admin/finance/vice_president →
 production_manager/ppc_head → purchasing_officer/warehouse_staff → qc_inspector → hr_officer →
 maintenance pair → impex_officer → department_head → sales_officer → customer_service_officer →
-employee → driver. Ranked blockers from Phase 0 unchanged: board-blind card sourcing → notification
-gaps → index migrations → finance authority pick.
+employee → driver. Phase 2 updates below record the shipped pages, widgets, and permission fixes; remaining
+approval-board gaps and live notification-delivery verification are listed in the current status above.
 
 ## Phase 2 status — FOUNDATION SHIPPED (analytics layer + indexes + dictionary)
 
@@ -94,14 +135,16 @@ commit**, not the running total — B says 192 backend because that is what `tes
 reported when B shipped, C says 196, E says 199. Read them as a timeline. The current state of the tree is
 the HEAD commit's own verification block, not the highest number in this file.
 
-Branch `docs/dss-discovery-phase0`. Feature code this time (the mission's Phase 2 is a build phase);
-role pages and DSS tiles are still NOT built.
+Branch `docs/dss-discovery-phase0`. Feature code this time (the mission's Phase 2 is a build phase).
+At this foundation increment, role pages and DSS tiles were still NOT built; later Phase 2 sections below
+record their delivery.
 
 | Deliverable | Files | State |
 |---|---|---|
 | Analytics service layer | `api/app/Modules/Dashboard/Support/Analytics/{MetricDefinition,MetricRegistry,AnalyticsPeriod}.php` · `Services/Analytics/{AnalyticsCache,AnalyticsService}.php` · `Services/Analytics/Domains/{DomainMetric,ReturnsPipelineAnalytics,WorkOrderLeadTimeAnalytics}.php` | shipped |
 | Thin controller + routes | `Controllers/MetricController.php` · `Requests/{ListMetricsRequest,ShowMetricRequest}.php` · `routes.php` (`GET /dashboard/metrics`, `GET /dashboard/metrics/{metric}`) | shipped |
 | Index batch (Phase 0 B §4 cheapest wins) | 6 migrations `2026_10_11_0900xx_*` → **75 indexes across 20 tables** (production/WO-log joins, GRN+QC joins, all of returns, budgets/credit lines, PR/PO dates, delivery OTD timestamps, chain links) | shipped |
+| MRP run trace follow-up | `2026_10_11_170000_add_mrp_run_trace_index.php` → `mrp_plans.mrp_run_id` index | shipped; migration applied; `Phase0IndexMigrationTest` asserts it |
 | Metric dictionary | `docs/dashboards/METRICS.md` — **generated** by `php artisan metrics:doc` from `MetricRegistry` | shipped |
 | Settings | `dashboard.analytics.cache_ttl_seconds` = 60 (migration `2026_10_11_090500`) | shipped |
 | SPA consumer | `spa/src/types/analytics.ts` (envelope contract) · `spa/src/api/metrics.ts` (catalog + one-metric read) · `spa/src/hooks/useMetric.ts` (refresh-bucket polling + stale flag) · `spa/src/lib/metricValue.ts` · `spa/src/components/dashboard/MetricPanel.tsx` | shipped |
@@ -119,7 +162,7 @@ Open items (deliberately NOT in this increment): materialized views / summary ta
 tables (daily stock/AR/AP/WIP), per-metric invalidation observers, endpoint p95 query-budget assertions,
 Reverb streaming for metric changes, the catalog (`GET /dashboard/metrics`) consumer — the API client
 exposes `metricsApi.catalog()` but no surface reads it yet — and the remaining ~11 rows of the Phase 0
-§4a index list (portal, MRP-run, payroll and admin tables). Only two metrics are mounted; the remaining
+§4a index list (portal, MRP actor/user, payroll and admin tables). Only two metrics are mounted; the remaining
 role pages are D3 build-order work.
 
 SPA wiring notes (2026-10-11): `MetricPanel` takes a metric CODE and fetches, so body selection is
@@ -176,10 +219,10 @@ them); driver 0; qc_inspector 3, quality only; ppc_head 1, supply_chain only; pr
 the three quality codes their own landing page's strip already listed. `/dashboard/widgets` agrees: VP 0 → 11 KPI
 tiles, driver 0, qc 3.
 
-**Still open:** `impex_officer` and `department_head` remain unable to read OTD / attendance rate — they need a
-surface that renders those KPIs (proposed `/dashboard/logistics`) or a grant, and neither exists yet, so this is
-recorded rather than papered over with a grant that widens a whole module. G-P2-3 (strip code lists chosen per
-page vs gates per module: PPC still reads 1 of its 4 strip codes) is unchanged.
+**Current status:** Phase 2 E shipped `/dashboard/logistics` and added its read slug to the supply-chain KPI
+gate, so ImpEx reads OTD. Department heads still have no department-scoped attendance KPI source; no
+company-wide grant was added. PPC and PM each read all three codes on their strips; purchasing and warehouse
+remain at 1/2 because their missing code belongs to another module.
 
 ### Phase 2 — B: company-overview shell (shipped)
 
@@ -208,15 +251,20 @@ purchasing, warehouse, qc, impex, depthead and employee are all unchanged. That 
 the reason this was held for an explicit decision. The VP's effective layout resolves 8 blocks (3 rich, 5
 scalar) with `layout_version` served; the strip reads all 6 codes.
 
-**Not built (deliberately, and why).** §B lists 8 blocks; this ships 4 block families for the executive plus
-the strip. Absent:
+That runtime measurement predates the recovery, quality and Phase 5 widgets. The migrations add five
+role-owned entries; a database check confirmed all five are present. Existing user-owned layouts remain
+unchanged and can add widgets from the picker; the effective rendered layout was not rechecked.
 
-| Missing | Reason |
+**Executive coverage after Phase 5.** The default VP layout now includes the requested quality and Phase 5
+families. Quality cards use read-only grants; detailed recommendation rows and briefing sentences still
+check each source permission before querying it.
+
+| Family | Status |
 |---|---|
-| Quality (defect Pareto, NCR aging, 8D SLA burn) | The executive holds no `quality.view` / `quality.ncr.view`. Omission is the documented rule; adding it is a grant decision, not a code change. The strip still carries DPPM and first-pass yield. |
+| Quality (defect Pareto, NCR aging, 8D SLA burn) | **Built.** VP receives `quality.view` and `quality.ncr.view` only; no quality write or disposition grant. The 8D card also uses existing `crm.complaints.view`. |
 | Demand vs supply | **Built in C below** — this was not a grant call after all, it was a gate written on a page slug. Both forecasts now read the datasets they project. |
-| Chain-stage *donut*, AP due ≤3d, chain-recovery backlog card | **Chain health built in F below.** AP due ≤3d is served by the existing `finance.upcoming_payables` (its horizon is the `dashboard.widgets.payables_horizon_days` setting); the recovery backlog card is still open, with its reason recorded in F. |
-| Risks & opportunities, Weekly briefing | Phase 5 by §B. |
+| Chain-stage *donut*, AP due ≤3d, chain-recovery backlog card | **Chain health built in F below.** AP due ≤3d is served by the existing `finance.upcoming_payables` (its horizon is the `dashboard.widgets.payables_horizon_days` setting); the recovery backlog is a scalar on the shared recovery attention query. VP has view-only recovery access for the count and drill-through. |
+| Risks & opportunities, Weekly briefing | **Built.** Current permission-filtered alert, recovery, quality, receivables and payables signals; weekly production/NCR/complaint totals compare trailing 7-day windows. This feed uses existing records and fixed rules, not predictive models. |
 
 ### Phase 2 — C: widget gates follow the dataset read (shipped)
 
@@ -228,7 +276,7 @@ grant, or a self-service slug — rather than by who may read the data behind it
 |---|---|---|
 | Re-gate migration | `2026_10_11_110000_regate_dashboard_widgets_on_dataset_reads.php` — 7 keys, applies **and** reverses, sourced from `KpiSnapshotService::moduleGates()` so the tiles and the widgets cannot disagree | applied |
 | Seeder | `DashboardWidgetSeeder` — the 7 rows now carry `permission_any` (the module's read set) with `permission` null | shipped |
-| Executive page | `DashboardRoleLayoutSeeder` VP default gains `forecast.revenue` + `forecast.capacity` → §B's Demand-vs-supply family | 8 → 10 blocks |
+| Executive page | `DashboardRoleLayoutSeeder` VP default gains `forecast.revenue` + `forecast.capacity` → §B's Demand-vs-supply family; recovery, quality and Phase 5 entries followed | 16 default entries currently |
 | Strip honesty | `spa/src/lib/dashboardKpis.ts` — `PPC_KPIS` drops `first_pass_yield` (a quality reading ppc_head holds no grant for, so the tile could never draw); purchasing/warehouse kept at 1/2 with the reason commented at the list | shipped |
 | Drift guards | `WidgetSeedIntegrityTest::test_widget_gates_follow_the_dataset_read` + `::test_regated_widgets_reach_the_intended_audience` (both directions: who GAINS and who LOSES) · `KpiVisibilityMatrixTest` +2 (the production data read admits the schedule owner; it does not widen them past their own modules) | 196 backend pass |
 
@@ -243,6 +291,9 @@ own up/down proof):
 | `purchasing_officer` | 24 | **21** | −3: both forecasts and the attendance projection — a buyer was rendering finance's cash forecast (G-P2-4) |
 | `warehouse_staff` | 18 | **15** | −3: same three |
 | `driver` | 8 | **7** | −1: the org-wide attendance/leave projection |
+
+These counts predate the recovery tile; VP now qualifies for one additional widget. Runtime count was not
+rechecked in this pass.
 
 **The hole in the naive fix, caught before shipping:** gating on a single data-read slug is correct for the
 module's own holder and **silent for the executive**, whose entire authority is `dashboard.company.view`.
@@ -320,7 +371,7 @@ grid they landed on resolved to empty.
 | Shared shell | `spa/src/components/dashboard/RoleDashboardShell.tsx` — extracted from `company.tsx`, now shared by **all six** role pages; `company.tsx` refactored onto it rather than left as a second copy of the same strip/registry/stale logic | shipped |
 | Pages | `spa/src/pages/dashboard/{logistics,maintenance,department,sales,customer-service}.tsx` | shipped |
 | Role defaults | `DashboardRoleLayoutSeeder` — new defaults for `sales_officer` + `customer_service_officer` (they had none); `impex_officer` gains the OTD reading and its shipments card | shipped |
-| New widgets | `logistics.shipments_in_transit` · `sales.open_orders` · `sales.price_requests` (scalar arms in `DashboardWidgetDataService`) | 68 widgets |
+| New widgets | `logistics.shipments_in_transit` · `sales.open_orders` · `sales.price_requests` (scalar arms in `DashboardWidgetDataService`) | 75 widgets |
 | Tests | `RoleDashboardShell.test.tsx` (5) · `DashboardDispatchTest` provider extended to all 17 roles + maintenance shared-page case · `KpiVisibilityMatrixTest` +2 | **199 backend / 64 SPA** |
 | Drift guard | `scripts/check-dashboard-route-parity.mjs` + `npm run audit:dashboard-routes` — every `DashboardCatalog` entry must have a `<Route>` whose `PermissionGuard` names **the same** permission | **14/14** |
 
@@ -334,11 +385,14 @@ search would happily accept a guard that sits on a different route. Proven by mu
 swapping `logistics`'s guard to `dashboard.ppc.view` makes it exit **1** naming the entry, and restoring makes
 it exit 0 with the routes file byte-identical.
 
-**Still open, and deliberately not blind-edited:** `scripts/role-dashboard-audit.js` is a Playwright audit
-with a hard-coded nine-role list and their expected landings — the nine roles that had pages *before* this
-increment. It is incomplete rather than wrong (its assertions would still pass), and Chromium is not
-installed in this environment, so the list was left alone and recorded here: extend it to all seventeen when
-a browser is available. The static parity check above covers all fourteen dashboards without one.
+**Role-login browser audit (2026-10-12).** `scripts/role-dashboard-audit.js` now checks all 17 role entries,
+their landing paths, visible permission toasts, browser errors, and failed API responses in Chromium and
+Firefox. Fifteen correctly matched live demo accounts passed with no dashboard API errors or permission
+toasts. The running database's maintenance demo accounts drift from `DemoAccountSeeder`: `maintenance@ogami.test`
+belongs to `maintenance_supervisor`, `maintenancehead@ogami.test` is absent, and `maintenance_tech` has no
+demo login. `DashboardDispatchTest` covers both maintenance roles. The live role-permission table has the
+expected dashboard landing grant and `notifications.view` for all 17 roles; no shared dashboard grant gap
+reproduced. If the toast persists, its failing API request is needed to identify a different permission gate.
 
 **The grants migration was round-tripped on dev, not just applied** (`up` → `migrate:rollback --path` →
 `up`), because "applies and reverses" is a claim about `down()` and only the rollback exercises it. Holder
@@ -382,6 +436,28 @@ using it would have hidden the page from half the roles it exists for (the M6 tr
 **Dev-DB side effects:** the migration applied, plus `RolePermissionSeeder`, `DashboardWidgetSeeder` and
 `DashboardRoleLayoutSeeder` re-run on dev.
 
+### Phase 2 — G: Sales dashboard analytics (shipped)
+
+Sales now sees a 12-month order-date trend, open orders by lifecycle stage, and active price requests by
+status. Existing order and pricing permissions remain the gates; customer-level records and amounts do not
+enter these aggregates. `sales.order_intake` is added to role defaults and existing saved Sales layouts by
+`2026_10_12_100000_add_sales_dashboard_analytics.php`.
+
+| Deliverable | Files | State |
+|---|---|---|
+| Rich analytics | `CrmWidgetAnalytics` — zero-filled 12-month order count; open order and price-request status mixes | shipped |
+| Catalog / defaults | `DashboardWidgetSeeder`, `DashboardRoleLayoutSeeder`, reversible catalog/layout migration | shipped |
+| Page copy | `spa/src/pages/dashboard/sales.tsx` now names the actual views | shipped |
+| Regression checks | `NewDomainAnalyticsTest`, `WidgetSeedIntegrityTest`, `DashboardWidgetDataTest` | passed |
+
+The Sales default no longer includes `crm.open_complaints`: its route uses `crm.complaints.view`, which Sales
+does not hold. The widget now uses that route grant, and a migration removes it from Sales role defaults while
+permission filtering strips it from saved layouts. No complaint-view permission was added to Sales.
+
+Conversion, promise-date risk, invoice handoff, and customer-confirmation trends remain out of this increment:
+they require source joins or read grants the Sales role does not currently hold. The billing backlog remains
+finance-owned, and no permission was widened to populate it.
+
 ### Phase 2 — F: §B chain health is a real breakdown (shipped)
 
 `chain.stage_breakdown` was a **scalar** — a single count of active order-to-cash chains. §B asks for the
@@ -392,7 +468,7 @@ still in Order Entered, 2 In Production" is where the bottleneck is.
 |---|---|---|
 | Rich provider | `CoreWidgetAnalytics` handles `chain.stage_breakdown` → `{total, segments[]}` — the same shape `qc.pareto` and `production.wo_breakdown` already produce, so the SPA's existing `WidgetBreakdown` renders it with no new component | shipped |
 | Shared source | `ProductionDashboardService::chainStageBreakdown()` — `private` → **public**, so the widget and `/production/dashboard` read ONE stage map. A re-derived copy would disagree the first time a sales-order status moved | shipped |
-| Render kind | `DashboardWidgetSeeder` — `chain.stage_breakdown` scalar → `breakdown` | 68 widgets |
+| Render kind | `DashboardWidgetSeeder` — `chain.stage_breakdown` scalar → `breakdown` | 75 widgets |
 | Drift guards | `WidgetSeedIntegrityTest` — rich↔provider bijection **and** "every handled key is seeded rich": the second is what fails if the seeder render kind is not moved with the provider | passed |
 
 **Live, on the VP's layout:** `kind=breakdown total=13 segments=7` — Order Entered 9 (success), MRP Planned
@@ -400,39 +476,177 @@ still in Order Entered, 2 In Production" is where the bottleneck is.
 0 (danger). Tones come from the source's own colour map, and the whole set is counts — no customer, order
 number or amount — so splitting the total into stages does not widen who sees what.
 
-**Two §B chain words were dropped rather than folded in, and that is deliberate.** `manual_required` is
-not a sales-order stage at all — it is a PR/PO *conversion* state and a delivery→invoice *handoff* state,
-so making it a segment of this donut would have labelled a stalled procurement as a production stage. The
-chain-recovery backlog is a `chain_listener_runs` count that belongs on the recovery surface.
+`manual_required` is not a sales-order stage at all — it is a PR/PO *conversion* state and a delivery→invoice
+*handoff* state, so making it a segment of this donut would have labelled a stalled procurement as a
+production stage. The chain-recovery backlog is a separate scalar on the recovery surface.
 
-**Still open from §B's chain-health row:** the recovery-backlog card. `ChainListenerRecoveryService`
-already owns "which runs need attention" (it is the `attention` query its index endpoint filters on), and
-that query is built inline inside the service. Shipping the card means extracting it into one shared
-builder first — the alternative, re-expressing "needs attention" in the dashboard, is exactly the
-divergence the row-scope doctrine in CLAUDE.md forbids. Deliberately not done in a session's last hour
-against a working, tested recovery surface; recorded so the next pass does it with the reuse intact.
+**Recovery backlog shipped.** `ChainListenerRecoveryService::attentionCount()` and its list endpoint share
+the same attention filter. The `chain.recovery_backlog` widget links to `/chains/recovery`; VP receives
+`dashboard.chain_recovery.view` only, not replay/resolve authority. The catalog migration adds the widget and
+VP's role default without changing saved user layouts.
 
-## Later phases — PENDING
+## Remaining approval-center work and verification
 
-Remaining after E/F, from the docs and in their own order:
+Phase 5 executive widgets, VP read-only quality access, VP escalation, finance page/API gate alignment,
+approval-record audit events, and the documented submit/decision/handoff notifications are implemented.
+The three migrations are applied. A VP service smoke returned NCR, 8D, recommendation, briefing and
+recovery aggregates; VP permissions were verified as read-only for quality and chain recovery. A
+read-only system-admin approval-board smoke exercised all ten custom filters and returned active OT,
+cost-review and budget-transfer cards. PHP lint, SPA typecheck and `git diff --check` passed. The live
+database has no `ApprovalRecord` audit rows, so there is no production sample; the HTTP feature test
+verifies actor, IP, user-agent and request ID. Notification delivery remains unverified.
 
-1. **§B's quality panel — a grant decision, not code.** It needs `quality.view` / `quality.ncr.view`,
-   which the executive does not hold. The docs are explicit that adding it is a deliberate widening of
-   executive access to quality records, so it is left for the reviewer rather than taken by a build pass.
-   Note the strip already carries DPPM and first-pass yield through the company read.
-2. **§B's chain-recovery backlog card** — extract `ChainListenerRecoveryService`'s attention query into one
-   shared builder first (see Phase 2 — F), then the card is a scalar over it.
-3. **§B's Risks & opportunities and Weekly briefing** — Phase 5 by spec.
-4. **The DSS recommendation tiles** — the Phase 5 capability behind them does not exist yet.
-5. **The D1 blockers that are not dashboard work at all:** board-blind approval card sourcing (payroll +
-   14 custom types), notification darkness, finance dual-slug authority (F-039), the `ApprovalRecord` audit
-   trait, sub-month KPI grain, and the top-step escalation gap.
-6. **Pre-existing red surfaces found while verifying, not fixed here:** `LateProductionReportTest` and 96
-   other `tests/Feature/Production` tests fail on a `produced_count` / `good_count` validation mismatch in
-   `RecordOutputRequest` + `StoreLateProductionReportRequest` (both last changed by `943e27ff`, a
-   consolidation commit dated 2026-10-10 — not by this mission), and `spa/src/lib/notificationMeta.test.ts`
-   fails on 7 missing `maintenance.*` notification types. Neither is a dashboard defect and neither is in
-   this mission's diffs; recorded because a red suite hides the next real signal.
+1. **Custom approval board sources are implemented (F-002, still partial).** `/approvals` now reads
+   payroll periods separately and adds permission-gated cards for OT, stock adjustments, item cost
+   reviews, stock-count variances, payroll adjustments, budgets, transfers, prebill invoices, supplier
+   listings and loan write-offs, applying maker guards where the source records them. Ledger rows remain
+   unchanged; no synthetic `approval_records`
+   were added. GRN refusal, unrouted transfers, return-case state transitions, PPAP (no SPA review route)
+   and late production reports (per-work-order list only) remain outside the global board.
+2. **Custom delegation and sweep coverage are implemented (F-014/F-015).** Active delegates can act
+   only when they already hold the source queue's read permission. The six-hour SLA sweep now sends
+   deduplicated reminder/escalation notices for payroll periods and ten custom queues; escalations also
+   notify active system administrators, never auto-decide. Targeted tests cover read-scope enforcement,
+   budget role separation, and no state mutation; live delivery remains unverified.
+3. **Sub-month KPI grain needs no snapshot change.** Snapshot grain stays monthly; weekly briefing and
+   trends query source tables, as specified in `METRICS.md`.
+4. **Reported validation/metadata failures are verified.** Finish-first output accepts the legacy
+   `good_count` shape when no rejects or defects are present; the HTTP feature test also verifies hashed
+   `crew_id` decoding. Notification catalog coverage passes for every emitted type, including the spare-parts
+   handover type, and SPA notification metadata typecheck passed.
+
+### F-040 — chain tracker role gates (closed 2026-10-12)
+
+`/chains` and its sidebar item admit either `crm.sales_orders.view` or `dashboard.view_bottlenecks`.
+Sales-order lookup/detail and bottleneck data each stay behind their own permission; the API's
+row-level module filtering remains authoritative. PPC users can use bottleneck-only mode, and a
+deep-linked sales-order ID does not trigger an unauthorized request. Sales and PPC component tests,
+sidebar permission tests, SPA typecheck, and `ApprovalChainRolePermissionDriftTest` pass. No grants changed.
+
+### F-041–F-042 — maintenance route gates (closed 2026-10-12)
+
+The maintenance landing and internal work-order detail now require `maintenance.view`. Employees
+with only `maintenance.work.assigned` retain scoped access on the self-service routes; backend
+assignment checks remain in place. Route tests verify denied roles see the not-found state without
+starting work-order reads. SPA tests, typecheck, and lint pass.
+
+### F-043 — overtime create access (closed 2026-10-12)
+
+The create route and list action now use `attendance.ot.create`, matching the write endpoint. The
+form fetches the employee directory only for `hr.employees.view`; create-only users submit for their
+linked employee. Focused SPA regression, typecheck, and lint pass.
+
+### F-044 — self-service access alignment (closed 2026-10-12)
+
+Audit confirmed self-service APIs resolve data from the authenticated employee and do not require
+the shared attendance, leave, or payroll read slugs. Notification preferences does require
+`notifications.preferences.manage`; its route is now guarded and its profile link hidden without
+that grant. Route regression, typecheck, and lint pass.
+
+### F-045 — approval-cover access (closed 2026-10-12)
+
+The unguarded route matches the self-service API: any signed-in user may manage their own cover;
+`admin.delegations.manage_any` is the only wider scope. Existing controller/service and page tests
+cover the ownership rules. No extra route permission added.
+
+### F-046 — leave and attendance read scopes (closed 2026-10-12)
+
+Leave and attendance management pages remain manager-only. Generic read endpoints grant shared
+self-service read permissions but enforce own/department row scopes. Leave visibility matrix and
+attendance self-scope regressions pass; no wider page access is needed.
+
+### F-047 — warehouse structure read access (closed 2026-10-12)
+
+`/inventory/warehouse` now admits `inventory.view` readers, matching the read endpoints. The page
+continues to hide mutations without `inventory.warehouse.manage`; Warehouse Map stays manager-only
+because its endpoints require that grant. Route permission regressions pass.
+
+### F-048/F-049 — admin and notification navigation gates (closed 2026-10-12)
+
+Removed the SPA-only `is_superuser` bypass so admin access follows the API's `system_admin` role
+check. The Notifications sidebar link now requires `notifications.view`, matching its route.
+Sidebar regressions pass.
+
+### F-050 — maintenance supervisor grant migrations (closed 2026-10-12)
+
+Follow-up migrations supply `maintenance.wo.verify` and `mrp.machines.view` on migrated databases.
+Regression removes and reapplies both grants twice without reseeding; personal dashboard layout stays intact.
+
+### F-051 — dashboard defaults for every seeded role (closed 2026-10-12)
+
+`DashboardRoleLayoutSeeder` now includes all 17 seeded roles, and the dispatch map sends only
+`employee` and `driver` to `/dashboard/default`. Added a seed-integrity regression for full role
+coverage; existing checks verify every default widget against role permissions.
+
+### F-053 — factory PWA role boundary (closed 2026-10-12)
+
+No production-operator role exists in the seeded catalog. Keep the full factory PWA restricted to
+`production_manager`; employees retain assignment-scoped work-order access through self-service.
+No broad permission grant added.
+
+### F-054 — unknown Finance permission module (closed 2026-10-12)
+
+Removed the stale `crm_commissions` module lookup from the Finance role seeder. It had no catalog
+entry and yielded no permissions.
+
+### F-055 — scorecard endpoint role (closed 2026-10-12)
+
+The standalone scorecard page remains deleted. Its API endpoint intentionally feeds the shared
+role KPI strips; E2E docs now name that strip surface.
+
+### F-056 — KPI strip and widget windows (closed 2026-10-12)
+
+Documented six monthly points for compact page strips and 12 months for widget trend context. Both
+read the same monthly snapshots under the same permission gates.
+
+### F-057 — forecast access gates (closed 2026-10-12)
+
+Documented the split: shared forecast widgets follow source-data permissions; bespoke dashboard
+panels use the permission declared by their service, including `forecasting.view` for cash/capacity.
+
+### F-058 — forecast series meaning (closed 2026-10-12)
+
+Clarified the inputs behind the capacity and attendance trend indicators. Capacity compares projected
+months only; attendance uses recorded rates for its mean, direction, and confidence, while future
+approved leave load drives its risk label.
+
+### F-059 — forecast threshold defaults (closed 2026-10-12)
+
+Accepted 90% capacity and 8%/15% attendance thresholds as fixed defaults. Code comments record
+runtime configurability as the upgrade trigger if policy owners need threshold changes.
+
+### F-060 — KPI calculator gaps (partial 2026-10-12)
+
+WO completion now counts finished work from the same due-month cohort as the denominator. A regression
+verifies July work finished in August remains a July miss and does not inflate August's rate. The focused
+test passed (4 assertions). OEE, inventory turnover, budget utilization, and AR-aging gaps remain open.
+
+### F-063–F-065 — dashboard query load (2026-10-12)
+
+Successful widget-summary and rich-payload reads cache for 30 seconds per viewer and widget. Production
+output totals, order-stage breakdowns, and dashboard OEE now aggregate in SQL or batch by machine. The
+output trend uses the new `work_order_outputs.recorded_at` index; cash position and AR aging use indexed,
+direct predicates. Inventory summary and low-stock aggregation remain full-set work because stock
+availability depends on location, holds, reservations, and blocked/quarantine rules. R1–R4 and R6/R8/R9
+are addressed; F-064 stays partial for R5/R7. Targeted production, widget, index, approval-board,
+delegation, workflow-permission, executive-gate, and role-dispatch tests passed: 162 tests,
+656 assertions across two serial runs. SPA typecheck passed; 27 focused SPA test files passed (108 tests),
+and dashboard route/catalog parity passed for all 14 dashboards; RBAC audit found no referenced but
+unseeded permissions. Full SPA lint still reports five `toISOString()` calendar-date violations in
+unchanged return-management files.
+
+### Dashboard role permissions (verified 2026-10-12)
+
+All 17 roles hold their expected dashboard landing grant and `notifications.view` in the running database.
+The role browser audit verifies each signed-in `/auth/user` role against the expected slug and found no
+permission toast or failed dashboard API response for 15 correctly matched
+demo accounts. Maintenance login data in the running database does not match the current demo seeder; see
+the audit note above. `Topbar` now omits the notification bell when the effective permission is absent.
+
+### F-052 — executive dashboard separation (closed 2026-10-12)
+
+The VP now lands on `/dashboard/company`; its read-only page separates company aggregates from
+plant operations, which remains available as an alternate. `DashboardDispatchTest` verifies dispatch.
 
 `driver` and `employee` keep `/dashboard/default` by design — their primary surfaces are the driver PWA and
 `/self-service`.
@@ -445,12 +659,10 @@ means it lands on a purpose-built dashboard, not that every item in its `M-p*.md
 module means it has a built surface, not that every reading `B-modules-data.md` asked for exists. The
 per-role and per-module gaps are recorded in those specs and in `FINDINGS.md`.
 
-**The Approval-chains list stays unchecked on purpose, and it is not waiting on this mission.** Every box
-there is blocked by §D1 blocker 1 — board-blind card sourcing: `payroll` is a dead ledger kind and all 14
-custom single-step types write no `approval_records` rows, so a card for them has nothing to source. That
-is a per-type card-sourcing change in each owning module, tracked as F-001/F-002 and reachable from
-`/approvals`; the dashboards mission built the approvals *surface* (the top-8 SLA worklist on every role
-dashboard, Phase 2 D/T2) and correctly did not turn a missing ledger into a dashboard fix.
+**Approval-board coverage:** all eight live step-ledger kinds, payroll's maker-checker queue and ten
+custom decision queues have sources gated by module read permission, applicable row scope, and maker
+guards where the source records them. The non-queue/state-machine cases and live notification delivery
+verification keep F-002 partial; custom delegation and notify-only SLA coverage are implemented.
 
 ### Spec coverage delivered in Phase 1
 
@@ -516,30 +728,30 @@ sub-month KPI grain, historical snapshots and the per-module gaps stand as recor
 ### Approval chains (from C §1a ledger + §1b custom)
 
 Ledger (step-ledger):
-- [ ] leave
-- [ ] pr
-- [ ] po
-- [ ] bill_payment
-- [ ] loan
-- [ ] salary_adjustment
-- [ ] asset_disposal
-- [ ] return_request
-- [ ] payroll (dead kind — wire or drop)
+- [x] leave
+- [x] pr
+- [x] po
+- [x] bill_payment
+- [x] loan
+- [x] salary_adjustment
+- [x] asset_disposal
+- [x] return_request
+- [x] payroll (separate maker-checker card source; still no ledger rows or sweep)
 
 Custom single-step:
-- [ ] overtime
-- [ ] stock_adjustment
-- [ ] item_cost_review
-- [ ] stock_count_variance
+- [x] overtime — custom approval-board source
+- [x] stock_adjustment — custom approval-board source
+- [x] item_cost_review — custom approval-board source
+- [x] stock_count_variance — custom approval-board source
 - [ ] grn_reject
-- [ ] payroll_adjustment
-- [ ] budget
-- [ ] budget_transfer
-- [ ] invoice_prebill
-- [ ] supplier_listing
+- [x] payroll_adjustment — custom approval-board source
+- [x] budget — custom approval-board source
+- [x] budget_transfer — custom approval-board source
+- [x] invoice_prebill — custom approval-board source
+- [x] supplier_listing — custom approval-board source
 - [ ] asset_transfer (unrouted)
 - [ ] return_case
-- [ ] loan_write_off
+- [x] loan_write_off — custom approval-board source
 - [ ] ppap / late_production_report
 
 ## How a fresh session resumes

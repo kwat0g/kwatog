@@ -52,6 +52,12 @@ export default function InspectionDetailPage() {
     queryFn: () => inspectionsApi.show(id),
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
+    // Measurement recording and checker review happen in other sessions.
+    // Poll while the verdict is not final so the page converges on its own.
+    refetchInterval: (query) =>
+      query.state.data && !['passed', 'failed', 'cancelled'].includes(query.state.data.status)
+        ? 15_000
+        : false,
   });
   const { data: inspectionOptions } = useQuery({
     queryKey: ['quality', 'inspections', 'options'],

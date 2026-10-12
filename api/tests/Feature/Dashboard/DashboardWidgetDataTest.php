@@ -13,12 +13,15 @@ use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use App\Modules\Dashboard\Services\WidgetAnalyticsService;
 use App\Modules\HR\Models\Employee;
-use Database\Seeders\DashboardWidgetSeeder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Database\Seeders\DashboardRoleLayoutSeeder;
+use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class DashboardWidgetDataTest extends TestCase
@@ -50,6 +53,35 @@ class DashboardWidgetDataTest extends TestCase
         $this->assertSame(DashboardWidget::count(), count($summaries));
         $unavailable = collect($summaries)->where('available', false);
         $this->assertSame([], $unavailable->keys()->all(), $unavailable->pluck('helper', 'key')->toJson());
+    }
+
+    public function test_warehouse_qc_handoff_widget_counts_retryable_pending_grns_and_is_in_default_layout(): void
+    {
+        foreach ([
+            ['pending_qc', 'manual_required'],
+            ['pending_qc', 'not_started'],
+            ['pending_qc', 'generated'],
+            ['pending_qc', 'not_required'],
+            ['accepted', 'manual_required'],
+        ] as [$status, $handoff]) {
+            GoodsReceiptNote::factory()->create([
+                'status' => $status,
+                'incoming_qc_handoff_status' => $handoff,
+            ]);
+        }
+
+        $summary = app(DashboardWidgetDataService::class)
+            ->summaries(['inventory.qc_handoff_issues'], User::factory()->create())['inventory.qc_handoff_issues'];
+
+        $this->assertSame('2', $summary['value']);
+        $this->assertSame('pending QC handoffs needing retry', $summary['helper']);
+
+        $this->seed(DashboardRoleLayoutSeeder::class);
+        $warehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->firstOrFail()->id,
+        ]);
+        $keys = collect(app(DashboardLayoutService::class)->getEffectiveLayout($warehouse))->pluck('key');
+        $this->assertTrue($keys->contains('inventory.qc_handoff_issues'));
     }
 
     public function test_widget_endpoint_returns_live_self_data_and_filters_forbidden_keys(): void
@@ -183,5 +215,95 @@ class DashboardWidgetDataTest extends TestCase
             ->pluck('key');
 
         $this->assertTrue($keys->contains('maintenance.due_schedules'));
+    }
+
+    public function test_summary_and_rich_widget_caches_reuse_only_the_callers_data(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+        $summaryKey = "dashboard:widget:summary:{$firstUser->id}:production.active_wo";
+        $richKey = "dashboard:widget:rich:{$firstUser->id}:breakdown:production.wo_breakdown";
+        Cache::forget($summaryKey);
+        Cache::forget($richKey);
+
+        $workOrderQueries = 0;
+        DB::listen(static function (QueryExecuted $query) use (&$workOrderQueries): void {
+            if (str_contains(strtolower($query->sql), 'work_orders')) {
+                $workOrderQueries++;
+            }
+        });
+
+        $widgetData = app(DashboardWidgetDataService::class);
+        $analytics = app(WidgetAnalyticsService::class);
+        $widgetData->summaries(['production.active_wo'], $firstUser);
+        $queriesAfterFirstSummary = $workOrderQueries;
+        $widgetData->summaries(['production.active_wo'], $firstUser);
+        $this->assertSame($queriesAfterFirstSummary, $workOrderQueries);
+
+        $analytics->payload('production.wo_breakdown', RenderKind::Breakdown, $firstUser);
+        $queriesAfterFirstPayload = $workOrderQueries;
+        $analytics->payload('production.wo_breakdown', RenderKind::Breakdown, $firstUser);
+        $this->assertSame($queriesAfterFirstPayload, $workOrderQueries);
+
+        $widgetData->summaries(['production.active_wo'], $secondUser);
+        $analytics->payload('production.wo_breakdown', RenderKind::Breakdown, $secondUser);
+        $this->assertGreaterThan($queriesAfterFirstPayload, $workOrderQueries);
+        $this->assertTrue(Cache::has("dashboard:widget:summary:{$secondUser->id}:production.active_wo"));
+        $this->assertTrue(Cache::has("dashboard:widget:rich:{$secondUser->id}:breakdown:production.wo_breakdown"));
+    }
+
+    public function test_cash_position_uses_configured_account_codes_only(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('accounting.accounts.cash_code', 'WGT1000');
+        $settings->set('accounting.accounts.payroll_cash_code', 'WGT1001');
+        $settings->set('accounting.accounts.asset_cash_code', null);
+        $now = now();
+        $accounts = [];
+        foreach ([
+            ['WGT1000', 'Operating bank', 'asset'],
+            ['WGT1001', 'Payroll bank', 'asset'],
+            ['WGT9999', 'Petty Cash', 'asset'],
+            ['WGT2000', 'Payables', 'liability'],
+        ] as [$code, $name, $type]) {
+            $accounts[$code] = DB::table('accounts')->insertGetId([
+                'code' => $code,
+                'name' => $name,
+                'type' => $type,
+                'normal_balance' => $type === 'asset' ? 'debit' : 'credit',
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+        $entryId = DB::table('journal_entries')->insertGetId([
+            'entry_number' => 'JE-CASH-WIDGET-TEST',
+            'date' => $now->toDateString(),
+            'total_debit' => 80,
+            'total_credit' => 80,
+            'status' => 'draft',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        foreach ([['WGT1000', 10, 0], ['WGT1001', 20, 0], ['WGT9999', 50, 0], ['WGT2000', 0, 80]] as [$code, $debit, $credit]) {
+            DB::table('journal_entry_lines')->insert([
+                'journal_entry_id' => $entryId,
+                'account_id' => $accounts[$code],
+                'line_no' => count($accounts),
+                'debit' => $debit,
+                'credit' => $credit,
+            ]);
+        }
+        DB::table('journal_entries')->where('id', $entryId)->update([
+            'status' => 'posted',
+            'posted_at' => $now,
+        ]);
+
+        $user = User::factory()->create();
+        Cache::forget("dashboard:widget:summary:{$user->id}:finance.cash_position");
+        $summary = app(DashboardWidgetDataService::class)
+            ->summaries(['finance.cash_position'], $user)['finance.cash_position'];
+
+        $this->assertSame('30.00', $summary['value']);
     }
 }

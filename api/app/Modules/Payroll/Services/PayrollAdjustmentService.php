@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
@@ -69,6 +71,17 @@ class PayrollAdjustmentService
             ]);
             // status non-fillable; service-only.
             $adj->forceFill(['status' => PayrollAdjustmentStatus::Pending->value])->save();
+
+            $audience = ApprovalDelegation::approvalAudience('payroll.adjustments.approve')
+                ->reject(fn (User $approver): bool => (int) $approver->id === (int) $user->id);
+            app(NotificationService::class)->send($audience, 'approval.action_required', [
+                'title' => 'Payroll adjustment needs approval',
+                'message' => 'A payroll adjustment is waiting for review.',
+                'link_to' => '/payroll/adjustments',
+                'entity_type' => 'payroll_adjustment',
+                'entity_id' => $adj->hash_id,
+            ], "payroll-adjustment:approval-required:{$adj->id}");
+
             return $adj;
         });
     }
@@ -114,9 +127,13 @@ class PayrollAdjustmentService
             if ((int) $locked->created_by === (int) $user->id) {
                 throw new BusinessRuleException('You cannot approve your own payroll adjustment.');
             }
+            if (! ApprovalDelegation::canActForPermission($user, 'payroll.adjustments.approve', [(int) $locked->created_by])) {
+                throw new AuthorizationException('You do not have permission to approve payroll adjustments.');
+            }
             $locked->status      = PayrollAdjustmentStatus::Approved;
             $locked->approved_by = $user->id;
             $locked->save();
+            $this->notifyRequester($locked, 'approval.completed', 'Payroll adjustment approved');
             return $locked->fresh();
         });
     }
@@ -131,13 +148,36 @@ class PayrollAdjustmentService
             if ($locked->status !== PayrollAdjustmentStatus::Pending) {
                 throw new BusinessRuleException('Only pending adjustments can be rejected.');
             }
+            if ((int) $locked->created_by === (int) $user->id) {
+                throw new BusinessRuleException('You cannot reject your own payroll adjustment.');
+            }
+            if (! ApprovalDelegation::canActForPermission($user, 'payroll.adjustments.reject', [(int) $locked->created_by])) {
+                throw new AuthorizationException('You do not have permission to reject payroll adjustments.');
+            }
             $locked->status      = PayrollAdjustmentStatus::Rejected;
             $locked->approved_by = $user->id;
             if ($remarks) {
                 $locked->reason = trim($locked->reason."\n\n[Rejected: {$remarks}]");
             }
             $locked->save();
+            $this->notifyRequester($locked, 'approval.rejected', 'Payroll adjustment rejected');
             return $locked->fresh();
         });
+    }
+
+    private function notifyRequester(PayrollAdjustment $adjustment, string $type, string $title): void
+    {
+        $requester = User::query()->whereKey($adjustment->created_by)->where('is_active', true)->first();
+        if (! $requester) {
+            return;
+        }
+
+        app(NotificationService::class)->send($requester, $type, [
+            'title' => $title,
+            'message' => $type === 'approval.rejected' ? 'Your payroll adjustment was rejected.' : 'Your payroll adjustment was approved.',
+            'link_to' => '/payroll/adjustments',
+            'entity_type' => 'payroll_adjustment',
+            'entity_id' => $adjustment->hash_id,
+        ], "payroll-adjustment:decision:{$adjustment->id}:{$type}");
     }
 }

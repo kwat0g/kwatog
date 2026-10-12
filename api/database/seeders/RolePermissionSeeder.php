@@ -252,6 +252,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
                 ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
                 // Supplier Item Listings — supplier-submitted offers reviewed here.
+                ['slug' => 'purchasing.supplier_listings.view', 'name' => 'View Supplier Item Listings'],
                 ['slug' => 'purchasing.supplier_listings.review', 'name' => 'Review Supplier Item Listings'],
                 ['slug' => 'purchasing.rfq.view',       'name' => 'View Supplier RFQs'],
                 ['slug' => 'purchasing.rfq.manage',     'name' => 'Run Supplier RFQs (create, publish, award)'],
@@ -603,7 +604,6 @@ class RolePermissionSeeder extends Seeder
                     $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
-                    $this->module('crm_commissions'),
                     $this->selfService(),
                     [
                         'dashboard.accounting.view',
@@ -647,7 +647,8 @@ class RolePermissionSeeder extends Seeder
             // across all seeded money workflows. Replaces the previous system_admin
             // stand-in, which put IT inside the business approval matrix (SoD: the
             // role that authors workflow definitions cannot also execute them).
-            // No dashboard of its own — reads what it signs.
+            // Company Overview is a read-only cross-functional surface; business
+            // decisions remain in their owning modules.
             'vice_president' => [
                 'name' => 'Vice President',
                 'description' => 'Reviews financial statements, budgets, supplier quotations and customer complaints; provides executive approval for purchases, payments, loans, salary adjustments and asset disposals without running sourcing, payroll preparation or HR records.',
@@ -682,6 +683,9 @@ class RolePermissionSeeder extends Seeder
                         'budgeting.approve',
                         'crm.view',
                         'crm.complaints.view',
+                        // Executive quality panels are read-only. NCR listing
+                        // and Pareto access add no create, edit, or disposition rights.
+                        'quality.view', 'quality.ncr.view',
                         'dashboard.plant_manager.view',
                         // 2026-10-11 — company-wide read. The executive page and
                         // every module's KPI set answer to this one slug, which
@@ -689,6 +693,7 @@ class RolePermissionSeeder extends Seeder
                         // dashboards to see company KPIs.
                         'dashboard.company.view',
                         'dashboard.view_bottlenecks',
+                        'dashboard.chain_recovery.view',
                         'search.global',
                         'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -1107,6 +1112,9 @@ class RolePermissionSeeder extends Seeder
                     ? '*'
                     : array_values(array_unique(array_merge(
                         (array) $def['permissions'],
+                        in_array('purchasing.supplier_listings.review', (array) $def['permissions'], true)
+                            ? ['purchasing.supplier_listings.view']
+                            : [],
                         [
                             'notifications.view',
                             // Every profile links to per-user notification

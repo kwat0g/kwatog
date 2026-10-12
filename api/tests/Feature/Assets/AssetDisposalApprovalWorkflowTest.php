@@ -21,6 +21,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -50,6 +51,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
             SettingsSeeder::class,
             WorkflowSeeder::class,
         ]);
+        Mail::fake();
     }
 
     private function user(string $roleSlug): User
@@ -85,17 +87,6 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         ], $data), $requester ?? $this->user('finance_officer'));
     }
 
-    /** Approve every step of the seeded chain with distinct holders. */
-    private function approveFullChain(Asset $asset): void
-    {
-        $svc = app(AssetService::class);
-        $svc->approveDisposal($asset, $this->user('finance_officer'));
-        // 2026-09-10 — the chain is finance_officer → vice_president (the
-        // business executive tier); system_admin is IT-only and is never a
-        // business-process approver.
-        $svc->approveDisposal($asset, $this->user('vice_president'));
-    }
-
     private function disposalJeCount(Asset $asset): int
     {
         return JournalEntry::query()
@@ -108,8 +99,17 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
     {
         $asset = $this->asset();
         $requester = $this->user('finance_officer');
+        $checker = $this->user('finance_officer');
 
         $this->requestDisposal($asset, [], $requester);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.action_required',
+        ]);
 
         // Nothing disposed, nothing journalised at request time.
         $this->assertSame(AssetStatus::Active, $asset->fresh()->status);
@@ -117,13 +117,23 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         $this->assertSame('5000.00', (string) $asset->fresh()->disposal_request_amount);
         $this->assertSame($requester->id, $asset->fresh()->disposal_requested_by);
 
-        $this->approveFullChain($asset);
+        $vp = $this->user('vice_president');
+        app(AssetService::class)->approveDisposal($asset, $checker);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $vp->id,
+            'type' => 'approval.action_required',
+        ]);
+        app(AssetService::class)->approveDisposal($asset, $vp);
 
         $fresh = $asset->fresh();
         $this->assertSame(AssetStatus::Disposed, $fresh->status);
         $this->assertSame('2026-08-13', $fresh->disposed_date?->toDateString());
         $this->assertSame('5000.00', (string) $fresh->disposal_amount);
         $this->assertSame('Sold — replaced by newer machine', $fresh->disposal_reason);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.completed',
+        ]);
         // Execution clears the proposal columns in the same save.
         $this->assertNull($fresh->disposal_request_amount);
         $this->assertNull($fresh->disposal_requested_by);
@@ -215,7 +225,8 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
     public function test_rejection_leaves_the_asset_untouched_and_a_new_request_can_be_made(): void
     {
         $asset = $this->asset();
-        $this->requestDisposal($asset);
+        $requester = $this->user('finance_officer');
+        $this->requestDisposal($asset, [], $requester);
 
         app(AssetService::class)->rejectDisposal($asset, $this->user('finance_officer'), 'Proceeds far below book value');
 
@@ -224,6 +235,10 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         $this->assertSame(0, $this->disposalJeCount($asset));
         $this->assertNull($fresh->disposal_request_amount);
         $this->assertNull($fresh->disposal_requested_by);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.rejected',
+        ]);
 
         // Later steps are skipped; nothing stays actionable.
         $this->assertNull(app(ApprovalService::class)->nextStep($fresh));

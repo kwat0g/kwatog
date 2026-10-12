@@ -144,6 +144,7 @@ describe('inspection spec editor accessibility', () => {
   vi.clearAllMocks();
   vi.mocked(usePermission).mockReturnValue({
    can: () => true,
+   canApprove: () => true,
    canAny: () => true,
    canAll: () => true,
    isAdmin: false,
@@ -335,7 +336,7 @@ describe('inspection spec editor accessibility', () => {
  });
 
  it('allows viewing requirements without exposing authoring actions to view-only staff', async () => {
-  vi.mocked(usePermission).mockReturnValue({ can: permission => permission === 'quality.specs.view', canAny: () => false, canAll: () => false, isAdmin: false });
+  vi.mocked(usePermission).mockReturnValue({ can: permission => permission === 'quality.specs.view', canApprove: () => false, canAny: () => false, canAll: () => false, isAdmin: false });
   renderEditor();
   expect(await screen.findByRole('heading', { name: 'Offset', level: 3 })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Edit Offset' })).not.toBeInTheDocument();

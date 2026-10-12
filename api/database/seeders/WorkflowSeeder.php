@@ -16,10 +16,10 @@ class WorkflowSeeder extends Seeder
         //   ENFORCED: leave_request, purchase_request, purchase_order,
         //             bill_payment, return_request, company_loan/cash_advance,
         //             salary_adjustment, asset_disposal (AS-03).
-        //   RESERVED (defined, not yet wired to a submit() path — do NOT present
-        //             these as working approvals): department_transfer,
+        //   RESERVED (defined, not wired to a submit() path — keep inactive and
+        //             off approval surfaces): department_transfer,
         //             separation_clearance, maintenance_request, 8d_report,
-        //             work_order, ncr. Wire or drop before pilot.
+        //             work_order, ncr. Activate only with an implemented submit path.
         $workflows = [
             [
                 'workflow_type' => 'leave_request',
@@ -166,8 +166,7 @@ class WorkflowSeeder extends Seeder
                     ['order' => 2, 'role' => 'vice_president', 'label' => 'Approved by'],
                 ],
             ],
-            // L-37 — Return Management approval. Dept head reviews, manager
-            // approves; mirrors the OT approval shape (lightweight).
+            // L-37 — Return Management approval. Dept head reviews, manager approves.
             [
                 'workflow_type' => 'return_request',
                 'name'          => 'Return Request Approval',

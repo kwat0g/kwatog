@@ -6,6 +6,7 @@ namespace App\Modules\Leave\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
@@ -306,9 +307,30 @@ class LeaveRequestService
 
                 $this->approvals->submit($req, 'leave_request');
 
+                $routedToHr = ! $this->hasEligibleDepartmentApprover($req);
+                if ($routedToHr) {
+                    ApprovalRecord::query()
+                        ->where('approvable_type', $req->getMorphClass())
+                        ->where('approvable_id', $req->getKey())
+                        ->where('step_order', 1)
+                        ->where('is_current', true)
+                        ->where('action', 'pending')
+                        ->firstOrFail()
+                        ->update([
+                            'action' => 'skipped',
+                            'remarks' => 'No eligible department approver; routed to HR.',
+                            'acted_at' => now(),
+                        ]);
+                    $req->forceFill(['status' => LeaveRequestStatus::PendingHr->value])->save();
+                }
+
+                $eventRequest = $req->fresh(['employee', 'employee.department', 'leaveType']);
                 app(OutboxService::class)->record(
-                    new LeaveRequestSubmitted($req->fresh(['employee', 'employee.department', 'leaveType'])),
+                    new LeaveRequestSubmitted($eventRequest),
                 );
+                if ($routedToHr) {
+                    app(OutboxService::class)->record(new LeaveRequestPendingHR($eventRequest));
+                }
 
                 return $req->load(['employee', 'employee.department', 'leaveType']);
             });
@@ -490,7 +512,11 @@ class LeaveRequestService
                     ->where('approvable_id', $req->getKey())
                     ->where('is_current', true)
                     ->whereIn('action', ['pending', 'skipped'])
-                    ->update(['action' => 'superseded', 'is_current' => false]);
+                    ->get()
+                    ->each(static fn (ApprovalRecord $record) => $record->update([
+                        'action' => 'superseded',
+                        'is_current' => false,
+                    ]));
             }
 
             if ($wasApproved) {
@@ -725,6 +751,38 @@ class LeaveRequestService
             ->lockForUpdate()
             ->with('employee')
             ->findOrFail($request->getKey());
+    }
+
+    private function hasEligibleDepartmentApprover(LeaveRequest $request): bool
+    {
+        $departmentId = $request->employee?->department_id;
+        if ($departmentId === null) {
+            return false;
+        }
+
+        $submitterId = $request->approvalSubmitterId();
+        $delegateIds = ApprovalDelegation::activeDelegatesFor('department_head', now());
+        $candidates = User::query()
+            ->where('is_active', true)
+            ->when($submitterId !== null, fn ($query) => $query->where('id', '<>', $submitterId))
+            ->where(function ($query) use ($delegateIds): void {
+                $query->whereHas('role', fn ($role) => $role->where('slug', 'department_head'));
+                if ($delegateIds !== []) {
+                    $query->orWhereIn('id', $delegateIds);
+                }
+            })
+            ->with('employee')
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if ($candidate->hasPermission('leave.approve_hr')
+                || ($candidate->hasPermission('leave.approve_dept')
+                    && (int) $candidate->employee?->department_id === (int) $departmentId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function assertDepartmentDecisionScope(LeaveRequest $request, User $approver): void

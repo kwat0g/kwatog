@@ -5,25 +5,21 @@ import { RoleDashboardShell } from '@/components/dashboard/RoleDashboardShell';
  *
  * `sales_officer` landed on `/dashboard/default` with **no role default rows at
  * all**, so the generic grid resolved to empty — the role had no dashboard in
- * either sense. It opens `/chains` but the bottleneck widget 403'd it (M10), so
- * even the one cross-module view it could reach showed it nothing.
+ * either sense. `/chains` now reconciles page access with both read grants
+ * (F-040); sales-order detail remains gated by `crm.sales_orders.view`.
  *
- * Two cards are new (`sales.open_orders`, `sales.price_requests`) because the
- * order book and the price-request queue had no widget over them; open customer
- * complaints already had one. The M10 divergence is NOT papered over here —
- * `chain.stage_breakdown` is gated `dashboard.view_bottlenecks`, which this role
- * does not hold, and the fix is either a grant or the API/gate reconciliation
- * F-040 names. Left as recorded rather than worked around with a page-local
- * permission change.
+ * The order book and price-request queue now show status breakdowns, and order
+ * intake shows a 12-month trend. The dashboard uses its sales widgets directly;
+ * it does not add a page-local permission to the chain-stage widget.
  */
 export default function SalesDashboardPage() {
   return (
     <RoleDashboardShell
       title="Sales"
-      subtitle="The open order book: what is unconfirmed, what is priced, what customers are saying."
+      subtitle="Track order intake, the live order pipeline, and price requests."
       kpiCodes={[]}
       emptyTitle="No sales blocks configured"
-      emptyDescription="Your order book, price requests and customer complaints appear here."
+      emptyDescription="Order intake, order stages, and price-request status appear here."
     />
   );
 }

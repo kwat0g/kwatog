@@ -44,6 +44,7 @@ class Phase0IndexMigrationTest extends TestCase
             'work_orders_product_id_index',
             'work_orders_mold_id_index',
             'work_orders_parent_wo_id_index',
+            'work_orders_sales_order_item_id_index',
             'work_orders_actual_start_index',
             'work_orders_actual_end_index',
         ],
@@ -130,6 +131,9 @@ class Phase0IndexMigrationTest extends TestCase
             'invoices_sales_order_id_index',
             'invoices_delivery_id_index',
         ],
+        'invoice_items' => [
+            'invoice_items_source_delivery_item_id_index',
+        ],
         'delivery_items' => [
             'delivery_items_inspection_id_index',
         ],
@@ -142,6 +146,7 @@ class Phase0IndexMigrationTest extends TestCase
         ],
         'work_order_outputs' => [
             'work_order_outputs_rework_ncr_id_index',
+            'work_order_outputs_recorded_at_index',
         ],
     ];
 
@@ -182,6 +187,28 @@ class Phase0IndexMigrationTest extends TestCase
 
         $this->assertNotNull($value, 'The analytics cache TTL setting must be seeded.');
         $this->assertSame(60, (int) json_decode((string) $value));
+    }
+
+    public function test_mrp_run_to_plan_trace_column_is_indexed(): void
+    {
+        $this->assertTrue(DB::table('pg_indexes')
+            ->where('tablename', 'mrp_plans')
+            ->where('indexname', 'mrp_plans_mrp_run_id_index')
+            ->exists());
+    }
+
+    public function test_work_order_sales_order_item_link_is_nullable_and_set_null_on_delete(): void
+    {
+        $constraint = DB::table('information_schema.referential_constraints')
+            ->where('constraint_name', 'work_orders_sales_order_item_id_foreign')
+            ->first();
+
+        $this->assertNotNull($constraint);
+        $this->assertSame('SET NULL', $constraint->delete_rule);
+        $this->assertSame('YES', DB::table('information_schema.columns')
+            ->where('table_name', 'work_orders')
+            ->where('column_name', 'sales_order_item_id')
+            ->value('is_nullable'));
     }
 
     /**

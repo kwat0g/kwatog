@@ -256,6 +256,7 @@ final class NotificationCatalog
                 ['key' => 'mrp_run_completed', 'label' => 'MRP planning result', 'description' => 'MRP planning finished. Review material shortages, work orders, scheduling conflicts, and failed orders.'],
                 ['key' => 'maintenance.assignment_needed', 'label' => 'Maintenance assignment needed', 'description' => 'A new maintenance work order needs a technician.'],
                 ['key' => 'maintenance.assigned', 'label' => 'Maintenance assigned', 'description' => 'You have been assigned a maintenance work order.'],
+                ['key' => 'maintenance.parts_handed_over', 'label' => 'Spare parts handed over', 'description' => 'Warehouse confirmed the spare parts. Repair can continue.'],
                 ['key' => 'maintenance.assignment_escalated', 'label' => 'Critical maintenance unassigned', 'description' => 'A critical maintenance order has remained unassigned for 15 minutes.'],
                 ['key' => 'maintenance.repair_submitted', 'label' => 'Repair ready for verification', 'description' => 'A technician submitted maintenance evidence for review.'],
                 ['key' => 'maintenance.repair_rejected', 'label' => 'Repair verification rejected', 'description' => 'A verifier requested more maintenance work or evidence.'],
@@ -264,6 +265,10 @@ final class NotificationCatalog
                 ['key' => 'maintenance.breakdown', 'label' => 'Machine breakdown', 'description' => 'A machine has entered breakdown status and may have paused a work order.'],
                 ['key' => 'approval_reminder', 'label' => 'Approval reminder', 'description' => 'You have a pending approval that has been waiting over 24 hours.'],
                 ['key' => 'approval_escalation', 'label' => 'Approval escalation', 'description' => 'An approval you are responsible for has been escalated due to timeout.'],
+                ['key' => 'approval.action_required', 'label' => 'Approval needed', 'description' => 'A request is waiting for your approval or has moved to your approval step.'],
+                ['key' => 'approval.completed', 'label' => 'Approval completed', 'description' => 'Your request completed its approval chain.'],
+                ['key' => 'approval.rejected', 'label' => 'Approval rejected', 'description' => 'Your request was rejected.'],
+                ['key' => 'bill_payment.posted', 'label' => 'Bill payment posted', 'description' => 'A bill payment was posted to the ledger.'],
             ]],
             ['title' => 'Security & administration', 'hint' => 'Changes to your own access', 'types' => [
                 ['key' => 'permission.override', 'label' => 'Your permissions changed', 'description' => 'An administrator granted or revoked a permission on your account.'],

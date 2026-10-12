@@ -7,10 +7,11 @@ namespace App\Common\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use App\Common\Traits\HasAuditLog;
 
 class ApprovalRecord extends Model
 {
-    use \App\Common\Traits\HasHashId;
+    use HasAuditLog, \App\Common\Traits\HasHashId;
 
     public $timestamps = false;
     protected $fillable = [

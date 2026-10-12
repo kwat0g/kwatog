@@ -127,6 +127,7 @@ describe('ChainBottleneckWidget', () => {
  role: { id: 'finance', name: 'Finance Officer', slug: 'finance_officer' },
  employee: null,
  permissions: [],
+ delegated_approvals: [],
  features: [],
  });
  useAuthStore.setState({ user: user('finance-a') });

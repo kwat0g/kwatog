@@ -20,8 +20,10 @@ use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\StockAdjustmentService;
 use App\Modules\Inventory\Services\WarehouseService;
 use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -44,7 +46,8 @@ class StockAdjustmentReasonTest extends TestCase
     {
         parent::setUp();
         Event::fake([StockMovementCompleted::class]);
-        $this->seed(ChartOfAccountsSeeder::class);
+        Mail::fake();
+        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class]);
 
         $role = Role::firstOrCreate(['slug' => 'system_admin'], ['name' => 'System Admin']);
         $this->admin = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -108,11 +111,39 @@ class StockAdjustmentReasonTest extends TestCase
 
         $this->assertSame('pending', $adj->getRawOriginal('status'));
         $this->assertNull($adj->stock_movement_id);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $this->admin->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.action_required',
+        ]);
 
         // Approving posts the movement and flips to approved.
         $approved = $this->svc->approve($adj->fresh(), $this->admin);
         $this->assertSame('approved', $approved->getRawOriginal('status'));
         $this->assertNotNull($approved->stock_movement_id);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.completed',
+        ]);
+
+        $rejected = $this->svc->create(
+            itemId: $this->item->id,
+            locationId: $this->location->id,
+            direction: 'out',
+            qty: '60',
+            unitCost: null,
+            reason: 'Incorrect count correction',
+            by: $maker,
+            reasonCode: StockAdjustmentReason::Damage,
+        );
+        $this->svc->reject($rejected, $this->admin, 'Count evidence was incomplete.');
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.rejected',
+        ]);
     }
 
     public function test_pending_adjustment_rejects_inactive_location_without_writing(): void

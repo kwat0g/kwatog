@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -17,6 +18,7 @@ use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrActionType;
@@ -29,13 +31,13 @@ use App\Modules\Quality\Resources\NcrResource;
 use App\Modules\Quality\Services\NcrService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 use Tests\Support\HasPassedInProcessQc;
+use Tests\TestCase;
 
 class NcrAutoReworkWoTest extends TestCase
 {
-    use RefreshDatabase;
     use HasPassedInProcessQc;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -188,6 +190,29 @@ class NcrAutoReworkWoTest extends TestCase
         $this->assertSame(NcrStatus::Closed, $closed->status);
         $this->assertSame($wo->id, $closed->rework_work_order_id);
         $this->assertSame(1, WorkOrder::where('parent_ncr_id', $ncr->id)->count());
+    }
+
+    public function test_failed_rework_work_order_creation_rolls_back_ncr_disposition(): void
+    {
+        $by = $this->user();
+        $ncr = $this->ncrFromInspection($by);
+        $this->mock(WorkOrderService::class)
+            ->shouldReceive('createDraft')
+            ->once()
+            ->andThrow(new \RuntimeException('Simulated work order failure.'));
+
+        try {
+            $this->sort($ncr, $by);
+            $this->fail('Failed work order creation must leave the disposition unset.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('could not be created', $exception->getMessage());
+        }
+
+        $this->assertSame(NcrStatus::Open, $ncr->fresh()->status);
+        $this->assertNull($ncr->fresh()->disposition);
+        $this->assertNull($ncr->fresh()->rework_work_order_id);
+        $this->assertNull($ncr->fresh()->replacement_work_order_id);
+        $this->assertSame(0, WorkOrder::query()->where('parent_ncr_id', $ncr->id)->count());
     }
 
     public function test_rework_disposition_in_process_does_not_create_wo(): void

@@ -106,7 +106,7 @@ export default function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can } = usePermission();
+  const { can, canApprove: canAct } = usePermission();
   const actorId = useAuthStore((state) => state.user?.id);
   const accountingEnabled = useFeature('accounting');
   const journalEntryReference = (entryId: string, entryNumber: string): ReactNode => {
@@ -417,7 +417,7 @@ export default function PayrollPeriodDetailPage() {
   // Approve requires a completed run with rows. Previously this was gated on
   // 'draft', so an uncomputed period could be approved into an empty ₱0 payroll.
   const canApprove =
-    can('payroll.periods.approve') && period.status === 'computed' && hasRows && !hasUnclassifiedDeductions;
+    canAct('payroll.periods.approve') && period.status === 'computed' && hasRows && !hasUnclassifiedDeductions;
   const isApprovedWithoutApprover = period.status === 'approved' && !period.approver;
   const canRequestCorrection =
     can('payroll.periods.request_correction') &&

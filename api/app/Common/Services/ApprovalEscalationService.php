@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -21,7 +23,8 @@ class ApprovalEscalationService
 
     public function __construct(
         private readonly NotificationService $notifications,
-        private readonly \App\Common\Services\SettingsService $settings,
+        private readonly SettingsService $settings,
+        private readonly CustomApprovalEscalationService $customApprovals,
     ) {}
 
     /**
@@ -81,9 +84,9 @@ class ApprovalEscalationService
 
                     $hours = (int) abs(now()->diffInHours($rec->created_at));
                     $this->notifications->send($approver, 'approval_reminder', [
-                        'title'   => 'Approval Reminder',
+                        'title' => 'Approval Reminder',
                         'message' => "Approval pending for {$hours}h on "
-                                     .class_basename((string) $rec->approvable_type).".",
+                                     .class_basename((string) $rec->approvable_type).'.',
                         'link_to' => $this->linkFor($rec),
                     ], $this->notificationKey($rec, 'reminder'));
                     $rec->update(['reminder_sent_at' => now()]);
@@ -92,11 +95,15 @@ class ApprovalEscalationService
                     $this->failed++;
                     Log::warning('ApprovalEscalationService::reminder failed', [
                         'record_id' => $rec->id,
-                        'error'     => $e->getMessage(),
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
         });
+        $count += $this->customApprovals->runReminders();
+        $this->failed += $this->customApprovals->failedCount();
+        $this->unstaffed += $this->customApprovals->unstaffedCount();
+
         return $count;
     }
 
@@ -128,14 +135,14 @@ class ApprovalEscalationService
                     }
 
                     $this->notifications->send($recipients, 'approval_escalation', [
-                        'title'   => 'Approval Escalation',
+                        'title' => 'Approval Escalation',
                         'message' => "Escalation: approval pending {$hours}h on "
-                                     .class_basename((string) $rec->approvable_type).".",
+                                     .class_basename((string) $rec->approvable_type).'.',
                         'link_to' => $this->linkFor($rec),
                     ], $this->notificationKey($rec, 'escalation'));
 
                     $rec->update([
-                        'escalated_at'         => now(),
+                        'escalated_at' => now(),
                         'escalated_to_user_id' => $superior?->id,
                     ]);
                     $count++;
@@ -143,11 +150,15 @@ class ApprovalEscalationService
                     $this->failed++;
                     Log::warning('ApprovalEscalationService::escalate failed', [
                         'record_id' => $rec->id,
-                        'error'     => $e->getMessage(),
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
         });
+        $count += $this->customApprovals->runEscalations();
+        $this->failed += $this->customApprovals->failedCount();
+        $this->unstaffed += $this->customApprovals->unstaffedCount();
+
         return $count;
     }
 
@@ -159,7 +170,7 @@ class ApprovalEscalationService
     {
         $enabled = $this->settings->get('approvals.auto_resolve.enabled');
         if (! is_bool($enabled)) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting approvals.auto_resolve.enabled is missing or invalid.');
+            throw new BusinessRuleException('Required business setting approvals.auto_resolve.enabled is missing or invalid.');
         }
         if (! $enabled) {
             return 0;
@@ -168,7 +179,7 @@ class ApprovalEscalationService
         $defaultHours = $this->positiveIntSetting('approvals.auto_resolve.default_hours');
         $defaultAction = (string) $this->settings->get('approvals.auto_resolve.default_action');
         if (! in_array($defaultAction, ['approve', 'reject', 'escalate'], true)) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting approvals.auto_resolve.default_action is missing or invalid.');
+            throw new BusinessRuleException('Required business setting approvals.auto_resolve.default_action is missing or invalid.');
         }
 
         $count = 0;
@@ -182,10 +193,12 @@ class ApprovalEscalationService
             foreach ($stale as $rec) {
                 try {
                     [$hours, $action] = $this->resolvePolicyForRecord($rec, $defaultHours, $defaultAction);
-                    if ($hours <= 0) continue;
+                    if ($hours <= 0) {
+                        continue;
+                    }
                     // Carbon 2: parsing the past instant and diffing to now() returns
                     // a positive hour count when escalated_at is in the past.
-                    $elapsed = \Carbon\Carbon::parse($rec->escalated_at)->diffInHours(now(), true);
+                    $elapsed = Carbon::parse($rec->escalated_at)->diffInHours(now(), true);
                     if ($elapsed < $hours) {
                         continue;
                     }
@@ -194,11 +207,12 @@ class ApprovalEscalationService
                 } catch (\Throwable $e) {
                     Log::warning('ApprovalEscalationService::autoResolve failed', [
                         'record_id' => $rec->id,
-                        'error'     => $e->getMessage(),
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
         });
+
         return $count;
     }
 
@@ -206,7 +220,7 @@ class ApprovalEscalationService
     {
         $value = $this->settings->get($key);
         if (! is_numeric($value) || (int) $value <= 0) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required business setting {$key} is missing or invalid.");
+            throw new BusinessRuleException("Required business setting {$key} is missing or invalid.");
         }
 
         return (int) $value;
@@ -221,7 +235,7 @@ class ApprovalEscalationService
      */
     private function resolvePolicyForRecord(ApprovalRecord $rec, int $defaultHours, string $defaultAction): array
     {
-        $hours  = $defaultHours;
+        $hours = $defaultHours;
         $action = $defaultAction;
 
         $steps = is_array($rec->workflow_snapshot)
@@ -281,6 +295,7 @@ class ApprovalEscalationService
         if (! in_array($action, ['approve', 'reject', 'escalate'], true)) {
             $action = $defaultAction;
         }
+
         return [$hours, $action];
     }
 
@@ -292,23 +307,24 @@ class ApprovalEscalationService
         if ($action === 'escalate') {
             $superior = $this->resolveSuperior($rec);
             $approver = $this->resolveCurrentApprover($rec);
-            $hours    = (int) abs(now()->diffInHours($rec->created_at));
+            $hours = (int) abs(now()->diffInHours($rec->created_at));
 
             $recipients = collect([$approver, $superior])->filter()->unique('id');
             $this->notifications->send($recipients, 'approval_escalation', [
-                'title'   => 'Approval SLA Escalation',
+                'title' => 'Approval SLA Escalation',
                 'message' => "SLA escalation: approval still pending {$hours}h on "
                              .class_basename((string) $rec->approvable_type)
-                             .". Routed to superior for action.",
+                             .'. Routed to superior for action.',
                 'link_to' => $this->linkFor($rec),
             ], $this->notificationKey($rec, 'auto-escalation').':'.(string) $rec->escalated_at);
 
             $rec->update([
-                'escalated_at'         => now(),
+                'escalated_at' => now(),
                 'escalated_to_user_id' => $superior?->id,
                 // intentionally NOT setting auto_resolved_at — the record stays
                 // pending and eligible for the next SLA sweep.
             ]);
+
             return;
         }
 
@@ -320,17 +336,17 @@ class ApprovalEscalationService
             ->first();
 
         if ($systemUser === null) {
-            throw new \App\Common\Exceptions\BusinessRuleException(
+            throw new BusinessRuleException(
                 'Approval auto-resolution requires an active automation actor.',
             );
         }
 
         DB::transaction(function () use ($rec, $action, $systemUser) {
             $rec->update([
-                'approver_id'      => $systemUser->id,
-                'action'           => $action === 'approve' ? 'approved' : 'rejected',
-                'remarks'          => 'Auto-resolved by SLA policy.',
-                'acted_at'         => now(),
+                'approver_id' => $systemUser->id,
+                'action' => $action === 'approve' ? 'approved' : 'rejected',
+                'remarks' => 'Auto-resolved by SLA policy.',
+                'acted_at' => now(),
                 'auto_resolved_at' => now(),
             ]);
 
@@ -341,7 +357,12 @@ class ApprovalEscalationService
                     ->where('is_current', true)
                     ->where('step_order', '>', $rec->step_order)
                     ->where('action', 'pending')
-                    ->update(['action' => 'skipped', 'acted_at' => now()]);
+                    ->lockForUpdate()
+                    ->get()
+                    ->each(static fn (ApprovalRecord $record) => $record->update([
+                        'action' => 'skipped',
+                        'acted_at' => now(),
+                    ]));
             }
         });
     }
@@ -372,7 +393,9 @@ class ApprovalEscalationService
     {
         if ($rec->approver_id) {
             $u = User::find($rec->approver_id);
-            if ($u && $u->is_active) return $u;
+            if ($u && $u->is_active) {
+                return $u;
+            }
         }
 
         return User::query()
@@ -388,7 +411,9 @@ class ApprovalEscalationService
         $superiorRole = is_string($roleMap[$rec->role_slug] ?? null)
             ? $roleMap[$rec->role_slug]
             : null;
-        if ($superiorRole === null || $superiorRole === '') return null;
+        if ($superiorRole === null || $superiorRole === '') {
+            return null;
+        }
 
         return User::query()
             ->whereHas('role', fn ($q) => $q->where('slug', $superiorRole))

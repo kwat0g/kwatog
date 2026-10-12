@@ -59,7 +59,7 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::post('/thirteenth-month', [PayrollPeriodController::class, 'runThirteenthMonth'])->middleware('permission:payroll.thirteenth_month.run');
             Route::get('/{period}', [PayrollPeriodController::class, 'show'])->middleware('permission:payroll.periods.view');
             Route::post('/{period}/compute', [PayrollPeriodController::class, 'compute'])->middleware('permission:payroll.periods.compute');
-            Route::patch('/{period}/approve', [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
+            Route::patch('/{period}/approve', [PayrollPeriodController::class, 'approve'])->middleware('approval_permission:payroll.periods.approve');
             Route::patch('/{period}/request-correction', [PayrollPeriodController::class, 'requestCorrection'])
                 ->middleware('permission:payroll.periods.request_correction');
             Route::patch('/{period}/finalize', [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
@@ -112,8 +112,8 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::get('/', [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.adjustments.view');
             Route::post('/', [PayrollAdjustmentController::class, 'store'])->middleware('permission:payroll.adjustments.create');
             Route::get('/{adjustment}', [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.view');
-            Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.approve');
-            Route::patch('/{adjustment}/reject', [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.reject');
+            Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('approval_permission:payroll.adjustments.approve');
+            Route::patch('/{adjustment}/reject', [PayrollAdjustmentController::class, 'reject'])->middleware('approval_permission:payroll.adjustments.reject');
         });
 
         // ─── De minimis benefits ──────────────────────────────────

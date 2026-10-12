@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
 use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use Illuminate\Http\Request;
@@ -58,8 +59,8 @@ class StockAdjustmentResource extends JsonResource
             ] : null),
             'resolved_at' => optional($this->resolved_at)->toIso8601String(),
             'resolution_reason' => $this->resolution_reason,
-            'can_approve' => $pending && $actor?->hasPermission('inventory.adjust.approve') && ! $isRequester,
-            'can_reject' => $pending && $actor?->hasPermission('inventory.adjust.approve') && ! $isRequester,
+            'can_approve' => $pending && $actor && ApprovalDelegation::canActForPermission($actor, 'inventory.adjust.approve', [(int) $this->requested_by]) && ! $isRequester,
+            'can_reject' => $pending && $actor && ApprovalDelegation::canActForPermission($actor, 'inventory.adjust.approve', [(int) $this->requested_by]) && ! $isRequester,
             'can_withdraw' => $pending && $actor?->hasPermission('inventory.adjust') && $isRequester,
             'created_at'    => optional($this->created_at)->toIso8601String(),
         ];

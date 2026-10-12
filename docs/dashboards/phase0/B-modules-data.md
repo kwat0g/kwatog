@@ -152,7 +152,7 @@ Cross-module: → HR.employees; → Payroll.payrolls (deduction) + Payroll.clear
 | BillPayment → `bill_payments` | bill_id (idx), bill+idempotency partial UQ, payment_date (idx), amount, payment_method, cash_account_id (**NO index**), journal_entry_id (**NO index**), status (**NO index**: pending_approval/rejected/posted/voided), void/replacement chain, proof_* |
 | SupplierInvoice → `supplier_invoices` | vendor+number live partial UQ, vendor_id (**NO index**), purchase_order_id (**NO index**), date, gross_total, portal_user_id (**NO index**), voided_* |
 | Invoice → `invoices` | invoice_number UQ, customer_id (idx), sales_order_id (**NO index**), delivery_id (**NO index**), date (idx), due_date (idx), status+date+cancelled AR-history composite (idx), status (idx: draft/finalized/partial/paid/cancelled), dunning (status+due+tier idx), subtotal/vat/total/**amount_paid+balance**, journal_entry_id (**NO index**), vat_classification, prebill_*, lifecycle_type, cancelled_* |
-| InvoiceItem → `invoice_items` | invoice_id (idx), revenue_account_id (idx), product_id (**NO FK/index — free product ref**), source_delivery_item_id (**NO index**), qty/unit_price/total — **NO timestamps** (§6-G1) |
+| InvoiceItem → `invoice_items` | invoice_id (idx), revenue_account_id (idx), product_id (**NO FK/index — free product ref**), source_delivery_item_id (idx, `2026_10_12_090000`), qty/unit_price/total — **NO timestamps** (§6-G1) |
 | Collection (`InvoiceCollection`) → `collections` | invoice_id (idx), collection_date (idx), idempotency_key UQ, amount, cash_account_id (**NO index**), journal_entry_id (**NO index**), manual_reason |
 | OfficialReceipt → `official_receipts` | or_number UQ, collection_id UQ+idx (1:1), customer_id (idx), invoice_id (**NO index**), date (idx), amount |
 | InvoicePaymentSubmission → `invoice_payment_submissions` | customer+idempotency UQ, invoice pending partial UQ, customer+bank+ref UQ, collection_id UQ, invoice_id single (**NO index** — only pending-partial), submitted_by (**NO index**), status pending/verified/rejected, proof_* |
@@ -189,8 +189,8 @@ BudgetEnforcementService gates PR/PO (Purchasing).
 | Item → `items` (soft) | code UQ, category_id (idx), item_type (idx: raw_material/finished_good/packaging/spare_part), is_active/is_critical (idx), standard_cost, reorder_point/safety_stock (recomputed — SafetyStockRecomputeService), lead_time_days, abc_class, uom |
 | ItemCategory → `item_categories` (soft) | type-inheriting tree |
 | Warehouse/WarehouseZone/WarehouseLocation → `warehouses` (soft), `warehouse_zones` (soft), `warehouse_locations` (soft) | code UQs, zone wh+code UQ + type (idx), location zone_id (idx); location.current_item_id (**NO index**), current_quantity/lot, is_blocked |
-| StockLevel → `stock_levels` | item+location UQ (= item idx + loc idx + item+qty idx), quantity/**reserved_quantity/weighted_avg_cost (MUTATED IN PLACE — StockMovementService ONLY writer, `Inventory/Services/StockMovementService.php:45-70`)**, last_counted_at, lock_version. **NO HasAuditLog** (verified §2-F11) |
-| StockMovement → `stock_movements` | item+created (×2 idx), item+lot (idx), movement_type (idx: 14 values incl grn_receipt/material_issue/material_return/production_receipt/delivery(+return)/transfer/adjustment_in+out/scrap/return_to_vendor/cycle_count/opening), reference_type+reference_id (idx, **polymorphic — NO FK**, §2-F8), from/to_location_id (**NO index**), lot_number/expiry, unit/total_cost, journal_entry_id (**NO index**), gl_handoff_status (idx), idempotency UQ. **NO HasAuditLog** |
+| StockLevel → `stock_levels` | item+location UQ (= item idx + loc idx + item+qty idx), quantity/**reserved_quantity/weighted_avg_cost (MUTATED IN PLACE — StockMovementService ONLY writer, `Inventory/Services/StockMovementService.php:45-70`)**, last_counted_at, lock_version. `HasAuditLog` captures Eloquent changes (F11) |
+| StockMovement → `stock_movements` | item+created (×2 idx), item+lot (idx), movement_type (idx: 14 values incl grn_receipt/material_issue/material_return/production_receipt/delivery(+return)/transfer/adjustment_in+out/scrap/return_to_vendor/cycle_count/opening), reference_type+reference_id (idx, **polymorphic — NO FK**, §2-F8), from/to_location_id (**NO index**), lot_number/expiry, unit/total_cost, journal_entry_id (**NO index**), gl_handoff_status (idx), idempotency UQ. Append-only movement history plus `HasAuditLog` for record changes (F11) |
 | GoodsReceiptNote → `goods_receipt_notes` | grn_number UQ, idempotency UQ, shipment_id UQ (1 GRN/shipment), purchase_order_id (idx), vendor_id (idx), supplier_shipment_id (**NO index**), received_date (idx), received_by (**NO index**), status (idx: draft/pending_qc/accepted/partial_accepted/rejected), qc_inspection_id (**NO index**, legacy single), accepted_by/at, journal_entry_id (**NO index**), incoming_qc_handoff_status (idx)+message+at |
 | GrnItem → `grn_items` | goods_receipt_note_id (**NO index** — §4 HIGH), purchase_order_item_id (idx), item_id (idx), material_lot_number (idx), quantity_received/**accepted (mutated on accept)**, unit_cost, landed_cost_unit/total, UoM receipt cols, coa_verified, moisture, expiry |
 | MaterialIssueSlip (+Item) → `material_issue_slips`, `material_issue_slip_items` | slip_number UQ, work_order_id (idx), issued_date (idx), status (idx: draft/issued/cancelled), issued_by/created_by (**NO index**); items: slip (idx), item (idx)+lot (idx), reservation (idx), stock_movement UQ, qty/cost |
@@ -227,7 +227,7 @@ MovementGlPostingService); material issues feed Production WOs; quarantine/MRB f
 | PurchaseRequest → `purchase_requests` (soft) | pr_number UQ, requested_by (idx), department_id (idx), date (**NO index** — §4), required_delivery_date, priority (idx)/is_urgent, status (idx: draft/pending/approved/rejected/converted/cancelled), sourcing_method (idx: direct_po/rfq), is_auto_generated (idx), mrp_plan_id (idx), template_id (idx), stock_production_work_order_id (**NO index**), po_conversion_status (idx)+note+at, budget warning/ack, submitted/approved_at |
 | PurchaseRequestItem → `purchase_request_items` (soft) | purchase_request_id (idx), item_id (idx), suggested_vendor_id (idx), qty/est price |
 | PurchaseOrder → `purchase_orders` (soft) | po_number UQ, vendor_id (idx), purchase_request_id (idx), request_for_quote_id (idx), date (**NO index** — §4), expected_delivery_date (idx), confirmed_delivery_date, subtotal/vat/total, status (idx: 11 values), requires_vp_approval (idx), is_auto_generated (idx), pending_change_response_id (idx), rfq freight/vat/other carry-over, short_close_*, budget ack |
-| PurchaseOrderItem → `purchase_order_items` (soft) | po+item (idx), purchase_request_item_id (idx), rfq_award_id + supplier_quote_version_id (trace idx), quantity/**received+accepted (mutated)**, unit_price/total + rfq line charges — **NO timestamps** (§6-G1) |
+| PurchaseOrderItem → `purchase_order_items` (soft) | po+item (idx), purchase_request_item_id (idx), rfq_award_id + supplier_quote_version_id (trace idx), quantity/**received+accepted (mutated)**, unit_price/total + rfq line charges, created_at/updated_at |
 | RequestForQuote (+Item +Invitation) → `request_for_quotes`, `request_for_quote_items`, `request_for_quote_invitations` | rfq_number UQ, purchase_request_id (idx), status+closes_at (idx: draft/open/closed/awarded/cancelled), issued/closed/resolved_at; items: rfq+PR-item UQ, item_id (**NO index**); invitations: rfq+vendor UQ, vendor+status (idx) |
 | SupplierQuote (+Item) → `supplier_quotes`, `supplier_quote_items` | rfq+vendor UQ, status (**NO index**: draft/submitted/awarded/not_awarded), invitation_id (**NO index**), portal_user_id (**NO index**), captured_by (**NO index**), submitted_at, vat/freight/total_delivered_cost, vat_treatment, quote_valid_until; items: quote+rfq-item UQ, request_for_quote_item_id (**NO index**), response_status (**NO index**), offered qty/price/lead time |
 | RfqAward → `rfq_awards` | rfq line UQ (one winner/line), request_for_quote_id (**NO index**), vendor_id (**NO index**), supplier_quote_id/item_id (**NO index**), awarded qty/price/delivered_cost, awarded_by/at |
@@ -300,9 +300,9 @@ ShipmentLotService.ensureForDelivery (`SupplyChain/Services/ShipmentLotService.p
 
 | model → table | key columns |
 |---|---|
-| WorkOrder → `work_orders` (soft) | wo_number UQ, batch_number UQ, product_id (**NO index**), sales_order_id (idx), **sales_order_item_id (column exists, NO FK constraint at all — §2-F1)**, mrp_plan_id (idx), parent_wo_id (**NO index**, self), parent_ncr_id (no FK row), machine_id (idx), mold_id (**NO index**), bom_id (**NO index**), rework_source_output_id (**NO index**), quantity_target/**produced+good+rejected+scrap_rate (rollup-mutated)**, planned_start (idx)+status composite, planned/actual start+end (**actual_* NO index**), status (idx: planned/confirmed/in_progress/paused/completed/closed/cancelled), qc_workflow, production_purpose (idx), work_order_class, stock idempotency UQ, cost snapshot cols, crew min/max, preferred_production_date |
+| WorkOrder → `work_orders` (soft) | wo_number UQ, batch_number UQ, product_id (**NO index**), sales_order_id (idx), sales_order_item_id (nullable FK→`sales_order_items`, indexed, `SET NULL` on delete; `2026_10_12_110000`), mrp_plan_id (idx), parent_wo_id (**NO index**, self), parent_ncr_id (no FK row), machine_id (idx), mold_id (**NO index**), bom_id (**NO index**), rework_source_output_id (**NO index**), quantity_target/**produced+good+rejected+scrap_rate (rollup-mutated)**, planned_start (idx)+status composite, planned/actual start+end (**actual_* NO index**), status (idx: planned/confirmed/in_progress/paused/completed/closed/cancelled), qc_workflow, production_purpose (idx), work_order_class, stock idempotency UQ, cost snapshot cols, crew min/max, preferred_production_date |
 | WoOperation → `wo_operations` | **only deleted_at indexed besides pkey — work_order_id UNINDEXED (§4 HIGH)**; routing_operation_id (**NO index**), machine/mold/operator (**NO index**), status (NO index), planned/actual/setup times, qty_planned/**completed+scrapped (mutated)**, downtime_minutes |
-| WorkOrderOutput → `work_order_outputs` | work_order+recorded_at (idx), work_order+idempotency UQ, recorded_at, good/reject_count, trial_inspection UQ, trial/held qtys + settled_at, production_started/finished_at, production_receipt_handoff_status (idx)+movement_id (idx → stock_movements), rework_ncr_id (**NO index**), rework_source_output_id (**NO index**), work_order_crew_id (**NO index**), receipt_unit_cost, crew_snapshot jsonb |
+| WorkOrderOutput → `work_order_outputs` | work_order+recorded_at (idx), recorded_at (idx, `2026_10_12_120000`), work_order+idempotency UQ, good/reject_count, trial_inspection UQ, trial/held qtys + settled_at, production_started/finished_at, production_receipt_handoff_status (idx)+movement_id (idx → stock_movements), rework_ncr_id (**NO index**), rework_source_output_id (**NO index**), work_order_crew_id (**NO index**), receipt_unit_cost, crew_snapshot jsonb |
 | WorkOrderMaterial → `work_order_materials` | work_order_id (idx), item_id (idx), bom_quantity/**actual_issued+variance (mutated)**, standard/actual cost + variance |
 | WorkOrderDefect → `work_order_defects` | output_id (idx), defect_type_id (**NO index**), count — **NO timestamps** (§6-G1) |
 | WorkOrderCrew (+Member) → `work_order_crews`, `work_order_crew_members` | assigned_by/recorder (**NO index**) |
@@ -333,7 +333,7 @@ sales_order_item_id NOT NULL AND parent_wo_id IS NULL
 | model → table | key columns |
 |---|---|
 | MrpRun → `mrp_runs` | run_at (idx), status+run_at / status+started_at (idx: running/completed/partial/failed), triggered_by (scheduled/manual/automatic) + user (**NO index**), counters (orders evaluated/shortages/PRs/plans/failed), duration_ms, error_code/recovery_action, summary json — **order linkage only via summary json + mrp_plans bridge (§2-F6)** |
-| MrpPlan → `mrp_plans` | mrp_plan_no UQ, sales_order_id+status (idx) + active partial UQ + version UQ, mrp_run_id (**NO index**), generated_by (**NO index**), generated_at, totals (lines/shortages/auto_PR/draft_WO), diagnostics + cost_summary + generation_context json, status active/superseded/cancelled |
+| MrpPlan → `mrp_plans` | mrp_plan_no UQ, sales_order_id+status (idx) + active partial UQ + version UQ, mrp_run_id (idx, `2026_10_11_170000`), generated_by (**NO index**), generated_at, totals (lines/shortages/auto_PR/draft_WO), diagnostics + cost_summary + generation_context json, status active/superseded/cancelled |
 | Bom → `bill_of_materials` (soft) | product+version UQ + active partial UQ, product+active (idx), material/labor/machine/overhead/total cost + basis/at/warnings/batch |
 | BomItem → `bom_items` | bom_id (idx), bom+item UQ, item_id (idx), qty_per_unit/waste/cost cols |
 | Machine → `machines` (soft) | machine_code UQ, status (idx: running/idle/maintenance/breakdown/offline), asset_id UQ → Assets, current_work_order_id (**NO index**), current_rework_ncr_id (**NO index**), tonnage/hours/capacity, running_hours_total (**mutated** — MachineHoursService) |
@@ -605,17 +605,17 @@ alert at 80% of max) with per-event detail in `mold_history`; analytics surfaces
 
 ### 2.6 Broken / missing / lossy links (flags, all verified)
 
-- **F1 — WO→SO-line unenforced.** `work_orders.sales_order_item_id` exists but has **zero FK rows** in `information_schema` (verified). Orphan-able; dashboards must LEFT JOIN.
-- **F2 — Delivery→Invoice lossy by design.** Confirm is valid with `invoice_handoff_status=manual_required` + `invoice_id NULL` (`DeliveryService.php:1640-1667`). Revenue dashboards must count handoff_status, not invoices alone.
-- **F3 — GRN→incoming-QC event gap.** `pending_qc` GRNs with handoff ≠ generated have no inspection rows; sweeper exists because the gap is real (`grn:retry-pending-incoming-qc`).
-- **F4 — Completed WOs without outgoing inspection existed as a class** (`qc:sweep-missing-outgoing`). O2C funnels must handle output batches with NULL inspection.
-- **F5 — GL reference polymorphic.** `journal_entries.reference_type/reference_id` has NO FK (by-convention; registry at `Accounting/Services/SourceReferenceRegistry.php`). Same for `stock_movements.reference_type/reference_id` (F8) and MWOs' `maintainable_type/id`.
-- **F6 — MRP run→order trace via bridge.** `mrp_runs` links orders only through `summary` json + `mrp_plans(mrp_run_id → sales_order_id)`; `mrp_plans.mrp_run_id` itself is unindexed.
-- **F7 — Forecast actuals late-filled.** `demand_forecasts.actual_quantity/variance` backfilled by `ForecastingService.php:251-302`; only `IS NOT NULL` rows are comparable.
+- **F1 — WO→SO-line constrained.** The running database had zero orphan rows; migration `2026_10_12_110000_constrain_work_order_sales_order_item` adds an indexed nullable FK with `ON DELETE SET NULL`, preserving historical work orders if a sales-order line is removed. Dashboard joins can keep their existing LEFT JOIN semantics.
+- **F2 — Delivery→Invoice lossy by design (confirmed, surfaced).** Confirm remains valid with `invoice_handoff_status=manual_required` + `invoice_id NULL` (`DeliveryService.php:1640-1667`; `AutoInvoiceOnDeliveryConfirmTest`). Finance's `finance.invoice_handoff_backlog` counts that state and links to the filtered delivery list. Booked Revenue MTD remains based on posted journal entries; do not treat an absent invoice as zero delivered handoffs or as booked revenue.
+- **F3 — GRN→incoming-QC event gap (recovery surfaced).** The 15-minute `grn:retry-pending-incoming-qc` sweep retries `not_started`/`manual_required` `pending_qc` GRNs. Warehouse's `inventory.qc_handoff_issues` widget counts those handoffs and opens the filtered GRN list; Admin rollout health still reports aged pending GRNs with no inspection. Failure, retry, tile count, and filter are covered by feature tests.
+- **F4 — Completed WOs without outgoing inspection (funnel + recovery covered).** `SalesOrderService::deriveOutgoingQcStage()` leaves the order's QC step `pending` when no outgoing inspection exists, rather than treating missing rows as released batches. The hourly `qc:sweep-missing-outgoing` repairs eligible output batches and notifies Quality about unresolved cases. Chain-state and sweep-recovery tests pass.
+- **F5 — GL reference polymorphic (integrity guarded, schema risk remains).** `journal_entries.reference_type/reference_id` has no FK; `SourceReferenceRegistry` validates service writes and `audit:source-references` found zero unresolved journal/movement links in the running database. `stock_movements.reference_type/reference_id` (F8) and MWOs' `maintainable_type/id` also remain polymorphic with no FK; direct database writes can bypass the service checks.
+- **F6 — MRP run→order trace via indexed bridge.** `mrp_runs` retains per-run `summary` json; per-order plans link through `mrp_plans.mrp_run_id → mrp_runs.id` and `sales_order_id`. The run FK now has an index (`2026_10_11_170000_add_mrp_run_trace_index.php`).
+- **F7 — Forecast actuals reconciled monthly.** `forecasting:reconcile-actuals` backfills elapsed periods on the 2nd at 04:00. `ForecastingService::collapseScopeRows()` excludes unreconciled `actual_quantity IS NULL` periods before accuracy calculations; `ForecastAccuracyTest` verifies they are not treated as zero.
 - **F8 — (see F5)** stock lineage by `StockMovementType` convention.
-- **F9 — Inspections dual addressing.** Legacy `entity_type/entity_id` coexist with typed FKs; dashboards must prefer typed FKs (legacy UQs only fire when the typed FK IS NULL).
-- **F10 — NCR-close WO creation can fail logged-only** (`NcrService.php:1124` Log::error). Replacement-coverage dashboards must reconcile `disposition=rework` + NULL `rework/replacement_work_order_id`.
-- **F11 — No audit rows for stock.** `StockLevel` + `StockMovement` do NOT use `HasAuditLog` (verified grep=0; 136 other models do). Movement history = `stock_movements` ledger only.
+- **F9 — Inspections dual addressing.** Legacy `entity_type/entity_id` coexist with typed FKs; dashboard rollout-health matching prefers `grn_item_id → grn_items.goods_receipt_note_id` and falls back to the legacy link only when all typed source FKs are null. `RolloutHealthTest` covers conflicting links.
+- **F10 — NCR-close WO creation can fail logged-only** (`NcrService.php:1124` Log::error). Required work-order creation failure now rolls back the NCR disposition. Quality's `Unlinked Rework NCRs` KPI and `recovery_coverage=unlinked` list reconcile non-cancelled `disposition=rework` records with both work-order IDs NULL; tests cover failure rollback, count, and filtered rows.
+- **F11 — Stock audit coverage added.** `StockLevel` and `StockMovement` now use `HasAuditLog`; the stock-movement ledger remains the canonical physical-movement history. Feature test verifies actor and before/after values through `StockMovementService`. Audit rows apply to future Eloquent writes; historical changes were not backfilled.
 - **F12 — Returns fact tables nearly unindexed** (`return_requests`: no status/type/date/customer/vendor indexes — §4).
 
 ---
@@ -630,15 +630,16 @@ Key per-table dates (all tables also carry `created_at`; `updated_at` omitted un
 
 | table | date/timestamp cols | mechanism | verdict |
 |---|---|---|---|
-| stock_movements | created_at; expiry_date | append-only ledger; WAC engine `StockMovementService.php:45-70`; reads via `StockCardService` | **TRENDABLE-LEDGER** (grain: event) |
-| stock_levels | updated_at, last_counted_at; NO created_at-independent history | qty/reserved/WAC mutated in place; NO audit rows (F11) | **OVERWRITE** — reconstruct from stock_movements |
+| stock_movements | created_at; expiry_date | append-only ledger; `HasAuditLog` records model changes; reads via `StockCardService` | **TRENDABLE-LEDGER** (grain: event) |
+| stock_levels | updated_at, last_counted_at; NO created_at-independent history | qty/reserved/WAC mutated in place; `HasAuditLog` records Eloquent changes | **MIXED** — movement ledger reconstructs physical quantity/WAC; audit rows retain balance and reservation transitions |
 | journal_entries + lines | date (idx), posted_at; lines: NO dates | posted immutable; reversed (not deleted); ref idx | **TRENDABLE-LEDGER** (date grain) |
-| audit_logs | created_at (idx), model+created composite | append-only; 136 models | **TRENDABLE-LEDGER** (status-transition fallback) |
+| audit_logs | created_at (idx), model+created composite | append-only; 138 models | **TRENDABLE-LEDGER** (status-transition fallback) |
 | sales_orders | date (idx) + 8 indexed stage timestamps | status machine, rows never deleted (soft) | **TRENDABLE-STATUS-MACHINE** (funnel by stage timestamps) |
 | sales_order_items | delivery_date/requested_delivery_date (idx); **NO timestamps** | quantity_delivered mutated | **MIXED** — join sales_orders.date |
 | work_orders | planned_start (idx); actual_start/end, preferred_production_date (**actual_* unindexed**) | status machine; qty rollups mutated | **TRENDABLE-STATUS-MACHINE** (lead-time needs actual_* index, §4) |
 | wo_operations | planned/actual/setup start+end | qty_completed/scrapped mutated | **MIXED** — join work_orders; needs work_order_id index |
 | work_order_outputs | recorded_at; production_started/finished_at; trial/held settled_at | append-only (idempotent key, not upsert) | **TRENDABLE-LEDGER** (recorded_at grain) |
+| work_order_defects | **NO timestamps** | immutable child of output | **MIXED** — trend by `work_order_outputs.recorded_at` |
 | production_logs | recorded_at | append-only events | **TRENDABLE-LEDGER** |
 | machine_downtimes | start_time (idx machine+start), end_time | append-only | **TRENDABLE-LEDGER** |
 | inspections | started_at (unindexed), completed_at (idx), reviewed_at, coverage_confirmed_at | result_version + replaces chain; rows immutable once recorded_result set | **TRENDABLE-LEDGER** (completed_at grain) |
@@ -659,7 +660,7 @@ Key per-table dates (all tables also carry `created_at`; `updated_at` omitted un
 | credit_notes (+lines/+applications) | date (**unindexed**); lines have timestamps | applied/balance mutated | **MIXED** — needs date index (§4) |
 | purchase_requests (+items) | date (**unindexed**); submitted/approved_at; po_conversion_at | status machine | **TRENDABLE-STATUS-MACHINE** (needs date index, §4) |
 | purchase_orders | date (**unindexed**); expected/confirmed_delivery_date; approved/sent/short_closed_at | status machine; line qty_received/accepted mutated | **TRENDABLE-STATUS-MACHINE** (needs date index, §4) |
-| purchase_order_items | **NO timestamps** | qty_received/accepted mutated | **MIXED** — join purchase_orders.date |
+| purchase_order_items | created_at/updated_at | qty_received/accepted mutated; GRN lines carry receipt acceptance | **MIXED** — order grain by purchase_orders.date; receipt grain by GRN event date |
 | request_for_quotes (+items/invitations) / supplier_quotes (+items) / rfq_awards | issued/closes/closed/resolved_at; submitted_at; awarded_at; quote_valid_until | one-quote-per-vendor edited in place (deliberately simple); awards immutable | **TRENDABLE-STATUS-MACHINE** (quote price history NOT kept — only winner award rows) |
 | supplier_performance_snapshots | period_year+month (idx+tier), computed_at | monthly snapshot UQ vendor+period | **TRENDABLE-SNAPSHOT** (month grain) |
 | shipments (+docs/containers/lots/landed_costs) | etd/atd/eta/ata/customs dates; lot_date (idx) | status machine; docs append | **TRENDABLE-STATUS-MACHINE** (lead-time dates present) |
@@ -672,7 +673,7 @@ Key per-table dates (all tables also carry `created_at`; `updated_at` omitted un
 | overtime_requests | date (emp+date idx), approved/cancelled_at | status machine | **TRENDABLE-STATUS-MACHINE** |
 | payroll_periods | period_start+end (idx), payroll_date, finalized/disbursed/voided_at | status machine; void reverses JE (never unlocks) | **TRENDABLE-STATUS-MACHINE** (cutoff grain) |
 | payrolls | computed_at; payslip_emailed_at | immutable per period (recompute reverses loans first) | **TRENDABLE-LEDGER** (cutoff grain) |
-| payroll_deduction_details | **NO timestamps** | rewritten on recompute | **MIXED** — join payrolls |
+| payroll_deduction_details | **NO timestamps** | rewritten on recompute | **MIXED** — join payrolls to payroll_periods for period grain |
 | payroll_adjustments / anomaly_flags / cycle_claims | applied_at / created_at / created_at | append-only | **TRENDABLE-LEDGER** |
 | thirteenth_month_accruals | year (idx); paid_date | accrued mutated → is_paid at finalize | **MIXED** — accrual trail via payrolls |
 | employee_loans | start/end_date | total_paid/balance/periods_remaining mutated | **MIXED** — repayment history = loan_payments |
@@ -748,7 +749,7 @@ second-position-only composites do NOT count. Each row = `table.column → targe
 | 17 | invoices.sales_order_id → sales_orders.id | SO→invoice AR join |
 | 18 | invoices.delivery_id → deliveries.id | delivery→invoice join |
 | 19 | deliveries.invoice_id → invoices.id | reverse invoice lookup |
-| 20 | invoice_items.source_delivery_item_id → delivery_items.id | invoice↔delivery line trace |
+| 20 | invoice_items.source_delivery_item_id → delivery_items.id (indexed `2026_10_12_090000`) | invoice↔delivery line trace |
 | 21 | official_receipts.invoice_id → invoices.id | OR→invoice (collection IS indexed) |
 | 22 | deliveries.vehicle_id / .driver_id → vehicles/users | fleet & driver utilization |
 | 23 | deliveries.delivered_at / .confirmed_at / .received_at | OTD / lead-time aggregations (only scheduled_date indexed) |
@@ -777,7 +778,7 @@ second-position-only composites do NOT count. Each row = `table.column → targe
 | 46 | machine_downtimes.work_order_id / .maintenance_order_id | downtime↔WO↔MWO joins (only machine+start) |
 | 47 | machines.current_work_order_id / .current_rework_ncr_id; molds.current_work_order_id / .current_rework_ncr_id | live load boards |
 | 48 | demand_forecasts.product_id / .customer_id (single-col) | forecast-vs-actual by product/customer (only period idx + scope UQ) |
-| 49 | mrp_plans.mrp_run_id → mrp_runs.id | run→plan drill-down (F6) |
+| 49 | mrp_plans.mrp_run_id → mrp_runs.id (indexed `2026_10_11_170000`) | run→plan drill-down (F6; index added) |
 | 50 | leave_requests.leave_type_id → leave_types.id | leave mix by type (emp+status indexed) |
 | 51 | attendances.shift_id → shifts.id | attendance by shift |
 | 52 | sales_order_items.price_agreement_id | price-source analytics |
@@ -866,8 +867,8 @@ Covered inline above (§4a rows 10, 23, 25, 26, 28, 29, 30, 33, 44, 45) plus:
 
 ### 5.3 Gaps / blockers for dashboard work (actionable)
 
-- **G1 — Line-item tables mostly lack dates.** `sales_order_items`, `purchase_order_items`, `invoice_items`, `bill_items`, `work_order_defects`, `payroll_deduction_details` carry NO timestamps — every time-series on lines must join the parent header date. (`delivery_items`, `grn_items`, `supplier_quote_items`, `bom_items` DO have timestamps.)
-- **G2 — Status history = `audit_logs` or nothing.** Single current `status` everywhere; 136 models emit audit rows (SO/WO/payroll/NCR included) but StockLevel/StockMovement do not (F11). Dwell-time dashboards need `audit_logs.model_type+model_id+created_at` (indexed composite — good).
+- **G1 — Line-item date rule (F-038).** `purchase_order_items` already has `created_at/updated_at`. For rows without timestamps, use the event or business date: `sales_order_items` → `sales_orders.date`; `invoice_items` → `invoices.date`; `bill_items` → `bills.date`; `work_order_defects` → `work_order_outputs.recorded_at`; payroll deductions → payroll period through `payrolls`. Forecast demand and production defect trends follow these joins. Child edit history is not preserved by a parent date or `updated_at`; add versioning only if a metric needs that history.
+- **G2 — Status history = `audit_logs` or nothing.** Single current `status` everywhere; 138 models emit audit rows, including StockLevel/StockMovement (F11). Dwell-time dashboards need `audit_logs.model_type+model_id+created_at` (indexed composite — good).
 - **G3 — KPI grain is monthly.** `kpi_snapshots` unique on (definition, year, month), computed 2nd @03:00. Any daily/weekly trend, OEE, OTD, or funnel widget queries source tables directly; do NOT stretch snapshots.
 - **G4 — §4 indexes.** Cheapest wins before dashboards ship: rows 1-6 (GRN/WO-log joins), 10-15 (returns), 39-41 (budgets/credit lines), 25-26 (PR/PO dates), 23/44/45 (lead-time timestamps).
 - **G5 — Handoff statuses are first-class dimensions.** `*_handoff_status` (invoice/CoC/incoming-QC/GL/production-receipt) with `manual_required` backlogs must appear on every chain-funnel widget, or broken links (F2-F4) read as zero volume.

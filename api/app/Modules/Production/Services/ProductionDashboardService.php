@@ -6,17 +6,16 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\CRM\Enums\SalesOrderStatus;
-use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderDefect;
-use App\Modules\Production\Models\WorkOrderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -75,9 +74,12 @@ class ProductionDashboardService
     /** @param Collection<int, array<string, mixed>> $oeeRows */
     private function kpis(Carbon $from, Carbon $to, Collection $oeeRows): array
     {
-        $todayOutputs = WorkOrderOutput::whereBetween('recorded_at', [$from, $to])->get();
-        $todayGood = (int) $todayOutputs->sum('good_count');
-        $todayReject = (int) $todayOutputs->sum('reject_count');
+        $todayOutputs = DB::table('work_order_outputs')
+            ->whereBetween('recorded_at', [$from, $to])
+            ->selectRaw('COALESCE(SUM(good_count), 0) AS good, COALESCE(SUM(reject_count), 0) AS reject')
+            ->first();
+        $todayGood = (int) $todayOutputs->good;
+        $todayReject = (int) $todayOutputs->reject;
 
         $machineStatusCounts = Machine::query()
             ->selectRaw('status, COUNT(*) as cnt')
@@ -132,7 +134,9 @@ class ProductionDashboardService
     public function chainStageBreakdown(): array
     {
         // SOs that have not been delivered/invoiced/paid/closed/cancelled.
-        $sos = SalesOrder::query()
+        $groups = DB::table('sales_orders')
+            ->select('status', 'mrp_plan_id')
+            ->selectRaw('COUNT(*) AS total')
             ->whereNotIn('status', [
                 SalesOrderStatus::Delivered->value,
                 SalesOrderStatus::Invoiced->value,
@@ -140,9 +144,8 @@ class ProductionDashboardService
                 SalesOrderStatus::Closed->value,
                 SalesOrderStatus::Cancelled->value,
             ])
+            ->groupBy('status', 'mrp_plan_id')
             ->get();
-
-        $total = max(1, $sos->count());
 
         $stages = [
             'Order Entered' => 0,
@@ -154,19 +157,23 @@ class ProductionDashboardService
             'At Risk' => 0,
         ];
 
-        foreach ($sos as $so) {
+        foreach ($groups as $group) {
+            $status = SalesOrderStatus::tryFrom((string) $group->status)
+                ?? throw new \UnexpectedValueException('Unsupported sales-order status in chain stage breakdown.');
             $key = match (true) {
-                $so->status->isBeforeConfirmation() => 'Order Entered',
-                $so->status === SalesOrderStatus::Confirmed => $so->mrp_plan_id ? 'MRP Planned' : 'Order Entered',
-                $so->status === SalesOrderStatus::InProduction => 'In Production',
-                $so->status === SalesOrderStatus::PartiallyDelivered => 'Ready to Ship',
+                $status->isBeforeConfirmation() => 'Order Entered',
+                $status === SalesOrderStatus::Confirmed => $group->mrp_plan_id ? 'MRP Planned' : 'Order Entered',
+                $status === SalesOrderStatus::InProduction => 'In Production',
+                $status === SalesOrderStatus::PartiallyDelivered => 'Ready to Ship',
                 // The query above excludes every terminal status. Keep this
                 // mapping exhaustive so an unknown status cannot be silently
                 // reported as active production.
                 default => throw new \UnexpectedValueException('Unsupported sales-order status in chain stage breakdown.'),
             };
-            $stages[$key]++;
+            $stages[$key] += (int) $group->total;
         }
+
+        $total = max(1, array_sum($stages));
 
         $colors = [
             'Order Entered' => 'success',

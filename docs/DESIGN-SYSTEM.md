@@ -67,7 +67,7 @@ user-selectable. See `stores/themeStore.ts` (`pushOverride` / `popOverride`).
   --text-primary:   #1f1b16;
   --text-secondary: #4a4239;
   --text-muted:     #6b6259;
-  --text-subtle:    #8a8078;  /* placeholders, disabled — decorative only */
+  --text-subtle:    #6f665d;  /* placeholders, disabled — decorative only */
 
   /* Accent — clay */
   --accent:         #b4542a;
@@ -114,7 +114,7 @@ of the hue over canvas. Alpha would defeat the contrast gate, which cannot resol
   --text-primary:   #f5f1ea;
   --text-secondary: #d6cec1;
   --text-muted:     #a89f93;
-  --text-subtle:    #7d7468;
+  --text-subtle:    #a89f93;
 
   --accent:         #d97848;
   --accent-hover:   #e8926a;
@@ -148,7 +148,7 @@ in a glove. Clay is pushed to safety-orange and every semantic hue clears AAA.
   --text-primary:   #fffdf8;
   --text-secondary: #e8e2d8;
   --text-muted:     #b8afa2;  /* lifted from dark's #a89f93 to clear AAA */
-  --text-subtle:    #9a9186;  /* lifted from dark's #8a8078 */
+  --text-subtle:    #9a9186;  /* lifted from dark's #a89f93 */
 
   --accent:         #ff8a4c;
   --accent-fg:      #0d0b08;
@@ -526,10 +526,15 @@ Sidebar | Page Header — serif title + status chip + actions
 ### Dashboard
 
 ```
-Rail | Page Header (title + range selector + export)
-     | KPI cards row
-     | Two-column grid of panels
+Rail | DashboardShell
+     | PageHeader (title + subtitle + actions + time-clock action)
+     | Optional KpiStrip header slot
+     | Widget grid or page-specific dashboard panels
 ```
+
+`DashboardShell` owns loading, error, empty, stale-data, and responsive layout states. Role dashboards
+use the permission-filtered widget layout; dedicated dashboards compose their own panels. The shared
+shell has no range selector or export action; pages add controls only when their data source supports them.
 
 ---
 

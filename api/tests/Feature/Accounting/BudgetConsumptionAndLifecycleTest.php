@@ -17,6 +17,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -138,6 +139,7 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
 
     public function test_budget_approval_requires_a_role_other_than_the_submitter_role(): void
     {
+        $this->seed(RolePermissionSeeder::class);
         $fiscalYear = $this->currentFiscalYear();
         $account = $this->expenseAccount();
         $service = app(BudgetService::class);
@@ -152,6 +154,14 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         $sameRole = User::factory()->withRole('finance_officer')->create();
         $checker = User::factory()->withRole('vice_president')->create();
         $submitted = $service->submit($budget, $submitter->id);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $sameRole->id,
+            'type' => 'approval.action_required',
+        ]);
 
         try {
             $service->approve($submitted, $sameRole->id);
@@ -162,10 +172,15 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
 
         $approved = $service->approve($submitted->fresh(), $checker->id);
         $this->assertSame('active', $approved->status);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $submitter->id,
+            'type' => 'approval.completed',
+        ]);
     }
 
     public function test_submitted_budget_can_be_rejected_to_draft_with_a_reason(): void
     {
+        $this->seed(RolePermissionSeeder::class);
         $fiscalYear = $this->currentFiscalYear();
         $account = $this->expenseAccount();
         $service = app(BudgetService::class);
@@ -179,8 +194,16 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         $submitter = User::factory()->withRole('finance_officer')->create();
         $checker = User::factory()->withRole('vice_president')->create();
         $submitted = $service->submit($budget, $submitter->id);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+        ]);
 
         $rejected = $service->reject($submitted, $checker->id, 'Rework the Q3 spread.');
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $submitter->id,
+            'type' => 'approval.rejected',
+        ]);
         $this->assertSame('draft', $rejected->status);
         $this->assertSame('Rework the Q3 spread.', $rejected->rejection_reason);
         $this->assertSame($checker->id, (int) $rejected->rejected_by);

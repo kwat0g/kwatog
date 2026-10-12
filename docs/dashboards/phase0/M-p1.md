@@ -8,10 +8,10 @@ Spot-check rule applied: permission slugs from `RolePermissionSeeder.php:501-988
 
 - **Auth/guard stack:** `AuthGuard → ModuleGuard → PermissionGuard`; backend `CheckPermission` 403s independently; row scopes are per-module policy code, never permission strings (A§0, 00§A). No Phase 1 surface adds a role-name branch: candidacy = permission, rarity counted live from `role_permissions` (A§0, 00§A).
 - **KPI grain:** snapshots are monthly, computed 2nd @ 03:00, read one month behind by design; daily/weekly sparklines/deltas query source tables, never stretched snapshots (D§2, B-G3, 00§D). Targets/directions: oee 85/75↑ · dppm 500/750↓ · FPY 98/95↑ · OTD 95/90↑ · supplier-quality 90/80↑ · attendance 96/93↑ · ar-aging-60d 5/8↓ · budget-util 90/80↑ · ncr-closure-days 5/8↓ · inv-turnover 6/4↑ · wo-completion 95/90↑ (`KpiDefinitionSeeder.php:15-25`, D§2). KPI-gate map (`KpiSnapshotService.php:41-48`): production→`production.dashboard.view` · quality→`dashboard.quality.view` · supply_chain→`dashboard.ppc.view` · purchasing→`dashboard.purchasing.view` · attendance→`dashboard.hr.view` · accounting→`accounting.dashboard.view` · inventory→`dashboard.warehouse.view`.
-- **Finance dual-slug (M1):** page/catalog/dispatch answer to `dashboard.accounting.view`, data + `kpi.*`/`finance.*` widgets answer to `accounting.dashboard.view`; every finance surface picks deliberately (A§M1, 00§blocker-4).
-- **Board-blind rule:** approval-center cards exist only for the 8 live ledger kinds; `payroll` kind is dead (never any rows) and all 14 custom single-step types have no ledger/board card/sweep — they need per-type card sourcing (C§2.9/§4/§5, 00§blocker-1). No generic approve endpoint: each inline button calls its module endpoint; remarks required on every reject (C§5).
-- **Notification darkness:** 7+ types fire nothing on submit/decide; mid-chain handoffs missing even on ledger types (C§3, 00§blocker-2). Inboxes poll; nothing assumes a push arrived.
-- **Handoff-status dimension:** `manual_required`/`Generated`/`NotRequired` backlogs are first-class on every funnel; broken links read as zero volume otherwise — delivery→invoice NULL-invoice valid (F2), pending-QC GRNs w/o inspection rows (F3), completed WOs w/o outgoing inspection (F4) (B§chains/F1–F12, 00§blocker-9).
+- **Finance gate (M1, aligned 2026-10-11):** page/catalog/dispatch and canonical `/dashboards/finance` use `dashboard.accounting.view`; individual panels and widgets keep source-data gates (A§M1, F-039).
+- **Approval board coverage:** 8 live ledger types, payroll periods and 10 custom decision queues have read-only cards; decisions stay on their module endpoints. GRN refusal, unrouted transfers, return-case actions, PPAP and per-work-order late reports remain outside the global board (C§4/§5, F-002).
+- **Approval notifications (2026-10-11):** documented F-006–F-010 submit, decision and handoff paths now send in-app notices; permission-scoped custom delegation and notify-only SLA reminders/escalations are implemented for payroll periods and ten custom queues. Delivery verification remains open (C§3, F-014/F-015).
+- **Handoff-status dimension:** count the handoff state on the surface that owns it; never infer delivery→invoice completion from invoice rows alone. Finance's `finance.invoice_handoff_backlog` links to confirmed deliveries with `invoice_handoff_status=manual_required`; the sales-order stage breakdown keeps that handoff separate from production stages. Other gaps remain: pending-QC GRNs without inspection rows (F3), completed WOs without outgoing inspection (F4) (B§chains/F1–F12, 00§blocker-9).
 - **Frontend:** 30 reusables (`AreaTrend BarComparison DonutBreakdown SparkLine OeeGaugeChain DowntimePareto` + shell/grid/live/filter/panels); CSS 12-col grid, no drag/resize; tile "Open →" = server `link_path`; refresh 60s bespoke / 30s fast / forecasts manual-only; shell-owned skeleton/error/empty/stale + per-cell boundaries; no dashboard/chart export (E§2, 00§E). New charts reuse these primitives; no new chart lib (E§gaps).
 - **Perf:** widget-data + rich payloads have no cache (every 30–60s poll hits transactional tables); add cache layer before DSS tiles; index debt first on returns/budgets/WO-operations/PR-PO dates/delivery actuals (F§R15/B§4, 00§blockers-3/7). Respect `0NNN_` vs `2026_*` migration ordering.
 - **Scope cuts honored:** activity feeds only on SO/PO/WO/NCR; no customizable dashboards, no import center, no per-shot mold depreciation (CLAUDE.md; A§5.9).
@@ -33,7 +33,7 @@ IT superuser, wildcard `*` (A§1.1). Top step of NO workflow; cannot award RFQs 
 | Budget utilization | `computeBudgetUtilization` (FY figure, month ignored — D§2 calc gap) | MoM | 90/80↑ | `/budgeting/budget-vs-actual` |
 | OTD | `computeOnTimeDelivery` | MoM | 95/90↑ | `/supply-chain/deliveries` |
 | DPPM | `computeDppm` | MoM | 500/750↓ | `/dashboard/quality` (UNVERIFIED as KPI anchor; widget link is `/quality/dashboard`) |
-| WO completion | `computeWoCompletionRate` (can exceed 100% — D§2 gap) | MoM | 95/90↑ | `/production/work-orders` |
+| WO completion | `computeWoCompletionRate` (same due-month cohort; late completion remains a miss) | MoM | 95/90↑ | `/production/work-orders` |
 | NCR closure days | `computeNcrClosureDays` | MoM | 5/8↓ | `/quality/ncrs` |
 | OEE | `computeOee` (ignores shifts/holidays/downtime calendars — D§2 gap) | MoM | 85/75↑ | `/production/oee` |
 Sparklines: monthly snapshots; sub-month = source queries (D§2).
@@ -46,22 +46,22 @@ Sparklines: monthly snapshots; sub-month = source queries (D§2).
 | QC defect Pareto (Bar, `qc.pareto` → `/quality/dashboard`) | top defect codes → CAPA focus (D§17/38) |
 | AR aging buckets (Bar, `finance.ar_aging` → `/accounting/invoices`) | 30d/60d tiers (D§alert-8, §31 dunning) → collector priority |
 | Budget vs actual by dept (Bar → `/budgeting/budget-vs-actual`) | warn/block/off 0.80/0.95/1.00/1.20 (D§28) → enforcement tuning |
-| Approval SLA burndown (AreaTrend; ledger `approval_records` + 24h/48h sweep — C§2/§5) | stall hotspots per kind → delegation/nudge; payroll+custom excluded (board-blind, C§5) |
+| Approval SLA burndown (AreaTrend; ledger + payroll/custom source timestamps + 24h/48h sweep — C§2/§5) | stall hotspots per kind → delegation/nudge; payroll/custom use separate board cards and notify-only sweep |
 
 ### 4. Forecast widgets (7-panel set, D§1.3; all gates pass by wildcard)
 Headcount (`forecast.headcount` → `/dashboard/hr`) · revenue (`forecast.revenue` → `/dashboard/finance`) · defect rate (`→/dashboard/quality`) · supplier risk (`forecasting.view`) · cash flow (`→/forecasting/demand`) · capacity (`→/production/schedule`) · attendance (`→/hr/attendance`). Caveats: 12-mo history / 3-mo horizon MA+seasonal+regression (D§1.3); capacity/attendance panels have no history (trend ≈ flat arithmetic) and capacity-90% + attendance-8%/15% are hardcoded consts, not settings (D§doc-gaps); demand actuals late-filled — only NOT-NULL rows comparable (B-F7).
 
 ### 5. Approval inbox & quick actions
-Acts on: **none by design** — top step of no seeded workflow (A§1.1/§3). Inbox = read-only cross-chain worklist (`approvals.pending` → `/approvals`, `ApprovalSourceScope::visibleIds()` per A§5.8, never `userCanView`). Quick actions: manage delegations (`/approvals/delegations`, M8 unguarded-SPA/service-scoped-backend — A§M8), user overrides (`/admin/users`, `admin.users.manage_permissions` + `RequireSystemAdmin` — A§3), role compare (`/admin/roles/compare`). **Board-blind flag:** payroll + 14 custom types show no cards for anyone (C§5, 00§blocker-1).
+Acts on: **none by design** — top step of no seeded workflow (A§1.1/§3). Inbox = read-only cross-chain worklist (`approvals.pending` → `/approvals`, `ApprovalSourceScope::visibleIds()` per A§5.8, never `userCanView`). Quick actions: manage delegations (`/approvals/delegations`, M8 unguarded-SPA/service-scoped-backend — A§M8), user overrides (`/admin/users`, `admin.users.manage_permissions` + `RequireSystemAdmin` — A§3), role compare (`/admin/roles/compare`). **Board coverage:** payroll periods and ten custom decision queues have read-gated cards; decisions stay on module endpoints. GRN refusal, unrouted transfer, return-case, PPAP and late-report queues remain outside (C§5).
 
 ### 6. Alerts / exceptions
-Alert-engine 1–13 (15-min, 24h dedup — D§1–13): stock critical/low, no-supplier, breakdown, mold 80/95%, WO overdue, MRP conflict, OEE-quality, AR 30d/60d, AP-due-3d, scrap 5%, scheduler-stall. Escalations 14–19 (approval 24h/48h 6-hourly; NCR 15-min tiers; 8D; CAPA 30d/14d; Action Center 24h default; doc-review 7d/PPAP/calibration/training sweeps — D§14–19). Badge severity >20 = danger; digest 07:05 (D§cross-cutting). **Gap:** `ApprovalRecord` has no audit trait — step decisions lack IP/user-agent rows (C§3, 00§blocker-6).
+Alert-engine 1–13 (15-min, 24h dedup — D§1–13): stock critical/low, no-supplier, breakdown, mold 80/95%, WO overdue, MRP conflict, OEE-quality, AR 30d/60d, AP-due-3d, scrap 5%, scheduler-stall. Escalations 14–19 (approval 24h/48h 6-hourly; NCR 15-min tiers; 8D; CAPA 30d/14d; Action Center 24h default; doc-review 7d/PPAP/calibration/training sweeps — D§14–19). Badge severity >20 = danger; digest 07:05 (D§cross-cutting). `ApprovalRecord` uses `HasAuditLog`; an HTTP test verifies actor, IP, user-agent and request ID (C§3).
 
 ### 7. DSS recommendations (from D§5 opportunities + D§4 behaviors)
 1. Recommended supplier + award recommendation (#1/#6) — admin views scoring weights (0.25/0.35/0.10/0.15/0.15, tiers A–D, D§26), cannot award (carve-out). 2. EOQ/coverage on PR lines (#2). 3. WO release earliest-feasible-date per machine; Gantt display-only today (#3). 4. Forecast method auto-select/blend per product (#12) with MAPE/bias evidence (D§1.3).
 
 ### 8. Activity feed
-`audit_logs` across 136 models (stock tables excluded — B-F11); parents carry `HasAuditLog`; mid-chain approval steps absent (C§3 gap above). Feed = global audit stream (`/admin/audit-logs`, `/admin/audit-logs/entity`, `/admin/activity` — routes verified in `dashboardRoutes.tsx:109`/`adminRoutes.tsx:119,136`). Login/auth + financial events carry IP/user-agent (CLAUDE.md security).
+`audit_logs` across 138 models, including stock tables (B-F11); parents carry `HasAuditLog`; mid-chain approval steps absent (C§3 gap above). Feed = global audit stream (`/admin/audit-logs`, `/admin/audit-logs/entity`, `/admin/activity` — routes verified in `dashboardRoutes.tsx:109`/`adminRoutes.tsx:119,136`). Login/auth + financial events carry IP/user-agent (CLAUDE.md security).
 
 ### 9. Shortcuts (all route-verified)
 `/dashboard/admin` · `/approvals` · `/approvals/delegations` · `/action-center` · `/notifications` · `/alerts` · `/admin/users` · `/admin/roles` · `/admin/roles/compare` · `/admin/settings` · `/admin/audit-logs` · `/admin/sessions` · `/admin/operations-health`.
@@ -112,13 +112,13 @@ Blocked snapshots (gate not held → stripped at render, D§2): oee/dppm/FPY/OTD
 | Leave | HR arm (step 2 of `department_head → hr_officer`; separate arms — C§1) | approve/reject on HR arm only; dept arm invisible (A§1.2 view-all tier note) → `/hr/leaves/:id` |
 | Company loan | step 2 (`+hr_officer`; C§1; row-scoped decide — `LoanAccessPolicy`) | verify employment/eligibility → module act endpoint → `/hr/loans/:id` |
 | Separation clearance | step 5 HR (`WorkflowSeeder.php:153-159`) | sign checklist → `/hr/separations/:id` |
-| Payroll period | **cannot act** — no `periods.approve`; maker only (A§1.2); **board `payroll` kind dead, no notification fires** (C§1a/§5.1, stuck-risk-5) → create/compute only → `/payroll/periods` |
-| OT requests | full-`attendance` module holder (A§1.2); custom single-step → **Action-ready, discovery-blind** (C§5: per-type card sourcing needed) | decide → `/hr/attendance/overtime/:id` |
-| Payroll adjustment | `payroll.adjustments.view/create` held (A§1.2); custom single-step, no ledger/sweep (C§2) | create/act → `/payroll/adjustments` (approver UNVERIFIED — mark) |
-**Board-blind flag:** payroll-period + OT + payroll-adjustment cards never appear on `/approvals` (C§5).
+| Payroll period | **cannot act** — no `periods.approve`; maker only (A§1.2); computed periods have a separate maker-checker card and notify-only SLA sweep (C§1a/§5.1) → create/compute only → `/payroll/periods` |
+| OT requests | full-`attendance` module holder (A§1.2); custom single-step → read-gated card on `/approvals`; decision stays on module route (C§5) | decide → `/hr/attendance/overtime/:id` |
+| Payroll adjustment | `payroll.adjustments.view/create` held (A§1.2); custom single-step, separate board source and notify-only sweep (C§2) | create/act → `/payroll/adjustments` (approver UNVERIFIED — mark) |
+**Board coverage:** payroll-period, OT and payroll-adjustment cards appear on `/approvals` when the actor meets the source read and approval gates (C§5).
 
 ### 6. Alerts / exceptions
-DTR missing-punch/import-failure · leave-balance forfeiture horizon (D§35) · probation horizon (D§35) · training 30/14/7d (D§19) · payroll anomaly flags block finalize (net-change 0.30, OT 80h, deduction 0.50 — D§27) · loan step-1 stall when borrower dept has no head (C§stuck-3; HR sees it at step 2 queue age) · session-timeout 30-min (non-employee — A§0). Present notifications: leave submit/arms/decide, loan submit + final decide, OT submit/decide (C§3); **missing: loan step transitions, payroll waiting-approval** (C§3).
+DTR missing-punch/import-failure · leave-balance forfeiture horizon (D§35) · probation horizon (D§35) · training 30/14/7d (D§19) · payroll anomaly flags block finalize (net-change 0.30, OT 80h, deduction 0.50 — D§27) · leave skips to HR when no eligible head/delegate can act; loans skip to the next chain role when no other active department head exists · session-timeout 30-min (non-employee — A§0). Loan step-transition and payroll waiting-approval notifications are implemented; delivery verification remains pending (C§3).
 
 ### 7. DSS recommendations
 1. OT/hiring recommendation: hours shortfall → authorize N OT-hours vs open req (opp. #4) from OT-hours + DTR-gap series. 2. Leave-forfeiture nudges before year-end job runs (D§35). 3. Payroll-anomaly pre-check on compute (D§27 thresholds) — unblocks finalize. 4. Probation/training slot planner from horizon sweeps (D§19/35).
@@ -179,11 +179,11 @@ Stripped snapshots (gates unheld): oee/FPY/WO (production), dppm/NCR (quality), 
 |---|---|---|
 | Purchase request | step 1 Finance (money-only; RFQ-sourced skips — CLAUDE.md/C§1); budget-ack precondition surfaced (C§5) | approve/reject w/ remarks → PR detail `/purchasing/purchase-requests/:id` |
 | Purchase order | step 1 Finance (buyer never a step; +vendor-SoD/PPAP/budget gates — C§5) | approve/reject → `/purchasing/purchase-orders/:id` |
-| Bill payment | **cannot act** — single VP step ≥₱50k else auto-posts (C§1 drift note); **no submit/decide notification exists** (C§3) → monitor-only queue |
+| Bill payment | **cannot act** — single VP step ≥₱50k else auto-posts (C§1 drift note); submit, decision and posting notifications are implemented (C§3), runtime delivery verification pending |
 | Asset disposal | step 1 Reviewed-by (JE posts on final approve in-tx — C§1) | review → asset detail `/assets/:id` |
 | Return (finance-only) | single Finance approval (`finance_only_return_request` — `WorkflowSeeder.php:180-185`) | approve → `/return-management/:id` |
-| Payroll period | checker: approve / request_correction / finalize / bank_file / disburse (A§1.3); **custom maker-checker, board-blind** (C§1a) | multi-button panel → `/payroll/periods/:id` (finalize emits GL-post; void reverses JE — B-chain-3) |
-| Budget / budget transfer | custom single-step + different-role rule; `budgeting.approve` ✓ (A§1.3); no ledger/sweep (C§2) | act → `/budgeting/:id`, `/budgeting/transfers` |
+| Payroll period | checker: approve / request_correction / finalize / bank_file / disburse (A§1.3); **custom maker-checker with separate board card** (C§1a) | multi-button panel → `/payroll/periods/:id` (finalize emits GL-post; void reverses JE — B-chain-3) |
+| Budget / budget transfer | custom single-step + different-role rule; `budgeting.approve` ✓ (A§1.3); no ledger rows, notify-only SLA sweep (C§2) | act → `/budgeting/:id`, `/budgeting/transfers` |
 | Loan write-off | request+approve held (A§1.3); custom single-step (C§2) | act → `/hr/loans/:id` (route family verified; write-off sub-action UNVERIFIED) |
 | Cost review / stock adjustment | `inventory.costs.approve` + `inventory.adjust.approve` ✓ (A§1.3); custom (C§2) | approve → `/crm/price-agreements/cost-reviews`, adjustment list (adjust-list path UNVERIFIED) |
 | Invoice prebill | custom (C§2); actor UNVERIFIED — inbox surfaces queue, actability marked UNVERIFIED |
@@ -205,14 +205,21 @@ Fiscal year + accounting period (`accounting.periods.view` ✓ — `FinanceDashb
 
 ---
 
-## R4. `vice_president` — Vice President · **NEW PAGE REQUIRED** → proposed `/dashboard/vp`
+## R4. `vice_president` — Vice President · Company Overview delivered (`/dashboard/company`)
 
-No VP-specific page exists by design ("reads what it signs"); lands on `/dashboard/plant-manager` via shared `dashboard.plant_manager.view` (A§1.4/§5.3, 00§A). Executive vs operations readings are not separated — this page separates them. Wiring: add `vp` catalog key + `dashboard.vp.view` (held by VP only), rarity-sort dispatch (A§0); URL follows the `/dashboard/<key>` catalog convention (existing 8 keys — `DashboardCatalog.php:33-47`).
+**Implementation status 2026-10-11:** this proposal is delivered as `/dashboard/company` with
+`dashboard.company.view`. VP layout includes chain recovery (view-only), read-only quality signals,
+permission-filtered risks/opportunities and a 7-day vs prior-7-day briefing. The recommendation feed
+uses current fixed-rule signals, not predictive models. Finance page/API gates now match. VP stalls
+notify `system_admin` without granting decision authority. The details below record the original
+proposal and its remaining design ideas.
+
+The original proposal was `/dashboard/vp`; implementation uses `/dashboard/company` and the shared `dashboard.company.view` grant. VP can still switch to `/dashboard/plant-manager` for operations readings.
 
 ### 1. Persona & decisions
-Executive terminal approver on all money chains (A§1.4, 00§A). **Daily:** ≥₱50k PR/PO/bill queue, SLA-aging (>24h remind / >48h escalate — C§5). **Weekly:** cash-commit exposure of pending approvals, loan/salary/asset-disposal queue, complaint trend. **Monthly:** budget-utilization vs FY, statements review, supplier-quality posture. No escalation superior — VP stall is terminal (C§stuck-2, 00§blocker-5); auto-resolve ships disabled (enabling = silent spend/kill — 00§blocker-5).
+Executive terminal approver on all money chains (A§1.4, 00§A). **Daily:** ≥₱50k PR/PO/bill queue, SLA-aging (>24h remind / >48h escalate — C§5). **Weekly:** cash-commit exposure of pending approvals, loan/salary/asset-disposal queue, complaint trend. **Monthly:** budget-utilization vs FY, statements review, supplier-quality posture. VP stalls notify `system_admin` without granting decision authority (C§stuck-2); auto-resolve remains disabled because timeout-driven decisions act without an approver.
 
-### 2. KPI cards (7 live executive cards; **all 11 snapshots data-not-available: VP holds none of the 7 `MODULE_PERMISSIONS` slugs** — verified §1.4 grants vs 00§0-map)
+### 2. KPI cards (7 live executive cards; VP now reads all 11 KPI codes through `dashboard.company.view`, measured in `PROGRESS.md`)
 | Card | Value (source the VP can read) | Delta / sparkline | Target | Click-through |
 |---|---|---|---|---|
 | Pending money-approvals ≥₱50k | open PR/PO/bill-payment rows awaiting VP (`po.view_all` + `purchasing.view` ✓) | WoW queue age | data not available: no approval-SLA KPI definition (sweep is notify-only — C§5) | `/approvals` |
@@ -231,34 +238,34 @@ Executive terminal approver on all money chains (A§1.4, 00§A). **Daily:** ≥�
 | Bar budget-util vs FY by dept (warn/block/off bands — D§28) | approve transfer or hold spend |
 | Table supplier score + open RFQ awards (`rfq.view` ✓; money via `RfqCommercialCalculator` — 00§shared-helpers) | award sign-off (buyer runs sourcing; VP signs — A§1.4) |
 | Bar complaint volume + 8D aging (8D 15-min sweep — D§16) | intervene on SLA-burn |
-| Donut chain-stage + `manual_required` backlog (bottleneck API ✓; page/API diverge M10 noted — A§M10) | unblock handoffs |
+| Donut chain-stage + `manual_required` backlog + recovery count/link | unblock handoffs |
 
 ### 4. Forecast widgets
-All 7 panels **data not available: gates unheld** — revenue (`accounting.dashboard.view` ✗) · cash-flow/capacity/supplier-risk (`forecasting.view` ✗) · attendance (`attendance.view` ✗) · headcount (`hr.employees.view` ✗) · defect-rate (`quality.view` ✗) (gates per §0/F-service greps; §1.4 grants). Interim: live 12-wk spend/commit trend from PR/PO/bill sources (TRENDABLE-STATUS-MACHINE via `audit_logs` join — B§rule-of-thumb) until a `forecasting.view` grant decision is made (grant = access-model change, flagged not assumed).
+Revenue, capacity and cash-flow projections use dataset permissions; the executive cards are listed in `PROGRESS.md`. The original proposal's other forecast panels remain unbuilt.
 
 ### 5. Approval inbox & quick actions (terminal steps only — `WorkflowSeeder.php:32-103,142-149`)
-PR ≥₱50k (step 2) · PO ≥₱50k (step 2) · bill-payment ≥₱50k (single) · cash-advance step 3 · company-loan step 4 (≥₱50k) · salary-adjustment step 2 · asset-disposal step 2. Each: amount + budget-ack/vendor-SoD/PPAP preconditions surfaced (C§5), approve/reject w/ remarks → module endpoints. Below-threshold rows skip VP (₱50k skip — C§engine). **Board-blind flag:** none of VP's act types is affected (all ledger-wired ✓), but VP also sees NO payroll/custom cards — correct, VP is step of none there (C§1).
+PR ≥₱50k (step 2) · PO ≥₱50k (step 2) · bill-payment ≥₱50k (single) · cash-advance step 3 · company-loan step 4 (≥₱50k) · salary-adjustment step 2 · asset-disposal step 2. Each: amount + budget-ack/vendor-SoD/PPAP preconditions surfaced (C§5), approve/reject w/ remarks → module endpoints. Below-threshold rows skip VP (₱50k skip — C§engine). VP's own decision types use live ledger cards; payroll has a separate maker-checker source; ten custom queues have read-gated cards, with decisions on their module endpoints.
 
 ### 6. Alerts / exceptions
-SLA 24h reminders + 48h escalations (6-hourly, ledger rows only — C§5) · NCR 15-min tiers + 8D + CAPA 30d/14d (D§15–17; VP reads complaints) · AR 30d/60d + AP-due-3d (D§8–9) · self-approval refusals on own requests (stall-never-spend mode — C§stuck-4/6) · VP-seat-empty = permanent stall for above-threshold bills (C§stuck-2) → delegation coverage check (`/approvals/delegations`).
+SLA 24h reminders + 48h escalations (6-hourly; ledger and notify-only custom queues — C§5); VP stalls notify `system_admin` without granting decision rights · NCR 15-min tiers + 8D + CAPA 30d/14d (D§15–17; VP reads complaints) · AR 30d/60d + AP-due-3d (D§8–9) · self-approval refusals on own requests (stall-never-spend mode — C§stuck-4/6) · above-threshold bill still waits for VP/delegate if the VP seat is empty.
 
 ### 7. DSS recommendations
-1. Cash-commit scenarios at approval time (opp. #5) — the executive tile. 2. Award recommendation: score+price+lead+MOQ blend (opp. #1/#6) on open comparisons → `/purchasing/rfqs/:id/compare`. 3. SO commit-date feasibility + expedite ranking (opp. #9) from bottleneck data. 4. Budget-transfer proposals (opp. #10) for breach lines awaiting spend approval.
+1. Risks & Opportunities and Weekly Briefing are implemented from current records with fixed rules; they do not predict. Still open: cash-commit scenarios (opp. #5), award recommendation (opp. #1/#6), SO commit-date feasibility (opp. #9), and budget-transfer proposals (opp. #10).
 
 ### 8. Activity feed
-VP step decisions (ledger-only trail; no `audit_logs` row per step — C§3 gap) · PR chain broadcasts + PO submit/full-approve notices (C§3 present) · salary/asset request notices **missing entirely** (C§3) → feed backfills from ledger polling. Surfaces: `/approvals`, PR/PO detail pages.
+VP step decisions now write `audit_logs` through `ApprovalRecord::HasAuditLog` (HTTP test verifies actor, IP, user-agent and request ID; no production sample yet) · PR/PO and salary/asset action-required notices added; custom approvals have scoped delegation plus notify-only SLA reminders/escalations. Surfaces: `/approvals`, PR/PO detail pages.
 
 ### 9. Shortcuts (route-verified)
-`/dashboard/plant-manager` (current landing) · `/dashboard/vp` (proposed) · `/approvals` · `/approvals/delegations` · `/action-center` · `/chains` · `/purchasing/purchase-requests` · `/purchasing/purchase-orders` · `/purchasing/rfqs/:id/compare` · `/accounting/bills` · `/accounting/invoices` · `/accounting/income-statement` · `/accounting/balance-sheet` · `/budgeting` · `/budgeting/budget-vs-actual` · `/crm/complaints` · `/hr/employees` (salary-adjustment queue tab — A§1.4) · `/assets/:id`.
+`/dashboard/company` · `/dashboard/plant-manager` · `/approvals` · `/approvals/delegations` · `/action-center` · `/chains` · `/chains/recovery` · `/purchasing/purchase-requests` · `/purchasing/purchase-orders` · `/purchasing/rfqs/:id/compare` · `/accounting/bills` · `/accounting/invoices` · `/accounting/income-statement` · `/accounting/balance-sheet` · `/budgeting` · `/budgeting/budget-vs-actual` · `/crm/complaints` · `/quality/ncrs` · `/hr/employees` (salary-adjustment queue tab — A§1.4) · `/assets/:id`.
 
 ### 10. Filters
 Amount band (≥₱50k terminal vs skipped) · kind (PR/PO/bill/loan/salary/asset) · SLA age (24h/48h) · department (cost-center on budgets) · date range · delegation-active toggle (A§3 `actsForRoles`).
 
 ---
 
-## R5. `customer_service_officer` — Customer Service Officer · **NEW PAGE REQUIRED** → proposed `/dashboard/customer-service`
+## R5. `customer_service_officer` — Customer Service Officer · page shipped in Phase 2 E: `/dashboard/customer-service`
 
-Lands on `/dashboard/default` (no catalog dashboard; no role-default layout rows — A§1.5/§5.2, 00§A). Generic widget home is the primary surface today (A§5.1). Wiring: add catalog key + `dashboard.customer_service.view`, seed role-default layout (A§5.2 gap), rarity dispatch (A§0). Path follows `/dashboard/<key>` convention.
+At spec time, the role landed on `/dashboard/default` with no catalog entry or default rows. Phase 2 E added `dashboard.customer_service.view`, a role-default layout, and `/dashboard/customer-service`; see `PROGRESS.md`.
 
 ### 1. Persona & decisions
 CRM complaints/inquiries/RMA lifecycle owner (A§1.5, 00§A). **Daily:** new complaints/inquiries, RMA intake + QC-defect notices, return-receive/inspect handoffs (owned by warehouse/QC — A§1.5). **Weekly:** complaint SLA aging, 8D progress, CoC attach completeness on confirms. **Monthly:** complaint Pareto by product/defect, RMA cycle time, price-agreement renewal watch.
@@ -266,7 +273,7 @@ CRM complaints/inquiries/RMA lifecycle owner (A§1.5, 00§A). **Daily:** new com
 ### 2. KPI cards (8 live; **all snapshots DNA: no KPI-module slug held** — §1.5 vs 00§0-map)
 | Card | Value | Delta / sparkline | Target | Click-through |
 |---|---|---|---|---|
-| Open complaints | `crm.open_complaints` (`crm.view` ✓) live | WoW; daily from `complaints` created_at (TRENDABLE-STATUS-MACHINE — B§) | data not available: no complaint KPI definition | `/crm/complaints` |
+| Open complaints | `crm.open_complaints` (`crm.complaints.view` ✓) live | WoW; daily from `complaints` created_at (TRENDABLE-STATUS-MACHINE — B§) | data not available: no complaint KPI definition | `/crm/complaints` |
 | Complaint SLA-breach | age vs 8D tiers (15-min sweep — D§16) | WoW | data not available (8D SLA in sweeper, no KPI target) | `/crm/complaints` |
 | Open inquiries | `crm.inquiries.view/manage` ✓ live | WoW | data not available | `/crm/inquiries` |
 | Open returns | `rma.open_returns` (`return_management.view` ✓) | WoW (returns tables nearly unindexed — B-F12/F§: filter may be slow pre-index) | data not available | `/return-management` |
@@ -302,28 +309,30 @@ Portal RMA + QC-defect notices (C§3 present) · NCR 15-min tiers + 8D 15-min + 
 Complaint/inquiry lifecycle + RMA `cases/lines/events` rows (B§ returns-10) · price-offer propose/approve trail · SO confirm + CoC attach + draft-invoice handoff (`Generated`/`ManualRequired`/`NotRequired` — B-chain-1) · activity feeds exist on SO (scope-cut list — §0). QC-inspect/receive steps appear as handoff events owned by other roles.
 
 ### 9. Shortcuts (route-verified)
-`/dashboard/default` (current) · `/dashboard/customer-service` (proposed) · `/crm/complaints` · `/crm/complaints/new` · `/crm/inquiries` · `/crm/customers` · `/crm/products` · `/crm/price-agreements` · `/crm/price-agreements/requests` · `/crm/sales-orders` · `/return-management` · `/return-management/new` · `/return-management/cases` · `/approvals` · `/action-center` · `/notifications`.
+`/dashboard/customer-service` (current; Phase 2 E) · `/crm/complaints` · `/crm/complaints/new` · `/crm/inquiries` · `/crm/customers` · `/crm/products` · `/crm/price-agreements` · `/crm/price-agreements/requests` · `/crm/sales-orders` · `/return-management` · `/return-management/new` · `/return-management/cases` · `/approvals` · `/action-center` · `/notifications`.
 
 ### 10. Filters
 Customer · product (finished-goods catalog in CRM — CLAUDE.md namespace gotcha) · complaint severity/status · RMA stage/disposition · date range · channel (portal vs direct; portal principals separate guards — A§0/§3) · CoC status (attached/`manual_required`).
 
 ---
 
-## R6. `sales_officer` — Sales Officer · **NEW PAGE REQUIRED** → proposed `/dashboard/sales`
+## R6. `sales_officer` — Sales Officer · `/dashboard/sales` (shipped in Phase 2 E)
 
-Lands on `/dashboard/default` (no catalog dashboard; no role-default layout rows — A§1.6/§5.2). Opens `/chains` but bottleneck widget 403s (M10 — A§M10, 00§A). Wiring: catalog key + `dashboard.sales.view`, role-default layout seed, rarity dispatch (A§0/§5.2).
+Originally landed on `/dashboard/default` with no role-default rows (A§1.6/§5.2). The shipped page now shows a 12-month order-date trend, live order-status mix, and price-request queue mix. `/chains` hides its bottleneck section unless the viewer holds that read permission; F-040 closed the page/API mismatch (A§M10, 00§A).
 
 ### 1. Persona & decisions
 SO full lifecycle + price propose (A§1.6, 00§A). No complaints/inquiries/RMA (A§1.6). **Daily:** open pipeline, confirm-ready SOs, commit-date feasibility. **Weekly:** conversion (quoted→confirmed), price-request outcomes, `manual_required` invoice backlog. **Monthly:** revenue vs target (target UNVERIFIED — no seeded sales target found), product mix, price-renewal watch.
 
-### 2. KPI cards (7 live; **all snapshots DNA: no KPI-module slug held** — §1.6 vs 00§0-map)
+### 2. KPI cards (7 proposed; **all snapshots DNA: no KPI-module slug held** — §1.6 vs 00§0-map)
+
+Shipped subset: the 12-month order-intake trend and current open-order / price-request counts with status breakdowns. Confirm-ready, conversion, commit-to-confirm lead time, invoice handoff, and delivered-awaiting-confirm remain unserved; source and permission limits below still apply.
 | Card | Value | Delta / sparkline | Target | Click-through |
 |---|---|---|---|---|
 | Open SOs | `sales_orders.view` ✓ live by stage (8 indexed stage timestamps — B§) | WoW | data not available: no SO-volume KPI definition | `/crm/sales-orders` |
 | Confirm-ready | MRP-planned + stock-available, minus failed-outgoing-QC re-plan owned by MRP (NCR-close creates no WO on SO-line — 00§shared-helpers `coversSalesOrderLine`) | WoW | data not available | `/crm/sales-orders` |
 | Quoted→confirmed conversion | price-request → SO join (propose held — A§1.6) | MoM | data not available | `/crm/price-agreements/requests` |
 | Avg commit-to-confirm lead time | stage-timestamp deltas (B§) | MoM | data not available | `/crm/sales-orders` |
-| `manual_required` invoice backlog | confirms with NULL invoice (valid-lossy F2 — B§) | WoW | data not available (handoff dimension, not KPI) | `/crm/sales-orders` |
+| `manual_required` invoice backlog | finance-owned confirmed deliveries with NULL invoice (F2) | WoW | Finance dashboard: `finance.invoice_handoff_backlog` | `/supply-chain/deliveries?invoice_handoff_status=manual_required` (finance read; Sales role does not hold delivery-read permission) |
 | Price requests pending offer | propose-queue age | WoW | data not available | `/crm/price-agreements/requests` |
 | Delivered awaiting customer-confirm | delivery→confirm stage (CoC attached — B-chain-1) | WoW | data not available | `/supply-chain/deliveries` (read via `purchasing.view`? NO — sales lacks it; **route visible but data 403s → shortcut marked UNVERIFIED for this role**; use `/chains` tracker instead) |
 
@@ -333,7 +342,7 @@ SO full lifecycle + price propose (A§1.6, 00§A). No complaints/inquiries/RMA (
 | AreaTrend SO volume + confirm rate (weekly; lines dateless → join parent timestamps — B§ rule) | forecast input to PPC → commit-date promise (opp. #9) |
 | Funnel quote→confirm→produce→deliver→invoice→collect (Chain-1 stages; F1 WO→SO unenforced → LEFT JOIN — B-F1) | find stage leak → expedite |
 | Bar product mix by SO value (products in CRM — namespace gotcha) | push high-availability items |
-| Table commit-date risk (bottleneck API 403s for this role — M10; uses SO-stage + MRP-plan data only) | re-promise early |
+| Table commit-date risk (uses SO-stage + MRP-plan data only; bottleneck panel requires its own grant — M10) | re-promise early |
 | Bar price-request win/loss (pricing-review daily + dispatch recovery — D§32) | re-price |
 | Table `manual_required` backlog (F2 first-class — 00§blocker-9) | chase invoicing |
 
@@ -344,7 +353,7 @@ All 7 DSS panels **data not available: gates unheld** (no `forecasting.view` etc
 Acts on: **none** — SO confirm/cancel is lifecycle (holds `confirm/cancel` — A§1.6), not an approval-ledger step; price propose (approve = finance — A§1.3). Queue = own pending price-requests + draft SOs → `/crm/price-agreements/requests`, `/crm/sales-orders/create`. **Board-blind flag:** N/A by design — but sales must know confirm does NOT auto-invoice (`manual_required` path — B-chain-1/B-F2); the "waiting invoice" state has no approval card anywhere (C§5 custom `invoice prebill` discovery-blind).
 
 ### 6. Alerts / exceptions
-Pricing-review daily (D§32) · chain-bottleneck hourly (D§38) — **page opens, bottleneck widget 403s** (M10 — A§M10) → page shows tracker without bottleneck data until M10 fixed · MRP schedule-conflict alerts (D§5) affect commit dates without notifying sales (notification gap class — C§3) → poll `/chains` · delivery-attempt events (attempts table — B§) for promise updates.
+Pricing-review daily (D§32) · chain-bottleneck hourly (D§38) — `/chains` shows only sections allowed by the user's read grants (M10 — A§M10) · MRP schedule-conflict alerts (D§5) affect commit dates without notifying sales (notification gap class — C§3) → poll `/chains` · delivery-attempt events (attempts table — B§) for promise updates.
 
 ### 7. DSS recommendations
 1. SO commit-date feasibility + expedite ranking (opp. #9) — the sales tile. 2. Price-renewal suggestion (opp. #6) from agreement horizons. 3. Demand-forecast visibility (read-only MAPE/bias + dispersion confidence — D§1.3) to promise against. 4. Order-quantity guidance (EOQ/coverage — opp. #2) translated as available-to-promise hints (UNVERIFIED as sales-visible — flagged).
@@ -352,8 +361,8 @@ Pricing-review daily (D§32) · chain-bottleneck hourly (D§38) — **page opens
 ### 8. Activity feed
 SO lifecycle (confirm/cancel/stage advances; `SalesOrderConfirmed` tolerates newer state — 00§shared-helpers) · price propose/offer events · delivery→confirm + CoC attach (B-chain-1) · activity feeds exist on SO (§0 scope-cut list). Complaint/RMA events out of scope (not held — A§1.6).
 
-### 9. Shortcuts (route-verified; M10-constrained)
-`/dashboard/default` (current) · `/dashboard/sales` (proposed) · `/crm/sales-orders` · `/crm/sales-orders/create` · `/crm/products` · `/crm/customers` · `/crm/price-agreements` · `/crm/price-agreements/requests` · `/chains` (tracker opens; bottleneck data 403s — M10) · `/approvals` · `/action-center` · `/notifications`.
+### 9. Shortcuts (route-verified)
+`/dashboard/sales` (current; Phase 2 E) · `/crm/sales-orders` · `/crm/sales-orders/create` · `/crm/products` · `/crm/customers` · `/crm/price-agreements` · `/crm/price-agreements/requests` · `/chains` (sales lookup; bottleneck section permission-gated — F-040) · `/approvals` · `/action-center` · `/notifications`.
 
 ### 10. Filters
 Customer · product · SO stage/status · date range · price-request status · commit-date risk band · invoice-handoff status (`Generated`/`ManualRequired`/`NotRequired` — B-chain-1).
@@ -362,6 +371,6 @@ Customer · product · SO stage/status · date range · price-request status · 
 
 ## Cross-role notes for Phase 1 builders
 
-1. **M10 fix precedes sales/VP chain widgets:** page gate (`crm.sales_orders.view`) vs API gate (`dashboard.view_bottlenecks`) diverge both ways — sales opens/403s, PPC calls/404s (A§M10, 00§A). Either align gates or grant `dashboard.view_bottlenecks` to sales_officer (access-model change — flagged).
-2. **M1 pick per finance surface** (00§blocker-4); **board-blind card sourcing** for payroll + 14 custom types (00§blocker-1); **7+ notification gaps** mean inbox polling, not push (00§blocker-2); **returns/budget/WO-op indexes before aggregating** (00§blocker-3); **uncached widget-data needs a cache layer** (00§blocker-7); **KPI monthly grain** — sub-month from sources (00§blocker-8); **`manual_required` first-class** (00§blocker-9).
+1. **M10 resolved:** `/chains` admits either read permission and gates each section and API call separately; seeded role grants remain unchanged (A§M10, 00§A).
+2. **M1 finance surfaces** (00§blocker-4); payroll + ten custom queues now have separate board sources; uncovered GRN/refusal, return, PPAP and late-report cases remain outside (C§4/§5); submit/decision notifications and custom SLA notices are implemented but delivery verification is pending. Phase 2 applied the core returns/budget/WO-op indexes (F-030…F-038) and added 30-second viewer-scoped widget caches (F-063); new queries still need query-specific index checks. **KPI monthly grain** remains — sub-month trends read source tables (00§blocker-8); `manual_required` stays a first-class handoff dimension (00§blocker-9).
 3. **Drift guards on any chain/seed touch:** `ApprovalChainRolePermissionDriftTest` (C§5) and `WidgetSeedIntegrityTest` (00§dashboards).

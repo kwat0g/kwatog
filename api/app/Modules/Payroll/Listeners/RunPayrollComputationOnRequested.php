@@ -34,6 +34,13 @@ class RunPayrollComputationOnRequested implements ShouldQueue
 
     public int $timeout = ProcessPayrollJob::TIMEOUT_SECONDS;
 
+    // Lane: low — the 30-min compute runs inline here; approvals/realtime
+    // must not wait behind it.
+    public function viaQueue(): string
+    {
+        return 'low';
+    }
+
     /** @return array<int, WithoutOverlapping> */
     public function middleware(PayrollComputationRequested $event): array
     {

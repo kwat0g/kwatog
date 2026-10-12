@@ -211,8 +211,10 @@ class KpiComputeProcessTest extends TestCase
      * lifecycle check constraint rejects, so running work silently left the
      * denominator. 1 of 2 due work orders finished → 50%; with the old
      * `started` filter the denominator would have been 1 and this read 100%.
+     * Late July work finished in August must not inflate August's numerator:
+     * numerator and denominator use the same due-in-month cohort.
      */
-    public function test_wo_completion_rate_uses_planned_end_for_the_due_population(): void
+    public function test_wo_completion_rate_uses_one_due_cohort_and_period_end(): void
     {
         $productId = DB::table('products')->insertGetId([
             'part_number' => 'KPI-WO-01', 'name' => 'KPI Cap', 'unit_of_measure' => 'pcs',
@@ -237,6 +239,13 @@ class KpiComputeProcessTest extends TestCase
             $row('WO-KPI-0003', 'completed', '2026-08-10 17:00:00', '2026-08-10 16:00:00'),
             // Planned but not yet released → outside the filtered statuses.
             $row('WO-KPI-0004', 'planned', '2026-07-28 17:00:00', null),
+            // Due in July but finished late in August: it stays a July miss
+            // and must not count as an August completion.
+            $row('WO-KPI-0005', 'completed', '2026-07-21 17:00:00', '2026-08-05 16:00:00'),
+            $row('WO-KPI-0006', 'completed', '2026-07-22 17:00:00', '2026-08-12 16:00:00'),
+            $row('WO-KPI-0007', 'completed', '2026-07-23 17:00:00', '2026-08-20 16:00:00'),
+            // Due in August, still running at month end → August denominator only.
+            $row('WO-KPI-0008', 'in_progress', '2026-08-25 17:00:00', null),
         ]);
 
         $definition = KpiDefinition::query()->create([
@@ -248,7 +257,12 @@ class KpiComputeProcessTest extends TestCase
         $snapshot = app(KpiSnapshotService::class)->computeKpi($definition, 2026, 7);
 
         $this->assertNotNull($snapshot);
-        $this->assertSame('50.0000', (string) $snapshot->actual_value);
+        $this->assertSame('20.0000', (string) $snapshot->actual_value);
+
+        $august = app(KpiSnapshotService::class)->computeKpi($definition, 2026, 8);
+
+        $this->assertNotNull($august);
+        $this->assertSame('50.0000', (string) $august->actual_value);
     }
 
     public function test_ar_aging_uses_open_invoice_balance_and_period_end_population(): void

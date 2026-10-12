@@ -64,11 +64,11 @@ Route::middleware('auth:sanctum')->prefix('dashboards')->group(function () {
     Route::get('/rollout-health', [RolloutHealthController::class, 'index'])
         ->middleware('permission:dashboard.admin.view');
 
-    // P4.3 — Finance dashboard unified under /dashboards prefix (canonical).
-    // The old /dashboard/finance route in Accounting/routes.php is kept as a
-    // temporary alias until the SPA is updated (see spa/src/api/accounting/dashboard.ts).
+    // Finance page access matches the SPA/catalog grant. Individual panels
+    // still self-gate against their accounting data permissions.
+    // The legacy /accounting/dashboard/finance route remains for compatibility.
     Route::get('/finance',         [FinanceDashboardController::class, 'summary'])
-        ->middleware('permission:accounting.dashboard.view');
+        ->middleware('permission:dashboard.accounting.view');
 });
 
 /*

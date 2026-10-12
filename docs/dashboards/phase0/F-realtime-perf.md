@@ -1,7 +1,8 @@
 # SECTION F — Real-time & performance (Phase 0 discovery)
 
-Read-only research against PRIMARY SOURCES. Code wins over docs.
-Branch: `docs/dss-discovery-phase0`. No code modified, no test suite run, no services started.
+Original discovery was read-only research against PRIMARY SOURCES. Code wins over docs. The R1–R9
+follow-up below records shipped changes and verification.
+Branch: `docs/dss-discovery-phase0`.
 
 **Ground truth used:** `docker-compose.yml`, `api/config/broadcasting.php`, `api/config/queue.php`,
 `api/config/cache.php`, `api/config/database.php`, `api/.env.example`, `api/routes/channels.php`,
@@ -87,9 +88,7 @@ SPA transport: `spa/src/lib/echo.ts:30-50` lazy-imports `laravel-echo` + `pusher
 (~21 KB gzipped kept out of entry chunk), sets `broadcaster: reverb`,
 `authEndpoint: /api/v1/broadcasting/auth` with an axios cookie+CSRF authorizer
 (`spa/src/lib/echo.ts:51-73`). Singleton resolves once (`spa/src/lib/echo.ts:86-96`).
-Declared-but-unlistened channel: `inventory.stock` is authorised in
-`api/routes/channels.php:36-37` but no SPA `useEcho('inventory.stock', …)` subscriber was
-found — effectively dead WS surface today.
+The unused `inventory.stock` channel authorization was removed; no event emitter or SPA subscriber exists.
 
 ### 1.3 What is cached — 32 key patterns (payload + version/lock)
 
@@ -215,55 +214,41 @@ Conventions: `B-§4` = missing-index inventory in `docs/dashboards/phase0/B-modu
 `purchase_requests/orders.date`, `containers.shipment_id`, etc.). Money = `decimal(15,2)`;
 `id` = HashID at API.
 
-- **R1 — Today's outputs loaded into PHP, then summed.** `WorkOrderOutput::whereBetween('recorded_at',…)->get()`
-  + `->sum('good_count')` / `->sum('reject_count')` in
-  `api/app/Modules/Production/Services/ProductionDashboardService.php:78-80`. Same shape in widget scalar
-  `DB::table('work_order_outputs')->whereDate('recorded_at',$today)->sum(DB::raw('good_count + reject_count'))`
-  (`api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:99`). No pagination; grows with
-  outputs/day. Served under 30s cache but recomputed on every miss + 60s SPA poll
-  (`spa/src/pages/production/dashboard.tsx:32`).
-- **R2 — Chain stage breakdown hydrates every active sales order.** `SalesOrder::query()->whereNotIn(status…)->get()`
-  then per-row PHP `match` in `api/app/Modules/Production/Services/ProductionDashboardService.php:122-156`.
-  Widget scalar repeats the count (`DashboardWidgetDataService.php:115`). No `limit`, no aggregate;
-  throws on unknown status (good) but cost is O(active SOs) per dashboard miss.
-- **R3 — OEE fan-out: 3 queries × N machines per dashboard load.** `calculateForAllMachines()` loads active
-  machines then calls `calculate()` per machine (`api/app/Modules/Production/Services/OeeService.php:119-145`);
-  each `calculate()` runs 2× `calculateDowntimeMinutes()` (each a `MachineDowntime::…->get()` +
-  PHP overlap loop, `…:399-422`) + 1× outputs query (`…:65-68`). 10 machines ≈ 31 queries, all inside the
-  30s-cached `ProductionDashboardService::payload()` (`ProductionDashboardService.php:47-53`).
-- **R4 — OEE outputs eager-load but still full-window `->get()`.**
-  `WorkOrderOutput::with('workOrder.mold')->whereHas(machine)->whereBetween(recorded_at)->get()`
-  (`api/app/Modules/Production/Services/OeeService.php:65-68`); sums + cycle-time avg done in PHP
-  (`…:70-80`). `Model::preventLazyLoading` is on in non-prod (`api/app/Providers/AppServiceProvider.php:258`)
-  so the `with` is required — but there is no chunking/pagination.
+- **R1 — Today's output totals aggregate in SQL.** Both the production page and widget scalar now sum
+  `good_count` and `reject_count` in the database with an indexed timestamp range; no output rows are
+  hydrated into PHP (`ProductionDashboardService.php`, `DashboardWidgetDataService.php`).
+- **R2 — Chain stages aggregate by status and MRP link.** `ProductionDashboardService::chainStageBreakdown()`
+  now groups by `status, mrp_plan_id` in SQL and maps the bounded groups to stages. Unknown statuses still
+  throw; active sales-order rows are not hydrated.
+- **R3 — OEE dashboard work is batched.** `calculateForAllMachines()` reads the active machine list once,
+  downtime once, and grouped output metrics once, instead of three queries per machine.
+- **R4 — OEE output totals aggregate in SQL.** The dashboard query groups by machine and computes good,
+  reject, and average positive mold cycle time without hydrating every output row. Single-machine reports
+  still use the separate `calculate()` path.
 - **R5 — Inventory dashboard loads two full tables into PHP.**
   `StockLevel::query()->with('location.zone.warehouse')->get()` +
   `Item::query()->where(is_active)->get()` then per-item `bccomp` availability loop
   (`api/app/Modules/Inventory/Services/InventoryDashboardService.php:38-51`). `stock_levels` is the
   highest-write inventory table (mutated in place per movement; B-§1.7) yet has no dashboard pagination;
   only mitigation is the 30s `inv:dashboard:summary` cache (`…:28`).
-- **R6 — Cash position scans the biggest ledger with an expression predicate.**
-  `journal_entry_lines ⋈ journal_entries ⋈ accounts … SUM(l.debit - l.credit)` with
-  `orWhereRaw('LOWER(a.name) LIKE %cash%')` in `DashboardWidgetDataService.php:385` (stricter
-  code-only variant in `FinanceDashboardService.php:118-124`). `journal_entry_lines` has only
-  `(journal_entry_id, account_id)` indexes (B-§1.6); the `LOWER()` expression + `OR` defeats index use.
-  Runs per widget-data poll; finance path is 30s-cached but flushed on EVERY JE write
-  (`JournalEntryObserver.php:30-48`).
+- **R6 — Cash position filters by configured account codes.** `DashboardWidgetDataService::cashPosition()`
+  uses the same configured cash-code set as FinanceDashboardService; it no longer scans account names with
+  `LOWER()` plus `OR`. JE observer invalidation remains high-churn (`JournalEntryObserver.php:30-48`).
 - **R7 — Low-stock subquery aggregates the whole stock table.**
   `fromSub(items LEFT JOIN stock_levels GROUP BY i.id, reorder_point … SUM(qty-reserved)) → whereColumn(available <= reorder_point)->count()`
   (`api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:463`); badge twin uses a
   correlated `SELECT SUM… WHERE sl.item_id = items.id` per item
   (`api/app/Modules/Dashboard/Services/BadgeService.php:326-329`). No pagination; badge runs per user
   per 30s TTL.
-- **R8 — `DATE(recorded_at)` GROUP BY busts the index.**
+- **R8 — `DATE(recorded_at)` groups an indexed window.**
   `DB::table('work_order_outputs')->selectRaw('DATE(recorded_at) as day, …')->where(recorded_at >= 14d)->groupBy('day')`
-  (`api/app/Modules/Dashboard/Services/Analytics/CoreWidgetAnalytics.php:96-100`). Function on the
-  filtered column prevents range-index use; 14 points recomputed per rich layout, uncached (see R15).
-- **R9 — AR aging = 4 full scans of `invoices`.** One `SUM(balance)` per bucket with
-  `whereRaw('CURRENT_DATE - due_date BETWEEN ? AND ?')`
-  (`api/app/Modules/Dashboard/Services/Analytics/CoreWidgetAnalytics.php:196-202`); scalar twins sum
-  open AR/AP separately (`DashboardWidgetDataService.php:125-126`). `invoices.balance` has no
-  dedicated index (B-§1.6 composite is status+date+cancelled); the date arithmetic blocks index use.
+  (`api/app/Modules/Dashboard/Services/Analytics/CoreWidgetAnalytics.php:140-144`). Migration
+  `2026_10_12_120000` adds the standalone `recorded_at` index, allowing its range predicate to narrow
+  the scan before day grouping; successful rich payloads cache per viewer and widget for 30 seconds (R15).
+- **R9 — AR aging uses indexed due-date ranges.** The four bucket sums now filter the existing
+  `invoices.due_date` index with `whereBetween`/`<` bounds instead of date arithmetic
+  (`CoreWidgetAnalytics.php:236-260`). Open AR/AP scalar totals remain separate. Successful rich
+  payloads cache per viewer/widget for 30 seconds (R15).
 - **R10 — Monthly OEE KPI hydrates a month of work orders.** `DB::table('work_orders')->whereIn(completed,closed)->whereBetween(actual_end)->get([...])`
   then PHP loop over planned/good/rejected/minutes (`api/app/Modules/Dashboard/Services/KpiSnapshotService.php:324-349`).
   `actual_end` is UNINDEXED (B-§1.10: only `planned_start+status` composite + `planned_end` are indexed).
@@ -272,11 +257,10 @@ Conventions: `B-§4` = missing-index inventory in `docs/dashboards/phase0/B-modu
   `SUM(total_cost)` over month's `stock_movements` + `SUM(quantity * weighted_avg_cost)` over ALL
   `stock_levels` (`api/app/Modules/Dashboard/Services/KpiSnapshotService.php:572-578`). Annualised
   (`×12`) from a single month; no snapshot table — recomputed per KPI run.
-- **R12 — WO-completion KPI double-counts + known contract gap.**
-  Two `COUNT(*)` over `work_orders` with `whereBetween(planned_end)` vs `whereBetween(actual_end)`
-  (`api/app/Modules/Dashboard/Services/KpiSnapshotService.php:617-639`); numerator/denominator use
-  different date columns so the ratio can exceed 100%, documented in-code (`…:601-611`). Both counts
-  uncached on compute path.
+- **R12 — WO-completion KPI uses two uncached counts.**
+  `COUNT(*)` over `work_orders` for the due cohort and completed due-cohort rows
+  (`api/app/Modules/Dashboard/Services/KpiSnapshotService.php`); both counts run on the compute path.
+  The original month-mismatch gap is closed by F-060's shared due-cohort filter.
 - **R13 — Badge fan-out: up to ~30 COUNTs per user per TTL.**
   `BadgeService::compute()` loops `definitions()` (`api/app/Modules/Dashboard/Services/BadgeService.php:154-193,203-589`):
   approvals, action-center (which itself calls `ActionCenterService::for($user)`, `…:233`), PR/leave/OT/
@@ -284,20 +268,20 @@ Conventions: `B-§4` = missing-index inventory in `docs/dashboards/phase0/B-modu
   inspections/GRN/MRB/shipments/MRP-plans/returns/invoices/bills/budgets/transfers. Mitigated by per-user
   30s cache + global version invalidation (`…:122-151`) + 60s SPA poll (`spa/src/hooks/useBadges.ts:23-26`);
   worst case is still N_badges × polling_users contemporaneous misses.
-- **R14 — Rich table tiles double-query with no cache.**
+- **R14 — Rich table tiles double-query on cache misses.**
   `SupplyChainWidgetAnalytics` (`…/SupplyChainWidgetAnalytics.php:49-76,90-113`),
   `LoanWidgetAnalytics` (`…/LoanWidgetAnalytics.php:44-66`),
   `ReturnWidgetAnalytics` (`…/ReturnWidgetAnalytics.php:71-97`): each builds `$base()` then runs
   `limit(10)->get()` AND `$base()->count()` — 2 queries per tile per layout render. Same for
-  `CoreWidgetAnalytics::headcount/poStatusMix` (`…/CoreWidgetAnalytics.php:222-287`). No
-  `Cache::remember` anywhere in `Services/Analytics/*` (grep: only `DB::table`, `groupBy`, `limit`, `get`).
-- **R15 — The two hottest dashboard paths have NO cache at all.**
-  `DashboardWidgetDataService::summaries()` loops keys with per-key try/catch and no
-  `Cache::remember` (`api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php:50-74`);
-  `WidgetAnalyticsService::payload()` is explicitly read-only with no transaction and no cache
-  (`api/app/Modules/Dashboard/Services/WidgetAnalyticsService.php:24-30,58-81`). Every
+  `CoreWidgetAnalytics::headcount/poStatusMix` (`…/CoreWidgetAnalytics.php:222-287`). Successful rich
+  payloads now cache per user and widget for 30 seconds; each miss still runs both queries.
+- **R15 — Dashboard data is cached per viewer and widget for 30 seconds.**
+  `DashboardWidgetDataService::summaries()` and `WidgetAnalyticsService::payload()` cache successful
+  results under viewer-specific keys (`api/app/Modules/Dashboard/Services/DashboardWidgetDataService.php`;
+  `WidgetAnalyticsService.php`). Viewer identity is part of the key because payloads may be row-scoped;
+  cache entries cannot cross user boundaries. Failures are not cached, so the next poll retries. Every
   `GET /dashboard/widget-data?keys[]=…` (max 50 keys, `DashboardLayoutController.php:72-79`) and every
-  `GET /dashboard/layout?rich=1` (`…:62-70`) therefore hits transactional tables live on each
+  `GET /dashboard/layout?rich=1` (`…:62-70`) hits transactional tables on cache miss, not every
   30–60s poll (`spa/src/api/dashboards.ts:10-17`, `spa/src/components/dashboard/RoleDashboard.tsx:37`).
   Failures degrade to `available:false` tiles (`DashboardWidgetDataService.php:59-70`) / `[]` rich payloads
   (`WidgetAnalyticsService.php:69-80`) — safe but silent under load.
@@ -320,7 +304,7 @@ they bound what a fresh/dev database holds and what the dashboard queries above 
 - Reference data (`docs/SEEDS.md:7-86`): departments 11 listed codes (12 rows incl. ADMIN);
   positions ~35; shifts 4; holidays ~21 (2026 PH); leave types 8; COA ~45 accounts
   (`docs/SEEDS.md:87-138`); defect types 11 (`…:139-154`); SSS ~30 brackets, PhilHealth 1 rate row,
-  Pag-IBIG 2 brackets, BIR 6 semi-monthly brackets (`…:155-233`); workflow definitions 18
+  Pag-IBIG 2 brackets, BIR 6 semi-monthly brackets (`…:155-233`); workflow definitions 18 seeded / 10 enforced
   (`…:235-257`).
 - Master/demo (`docs/SEEDS.md:258-343` + seeders): demo accounts 18; demo products 8 (each with BOM);
   demo customers 5; raw materials 12; vendors 8. `DemoDataSeeder::TARGET_EMPLOYEES = 50`,
@@ -329,7 +313,8 @@ they bound what a fresh/dev database holds and what the dashboard queries above 
   one complaint section (`…:50-56`). Attendance seeder guard references `employees × 50` rows
   (`api/database/seeders/RealisticDataSeeder.php:215`) — i.e. dev attendance volume is
   O(employees × days), the largest dev fact table by row count.
-- Widget catalog: 55 scalar keys in `LINK_BY_KEY` (`api/database/seeders/DashboardWidgetSeeder.php:48-105`)
+- Widget catalog: 65 non-KPI keys in `LINK_BY_KEY` plus 11 KPI keys = 76 total
+  (`api/database/seeders/DashboardWidgetSeeder.php`)
   + `kpi.*` per-definition widgets (`…:107-…`); `GET /dashboard/widget-data` accepts max 50 keys per call
   (`api/app/Modules/Dashboard/Controllers/DashboardLayoutController.php:74`). KPI scorecard size =
   active `kpi_definitions` rows; snapshots filled ONLY by `kpi:compute-monthly` (2nd 03:00,
@@ -390,18 +375,17 @@ they bound what a fresh/dev database holds and what the dashboard queries above 
    `inventory/dashboard.tsx:25`, approvals `30s` with "websocket upgrade is a future task",
    `spa/src/pages/approvals/index.tsx:66`). Forecast panels never poll by design (manual Refresh,
    `spa/src/api/dashboards.ts:11-14`).
-2. **No cache on the two hottest composable paths (R15).** Widget scalars + rich analytics recompute
-   live on every poll; only the bespoke role dashboards and the procurement-chain controller cache.
-   A DSS that adds tiles to `widget-data` without adding a cache layer multiplies R1–R14 linearly
-   with polling users × keys (≤50/call).
+2. **Composable paths use short viewer-scoped caches (R15).** Widget scalars and rich analytics cache
+   successful reads per user/key for 30s; failures retry on the next poll. This reduces repeated
+   requests from one user but does not deduplicate work across users or remove query cost on misses.
 3. **Cache invalidation is coarse.** `dashboard:production` (30s) is forgotten on any
    `production.*` settings write; finance/statement tags flush on EVERY JE `saved`/`deleted`
    (`JournalEntryObserver.php:30-48`) — correct but high-churn: posting-heavy windows (payroll GL,
    billing runs) reduce the 30–60s caches to write-through. Procurement-chain + inventory-summary keys
-   are TTL-only with no forget — stale up to 60s/30s by design.
-4. **Dead/near-dead WS surface.** `inventory.stock` channel is authorised but unsubscribed
-   (`api/routes/channels.php:36-37`, no SPA listener found). `ChainStepAdvanced` is the only
-   `ShouldBroadcastNow` — everything else queues through Redis, so WS latency inherits queue health;
+   are TTL-only with no forget — stale up to 60s/30s by design. Widget summary and rich payload caches
+   are also viewer-scoped TTL entries, stale for at most 30s.
+4. **WebSocket delivery is queue-bound.** `ChainStepAdvanced` is the only `ShouldBroadcastNow` —
+   everything else queues through Redis, so WS latency inherits queue health;
    the outbox minute-poll (`api/routes/console.php:227-228`) is the only fallback when Redis is down.
 5. **Analytic failure mode hides load.** Per-key try/catch returns `available:false` / `[]`
    (`DashboardWidgetDataService.php:59-70`, `WidgetAnalyticsService.php:69-80`) and per-badge catch

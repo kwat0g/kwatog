@@ -1,9 +1,9 @@
 # OGAMI ERP — Phase 1: Role × Dashboard Coverage Matrix (`01-matrix.md`)
 
-Branch `docs/dss-discovery-phase0`. **Phase 1 deliverable.** Compiled strictly from Phase 0
-(`../00-discovery.md` + `phase0/A–F`) with spot-checks against the seeders, widget catalog, role-default
-layouts and SPA route table. No feature code is written in this phase — this file is the spec the later
-phases build from, and the session **stops here for review** (mission execution order §1).
+Branch `docs/dss-discovery-phase0`. **Phase 1 specification.** Compiled from Phase 0
+(`../00-discovery.md` + `phase0/A–F`) and spot-checked against seeders, widget catalog, role-default
+layouts and SPA routes. Phase 2 implementation and current verification are recorded in
+`PROGRESS.md`; status notes below distinguish the original proposal from shipped work.
 
 **How this deliverable is organized** (the per-role spec was authored in parts 1–3 and is part of the
 matrix, not a substitute for it):
@@ -20,12 +20,10 @@ Trace key: (00§X) = `../00-discovery.md` §X · (A/B/C/D/E/F §Y) = the phase0 
 marked **UNVERIFIED**; every metric that cannot be computed from existing tables is marked
 **data not available: reason**.
 
-**Coverage counts (this deliverable):** roles specified **17/17** · matrices **4/4** ·
-company-overview spec **1/1** · role pages that exist today **8 bespoke + 9 default-grid** ·
-proposed new pages **5** (`vendor`/`vp` collapsed into one executive page, plus logistics,
-maintenance, department, driver landing) · UNVERIFIED items **19** ·
-data-not-available items **44** (per-role counts rolled up from M-p1 14 / 41 + M-p2 4 / 12 + M-p3 1 / 6,
-minus overlaps).
+**Phase 1 baseline counts:** roles specified **17/17** · matrices **4/4** · company-overview spec **1/1** ·
+six new dashboard pages proposed and now shipped (company overview plus logistics, maintenance,
+department, sales, customer service) · UNVERIFIED items **19** · data-not-available items **44**
+(per-role counts from the original spec; later implementation status is in `PROGRESS.md`).
 
 ---
 
@@ -36,24 +34,24 @@ minus overlaps).
 | 1 | `system_admin` | `/dashboard/admin` | `dashboard.admin.view` (1) | exists (system health, no business KPIs) | M-p1 R1 | none by design (IT; top step of no workflow) |
 | 2 | `hr_officer` | `/dashboard/hr` | `dashboard.hr.view` (2) | exists | M-p1 R2 | leave (HR arm), company loan step 2, separation clearance step 5 |
 | 3 | `finance_officer` | `/dashboard/finance` | `dashboard.accounting.view` (2) | exists | M-p1 R3 | PR step 1, PO step 1, payroll checker (approve/finalize/bank/disburse), asset-disposal step 1, finance-only return, budget + transfer, loan write-off |
-| 4 | `vice_president` | `/dashboard/plant-manager` | `dashboard.plant_manager.view` (3) | **new page required** → one executive page (see B) | M-p1 R4 | PR/PO step 2 (≥₱50k), bill payment (≥₱50k), cash-advance step 3, company-loan step 4, salary-adjustment step 2, asset-disposal step 2 |
-| 5 | `customer_service_officer` | `/dashboard/default` | — | **new page required** → `/dashboard/customer-service` | M-p1 R5 | none (RMA/manage, price propose; approval by others) |
-| 6 | `sales_officer` | `/dashboard/default` | — | **new page required** → `/dashboard/sales` | M-p1 R6 | none (SO lifecycle + price propose) |
+| 4 | `vice_president` | `/dashboard/company` | `dashboard.company.view` (2; plant-manager also available) | shipped — executive aggregates, separate from operations | M-p1 R4 | PR/PO step 2 (≥₱50k), bill payment (≥₱50k), cash-advance step 3, company-loan step 4, salary-adjustment step 2, asset-disposal step 2 |
+| 5 | `customer_service_officer` | `/dashboard/customer-service` | `dashboard.customer_service.view` (2) | shipped | M-p1 R5 | none (RMA/manage, price propose; approval by others) |
+| 6 | `sales_officer` | `/dashboard/sales` | `dashboard.sales.view` (2) | shipped — order-intake trend, open-order stages, price-request status | M-p1 R6 | none (SO lifecycle + price propose) |
 | 7 | `production_manager` | `/dashboard/plant-manager` | `dashboard.plant_manager.view` (3) | exists + factory PWA | M-p2 R7 | return_request step 2, salary-adjustment step 1, legacy company-loan step 2 |
 | 8 | `ppc_head` | `/dashboard/ppc` | `dashboard.ppc.view` (2) | exists | M-p2 R8 | none (MRP/schedule owner) |
 | 9 | `purchasing_officer` | `/dashboard/purchasing` | `dashboard.purchasing.view` (2) | exists | M-p2 R9 | none (sourcing actions: RFQ award, supplier-listing review) |
 | 10 | `warehouse_staff` | `/dashboard/warehouse` | `dashboard.warehouse.view` (2) | exists | M-p2 R10 | none (GRN/issues/counts/MRB; adjustment checker is another role) |
 | 11 | `qc_inspector` | `/dashboard/quality` | `dashboard.quality.view` (2) | exists | M-p2 R11 | none (NCR/PPAP lifecycle) |
-| 12 | `maintenance_tech` | `/dashboard/default` | — | **new page required** → `/dashboard/maintenance` (shared with 13) | M-p2 R12 | none (MWO lifecycle) |
-| 13 | `maintenance_supervisor` | `/dashboard/default` | — | **new page required** → `/dashboard/maintenance` | M-p3 R13 | none (assign/verify lifecycle) |
-| 14 | `impex_officer` | `/dashboard/default` | — | **new page required** → `/dashboard/logistics` | M-p3 R14 | none (shipment/delivery lifecycle) |
-| 15 | `department_head` | `/dashboard/default` | — | **new page required** → `/dashboard/department` (or keep grid + cards) | M-p3 R15 | leave step 1, loan step 1, return_request step 1, OT (custom), PR creator |
+| 12 | `maintenance_tech` | `/dashboard/maintenance` | `dashboard.maintenance.view` (3) | shipped (shared with 13) | M-p2 R12 | none (MWO lifecycle) |
+| 13 | `maintenance_supervisor` | `/dashboard/maintenance` | `dashboard.maintenance.view` (3) | shipped (shared with 12) | M-p3 R13 | none (assign/verify lifecycle) |
+| 14 | `impex_officer` | `/dashboard/logistics` | `dashboard.logistics.view` (2) | shipped | M-p3 R14 | none (shipment/delivery lifecycle) |
+| 15 | `department_head` | `/dashboard/department` | `dashboard.department.view` (2) | shipped | M-p3 R15 | leave step 1, loan step 1, return_request step 1, OT (custom), PR creator |
 | 16 | `employee` | `/dashboard/default` | — | exists (self-service + `GET /dashboards/employee`) | M-p3 R16 | none |
 | 17 | `driver` | `/dashboard/default` | — | **landing change required** → `/driver` PWA | M-p3 R17 | none |
 
 Landing is computed server-side by `DashboardDispatchService::resolve()` — permission-derived, rarest
-permission first, counted live from `role_permissions` (A§0). **No spec below may add a role-name
-branch**; each proposed page is reached by a new permission slug held by the intended roles.
+permission first, counted live from `role_permissions` (A§0). **No dashboard route uses a role-name
+branch**; shipped pages are reached through permission slugs held by their intended roles.
 
 ---
 
@@ -71,14 +69,16 @@ branch**; each proposed page is reached by a new permission slug held by the int
    quality→`dashboard.quality.view` · supply_chain→`dashboard.ppc.view` ·
    purchasing→`dashboard.purchasing.view` · attendance→`dashboard.hr.view` ·
    accounting→`accounting.dashboard.view` · inventory→`dashboard.warehouse.view`.
-3. **Finance dual slug (M1).** Page/catalog/dispatch answer to `dashboard.accounting.view`; data +
-   `kpi.*`/`finance.*` widgets answer to `accounting.dashboard.view`. Every new finance surface picks
-   deliberately.
+3. **Finance page/data gates (M1, aligned).** Page/catalog/dispatch and `/dashboards/finance` answer to
+   `dashboard.accounting.view`; finance panels and `finance.*` widgets still gate on their source-data
+   permissions, including `accounting.dashboard.view` where applicable. The endpoint no longer creates
+   a page-without-data split.
 4. **Board-blind rule.** Only the 8 live ledger kinds have board cards; `payroll` is a dead kind; the 14
    custom single-step types need per-type card sourcing. No generic approve endpoint exists — an inline
    button calls its module endpoint (remarks required on reject).
-5. **Notification darkness.** 7+ types fire nothing on submit/decide; mid-chain handoffs are missing even
-   on ledger types. Inboxes must poll; nothing assumes a push.
+5. **Approval notifications.** Shared ledger decisions now notify missing submitters and next-step roles;
+   F-009 custom submits/decisions and payroll computed handoff have notifications. `/approvals` polling
+   remains the fallback; no delivery assumes push arrived.
 6. **Handoff-status dimension.** `manual_required` / `Generated` / `NotRequired` are first-class on every
    funnel (delivery→invoice, GRN→inspection, WO→outgoing inspection) — a broken link must not read as
    zero volume.
@@ -97,37 +97,29 @@ branch**; each proposed page is reached by a new permission slug held by the int
 
 ---
 
-## B. Company-overview dashboard (cross-functional)
+## B. Company-overview dashboard (cross-functional; shipped at `/dashboard/company`)
 
-**Who qualifies.** Company-wide reads only. Derived from grants (A§1): `system_admin` (wildcard),
-`vice_president` (money chains + `dashboard.view_bottlenecks` + budgeting/accounting reads),
-`finance_officer` (accounting + budgeting + PO/PR approve + `dashboard.view_bottlenecks`),
-`production_manager` (broadest operations read: production, quality read, purchasing read, maintenance,
-`view_bottlenecks`, chain recovery), `ppc_head` (MRP + forecasting + production plan + bottlenecks),
-`hr_officer` (people only — excluded from a cross-functional page), `purchasing_officer` (chain-2 +
-chain-recovery view — borderline; include read-only).
+**Page access.** `dashboard.company.view` is held by `system_admin` and `vice_president`. Other module roles
+use their own dashboards; each company widget and summary still checks its source-data permission.
 
-**Proposed key:** `company` → `dashboard.company.view` → `/dashboard/company`. Held by
-`system_admin` + `vice_president` (and optionally `finance_officer`, `production_manager`; each added
-holder changes landing/rarity — sequence deliberately, G-D-2).
+**Shipped key:** `company` → `dashboard.company.view` → `/dashboard/company`, held by
+`system_admin` + `vice_president`.
 
-> **Decision to make (recorded, not silently taken):** M-p1 R4 proposed `/dashboard/vp` and this section
-> proposes `/dashboard/company`. They are the same page. **Recommendation: one page, one slug**
-> (`dashboard.company.view`, path `/dashboard/company`), and the VP's landing moves from
-> `/dashboard/plant-manager` to it. Do not ship both.
+> **Resolved 2026-10-11:** M-p1 R4's `/dashboard/vp` and the proposed `/dashboard/company` were the same
+> page. One page and one slug shipped; VP now lands on `/dashboard/company`.
 
 **Contents (8 blocks, all reusing existing primitives):**
 
 | Block | Content | Sources |
 |---|---|---|
-| Health strip | 6 KPI tiles: OEE, OTD, FPY, DPPM, AR >60d, budget utilization (gates: the viewer must hold the module slug, else the tile is omitted — a VP sees none of them today, see G-P3-2) | `kpi.*` snapshots |
-| Chain health | chain-stage donut incl. `manual_required` + chain-recovery backlog; bottleneck owner per stage | `chain.stage_breakdown`, `/chains`, `/chains/recovery` |
+| Health strip | Six selected KPI tiles: OEE, OTD, FPY, DPPM, AR >60d, budget utilization. VP reads all 11 KPI codes through `dashboard.company.view`; source gates still filter other viewers. | `kpi.*` snapshots |
+| Chain health | SQL status-stage breakdown plus separate chain-recovery backlog; `manual_required` handoffs stay distinct from sales-order stages | `chain.stage_breakdown`, `/chains`, `/chains/recovery` |
 | Money | cash, AR/AP aging, AP due ≤3d, revenue MTD | finance widgets (gated) |
 | Demand vs supply | demand forecast (3-mo) vs capacity vs actual output | `forecast.*`, `/production/schedule` |
 | Quality | defect Pareto + NCR aging + 8D SLA burn | `qc.pareto`, `/quality/ncrs`, `/crm/complaints` |
 | Approvals | VP-only filtered top-8 (already the worklist widget, filtered to ≥₱50k rows) | `approvals.pending` |
-| Risks & opportunities | top-5 from the DSS recommendation feed (Phase 5) + open critical alerts | alerts engine |
-| Weekly briefing | auto-generated plain-language summary (Phase 5 "executive" capability) | Phase 5 |
+| Risks & opportunities | top-5 current signals from alerts, recovery, NCR/8D, AR and AP, filtered by each source permission | existing operational tables + alerts engine |
+| Weekly briefing | plain-language 7-day vs prior-7-day counts for production, NCRs and complaints, filtered by source permissions | output, NCR and complaint tables |
 
 Explicitly **not** on this page: personal self-service tiles, module CRUD shortcuts beyond read/drill,
 any per-role conditional rendering (stripping is permission-derived server-side).
@@ -174,7 +166,7 @@ visibility.
 | `maintenance.open_wos`, `maintenance.due_schedules` | `maintenance.view` | adm, PM, PPC, tech, supervisor |
 | `assets.under_maintenance` | `assets.view` | adm, VP, PM, PPC, tech, supervisor |
 | `rma.open_returns`, `rma.pending_approval` | `return_management.view` | adm, finance, PM, purchasing, QC, warehouse, department_head, CSO |
-| `crm.open_complaints` | `crm.view` | adm, VP, PM, PPC, QC, sales, CSO |
+| `crm.open_complaints` | `crm.complaints.view` | adm, VP, PM, QC, CSO |
 | `budget.utilization` | `budgeting.view` | adm, VP, finance |
 | `loans.outstanding` | `loans.view` | adm, VP, finance, HR, PM, department_head (dept-scoped unless `loans.write_off`) |
 | `forecast.headcount` | `hr.employees.view` | adm, HR, department_head |
@@ -207,7 +199,7 @@ finance and HR were already clean. See G-P2-3.
 | Supply chain | `/dashboard/warehouse` (deliveries), `/dashboard/logistics` | outgoing queue, delivery/OTD panels |
 | Production | `/dashboard/plant-manager`, `/dashboard/ppc`, `/factory` PWA | OEE, WO mix, Gantt, output |
 | MRP | `/dashboard/ppc`, `/dashboard/plant-manager` | shortages, reservations, Gantt, capacity |
-| CRM | `/dashboard/customer-service`, `/dashboard/sales`, `/dashboard/quality`, `/dashboard/plant-manager` | complaints, order book, price-request queue, defect Pareto |
+| CRM | `/dashboard/customer-service`, `/dashboard/sales`, `/dashboard/quality`, `/dashboard/plant-manager` | complaints, 12-month order intake, open-order stages, price-request status, defect Pareto |
 | B2B portal | **not covered on any dashboard** — portal is a separate principal surface (supplier/customer self-service); dashboard visibility of portal activity is limited to supplier shipments feeding GRN + portal RMAs feeding returns | — |
 | Forecasting | `/dashboard/ppc`, `/dashboard/hr`, `/dashboard/finance`, `/dashboard/quality`, `/dashboard/plant-manager`, `/dashboard/purchasing` | 7 forecast panels + demand/stock-out/accuracy pages |
 | Return management | `/dashboard/quality`, `/dashboard/purchasing`, `/dashboard/warehouse`, `/dashboard/customer-service` | RMA widgets, inspection staging, receiving |
@@ -225,8 +217,9 @@ model; A§0/§3) · per-shot mold depreciation (scope cut).
 
 ### C3. Approval type × role quick-approve
 
-`✅` = may act at some step (or is the single checker) · `—` = not eligible · `◇` = creates/submits but
-cannot approve (self-approval guard) · `✖` = board-invisible (no ledger rows → no card today).
+`✅ ledger` = step-ledger card · `separate source` = non-ledger card · `custom board` = custom queue card
+whose decision stays on its module route · `outside board` = no global card · `◇` = creates/submits but
+cannot approve (self-approval guard).
 
 | Type | Ledger? | Act roles |
 |---|---|---|
@@ -238,20 +231,20 @@ cannot approve (self-approval guard) · `✖` = board-invisible (no ledger rows 
 | Salary adjustment | ✅ ledger | production_manager (1) · vice_president (2) |
 | Asset disposal | ✅ ledger | finance_officer (1) · vice_president (2) |
 | Return request | ✅ ledger | department_head (1) · production_manager (2) · finance_officer (finance-only variant) · QC-generated supplier returns auto-approve |
-| Payroll period | ✖ dead kind | finance_officer (approve/finalize/disburse, maker-checker) — card must be sourced from the period, not the ledger |
-| Overtime | ✖ custom | hr_officer, department_head (`attendance.ot.approve`) |
-| Stock adjustment | ✖ custom | finance_officer (`inventory.adjust.approve`) |
-| Item cost review | ✖ custom | finance_officer (`inventory.costs.approve`) |
-| Stock-count variance | ✖ custom | warehouse_staff (`inventory.stock_count.manage` — the role that also counts) |
-| GRN reject | ✖ refusal arm | warehouse_staff |
-| Payroll adjustment | ✖ custom | finance_officer (`payroll.adjustments.approve`; hr_officer creates) |
-| Budget / budget transfer | ✖ custom | finance_officer, vice_president (`budgeting.approve`) |
-| Invoice prebill | ✖ custom | finance_officer (`accounting.invoices.prebill_approve`) |
-| Supplier listing | ✖ custom | purchasing_officer (`purchasing.supplier_listings.review`) |
-| Asset transfer | ✖ unrouted | — (undecidable via API by design) |
-| Return case | ✖ custom | customer_service_officer / purchasing_officer (`return_management.manage`) |
-| Loan write-off | ✖ custom | finance_officer (`loans.write_off.approve`) |
-| PPAP / late production report | ✖ custom | qc_inspector / production_manager (module-local) |
+| Payroll period | separate source | finance_officer (approve/finalize/disburse, maker-checker; no ledger rows) |
+| Overtime | custom board | hr_officer, department_head (`attendance.ot.approve`); decision stays on OT route |
+| Stock adjustment | custom board | finance_officer (`inventory.adjust.approve`); decision stays on inventory route |
+| Item cost review | custom board | finance_officer (`inventory.costs.approve`); decision stays on inventory route |
+| Stock-count variance | custom board | warehouse_staff (`inventory.stock_count.manage` — the role that also counts) |
+| GRN reject | outside board | warehouse_staff refusal arm remains module-local |
+| Payroll adjustment | custom board | finance_officer (`payroll.adjustments.approve`; hr_officer creates) |
+| Budget / budget transfer | custom board | finance_officer, vice_president (`budgeting.approve`) |
+| Invoice prebill | custom board | finance_officer (`accounting.invoices.prebill_approve`) |
+| Supplier listing | custom board | purchasing_officer (`purchasing.supplier_listings.review`) |
+| Asset transfer | outside board | unrouted; no API actor path by design |
+| Return case | outside board | customer_service_officer / purchasing_officer (`return_management.manage`) |
+| Loan write-off | custom board | finance_officer (`loans.write_off.approve`) |
+| PPAP / late production report | outside board | qc_inspector / production_manager (module-local; no PPAP review route) |
 
 Roles with **no** approve path anywhere: `sales_officer`, `maintenance_tech`, `maintenance_supervisor`,
 `impex_officer`, `employee`, `driver`, and (by design) `system_admin` — their dashboards need
@@ -262,7 +255,7 @@ operational queues, not approval cards.
 | Metric | Source tables / columns | Aggregation | Refresh |
 |---|---|---|---|
 | OEE (KPI) | `work_orders`, `wo_operations`, machine `available_hours_per_day` | availability × performance × quality over closed WOs, month grain | monthly snapshot (2nd 03:00); ignores shifts/holidays/downtime |
-| WO completion (KPI) | `work_orders.planned_end/actual_end/status` | finished-in-month ÷ due-in-month | monthly; can exceed 100% (month mismatch) |
+| WO completion (KPI) | `work_orders.planned_end/actual_end/status` | completed work due in the same month ÷ eligible work due that month | monthly; late completions remain misses in their due month |
 | DPPM / FPY (KPI) | `inspections`, `inspection_measurements` | defect ppm / pass ratio per month | monthly |
 | NCR closure days (KPI) | `non_conformance_reports` opened/closed | mean(closed − opened) | monthly; ignores still-open NCRs |
 | OTD (KPI) | `deliveries` `planned_*`/`actual_*` | on-time ÷ delivered | monthly; `actual_*` unindexed |
@@ -274,7 +267,7 @@ operational queues, not approval cards.
 | Units produced today | `work_order_outputs` | SUM(good qty) today | 60s poll (page), 30s fast |
 | Active / overdue WOs | `work_orders` | COUNT by status, planned_end < now | 60s |
 | Chain stage counts | chain tracker service + `manual_required` states | COUNT per stage | 60s; verified per owning scope |
-| Pending approvals (top-8) | `approval_records` + owning row scopes | SLA-overdue-first, LIMIT 8 | 30s + Reverb `ChainStepAdvanced` |
+| Pending approvals (top-8) | `approval_records` + owning row scopes; payroll periods use a separate maker-checker source | SLA-overdue-first, LIMIT 8 | 30s + Reverb `ChainStepAdvanced` |
 | PR queue age / est. total | `purchase_requests`, `purchase_request_items` | SUM est. total, days waiting | 60s; `date` unindexed |
 | PO pipeline | `purchase_orders.status` | COUNT per status (9, non-zero) | 60s |
 | Supplier score / tier | `supplier_performance` | latest period overall + tier (A≥90/B≥75/C≥60) | daily/weekly read, monthly recompute |
@@ -301,25 +294,32 @@ operational queues, not approval cards.
 | Demand forecast / MAPE | `demand_forecasts`, `sales_order_items` | moving/weighted/manual; MAPE vs reconciled actuals | monthly generate (1st 04:00) + reconcile (2nd 04:00) |
 | Stock-out risk | `stock_levels`, forecast or 30-day consumption | days-to-stockout, risk bands vs lead time | 60s read |
 | Alerts (all kinds) | per-kind sources | threshold rules, 24h dedup | 15-min alert engine |
-| Approval SLA | `approval_records` timestamps + settings | reminders 24h / escalations 48h, 6-hourly | 6-hourly sweep |
+| Approval SLA | ledger and payroll/custom queue timestamps + shared settings | reminders 24h / escalations 48h, 6-hourly | notify-only sweep for payroll + ten custom queues; ledger auto-resolve remains policy-gated |
 | Badges | 26 observers, `StockLevel` excluded | per-user COUNTs, TTL 30s | 60s poll + Reverb |
 
 ---
 
 ## D. Coverage gaps and build order
 
-### D1. Gaps carried out of Phase 0 (blockers, ranked — unchanged)
+### D1. Gaps carried out of Phase 0 (status updated 2026-10-11)
 
-1. Board-blind decision types (payroll + 14 custom) — needs per-type card sourcing before any dashboard
-   approval centre.
-2. Notification darkness (7+ types; mid-chain handoffs).
-3. Index debt on dashboard fact tables (returns, budgets/credit lines, WO operations/logs, PR/PO dates,
-   delivery actuals).
-4. Finance dual-slug authority (M1).
-5. Top-step fragility (VP has no escalation superior; auto-resolve ships disabled).
-6. Mid-chain audit gap (`ApprovalRecord` has no `HasAuditLog`).
-7. Uncached widget-data/rich payloads (R15) — cache layer before adding tiles.
-8. KPI monthly grain — sub-month from sources.
+1. **Partly addressed:** `/approvals` now has separate sources for payroll periods and ten custom
+   decision queues, with source permission and maker checks. GRN refusal, unrouted asset transfer,
+   return-case actions, PPAP and per-work-order late reports remain outside the global board.
+2. **Partly addressed:** ledger handoffs and custom submit/decision paths notify; custom delegation and
+   notify-only reminders/escalations now cover payroll periods and ten custom queues. Delivery
+   verification remains open; auto-resolve stays disabled.
+3. **Core dashboard index debt closed in Phase 2:** returns, budgets/credit lines, WO operations/logs,
+   PR/PO dates, and delivery timestamps are indexed. Other B §4 gaps remain query-specific; add an index
+   when a shipped dashboard query depends on one.
+4. **Aligned:** finance page endpoint now uses the catalog/page slug; panel and widget gates remain
+   source-specific (M1/F-039).
+5. **Partly addressed:** VP stalls notify `system_admin`; auto-resolve remains disabled.
+6. **Verified:** `ApprovalRecord` uses `HasAuditLog`; the HTTP feature test verifies actor, IP, user-agent
+   and request ID; bulk status changes use model updates so their audit events fire.
+7. **Cached in Phase 2:** successful widget summaries and rich payloads use 30-second viewer-scoped keys;
+   failed reads remain retryable.
+8. KPI snapshots remain monthly; sub-month trends and the weekly briefing read source tables.
 9. Handoff-status dimensions first-class.
 10. Test throughput (one suite per DB; targeted filters).
 
@@ -339,13 +339,11 @@ operational queues, not approval cards.
   re-gated on the production data read. `production.view` is held by exactly ppc_head +
   production_manager + system_admin, so the fix adds that role and nobody else (measured: PPC 27 → 28
   available widgets, +3 production tiles).
-- **G-P2-3 (strip ≠ gate).** Strip code lists were chosen per page, gates per module: PPC 1/4 of its
-  codes survive, PM 2/3, purchasing 1/2, warehouse 1/2. Failure is silent (empty-message branch). —
-  **PPC FIXED 2026-10-11** (3/3 after the gate fix; the fourth code was a quality reading it holds no
-  grant for and was removed from the list rather than promised). Purchasing and warehouse remain 1/2 by
-  DESIGN and are commented at the list: the missing code is the other module's reading, so the fix is a
-  grant decision, not a list edit. `KpiVisibilityMatrixTest` pins both the readable set and that a
-  data-read slug does not widen a role past its own modules.
+- **G-P2-3 (strip ≠ gate).** The original strip lists exceeded some module gates. — **PARTLY FIXED
+  2026-10-11:** PPC now lists only its three readable codes (3/3); its quality-only code was removed.
+  Purchasing and warehouse remain 1/2 by design: each missing code belongs to another module, so access
+  would require a grant decision. `KpiVisibilityMatrixTest` pins the readable set and ensures a data-read
+  slug does not widen a role past its own modules.
 - **G-P2-4 (dataset gate drift).** `forecasting.view` is held by finance, PM, PPC, purchasing and
   warehouse, exposing `forecast.cash_flow` (finance dataset) and `forecast.capacity` (production
   dataset) to buyers and warehouse staff. — **FIXED 2026-10-11:** every forecast is now gated on its
@@ -353,16 +351,17 @@ operational queues, not approval cards.
   purchasing 24 → 21, warehouse 18 → 15 (the three leaked forecasts each), ppc_head 27 → 28 (gained the
   three production tiles, lost the finance projection). `forecast.revenue` was the one left behind on a
   page grant and was fixed in the same migration, which is what puts §B's Demand-vs-supply family on the
-  executive page. Still open from this item: settings-driving the capacity-90% / attendance-8%/15%
-  constants.
-- **G-P3-2 (gate map can't express two qualified owners).** OTD is gated `dashboard.ppc.view`, attendance
-  rate `dashboard.hr.view`; `impex_officer` and `department_head` need one of each and hold neither.
-  `MODULE_PERMISSIONS` maps module→**one** slug; extend it to a set (or add new KPI definitions) rather
-  than branching on role name.
-- **G-P3-3 / G-P3-4 (landing + defaults).** Three P3 roles have a better primary surface than the grid
-  (`/driver`, `/self-service`, proposed logistics/maintenance). Each new surface needs its own permission
-  slug, and each new slug changes rarity-sorted dispatch for existing holders. Also
-  `DashboardRoleLayoutSeeder`'s comment says "five roles with no grant" while eight lack one.
+  executive page. Thresholds remain fixed defaults by decision; F-059 records configurability as a future
+  policy change.
+- **G-P3-2 (gate map can't express two qualified owners).** Originally OTD required the PPC page grant and
+  attendance rate required the HR page grant. **PARTLY RESOLVED 2026-10-12:** module gates now accept a
+  permission set, and `dashboard.logistics.view` admits ImpEx to OTD without a role-name branch.
+  Department heads still have no department-scoped attendance KPI source; no company-wide grant was added.
+- **G-P3-3 / G-P3-4 (landing + defaults).** **RESOLVED for shipped pages in Phase 2 E:** maintenance,
+  logistics, department, sales and customer-service pages have catalog grants and role defaults, checked
+  by dispatch and widget-seed tests. Employee and driver retain the generic dashboard by design, with
+  self-service and the driver PWA as their primary work surfaces. A separate driver-PWA dispatch change
+  remains deferred.
 - **G-D-1 (two competing executive-page proposals).** M-p1 R4 `/dashboard/vp` and this file's
   `/dashboard/company` are the same surface — ship one.
 - **G-D-2 (dispatch side effects).** Adding `dashboard.company.view` to VP moves the VP landing off
@@ -393,7 +392,7 @@ Sequencing rules: one page per PR; every page ships with its 5 states, its row-s
 `WidgetSeedIntegrityTest`/`ApprovalChainRolePermissionDriftTest` runs; no new chart dependency; no
 role-name branch anywhere.
 
-### D4. Open questions for the reviewer (stop point)
+### D4. Decisions resolved during implementation
 
 1. G-P2-1: re-gate the three shared-slug widgets, or document the broad visibility? — **DECIDED
    2026-10-11: split.** Measured rather than assumed: the two `hr.team_*` tiles stay on the self-service
@@ -409,8 +408,9 @@ role-name branch anywhere.
    set on the tile side, so the scorecard and the widget cannot disagree. A new
    `dashboard.company.view` slug (held by system_admin + vice_president) appears in every module's set,
    which is what lets one grant admit all seven modules instead of handing the executive four whole
-   module dashboards. See `PROGRESS.md` "Phase 2 — A". Still open from this item: `impex_officer` and
-   `department_head` (OTD / attendance rate) need a surface that renders those KPIs, not a grant.
+   module dashboards. See `PROGRESS.md` "Phase 2 — A". Phase 2 E then added `dashboard.logistics.view`
+   to the supply-chain gate set, so ImpEx reads OTD. Department heads still lack a department-scoped
+   attendance KPI source; no company-wide grant was added.
 4. G-D-1: confirm **one** executive page (`dashboard.company.view` → `/dashboard/company`) replacing the
    `/dashboard/vp` proposal, and confirm the VP landing change (plant-manager → company) — **DECIDED
    2026-10-11: yes to both.** `/dashboard/vp` is not shipped. The landing move was verified against every

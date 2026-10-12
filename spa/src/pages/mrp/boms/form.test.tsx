@@ -54,6 +54,7 @@ beforeEach(() => {
     part_number: 'FG-1',
     name: 'Finished product',
     unit_of_measure: 'PCS',
+    include_forecast_in_mrp: true,
   };
   vi.mocked(productsApi.options).mockResolvedValue(page([product]));
   vi.mocked(productsApi.list).mockResolvedValue(page([product as never]));

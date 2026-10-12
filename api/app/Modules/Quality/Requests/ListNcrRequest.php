@@ -38,6 +38,7 @@ final class ListNcrRequest extends FormRequest
             'severity'      => ['nullable', Rule::in(NcrSeverity::values())],
             'status'        => ['nullable', Rule::in(NcrStatus::values())],
             'disposition'   => ['nullable', Rule::in(NcrDisposition::values())],
+            'recovery_coverage' => ['nullable', Rule::in(['unlinked'])],
             'product_id'    => ['nullable', 'integer', 'exists:products,id'],
             'inspection_id' => ['nullable', 'integer', 'exists:inspections,id'],
             'search'        => ['nullable', 'string', 'max:120'],

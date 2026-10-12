@@ -28,6 +28,7 @@ export interface NcrListParams extends ListParams {
   severity?: NcrSeverity;
   status?: NcrStatus | '';
   disposition?: NcrDisposition;
+  recovery_coverage?: 'unlinked';
   product_id?: string;
   inspection_id?: string;
 }

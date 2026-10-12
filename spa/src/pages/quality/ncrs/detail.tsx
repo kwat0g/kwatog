@@ -87,6 +87,13 @@ export default function NcrDetailPage() {
     queryFn: () => ncrsApi.show(id),
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
+    // Another role (QC review, MRB, containment) can move this record while
+    // we watch it. Poll while open so cross-user changes appear without a
+    // manual refresh — same precedent as the sales-order detail page.
+    refetchInterval: (query) =>
+      query.state.data && !['closed', 'cancelled'].includes(query.state.data.status)
+        ? 15_000
+        : false,
   });
   const { data: options } = useQuery({
     queryKey: ['quality', 'ncrs', 'options'],

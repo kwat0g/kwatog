@@ -62,7 +62,10 @@ class ProcessYearEndLeave implements ShouldQueue
         public User $runBy,
         public ?int $year = null,
         public ?array $leaveTypeIds = null,
-    ) {}
+    ) {
+        // Lane: low — yearly bulk sweep over all employees.
+        $this->onQueue('low');
+    }
 
     /** @return array{processed_types:int, skipped_types:int, employees:int, converted:float, carried:float, forfeited:float} */
     public function handle(): array

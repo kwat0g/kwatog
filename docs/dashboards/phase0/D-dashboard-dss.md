@@ -105,7 +105,7 @@ finance uses a shared key suffixed by a gate-answer signature (`FinanceDashboard
   failures), queue health (pending/failed + 10 recent; `healthy` = 0 failed AND pending <
   `dashboard.admin.pending_jobs_warning_threshold` = 100), recent audit (15), open alerts by severity.
 
-### 1.3 Widget catalog: 65 keys (54 + 11 KPI)
+### 1.3 Widget catalog: 76 keys (65 catalog + 11 KPI)
 
 Source: `DashboardWidgetSeeder::catalog()` (`api/database/seeders/DashboardWidgetSeeder.php:175-286`)
 + `kpiCatalog()` (`:128-143`). Each row declares **permission / render_kind / link_path / module**
@@ -145,7 +145,8 @@ independently (`DashboardWidgetSeeder.php:19-23`); every key has an "Open →" l
 | `maintenance.open_wos` / `.due_schedules` | `maintenance.view` | scalar | open statuses / due ≤ N days | — |
 | `assets.under_maintenance` | `assets.view` | breakdown | count out of service | `AssetWidgetAnalytics` |
 | `rma.open_returns` / `.pending_approval` | `return_management.view` | breakdown/table | in-progress / awaiting decision | `ReturnWidgetAnalytics` |
-| `crm.open_complaints` | `crm.view` | breakdown | open+investigating | `CrmWidgetAnalytics` |
+| `crm.open_complaints` | `crm.complaints.view` | breakdown | complaint status distribution | `CrmWidgetAnalytics` |
+| `sales.order_intake` / `sales.open_orders` / `sales.price_requests` | sales-order / price-agreement read | trend / breakdown / breakdown | orders by order date in trailing 12 months / non-terminal order book / active price requests | monthly order-intake trend, order stages, and request statuses (`CrmWidgetAnalytics`) |
 | `budget.utilization` | `budgeting.view` | gauge | spent-or-committed % of approved (null when no budget) | `BudgetWidgetAnalytics` |
 | `loans.outstanding` | `loans.view` | table | dept-scoped unless `loans.write_off` | `LoanWidgetAnalytics` |
 | `kpi.*` (11: oee, wo_completion_rate, dppm, first_pass_yield, ncr_closure_days, on_time_delivery, supplier_quality, attendance_rate, ar_aging_60d, budget_utilization, inventory_turnover) | `KpiSnapshotService::MODULE_PERMISSIONS[module]` | trend | latest snapshot value + period/target/status helper; null before first compute (`DashboardWidgetDataService.php:309-346`) | 12-month points + delta + target-at-time + status (`Analytics/KpiWidgetAnalytics.php:44-92`) |
@@ -184,6 +185,10 @@ flag (`DashboardLayoutService.php:70-82`, `WidgetAnalyticsService.php:69-80`).
   KPI tiles link to owning dashboard + `#kpi-<code>` anchor.
 - **Top-8 approvals (branch, `dcd56028`)**: `approvals.pending` renders the caller's top-8 queue
   (Document/Type/Waiting + SLA-overdue sort + link-out) on all dashboards carrying the widget.
+  Payroll periods are sourced separately from `approval_records`, gated by view/approve grants and
+  the maker-checker rule; ten custom single-step queues also have permission/read-scoped cards, with
+  decisions remaining on their owning module endpoints. GRN refusal, unrouted asset transfer, return,
+  PPAP and per-work-order late-report queues remain outside the global board (C§4/§5).
 
 ---
 
@@ -218,8 +223,8 @@ flag (`DashboardLayoutService.php:70-82`, `WidgetAnalyticsService.php:69-80`).
 - **Calculator notes / known gaps** (all in `KpiSnapshotService.php`):
   - OEE (`:318-374`): availability×performance×quality over completed/closed WOs; scheduled minutes
     from machine `available_hours_per_day` × weekdays — ignores shifts/holidays/downtime calendars.
-  - WO completion (`:612-642`): denominator = due-in-month, numerator = finished-in-month → **can exceed
-    100%** (documented M007-13); numerator/denominator months misalign by design.
+  - WO completion (`:612-642`): denominator and numerator use the same due-in-month cohort; a late
+    completion remains a miss in its due month and cannot inflate a later month's rate.
   - Inventory turnover (`:558-585`): annualised monthly-issues / **current** (not period-average) stock
     value — no historical stock snapshot exists.
   - Budget utilization (`:527-541`): fiscal-**year** figure, month arg ignored.
@@ -443,21 +448,26 @@ Format: behavior → exact rule/threshold + config location → what it gets wro
 1. **Scheduled-command count**: CLAUDE.md cron note says "43 scheduled commands as of 2026-08-25";
    `api/routes/console.php` now registers **63** `Schedule::command/call` entries (counted). The
    in-code comment in `AlertEngineService.php:677-681` still says "42 scheduled entries". Both stale.
-2. **Scorecard docs**: `GET /dashboard/kpi/scorecard` endpoint + `KpiSnapshotService::getScorecard`
-   still exist and are tested, but the SPA scorecard page is deleted (branch) — docs
-   (`docs/e2e-audit.md:20,65`) still reference "scorecard sparklines" as a live surface.
-3. **KPI strip vs widget duplication**: the same KPI now renders in two places (page-strip +
-   pickable `kpi.*` widget) with different windows (strip trends via `/trends`, tiles via 12-mo
-   `KpiWidgetAnalytics::WINDOW`) — no doc states which is canonical.
-4. **Forecast gate inconsistency** (deliberate but undocumented outside code): headcount/attendance/
-   defect forecasts use dataset gates while cash/capacity use `forecasting.view` — the rule ("projection
-   of a dataset = dataset's gate") lives only in code comments.
-5. **Capacity/attendance forecasts have no history**: `historical: []` by construction — trend and
-   confidence derive from forecast-month values (capacity) or a single mean (attendance), so the
-   "trend" is nearly always flat; panels risk reading as analytical when they are arithmetic.
-6. **Hardcoded DSS thresholds in new code**: capacity breach 90% (`CapacityForecastService.php:18`),
-   attendance risk 8%/15% (`AttendanceForecastService.php:17-18`) are consts, not settings — unlike
-   every alert-engine threshold. Noted in-code as ponytail; DSS-phase follow-up should settings-drive them.
+2. **Resolved 2026-10-12 — scorecard terminology.** The standalone page is deleted, but
+   `GET /dashboard/kpi/scorecard` remains the shared data source for role `KpiStrip` components.
+   E2E chart notes now name the strip explicitly.
+3. **Resolved 2026-10-12 — KPI strip and widget windows.** The compact page strip requests six
+   monthly points from `/dashboard/kpi/trends` for a quick scan; pickable `kpi.*` widgets retain
+   12 months for deeper trend context. Both use the same KPI permission gates and snapshot series.
+4. **Resolved 2026-10-12 — forecast permissions are surface-specific.** Shared forecast widgets
+   follow the source-data gates: headcount uses `hr.employees.view`; revenue/cash flow use accounting
+   gates; defect uses `quality.view`; capacity uses production gates; attendance uses attendance
+   gates. Bespoke dashboard panels keep their service-declared gate, including `forecasting.view`
+   for finance cash flow and plant/PPC capacity. The widget and panel paths may expose different
+   forecast surfaces; each gate stays explicit.
+5. **Resolved 2026-10-12 — capacity/attendance series semantics.** Capacity has no historical
+   utilization source; its direction compares future projected loads, and confidence derives from
+   projected load values. Attendance calculates recent recorded rates, uses their mean as the future
+   expected rate, derives trend/confidence from those rates, and uses approved leave load for risk;
+   no historical points are plotted. These are projections, not historical trend charts.
+6. **Accepted policy defaults**: capacity breach is 90% (`CapacityForecastService.php:18`), attendance
+   risk is 8%/15% (`AttendanceForecastService.php:17-18`). They stay constants until policy owners need
+   runtime changes; the code comments record that upgrade trigger.
 7. **Blockers for DSS work**: no per-machine load series (capacity), no payment-behaviour data
    (cash-flow realism), no historical stock snapshots (turnover accuracy), no demand-driver fields
    (promo/season/customer pipeline) on forecasts, no scenario/what-if persistence layer anywhere.

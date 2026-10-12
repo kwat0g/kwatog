@@ -20,13 +20,14 @@ import { landingApi } from '@/api/landing';
 
 interface TopbarProps {
  user?: { name: string; email: string; avatarUrl?: string | null } | null;
+ canViewNotifications?: boolean;
  onLogout?: () => void;
  onOpenShortcuts?: () => void;
  /** Extra controls injected just before the avatar (e.g. shortcut help, X1). */
  rightExtras?: ReactNode;
 }
 
-export function Topbar({ user, onLogout, onOpenShortcuts, rightExtras }: TopbarProps) {
+export function Topbar({ user, canViewNotifications = false, onLogout, onOpenShortcuts, rightExtras }: TopbarProps) {
  const toggleSidebar = useSidebarStore((s) => s.toggle);
  const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
  const mobileOpen = useSidebarStore((s) => s.mobileOpen);
@@ -131,7 +132,7 @@ export function Topbar({ user, onLogout, onOpenShortcuts, rightExtras }: TopbarP
         </Tooltip>
       </span>
 
-      <NotificationBell />
+      {canViewNotifications && <NotificationBell />}
 
       {rightExtras}
 

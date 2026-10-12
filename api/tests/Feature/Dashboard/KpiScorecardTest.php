@@ -6,8 +6,9 @@ namespace Tests\Feature\Dashboard;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Dashboard\Services\KpiSnapshotService;
+use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Models\KpiSnapshot;
+use App\Modules\Dashboard\Services\KpiSnapshotService;
 use Carbon\Carbon;
 use Database\Seeders\KpiDefinitionSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -83,7 +84,7 @@ class KpiScorecardTest extends TestCase
 
     public function test_batch_trends_returns_requested_kpis_in_one_payload(): void
     {
-        $definition = \App\Modules\Dashboard\Models\KpiDefinition::query()
+        $definition = KpiDefinition::query()
             ->where('code', 'oee')->firstOrFail();
         KpiSnapshot::query()->create([
             'definition_id' => $definition->id,
@@ -103,5 +104,30 @@ class KpiScorecardTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.oee.0.period', '2026-06')
             ->assertJsonPath('data.oee.0.value', '82.5000');
+    }
+
+    public function test_batch_trends_filters_kpis_the_role_cannot_read_from_dashboard_strip_requests(): void
+    {
+        $scenarios = [
+            ['purchasing_officer', 'supplier_quality,on_time_delivery', 'supplier_quality', 'on_time_delivery'],
+            ['warehouse_staff', 'inventory_turnover,supplier_quality', 'inventory_turnover', 'supplier_quality'],
+        ];
+        $results = [];
+
+        foreach ($scenarios as [$roleSlug, $codes, $readableCode, $hiddenCode]) {
+            $user = User::factory()->create([
+                'role_id' => Role::query()->where('slug', $roleSlug)->value('id'),
+            ]);
+            $response = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/dashboard/kpi/trends?codes='.$codes.'&months=6');
+
+            $results[] = [$response, $readableCode, $hiddenCode];
+        }
+
+        foreach ($results as [$response, $readableCode, $hiddenCode]) {
+            $response->assertOk();
+            $this->assertArrayHasKey($readableCode, $response->json('data'));
+            $this->assertArrayNotHasKey($hiddenCode, $response->json('data'));
+        }
     }
 }

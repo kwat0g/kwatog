@@ -93,6 +93,7 @@ function AppLayoutInner() {
  <OfflineBanner />
  <Topbar
  user={user ? { name: user.name, email: user.email, avatarUrl: user.employee?.photo_url } : null}
+ canViewNotifications={permissions.has('notifications.view')}
  onLogout={onLogout}
   onOpenShortcuts={() => setHelpOpen(true)}
   rightExtras={

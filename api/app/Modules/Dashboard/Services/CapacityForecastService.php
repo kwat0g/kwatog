@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
-/** Phase 3 — Capacity forecast (Task 7). Read-only: no transaction, no writes. Plant-level aggregate only (ponytail: threshold const, per-machine split later if needed). */
+/** Phase 3 — Capacity forecast (Task 7). Read-only plant aggregate; shortcut: keep the 90% breach threshold fixed until policy owners need runtime changes. */
 final class CapacityForecastService
 {
     private const BREACH_UTIL_PCT = 90.0;

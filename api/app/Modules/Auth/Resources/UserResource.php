@@ -40,6 +40,7 @@ class UserResource extends JsonResource
                 })()
                 : null,
             'permissions' => $this->permission_slugs,
+            'delegated_approvals' => \App\Common\Models\ApprovalDelegation::delegatedApprovalPermissions($this->resource),
             'features'    => $features,
         ];
     }

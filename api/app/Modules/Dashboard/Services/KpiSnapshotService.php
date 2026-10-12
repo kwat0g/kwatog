@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Dashboard\Enums\KpiDirection;
@@ -12,7 +15,6 @@ use App\Modules\Dashboard\Enums\KpiTrend;
 use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Models\KpiSnapshot;
 use App\Modules\Inventory\Enums\StockMovementType;
-use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use Carbon\Carbon;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -145,7 +147,7 @@ class KpiSnapshotService
         }
 
         if ($def->target_value === null) {
-            throw new \App\Common\Exceptions\BusinessRuleException(
+            throw new BusinessRuleException(
                 "KPI [{$def->code}] has no configured target value. Configure it before computing a snapshot."
             );
         }
@@ -263,7 +265,7 @@ class KpiSnapshotService
                 continue;
             }
             if ($user && ! $this->userCanSeeModule($user, $definition->module)) {
-                abort(403, 'You do not have permission to view this KPI.');
+                continue;
             }
             $definitionIds[$code] = (int) $definition->id;
         }
@@ -391,7 +393,9 @@ class KpiSnapshotService
             $totalGood += $good;
             $totalProduced += $produced;
             $totalActual += max(1, (int) Carbon::parse($wo->actual_start)->diffInMinutes(Carbon::parse($wo->actual_end), true));
-            if ($wo->machine_id !== null) $machineIds[(int) $wo->machine_id] = true;
+            if ($wo->machine_id !== null) {
+                $machineIds[(int) $wo->machine_id] = true;
+            }
         }
 
         if ($totalPlanned == 0 || $totalActual == 0 || $totalProduced == 0) {
@@ -406,7 +410,9 @@ class KpiSnapshotService
             $cursor = Carbon::create($year, $month, 1)->startOfDay();
             $end = $cursor->copy()->endOfMonth();
             while ($cursor->lte($end)) {
-                if (! $cursor->isWeekend()) $workingDays++;
+                if (! $cursor->isWeekend()) {
+                    $workingDays++;
+                }
                 $cursor->addDay();
             }
             $hours = (float) DB::table('machines')->whereIn('id', array_keys($machineIds))->sum('available_hours_per_day');
@@ -541,7 +547,7 @@ class KpiSnapshotService
         // invoices are not receivables. Historical balance movements are not
         // available in this module, so the stored balance is evaluated against
         // the period-end invoice population.
-        $lookbackDays = app(\App\Common\Services\SettingsService::class)->requiredInt('dashboard.kpi_snapshot_lookback_days', 1, 3650);
+        $lookbackDays = app(SettingsService::class)->requiredInt('dashboard.kpi_snapshot_lookback_days', 1, 3650);
         $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
         $cutoff = $periodEnd->copy()->subDays($lookbackDays)->toDateString();
         $openStatuses = [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value];
@@ -646,14 +652,9 @@ class KpiSnapshotService
      *
      * KNOWN metric-contract gaps left for a decision, NOT schema issues — see
      * the M007-13/M007-14 entries in the audit fix log:
-     *   1. The denominator counts work due in the month (`planned_end`) while
-     *      the numerator counts work finished in the month (`actual_end`), so a
-     *      WO planned for July but finished in August is a July miss AND an
-     *      August hit. The ratio can therefore exceed 100%.
-     *   2. `work_orders` is soft-deleted and these raw queries ignore
-     *      `deleted_at`, so cancelled-and-deleted work still lands in the
-     *      denominator. computeAttendanceRate excludes soft deletes; this does
-     *      not.
+     * Both counts use the same due-in-month cohort. A late completion stays a
+     *     miss in its due month and cannot inflate a later month's numerator.
+     * `work_orders` is soft-deleted, so raw queries must exclude deleted rows.
      */
     private function computeWoCompletionRate(int $year, int $month): ?float
     {
@@ -681,6 +682,7 @@ class KpiSnapshotService
                 WorkOrderStatus::Completed->value,
                 WorkOrderStatus::Closed->value,
             ])
+            ->whereBetween('planned_end', [$from, $to])
             ->whereBetween('actual_end', [$from, $to])
             ->count();
 

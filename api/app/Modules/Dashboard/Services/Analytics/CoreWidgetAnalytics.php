@@ -234,14 +234,29 @@ final class CoreWidgetAnalytics
             ['label' => '60+', 'from' => 61, 'to' => 100000, 'tone' => 'danger'],
         ];
 
+        $today = Carbon::today();
         $segments = [];
         $total = 0.0;
         foreach ($buckets as $bucket) {
-            $amount = (float) DB::table('invoices')
+            $query = DB::table('invoices')
                 ->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value])
-                ->where('balance', '>', 0)
-                ->whereRaw('CURRENT_DATE - due_date BETWEEN ? AND ?', [$bucket['from'], $bucket['to']])
-                ->sum('balance');
+                ->where('balance', '>', 0);
+
+            if ($bucket['from'] < 0) {
+                $query->whereBetween('due_date', [
+                    $today->toDateString(),
+                    $today->copy()->addDays(abs($bucket['from']))->toDateString(),
+                ]);
+            } elseif ($bucket['to'] === 100000) {
+                $query->where('due_date', '<', $today->copy()->subDays($bucket['from'] - 1)->toDateString());
+            } else {
+                $query->whereBetween('due_date', [
+                    $today->copy()->subDays($bucket['to'])->toDateString(),
+                    $today->copy()->subDays($bucket['from'])->toDateString(),
+                ]);
+            }
+
+            $amount = (float) $query->sum('balance');
 
             $total += $amount;
             $segments[] = [

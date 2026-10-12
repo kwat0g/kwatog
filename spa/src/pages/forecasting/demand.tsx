@@ -21,7 +21,6 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Chip } from '@/components/ui/Chip';
 import { StatCard } from '@/components/ui/StatCard';
 import { productsApi } from '@/api/crm/products';
-import { customersApi } from '@/api/accounting/customers';
 import { forecastingApi } from '@/api/forecasting';
 import { usePermission } from '@/hooks/usePermission';
 import type { ComputedForecastMethod, DemandForecast } from '@/types/forecasting';
@@ -59,13 +58,17 @@ export default function DemandForecastingPage() {
   const [manualConf, setManualConf] = useState<string>('');
   const currentYear = new Date().getFullYear();
 
+  // Scoped dropdown reads: product options + forecasting customer options are
+  // both gated on forecasting.view, so every forecast viewer can load this
+  // page without full CRM/accounting list permissions (and their cost/credit
+  // payloads). Do NOT switch these back to productsApi.list/customersApi.list.
   const productsQ = useQuery({
-    queryKey: ['products', { is_active: true, per_page: 200 }],
-    queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
+    queryKey: ['products', 'options', { is_active: true, per_page: 200 }],
+    queryFn: () => productsApi.options({ is_active: true, per_page: 200 }),
   });
   const customersQ = useQuery({
-    queryKey: ['customers', { per_page: 200 }],
-    queryFn: () => customersApi.list({ per_page: 200 }),
+    queryKey: ['forecasting', 'customer-options'],
+    queryFn: () => forecastingApi.customerOptions(),
   });
   const settingsQ = useQuery({
     queryKey: ['forecasting', 'settings'],
@@ -306,9 +309,9 @@ export default function DemandForecastingPage() {
               <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
                 Customer (optional)
               </label>
-              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                <option value="">All customers (total)</option>
-                {(customersQ.data?.data ?? []).map((c) => (
+                <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                  <option value="">All customers (total)</option>
+                  {(customersQ.data ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>

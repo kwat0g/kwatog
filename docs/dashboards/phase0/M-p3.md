@@ -5,7 +5,7 @@ Branch `docs/dss-discovery-phase0`. Part-author file: covers `maintenance_superv
 `M-p2.md` (roles 7–12), synthesis `../01-matrix.md`.
 
 **§0 shared contracts live in `M-p1.md` §0** (auth/guard stack, KPI grain + targets + gate map,
-finance dual-slug M1, board-blind rule, notification darkness, handoff-status dimension, frontend
+finance dual-slug M1, approval-board coverage, notification status, handoff-status dimension, frontend
 reuse, perf, scope cuts) and are binding here. Trace key: (00§X) = `../00-discovery.md` §X;
 (A/B/C/D/E/F §Y) = phase0 section files. Spot-checks re-verified against
 `api/database/seeders/RolePermissionSeeder.php` (grants), `DashboardWidgetSeeder.php` (key →
@@ -14,27 +14,26 @@ permission → `link_path`), `DashboardRoleLayoutSeeder.php` (role defaults) and
 
 ## §0-P3. The shape of this group
 
-All five roles land on **`/dashboard/default`** — a registered dashboard but a **generic widget grid**,
-not a composed page (A§5.1/5.2, D§1.1). Three of them (`department_head`, `employee`, `driver`) have a
-role-default widget set; `maintenance_supervisor` and `impex_officer` reuse the sets of their tech /
-logistics siblings (`DashboardRoleLayoutSeeder.php:31-129` — the maintenance pair share an identical
-list). None holds a `kpi.*` gate, so the KPI plane is empty for all five; every card below is either an
-existing widget scalar or a **new** card that Phase 2 must serve.
+At Phase 1 specification time, all five roles landed on **`/dashboard/default`**, a generic widget grid.
+Phase 2 E shipped purpose-built dashboards for `maintenance_supervisor`, `impex_officer`, and
+`department_head`; `employee` and `driver` retain the generic dashboard, with `/self-service` and the
+`/driver` PWA as their primary work surfaces. ImpEx gained OTD through the logistics KPI gate. Other
+cards below remain proposals unless an as-built note says otherwise.
 
 Two structural decisions this group forces (both land in `01-matrix.md` §D):
 
-- **D-P3-1:** a generic grid is the right answer for `department_head` (approvals-first, department-scoped)
-  and `employee` (self-service), but the wrong one for `maintenance_supervisor`/`maintenance_tech`
-  (shared operational surface — see `M-p2.md` R12 proposed `/dashboard/maintenance`) and
-  `impex_officer` (logistics surface).
-- **D-P3-2:** `driver` should land on the **existing** `/driver` PWA, not a widget grid. That needs a
-  catalog/PWA-aware dispatch entry, not a new dashboard page.
+- **D-P3-1:** the generic grid was the wrong primary surface for maintenance, logistics, and
+  department-head work. Phase 2 E shipped their shared/purpose-built dashboards; employee and driver keep
+  generic dashboards by design.
+- **D-P3-2:** the PWA remains the driver's primary work surface, but dispatch still opens
+  `/dashboard/default`. Phase 2 kept that behavior by design; changing dispatch to `/driver` is deferred.
 
 ---
 
-## R13. `maintenance_supervisor` — Maintenance Supervisor · **NEW PAGE REQUIRED** → `/dashboard/maintenance`
+## R13. `maintenance_supervisor` — Maintenance Supervisor · shared page shipped in Phase 2 E: `/dashboard/maintenance`
 
-(A§1.13, 00§A; no `dashboard.*.view`; identical default layout to `maintenance_tech`.)
+(A§1.13, 00§A; at spec time had no `dashboard.*.view`; Phase 2 E added the shared page permission and
+kept its default layout aligned with `maintenance_tech`.)
 
 ### 1. Persona & decisions
 
@@ -95,7 +94,7 @@ MWO assign/verify, schedule CRUD, window confirmations, downtime edits. Surfaces
 
 ### 9. Shortcuts (route-verified)
 
-`/dashboard/default` (current) · `/dashboard/maintenance` (proposed, shared) · `/maintenance` ·
+`/dashboard/maintenance` (current; shared with maintenance_tech) · `/maintenance` ·
 `/maintenance/work-orders` (+`/create`) · `/maintenance/schedules` (+`/create`,
 `/schedules/:id/edit`) · `/maintenance/downtime` · `/mrp/machines` · `/assets` · `/action-center` ·
 `/approvals` (read) · `/notifications`.
@@ -107,13 +106,12 @@ downtime reason.
 
 ### As-built → Phase-1 delta
 
-Ship the shared `/dashboard/maintenance` page (R12 §"As-built → Phase-1 delta") with a supervisor view
-toggled by permission (`maintenance.wo.verify`), and add the three queue cards. Re-run
-`ApprovalChainRolePermissionDriftTest` if any step role is touched — not needed here (no chain change).
+Phase 2 E shipped the shared `/dashboard/maintenance` page. Its permission-filtered default keeps
+supervisor and technician views aligned; actions remain on the existing maintenance routes.
 
 ---
 
-## R14. `impex_officer` — ImpEx Officer · **NEW PAGE REQUIRED** → proposed `/dashboard/logistics`
+## R14. `impex_officer` — ImpEx Officer · page shipped in Phase 2 E: `/dashboard/logistics`
 
 (A§1.14, 00§A; no `dashboard.*.view`; defaults = supply tiles + purchasing reads + self set.)
 
@@ -133,7 +131,7 @@ doc-expiry compliance, freight spend.
 | Delivery schedule ≤ N days | `supply.delivery_schedule` | WoW | — | `/supply-chain/deliveries` |
 | Open POs (inbound) | `purchasing.open_pos` (`purchasing.view` ✓) | WoW | — | `/purchasing/purchase-orders` |
 | Pending PRs | `purchasing.open_prs` | WoW | — | `/purchasing/purchase-requests` |
-| OTD | **data not available: strip/tile needs `dashboard.ppc.view`** (KPI gate), OTD KPI is supply_chain's — request access or add a new gate (see §C matrix G-P3-2) | MoM | 95 / 90 ↑ | `/supply-chain/deliveries` |
+| OTD | `kpi.on_time_delivery` — `dashboard.logistics.view` is an additional supply-chain read gate (F-057/G-P3-2) | MoM | 95 / 90 ↑ | `/supply-chain/deliveries` |
 | Shipments in transit (new) | non-terminal `shipments` count | WoW | — | `/supply-chain/shipments` |
 | Docs expiring ≤ 30d (new) | shipment/container documents by expiry | WoW | 0 | `/supply-chain/shipments/:id` |
 
@@ -183,7 +181,7 @@ lossy by design (F2) — the feed must show `manual_required` explicitly.
 
 ### 9. Shortcuts (route-verified)
 
-`/dashboard/default` (current) · `/dashboard/logistics` (proposed) · `/supply-chain` ·
+`/dashboard/logistics` (current; Phase 2 E) · `/supply-chain` ·
 `/supply-chain/shipments` (+`/create`) · `/supply-chain/deliveries` (+`/create`) · `/supply-chain/fleet` ·
 `/purchasing/purchase-orders` · `/purchasing/purchase-requests` · `/approvals` (read) ·
 `/notifications`.
@@ -195,15 +193,14 @@ incoterm · date range.
 
 ### As-built → Phase-1 delta
 
-New key `logistics` → `dashboard.logistics.view` → `/dashboard/logistics`, seeded to `impex_officer`.
-**KPI-gate consequence:** `on_time_delivery`'s module gate is `dashboard.ppc.view`
-(`KpiSnapshotService::MODULE_PERMISSIONS['supply_chain']`); giving ImpEx OTD means either a second
-qualified gate or moving the gate map to a permission the logistics role holds — flag as
-G-P3-2, do not silently add a role-name branch (forbidden).
+Phase 2 E shipped `logistics` → `dashboard.logistics.view` → `/dashboard/logistics`, seeded to
+`impex_officer`. The supply-chain KPI gate set includes this permission, so ImpEx reads OTD without a
+role-name branch. The department attendance KPI remains unresolved because no department-scoped source
+exists; see G-P3-2.
 
 ---
 
-## R15. `department_head` — Department Head · **NEW PAGE REQUIRED** → proposed `/dashboard/department`
+## R15. `department_head` — Department Head · page shipped in Phase 2 E: `/dashboard/department`
 
 (A§1.15, 00§A; no `dashboard.*.view`; department-scoped role — the only one whose row scopes read
 `users.employee.department_id`.)
@@ -234,7 +231,7 @@ consumption (read via `budgeting`? **not held** — data not available for this 
 
 | Chart | Purpose → decision |
 |---|---|
-| Approval queue by type/age (Bar; ledger rows only — see §5) | decide oldest first |
+| Approval queue by type/age (ledger + separate payroll/custom sources — see §5) | decide oldest first |
 | Team attendance by day (AreaTrend; `attendances` overwrite-per-day, punches for intra-day) | spot slippage → coaching/shift change |
 | OT hours by employee (Bar) | authorize vs hire (D§5.4) |
 | Leave calendar / forfeiture horizon (timeline) | approve before balances lapse (D§35) |
@@ -255,19 +252,20 @@ attendance panel as team-scoped in its copy.
 | Leave | step 1 `leave.approve_dept` (dept + own scope) | approve-dept / reject w/ remarks | `/hr/leaves/:id` |
 | Loan / cash advance | step 1 (both chains, dept ladder) | approve/reject | `/hr/loans/:id` |
 | Return request | step 1 (`return_management.approve`, **not** dept-scoped) | approve/reject | `/return-management/:id` |
-| Overtime | custom single-step (`attendance.ot.approve`) | approve/reject — **board-blind** (C§1b) | `/hr/attendance/overtime` |
+| Overtime | custom single-step (`attendance.ot.approve`) | read-gated card; approve/reject stays on module route (C§1b) | `/hr/attendance/overtime` |
 | Separation clearance | step 1 sign (`hr.clearance.sign`, own-department items only) | sign item | `/hr/separations/:id` |
 | PR | creator only (`purchasing.pr.create`, no chain step since 2026-09-10) | create/submit | `/purchasing/purchase-requests/create` |
-**Known stalls to surface:** own leave (sole-head department) stalls at step 1 (C§2.1); a headless
-department stalls loans/RMA step 1 (C§2.3) — the dashboard should show "unassigned approver" rather
-than an empty card. OT cards never appear on `/approvals` (payroll/custom family, 00§blocker-1).
+**Known stalls to surface:** leave now skips the department step and enters HR's queue when no other
+active department head or scoped delegate can act; headless loan requests now skip the department
+step and notify HR/Finance. Return step 1 remains unscoped. OT cards appear on `/approvals` for users
+with its read and approval grants.
 
 ### 6. Alerts / exceptions
 
-OT queue age (no SLA sweep on custom types — C§2.10) · team leave-forfeiture horizon (D§35) ·
-probation and training expiries (D§19) · loan step-1 stall when the dept has no head · self-approval
-refusals on the head's own requests · 15-min? no — 30-min session (A§0) · notification darkness: loan
-mid-chain handoffs and OT submits fire (OT does notify — C§3), PR submit does not.
+OT queue age (notify-only custom SLA sweep — C§2.10) · team leave-forfeiture horizon (D§35) ·
+probation and training expiries (D§19) · leave/loan department-step skips when no eligible approver
+exists · 15-min? no — 30-min session (A§0) · loan/PR/PO step notices and
+payroll waiting-approval notices are implemented; live delivery verification remains pending (C§3).
 
 ### 7. DSS recommendations
 
@@ -285,7 +283,7 @@ submissions. Surfaces: `/hr/leaves/:id`, `/hr/loans/:id`, `/return-management/:i
 
 ### 9. Shortcuts (route-verified)
 
-`/dashboard/default` (current) · `/dashboard/department` (proposed) · `/approvals` ·
+`/dashboard/department` (current; Phase 2 E) · `/approvals` ·
 `/action-center` · `/hr/employees` · `/hr/leaves` · `/hr/attendance` ·
 `/hr/attendance/overtime` · `/hr/loans` · `/hr/separations` · `/purchasing/purchase-requests`
 (+`/create`) · `/return-management` · `/notifications` · `/calendar` · self-service.
@@ -297,10 +295,9 @@ leave type · OT window.
 
 ### As-built → Phase-1 delta
 
-The role-default widget set is already approvals-first and department-scoped (good). What is missing:
-dedicated cards for the dept OT/hour shortfall, an "unassigned approver" state, and a page that puts
-the five approval types in one queue (today they are five separate module pages plus a board that
-omits OT).
+Phase 2 E shipped the department dashboard over its department-scoped defaults. The approval board now
+includes a permission-scoped OT source; dedicated cards for department OT/hour shortfall and an
+"unassigned approver" state remain unbuilt.
 
 ---
 
@@ -381,13 +378,14 @@ Month/date range · request status · leave type. Nothing department-wide (self 
 
 ### As-built → Phase-1 delta
 
-Prefer the **existing** `GET /dashboards/employee` payload as the employee landing (3 KPIs + payslip +
-holiday) over the generic grid, and hide the mis-gated team widgets (G-P2-1) from this role. Fix M7
-guards.
+Phase 2 keeps `/dashboard/default` as a secondary employee dashboard and `/self-service` as the primary
+surface. Self-service routes now match their authenticated, employee-scoped API access (F-044). Team
+widgets remain department-scoped and null-safe; the org-wide attendance forecast uses the planning-read
+gate. The standalone `GET /dashboards/employee` payload is not wired as the landing.
 
 ---
 
-## R17. `driver` — Driver · **NEW LANDING REQUIRED** → existing `/driver` PWA
+## R17. `driver` — Driver · generic dashboard plus existing `/driver` PWA
 
 (A§1.17, 00§A; holds self-service + `supply_chain.driver.access` only.)
 
@@ -453,36 +451,22 @@ Date (today/this week) · run status · delivery area (own runs only).
 
 ### As-built → Phase-1 delta
 
-Dispatch currently sends every role without a dashboard permission to `/dashboard/default`, so a driver
-lands on a widget grid to reach a phone workflow. Add a **catalog/PWA-aware dispatch entry** so
-`supply_chain.driver.access` (or a new `dashboard.driver.view` held by the driver role) lands on
-`/driver`. Keep the widget grid as a secondary link. Driver default layout should drop
-`approvals.pending` and gain the run cards.
+Phase 2 keeps `/dashboard/default` for the driver and the existing `/driver` PWA for run execution. The
+PWA remains the primary work surface; a PWA-aware dispatch change and a dashboard run card are deferred.
 
 ---
 
 ## Cross-role notes for the P3 roles (feed into `01-matrix.md`)
 
-1. **G-P3-1 (leak, sharpest here):** `attendance.view` / `leave.view` are granted to **every** role via
-   `selfService()` (`RolePermissionSeeder.php:1011-1019`), and the widget gates
-   `hr.team_dtr_today`, `hr.team_on_leave_today`, `forecast.attendance` use exactly those slugs
-   (`DashboardWidgetSeeder.php`). An `employee` or `driver` picker therefore offers *department-wide*
-   attendance/leave tiles — the same leak class CLAUDE.md records for the Approval Queue
-   ("a self-scoped permission reused as a GLOBAL gate is a leak"). The payload is department-scoped and
-   null-safe, so the fix is a gate change (or an explicit, documented decision that team tiles are
-   viewable by all staff) — never a client-side role check.
-2. **G-P3-2 (gate map is modules, roles are not):** OTD's gate is `dashboard.ppc.view`; attendance
-   rate's is `dashboard.hr.view`. `impex_officer` (logistics = the supply-chain owner on the floor) and
-   `department_head` (dept attendance) both need one of those readings and hold neither. Resolve by
-   extending `KpiSnapshotService::MODULE_PERMISSIONS` to accept a set of qualifying slugs, or by adding
-   new KPI definitions — not by branching on role name.
-3. **G-P3-3 (landing ≠ surface):** three of five roles here have a better primary surface than the grid:
-   `/driver` (PWA), `/self-service` (employee), `/dashboard/maintenance` + `/dashboard/logistics`
-   (proposed). Landing selection is permission-derived rarity sort — so each new surface needs its own
-   permission slug, and each new slug changes landing/rarity behaviour for existing holders
-   (`DashboardDispatchService::resolve()`). Sequence these one at a time and record the dispatch diff.
-4. **G-P3-4 (role defaults vs gates):** `DashboardRoleLayoutSeeder` says "the five roles with no
-   `dashboard.*.view` grant get none" but eight roles lack one (A§5.1/§5.2). Every default in this group
-   should be validated by `WidgetSeedIntegrityTest` (which asserts no role default references a widget
-   the role cannot see) after the gate fixes above — otherwise `driver`'s and `employee`'s defaults sit
-   one permission change away from silently stripping to an empty grid.
+1. **G-P3-1 (resolved 2026-10-11):** team DTR/leave widgets remain broad-but-safe because they are
+   department-scoped and null-safe; the organization-wide `forecast.attendance` uses the planning-read
+   gate, so employee and driver cannot add it.
+2. **G-P3-2 (partly resolved 2026-10-12):** the gate map accepts permission sets and ImpEx now reads OTD
+   through `dashboard.logistics.view`. Department heads still lack a department-scoped attendance KPI
+   source; no company-wide grant was added.
+3. **G-P3-3 (resolved for shipped pages):** maintenance supervisor, ImpEx, and department head have
+   permission-derived dashboards. Employee and driver keep `/dashboard/default`, with self-service and
+   the driver PWA as their primary work surfaces. PWA-aware dispatch remains deferred.
+4. **G-P3-4 (resolved for seeded defaults):** all 17 seeded roles have permission-filtered dashboard
+   defaults, guarded by `WidgetSeedIntegrityTest`; maintenance, logistics, and department pages use their
+   new catalog grants.

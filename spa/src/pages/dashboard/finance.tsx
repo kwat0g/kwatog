@@ -54,7 +54,7 @@ export default function FinanceDashboardPage() {
  /*
   * FinanceDashboardService gates each panel on the caller's own grant and
   * omits what they may not read (PanelGate) — reaching this page needs
-  * accounting.dashboard.view, which does not itself carry the AR, AP,
+  * dashboard.accounting.view, which does not itself carry the AR, AP,
   * journal, payroll or budget reads. Every block below renders only if its
   * data arrived; a missing panel must not draw as ₱0.00.
   */

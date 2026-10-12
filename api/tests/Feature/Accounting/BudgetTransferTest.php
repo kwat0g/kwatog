@@ -15,6 +15,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class BudgetTransferTest extends TestCase
@@ -25,6 +26,7 @@ class BudgetTransferTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        Mail::fake();
     }
 
     public function test_request_then_approve_moves_the_month_bucket(): void
@@ -40,12 +42,24 @@ class BudgetTransferTest extends TestCase
         ], $maker->id);
         $this->assertSame('pending', $transfer->fresh()->status);
         $this->assertNotEmpty($transfer->transfer_number);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.action_required',
+        ]);
 
         // Nothing moves while pending.
         $this->assertSame('1000.00', $from->fresh()->jan);
 
         $approved = $service->approve($transfer, $checker->id);
         $this->assertSame('approved', $approved->status);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.completed',
+        ]);
         $this->assertSame('700.00', $from->fresh()->jan);
         $this->assertSame('1300.00', $to->fresh()->jan);
         // annual_total is a stored generated column: it follows the buckets.
@@ -143,6 +157,10 @@ class BudgetTransferTest extends TestCase
 
         $rejected = $service->request($payload([]), $maker->id);
         $service->reject($rejected, $checker->id);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $maker->id,
+            'type' => 'approval.rejected',
+        ]);
         // Rejection moves nothing; the earlier approved 10.00 stays moved.
         $this->assertSame('90.00', $from->fresh()->jan);
         // The rejection is attributed to the rejecter, never the approver.

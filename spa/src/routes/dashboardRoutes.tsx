@@ -133,7 +133,7 @@ export const dashboardRoutes = (
  />
  <Route
  path="/chains"
- element={<PermissionGuard permission="crm.sales_orders.view"><Suspense fallback={<SkeletonDashboard />}><ChainTrackerPage /></Suspense></PermissionGuard>}
+ element={<PermissionGuard anyOf={["crm.sales_orders.view", "dashboard.view_bottlenecks"]}><Suspense fallback={<SkeletonDashboard />}><ChainTrackerPage /></Suspense></PermissionGuard>}
  />
 
  {/* Series F / Task F7 — System activity feed */}

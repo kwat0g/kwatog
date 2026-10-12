@@ -74,7 +74,7 @@ final class ApprovalsWidgetAnalytics
             return [
                 'document' => (string) $card['number'],
                 'type' => (string) $card['type'],
-                'type_label' => ApprovalTypeRegistry::forKind((string) $card['type'])['label'] ?? (string) $card['type'],
+                'type_label' => ApprovalTypeRegistry::kindLabel((string) $card['type']) ?? (string) $card['type'],
                 'waiting_h' => $waitingHours,
                 'overdue_hours' => max(0, $waitingHours - $slaHours),
                 'link' => $redacted ? null : (string) $card['link'],

@@ -89,6 +89,12 @@ class NcrService
                 $q->where($f, $filters[$f]);
             }
         }
+        if (($filters['recovery_coverage'] ?? null) === 'unlinked') {
+            $q->where('disposition', NcrDisposition::Rework->value)
+                ->whereNull('rework_work_order_id')
+                ->whereNull('replacement_work_order_id')
+                ->where('status', '!=', NcrStatus::Cancelled->value);
+        }
         if (! empty($filters['product_id'])) {
             $q->where('product_id', $filters['product_id']);
         }

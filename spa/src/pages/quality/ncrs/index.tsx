@@ -182,6 +182,15 @@ export default function NcrsListPage() {
       type: 'select',
       options: [{ value: '', label: 'All' }, ...(ncrOptions?.sources ?? [])],
     },
+    {
+      key: 'recovery_coverage',
+      label: 'Recovery coverage',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'unlinked', label: 'Unlinked rework' },
+      ],
+    },
   ];
 
   return (

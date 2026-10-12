@@ -92,16 +92,22 @@ function bottleneckHref(row: ChainBottleneckRow): string {
 
 export default function ChainTrackerPage() {
   const [params, setParams] = useSearchParams();
+  const { can } = usePermission();
+  const canTrackSalesOrders = can('crm.sales_orders.view');
   const selectedId = params.get('id') ?? undefined;
 
   return (
     <div>
       <PageHeader
         title="Chain Tracker"
-        subtitle="Follow a sales order end-to-end across every module — order to cash."
+        subtitle={
+          canTrackSalesOrders
+            ? 'Follow a sales order end-to-end across every module — order to cash.'
+            : 'Review stuck documents across the plant.'
+        }
       />
       <div className="px-5 py-4">
-        {selectedId ? (
+        {selectedId && canTrackSalesOrders ? (
           <ChainDetail
             id={selectedId}
             onClear={() => {
@@ -123,6 +129,7 @@ export default function ChainTrackerPage() {
 function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
   const [search, setSearch] = useState('');
   const { can } = usePermission();
+  const canTrackSalesOrders = can('crm.sales_orders.view');
   const canViewBottlenecks = can('dashboard.view_bottlenecks');
   // One sales-order lookup per keystroke, unthrottled, against a search index.
   const debouncedSearch = useDebounce(search, 300);
@@ -132,6 +139,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
     queryFn: ({ signal }) =>
       salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }, signal),
     placeholderData: (prev) => prev,
+    enabled: canTrackSalesOrders,
   });
 
   const bottlenecks = useQuery({
@@ -143,9 +151,9 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
   const orders = results.data?.data ?? [];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+    <div className={cn('grid gap-4', canTrackSalesOrders && canViewBottlenecks && 'lg:grid-cols-[1.3fr_1fr]')}>
       {/* Search / pick */}
-      <Panel title="Track a sales order">
+      {canTrackSalesOrders && <Panel title="Track a sales order">
         <Input
           label="Search"
           placeholder="Search SO number or customer…"
@@ -167,7 +175,9 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
                 description={
                   search
                     ? 'Try a different SO number or customer name.'
-                    : 'Or pick one of the stuck documents on the right.'
+                    : canViewBottlenecks
+                      ? 'Or pick one of the stuck documents on the right.'
+                      : 'Search by sales order number or customer name.'
                 }
               />
             </div>
@@ -196,7 +206,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
             ))
           )}
         </div>
-      </Panel>
+      </Panel>}
 
       {/* Plant-wide bottlenecks */}
       {canViewBottlenecks && (

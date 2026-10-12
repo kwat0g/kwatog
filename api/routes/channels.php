@@ -32,10 +32,6 @@ Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId
 Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('payroll.periods.view')
 );
 
-// Inventory stock changes — useful for warehouse staff dashboards
-Broadcast::channel('inventory.stock', fn (User $user): bool => $user->hasPermission('inventory.stock_levels.view') || $user->hasPermission('inventory.view')
-);
-
 // Maintenance dashboard — open WO updates push live
 Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasPermission('maintenance.view')
 );

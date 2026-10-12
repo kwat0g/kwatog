@@ -172,9 +172,20 @@ const BY_TYPE: Record<string, NotificationMeta> = {
 
   // ── Maintenance, planning & approvals ────────────────────────────────
   mrp_run_completed: { icon: LuFactory, group: 'system', label: 'MRP' },
+  'maintenance.assignment_needed': { icon: LuUsers, group: 'approvals', label: 'Maintenance' },
+  'maintenance.assigned': { icon: LuWrench, group: 'system', label: 'Maintenance' },
+  'maintenance.assignment_escalated': { icon: LuTriangleAlert, group: 'alerts', label: 'Maintenance' },
+  'maintenance.repair_submitted': { icon: LuClipboardCheck, group: 'approvals', label: 'Maintenance' },
+  'maintenance.repair_rejected': { icon: LuTriangleAlert, group: 'alerts', label: 'Maintenance' },
+  'maintenance.shift_handover': { icon: LuCalendar, group: 'alerts', label: 'Maintenance' },
+  'maintenance.repeat_breakdown': { icon: LuTriangleAlert, group: 'alerts', label: 'Maintenance' },
   'maintenance.breakdown': { icon: LuWrench, group: 'alerts', label: 'Maintenance' },
   approval_reminder: { icon: LuCircleCheck, group: 'approvals', label: 'Approval' },
   approval_escalation: { icon: LuTriangleAlert, group: 'approvals', label: 'Approval' },
+  'approval.action_required': { icon: LuClipboardCheck, group: 'approvals', label: 'Approval' },
+  'approval.completed': { icon: LuCircleCheck, group: 'approvals', label: 'Approval' },
+  'approval.rejected': { icon: LuTriangleAlert, group: 'approvals', label: 'Approval' },
+  'bill_payment.posted': { icon: LuReceipt, group: 'system', label: 'Accounting' },
 
   // ── Security & administration ────────────────────────────────────────
   'permission.override': { icon: LuKeyRound, group: 'system', label: 'Access' },

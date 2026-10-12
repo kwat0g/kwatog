@@ -9,7 +9,6 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
-use App\Modules\HR\Models\EmployeeSalaryHistory;
 use App\Modules\HR\Models\SalaryAdjustment;
 use App\Modules\HR\Services\EmployeeService;
 use App\Modules\HR\Services\SalaryAdjustmentService;
@@ -18,6 +17,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -35,6 +35,7 @@ class SalaryAdjustmentGateTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(WorkflowSeeder::class);
+        Mail::fake();
     }
 
     private function userWithRole(string $slug): User
@@ -42,6 +43,21 @@ class SalaryAdjustmentGateTest extends TestCase
         return User::factory()->create([
             'role_id' => Role::query()->where('slug', $slug)->value('id'),
         ]);
+    }
+
+    public function test_production_manager_cannot_request_salary_adjustments_by_default(): void
+    {
+        $manager = $this->userWithRole('production_manager');
+        $employee = Employee::factory()->create();
+
+        $this->actingAs($manager)
+            ->postJson('/api/v1/hr/employees/'.$employee->id.'/salary-adjustments', [
+                'to_basic_monthly_salary' => '25000.00',
+                'effective_date' => '2026-08-01',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('salary_adjustments', 0);
     }
 
     /**
@@ -61,7 +77,7 @@ class SalaryAdjustmentGateTest extends TestCase
         try {
             app(EmployeeService::class)->update($employee, [
                 'basic_monthly_salary' => '99000.00',
-                'semi_monthly_rate'    => '5000.00',
+                'semi_monthly_rate' => '5000.00',
             ]);
             $this->fail('Generic employee update accepted a compensation change.');
         } catch (BusinessRuleException $e) {
@@ -79,16 +95,21 @@ class SalaryAdjustmentGateTest extends TestCase
     public function test_request_does_not_apply_until_approved(): void
     {
         $hr = $this->userWithRole('hr_officer');
+        $checker = $this->userWithRole('production_manager');
         $employee = Employee::factory()->create(['basic_monthly_salary' => '20000.00']);
 
         $adj = app(SalaryAdjustmentService::class)->request($employee, [
             'to_basic_monthly_salary' => '25000.00',
-            'effective_date'          => '2026-08-01',
-            'reason'                  => 'Annual merit increase',
+            'effective_date' => '2026-08-01',
+            'reason' => 'Annual merit increase',
         ], $hr);
 
         $this->assertSame('pending', $adj->status->value);
         $this->assertSame('20000.00', (string) $employee->fresh()->basic_monthly_salary);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+        ]);
     }
 
     /** Full approval applies the new salary + writes an effective-dated history row. */
@@ -102,19 +123,31 @@ class SalaryAdjustmentGateTest extends TestCase
 
         $adj = $svc->request($employee, [
             'to_basic_monthly_salary' => '25000.00',
-            'effective_date'          => '2026-08-01',
-            'reason'                  => 'Merit',
+            'effective_date' => '2026-08-01',
+            'reason' => 'Merit',
         ], $hr);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+        ]);
 
         $svc->approve($adj, $checker);          // step 1 — Checked by
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $approver->id,
+            'type' => 'approval.action_required',
+        ]);
         $adj = $svc->approve($adj, $approver);  // step 2 — Approved by → applies
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $hr->id,
+            'type' => 'approval.completed',
+        ]);
 
         $this->assertSame('approved', $adj->fresh()->status->value);
         $this->assertSame('25000.00', (string) $employee->fresh()->basic_monthly_salary);
         $this->assertDatabaseHas('employee_salary_history', [
-            'employee_id'          => $employee->id,
+            'employee_id' => $employee->id,
             'basic_monthly_salary' => '25000.00',
-            'effective_date'       => '2026-08-01',
+            'effective_date' => '2026-08-01',
         ]);
         $this->assertDatabaseHas('employment_history', [
             'employee_id' => $employee->id,
@@ -191,13 +224,17 @@ class SalaryAdjustmentGateTest extends TestCase
 
         $adj = $svc->request($employee, [
             'to_basic_monthly_salary' => '25000.00',
-            'effective_date'          => '2026-08-01',
+            'effective_date' => '2026-08-01',
         ], $hr);
 
         $svc->reject($adj, $checker, 'Budget not approved');
 
         $this->assertSame('rejected', $adj->fresh()->status->value);
         $this->assertSame('20000.00', (string) $employee->fresh()->basic_monthly_salary);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $hr->id,
+            'type' => 'approval.rejected',
+        ]);
     }
 
     /** The requester cannot approve their own adjustment (SoD, via requested_by). */
@@ -210,7 +247,7 @@ class SalaryAdjustmentGateTest extends TestCase
 
         $adj = $svc->request($employee, [
             'to_basic_monthly_salary' => '25000.00',
-            'effective_date'          => '2026-08-01',
+            'effective_date' => '2026-08-01',
         ], $hr);
 
         $this->expectException(ForbiddenActionException::class);

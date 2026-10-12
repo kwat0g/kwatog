@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\AccountType;
@@ -126,6 +128,18 @@ class BudgetService
                 'rejection_reason' => null,
             ])->save();
 
+            $submitterRoleId = User::query()->whereKey($userId)->value('role_id');
+            $notifications = app(NotificationService::class);
+            $audience = ApprovalDelegation::approvalAudience('budgeting.approve')
+                ->filter(fn (User $user): bool => (int) $user->role_id !== (int) $submitterRoleId);
+            $notifications->send($audience, 'approval.action_required', [
+                'title' => "Budget {$locked->name} needs approval",
+                'message' => 'A submitted budget is waiting for review.',
+                'link_to' => "/budgeting/budgets/{$locked->hash_id}",
+                'entity_type' => 'budget',
+                'entity_id' => $locked->hash_id,
+            ], "budget:approval-required:{$locked->id}:{$locked->submitted_at->timestamp}");
+
             return $locked->fresh()->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy']);
         });
     }
@@ -146,6 +160,9 @@ class BudgetService
             // different role (vice_president). Compares raw role ids so the
             // rule holds even when role names change.
             $approver = User::query()->findOrFail($userId);
+            if (! ApprovalDelegation::canActForPermission($approver, 'budgeting.approve', [(int) $locked->submitted_by])) {
+                throw new BusinessRuleException('You do not have permission to approve budgets.');
+            }
             if (! $this->hasDifferentRoleFromSubmitter($locked, $approver)) {
                 throw new BusinessRuleException('Budget approval requires a different role than the submitting role.');
             }
@@ -158,6 +175,8 @@ class BudgetService
                 'approved_at' => now(),
             ])->save();
 
+            $this->notifyBudgetSubmitter($locked, 'approval.completed', 'Budget approved');
+
             return $locked->fresh()->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy']);
         });
     }
@@ -166,7 +185,28 @@ class BudgetService
     {
         $submitter = User::query()->find($budget->submitted_by);
 
-        return $submitter === null || (int) $submitter->role_id !== (int) $approver->role_id;
+        return ApprovalDelegation::hasDifferentPermissionRole(
+            $approver,
+            'budgeting.approve',
+            $submitter?->role_id === null ? null : (int) $submitter->role_id,
+            [(int) $budget->submitted_by],
+        );
+    }
+
+    private function notifyBudgetSubmitter(Budget $budget, string $type, string $title): void
+    {
+        $submitter = User::query()->whereKey($budget->submitted_by)->where('is_active', true)->first();
+        if (! $submitter) {
+            return;
+        }
+
+        app(NotificationService::class)->send($submitter, $type, [
+            'title' => $title,
+            'message' => $type === 'approval.rejected' ? 'Your budget was returned for revision.' : 'Your budget was approved.',
+            'link_to' => "/budgeting/budgets/{$budget->hash_id}",
+            'entity_type' => 'budget',
+            'entity_id' => $budget->hash_id,
+        ], "budget:decision:{$budget->id}:".($budget->rejected_at?->timestamp ?? $budget->approved_at?->timestamp));
     }
 
     /** Close an active (or legacy approved) budget. */
@@ -192,12 +232,19 @@ class BudgetService
         return DB::transaction(function () use ($budget, $userId, $reason): Budget {
             $locked = Budget::query()->lockForUpdate()->findOrFail($budget->getKey());
             $this->assertTransition($locked, 'draft');
+            $approver = User::query()->findOrFail($userId);
+            if ((int) $locked->submitted_by === $userId
+                || ! ApprovalDelegation::canActForPermission($approver, 'budgeting.approve', [(int) $locked->submitted_by])) {
+                throw new BusinessRuleException('You are not authorized to return this budget for revision.');
+            }
             $locked->forceFill([
                 'status' => 'draft',
                 'rejected_by' => $userId,
                 'rejected_at' => now(),
                 'rejection_reason' => $reason,
             ])->save();
+
+            $this->notifyBudgetSubmitter($locked, 'approval.rejected', 'Budget returned');
 
             return $locked->fresh()->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy', 'rejectedBy']);
         });

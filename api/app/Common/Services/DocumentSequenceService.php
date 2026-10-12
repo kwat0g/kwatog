@@ -119,15 +119,12 @@ class DocumentSequenceService
         [$table, $column] = $source;
         $start = $prefix.'-'.$datePart.'-';
 
-        return DB::table($table)
+        // Single aggregate inside the sequence-row lock — never a full-table
+        // pluck + PHP loop. Trailing-digit suffix holds the sequence.
+        return (int) (DB::table($table)
             ->where($column, 'like', $start.'%')
-            ->pluck($column)
-            ->map(static function (mixed $number): int {
-                return preg_match('/(\d+)$/', (string) $number, $matches) === 1
-                    ? (int) $matches[1]
-                    : 0;
-            })
-            ->max() ?? 0;
+            ->selectRaw("MAX(CAST(SUBSTRING({$column} FROM '([0-9]+)$') AS INTEGER)) AS agg")
+            ->value('agg') ?? 0);
     }
 
     /** @return array<int, string> */

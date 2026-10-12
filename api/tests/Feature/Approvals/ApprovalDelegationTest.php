@@ -6,6 +6,7 @@ namespace Tests\Feature\Approvals;
 
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Models\ApprovalRecord;
 use App\Common\Models\AuditLog;
 use App\Common\Services\ApprovalService;
 use App\Modules\Auth\Models\Role;
@@ -15,6 +16,7 @@ use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -97,6 +99,35 @@ class ApprovalDelegationTest extends TestCase
 
         $this->assertSame('approved', $step1->action);
         $this->assertSame($delegate->id, $step1->approver_id);
+    }
+
+    public function test_approval_record_audit_captures_actor_ip_and_user_agent(): void
+    {
+        $pr = $this->pendingPurchaseRequest($this->makeUser('employee'));
+        $approver = $this->makeUser('finance_officer');
+
+        $this->actingAs($approver, 'sanctum')
+            ->withServerVariables(['REMOTE_ADDR' => '192.0.2.24'])
+            ->withHeaders([
+                'User-Agent' => 'Approval audit feature test',
+                'X-Request-ID' => 'approval-audit-test',
+            ])
+            ->patchJson('/api/v1/purchasing/purchase-requests/'.$pr->hash_id.'/approve')
+            ->assertOk();
+
+        $audit = DB::table('audit_logs')
+            ->where('model_type', (new ApprovalRecord)->getMorphClass())
+            ->where('model_id', app(ApprovalService::class)->records($pr)->first()->id)
+            ->where('action', 'updated')
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($audit);
+        $this->assertSame($approver->id, (int) $audit->user_id);
+        $this->assertSame('user', $audit->actor_type);
+        $this->assertSame('192.0.2.24', $audit->ip_address);
+        $this->assertSame('Approval audit feature test', $audit->user_agent);
+        $this->assertSame('approval-audit-test', $audit->correlation_id);
     }
 
     public function test_delegate_cannot_act_outside_window(): void

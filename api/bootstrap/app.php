@@ -60,6 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'permission' => CheckPermission::class,
             'permission_any' => \App\Common\Middleware\CheckAnyPermission::class,
+            'approval_permission' => \App\Common\Middleware\CheckApprovalPermission::class,
             'feature' => CheckFeature::class,
             'session.timeout' => SessionTimeout::class,
             'password.expired' => CheckPasswordExpiry::class,

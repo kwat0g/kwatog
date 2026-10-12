@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Requests;
 
+use App\Common\Models\ApprovalDelegation;
 use Illuminate\Foundation\Http\FormRequest;
 
 class BulkApproveSupplierListingRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('purchasing.supplier_listings.review') ?? false;
+        return $this->user() !== null && ApprovalDelegation::canActForPermission($this->user(), 'purchasing.supplier_listings.review');
     }
 
     public function rules(): array

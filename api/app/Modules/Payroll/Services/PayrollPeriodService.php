@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\AuditLog;
 use App\Common\Services\OutboxService;
 use App\Common\Support\Money;
@@ -943,6 +944,7 @@ class PayrollPeriodService
      */
     public function releaseClaim(PayrollPeriod $period, array $extraAttributes = [], ?string $token = null): PayrollPeriod
     {
+        $notificationKey = $token ?? $period->processing_token;
         $oldValues = [
             'status' => $period->status?->value,
             'processing_started_at' => optional($period->processing_started_at)->toIso8601String(),
@@ -980,7 +982,40 @@ class PayrollPeriodService
             ]);
         }
 
-        return PayrollPeriod::query()->find($period->id) ?? $period;
+        $fresh = PayrollPeriod::query()->find($period->id) ?? $period;
+        if ($released > 0 && $fresh->status === PayrollPeriodStatus::Computed) {
+            $this->notifyPendingApproval($fresh, $notificationKey);
+        }
+
+        return $fresh;
+    }
+
+    public function notifyPendingApproval(PayrollPeriod $period, ?string $runKey = null): void
+    {
+        if ($period->status !== PayrollPeriodStatus::Computed) {
+            return;
+        }
+
+        $makers = array_map(
+            static fn ($id): int => (int) $id,
+            array_filter([$period->created_by, $period->computed_by], static fn ($id): bool => $id !== null),
+        );
+        $candidates = app(\App\Common\Services\NotificationService::class)
+            ->usersWithPermission('payroll.periods.approve')
+            ->filter(fn (User $user): bool => $user->hasPermission('payroll.periods.view'));
+        $audience = $candidates->filter(fn (User $user): bool => $user->role?->slug !== 'system_admin'
+            && (! in_array((int) $user->id, $makers, true) || $user->hasPermission('payroll.periods.self_approve_override')));
+        if ($audience->isEmpty()) {
+            $audience = $candidates->filter(fn (User $user): bool => $user->role?->slug === 'system_admin');
+        }
+
+        app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [
+            'title' => 'Payroll period needs approval',
+            'message' => "Payroll {$period->period_start->toDateString()}–{$period->period_end->toDateString()} is computed and waiting for review.",
+            'link_to' => "/payroll/periods/{$period->hash_id}",
+            'entity_type' => 'payroll_period',
+            'entity_id' => $period->hash_id,
+        ], "payroll-period:approval-required:{$period->id}:".($runKey ?? (string) ($period->updated_at?->timestamp ?? 'unknown')));
     }
 
     /**
@@ -1209,6 +1244,9 @@ class PayrollPeriodService
                 static fn ($id): int => (int) $id,
                 array_filter([$locked->created_by, $locked->computed_by], static fn ($id): bool => $id !== null),
             );
+            if (! ApprovalDelegation::canActForPermission($actor, 'payroll.periods.approve', $makerIds)) {
+                throw new BusinessRuleException('You do not have permission to approve payroll periods.');
+            }
             $isMaker = in_array((int) $actor->id, $makerIds, true);
             $makerCheckerOverride = $isMaker && $actor->hasPermission('payroll.periods.self_approve_override');
             if ($isMaker && ! $makerCheckerOverride) {

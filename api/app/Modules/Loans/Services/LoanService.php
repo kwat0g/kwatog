@@ -5,30 +5,34 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
+use App\Common\Models\WorkflowDefinition;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
-use App\Common\Models\WorkflowDefinition;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
-use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Events\LoanDecided;
+use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
-use App\Modules\Loans\Events\LoanDecided;
-use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Support\LoanRate;
 use App\Modules\Loans\Support\LoanStateMachine;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class LoanService
@@ -59,6 +63,7 @@ class LoanService
             ->map(function (LoanType $type) use ($workflows) {
                 $workflow = $workflows->get($type->value);
                 $rate = $this->interestRateFor($type);
+
                 return [
                     'value' => $type->value,
                     'label' => $type->label(),
@@ -79,21 +84,27 @@ class LoanService
             'employee.user:id,employee_id',
             'approvalRecords',
         ]);
-        if (!empty($filters['employee_id'])) {
-            $empId = \App\Common\Support\HashIdFilter::decode(
-                $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
+        if (! empty($filters['employee_id'])) {
+            $empId = HashIdFilter::decode(
+                $filters['employee_id'], Employee::class,
             );
-            if ($empId) $q->where('employee_id', $empId);
+            if ($empId) {
+                $q->where('employee_id', $empId);
+            }
         }
-        if (!empty($filters['loan_type'])) $q->where('loan_type', $filters['loan_type']);
-        if (!empty($filters['status'])) $q->where('status', $filters['status']);
-        if (!empty($filters['search'])) {
+        if (! empty($filters['loan_type'])) {
+            $q->where('loan_type', $filters['loan_type']);
+        }
+        if (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
+        }
+        if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('loan_no', SearchOperator::like(), SearchOperator::contains($term))
-                   ->orWhereHas('employee', fn ($e) => $e->where('first_name', SearchOperator::like(), SearchOperator::contains($term))
-                       ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))
-                       ->orWhere('employee_no', SearchOperator::like(), SearchOperator::contains($term)));
+                    ->orWhereHas('employee', fn ($e) => $e->where('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                        ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))
+                        ->orWhere('employee_no', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 
@@ -151,7 +162,7 @@ class LoanService
 
             // Cap check.
             if (bccomp($principal, $limits['principal_max'], 2) > 0) {
-                throw new BusinessRuleException('Principal exceeds maximum of '.app(\App\Common\Services\CurrencyDisplayService::class)->format($limits['principal_max'])." for {$type->value}.");
+                throw new BusinessRuleException('Principal exceeds maximum of '.app(CurrencyDisplayService::class)->format($limits['principal_max'])." for {$type->value}.");
             }
 
             $sequenceKey = $type === LoanType::CashAdvance ? 'cash_advance' : 'loan';
@@ -180,23 +191,36 @@ class LoanService
             $chainSize = count($workflow->steps ?? []);
 
             $loan = EmployeeLoan::create([
-                'loan_no'                => $loanNo,
-                'employee_id'            => $employeeId,
-                'loan_type'              => $type->value,
-                'principal'              => $principal,
-                'interest_rate'          => $interestRate,
-                'monthly_amortization'   => $perPeriod,
-                'total_paid'             => 0,
-                'balance'                => $totalDue,
-                'pay_periods_total'      => $periods,
-                'pay_periods_remaining'  => $periods,
-                'approval_chain_size'    => $chainSize,
-                'purpose'                => $data['purpose'] ?? null,
+                'loan_no' => $loanNo,
+                'employee_id' => $employeeId,
+                'loan_type' => $type->value,
+                'principal' => $principal,
+                'interest_rate' => $interestRate,
+                'monthly_amortization' => $perPeriod,
+                'total_paid' => 0,
+                'balance' => $totalDue,
+                'pay_periods_total' => $periods,
+                'pay_periods_remaining' => $periods,
+                'approval_chain_size' => $chainSize,
+                'purpose' => $data['purpose'] ?? null,
             ]);
             // status is non-fillable (service-only mutation); forceFill + save.
             $loan->forceFill(['status' => LoanStatus::Pending->value])->save();
 
             $this->approvals->submit($loan, $type->workflowType(), $principal);
+            $firstStep = $this->approvals->currentRecords($loan)
+                ->where('step_order', 1)
+                ->where('action', 'pending')
+                ->first();
+            if ($firstStep?->role_slug === 'department_head'
+                && ! $this->hasEligibleDepartmentHead($employee, $loan->approvalSubmitterId())) {
+                $firstStep->update([
+                    'action' => 'skipped',
+                    'remarks' => 'No eligible department head; routed to the next approval step.',
+                    'acted_at' => now(),
+                ]);
+                $this->approvals->notifyNextStep($loan);
+            }
 
             app(OutboxService::class)->record(
                 new LoanSubmitted($loan->fresh(['employee'])),
@@ -204,6 +228,22 @@ class LoanService
 
             return $loan->load('employee');
         });
+    }
+
+    private function hasEligibleDepartmentHead(Employee $borrower, ?int $submitterId): bool
+    {
+        if ($borrower->department_id === null) {
+            return false;
+        }
+
+        return User::query()
+            ->where('is_active', true)
+            ->when($submitterId !== null, fn ($query) => $query->where('id', '<>', $submitterId))
+            ->whereHas('role', fn ($role) => $role->where('slug', 'department_head'))
+            ->whereHas('employee', fn ($employee) => $employee->where('department_id', $borrower->department_id))
+            ->with('role')
+            ->get()
+            ->contains(fn (User $head) => $head->hasPermission('loans.approve'));
     }
 
     public function approve(EmployeeLoan $loan, User $user, ?string $remarks = null): EmployeeLoan
@@ -233,6 +273,7 @@ class LoanService
                     new LoanDecided($loan->fresh(['employee']), true),
                 );
             }
+
             return $loan;
         });
     }
@@ -246,13 +287,13 @@ class LoanService
      * existence oracle, and since HashIdFilter::decode accepts bare integers a
      * caller can probe with PKs directly.
      *
-     * @param array<int, int> $ids
+     * @param  array<int, int>  $ids
      * @return array{approved: array<int, EmployeeLoan>, failed: array<int, array{id:string, reason:string}>}
      */
     public function bulkApprove(array $ids, User $approver, ?string $remarks = null): array
     {
         $approved = [];
-        $failed   = [];
+        $failed = [];
 
         foreach ($ids as $id) {
             $reference = app('hashids')->encode($id);
@@ -260,6 +301,7 @@ class LoanService
                 $loan = EmployeeLoan::query()->find($id);
                 if (! $loan) {
                     $failed[] = ['id' => $reference, 'reason' => 'Not found.'];
+
                     continue;
                 }
                 $approved[] = $this->approve($loan, $approver, $remarks);
@@ -267,6 +309,7 @@ class LoanService
                 $failed[] = ['id' => $reference, 'reason' => $e->getMessage()];
             }
         }
+
         return ['approved' => $approved, 'failed' => $failed];
     }
 
@@ -287,6 +330,7 @@ class LoanService
             app(OutboxService::class)->record(
                 new LoanDecided($loan->fresh(['employee']), false),
             );
+
             return $loan;
         });
     }
@@ -309,6 +353,7 @@ class LoanService
 
             $this->stateMachine->transition($authoritative, LoanStatus::Cancelled);
             $authoritative->save();
+
             return $authoritative->fresh(['employee', 'payments']);
         });
     }
@@ -358,7 +403,8 @@ class LoanService
     public function approveWriteOff(EmployeeLoan $loan, User $checker, ?string $remarks = null): EmployeeLoan
     {
         return DB::transaction(function () use ($loan, $checker, $remarks) {
-            if (! $checker->hasPermission('loans.write_off.approve') || ! $this->access->canDecide($checker, $loan)) {
+            if (! ApprovalDelegation::canActForPermission($checker, 'loans.write_off.approve', [(int) $loan->write_off_requested_by])
+                || ! $this->access->canDecide($checker, $loan)) {
                 throw new BusinessRuleException('You do not have Finance permission to approve this loan write-off within your row scope.');
             }
 
@@ -438,7 +484,11 @@ class LoanService
             ->where('approvable_id', $loan->getKey())
             ->where('is_current', true)
             ->whereIn('action', ['pending', 'skipped'])
-            ->update(['action' => 'superseded', 'is_current' => false]);
+            ->get()
+            ->each(static fn (ApprovalRecord $record) => $record->update([
+                'action' => 'superseded',
+                'is_current' => false,
+            ]));
     }
 
     public function recordPayment(
@@ -542,11 +592,12 @@ class LoanService
         ]);
         $this->stateMachine->transition($loan, $paidOff ? LoanStatus::Paid : LoanStatus::Active);
         $loan->save();
+
         return $loan;
     }
 
     /** Used by Sprint 3's PayrollCalculatorService. */
-    public function activeForPayroll(int $employeeId): \Illuminate\Database\Eloquent\Collection
+    public function activeForPayroll(int $employeeId): Collection
     {
         return EmployeeLoan::query()
             ->where('employee_id', $employeeId)
@@ -662,6 +713,7 @@ class LoanService
     private function outstandingBalance(EmployeeLoan $loan): string
     {
         $paid = (string) $loan->payments()->reorder()->sum('amount');
+
         return Money::clampMin(Money::sub($this->totalDueFor($loan), $paid), Money::zero());
     }
 
@@ -685,7 +737,7 @@ class LoanService
     }
 
     /**
-     * @param array<int, array{amount:string}>|null $schedule
+     * @param  array<int, array{amount:string}>|null  $schedule
      */
     private function totalDueFor(EmployeeLoan $loan, ?array $schedule = null): string
     {

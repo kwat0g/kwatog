@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
@@ -182,7 +183,7 @@ class BudgetController extends Controller
         $budget->setAttribute(
             'can_approve',
             $actor instanceof User
-                && $actor->hasPermission('budgeting.approve')
+                && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budget->submitted_by])
                 && $budget->status === 'submitted'
                 && (int) $budget->submitted_by !== (int) $actor->id
                 && $this->budgetService->hasDifferentRoleFromSubmitter($budget, $actor),

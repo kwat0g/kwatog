@@ -63,7 +63,10 @@ class ProcessPayrollJob implements ShouldQueue
         public PayrollPeriod $period,
         public ?int $triggeredBy = null,
         public ?string $claimToken = null,
-    ) {}
+    ) {
+        // Lane: low — 30-min compute must not starve approvals/realtime.
+        $this->onQueue('low');
+    }
 
     public function handle(
         PayrollCalculatorService $calculator,

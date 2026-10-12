@@ -50,6 +50,12 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
 
     public int $timeout = self::TIMEOUT_SECONDS;
 
+    public function __construct()
+    {
+        // Lane: low — daily bulk sweep.
+        $this->onQueue('low');
+    }
+
     public function handle(
         MaintenanceScheduleService $schedules,
         MachineHoursService $machineHours,

@@ -6,8 +6,8 @@ namespace Tests\Feature\Leave;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
-use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Enums\HolidayType;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\Holiday;
 use App\Modules\Attendance\Services\HolidayService;
 use App\Modules\Auth\Models\Role;
@@ -28,6 +28,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -97,8 +98,10 @@ class LeaveRequestHardeningTest extends TestCase
         $departments = Department::query()->orderBy('id')->take(2)->get();
         $alphaHead = $this->employee($departments[0]->id);
         $alphaMember = $this->employee($departments[0]->id);
+        $betaHead = $this->employee($departments[1]->id);
         $betaMember = $this->employee($departments[1]->id);
         $head = $this->user('department_head', $alphaHead);
+        $this->user('department_head', $betaHead);
 
         $sameDepartment = $this->submit($alphaMember, $this->vacation, [
             'start_date' => $this->workDate(),
@@ -126,6 +129,66 @@ class LeaveRequestHardeningTest extends TestCase
             $bulk['failed'][0]['reason'],
         );
         $this->assertSame(LeaveRequestStatus::PendingDept, $otherDepartment->fresh()->status);
+    }
+
+    public function test_headless_department_routes_leave_to_hr(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $request = $this->submit($employee, $this->vacation);
+
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'step_order' => 1,
+            'action' => 'skipped',
+            'remarks' => 'No eligible department approver; routed to HR.',
+            'approver_id' => null,
+            'is_current' => true,
+        ]);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'step_order' => 2,
+            'action' => 'pending',
+            'role_slug' => 'hr_officer',
+            'is_current' => true,
+        ]);
+
+        $this->actingAs($this->user('hr_officer'))
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-hr")
+            ->assertOk();
+        $this->assertSame(LeaveRequestStatus::Approved, $request->fresh()->status);
+    }
+
+    public function test_sole_department_head_own_leave_routes_to_hr_but_peer_head_keeps_department_step(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $headEmployee = $this->employee($department->id);
+        $this->user('department_head', $headEmployee);
+        $request = $this->submit($headEmployee, $this->vacation);
+
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'step_order' => 1,
+            'action' => 'skipped',
+            'is_current' => true,
+        ]);
+
+        $secondHead = $this->user('department_head', $this->employee($department->id));
+        $peerRequest = $this->submit($this->employee($department->id), $this->vacation, [
+            'start_date' => $this->workDate(16),
+        ]);
+
+        $this->assertSame(LeaveRequestStatus::PendingDept, $peerRequest->fresh()->status);
+        $this->actingAs($secondHead)
+            ->patchJson("/api/v1/leaves/requests/{$peerRequest->hash_id}/approve-dept")
+            ->assertOk();
+        $this->assertSame(LeaveRequestStatus::PendingHr, $peerRequest->fresh()->status);
+        $this->assertSame($secondHead->id, $peerRequest->fresh()->dept_approver_id);
     }
 
     public function test_a_delegate_cannot_decide_two_steps_in_the_same_leave_chain(): void
@@ -212,6 +275,7 @@ class LeaveRequestHardeningTest extends TestCase
         $department = Department::query()->firstOrFail();
         $employee = $this->employee($department->id);
         $otherEmployee = $this->employee($department->id);
+        $this->user('department_head', $this->employee($department->id));
         $request = $this->submit($employee, $this->vacation);
 
         $this->actingAs($this->user('employee', $otherEmployee))
@@ -440,7 +504,7 @@ class LeaveRequestHardeningTest extends TestCase
         $employee = $this->employee($department->id);
         $head = $this->user('department_head', $this->employee($department->id));
         $hr = $this->user('hr_officer');
-        $start = \Illuminate\Support\Carbon::parse($this->workDate());
+        $start = Carbon::parse($this->workDate());
         $holiday = $start->copy()->addDay();
         while ($holiday->isSunday()) {
             $holiday->addDay();

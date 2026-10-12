@@ -24,7 +24,11 @@ class DispatchOutboxMessage implements ShouldQueue
     /** The lease this job most recently acquired; used to fence stale retries. */
     public ?string $leaseToken = null;
 
-    public function __construct(public readonly string $outboxId) {}
+    public function __construct(public readonly string $outboxId)
+    {
+        // Lane: high — the cross-module realtime bus. Never behind bulk jobs.
+        $this->onQueue('high');
+    }
 
     public function handle(OutboxDispatcher $dispatcher): void
     {

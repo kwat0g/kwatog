@@ -25,6 +25,12 @@ class RunBudgetActualsSyncOnRequested implements ShouldQueue
 
     public int $timeout = SyncBudgetActuals::TIMEOUT_SECONDS;
 
+    // Lane: low — the GL rewrite runs inline here (monthly bulk).
+    public function viaQueue(): string
+    {
+        return 'low';
+    }
+
     /** @return array<int, WithoutOverlapping> */
     public function middleware(BudgetActualsSyncRequested $event): array
     {

@@ -20,11 +20,9 @@ use Illuminate\Support\Facades\DB;
 class DashboardRoleLayoutSeeder extends Seeder
 {
     /**
-     * Each role that holds a scorecard grant leads with ONE KPI, not a wall of
-     * them: `kpi.*` widgets are pickable by anyone who qualifies, and a default
-     * layout's job is to name the single reading that role opens the day on.
-     * The five roles with no `dashboard.*.view` grant get none — the registry
-     * would strip them anyway (DashboardLayoutService::getEffectiveLayout).
+     * Each seeded role gets a default layout. Roles without a purpose-built
+     * dashboard get only the general widgets their permissions allow; the
+     * registry strips any widget they no longer qualify for.
      *
      * @return array<string, array<int, string>>
      */
@@ -42,7 +40,8 @@ class DashboardRoleLayoutSeeder extends Seeder
             // (AR/AP/unpaid/upcoming payables), chain health, demand vs supply
             // (revenue + capacity forecasts) and the approvals worklist.
             //
-            // It holds no `quality.*` grant, so §B's quality panel stays omitted.
+            // Quality widgets use read-only grants; the executive receives no
+            // quality write or approval authority.
             // Demand-vs-supply is present because those two forecasts are gated on
             // their DATASET reads, which admit the company-wide read; gating them
             // on a module page grant (`forecasting.view`, `accounting.dashboard.view`)
@@ -53,11 +52,13 @@ class DashboardRoleLayoutSeeder extends Seeder
             // widgets here, because the strip already names them and a tile that
             // duplicates the strip's own number is noise.
             'vice_president' => [
-                'chain.stage_breakdown', 'alerts',
+                'chain.stage_breakdown', 'chain.recovery_backlog', 'alerts',
                 'finance.ar_aging', 'finance.ap_aging',
                 'finance.unpaid_invoices', 'finance.upcoming_payables',
                 'budget.utilization', 'forecast.revenue', 'forecast.capacity',
-                'approvals.pending',
+                'approvals.pending', 'qc.pareto', 'quality.ncr_aging',
+                'quality.eightd_sla', 'executive.risks_opportunities',
+                'executive.weekly_briefing',
             ],
             'production_manager' => [
                 'production.kpi', 'chain.stage_breakdown', 'machine.utilization',
@@ -73,7 +74,8 @@ class DashboardRoleLayoutSeeder extends Seeder
             ],
             'finance_officer' => [
                 'finance.cash_position', 'finance.ar_aging', 'finance.ap_aging',
-                'finance.revenue_mtd', 'finance.unpaid_invoices', 'finance.upcoming_payables',
+                'finance.revenue_mtd', 'finance.invoice_handoff_backlog',
+                'finance.unpaid_invoices', 'finance.upcoming_payables',
                 'forecast.revenue', 'budget.utilization', 'kpi.ar_aging_60d',
                 'forecast.cash_flow',
             ],
@@ -98,7 +100,7 @@ class DashboardRoleLayoutSeeder extends Seeder
             // floor has no business holding, so the tile was silently stripped
             // at render and the default was lying about it.
             'warehouse_staff' => [
-                'inventory.pending_grns', 'inventory.low_stock',
+                'inventory.pending_grns', 'inventory.qc_handoff_issues', 'inventory.low_stock',
                 'inventory.pending_issues', 'supply.delivery_schedule',
                 'rma.open_returns', 'kpi.inventory_turnover',
             ],
@@ -160,13 +162,13 @@ class DashboardRoleLayoutSeeder extends Seeder
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],
-            // The last two roles with no default at all — they resolved to an
-            // empty grid, so their new page body would have been empty too.
-            // `crm.open_complaints` is the one widget that already covered this
-            // data; the two sales cards are new.
+            // These roles previously had no defaults and resolved to an empty
+            // grid, so their new page body would have been empty too.
+            // Order intake, pipeline stages, price-request status, and customer
+            // requests give sales a compact view of its active work.
             'sales_officer' => [
-                'sales.open_orders', 'sales.price_requests',
-                'crm.open_complaints', 'alerts',
+                'sales.order_intake', 'sales.open_orders', 'sales.price_requests',
+                'alerts',
                 'self.payslip_summary', 'self.leave_balance',
                 'self.dtr_today', 'self.pending_requests',
             ],
@@ -198,6 +200,7 @@ class DashboardRoleLayoutSeeder extends Seeder
             $roleId = $rolesByslug->get($slug);
             if (! $roleId) {
                 $this->command?->warn("Role '{$slug}' not found; skipping default layout.");
+
                 continue;
             }
 
@@ -223,12 +226,12 @@ class DashboardRoleLayoutSeeder extends Seeder
 
                 $rows[] = [
                     'owner_type' => DashboardLayout::OWNER_ROLE,
-                    'owner_id'   => $roleId,
+                    'owner_id' => $roleId,
                     'widget_key' => $key,
                     'position_x' => $x,
                     'position_y' => $y,
-                    'width'      => $width,
-                    'height'     => 4,
+                    'width' => $width,
+                    'height' => 4,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];

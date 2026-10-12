@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\NotificationService;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
@@ -127,6 +128,9 @@ class SupplierListingService
      */
     public function approve(SupplierItemListing $listing, User $reviewer): SupplierItemListing
     {
+        if (! ApprovalDelegation::canActForPermission($reviewer, 'purchasing.supplier_listings.review')) {
+            throw new BusinessRuleException('You do not have permission to review supplier listings.');
+        }
         if ($listing->status !== SupplierListingStatus::Pending) {
             throw new BusinessRuleException('Only pending listings can be approved.');
         }
@@ -169,6 +173,9 @@ class SupplierListingService
 
     public function reject(SupplierItemListing $listing, User $reviewer, string $reason): SupplierItemListing
     {
+        if (! ApprovalDelegation::canActForPermission($reviewer, 'purchasing.supplier_listings.review')) {
+            throw new BusinessRuleException('You do not have permission to review supplier listings.');
+        }
         if ($listing->status !== SupplierListingStatus::Pending) {
             throw new BusinessRuleException('Only pending listings can be rejected.');
         }
@@ -336,10 +343,7 @@ class SupplierListingService
         try {
             $item = $listing->item;
             $vendor = $listing->vendor;
-            $reviewers = User::query()
-                ->where('is_active', true)
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'purchasing.supplier_listings.review'))
-                ->get();
+            $reviewers = ApprovalDelegation::approvalAudience('purchasing.supplier_listings.review');
 
             app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [
                 'title' => 'Supplier listing awaiting review',

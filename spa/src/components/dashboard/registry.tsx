@@ -121,6 +121,9 @@ function renderRichWidget(widget: DashboardLayoutItem): React.ReactNode | null {
   if (widget.key === 'approvals.pending') {
   return <ApprovalsPendingTable data={data as WidgetTableData} />;
   }
+  if (widget.key === 'executive.risks_opportunities') {
+  return <ExecutiveRecommendationsTable data={data as WidgetTableData} />;
+  }
   return <WidgetTable {...(data as WidgetTableData)} />;
   case 'gauge':
   return <RichGauge {...(data as WidgetGaugeData)} />;
@@ -223,6 +226,46 @@ function ApprovalsPendingTable({ data }: { data: WidgetTableData }) {
       {data.total_count > rows.length && (
         <p className="text-2xs text-subtle">
           Showing {rows.length} of {data.total_count.toLocaleString()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ExecutiveRecommendationsTable({ data }: { data: WidgetTableData }) {
+  if (data.rows.length === 0) {
+    return <p className="text-xs text-muted">No current risks or opportunities flagged.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-subtle text-left">
+            <th scope="col" className="pb-1 font-medium text-muted">Priority</th>
+            <th scope="col" className="pb-1 font-medium text-muted">Signal</th>
+            <th scope="col" className="pb-1 font-medium text-muted">Next step</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-subtle">
+          {data.rows.map((row, index) => (
+            <tr key={`${String(row.priority ?? '')}-${index}`}>
+              <td className="py-1.5 text-primary">{row.priority}</td>
+              <td className="py-1.5 text-primary">{row.signal}</td>
+              <td className="py-1.5 text-primary">
+                {row.link ? (
+                  <Link to={String(row.link)} className="text-link hover:underline">
+                    {row.recommendation}
+                  </Link>
+                ) : row.recommendation}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.total_count > data.rows.length && (
+        <p className="text-2xs text-subtle">
+          Showing {data.rows.length} of {data.total_count.toLocaleString()}
         </p>
       )}
     </div>

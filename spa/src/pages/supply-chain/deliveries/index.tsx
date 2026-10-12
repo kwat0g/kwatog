@@ -17,7 +17,7 @@ import type { Delivery } from '@/types/supplyChain';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: DeliveryListParams = {
- page: 1, per_page: 25, status: '',
+ page: 1, per_page: 25, status: '', invoice_handoff_status: '',
 };
 
 export default function DeliveriesListPage() {
@@ -53,6 +53,13 @@ export default function DeliveriesListPage() {
  { key: 'status', label: 'Status', type: 'select', options: [
  { value: '', label: 'All' },
  ...(options?.statuses ?? []),
+ ] },
+ { key: 'invoice_handoff_status', label: 'Invoice handoff', type: 'select', options: [
+ { value: '', label: 'All' },
+ { value: 'not_started', label: 'Not attempted' },
+ { value: 'generated', label: 'Draft invoice created' },
+ { value: 'manual_required', label: 'Finance action required' },
+ { value: 'not_required', label: 'Not required' },
  ] },
  ];
 

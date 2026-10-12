@@ -5,34 +5,38 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\ApprovalBoardService;
+use App\Common\Services\ChainListenerRecoveryService;
 use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\User;
-use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetConsumptionService;
-use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\CRM\Enums\PriceRequestStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\Dashboard\Support\WidgetScope;
+use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
+use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
+use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrStatus;
-use App\Modules\Inventory\Enums\GrnStatus;
-use App\Modules\Inventory\Enums\MaterialIssueStatus;
-use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
-use App\Modules\CRM\Enums\PriceRequestStatus;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Models\PurchaseRequest;
-use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
-use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
-use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
-use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
-use App\Modules\Assets\Enums\AssetStatus;
-use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
-use App\Modules\CRM\Enums\ComplaintStatus;
-use App\Modules\Loans\Enums\LoanStatus;
-use App\Modules\Dashboard\Support\WidgetScope;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -41,23 +45,37 @@ use Throwable;
 /** Resolves configurable dashboard widgets from live transactional tables. */
 class DashboardWidgetDataService
 {
+    private const CACHE_TTL_SECONDS = 30;
+
     public function __construct(
         private readonly SettingsService $settings,
         private readonly ForecastingDashboardService $forecasts,
         private readonly WidgetScope $scope,
         private readonly ApprovalBoardService $approvals,
         private readonly BudgetConsumptionService $budgetConsumption,
+        private readonly ChainListenerRecoveryService $chainRecovery,
     ) {}
+
     /** @return array<string, array{key:string,value:string|null,kind:string,helper:?string,available:bool,updated_at:string}> */
     public function summaries(array $keys, User $user): array
     {
         $result = [];
         foreach (array_values(array_unique($keys)) as $key) {
+            $cacheKey = "dashboard:widget:summary:{$user->id}:{$key}";
+            $missing = new \stdClass();
+            $cached = Cache::get($cacheKey, $missing);
+            if ($cached !== $missing) {
+                $result[$key] = $cached;
+                continue;
+            }
+
             try {
-                $result[$key] = array_merge(
+                $summary = array_merge(
                     ['key' => $key, 'available' => true, 'updated_at' => now()->toIso8601String()],
                     $this->summary($key, $user),
                 );
+                Cache::put($cacheKey, $summary, self::CACHE_TTL_SECONDS);
+                $result[$key] = $summary;
             } catch (Throwable $exception) {
                 Log::error('Dashboard widget data source failed.', [
                     'widget' => $key,
@@ -78,6 +96,15 @@ class DashboardWidgetDataService
     /** @return array{value:string|null,kind:string,helper:?string} */
     private function summary(string $key, User $user): array
     {
+        if (in_array($key, [
+            'quality.ncr_aging',
+            'quality.eightd_sla',
+            'executive.risks_opportunities',
+            'executive.weekly_briefing',
+        ], true)) {
+            return ['value' => null, 'kind' => 'number', 'helper' => 'See the detailed panel for current signals.'];
+        }
+
         // KPI tiles are keyed by their definition code, so a match arm per KPI
         // would be a second copy of the scorecard catalog. Handled by prefix
         // instead. The rich monthly trend is the real rendering
@@ -88,6 +115,8 @@ class DashboardWidgetDataService
         }
 
         $today = now()->toDateString();
+        $monthStart = now()->startOfMonth();
+        $nextMonth = $monthStart->copy()->addMonth();
         $ganttDays = $this->settings->requiredInt('dashboard.widgets.gantt_horizon_days', 0);
         $payablesDays = $this->settings->requiredInt('dashboard.widgets.payables_horizon_days', 0);
         $probationDays = $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0);
@@ -98,7 +127,7 @@ class DashboardWidgetDataService
 
         return match ($key) {
             'production.kpi' => $this->number(
-                DB::table('work_order_outputs')->whereDate('recorded_at', $today)->sum(DB::raw('good_count + reject_count')),
+                DB::table('work_order_outputs')->whereBetween('recorded_at', [now()->startOfDay(), now()->endOfDay()])->sum(DB::raw('good_count + reject_count')),
                 'units recorded today',
             ),
             'production.active_wo' => $this->number(DB::table('work_orders')->whereIn('status', [
@@ -115,6 +144,7 @@ class DashboardWidgetDataService
             'machine.utilization', 'oee.gauges' => $this->ratio(DB::table('machines')->where('status', MachineStatus::Running->value)->count(), DB::table('machines')->count(), 'machines running now'),
             'machine.status' => $this->number(DB::table('machines')->where('status', MachineStatus::Running->value)->count(), DB::table('machines')->where('status', MachineStatus::Breakdown->value)->count().' in breakdown'),
             'chain.stage_breakdown' => $this->number(DB::table('sales_orders')->whereNotIn('status', [SalesOrderStatus::Delivered->value, SalesOrderStatus::Invoiced->value, SalesOrderStatus::Paid->value, SalesOrderStatus::Closed->value, SalesOrderStatus::Cancelled->value])->count(), 'active order-to-cash chains'),
+            'chain.recovery_backlog' => $this->number($this->chainRecovery->attentionCount(), 'listener runs need attention'),
 
             'qc.pareto' => $this->number(DB::table('inspections')->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('defect_count'), 'defects recorded this month'),
             'qc.pending_inspections' => $this->number(DB::table('inspections')->whereIn('status', [InspectionStatus::Draft->value, InspectionStatus::InProgress->value])->count(), 'awaiting completion'),
@@ -127,6 +157,14 @@ class DashboardWidgetDataService
             'finance.ar_aging' => $this->currency(DB::table('invoices')->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value])->sum('balance'), 'open accounts receivable'),
             'finance.ap_aging' => $this->currency(DB::table('bills')->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->sum('balance'), 'open accounts payable'),
             'finance.revenue_mtd' => $this->currency(DB::table('invoices')->whereDate('date', '>=', now()->startOfMonth()->toDateString())->whereNotIn('status', [InvoiceStatus::Draft->value, InvoiceStatus::Cancelled->value])->sum('total_amount'), 'invoiced month to date'),
+            'finance.invoice_handoff_backlog' => $this->number(
+                DB::table('deliveries')
+                    ->where('status', DeliveryStatus::Confirmed->value)
+                    ->where('invoice_handoff_status', DeliveryInvoiceHandoffStatus::ManualRequired->value)
+                    ->whereNull('invoice_id')
+                    ->count(),
+                'confirmed deliveries missing an invoice',
+            ),
             'finance.unpaid_invoices' => $this->number(DB::table('invoices')->where('balance', '>', 0)->whereNotIn('status', [InvoiceStatus::Draft->value, InvoiceStatus::Cancelled->value])->count(), 'customer invoices with balance'),
             'finance.upcoming_payables' => $this->currency(DB::table('bills')->whereBetween('due_date', [$today, now()->addDays($payablesDays)->toDateString()])->where('balance', '>', 0)->sum('balance'), "due in the next {$payablesDays} days"),
 
@@ -150,6 +188,13 @@ class DashboardWidgetDataService
 
             'inventory.low_stock' => $this->number($this->lowStockCount(), 'items at or below reorder point'),
             'inventory.pending_grns' => $this->number(DB::table('goods_receipt_notes')->whereNotIn('status', [GrnStatus::Accepted->value, GrnStatus::Rejected->value])->count(), 'receipts awaiting completion'),
+            'inventory.qc_handoff_issues' => $this->number(
+                DB::table('goods_receipt_notes')
+                    ->where('status', GrnStatus::PendingQc->value)
+                    ->whereIn('incoming_qc_handoff_status', [IncomingQcHandoffStatus::NotStarted->value, IncomingQcHandoffStatus::ManualRequired->value])
+                    ->count(),
+                'pending QC handoffs needing retry',
+            ),
             'inventory.pending_issues' => $this->number(DB::table('material_issue_slips')->where('status', MaterialIssueStatus::Draft->value)->count(), 'material issues not completed'),
 
             // The five role pages' own cards (§D3). Kept in this match rather
@@ -171,6 +216,13 @@ class DashboardWidgetDataService
                 ])->count(),
                 'awaiting an offer or a decision',
             ),
+            'sales.order_intake' => $this->number(
+                DB::table('sales_orders')
+                    ->where('date', '>=', $monthStart->toDateString())
+                    ->where('date', '<', $nextMonth->toDateString())
+                    ->count(),
+                'orders dated this month',
+            ),
 
             'self.payslip_summary' => $this->latestPayslip($employeeId),
             'self.leave_balance' => $employeeId
@@ -182,12 +234,12 @@ class DashboardWidgetDataService
             'self.pending_requests' => $this->number($this->selfPendingCount($employeeId), 'your pending requests'),
             'alerts' => $this->number(DB::table('alerts')->where('is_dismissed', false)->count(), 'open operational alerts'),
 
-            'forecast.headcount'   => $this->forecast($this->forecasts->headcountForecast(), 'number'),
-            'forecast.revenue'     => $this->forecast($this->forecasts->revenueForecast(), 'currency'),
+            'forecast.headcount' => $this->forecast($this->forecasts->headcountForecast(), 'number'),
+            'forecast.revenue' => $this->forecast($this->forecasts->revenueForecast(), 'currency'),
             'forecast.defect_rate' => $this->forecast($this->forecasts->defectRateForecast(), 'percent'),
-            'forecast.cash_flow'   => $this->forecast($this->forecasts->cashFlowForecast(), 'currency'),
-            'forecast.capacity'    => $this->forecast($this->forecasts->capacityForecast(), 'percent'),
-            'forecast.attendance'  => $this->forecast($this->forecasts->attendanceForecast(), 'percent'),
+            'forecast.cash_flow' => $this->forecast($this->forecasts->cashFlowForecast(), 'currency'),
+            'forecast.capacity' => $this->forecast($this->forecasts->capacityForecast(), 'percent'),
+            'forecast.attendance' => $this->forecast($this->forecasts->attendanceForecast(), 'percent'),
 
             'maintenance.open_wos' => $this->number(DB::table('maintenance_work_orders')->whereIn('status', [
                 MaintenanceWorkOrderStatus::Open->value,
@@ -382,8 +434,21 @@ class DashboardWidgetDataService
         return DB::table('shipments')->whereIn('status', $inFlight)->count();
     }
 
-    private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }    private function decimal(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'decimal', 'helper' => $helper]; }
-    private function currency(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'currency', 'helper' => $helper]; }
+    private function number(mixed $value, ?string $helper): array
+    {
+        return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper];
+    }
+
+    private function decimal(mixed $value, ?string $helper): array
+    {
+        return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'decimal', 'helper' => $helper];
+    }
+
+    private function currency(mixed $value, ?string $helper): array
+    {
+        return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'currency', 'helper' => $helper];
+    }
+
     private function hours(mixed $value, ?string $helper): array
     {
         return [
@@ -392,6 +457,7 @@ class DashboardWidgetDataService
             'helper' => $value === null ? 'No hours recorded yet' : $helper,
         ];
     }
+
     private function ratio(int $part, int $total, string $helper): array
     {
         // A percentage with no observations is unknown, not zero. Returning
@@ -406,6 +472,7 @@ class DashboardWidgetDataService
     private function breakdown(string $table, string $column): array
     {
         $rows = DB::table($table)->select($column, DB::raw('COUNT(*) AS aggregate'))->groupBy($column)->orderByDesc('aggregate')->get();
+
         return $this->number($rows->sum('aggregate'), $rows->take(3)->map(fn ($r) => "{$r->{$column}}: {$r->aggregate}")->implode(' · '));
     }
 
@@ -413,13 +480,24 @@ class DashboardWidgetDataService
     {
         $passed = DB::table('inspections')->where('status', 'passed')->count();
         $failed = DB::table('inspections')->where('status', 'failed')->count();
+
         return $this->ratio($passed, $passed + $failed, 'completed inspections passed');
     }
 
     private function cashPosition(): float
     {
-        $cashCode = $this->settings->requiredString('accounting.accounts.cash_code');
-        return (float) DB::table('journal_entry_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('j.status', 'posted')->where(function ($q) use ($cashCode) { $q->where('a.code', $cashCode)->orWhereRaw('LOWER(a.name) LIKE ?', ['%cash%']); })->sum(DB::raw('l.debit - l.credit'));
+        $cashCodes = array_values(array_filter([
+            $this->settings->requiredString('accounting.accounts.cash_code'),
+            $this->settings->get('accounting.accounts.payroll_cash_code'),
+            $this->settings->get('accounting.accounts.asset_cash_code'),
+        ], static fn ($code): bool => is_string($code) && $code !== ''));
+
+        return (float) DB::table('journal_entry_lines as l')
+            ->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')
+            ->join('accounts as a', 'a.id', '=', 'l.account_id')
+            ->where('j.status', 'posted')
+            ->whereIn('a.code', $cashCodes)
+            ->sum(DB::raw('l.debit - l.credit'));
     }
 
     private function leaveCount(string $today, mixed $departmentId = null): int
@@ -484,14 +562,18 @@ class DashboardWidgetDataService
     private function upcomingPayroll(): array
     {
         $row = DB::table('payroll_periods')->where('is_thirteenth_month', false)->whereDate('payroll_date', '>=', now()->toDateString())->where('status', '!=', 'voided')->orderBy('payroll_date')->first();
+
         return $row ? ['value' => (string) $row->payroll_date, 'kind' => 'date', 'helper' => (string) $row->status] : ['value' => null, 'kind' => 'date', 'helper' => 'No upcoming payroll period'];
     }
 
     private function supplierPerformance(): array
     {
         $latest = DB::table('supplier_performance_snapshots')->orderByDesc('period_year')->orderByDesc('period_month')->first(['period_year', 'period_month']);
-        if (! $latest) return ['value' => null, 'kind' => 'percent', 'helper' => 'No computed supplier score yet'];
+        if (! $latest) {
+            return ['value' => null, 'kind' => 'percent', 'helper' => 'No computed supplier score yet'];
+        }
         $avg = DB::table('supplier_performance_snapshots')->where('period_year', $latest->period_year)->where('period_month', $latest->period_month)->avg('overall_score');
+
         return ['value' => $avg === null ? null : number_format((float) $avg, 1, '.', ''), 'kind' => 'percent', 'helper' => sprintf('%04d-%02d overall score', $latest->period_year, $latest->period_month)];
     }
 
@@ -503,12 +585,16 @@ class DashboardWidgetDataService
     private function latestPayslip(?int $employeeId): array
     {
         $row = $employeeId ? DB::table('payrolls as p')->join('payroll_periods as pp', 'pp.id', '=', 'p.payroll_period_id')->where('p.employee_id', $employeeId)->whereIn('pp.status', ['finalized', 'disbursed'])->orderByDesc('pp.period_end')->first(['p.net_pay', 'pp.period_end']) : null;
+
         return $row ? $this->currency($row->net_pay, 'net pay · '.$row->period_end) : ['value' => null, 'kind' => 'currency', 'helper' => 'No finalized payslip yet'];
     }
 
     private function selfPendingCount(?int $employeeId): int
     {
-        if (! $employeeId) return 0;
+        if (! $employeeId) {
+            return 0;
+        }
+
         return (int) DB::table('leave_requests')->where('employee_id', $employeeId)->where('status', 'pending')->count()
             + (int) DB::table('overtime_requests')->where('employee_id', $employeeId)->where('status', 'pending')->count()
             + (int) DB::table('profile_update_requests')->where('employee_id', $employeeId)->whereIn('status', ['pending', 'pending_finance'])->count();

@@ -17,6 +17,7 @@ use App\Modules\Dashboard\Services\Analytics\CapacityWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CashFlowWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CoreWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CrmWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\ExecutiveWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\LoanWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\ReturnWidgetAnalytics;
@@ -59,6 +60,7 @@ class WidgetSeedIntegrityTest extends TestCase
             app(CashFlowWidgetAnalytics::class),
             app(CapacityWidgetAnalytics::class),
             app(AttendanceWidgetAnalytics::class),
+            app(ExecutiveWidgetAnalytics::class),
         ])->flatMap(fn ($provider) => $provider->handles())->unique();
     }
 
@@ -123,6 +125,116 @@ class WidgetSeedIntegrityTest extends TestCase
         }
     }
 
+    public function test_every_seeded_role_has_default_dashboard_widgets(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+
+        $rolesWithoutDefaults = Role::query()
+            ->whereNotIn('id', DB::table('dashboard_layouts')
+                ->where('owner_type', 'role')
+                ->select('owner_id'))
+            ->orderBy('slug')
+            ->pluck('slug')
+            ->all();
+
+        $this->assertSame([], $rolesWithoutDefaults);
+    }
+
+    public function test_sales_dashboard_defaults_include_order_and_queue_analytics(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+        $salesRoleId = Role::query()->where('slug', 'sales_officer')->value('id');
+        $keys = DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')
+            ->where('owner_id', $salesRoleId)
+            ->pluck('widget_key')
+            ->all();
+
+        $this->assertContains('sales.order_intake', $keys);
+        $this->assertContains('sales.open_orders', $keys);
+        $this->assertContains('sales.price_requests', $keys);
+        $this->assertNotContains('crm.open_complaints', $keys);
+    }
+
+    public function test_sales_analytics_migration_updates_existing_layouts_and_rolls_back(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+        $salesRoleId = Role::query()->where('slug', 'sales_officer')->value('id');
+        $salesUser = User::factory()->create(['role_id' => $salesRoleId]);
+
+        DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')
+            ->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'sales.order_intake')
+            ->delete();
+        DB::table('dashboard_widgets')->where('key', 'crm.open_complaints')->update(['permission' => 'crm.view']);
+        DB::table('dashboard_layouts')->insert([
+            'owner_type' => 'role', 'owner_id' => $salesRoleId, 'widget_key' => 'crm.open_complaints',
+            'position_x' => 8, 'position_y' => 0, 'width' => 4, 'height' => 4,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('dashboard_layouts')
+            ->where('owner_type', 'user')
+            ->where('owner_id', $salesUser->id)
+            ->delete();
+        DB::table('dashboard_layouts')->insert([
+            [
+                'owner_type' => 'user', 'owner_id' => $salesUser->id, 'widget_key' => 'sales.open_orders',
+                'position_x' => 0, 'position_y' => 0, 'width' => 4, 'height' => 4,
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'owner_type' => 'user', 'owner_id' => $salesUser->id, 'widget_key' => 'sales.price_requests',
+                'position_x' => 4, 'position_y' => 0, 'width' => 4, 'height' => 4,
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'owner_type' => 'user', 'owner_id' => $salesUser->id, 'widget_key' => 'crm.open_complaints',
+                'position_x' => 8, 'position_y' => 0, 'width' => 4, 'height' => 4,
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+        ]);
+        DB::table('dashboard_widgets')->whereIn('key', ['sales.open_orders', 'sales.price_requests'])->update([
+            'render_kind' => 'scalar', 'default_w' => 4,
+        ]);
+
+        $migration = require database_path('migrations/2026_10_12_100000_add_sales_dashboard_analytics.php');
+        $migration->up();
+
+        $this->assertSame(
+            1,
+            DB::table('dashboard_layouts')
+                ->where('owner_type', 'user')
+                ->where('owner_id', $salesUser->id)
+                ->where('widget_key', 'sales.order_intake')
+                ->count(),
+        );
+        $this->assertSame('breakdown', DB::table('dashboard_widgets')->where('key', 'sales.open_orders')->value('render_kind'));
+        $this->assertSame(
+            'crm.complaints.view',
+            DB::table('dashboard_widgets')->where('key', 'crm.open_complaints')->value('permission'),
+        );
+        $this->assertSame(0, DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'crm.open_complaints')->count());
+        $effectiveKeys = collect(app(DashboardLayoutService::class)->getEffectiveLayout($salesUser))
+            ->pluck('key')->all();
+        $this->assertNotContains('crm.open_complaints', $effectiveKeys);
+
+        $migration->down();
+
+        $this->assertSame(0, DB::table('dashboard_widgets')->where('key', 'sales.order_intake')->count());
+        $this->assertSame(0, DB::table('dashboard_layouts')->where('widget_key', 'sales.order_intake')->count());
+        $this->assertSame('scalar', DB::table('dashboard_widgets')->where('key', 'sales.open_orders')->value('render_kind'));
+        $this->assertSame('crm.view', DB::table('dashboard_widgets')->where('key', 'crm.open_complaints')->value('permission'));
+        $this->assertSame(1, DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'crm.open_complaints')->count());
+        $this->assertSame(4, (int) DB::table('dashboard_layouts')
+            ->where('owner_type', 'role')->where('owner_id', $salesRoleId)
+            ->where('widget_key', 'sales.open_orders')->value('width'));
+    }
+
     /** No role's row may overflow the 12-column grid. */
     public function test_no_role_row_exceeds_twelve_columns(): void
     {
@@ -172,6 +284,7 @@ class WidgetSeedIntegrityTest extends TestCase
             foreach ($keys as $key) {
                 if (! $permissionByKey->has($key)) {
                     $leaks[] = "{$role->slug} → {$key} (no such widget)";
+
                     continue;
                 }
 
@@ -215,7 +328,7 @@ class WidgetSeedIntegrityTest extends TestCase
     public function test_link_paths_are_in_app_absolute_paths(): void
     {
         foreach (DashboardWidget::query()->pluck('link_path', 'key') as $key => $path) {
-            $this->assertMatchesRegularExpression('~^/[a-z0-9\-/]*(#[a-z0-9\-_]+)?$~', (string) $path, "widget {$key} has a non-app link");
+            $this->assertMatchesRegularExpression('~^/[a-z0-9\-/]*(?:\?[a-z0-9_=&%.%-]+)?(?:#[a-z0-9\-_]+)?$~', (string) $path, "widget {$key} has a non-app link");
         }
     }
 

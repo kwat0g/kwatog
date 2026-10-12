@@ -68,6 +68,12 @@ class GrnService
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
+        if (($filters['qc_handoff'] ?? null) === 'action_required') {
+            $q->whereIn('incoming_qc_handoff_status', [
+                IncomingQcHandoffStatus::NotStarted->value,
+                IncomingQcHandoffStatus::ManualRequired->value,
+            ]);
+        }
         if (! empty($filters['vendor_id'])) {
             $vid = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
             if ($vid) {

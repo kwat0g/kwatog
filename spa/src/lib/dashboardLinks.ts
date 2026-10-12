@@ -114,6 +114,8 @@ export function kpiLink(label: string): string | undefined {
       return `/quality/inspections?date=today`;
     case 'Open NCRs':
       return `/quality/ncrs?status=open`;
+    case 'Unlinked Rework NCRs':
+      return `/quality/ncrs?recovery_coverage=unlinked`;
     case 'CoCs Gen. MTD':
       return `/quality/inspections?stage=outgoing&status=passed&from=${startOfThisMonth()}`;
 

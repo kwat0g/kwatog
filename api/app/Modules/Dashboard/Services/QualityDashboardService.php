@@ -42,6 +42,7 @@ class QualityDashboardService
                     ['quality.inspections.view', fn () => $this->kpi('Pending Inspections', (string) $this->safeCount('inspections', fn ($q) => $q->where('status', 'in_progress')), 'count')],
                     ['quality.view', fn () => $this->kpi('Pass Rate Today', $this->qualityPassRateToday(), 'pct')],
                     ['quality.ncr.view', fn () => $this->kpi('Open NCRs', (string) $this->safeCount('non_conformance_reports', fn ($q) => $q->whereIn('status', ['open', 'in_progress'])), 'count')],
+                    ['quality.ncr.view', fn () => $this->kpi('Unlinked Rework NCRs', (string) $this->safeCount('non_conformance_reports', fn ($q) => $q->where('disposition', 'rework')->whereNull('rework_work_order_id')->whereNull('replacement_work_order_id')->where('status', '!=', 'cancelled')), 'count')],
                     ['quality.inspections.view', fn () => $this->kpi('CoCs Gen. MTD', (string) $this->cocsGeneratedThisMonth(), 'count')],
                 ]),
                 'panels' => $this->gate->panels($user, [

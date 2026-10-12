@@ -21,6 +21,7 @@ import { AxiosError } from 'axios';
 import { selfServiceApi } from '@/api/self-service';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -409,6 +410,7 @@ function UpdateRequestsPanel({
 
 function PreferencesPanel() {
  const { mode, setMode } = useThemeStore();
+ const { can } = usePermission();
 
  return (
  <Panel title="Preferences">
@@ -426,14 +428,14 @@ function PreferencesPanel() {
  ]}
  />
  </div>
- <div className="pt-1 border-t border-subtle">
+ {can('notifications.preferences.manage') && <div className="pt-1 border-t border-subtle">
  <Link
  to="/self-service/notification-preferences"
  className="text-xs text-link hover:underline"
  >
  Notification preferences →
  </Link>
- </div>
+ </div>}
  </div>
  </Panel>
  );

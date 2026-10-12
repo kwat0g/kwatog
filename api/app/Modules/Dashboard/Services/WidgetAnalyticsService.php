@@ -14,10 +14,12 @@ use App\Modules\Dashboard\Services\Analytics\CapacityWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CashFlowWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CoreWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\CrmWidgetAnalytics;
+use App\Modules\Dashboard\Services\Analytics\ExecutiveWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\KpiWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\LoanWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\ReturnWidgetAnalytics;
 use App\Modules\Dashboard\Services\Analytics\SupplyChainWidgetAnalytics;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -30,6 +32,8 @@ use Throwable;
  */
 final class WidgetAnalyticsService
 {
+    private const CACHE_TTL_SECONDS = 30;
+
     /** Rich providers that failed during the current layout build. */
     private array $failedKeys = [];
 
@@ -46,6 +50,7 @@ final class WidgetAnalyticsService
         private readonly CashFlowWidgetAnalytics $cashFlow,
         private readonly CapacityWidgetAnalytics $capacity,
         private readonly AttendanceWidgetAnalytics $attendance,
+        private readonly ExecutiveWidgetAnalytics $executive,
     ) {}
 
     /**
@@ -61,13 +66,23 @@ final class WidgetAnalyticsService
             return [];
         }
 
+        $cacheKey = "dashboard:widget:rich:{$user->id}:{$kind->value}:{$key}";
+        $missing = new \stdClass();
+        $cached = Cache::get($cacheKey, $missing);
+        if ($cached !== $missing) {
+            return $cached;
+        }
+
         foreach ($this->providers() as $provider) {
             if (! in_array($key, $provider->handles(), true)) {
                 continue;
             }
 
             try {
-                return $provider->payload($key, $user);
+                $payload = $provider->payload($key, $user);
+                Cache::put($cacheKey, $payload, self::CACHE_TTL_SECONDS);
+
+                return $payload;
             } catch (Throwable $e) {
                 $this->failedKeys[$key] = true;
                 Log::warning('dashboard widget analytics failed', [
@@ -94,7 +109,7 @@ final class WidgetAnalyticsService
     }
 
     /**
-     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics|CashFlowWidgetAnalytics|CapacityWidgetAnalytics|AttendanceWidgetAnalytics>
+     * @return list<CoreWidgetAnalytics|CrmWidgetAnalytics|AssetWidgetAnalytics|SupplyChainWidgetAnalytics|ReturnWidgetAnalytics|BudgetWidgetAnalytics|LoanWidgetAnalytics|KpiWidgetAnalytics|ApprovalsWidgetAnalytics|CashFlowWidgetAnalytics|CapacityWidgetAnalytics|AttendanceWidgetAnalytics|ExecutiveWidgetAnalytics>
       */
     private function providers(): array
     {
@@ -111,6 +126,7 @@ final class WidgetAnalyticsService
             $this->cashFlow,
             $this->capacity,
             $this->attendance,
+            $this->executive,
         ];
     }
 }

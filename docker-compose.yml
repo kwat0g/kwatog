@@ -62,6 +62,7 @@ services:
       - "${NGINX_PORT:-80}:80"
     volumes:
       - ./api:/var/www
+      - ./spa/dist:/var/www/spa:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       # Outside conf.d/ on purpose: nginx.conf wildcard-includes conf.d/*.conf
       # at http level, which would apply these headers twice.
@@ -134,7 +135,28 @@ services:
     # Keep the local worker aligned with the longest durable listener. A
     # shorter worker timeout would kill a healthy payroll run while the Redis
     # retry lease still considers it in flight.
-    command: php artisan queue:work --tries=3 --timeout=1800 --sleep=3
+    # Lanes: high = realtime bus (outbox), default = interactive listeners,
+    # low = bulk (payroll/MRP/backup/payslip fan-out). The interactive worker
+    # never picks up low, so a 30-min payroll run cannot starve approvals.
+    command: php artisan queue:work --queue=high,default --tries=3 --timeout=1800 --sleep=3
+    depends_on:
+      - api
+      - redis
+    networks: [ogami-net]
+
+  queue-low:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: ogami-queue-low
+    working_dir: /var/www
+    volumes:
+      - ./api:/var/www
+      - ./scripts:/var/www/scripts:ro
+    # Bulk lane only. 3600s covers backup/restore; retry_after (2400) is per
+    # connection, and the low lane's longest lease still applies — a live
+    # backup is not redelivered while its worker holds it.
+    command: php artisan queue:work --queue=low --tries=3 --timeout=3600 --sleep=3
     depends_on:
       - api
       - redis

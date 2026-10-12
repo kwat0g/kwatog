@@ -22,6 +22,10 @@ import { COMPANY_KPIS } from '@/lib/dashboardKpis';
  * hold — and omitting a panel is the documented rule. Nothing here names a role,
  * so granting that slug adds the block with no code change.
  *
+ * Quality is a read-only set of Pareto, NCR-aging and 8D-SLA signals. It
+ * requires quality view grants, while every management and disposition action
+ * remains in the owning module.
+ *
  * Demand-vs-supply is the block that proved the rule rather than dodging it. It
  * was absent because its two forecasts were gated on module PAGE slugs
  * (`forecasting.view`, `accounting.dashboard.view`) that the executive does not
@@ -33,10 +37,10 @@ export default function CompanyDashboardPage() {
   return (
     <RoleDashboardShell
       title="Company Overview"
-      subtitle="Cross-functional read: money, chain health and approvals across all three chains."
+      subtitle="Company risks, quality, cash flow, chain health and approval load."
       kpiCodes={COMPANY_KPIS}
       emptyTitle="Nothing on this overview yet"
-      emptyDescription="Your role has no default blocks for this page. Money, chain health, alerts and approvals arrive as you hold those module reads."
+      emptyDescription="Your role has no default blocks for this page. Signals appear when your permissions include their source data."
     />
   );
 }

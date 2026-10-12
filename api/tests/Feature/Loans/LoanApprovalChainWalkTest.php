@@ -10,14 +10,16 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
 use App\Modules\Loans\Services\LoanService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
-use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -62,7 +64,7 @@ class LoanApprovalChainWalkTest extends TestCase
     {
         return $this->service->request(
             $employee->id,
-            \App\Modules\Loans\Enums\LoanType::from($type),
+            LoanType::from($type),
             ['principal' => '5000.00', 'pay_periods' => 5, 'purpose' => 'Chain walk test'],
         )->fresh(['employee']);
     }
@@ -78,10 +80,9 @@ class LoanApprovalChainWalkTest extends TestCase
     public function test_cash_advance_chain_advances_through_department_head_to_vp(): void
     {
         $requester = Employee::factory()->create();
-        $loan = $this->pendingLoanFor($requester, 'cash_advance');
-
         $deptHeadUser = $this->userWithRole('department_head');
         $deptHeadUser->employee->update(['department_id' => $requester->department_id]);
+        $loan = $this->pendingLoanFor($requester, 'cash_advance');
 
         $finance = $this->userWithRole('finance_officer');
         $vp = $this->userWithRole('vice_president');
@@ -110,11 +111,10 @@ class LoanApprovalChainWalkTest extends TestCase
     public function test_small_company_loan_chain_advances_through_hr_and_finance_without_vp(): void
     {
         $requester = Employee::factory()->create();
-        $loan = $this->pendingLoanFor($requester, 'company_loan');
-
         // Step 1: department head (the requester's own department head).
         $deptHeadUser = $this->userWithRole('department_head');
         $deptHeadUser->employee->update(['department_id' => $requester->department_id]);
+        $loan = $this->pendingLoanFor($requester, 'company_loan');
         $this->actingAs($deptHeadUser)->patchJson("/api/v1/loans/{$loan->hash_id}/approve")->assertOk();
 
         // Step 2: HR confirms employee eligibility.
@@ -173,6 +173,8 @@ class LoanApprovalChainWalkTest extends TestCase
         // ApprovalService (ForbiddenActionException → 403), not the
         // controller's row-scope guard (BusinessRuleException → 422).
         $requester = Employee::factory()->create();
+        $deptHead = $this->userWithRole('department_head');
+        $deptHead->employee->update(['department_id' => $requester->department_id]);
         $loan = $this->pendingLoanFor($requester, 'cash_advance');
         $vp = $this->userWithRole('vice_president');
 
@@ -184,10 +186,10 @@ class LoanApprovalChainWalkTest extends TestCase
     public function test_loan_detail_actions_follow_the_current_approval_step(): void
     {
         $requester = Employee::factory()->create();
-        $loan = $this->pendingLoanFor($requester, 'cash_advance');
-        $vp = $this->userWithRole('vice_president');
         $deptHead = $this->userWithRole('department_head');
         $deptHead->employee->update(['department_id' => $requester->department_id]);
+        $loan = $this->pendingLoanFor($requester, 'cash_advance');
+        $vp = $this->userWithRole('vice_president');
 
         $this->actingAs($vp)
             ->getJson("/api/v1/loans/{$loan->hash_id}")
@@ -211,15 +213,51 @@ class LoanApprovalChainWalkTest extends TestCase
         // refuse. Plain employees are refused earlier, at the route
         // middleware, which is why the guard is proven with this actor.
         $headUser = $this->userWithRole('department_head');
+        $peerHead = $this->userWithRole('department_head');
+        $peerHead->employee->update(['department_id' => $headUser->employee->department_id]);
 
         $loan = $this->service->request(
             $headUser->employee_id,
-            \App\Modules\Loans\Enums\LoanType::CashAdvance,
+            LoanType::CashAdvance,
             ['principal' => '3000.00', 'pay_periods' => 3],
         );
 
         $this->actingAs($headUser)
             ->patchJson("/api/v1/loans/{$loan->hash_id}/approve")
             ->assertStatus(403);
+    }
+
+    public function test_headless_loan_skips_department_step_and_notifies_next_approver(): void
+    {
+        Mail::fake();
+
+        foreach ([
+            ['cash_advance', 'finance_officer'],
+            ['company_loan', 'hr_officer'],
+        ] as [$type, $nextRole]) {
+            $requester = Employee::factory()->create();
+            $nextApprover = $this->userWithRole($nextRole);
+            $loan = $this->pendingLoanFor($requester, $type);
+
+            $this->assertSame('skipped', $loan->approvalRecords()->where('step_order', 1)->value('action'));
+            $this->assertSame('No eligible department head; routed to the next approval step.', $loan->approvalRecords()->where('step_order', 1)->value('remarks'));
+            $this->assertSame($nextRole, $loan->approvalRecords()->where('step_order', 2)->value('role_slug'));
+            $this->assertSame('pending', $loan->approvalRecords()->where('step_order', 2)->value('action'));
+            $this->assertDatabaseHas('notifications', [
+                'type' => 'approval.action_required',
+                'notifiable_type' => User::class,
+                'notifiable_id' => $nextApprover->id,
+            ]);
+
+            $this->actingAs($nextApprover)
+                ->patchJson("/api/v1/loans/{$loan->hash_id}/approve")
+                ->assertOk();
+            $this->assertSame('approved', $loan->approvalRecords()->where('step_order', 2)->value('action'));
+        }
+
+        $soleHead = $this->userWithRole('department_head');
+        $ownLoan = $this->pendingLoanFor($soleHead->employee, 'company_loan');
+        $this->assertSame('skipped', $ownLoan->approvalRecords()->where('step_order', 1)->value('action'));
+        $this->assertSame('pending', $ownLoan->approvalRecords()->where('step_order', 2)->value('action'));
     }
 }

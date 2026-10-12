@@ -63,8 +63,9 @@ PO quantity/price vs GRN received vs supplier invoice (the 3-way match).
    override permission clears it.
 6. Click **Post bill** (confirm: **Post bill**).
 7. To pay, click **Record payment**, enter amount, date, method.
-8. The payment waits for approval: as `vp@ogami.test`, open the bill
-   and click **Approve** on the payment line.
+8. Bills totaling at least ₱50,000 need one VP approval; lower-value
+   payments post automatically. For a VP approval, log in as
+   `vp@ogami.test`, open the bill and click **Approve** on the payment line.
 
 ## Part D — Customer invoices + collections (`/accounting/invoices`)
 
@@ -102,5 +103,6 @@ They are two different locks:
 - `finance@ogami.test` — create bills/invoices/entries, post bills,
   record payments and collections, close periods.
 - `finance2@ogami.test` — posts entries finance@ created (the checker).
-- `vp@ogami.test` — approves bill payments; views statements.
+- `vp@ogami.test` — approves bill payments on bills totaling at least
+  ₱50,000; views statements.
 - No single person creates AND posts the same journal entry.

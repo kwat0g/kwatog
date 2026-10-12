@@ -12,6 +12,7 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class ApprovalAutoResolveTest extends TestCase
@@ -239,5 +240,43 @@ class ApprovalAutoResolveTest extends TestCase
         $this->assertSame(0, $count);
         $this->assertSame('pending', $rec->fresh()->action);
         $this->assertNull($rec->fresh()->approver_id);
+    }
+
+    public function test_vp_stall_escalates_to_system_admin_without_changing_decision_authority(): void
+    {
+        Mail::fake();
+        Cache::forget('settings:approvals.escalation.superior_role_map');
+        $this->assertSame(
+            'system_admin',
+            app(SettingsService::class)->get('approvals.escalation.superior_role_map')['vice_president'] ?? null,
+        );
+
+        $vpRole = Role::firstOrCreate(['slug' => 'vice_president'], ['name' => 'Vice President']);
+        $vp = User::factory()->create(['role_id' => $vpRole->id, 'is_active' => true]);
+        $admin = User::query()->whereHas('role', fn ($query) => $query->where('slug', 'system_admin'))->firstOrFail();
+        app(SettingsService::class)->set('approvals.escalation_hours', 1, 'approval');
+
+        $rec = ApprovalRecord::create([
+            'approvable_type' => 'TestApprovable',
+            'approvable_id' => 100,
+            'step_order' => 1,
+            'role_slug' => 'vice_president',
+            'action' => 'pending',
+            'created_at' => now()->subHours(3),
+        ]);
+
+        $this->assertSame(1, app(ApprovalEscalationService::class)->runEscalations());
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $vp->id,
+            'type' => 'approval_escalation',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $admin->id,
+            'type' => 'approval_escalation',
+        ]);
+        $this->assertSame('pending', $rec->fresh()->action);
+        $this->assertSame('vice_president', $rec->fresh()->role_slug);
+        $this->assertNull($rec->fresh()->approver_id);
+        $this->assertSame($admin->id, $rec->fresh()->escalated_to_user_id);
     }
 }

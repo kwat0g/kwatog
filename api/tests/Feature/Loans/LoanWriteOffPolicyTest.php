@@ -9,7 +9,6 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
-use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
@@ -203,6 +202,10 @@ final class LoanWriteOffPolicyTest extends TestCase
     public function test_approved_loan_disbursement_uses_configured_receivable_and_cash_accounts(): void
     {
         $employee = Employee::factory()->create();
+        $departmentHead = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $employee->department_id])->id,
+        ]);
         $loan = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal' => '1000.00',
             'pay_periods' => 2,
@@ -211,10 +214,6 @@ final class LoanWriteOffPolicyTest extends TestCase
         $finance = $this->finance();
         $vp = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'vice_president')->value('id'),
-        ]);
-        $departmentHead = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
-            'employee_id' => Employee::factory()->create(['department_id' => $employee->department_id])->id,
         ]);
 
         app(LoanService::class)->approve($loan, $departmentHead);

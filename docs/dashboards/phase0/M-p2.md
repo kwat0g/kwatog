@@ -5,7 +5,7 @@ Branch `docs/dss-discovery-phase0`. Part-author file: covers `production_manager
 `M-p1.md` (roles 1–6), `M-p3.md` (roles 13–17), synthesis `../01-matrix.md`.
 
 **§0 shared contracts are stated once in `M-p1.md` §0** and are binding here too (auth/guard stack,
-KPI grain + targets + gate map, finance dual-slug M1, board-blind rule, notification darkness,
+KPI grain + targets + gate map, finance dual-slug M1, approval-board coverage, notification status,
 handoff-status dimension, frontend reuse, perf constraints, scope cuts). Only P2-specific deltas are
 repeated below. Trace key: (00§X) = `../00-discovery.md` §X; (A/B/C/D/E/F §Y) = phase0 section files.
 Spot-checks in this file were re-verified directly against
@@ -16,25 +16,19 @@ Spot-checks in this file were re-verified directly against
 ## §0-P2. Deltas that bite these six roles
 
 1. **Self-service slugs are shared by every role** — `attendance.view`, `leave.view`, `leave.create`,
-   `payroll.view` are merged into **all 17** roles (`RolePermissionSeeder.php:1011-1019`). Any widget
-   gated on one of them is therefore visible to *everyone*: `hr.team_dtr_today` and
-   `forecast.attendance` (gate `attendance.view`), `hr.team_on_leave_today` (gate `leave.view`)
-   (`DashboardWidgetSeeder.php`). This is the CLAUDE.md aggregator rule ("a self-scoped permission
-   reused as a GLOBAL gate is a leak") applied to widgets — see 01-matrix §D2 gap G-P2-1.
-2. **`production.dashboard.view` is NOT held by `ppc_head`** — PPC's grants list production slugs
-   explicitly and include `production.view` / `work_orders.view` / `wo.*` / `schedule.view` /
-   `routings.*` but not `production.dashboard.view` (`RolePermissionSeeder.php:772-811`;
-   the in-code comment shows this class of miss has bitten PPC before). Consequences: the
-   `machine.utilization` gauge, `oee.gauges`, `production.kpi` trend, and the `kpi.oee` /
-   `kpi.wo_completion_rate` tiles are **stripped** from PPC, and its KPI strip renders **1 of its 4
-   codes** (below). Flagged as G-P2-2.
-3. **KPI strip codes vs KPI snapshot gates disagree for 4 of the 7 bespoke strips.** The strip passes
+   `payroll.view` are merged into **all 17** roles (`RolePermissionSeeder.php:1011-1019`). The two
+   `hr.team_*` widgets remain on those gates because their payloads are department-scoped and null-safe;
+   `forecast.attendance` now requires the attendance-planning read. This resolves G-P2-1 without hiding
+   safe team tiles or exposing the company-wide forecast.
+2. **`production.dashboard.view` remains absent from `ppc_head`** by design. Production widgets and
+   KPI tiles now use the production data-read set, so PPC reads the schedule data it owns without gaining
+   the unrelated page permission (G-P2-2, resolved 2026-10-11).
+3. **KPI strip codes vs KPI snapshot gates still differ for purchasing and warehouse.** The strip passes
    its per-page code list to `GET /dashboard/kpi/trends`, which enforces
-   `KpiSnapshotService::MODULE_PERMISSIONS` identically to the scorecard (D§2). Strips were chosen
-   by role, gates by module — so: PM 2/3 (`first_pass_yield` gate `dashboard.quality.view` — PM holds
-   `quality.view`, not the dashboard slug), PPC 1/4, purchasing 1/2, warehouse 1/2. QC 3/3, finance
-   2/2, HR 1/1 are clean. Flagged as G-P2-3 (the mismatch is invisible today because the strip
-   silently drops refused codes to an empty message — Task 1 behaviour).
+   `KpiSnapshotService::MODULE_PERMISSIONS` identically to the scorecard (D§2). PPC and PM now read all
+   three listed codes after data-gate fixes; purchasing and warehouse read 1/2 because each remaining
+   code belongs to another module. Those two gaps stay explicit rather than widening role grants
+   (G-P2-3; see `01-matrix.md` §D2).
 4. **Factory/driver PWAs are single-holder surfaces** — `production.operator.access` = PM (+admin)
    (A§5.6), `supply_chain.driver.access` = driver (+admin) (A§5.7). No operator-rank role exists, so
    the shop-floor surface for `employee`/`department_head` is `/self-service/work-orders`
@@ -121,7 +115,7 @@ watchdog (D§30). Realtime: 8 production/MRP events on `production.dashboard` (F
 ### 8. Activity feed
 
 Audit stream on `work_orders` / `work_order_outputs` / `work_order_defects` / inspections / NCRs
-(parents carry `HasAuditLog`; stock tables excluded — B-F11); in-process QC + output handoff events;
+(parents carry `HasAuditLog`; `StockLevel` and `StockMovement` now audited — B-F11); in-process QC + output handoff events;
 schedules confirm. Surfaces: `/production/work-orders/:id`, `/quality/inspections/:id`.
 
 ### 9. Shortcuts (all route-verified)
@@ -220,14 +214,13 @@ MRP run summaries (bridge json, B-F6), plan/PR generation, WO create/confirm, sc
 forecast generate/reconcile. Surfaces: `/mrp/plans/:id`, `/production/work-orders/:id`,
 `/forecasting/demand`.
 
-### 9. Shortcuts (route-verified; M10-constrained)
+### 9. Shortcuts (route-verified)
 
 `/dashboard/ppc` · `/mrp` · `/mrp/plans` · `/mrp/boms` · `/mrp/machines` · `/mrp/molds` ·
 `/production/schedule` · `/production/work-orders` · `/production/work-orders/create` ·
 `/production/routings` · `/forecasting/demand` · `/forecasting/stock-out` · `/forecasting/accuracy` ·
-`/crm/products` · `/approvals` (read) · `/action-center`. `/chains`: **page 404s** (lacks
-`crm.sales_orders.view`) while the bottleneck API works (M10) — either grant the page permission or
-link the bottleneck widget to a PPC-owned page.
+`/crm/products` · `/approvals` (read) · `/action-center` · `/chains` (bottleneck-only mode; sales-order
+lookup remains permission-gated — M10).
 
 ### 10. Filters
 
@@ -238,7 +231,7 @@ method.
 
 Add production dashboard read (`production.dashboard.view`) or re-point the gauge/trend widgets to
 `production.view` — today the planning role cannot see machine utilization, OEE gauges, or the
-production KPI trend (G-P2-2). Fix M10. Add MAPE/bias tile.
+production KPI trend (G-P2-2). Add MAPE/bias tile.
 
 ---
 
@@ -291,9 +284,10 @@ Acts on: **none of the ledger chains** — deliberately no `purchasing.pr.approv
 `po.sod_override` (`RolePermissionSeeder.php:812-834`). The buyer *creates* POs (creator ≠ chain step),
 so every PR/PO they touch appears on the **Finance** card. Their own queue is **sourcing actions**:
 RFQ award (`RequestForQuoteAccessPolicy::canAward()`), supplier-listing review
-(`purchasing.supplier_listings.review` — custom single-step, **board-blind**: Action-ready,
-discovery-blind per C§4), GRN-reject refusal arms, return lifecycle. Mount an "awaiting your award"
-list from RFQ states (close-due sweep runs every minute, D§38) rather than from `approval_records`.
+(`purchasing.supplier_listings.review` — custom single-step, now has a permission/read-scoped board
+card; decision remains on the module route, C§4/§5), GRN-reject refusal arms, return lifecycle. Mount an
+"awaiting your award" list from RFQ states (close-due sweep runs every minute, D§38) rather than from
+`approval_records`.
 
 ### 6. Alerts / exceptions
 
@@ -389,7 +383,8 @@ inspection row (F3), MRB holds.
 ### 6. Alerts / exceptions
 
 `stock_critical` / `stock_low` (`AlertEngineService:298-379`) · `replenishment_blocked` · QC-held
-GRNs without inspection rows (F3, sweeper exists) · MRB holds · missing-outgoing sweep (hourly) ·
+GRNs without inspection rows (F3; `inventory.qc_handoff_issues` and the retry sweep cover missing
+handoffs) · MRB holds · missing-outgoing sweep (hourly) ·
 clearance items awaiting signature (`hr.separation.view` + `hr.clearance.sign`) · return receive
 handoff (no notification — C§3).
 
@@ -406,7 +401,7 @@ handoff (no notification — C§3).
 
 GRN finalize/accept, issue/transfer posting, count sessions, MRB hold/release, return receipts,
 adjustment submissions. Surfaces: `/inventory/grn/:id`, `/inventory/material-issues/:id`,
-`/inventory/mrb/:id`. Stock tables have **no audit rows** (B-F11) — ledger only.
+`/inventory/mrb/:id`. The stock-movement ledger remains event history; stock-level and movement changes also emit audit rows (B-F11).
 
 ### 9. Shortcuts (route-verified)
 
@@ -423,8 +418,10 @@ partial_accepted|rejected`) · supplier · date range · hold reason.
 
 ### As-built → Phase-1 delta
 
-Dashboard exists. Add the operations queue (counts/GRN-QC/adjustment-checker) and index the returns +
-WO-operation join columns before any of it aggregates (00§blocker-3). Note M9: SPA warehouse-structure
+Dashboard exists. `inventory.qc_handoff_issues` now surfaces pending GRNs whose incoming-QC handoff
+needs retry, with a filtered list link. Stock-count variance and adjustment-checker queue items remain
+open; index the returns + WO-operation join columns before any of them aggregates (00§blocker-3).
+Note M9: SPA warehouse-structure
 pages are narrower than the API — a dashboard link into `/inventory/warehouse` works for this role
 only because it holds `warehouse.manage`.
 
@@ -525,9 +522,10 @@ verification.
 
 ---
 
-## R12. `maintenance_tech` — Maintenance Technician · **NEW PAGE REQUIRED** → proposed `/dashboard/maintenance`
+## R12. `maintenance_tech` — Maintenance Technician · shared page shipped in Phase 2 E: `/dashboard/maintenance`
 
-(A§1.12, 00§A; no `dashboard.*.view` → lands `/dashboard/default`; role-default layout exists —
+(A§1.12, 00§A; at spec time the role landed on `/dashboard/default`; Phase 2 E added
+`dashboard.maintenance.view` and the shared maintenance page. The role-default layout already existed —
 `DashboardRoleLayoutSeeder.php:31-129`.)
 
 ### 1. Persona & decisions
@@ -537,7 +535,7 @@ MWO executor: create, start, complete, submit-repair (no assign, no verify, **no
 spare availability, downtime capture. **Weekly:** MTTR of own jobs, repeat breakdowns, schedule
 adherence. **Monthly:** PM completion rate, mold/machine wear indicators, PM-vs-corrective mix.
 
-### 2. KPI cards (6 — all from default-layout widgets; proposed page adds the rest)
+### 2. KPI cards (6 — shipped on the shared maintenance page)
 
 | Card | Value | Delta / sparkline | Target | Click-through |
 |---|---|---|---|---|
@@ -597,7 +595,7 @@ polymorphic `maintainable_type/_id` targets (CLAUDE.md namespace note). Surfaces
 
 ### 9. Shortcuts (route-verified)
 
-`/dashboard/default` (current) · `/dashboard/maintenance` (proposed) · `/maintenance` ·
+`/dashboard/maintenance` (current; shared with maintenance_supervisor) · `/maintenance` ·
 `/maintenance/work-orders` (+`/create`) · `/maintenance/schedules` · `/maintenance/downtime` ·
 `/mrp/machines` · `/assets` · `/action-center` · `/approvals` (read) · `/notifications` ·
 `/self-service` (self tiles).
@@ -609,34 +607,31 @@ schedule window.
 
 ### As-built → Phase-1 delta (build order)
 
-1. New catalog key `maintenance` → `dashboard.maintenance.view` → `/dashboard/maintenance`, seeded to
-   `maintenance_tech` **and** `maintenance_supervisor` (single page, two permission-derived views).
-2. Role-default layout swap: point both roles' defaults at the new page widget set.
-3. Rows 1–2 of §3 charts are reusables (`DowntimeParetoChart`); no new chart lib (E§2 gap rule).
-4. Do NOT reuse `maintenance.work.assigned` as a page gate (M6 trap; the tech does not hold it).
+Phase 2 E shipped the shared `/dashboard/maintenance` page for both roles. Their defaults provide the
+six cards above; the page remains permission-derived, and maintenance actions stay on existing routes.
+`maintenance.work.assigned` remains an assignment-scoped self-service permission, not a page gate (M6).
 
 ---
 
 ## Cross-role notes for the P2 roles (feed into `01-matrix.md`)
 
-1. **G-P2-1 (leak):** `attendance.view`/`leave.view` are self-service slugs granted to all 17 roles and
-   are used as widget gates for `hr.team_dtr_today`, `hr.team_on_leave_today`, `forecast.attendance`.
-   Every role — including `driver` and `warehouse_staff` — can add those tiles. Fix by gating on
-   `dashboard.hr.view` / `attendance.*` management slugs, or by declaring these department-scoped
-   widgets intentionally broad (report-only, per-widget payload stays dept-scoped and null-safe).
-2. **G-P2-2 (gate outage):** `ppc_head` cannot read `production.dashboard.view`; four production
-   widgets + two KPI tiles are stripped from the role that owns the schedule. Either add the slug or
-   re-gate the widgets on `production.view`.
-3. **G-P2-3 (strip ≠ gate):** PPC 1/4, PM 2/3, purchasing 1/2, warehouse 1/2 strip codes survive their
-   KPI gate. Symptoms are silent (empty message, Task 1 behaviour). Fix by deriving strip codes from
-   `MODULE_PERMISSIONS` at build time or by asserting the pairs in a test.
-4. **G-P2-4 (dataset gate):** `forecasting.view` (held by finance, VP? no — finance, PM, PPC, purchasing,
-   QC? no, warehouse ✓) exposes `forecast.cash_flow` and `forecast.capacity` outside their owning
-   datasets: warehouse and purchasing can mount a cash-flow tile. Apply the documented rule
-   "projection of a dataset = the dataset's gate" (D§6.4) uniformly and settings-drive the
-   capacity/attendance thresholds (D§6.6).
-5. **G-P2-5 (board-blind floor roles):** warehouse, QC, buyer, PM(re-stock) all have real decision
-   queues that write no `approval_records` rows (C§1b/§5). Each P2 page needs an operational queue
-   cardinality probe rather than an approval card (01-matrix §C matrix "Approval-type × role").
-6. Indexes before aggregation: returns fact tables, `wo_operations`, `production_logs`, `budget`
-   lines, PR/PO dates, delivery actuals (00§blocker-3, B §4).
+1. **G-P2-1 (leak, resolved 2026-10-11):** the two `hr.team_*` widgets remain available on the
+   self-service slugs because payloads are department-scoped and null-safe; this is documented broad
+   access, not a cross-department leak. The organization-wide `forecast.attendance` widget now uses the
+   attendance-planning read gate.
+2. **G-P2-2 (gate outage, resolved 2026-10-11):** production widgets and KPI tiles use the production
+   data-read set, so `ppc_head` can read the schedule data it owns without gaining the unrelated
+   `production.dashboard.view` page permission.
+3. **G-P2-3 (partly resolved):** PPC and PM now read all three codes on their strips. Purchasing and
+   warehouse read 1/2 because each missing code belongs to another module; their lists document that
+   tradeoff and `KpiVisibilityMatrixTest` pins the readable sets.
+4. **G-P2-4 (dataset gate, resolved 2026-10-11):** forecasts now follow the read set of their source
+   datasets, so buyers and warehouse staff no longer see finance or production projections. Capacity and
+   attendance thresholds remain fixed defaults by decision; F-059 records the trigger for changing them.
+5. **G-P2-5 (board-blind floor roles): partly addressed.** Warehouse stock adjustments/stock-count
+   variances and buyer supplier-listing reviews now have permission/read-scoped approval cards; decision
+   routes remain in their modules. GRN refusal and per-work-order late reports remain outside the board,
+   so page-level operational probes still matter (01-matrix §C matrix "Approval-type × role").
+6. Dashboard prerequisite indexes for returns, `wo_operations`, `production_logs`, budgets, PR/PO dates,
+   and delivery timestamps were applied in the Phase 2 index batches. Other unindexed relationships remain
+   listed in B §4; add those only when a dashboard query depends on them.

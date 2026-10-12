@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Services\PricingReviewService;
 use App\Modules\Inventory\Enums\ItemCostReviewStatus as Status;
@@ -18,7 +20,12 @@ class ItemCostReviewService
 {
     public function capture(GrnItem $line, string $cost): ItemCostReview
     {
-        return ItemCostReview::firstOrCreate(['grn_item_id' => $line->id], ['item_id' => $line->item_id, 'previous_cost' => $line->item->standard_cost, 'proposed_cost' => $cost, 'status' => Status::Pending]);
+        $review = ItemCostReview::firstOrCreate(['grn_item_id' => $line->id], ['item_id' => $line->item_id, 'previous_cost' => $line->item->standard_cost, 'proposed_cost' => $cost, 'status' => Status::Pending]);
+        if ($review->wasRecentlyCreated) {
+            app(PricingReviewService::class)->notifyCostReview($review, 'A supplier receipt cost needs Finance review.');
+        }
+
+        return $review;
     }
 
     public function list(): LengthAwarePaginator
@@ -51,7 +58,7 @@ class ItemCostReviewService
 
     public function decide(ItemCostReview $review, User $by, string $decision, string $notes, ?int $version = null): ItemCostReview
     {
-        abort_unless($by->hasPermission('inventory.costs.approve'), 403);
+        abort_unless(ApprovalDelegation::canActForPermission($by, 'inventory.costs.approve'), 403);
 
         return DB::transaction(function () use ($review, $by, $decision, $notes, $version): ItemCostReview {
             $item = Item::withTrashed()->lockForUpdate()->findOrFail($review->item_id);
@@ -83,6 +90,15 @@ class ItemCostReviewService
                 app(ItemService::class)->update($item, ['standard_cost' => $row->proposed_cost]);
             }
             $row->forceFill(['status' => $target, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'notes' => $notes])->save();
+
+            $audience = app(NotificationService::class)->usersWithPermission('inventory.costs.review');
+            app(NotificationService::class)->send($audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [
+                'title' => $target === Status::Approved ? 'Supplier cost review approved' : 'Supplier cost review rejected',
+                'message' => "The supplier cost review for {$item->code} was {$target->value}.",
+                'link_to' => '/crm/price-agreements/cost-reviews',
+                'entity_type' => 'item_cost_review',
+                'entity_id' => $row->hash_id,
+            ], "cost-review:decision:{$row->id}:{$row->version}:{$target->value}");
 
             return $row->load(['item', 'receiptLine.grn']);
         }, 3);

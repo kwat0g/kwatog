@@ -21,7 +21,7 @@ import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
 export default function OvertimeDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const user = useAuthStore((s) => s.user);
- const { can } = usePermission();
+ const { can, canApprove } = usePermission();
  const [reject, setReject] = useState(false);
  const [reason, setReason] = useState('');
  const [confirmApprove, setConfirmApprove] = useState(false);
@@ -72,7 +72,7 @@ export default function OvertimeDetailPage() {
  }
 
  const isOwner = user?.employee?.id === ot.employee?.id;
- const canApprove = ot.status === 'pending' && can('attendance.ot.approve');
+ const canApproveRequest = ot.status === 'pending' && canApprove('attendance.ot.approve');
  const canCancel = ot.status === 'pending' && (isOwner || can('attendance.ot.approve'));
 
  return (
@@ -90,7 +90,7 @@ export default function OvertimeDetailPage() {
  backLabel="Overtime"
  actions={
  <>
- {canApprove && (
+ {canApproveRequest && (
  <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approveMut.isPending} loading={approveMut.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>

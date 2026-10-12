@@ -453,7 +453,11 @@ class AssetService
                 ->where('approvable_id', $locked->getKey())
                 ->where('is_current', true)
                 ->whereIn('action', ['pending', 'skipped'])
-                ->update(['action' => 'superseded', 'is_current' => false]);
+                ->get()
+                ->each(static fn (ApprovalRecord $record) => $record->update([
+                    'action' => 'superseded',
+                    'is_current' => false,
+                ]));
 
             $this->clearDisposalRequest($locked);
 

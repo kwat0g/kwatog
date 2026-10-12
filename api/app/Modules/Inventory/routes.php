@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->group(function () {
     Route::get('/cost-reviews', [ItemCostReviewController::class, 'index'])->middleware('permission:inventory.costs.review');
     Route::post('/cost-reviews/{itemCostReview}/renew', [ItemCostReviewController::class, 'renew'])->middleware('permission:inventory.costs.review');
-    Route::post('/cost-reviews/{itemCostReview}/decide', [ItemCostReviewController::class, 'decide'])->middleware('permission:inventory.costs.approve');
+    Route::post('/cost-reviews/{itemCostReview}/decide', [ItemCostReviewController::class, 'decide'])->middleware('approval_permission:inventory.costs.approve');
 
     /* ─── Item categories ─── */
     Route::get('/item-categories', [ItemCategoryController::class, 'index'])->middleware('permission:inventory.view');
@@ -133,8 +133,8 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/stock-adjustments', [StockAdjustmentController::class, 'index'])
         ->middleware('permission_any:inventory.adjust,inventory.adjust.approve');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
-    Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
-    Route::patch('/stock-adjustments/{stockAdjustment}/reject', [StockAdjustmentController::class, 'reject'])->middleware('permission:inventory.adjust.approve');
+    Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('approval_permission:inventory.adjust.approve');
+    Route::patch('/stock-adjustments/{stockAdjustment}/reject', [StockAdjustmentController::class, 'reject'])->middleware('approval_permission:inventory.adjust.approve');
     Route::patch('/stock-adjustments/{stockAdjustment}/withdraw', [StockAdjustmentController::class, 'withdraw'])->middleware('permission:inventory.adjust');
     /* ─── ADV8 — WMS: Warehouse Map ─── */
     Route::get('/warehouse-map', [WarehouseMapController::class, 'index'])->middleware('permission:inventory.warehouse.manage');
@@ -147,7 +147,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/stock-counts', [StockCountController::class, 'store'])->middleware('permission:inventory.stock_count.manage');
     Route::post('/stock-counts/{id}/start', [StockCountController::class, 'start'])->middleware('permission:inventory.stock_count.manage');
     Route::post('/stock-counts/items/{id}/count', [StockCountController::class, 'recordCount'])->middleware('permission:inventory.stock_count.manage');
-    Route::post('/stock-counts/items/{id}/approve', [StockCountController::class, 'approveVariance'])->middleware('permission:inventory.stock_count.manage');
+    Route::post('/stock-counts/items/{id}/approve', [StockCountController::class, 'approveVariance'])->middleware('approval_permission:inventory.stock_count.manage');
     Route::post('/stock-counts/{id}/complete', [StockCountController::class, 'complete'])->middleware('permission:inventory.stock_count.manage');
     Route::delete('/stock-counts/{id}', [StockCountController::class, 'cancel'])->middleware('permission:inventory.stock_count.manage');
 

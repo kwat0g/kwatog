@@ -22,6 +22,12 @@ class RunMonthlyDepreciationOnRequested implements ShouldQueue
 
     public int $timeout = RunMonthlyDepreciationJob::TIMEOUT_SECONDS;
 
+    // Lane: low — the depreciation run executes inline here (monthly bulk).
+    public function viaQueue(): string
+    {
+        return 'low';
+    }
+
     /** @return array<int, WithoutOverlapping> */
     public function middleware(MonthlyDepreciationRequested $event): array
     {

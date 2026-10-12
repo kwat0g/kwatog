@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Requests;
 
+use App\Common\Models\ApprovalDelegation;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RejectPayrollAdjustmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('payroll.adjustments.reject') ?? false;
+        return $this->user() !== null && ApprovalDelegation::canActForPermission($this->user(), 'payroll.adjustments.reject');
     }
 
     public function rules(): array

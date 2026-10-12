@@ -46,65 +46,73 @@ class DashboardWidgetSeeder extends Seeder
      * of it. WidgetSeedIntegrityTest now asserts every seeded key has an entry.
      */
     private const LINK_BY_KEY = [
-        'production.kpi'            => '/production/dashboard',
-        'production.active_wo'      => '/production/work-orders',
-        'production.wo_breakdown'   => '/production/work-orders',
-        'production.gantt_mini'     => '/production/schedule',
-        'machine.utilization'       => '/production/dashboard',
-        'machine.status'            => '/mrp/machines',
-        'oee.gauges'                => '/production/oee',
-        'chain.stage_breakdown'     => '/chains',
-        'qc.pareto'                 => '/quality/dashboard',
-        'qc.pending_inspections'    => '/quality/inspections',
-        'qc.open_ncrs'              => '/quality/ncrs',
-        'qc.pass_rate'              => '/quality/dashboard',
-        'mrp.shortages'             => '/mrp/plans',
-        'material.reservations'     => '/inventory/stock-levels',
-        'finance.cash_position'     => '/accounting/balance-sheet',
-        'finance.ar_aging'          => '/accounting/invoices',
-        'finance.ap_aging'          => '/accounting/bills',
-        'finance.revenue_mtd'       => '/accounting/income-statement',
-        'finance.unpaid_invoices'   => '/accounting/invoices',
+        'production.kpi' => '/production/dashboard',
+        'production.active_wo' => '/production/work-orders',
+        'production.wo_breakdown' => '/production/work-orders',
+        'production.gantt_mini' => '/production/schedule',
+        'machine.utilization' => '/production/dashboard',
+        'machine.status' => '/mrp/machines',
+        'oee.gauges' => '/production/oee',
+        'chain.stage_breakdown' => '/chains',
+        'chain.recovery_backlog' => '/chains/recovery',
+        'finance.invoice_handoff_backlog' => '/supply-chain/deliveries?invoice_handoff_status=manual_required',
+        'qc.pareto' => '/quality/dashboard',
+        'qc.pending_inspections' => '/quality/inspections',
+        'qc.open_ncrs' => '/quality/ncrs',
+        'quality.ncr_aging' => '/quality/ncrs',
+        'quality.eightd_sla' => '/crm/complaints',
+        'executive.risks_opportunities' => '/alerts',
+        'executive.weekly_briefing' => '/dashboard/company',
+        'qc.pass_rate' => '/quality/dashboard',
+        'mrp.shortages' => '/mrp/plans',
+        'material.reservations' => '/inventory/stock-levels',
+        'finance.cash_position' => '/accounting/balance-sheet',
+        'finance.ar_aging' => '/accounting/invoices',
+        'finance.ap_aging' => '/accounting/bills',
+        'finance.revenue_mtd' => '/accounting/income-statement',
+        'finance.unpaid_invoices' => '/accounting/invoices',
         'finance.upcoming_payables' => '/accounting/bills',
-        'hr.headcount'              => '/hr/employees',
-        'hr.on_leave_today'         => '/hr/leaves',
-        'hr.team_on_leave_today'    => '/hr/leaves',
-        'hr.team_dtr_today'         => '/hr/attendance',
-        'hr.probation_alerts'       => '/hr/employees',
-        'payroll.upcoming'          => '/payroll/periods',
-        'approvals.pending'         => '/approvals',
-        'purchasing.open_prs'       => '/purchasing/purchase-requests',
-        'purchasing.open_pos'       => '/purchasing/purchase-orders',
-        'purchasing.supplier_perf'  => '/purchasing/suppliers/performance',
+        'hr.headcount' => '/hr/employees',
+        'hr.on_leave_today' => '/hr/leaves',
+        'hr.team_on_leave_today' => '/hr/leaves',
+        'hr.team_dtr_today' => '/hr/attendance',
+        'hr.probation_alerts' => '/hr/employees',
+        'payroll.upcoming' => '/payroll/periods',
+        'approvals.pending' => '/approvals',
+        'purchasing.open_prs' => '/purchasing/purchase-requests',
+        'purchasing.open_pos' => '/purchasing/purchase-orders',
+        'purchasing.supplier_perf' => '/purchasing/suppliers/performance',
         'supply.overdue_deliveries' => '/supply-chain/deliveries',
-        'supply.delivery_schedule'  => '/supply-chain/deliveries',
-        'inventory.low_stock'       => '/inventory/stock-levels',
-        'inventory.pending_grns'    => '/inventory/grn',
-        'inventory.pending_issues'  => '/inventory/material-issues',
-        'self.payslip_summary'      => '/self-service/payslips',
-        'self.leave_balance'        => '/self-service/leaves',
-        'self.dtr_today'            => '/self-service/dtr',
-        'self.pending_requests'     => '/self-service',
+        'supply.delivery_schedule' => '/supply-chain/deliveries',
+        'inventory.low_stock' => '/inventory/stock-levels',
+        'inventory.pending_grns' => '/inventory/grn',
+        'inventory.qc_handoff_issues' => '/inventory/grn?status=pending_qc&qc_handoff=action_required',
+        'inventory.pending_issues' => '/inventory/material-issues',
+        'self.payslip_summary' => '/self-service/payslips',
+        'self.leave_balance' => '/self-service/leaves',
+        'self.dtr_today' => '/self-service/dtr',
+        'self.pending_requests' => '/self-service',
         // Forecast tiles summarise a projection; the bespoke role dashboards
         // carry the full historical + forecast chart, so "Open →" goes there.
-        'forecast.headcount'        => '/dashboard/hr',
-        'forecast.revenue'          => '/dashboard/finance',
-        'forecast.defect_rate'      => '/dashboard/quality',
-        'forecast.cash_flow'        => '/forecasting/demand',
-        'forecast.capacity'         => '/production/schedule',
-        'forecast.attendance'       => '/hr/attendance',
-        'maintenance.open_wos'      => '/maintenance/work-orders',
+        'forecast.headcount' => '/dashboard/hr',
+        'forecast.revenue' => '/dashboard/finance',
+        'forecast.defect_rate' => '/dashboard/quality',
+        'forecast.cash_flow' => '/forecasting/demand',
+        'forecast.capacity' => '/production/schedule',
+        'forecast.attendance' => '/hr/attendance',
+        'maintenance.open_wos' => '/maintenance/work-orders',
         'maintenance.due_schedules' => '/maintenance/schedules',
-        'assets.under_maintenance'  => '/assets',
-        'rma.open_returns'          => '/return-management',
-        'rma.pending_approval'      => '/return-management',
-        'crm.open_complaints'       => '/crm/complaints',
+        'assets.under_maintenance' => '/assets',
+        'rma.open_returns' => '/return-management',
+        'rma.pending_approval' => '/return-management',
+        'crm.open_complaints' => '/crm/complaints',
         'logistics.shipments_in_transit' => '/supply-chain/shipments',
-        'sales.open_orders'         => '/crm/sales-orders',
-        'sales.price_requests'      => '/crm/price-agreements/requests',
-        'budget.utilization'        => '/budgeting/budget-vs-actual',
-        'loans.outstanding'         => '/hr/loans',
-        'alerts'                    => '/alerts',
+        'sales.open_orders' => '/crm/sales-orders',
+        'sales.price_requests' => '/crm/price-agreements/requests',
+        'sales.order_intake' => '/crm/sales-orders',
+        'budget.utilization' => '/budgeting/budget-vs-actual',
+        'loans.outstanding' => '/hr/loans',
+        'alerts' => '/alerts',
     ];
 
     /**
@@ -138,7 +146,7 @@ class DashboardWidgetSeeder extends Seeder
     {
         return [
             ['code' => 'oee',               'name' => 'OEE Trend',                 'module' => 'production'],
-            ['code' => 'wo_completion_rate','name' => 'WO Completion Rate Trend',  'module' => 'production'],
+            ['code' => 'wo_completion_rate', 'name' => 'WO Completion Rate Trend',  'module' => 'production'],
             ['code' => 'dppm',              'name' => 'DPPM Trend',                'module' => 'quality'],
             ['code' => 'first_pass_yield',  'name' => 'First Pass Yield Trend',    'module' => 'quality'],
             ['code' => 'ncr_closure_days',  'name' => 'NCR Closure Time Trend',    'module' => 'quality'],
@@ -146,8 +154,8 @@ class DashboardWidgetSeeder extends Seeder
             ['code' => 'supplier_quality',  'name' => 'Supplier Quality Trend',    'module' => 'purchasing'],
             ['code' => 'attendance_rate',   'name' => 'Attendance Rate Trend',     'module' => 'attendance'],
             ['code' => 'ar_aging_60d',      'name' => 'AR Over 60 Days Trend',     'module' => 'accounting'],
-            ['code' => 'budget_utilization','name' => 'Budget Utilization Trend',  'module' => 'accounting'],
-            ['code' => 'inventory_turnover','name' => 'Inventory Turnover Trend',  'module' => 'inventory'],
+            ['code' => 'budget_utilization', 'name' => 'Budget Utilization Trend',  'module' => 'accounting'],
+            ['code' => 'inventory_turnover', 'name' => 'Inventory Turnover Trend',  'module' => 'inventory'],
         ];
     }
 
@@ -163,18 +171,18 @@ class DashboardWidgetSeeder extends Seeder
     private function kpiWidgets(): array
     {
         return array_map(fn (array $kpi): array => [
-            'key'            => self::kpiWidgetKey($kpi['code']),
-            'name'           => $kpi['name'],
-            'module'         => $kpi['module'],
+            'key' => self::kpiWidgetKey($kpi['code']),
+            'name' => $kpi['name'],
+            'module' => $kpi['module'],
             // A module with no entry in the map is ungated on the scorecard;
             // keep the widget ungated too rather than inventing a stricter
             // rule the scorecard does not apply.
-            'permission'     => null,
+            'permission' => null,
             'permission_any' => KpiSnapshotService::moduleGates($kpi['module']),
-            'render_kind'    => 'trend',
+            'render_kind' => 'trend',
             // A KPI sparkline reads fine at a third of the row; the 8-column
             // default for `trend` is for a 14-day production series.
-            'default_w'   => 4,
+            'default_w' => 4,
             'description' => 'Monthly actual against target, with trailing history.',
         ], self::kpiCatalog());
     }
@@ -215,11 +223,16 @@ class DashboardWidgetSeeder extends Seeder
             // mapping /production/dashboard shows, so the two cannot disagree.
             // Gate unchanged — same aggregate, same audience as the scalar was.
             ['key' => 'chain.stage_breakdown',         'name' => 'Chain Stage Breakdown',     'module' => 'production',  'permission' => 'dashboard.view_bottlenecks', 'render_kind' => 'breakdown'],
+            ['key' => 'chain.recovery_backlog',        'name' => 'Chain Recovery Backlog',    'module' => 'platform',    'permission' => 'dashboard.chain_recovery.view'],
 
             // ─── Quality ────────────────────────────────────────────
             ['key' => 'qc.pareto',                     'name' => 'QC Defect Pareto',          'module' => 'quality',     'permission' => 'quality.view', 'render_kind' => 'breakdown'],
             ['key' => 'qc.pending_inspections',        'name' => 'Pending Inspections',       'module' => 'quality',     'permission' => 'quality.inspections.view'],
             ['key' => 'qc.open_ncrs',                  'name' => 'Open NCRs',                 'module' => 'quality',     'permission' => 'quality.ncr.view'],
+            ['key' => 'quality.ncr_aging',             'name' => 'NCR Aging',                 'module' => 'quality',     'permission' => 'quality.ncr.view', 'render_kind' => 'breakdown'],
+            ['key' => 'quality.eightd_sla',            'name' => '8D SLA Burn',               'module' => 'quality',     'permission' => 'crm.complaints.view', 'render_kind' => 'breakdown'],
+            ['key' => 'executive.risks_opportunities', 'name' => 'Risks & Opportunities',       'module' => 'platform',    'permission' => 'dashboard.company.view', 'render_kind' => 'table'],
+            ['key' => 'executive.weekly_briefing',     'name' => 'Weekly Briefing',            'module' => 'platform',    'permission' => 'dashboard.company.view', 'render_kind' => 'table'],
             ['key' => 'qc.pass_rate',                  'name' => 'Pass Rate by Product',      'module' => 'quality',     'permission' => 'quality.view'],
 
             // ─── MRP / PPC ──────────────────────────────────────────
@@ -230,7 +243,8 @@ class DashboardWidgetSeeder extends Seeder
             ['key' => 'finance.cash_position',         'name' => 'Cash Position',             'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
             ['key' => 'finance.ar_aging',              'name' => 'AR Aging',                  'module' => 'accounting',  'permission' => 'accounting.invoices.view', 'render_kind' => 'breakdown'],
             ['key' => 'finance.ap_aging',              'name' => 'AP Aging',                  'module' => 'accounting',  'permission' => 'accounting.bills.view'],
-            ['key' => 'finance.revenue_mtd',           'name' => 'Revenue Month-To-Date',     'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
+            ['key' => 'finance.revenue_mtd',           'name' => 'Invoiced Month-To-Date',    'module' => 'accounting',  'permission' => 'accounting.dashboard.view'],
+            ['key' => 'finance.invoice_handoff_backlog', 'name' => 'Delivery Invoice Handoffs', 'module' => 'accounting', 'permission' => 'supply_chain.deliveries.view'],
             ['key' => 'finance.unpaid_invoices',       'name' => 'Unpaid Invoices',           'module' => 'accounting',  'permission' => 'accounting.invoices.view'],
             ['key' => 'finance.upcoming_payables',     'name' => 'Upcoming Payables',         'module' => 'accounting',  'permission' => 'accounting.bills.view'],
 
@@ -269,6 +283,7 @@ class DashboardWidgetSeeder extends Seeder
             // ─── Inventory / Warehouse ─────────────────────────────
             ['key' => 'inventory.low_stock',           'name' => 'Low Stock Alerts',          'module' => 'inventory',   'permission' => 'inventory.view'],
             ['key' => 'inventory.pending_grns',        'name' => 'Pending GRNs',              'module' => 'inventory',   'permission' => 'inventory.view'],
+            ['key' => 'inventory.qc_handoff_issues',   'name' => 'GRNs Missing QC Handoff',   'module' => 'inventory',   'permission' => 'inventory.view'],
             ['key' => 'inventory.pending_issues',      'name' => 'Pending Material Issues',   'module' => 'inventory',   'permission' => 'inventory.view'],
 
             // ─── Self-service ──────────────────────────────────────
@@ -325,7 +340,7 @@ class DashboardWidgetSeeder extends Seeder
             // ─── Returns / CRM / Budget ────────────────────────────
             ['key' => 'rma.open_returns',              'name' => 'Open Return Requests',      'module' => 'return_management', 'permission' => 'return_management.view', 'render_kind' => 'breakdown'],
             ['key' => 'rma.pending_approval',          'name' => 'Returns Awaiting Approval', 'module' => 'return_management', 'permission' => 'return_management.view', 'render_kind' => 'table'],
-            ['key' => 'crm.open_complaints',           'name' => 'Open Customer Complaints',  'module' => 'crm',         'permission' => 'crm.view', 'render_kind' => 'breakdown'],
+            ['key' => 'crm.open_complaints',           'name' => 'Open Customer Complaints',  'module' => 'crm',         'permission' => 'crm.complaints.view', 'render_kind' => 'breakdown'],
             // ─── The five role pages (DSS 01-matrix §D3) ────────────
             // Only the cards that had no existing widget over the same data are
             // new; every other block on those pages reuses a widget above, which
@@ -337,8 +352,9 @@ class DashboardWidgetSeeder extends Seeder
             // behind it, so the card would have had no source. Recorded as
             // data-not-available rather than shipped as a permanent zero.
             ['key' => 'logistics.shipments_in_transit', 'name' => 'Shipments In Transit',     'module' => 'supply_chain', 'permission' => 'supply_chain.view'],
-            ['key' => 'sales.open_orders',             'name' => 'Open Sales Orders',         'module' => 'crm',         'permission' => 'crm.sales_orders.view'],
-            ['key' => 'sales.price_requests',          'name' => 'Open Price Requests',       'module' => 'crm',         'permission' => 'crm.price_agreements.view'],
+            ['key' => 'sales.order_intake',            'name' => 'Sales Order Intake',         'module' => 'crm',         'permission' => 'crm.sales_orders.view', 'render_kind' => 'trend', 'default_w' => 6, 'description' => 'Sales order count by order date over the last 12 months.'],
+            ['key' => 'sales.open_orders',             'name' => 'Open Sales Orders',          'module' => 'crm',         'permission' => 'crm.sales_orders.view', 'render_kind' => 'breakdown'],
+            ['key' => 'sales.price_requests',          'name' => 'Open Price Requests',        'module' => 'crm',         'permission' => 'crm.price_agreements.view', 'render_kind' => 'breakdown'],
             ['key' => 'budget.utilization',            'name' => 'Budget Utilization',        'module' => 'budgeting',   'permission' => 'budgeting.view', 'render_kind' => 'gauge'],
             // Resolver scopes to the caller's department unless they hold a
             // company-wide loans read — see ::outstandingLoans.
@@ -375,13 +391,13 @@ class DashboardWidgetSeeder extends Seeder
      * company-wide reader's link is the company page, not a module dashboard).
      */
     private const KPI_DASHBOARD_BY_MODULE = [
-        'production'   => '/dashboard/plant-manager',
-        'quality'      => '/dashboard/quality',
+        'production' => '/dashboard/plant-manager',
+        'quality' => '/dashboard/quality',
         'supply_chain' => '/dashboard/ppc',
-        'purchasing'   => '/dashboard/purchasing',
-        'attendance'   => '/dashboard/hr',
-        'accounting'   => '/dashboard/finance',
-        'inventory'    => '/dashboard/warehouse',
+        'purchasing' => '/dashboard/purchasing',
+        'attendance' => '/dashboard/hr',
+        'accounting' => '/dashboard/finance',
+        'inventory' => '/dashboard/warehouse',
     ];
 
     /** In-dashboard anchor link for a KPI code, e.g. `/dashboard/quality#kpi-dppm`. */
@@ -403,15 +419,15 @@ class DashboardWidgetSeeder extends Seeder
             DashboardWidget::updateOrCreate(
                 ['key' => $w['key']],
                 [
-                    'name'           => $w['name'],
-                    'description'    => $w['description'] ?? null,
-                    'module'         => $w['module'],
-                    'permission'     => $w['permission'],
+                    'name' => $w['name'],
+                    'description' => $w['description'] ?? null,
+                    'module' => $w['module'],
+                    'permission' => $w['permission'],
                     'permission_any' => $w['permission_any'] ?? null,
-                    'render_kind'    => $kind,
-                    'link_path'   => self::linkFor($w['key']),
-                    'default_w'   => $w['default_w'] ?? self::WIDTH_BY_KIND[$kind] ?? 4,
-                    'default_h'   => $w['default_h'] ?? 4,
+                    'render_kind' => $kind,
+                    'link_path' => self::linkFor($w['key']),
+                    'default_w' => $w['default_w'] ?? self::WIDTH_BY_KIND[$kind] ?? 4,
+                    'default_h' => $w['default_h'] ?? 4,
                 ],
             );
         }

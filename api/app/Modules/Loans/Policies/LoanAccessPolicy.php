@@ -67,7 +67,9 @@ final class LoanAccessPolicy
         $isDepartmentHead = $user->role?->slug === self::DEPARTMENTAL_STEP_ROLE;
         $departmentId = $isDepartmentHead ? $this->departmentId($user) : null;
 
-        return $query->where(function (Builder $scope) use ($employeeId, $isDepartmentHead, $departmentId, $stepRoles): void {
+        $canApproveWriteOff = ApprovalDelegation::canActForPermission($user, 'loans.write_off.approve');
+
+        return $query->where(function (Builder $scope) use ($employeeId, $isDepartmentHead, $departmentId, $stepRoles, $canApproveWriteOff): void {
             $scope->where(function (Builder $own) use ($employeeId, $isDepartmentHead, $departmentId): void {
                 if ($employeeId === null) {
                     $own->whereRaw('1 = 0');
@@ -94,19 +96,30 @@ final class LoanAccessPolicy
                         });
                 });
             }
+            if ($canApproveWriteOff) {
+                $scope->orWhere('status', LoanStatus::WriteOffPending->value);
+            }
         });
     }
 
     public function canView(User $user, EmployeeLoan $loan): bool
     {
-        return $this->canAccessEmployee($user, (int) $loan->employee_id)
+        return $this->canViewWriteOff($user, $loan)
+            || $this->canAccessEmployee($user, (int) $loan->employee_id)
             || $this->isChainParticipant($user, $loan);
     }
 
     public function canDecide(User $user, EmployeeLoan $loan): bool
     {
-        return $this->canAccessEmployee($user, (int) $loan->employee_id)
+        return $this->canViewWriteOff($user, $loan)
+            || $this->canAccessEmployee($user, (int) $loan->employee_id)
             || $this->isChainParticipant($user, $loan);
+    }
+
+    private function canViewWriteOff(User $user, EmployeeLoan $loan): bool
+    {
+        return $loan->status === LoanStatus::WriteOffPending
+            && ApprovalDelegation::canActForPermission($user, 'loans.write_off.approve', [(int) $loan->write_off_requested_by]);
     }
 
     public function canViewEmployee(User $user, Employee $employee): bool
