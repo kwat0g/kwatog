@@ -104,6 +104,13 @@ Schedule::command('alerts:run')
     ->withoutOverlapping(10)
     ->onOneServer();
 
+// DSS Wave 0-2 — detector run, hourly. Modes affect display only (W0-3), so
+// this is shadow-safe from day one; the kill switch silences it entirely.
+Schedule::command('dss:run')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 // Retry failed critical-alert email handoffs without creating another alert
 // row. The delivery state on the alert supplies bounded backoff and recovery.
 Schedule::command('alerts:retry-critical-emails --limit=100')
