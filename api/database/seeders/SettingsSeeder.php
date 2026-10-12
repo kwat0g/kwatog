@@ -496,6 +496,7 @@ class SettingsSeeder extends Seeder
             'b2b_portals'       => ['B2B Portals',          'Supplier and customer self-service portals.'],
             'forecasting'       => ['Forecasting',          'Demand forecasts, stock-out projections, and forecast accuracy.'],
             'budgeting'         => ['Budgeting',            'Budgets, budget line items, and fiscal years.'],
+            'dss'               => ['Decision Support',     'Unified recommendations, detectors, and Decision Center.'],
         ];
 
         foreach ($modules as $slug => [$label, $description]) {
