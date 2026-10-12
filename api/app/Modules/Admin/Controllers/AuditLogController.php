@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Controllers;
 
 use App\Common\Models\AuditLog;
+use App\Common\Enums\DocumentType;
+use App\Common\Services\DocumentVaultService;
 use App\Common\Support\AuditFieldLabels;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\Pdf\PdfRenderService;
@@ -176,8 +178,10 @@ class AuditLogController
      * PDF export of audit logs — same filter set as index().
      * Capped at 500 rows to keep PDF rendering performant.
      */
-    public function exportPdf(Request $request, PdfRenderService $pdfService): \Illuminate\Http\Response
+    public function exportPdf(Request $request, PdfRenderService $pdfService, DocumentVaultService $vault): \Illuminate\Http\Response
     {
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 401);
         $filters = $this->validatedFilters($request);
         $logs = $this->filteredQuery($filters)
             ->with('user:id,name,email')
@@ -197,6 +201,7 @@ class AuditLogController
         ]);
 
         $filename = 'audit-trail-'.now()->format('Ymd-His').'.pdf';
+        $vault->store($bytes, DocumentType::AuditTrail, $actor, $actor, null, $filename);
 
         return response($bytes, 200, [
             'Content-Type'        => 'application/pdf',

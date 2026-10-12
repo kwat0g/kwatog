@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\Landing\Controllers;
 
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 
 class QualityPolicyController
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PdfRenderService $renderer,
+    ) {}
 
     public function download(): Response
     {
@@ -36,7 +39,7 @@ class QualityPolicyController
             '{{standard}}' => $standard,
             '{{partners}}' => implode(', ', $partners),
         ]);
-        $pdf = Pdf::loadView('pdf.quality-policy', [
+        $bytes = $this->renderer->render('pdf.quality-policy', [
             // Fixed approval/effective date of the controlled document (Rev. A);
             // `generatedAt` is only the "printed on" stamp in the footer.
             'effectiveDate' => (string) $this->settings->get('landing.quality_policy.effective_date', ''),
@@ -49,8 +52,11 @@ class QualityPolicyController
             'partners' => $partners,
             'objectives' => $objectives,
             'generatedAt'   => now()->format('d F Y'),
-        ]);
+        ], ['title' => 'Quality Policy']);
 
-        return $pdf->download('ogami-quality-policy.pdf');
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="ogami-quality-policy.pdf"',
+        ]);
     }
 }

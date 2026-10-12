@@ -39,6 +39,9 @@ class DocumentVaultService
      * @param  Model  $entity  Owning record
      * @param  User|null  $user  Generator (null for system jobs)
      * @param  bool|null  $confidential  Override the type's default
+     * @param  string|null  $fileName  Human filename (e.g. the inline name the
+     *     direct response used). Sanitized; a taken name gets a short suffix
+     *     so a re-export never overwrites the stored copy. Null = generated.
      */
     public function store(
         string $bytes,
@@ -46,6 +49,7 @@ class DocumentVaultService
         Model $entity,
         ?User $user = null,
         ?bool $confidential = null,
+        ?string $fileName = null,
     ): Document {
         if ($bytes === '') {
             throw new BusinessRuleException('Refusing to store an empty document.');
@@ -55,13 +59,15 @@ class DocumentVaultService
         $confidential ??= $type->isConfidential();
         $entityRef = $this->entityRef($entity);
 
-        $filename = sprintf(
-            '%s-%s-%s-%s.pdf',
-            $type->filePrefix(),
-            $entityRef,
-            now()->format('YmdHis'),
-            Str::lower(Str::random(6)),
-        );
+        $filename = $fileName !== null && trim($fileName) !== ''
+            ? $this->uniqueHumanFilename($type, $fileName)
+            : sprintf(
+                '%s-%s-%s-%s.pdf',
+                $type->filePrefix(),
+                $entityRef,
+                now()->format('YmdHis'),
+                Str::lower(Str::random(6)),
+            );
         $path = sprintf('documents/%s/%s', $type->value, $filename);
 
         if (! Storage::disk(self::DISK)->put($path, $bytes)) {
@@ -286,5 +292,36 @@ class DocumentVaultService
         }
 
         return 'rec-'.$entity->getKey();
+    }
+
+    /**
+     * Human filename, safe for headers and storage: no directories, no
+     * quotes/CR/LF (header injection), capped length, always .pdf. A taken
+     * name gets `-{rand4}` before the extension so re-exports keep history.
+     */
+    private function uniqueHumanFilename(DocumentType $type, string $fileName): string
+    {
+        $base = basename(str_replace('\\', '/', trim($fileName)));
+        $base = str_replace('"', '', $base);
+        $base = (string) preg_replace('/[^A-Za-z0-9._-]+/', '-', $base);
+        $base = trim($base, '.-');
+        if ($base === '') {
+            $base = 'document.pdf';
+        }
+        if (! str_ends_with(strtolower($base), '.pdf')) {
+            $base .= '.pdf';
+        }
+        if (strlen($base) > 120) {
+            $base = substr($base, 0, 116).'.pdf';
+        }
+
+        $disk = Storage::disk(self::DISK);
+        $candidate = $base;
+        while ($disk->exists(sprintf('documents/%s/%s', $type->value, $candidate))) {
+            $stem = substr($base, 0, -4);
+            $candidate = sprintf('%s-%s.pdf', substr($stem, 0, 111), Str::lower(Str::random(4)));
+        }
+
+        return $candidate;
     }
 }

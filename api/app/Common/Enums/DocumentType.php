@@ -33,6 +33,8 @@ enum DocumentType: string
     case BulkPdf            = 'bulk_pdf';
     case PackingList        = 'packing_list';
     case CommercialInvoice  = 'commercial_invoice';
+    case Bir2307            = 'bir_2307';
+    case AuditTrail         = 'audit_trail';
 
     /** Confidential by default — affects watermark + Cache-Control. */
     public function isConfidential(): bool
@@ -69,11 +71,13 @@ enum DocumentType: string
             self::PagIbigRemittance  => 'Pag-IBIG Remittance',
             self::Bir1601c           => 'BIR 1601-C',
             self::Bir2316            => 'BIR 2316',
+            self::Bir2307            => 'BIR 2307',
             self::Ncr                => 'NCR',
             self::WorkOrderTraveler  => 'Work Order Traveler',
             self::BulkPdf            => 'Bulk PDF',
             self::PackingList        => 'Packing List',
             self::CommercialInvoice  => 'Commercial Invoice',
+            self::AuditTrail         => 'Audit Trail',
         };
     }
 
