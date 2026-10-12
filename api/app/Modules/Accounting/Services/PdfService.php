@@ -72,7 +72,9 @@ class PdfService
             'currency' => $this->currency(),
             'money'   => $this->statementMoney,
         ], ['title' => 'Trial Balance']);
-        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="TrialBalance-'.$from->toDateString().'-'.$to->toDateString().'.pdf"']);
+
+        return $this->storeStatement($bytes, DocumentType::TrialBalance,
+            'TrialBalance-'.$from->toDateString().'-'.$to->toDateString().'.pdf');
     }
 
     public function incomeStatement(Carbon $from, Carbon $to): Response
@@ -83,7 +85,9 @@ class PdfService
             'currency' => $this->currency(),
             'money'   => $this->statementMoney,
         ], ['title' => 'Income Statement']);
-        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="IncomeStatement-'.$from->toDateString().'-'.$to->toDateString().'.pdf"']);
+
+        return $this->storeStatement($bytes, DocumentType::IncomeStatement,
+            'IncomeStatement-'.$from->toDateString().'-'.$to->toDateString().'.pdf');
     }
 
     public function purchaseOrder(PurchaseOrder $po): StreamedResponse
@@ -114,7 +118,9 @@ class PdfService
             'currency' => $this->currency(),
             'money'   => $this->statementMoney,
         ], ['title' => 'Balance Sheet']);
-        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="BalanceSheet-'.$asOf->toDateString().'.pdf"']);
+
+        return $this->storeStatement($bytes, DocumentType::BalanceSheet,
+            'BalanceSheet-'.$asOf->toDateString().'.pdf');
     }
 
     public function bir2307(Vendor $vendor, int $year, int $quarter): Response
@@ -148,8 +154,16 @@ class PdfService
 
         $vendorSlug = \Illuminate\Support\Str::slug($vendor->name) ?: $vendor->hash_id;
         $filename = "BIR2307-{$vendorSlug}-{$year}-Q{$quarter}.pdf";
+        $actor = auth()->user();
+        $this->vault->store(
+            $bytes, DocumentType::Bir2307, $vendor,
+            $actor instanceof User ? $actor : null, null, $filename,
+        );
 
-        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$filename.'"']);
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+        ]);
     }
 
     private function currency(): string
@@ -166,5 +180,23 @@ class PdfService
         $document = $this->vault->store($bytes, $type, $entity, $user);
 
         return $this->vault->streamInline($document);
+    }
+
+    /**
+     * Statements have no owning business entity, so the vault row is filed
+     * against the requesting user (same convention as bulk prints). The bytes
+     * still stream back directly with the long-standing inline filename, so
+     * the download contract is unchanged — the vault copy is the audit trail.
+     */
+    private function storeStatement(string $bytes, DocumentType $type, string $filename): Response
+    {
+        $actor = auth()->user();
+        abort_unless($actor instanceof User, 401);
+        $this->vault->store($bytes, $type, $actor, $actor, null, $filename);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+        ]);
     }
 }

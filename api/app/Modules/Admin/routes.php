@@ -147,8 +147,9 @@ Route::prefix('admin')
 Route::middleware(['auth:sanctum', 'feature:search', 'permission:search.global', 'throttle:30,1'])
     ->get('/search', [SearchController::class, 'search']);
 
-/* Sprint 8 — Task 76. Bulk approval PDF print. */
-Route::middleware(['auth:sanctum', 'permission:admin.print.bulk'])
+/* Sprint 8 — Task 76. Bulk approval PDF print. throttle:sensitive: each hit
+   renders up to 50 PDFs — without a cap one operator can starve the queue. */
+Route::middleware(['auth:sanctum', 'permission:admin.print.bulk', 'throttle:sensitive'])
     ->post('/print/bulk', [BulkPrintController::class, 'print']);
 
 /*

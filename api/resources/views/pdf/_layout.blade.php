@@ -1,9 +1,14 @@
 {{--
-    Series E (E1) shared PDF chrome — executive corporate design system.
-    Every per-document Blade extends or @includes from this layout.
+    Phase 2 (PDF foundation) — Atelier chrome for every PDF.
+    Warm paper canvas, espresso ink, one clay accent. Hierarchy from borders,
+    never shadows. Chips stay readable in black & white (label + border carry
+    meaning, never colour alone).
 
     Variables provided by App\Common\Services\Pdf\PdfRenderService:
-      - $company       (array — name/address/phone/email/tin/disclaimer)
+      - $company       (array — name/address/phone/email/tin/vat_status/logo_path/
+                        public_url/certification/disclaimer + accent/logo_data_uri/
+                        tagline/terms)
+      - $brand         (array — accent/logo_data_uri/tagline/terms/name)
       - $generated     (array — by/by_user/at/at_text)
       - $confidential  (bool)
       - $watermark     (string|null)
@@ -27,67 +32,107 @@
     font-family: 'Helvetica Neue', 'Helvetica', Arial, 'DejaVu Sans', sans-serif;
     font-size: 9pt;
     line-height: 1.5;
-    color: #334155; /* Slate 700 */
+    color: #1f1b16; /* Atelier espresso ink */
     margin: 0;
     padding: 0;
     background: #FFFFFF;
   }
-  .mono { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; }
-  
+  .mono, .num { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-variant-numeric: tabular-nums; }
+  table.lines td.r, table.lines th.r, .totals-box td.val { font-variant-numeric: tabular-nums; }
+
   /* Brand Header & Letterhead */
   .brand-bar {
     width: 100%;
-    height: 6px;
-    background: #0f172a; /* Slate 900 */
+    height: 5px;
+    background: {{ $company['accent'] ?? '#b4542a' }};
     border-radius: 3px 3px 0 0;
-    margin-bottom: 15px;
+    margin-bottom: 14px;
   }
-  
+
   .header-table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #f1f5f9; /* Slate 100 */
-    padding-bottom: 15px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #e8e2d8;
+    padding-bottom: 12px;
   }
   .header-table td { vertical-align: middle; }
-  
+
   .company-title {
-    font-size: 16pt;
+    font-size: 15pt;
     font-weight: bold;
-    color: #0f172a; /* Slate 900 */
+    color: #1f1b16;
     letter-spacing: -0.5px;
-    margin: 0 0 4px;
+    margin: 0 0 2px;
     text-transform: uppercase;
   }
-  
+  .company-tagline {
+    font-size: 8pt;
+    font-style: italic;
+    color: #6b6259;
+    margin-bottom: 2px;
+  }
   .company-sub {
     font-size: 8pt;
-    color: #64748b; /* Slate 500 */
+    color: #6b6259;
     line-height: 1.4;
   }
-  
+  .company-logo { max-height: 44px; max-width: 180px; margin-bottom: 4px; }
+
   .doc-badge-box {
     text-align: right;
   }
-  
+
   .doc-title {
-    font-size: 20pt;
+    font-size: 19pt;
     font-weight: bold;
-    color: #0f172a; /* Slate 900 */
+    color: #1f1b16;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin: 0 0 4px;
   }
-  
+
   .doc-meta {
     font-size: 8.5pt;
-    color: #64748b;
+    color: #6b6259;
     line-height: 1.4;
   }
   .doc-meta .val {
     font-weight: bold;
-    color: #334155;
+    color: #1f1b16;
+  }
+
+  /* Document head: number block + status + references */
+  .doc-head {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+  .doc-head td { vertical-align: top; padding: 0; }
+  .doc-number {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #1f1b16;
+  }
+  .doc-refs { font-size: 8pt; color: #6b6259; margin-top: 2px; }
+  .doc-refs .val { font-weight: bold; color: #4a4239; }
+
+  /* Controlled-document block (IATF forms, CoC, 8D) */
+  .control-block {
+    border: 1px solid #e8e2d8;
+    background: #f7f4ef;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    font-size: 8pt;
+    color: #4a4239;
+  }
+  .control-block .lbl {
+    font-size: 7.5pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6259;
   }
 
   /* Meta Grid (Two-column info headers) */
@@ -95,7 +140,7 @@
     width: 100%;
     display: table;
     table-layout: fixed;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
   .meta-grid .col {
     display: table-cell;
@@ -112,13 +157,13 @@
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #94a3b8; /* Slate 400 */
+    color: #6b6259;
     margin-bottom: 2px;
   }
   .meta-grid .v {
     font-size: 9.5pt;
     font-weight: bold;
-    color: #0f172a; /* Slate 900 */
+    color: #1f1b16;
     margin-bottom: 6px;
   }
 
@@ -126,7 +171,7 @@
   .info-grid {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
   .info-grid td {
     width: 50%;
@@ -134,8 +179,8 @@
     padding: 0;
   }
   .info-card {
-    background: #f8fafc; /* Slate 50 */
-    border: 1px solid #e2e8f0; /* Slate 200 */
+    background: #f7f4ef;
+    border: 1px solid #e8e2d8;
     border-radius: 6px;
     padding: 12px 14px;
     margin-right: 8px;
@@ -149,8 +194,8 @@
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: #64748b; /* Slate 500 */
-    border-bottom: 1px solid #e2e8f0;
+    color: #6b6259;
+    border-bottom: 1px solid #e8e2d8;
     padding-bottom: 4px;
     margin-bottom: 8px;
   }
@@ -159,13 +204,13 @@
     font-size: 8.5pt;
   }
   .info-row .lbl {
-    color: #64748b;
+    color: #6b6259;
     display: inline-block;
     width: 90px;
     font-size: 8pt;
   }
   .info-row .val {
-    color: #0f172a;
+    color: #1f1b16;
     font-weight: bold;
   }
 
@@ -174,11 +219,13 @@
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
+  table.lines thead { display: table-header-group; }
+  table.lines tr { page-break-inside: avoid; }
   table.lines th {
-    background: #0f172a; /* Slate 900 */
-    color: #ffffff;
+    background: #1f1b16; /* espresso, not slate */
+    color: #fdfcfa;
     font-size: 8pt;
     font-weight: bold;
     text-transform: uppercase;
@@ -188,17 +235,17 @@
     border: none;
   }
   table.lines th:first-child { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
-  table.lines th:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
-  
+
   table.lines td {
     padding: 8px 10px;
-    border-bottom: 1px solid #e2e8f0; /* Slate 200 */
+    border-bottom: 1px solid #f0eae0;
     font-size: 9pt;
     vertical-align: top;
-    color: #334155;
+    color: #1f1b16;
   }
+  table.lines tr:nth-child(even) td { background: #f7f4ef; }
   table.lines tr:last-child td {
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 1px solid #e8e2d8;
   }
   table.lines td.r, table.lines th.r { text-align: right; }
   table.lines td.c, table.lines th.c { text-align: center; }
@@ -210,7 +257,8 @@
     margin-left: auto;
     border-collapse: collapse;
     margin-top: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 18px;
+    page-break-inside: avoid;
   }
   table.totals td,
   .totals-box td {
@@ -220,7 +268,7 @@
   table.totals td.label,
   table.totals td.lbl,
   .totals-box td.lbl {
-    color: #64748b;
+    color: #6b6259;
     text-align: right;
   }
   table.totals td.v,
@@ -228,15 +276,15 @@
   .totals-box td.val {
     text-align: right;
     font-weight: bold;
-    color: #0f172a;
+    color: #1f1b16;
   }
   table.totals tr.grand td,
   .totals-box tr.grand-total td {
-    border-top: 2px solid #0f172a;
-    background: #f8fafc;
+    border-top: 2px solid #1f1b16;
+    background: #f7f4ef;
     font-size: 11pt;
     font-weight: bold;
-    color: #0f172a;
+    color: #1f1b16;
     padding: 10px;
   }
   table.totals tr.grand td:first-child,
@@ -249,8 +297,81 @@
     border-top-right-radius: 0;
     border-bottom-right-radius: 4px;
   }
+  .amount-words {
+    font-size: 8pt;
+    font-style: italic;
+    color: #4a4239;
+    text-align: right;
+    margin-top: 2px;
+  }
 
-  /* Status Chips */
+  /* Notes / terms */
+  .notes-block {
+    border: 1px solid #e8e2d8;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    font-size: 8.5pt;
+    color: #4a4239;
+    page-break-inside: avoid;
+  }
+  .notes-block .notes-title {
+    font-size: 7.5pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6b6259;
+    margin-bottom: 4px;
+  }
+
+  /* Report kit: filter summary, KPI strip, empty state */
+  .filter-summary {
+    border: 1px solid #e8e2d8;
+    background: #f7f4ef;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    font-size: 8.5pt;
+    color: #4a4239;
+  }
+  .filter-summary .count {
+    font-weight: bold;
+    color: #1f1b16;
+  }
+  .kpi-strip {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+  }
+  .kpi-strip td {
+    border: 1px solid #e8e2d8;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: center;
+    width: 25%;
+  }
+  .kpi-strip .kpi-val {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #1f1b16;
+  }
+  .kpi-strip .kpi-lbl {
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b6259;
+  }
+  .empty-state {
+    border: 1px dashed #e8e2d8;
+    border-radius: 6px;
+    padding: 24px;
+    text-align: center;
+    font-size: 9pt;
+    color: #6b6259;
+    margin-bottom: 16px;
+  }
+
+  /* Status Chips — label + border carry meaning in B&W, never colour alone */
   .chip {
     display: inline-block;
     padding: 3px 8px;
@@ -259,21 +380,21 @@
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: #f1f5f9;
-    color: #475569;
-    border: 1px solid #e2e8f0;
+    background: #f5f1e9;
+    color: #4a4239;
+    border: 1px solid #e8e2d8;
   }
-  .chip-success { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
-  .chip-warning { background: #fffbeb; color: #92400e; border-color: #fde68a; }
-  .chip-danger  { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
-  .chip-info    { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+  .chip-success { background: #e3ece7; color: #2c4e3b; border-color: #3f6d54; }
+  .chip-warning { background: #f7eedc; color: #7a5314; border-color: #b07a22; }
+  .chip-danger  { background: #f6e4e1; color: #7a2820; border-color: #a8392f; }
+  .chip-info    { background: #e3e9f0; color: #2a4059; border-color: #3d5a80; }
 
   /* Signatures */
   .signatures {
     width: 100%;
     display: table;
     table-layout: fixed;
-    margin-top: 30px;
+    margin-top: 28px;
     page-break-inside: avoid;
   }
   .signatures .sig,
@@ -293,28 +414,29 @@
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #64748b;
+    color: #6b6259;
     margin-bottom: 30px;
   }
   .sig-line,
   .signatures .line {
-    border-top: 1px solid #0f172a;
+    border-top: 1px solid #1f1b16;
     padding-top: 6px;
     font-size: 8.5pt;
     font-weight: bold;
-    color: #0f172a;
+    color: #1f1b16;
   }
   .sig-meta {
     font-size: 7.5pt;
-    color: #64748b;
+    color: #6b6259;
     margin-top: 2px;
   }
-  
+
   /* Utilities */
   .text-right { text-align: right; }
   .text-center { text-align: center; }
   .font-bold { font-weight: bold; }
-  .text-muted { color: #64748b; }
+  .text-muted { color: #6b6259; }
+  .page-break { page-break-after: always; }
 
 </style>
 </head>

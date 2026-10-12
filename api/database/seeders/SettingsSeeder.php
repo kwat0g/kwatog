@@ -79,6 +79,9 @@ class SettingsSeeder extends Seeder
             ['key' => 'attendance.punch_late_in_cutoff_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch: late time-in cutoff (min)', 'description' => 'The first time-in of the day is refused later than this many minutes after shift start.'],
             ['key' => 'email.brand_name', 'value' => $emailBrandName, 'group' => 'email', 'label' => 'Email Display Name', 'description' => 'Customer-facing display name used in transactional email headers and footers.'],
             ['key' => 'pdf.footer_disclaimer', 'value' => $envString('PDF_FOOTER_DISCLAIMER'), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
+            ['key' => 'company.tagline', 'value' => $envString('COMPANY_TAGLINE'), 'group' => 'company', 'label' => 'Company Tagline', 'description' => 'Optional line under the company name on PDF letterheads.'],
+            ['key' => 'pdf.accent_color', 'value' => $envString('PDF_ACCENT_COLOR') ?: '#b4542a', 'group' => 'company', 'label' => 'PDF Accent Color', 'description' => 'Hex accent for the PDF brand bar (Atelier clay #b4542a when empty).'],
+            ['key' => 'pdf.terms_conditions', 'value' => $envString('PDF_TERMS_CONDITIONS'), 'group' => 'company', 'label' => 'PDF Standard Terms', 'description' => 'Standard terms printed by the notes block on money documents.'],
 
             // ── Fiscal ───────────────────────────────────────
             [

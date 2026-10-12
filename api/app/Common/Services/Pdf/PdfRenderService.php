@@ -14,9 +14,17 @@ use Illuminate\Support\Facades\Log;
  * Series E (Task E1) — single entry point for every PDF rendered in the
  * system. Pre-injects company branding, generator metadata, and watermark
  * flag into the view so per-document Blades stay focused on body content.
+ *
+ * Phase 2 (PDF foundation) — brand chrome is Atelier (warm paper, espresso
+ * ink, clay accent). The accent/tagline/terms/logo all resolve from settings
+ * with graceful fallbacks so a missing setting hides its element instead of
+ * breaking the render.
  */
 class PdfRenderService
 {
+    /** Atelier clay — fallback when `pdf.accent_color` is unset or invalid. */
+    public const DEFAULT_ACCENT = '#b4542a';
+
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
@@ -47,9 +55,11 @@ class PdfRenderService
         $watermark    = $opts['watermark_text'] ?? ($confidential ? 'CONFIDENTIAL' : null);
 
         $companyCtx = $this->companyContext();
+        $brandCtx = $this->brandContext();
 
         $merged = array_merge($data, [
-            'company'        => $companyCtx,
+            'company'        => array_merge($companyCtx, $brandCtx),
+            'brand'          => $brandCtx,
             'generated'      => $this->generatedContext($generator),
             'confidential'   => $confidential,
             'watermark'      => $watermark,
@@ -61,9 +71,92 @@ class PdfRenderService
             'user'           => $generator?->name,
         ]);
 
-        return Pdf::loadView($view, $merged)
-            ->setPaper($paper, $orientation)
-            ->output();
+        $pdf = Pdf::loadView($view, $merged)->setPaper($paper, $orientation);
+        $this->applyMetadata($pdf, $title, $companyCtx['name']);
+
+        return $pdf->output();
+    }
+
+    /**
+     * Public brand context so tests and the branding preview can resolve the
+     * same values the chrome renders — one source of truth, no re-expression.
+     *
+     * @return array{accent: string, logo_data_uri: string, tagline: string, terms: string, name: string}
+     */
+    public function brandContext(): array
+    {
+        return [
+            'accent' => $this->accent(),
+            'logo_data_uri' => $this->logoDataUri(),
+            'tagline' => $this->setting('company.tagline'),
+            'terms' => $this->setting('pdf.terms_conditions'),
+            'name' => $this->setting('company.legal_name'),
+        ];
+    }
+
+    /** Admin-set accent, restricted to a 6-digit hex so it cannot inject CSS. */
+    private function accent(): string
+    {
+        $raw = trim($this->setting('pdf.accent_color'));
+
+        return (bool) preg_match('/^#[0-9a-fA-F]{6}$/D', $raw) ? $raw : self::DEFAULT_ACCENT;
+    }
+
+    /**
+     * Local logo file → data URI (DomPDF has `enable_remote=false`, so a URL
+     * would never load). Missing/unreadable/non-image → '' and the letterhead
+     * hides the <img> gracefully.
+     */
+    private function logoDataUri(): string
+    {
+        try {
+            $path = trim($this->setting('company.logo_path'));
+            if ($path === '') {
+                return '';
+            }
+            $disk = \Illuminate\Support\Facades\Storage::disk('local');
+            if (! $disk->exists($path)) {
+                return '';
+            }
+            $mime = match (strtolower((string) pathinfo($path, PATHINFO_EXTENSION))) {
+                'png' => 'image/png',
+                'jpg', 'jpeg' => 'image/jpeg',
+                'gif' => 'image/gif',
+                'webp' => 'image/webp',
+                default => null,
+            };
+            if ($mime === null) {
+                return '';
+            }
+            $bytes = $disk->get($path);
+            if (! is_string($bytes) || $bytes === '') {
+                return '';
+            }
+
+            return "data:{$mime};base64,".base64_encode($bytes);
+        } catch (\Throwable $exception) {
+            Log::warning('PDF logo lookup failed; omitting logo.', [
+                'exception' => $exception,
+            ]);
+
+            return '';
+        }
+    }
+
+    private function applyMetadata(mixed $pdf, ?string $title, string $author): void
+    {
+        try {
+            $dompdf = $pdf->getDomPDF();
+            $dompdf->add_info('Title', $title ?? 'Document');
+            $dompdf->add_info('Author', $author !== '' ? $author : 'OGAMI ERP');
+            $dompdf->add_info('Subject', $title ?? 'Document');
+            $dompdf->add_info('Creator', 'OGAMI ERP');
+            $dompdf->add_info('Language', 'en-PH');
+        } catch (\Throwable $exception) {
+            Log::warning('PDF metadata could not be applied.', [
+                'exception' => $exception,
+            ]);
+        }
     }
 
     /**
