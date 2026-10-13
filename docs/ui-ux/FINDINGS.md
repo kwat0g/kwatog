@@ -167,57 +167,119 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
   seeder, or update the seeder to describe the deployed reality. Meanwhile the harness maps each
   role to the account that genuinely holds it, with a comment saying why.
 
-### F-009 — `/crm/sales-orders` is the only page in 162 captures that scrolls horizontally
+### F-009 — `/crm/sales-orders` is the only page in 162 captures that scrolls horizontally — **fixed**
 
-- **Status:** Open · **Severity:** medium-high (the brief's "no horizontal page scroll" rule)
-- **Evidence:** `baseline-roles/sales/report.json` → `/crm/sales-orders@375`,
-  `horizontalPageScroll: true`. The cause is identified, not inferred:
+- **Status:** **Resolved** (`spa/src/components/ui/StatCard.tsx`) · **Severity:** was medium-high
+  (the brief's "no horizontal page scroll" rule)
+- **Evidence (as filed):** `baseline-roles/sales/report.json` → `/crm/sales-orders@375`,
+  `horizontalPageScroll: true`. The cause was identified, not inferred:
   ```
   div.text-2xl font-medium font-mono tabular-nums text-p (175>132, overflow-x: visible)
   ```
 - **Cause:** a large monospace figure — 175px of digits in a 132px slot — painting past its box
   with `overflow: visible`. The same component is present on `/accounting/invoices@375`
-  (`143>132`) but does not yet widen the page there; the sales figure is simply larger. So this
-  is **F-002's defect class** (a fixed slot that cannot hold its content) one level up: there it
-  overlapped a neighbour, here it scrolls the whole document.
-- **Why it matters:** one report of a page that can be dragged sideways on a phone; the fix
-  belongs in the shared KPI/figure component, not on the sales page.
+  (`143>132`). So this is **F-002's defect class** (a fixed slot that cannot hold its content)
+  one level up: there it overlapped a neighbour, here it scrolls the whole document.
+- **Fix — in the shared figure, where it belongs.** `StatCard`'s value is the shared KPI figure
+  (used by 60+ cards across list and detail pages), so the page was not touched. The figure now
+  sizes against **its own card** and cannot paint outside it:
+  - the value sits inside an `@container` wrapper and takes
+    `text-[clamp(1rem,12cqw,1.625rem)]` — a 16px floor at ~132px of content, reaching the 26px
+    `text-2xl` KPI spec at ~217px;
+  - `overflow-wrap: anywhere` is the backstop, not the mechanism.
+- **Why container units, not a `sm:`/`lg:` ladder.** `StatCard` is dropped into caller-chosen
+  grids — 2-up here, 1-up, 3-up and 4-up elsewhere — so the constraint that matters is the
+  card's width, not the viewport's. The same card measures 132px of content at 375px on the
+  sales list and 110px at 768px on `/budgeting`, where the viewport is *wider* and the slot
+  *narrower*; a viewport breakpoint gets that backwards.
+- **Why not truncate.** A money figure with digits hidden is worse than one on a second line, so
+  the design size is kept wherever the card has room (measured 26px/one line at 768 and 1440 on
+  `/crm/sales-orders`) and the wrap only engages when even the floor cannot fit. Verified
+  deliberately, since no live row triggers it: with `₱1,234,567,890.12` injected at 375px the
+  figure wraps to 2 lines inside the card, `scrollWidth − clientWidth = 0` and the page scroll is
+  **0**. Every digit stays on screen.
+- **Proof — A/B with the fix stashed (`w2-ctl`) vs applied (`w2-after`), same probe, same
+  accounts, same day (8 roles, 36 route×viewport rows):**
 
-### F-010 — F-004's Panel-clipping class: three of four sites fixed, the fourth is a header
+  | Row | control | fixed |
+  |---|---|---|
+  | `/crm/sales-orders@375` | `H-SCROLL`, figure `175>132` | page scroll **0**; figure `132 = 132` |
+  | `/accounting/invoices@375` | figure `143>132` | overflow **0** |
+  | 33 of the 36 rows | — | byte-identical; **no row gained overflow, no new page scroll** |
 
-- **Status:** **Resolved at 3 of 4 sites**; the `/budgeting` header **Open** ·
-  **Severity:** low-medium (silent clipping, no scrollbar)
-- **Fixed** — each panel opts in to the `scrollBody` capability F-004 added (opt-in, so no
-  unrelated panel changes):
+- **Two further sites the probe could only see as height.** The figure's fixed 26px also made
+  money values *wrap* where the slot was narrow (no overflow, so no finding) and then grow the
+  KPI row:
+  - `/budgeting@768`: four `₱ 1.23M` figures each broke after the currency symbol — the KPI row
+    measured **115px** (figure height 65px, two lines) against **70px** (one line) after; this is
+    the whole of that route's 45px panel shift.
+  - `qc /dashboard@375`: five figures stepped 26px → 16px, 3 grid rows × 13px = **38px**, exactly
+    the measured shift of every panel on that page.
+  Every remaining panel `y` change in the compared set resolves to this same step (`12cqw`),
+  with all panel **heights** unchanged except the one `/budgeting` header (F-010).
+
+### F-010 — F-004's Panel-clipping class: the fourth site was a control that could not shrink
+
+- **Status:** **Resolved at all 4 sites** · **Severity:** was low-medium (silent clipping, no
+  scrollbar)
+- **Fixed at all four sites** — three opt in to the `scrollBody` capability F-004 added (opt-in,
+  so no unrelated panel changes); the fourth is the header case below:
 
   | Site | Fix | Proof, same probe + same account |
   |---|---|---|
   | `spa/src/pages/dashboard/purchasing.tsx:107` (PR Action Queue) | `scrollBody` | ✓ purchasing `/dashboard@375`: overflow elements **4 → 0** |
   | `spa/src/pages/dashboard/purchasing.tsx:233` (Upcoming Deliveries) | `scrollBody` | ✓ same capture (both were `462>333` / `426>333`) |
   | `spa/src/pages/dashboard/finance.tsx:466` (Budget vs Actual; :459 is the empty-state variant) | `scrollBody` + `noPadding` + `px-1.5 pb-2` | ✓ finance `/dashboard@375`: **3 → 1** (the remaining 1 is the recharts text below) |
+  | `spa/src/pages/budgeting/index.tsx:194` (Budgets; the header above) | `SegmentedControl` narrow mode + `Panel` header `min-w-0` — see the 4th-site block below | ✓ `/budgeting@375`: **2 → 0**, panel and header `333 = 333` |
 
 - **Round-trip proof, not a before/after guess.** The `spa` service runs `vite dev` with
   `./spa` bind-mounted (`docker-compose.yml:29,55`), so the captured origin **is the working
   tree**. With this fix stashed the same routes re-measured the baseline numbers **exactly**
   (purchasing 4, finance 3, `/budgeting` 2); with it applied they drop. The only variable was
   the code — which also rules out the "the data changed" explanation for these routes.
-- **Still open — and it is a different defect.** `/budgeting` (finance), panel **"Budgets"**,
-  `@375`: the panel root *and* its header both measure **411px inside a 333px panel**.
+- **4th site, fixed — and it was a different defect.** `/budgeting` (finance), panel **"Budgets"**,
+  `@375`: the panel root *and* its header both measured **411px inside a 333px panel**.
   `scrollBody` cannot help; the overflow is not the body. Measured cause: the header's `meta`
   is a `SegmentedControl` whose min-content is **340px** against **301px** available.
-  - A `flex-wrap` on the header lowers it (411 → 356) but does **not** resolve it, because the
-    control alone does not fit. That change was also rejected for a measured second reason: it
-    re-spaced **54 headers across four dashboards** (the new geometry metric caught it — e.g.
-    "Payroll pipeline" was 373px of content in a 377px header and wrapped once a 12px gap was
-    added). A primitive used by 212 call sites should not change layout to serve one page; that
-    is the same reasoning that made F-004's fix opt-in, and `spa/src/components/ui/Panel.tsx`
-    was reverted to HEAD rather than shipped with the wider change.
-  - **Next unit:** a narrow-width mode for `SegmentedControl` (its options are fixed-height and
-    the wrapper is `overflow-hidden`, so this is a component change, not a class tweak), or move
-    that control out of the panel header.
-- **Also still open:** `finance/dashboard` at all three viewports — `text.[object
-  SVGAnimatedString] (64>52)`, a recharts `<text>` node wider than its box. A separate fix
-  with a separate cause; not addressed here.
+  - **Fix, two halves, both in the primitives:**
+    1. `SegmentedControl` gets a narrow-width mode — `max-w-full` (so the container may be
+       narrower than its labels at all; a shrink-to-fit box otherwise sizes to max-content),
+       `flex-wrap` (options move to a second row), `overflow-x-auto overflow-y-hidden` (second
+       stage, for a single option that cannot fit even alone) and `shrink-0 whitespace-nowrap`
+       (never squash an option under its label).
+    2. `Panel`'s header offers `min-w-0` on **both** links of its flex chain (the title cluster
+       and the meta slot). Without it a flex item's automatic minimum size is its content's, so
+       no narrow mode can engage — the header still grows to 340px.
+  - **Why not scroll alone:** tried first, and it fixed the page but left **2 of the 6 options
+    outside the control's visible box** (measured `optionsOutsideBox: 2`) — the filed complaint
+    (options unreachable, no scrollbar to say so) merely softened. A filter strip whose job is
+    "pick a status" should show the statuses. Scrolling survives as the second stage.
+  - **Why not `flex-wrap` on the header** (rejected at filing, still rejected): it re-spaced **54
+    headers across four dashboards** (the geometry metric caught e.g. "Payroll pipeline": 373px
+    of content in a 377px header, wrapped once a 12px gap was added). A primitive used by 212
+    call sites does not change layout to serve one page — the same reasoning that made F-004's
+    fix opt-in.
+  - **Measured after:** panel and header both `333 = 333`, `overflowing: []` at every viewport.
+    The control is 246px wide inside its 301px slot and wraps to two rows — option tops at
+    **1017** and **1045**, control height **58px**, tallest option bottom **57px**, i.e. nothing
+    clipped vertically and `optionsOutsideBox: 0`.
+  - **Cost, measured and accepted:** `/budgeting@375` "Budgets" header **55 → 83px**. It is the
+    one panel-height change in **264 compared panel instances**; the room is what the six
+    options need to stay visible.
+- **`min-w-0` is inert where it is not needed — proven two ways.** Against the stashed control,
+  **33 of 36** route×viewport rows are byte-identical, and 263 of 264 panel instances keep their
+  exact height (the 264th is the intended `/budgeting` header). The header's `overflow-hidden`
+  stays, so a panel whose content declares no narrow mode clips exactly as before.
+- **Regression guard:** `spa/src/components/ui/__tests__/narrow-width.test.ts` locks all of the
+  above source decisions (8 tests). jsdom has no layout engine — this defect class is invisible
+  to a render test, which is why it survived — so the test asserts the classes that fix it, in
+  the style of `styles/__tests__/blueprint-tokens.test.ts`: **6 of its 8 tests fail against the
+  pre-fix components** (negative control run with the three files stashed).
+- **Also still open, unchanged:** `finance/dashboard` at all three viewports — `text.[object
+  SVGAnimatedString] [panel: AP Aging Distribution] (64>52)`, a recharts `<text>` node wider than
+  its box. Same finding, same numbers, in **both** the control and the fixed capture — a separate
+  fix with a separate cause. (The earlier reading of `baseline-roles`, where that entry appeared
+  to be gone, was data drift: it is present in both sides of today's A/B.)
 
 ### F-011 — `/sign-in` had two WCAG 2.2 AA failures, one of them a 6px tap target
 

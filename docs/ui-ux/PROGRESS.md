@@ -2,12 +2,12 @@
 
 Single source of truth. A fresh session should be able to resume from this file alone.
 
-**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; F-010 closed at 3 of its 4 sites. W1.4 quality gates built, enforced, and green locally — axe (6 surfaces + negative control), bundle budget (5 measured budgets), e2e typecheck. The three red suites the gates surfaced (F-007, F-013, F-014) were fixed the same day: `npm run lint` is green and the full suite passes 177 files / 1034 tests.**
+**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; every finding from the shell pass is now closed — F-007/F-013/F-014 the same day, and F-009 + F-010 (the width pass) in the unit below. There is no route in the compared set with a horizontal page scroll and none with unintended overflow. W1.4 quality gates are built, enforced, and green locally — axe (6 surfaces + negative control), bundle budget (5 measured budgets), e2e typecheck.**
 
-- Branch: `feat/dss-w0-6-admin` (Phase 0–2 docs + Wave 1 PR 1, uncommitted at the time of writing)
+- Branch: `fix/ui-ux-wave1-shell` (Wave 1 so far, uncommitted at the time of writing)
 - Date: 2026-10-13
 - Decisions taken on the proposed defaults: **Wave 1 only** · **axe approved** · **docs get their own commit**
-- Next unit: **the `SegmentedControl` narrow-width mode** (the one remaining F-010 site — 340px of control in 301px of header) and **F-009** (page-level scroll, shared figure component), then **W1.2/W1.3** (component gallery + the phone action surface). **W1.4 was done early** so every later wave is measured by a gate rather than asserted.
+- Next unit: **W1.2/W1.3/W1.5** (component gallery + saved baselines, the phone action surface, chart palette tokens) — the plan's Wave 1 remainder; the F-009/F-010 work below sat outside the W1.x numbering because both are findings, not planned work. **W1.4 was done early** so every later wave is measured by a gate rather than asserted.
 
 ---
 
@@ -97,7 +97,7 @@ Single source of truth. A fresh session should be able to resume from this file 
 | F-004 Panel clipped tables | opt-in `scrollBody` prop (`Panel.tsx`) | ✓ the `357>333` element is gone; 5 rows still render |
 | (withdrawn) unnamed a11y elements | none — probe defect | ✓ Chromium AX tree: **0** unnamed |
 | F-006 hand-rolled bars ×7 | `clampPercent` in `lib/progress.ts`; `ProgressBar` uses it | ✓ 3 clamped, 4 proven safe; overflow `0 → 0`, DOM counts identical |
-| F-010 Panel-clipping class (F-004's) | `scrollBody` opt-in at 3 panels (`purchasing.tsx` ×2, `finance.tsx`) | ✓ purchasing `/dashboard@375` `4 → 0`; finance `3 → 1`; round-trip verified |
+| F-010 Panel-clipping class (F-004's) | `scrollBody` opt-in at 3 panels (`purchasing.tsx` ×2, `finance.tsx`); the 4th is a **header**, fixed in the width pass below | ✓ purchasing `/dashboard@375` `4 → 0`; finance `3 → 1`; round-trip verified |
 
 Checks run: `npm run typecheck` (exit 0) · `eslint` on the 3 changed files (exit 0) ·
 `vitest run src/components/dashboard src/components/ui` (**21 files / 89 tests passed**).
@@ -128,6 +128,52 @@ on committed code outside this PR** — F-014 and F-013, both reproduced with th
 stashed. Both were fixed the same day (see **Known gaps**), after which `lint` exits 0 and the
 full suite is green.
 
+## Wave 1 — F-009 + F-010 width pass (the two remaining shell findings)
+
+Both defects are width contracts on **shared primitives**, so neither was fixed on the page that
+reported it. Evidence is the Phase 0 harness as an A/B: `screenshots/w2-ctl` (the three edits
+stashed) vs `screenshots/w2-after` (applied), **same probe, same accounts, same day**, 8 roles ×
+1–3 routes × 3 viewports = 36 rows / 264 panel instances (3 rows differ, all improvements).
+
+| Defect | Fix | Proof |
+|---|---|---|
+| **F-009** `/crm/sales-orders@375` — the only page scroll in 162 captures; the KPI figure (`175px` of monospace in a `132px` slot) painted out of its box | `StatCard` figure sizes against **its own card**: `@container` + `text-[clamp(1rem,12cqw,1.625rem)]`, `overflow-wrap: anywhere` as the backstop | ✓ page scroll **`true → false`**; figure `175>132 → 132=132`; 26px kept wherever the card has room (768/1440) |
+| **F-009** second site: `/accounting/invoices@375` figure `143>132` | same component change, no page edit | ✓ overflow **`1 → 0`** |
+| **F-010** `/budgeting@375` panel **and** header `411` inside a `333px` panel (options clipped, no scrollbar) | `SegmentedControl` narrow mode (`max-w-full` + `flex-wrap` + `overflow-x-auto` + `shrink-0 whitespace-nowrap`) **and** `Panel` header `min-w-0` on both flex links | ✓ `333 = 333` at 375/768/1440; `optionsOutsideBox: 0`; control wraps to 2 rows in a 58px box |
+
+**No collateral movement:** 33 of 36 rows byte-identical; **263 of 264** panel instances keep their
+exact height. The single change is the intended one — `/budgeting@375` "Budgets" header
+**55 → 83px**, the room six options need to stay visible. No row gained overflow and no new page
+scroll appeared anywhere in the set.
+
+**Every `y` shift is accounted for** rather than waved at: the QC dashboard (38px at 375) and
+`/budgeting@768` (45px) move because the KPI figures step down — at 768 four `₱ 1.23M` figures were
+each wrapping to **two lines** (figure height 65px) in a 110px slot, and now sit on one (20px).
+The admin dashboard's shifts did **not** reproduce when both sides were re-captured minutes apart
+(main 2308px in both, figures 26px in both): data, not layout. All four are recorded in
+`FINDINGS.md` F-009/F-010 with their numbers.
+
+Not fixed, and explicitly out of this unit: `finance/dashboard`'s recharts `<text> (64>52)` —
+present in **both** sides of the A/B, so the earlier reading of it as gone was data drift.
+
+**Regression guard:** `spa/src/components/ui/__tests__/narrow-width.test.ts` (8 tests) locks the
+source decisions. This defect class is invisible to jsdom — no layout engine — which is why a
+render test would not have caught it; the file asserts the classes that fix it, like
+`styles/__tests__/blueprint-tokens.test.ts` asserts a token contract. **6 of the 8 fail against
+the pre-fix components** (negative control: the three files stashed, the test file kept).
+
+Checks run: `vitest` **178 files / 1042 tests passed** (was 177/1034) · `lint` **exit 0** ·
+`typecheck` **exit 0** · `audit:tokens` **clean, 1045 files** · `test:a11y` **8 passed** ·
+`audit:bundle` **5/5 hold** (`npm run build` after the change; the four new declarations —
+`clamp(…cqw…)`, `container-type`, `overflow-wrap`, `flex-wrap` — are present in the built CSS,
+so dev and production carry the same rules).
+
+One test needed updating rather than the fix backing down
+(`pages/maintenance/work-orders/index.test.tsx`): it located the two figures by `.text-2xl`,
+which is exactly the class that is now responsive. It now reads them inside their labelled card
+(`within(...)`) — class-independent **and** a stronger assertion, since it also proves the number
+landed in the right card.
+
 ## Full-role baseline (label `baseline-roles`)
 
 162 captures · 16 roles · 34 routes · 3 viewports. Corrected probe throughout.
@@ -136,15 +182,15 @@ full suite is green.
 |---|---|
 | Non-200 responses | **0** |
 | Interactive elements with no accessible name | **0** |
-| Captures with a horizontal page scroll | **1** — sales `/crm/sales-orders@375` (F-009) |
-| Captures with unintended overflow | **8** — finance ×6, purchasing ×1, sales ×1 (F-010) |
+| Captures with a horizontal page scroll | **1** — sales `/crm/sales-orders@375` (F-009, **resolved**; page scroll **0** after the fix) |
+| Captures with unintended overflow | **8** — finance ×6, purchasing ×1, sales ×1 (F-010; **0** on every route re-measured after the width pass, except the recharts `<text>` noted in F-010) |
 
 Admin and QC dashboards read **clean**, which is W1.1 and F-006 holding up under the corrected
 probe at all three viewports.
 
-**Next unit (unchanged):** F-009 (page-level scroll, shared figure component) and the `/budgeting`
-header (the one F-010 site `scrollBody` cannot fix — see F-010 for the measurement). W1.4 landed
-first — see Wave 1 PR 4 above.
+**Next unit:** W1.2 (component gallery + saved visual baselines), then W1.3 (phone action
+surface). Both shell findings that were still open when this baseline was taken — F-009 and the
+`/budgeting` header — are closed above.
 
 ## Known gaps / blockers
 
@@ -159,12 +205,16 @@ first — see Wave 1 PR 4 above.
   - **F-014:** the five `toISOString()` sites in return-management now use `manilaIsoDate()`.
   - Result: `npm run lint` **exit 0**; suite **177 files / 1034 tests passed**; `typecheck`,
     `typecheck:e2e`, `audit:tokens`, `test:a11y` (8) and `audit:bundle` (5/5) all green.
+- **F-009 / F-010 — resolved 2026-10-13**, the second unit of the day (the width pass above).
+  The only part of either still open is F-010's `finance/dashboard` recharts `<text> (64>52)`,
+  which reproduces identically in the control and the fixed capture.
 - **F-005** — QC coverage `pct` can exceed 100 (two different quantities in the ratio); needs
   a business definition of the denominator before it can be fixed.
-- **Unexplained, not credited:** in the same comparison `/accounting/invoices@375` and
-  `/accounting/bills@375` went `1 → 0` with no change to those pages. Neither route was part of
-  the stash round-trip, so live data is the likely cause; recorded here rather than claimed as a
-  fix.
+- **Drift, not credited:** the width pass settled two earlier readings as data rather than code —
+  `/accounting/invoices@375` and `/accounting/bills@375` `1 → 0` (no change to those pages then,
+  and none now), and `finance/dashboard`'s recharts text appearing to clear on one capture. Both
+  are in the A/B above with the same numbers on both sides, which is why they are not claimed as
+  fixes.
 - **Not measured:** Lighthouse, LCP/INP/CLS, full-suite duration (axe and bundle size are now
   gated — see Wave 1 PR 4).
 - **Tier B/C findings** (approval board-blindness, notification gaps, index debt,
