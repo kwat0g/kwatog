@@ -78,9 +78,30 @@ const DEFAULT_ROUTES = {
   customer_service: ['/dashboard', '/crm/complaints', '/return-management'],
 };
 
+/**
+ * Read a `--name value` argument.
+ *
+ * Fails LOUDLY on the `--name=value` form. `indexOf` is an exact-token match, so
+ * `--role=purchasing` used to miss and fall through to the default — the harness
+ * then captured the wrong role into the wrong label without printing an error
+ * (18 screenshots written under admin/before before anyone noticed). A silent
+ * wrong answer is worse than a crash, so this rejects the form outright.
+ */
 function arg(name, fallback = undefined) {
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? fallback : process.argv[index + 1];
+  const flag = `--${name}`;
+  const eqForm = process.argv.find((a) => a.startsWith(`${flag}=`));
+  if (eqForm) {
+    throw new Error(
+      `argument "${eqForm}" uses "=" — pass "${flag} ${eqForm.slice(flag.length + 1)}" instead`,
+    );
+  }
+  const index = process.argv.indexOf(flag);
+  if (index === -1) return fallback;
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`argument "${flag}" is missing a value`);
+  }
+  return value;
 }
 
 function slug(route) {
@@ -109,6 +130,7 @@ async function main() {
     : (DEFAULT_ROUTES[role] ?? ['/dashboard']);
   const outRoot = path.join(REPO_ROOT, 'docs', 'ui-ux', 'screenshots', label, role);
   await mkdir(outRoot, { recursive: true });
+  console.log(`-> role ${role}, label ${label}: ${routes.length} route(s) into ${outRoot}`);
 
   const browser = await chromium.launch();
   /* TLS is internal (APP_URL=https://47.129.228.44); Chromium must not reject it. */
@@ -182,6 +204,26 @@ async function main() {
               dialogs: document.querySelectorAll('[role="dialog"]').length,
               charts: document.querySelectorAll('svg.recharts-surface').length,
             },
+            /**
+             * Panel header geometry — how a change to the shared Panel primitive
+             * is proven inert (or not) on pages that already render cleanly.
+             *
+             * Keyed on title + height + y, NOT width: a live count in `meta`
+             * moves the width between two captures of the same code, so width
+             * cannot distinguish a layout regression from fresh data. A wrapped
+             * or re-spaced header changes height or y; a data refresh does not.
+             */
+            panels: Array.from(
+              document.querySelectorAll('[class*="bg-canvas border border-default"]'),
+            ).map((panel) => {
+              const header = panel.firstElementChild;
+              const rect = header?.getBoundingClientRect();
+              return {
+                t: (panel.querySelector('h3')?.textContent ?? '').trim(),
+                h: rect ? Math.round(rect.height) : 0,
+                y: rect ? Math.round(rect.y) : 0,
+              };
+            }),
             a11y: {
               imagesWithoutAlt: Array.from(document.querySelectorAll('img')).filter(
                 (img) => !img.hasAttribute('alt'),
@@ -237,7 +279,13 @@ async function main() {
                 .slice(0, 10)
                 .map((el) => {
                   const style = getComputedStyle(el);
-                  return `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).slice(0, 50)}` : ''} (${el.scrollWidth}>${el.clientWidth}, overflow-x:${style.overflowX})`;
+                  // Name the enclosing Panel so the finding points at a call site.
+                  const panel =
+                    el
+                      .closest('[class*="bg-canvas border border-default"]')
+                      ?.querySelector('h3')
+                      ?.textContent?.trim() ?? '';
+                  return `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).slice(0, 50)}` : ''}${panel ? ` [panel: ${panel}]` : ''} (${el.scrollWidth}>${el.clientWidth}, overflow-x:${style.overflowX})`;
                 });
             })(),
           };
@@ -260,6 +308,7 @@ async function main() {
               .map((node) => `${node.role?.value}${node.description?.value ? ` (${node.description.value})` : ''}`),
           },
           overflowing: metrics.overflowing,
+          panels: metrics.panels,
           file: path.relative(REPO_ROOT, file),
         });
         console.log(
