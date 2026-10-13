@@ -11,6 +11,7 @@ import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -92,7 +93,7 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
  }
 
  return (
- <Panel title="Inspection Queue" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+ <Panel title="Inspection Queue" meta={items.length.toString()} noPadding scrollBody bodyClassName="px-1.5 pb-2">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
@@ -157,19 +158,12 @@ function DefectParetoPanel({ items, policy }: { items: DefectItem[]; policy?: Qu
  </span>
  <span className="font-mono tabular-nums ml-2">{d.count}</span>
  </div>
- <div
- role="progressbar"
- aria-valuenow={pct}
- aria-valuemin={0}
- aria-valuemax={100}
- aria-label={`${d.code}: ${d.count} occurrences`}
- className="h-2 bg-subtle rounded-full overflow-hidden"
- >
- <div
- className={defectBarClass(pct, policy)}
- style={{ width: `${pct}%` }}
+ <ProgressBar
+   value={pct}
+   variant={defectVariant(pct, policy)}
+   height="2"
+   ariaLabel={`${d.code}: ${d.count} occurrences`}
  />
- </div>
  </li>
  );
  })}
@@ -178,10 +172,10 @@ function DefectParetoPanel({ items, policy }: { items: DefectItem[]; policy?: Qu
  );
 }
 
-function defectBarClass(pct: number, policy?: QualityDashboardData['display_policy']): string {
- if (policy && pct >= policy.defect_danger_pct) return 'h-full bg-danger-bg rounded-full';
- if (policy && pct >= policy.defect_warning_pct) return 'h-full bg-warning-bg rounded-full';
- return 'h-full bg-info-bg rounded-full';
+function defectVariant(pct: number, policy?: QualityDashboardData['display_policy']): 'danger' | 'warning' | 'info' {
+  if (policy && pct >= policy.defect_danger_pct) return 'danger';
+  if (policy && pct >= policy.defect_warning_pct) return 'warning';
+  return 'info';
 }
 
 function NcrStatusPanel({ items }: { items: NcrItem[] }) {
@@ -194,7 +188,7 @@ function NcrStatusPanel({ items }: { items: NcrItem[] }) {
  }
 
  return (
- <Panel title="Open NCRs" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+ <Panel title="Open NCRs" meta={items.length.toString()} noPadding scrollBody bodyClassName="px-1.5 pb-2">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
@@ -266,19 +260,12 @@ function QcChainCoveragePanel({ coverage, policy }: { coverage: QualityDashboard
  <span className="font-mono tabular-nums ml-1">({s.pct}%)</span>
  </span>
  </div>
- <div
- role="progressbar"
- aria-valuenow={s.pct}
- aria-valuemin={0}
- aria-valuemax={100}
- aria-label={`${s.label}: ${s.inspected} of ${s.total} inspected`}
- className="h-2.5 bg-subtle rounded-full overflow-hidden"
- >
- <div
- className={coverageBarClass(s.pct, policy)}
- style={{ width: `${s.pct}%` }}
+ <ProgressBar
+   value={s.pct}
+   variant={coverageVariant(s.pct, policy)}
+   height="2"
+   ariaLabel={`${s.label}: ${s.inspected} of ${s.total} inspected`}
  />
- </div>
  </li>
  ))}
  </ul>
@@ -286,11 +273,14 @@ function QcChainCoveragePanel({ coverage, policy }: { coverage: QualityDashboard
  );
 }
 
-function coverageBarClass(pct: number, policy?: QualityDashboardData['display_policy']): string {
- if (policy && pct >= policy.coverage_success_pct) return 'h-full bg-success-bg rounded-full';
- if (policy && pct >= policy.coverage_info_pct) return 'h-full bg-info-bg rounded-full';
- if (policy && pct >= policy.coverage_warning_pct) return 'h-full bg-warning-bg rounded-full';
- return 'h-full bg-danger-bg rounded-full';
+function coverageVariant(
+  pct: number,
+  policy?: QualityDashboardData['display_policy'],
+): 'success' | 'info' | 'warning' | 'danger' {
+  if (policy && pct >= policy.coverage_success_pct) return 'success';
+  if (policy && pct >= policy.coverage_info_pct) return 'info';
+  if (policy && pct >= policy.coverage_warning_pct) return 'warning';
+  return 'danger';
 }
 
 /* ───────────────────────── Page component ───────────────────────── */
