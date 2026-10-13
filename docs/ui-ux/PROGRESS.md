@@ -2,12 +2,12 @@
 
 Single source of truth. A fresh session should be able to resume from this file alone.
 
-**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified.**
+**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; F-010 closed at 3 of its 4 sites.**
 
 - Branch: `feat/dss-w0-6-admin` (Phase 0–2 docs + Wave 1 PR 1, uncommitted at the time of writing)
 - Date: 2026-10-13
 - Decisions taken on the proposed defaults: **Wave 1 only** · **axe approved** · **docs get their own commit**
-- Next unit: **W1.2/W1.3** (component gallery + the phone action surface)
+- Next unit: **the `SegmentedControl` narrow-width mode** (the one remaining F-010 site — 340px of control in 301px of header) and **F-009** (page-level scroll, shared figure component), then **W1.2/W1.3** (component gallery + the phone action surface)
 
 ---
 
@@ -54,6 +54,22 @@ Single source of truth. A fresh session should be able to resume from this file 
   cd spa && node scripts/ui-ux-baseline-capture.mjs --role admin --label baseline
   ```
   Output: `docs/ui-ux/screenshots/<label>/<role>/`
+- Flags are **space-separated** (`--role admin`, never `--role=admin`). C-003: the harness used
+  to ignore the `=` form *silently* and capture the default role instead; it now throws, and it
+  prints the resolved role, label and output path **before** the first capture.
+- The captured origin **is the working tree**: the `spa` service runs `vite dev` with `./spa`
+  bind-mounted (`docker-compose.yml`), so a capture reflects uncommitted edits with no rebuild
+  step. That allows a true A/B — `git stash push -- <files>` for the "before" side, capture,
+  `git stash pop`, capture again — which is how F-010's fix was proven (the stashed run
+  re-measured the baseline numbers *exactly*).
+- Each capture's JSON now records `overflowing` (in-flow overflow, every entry **naming its
+  enclosing Panel**), `a11y` (Chromium's accessibility tree), `counts`, and `panels`
+  (panel-header height + y). Compare geometry by **title + height + y, never width** — a live
+  count in `meta` moves the width between two captures of identical code.
+- Background sweeps: killing the wrapper shell does **not** kill the `node` child. An orphaned
+  sweep kept writing captures — and interleaving NUL-padded output into its log — after its
+  parent was reported gone. Check `ps -eo pid,cmd | grep [u]i-ux-baseline-capture` before
+  trusting a "finished" sweep.
 
 ## Wave 1 PR 1 — shipped and measured
 
@@ -64,6 +80,7 @@ Single source of truth. A fresh session should be able to resume from this file 
 | F-004 Panel clipped tables | opt-in `scrollBody` prop (`Panel.tsx`) | ✓ the `357>333` element is gone; 5 rows still render |
 | (withdrawn) unnamed a11y elements | none — probe defect | ✓ Chromium AX tree: **0** unnamed |
 | F-006 hand-rolled bars ×7 | `clampPercent` in `lib/progress.ts`; `ProgressBar` uses it | ✓ 3 clamped, 4 proven safe; overflow `0 → 0`, DOM counts identical |
+| F-010 Panel-clipping class (F-004's) | `scrollBody` opt-in at 3 panels (`purchasing.tsx` ×2, `finance.tsx`) | ✓ purchasing `/dashboard@375` `4 → 0`; finance `3 → 1`; round-trip verified |
 
 Checks run: `npm run typecheck` (exit 0) · `eslint` on the 3 changed files (exit 0) ·
 `vitest run src/components/dashboard src/components/ui` (**21 files / 89 tests passed**).
@@ -84,8 +101,8 @@ corrected probe) — same probe both sides, **NO REGRESSIONS**, data rows unchan
 Admin and QC dashboards read **clean**, which is W1.1 and F-006 holding up under the corrected
 probe at all three viewports.
 
-**Next unit:** F-009 (page-level scroll, shared figure component) and F-010 (three panels opt
-into the existing `scrollBody`; the budgeting header needs a different fix).
+**Next unit:** F-009 (page-level scroll, shared figure component) and the `/budgeting` header
+(the one F-010 site `scrollBody` cannot fix — see F-010 for the measurement).
 
 ## Known gaps / blockers
 
@@ -95,6 +112,10 @@ into the existing `scrollBody`; the budgeting header needs a different fix).
   `maintenance.parts_handed_over` (reproduced with this PR stashed). One-line fix, own PR.
 - **F-005** — QC coverage `pct` can exceed 100 (two different quantities in the ratio); needs
   a business definition of the denominator before it can be fixed.
+- **Unexplained, not credited:** in the same comparison `/accounting/invoices@375` and
+  `/accounting/bills@375` went `1 → 0` with no change to those pages. Neither route was part of
+  the stash round-trip, so live data is the likely cause; recorded here rather than claimed as a
+  fix.
 - **Not measured:** axe/Lighthouse, bundle size, LCP/INP/CLS, full-suite duration.
 - **Tier B/C findings** (approval board-blindness, notification gaps, index debt,
   uncached hot paths) come from `docs/dashboards/phase0/*` and were not re-verified here.

@@ -183,30 +183,43 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
 - **Why it matters:** one report of a page that can be dragged sideways on a phone; the fix
   belongs in the shared KPI/figure component, not on the sales page.
 
-### F-010 — F-004's Panel-clipping class is unfixed at four more call sites
+### F-010 — F-004's Panel-clipping class: three of four sites fixed, the fourth is a header
 
-- **Status:** Open · **Severity:** low-medium (silent clipping, no scrollbar)
-- **Evidence:** `baseline-roles/*/report.json`, all at 375px —
-  ```
-  finance/dashboard     : div.bg-canvas border … overflow-hidden (396>333)  + div.p-4 (396>333)
-  finance/budgeting     : div.bg-canvas border … overflow-hidden (411>333)
-                          + div.flex items-center justify-between px-4 py-3 (411>333)  ← the HEADER
-  purchasing/dashboard  : (462>333) and (426>333), each with a clipped div.px-1.5 pb-2 body
-  ```
-- **Cause:** `Panel` clips its own overflow for rounded corners, so an over-wide child is cut
-  off with no scrollbar. `Panel.scrollBody` now exists (F-004) but it is **opt-in**, and these
-  four panels never opted in — the exact "inconsistent partial rollout" the risk register names.
-- **Two distinct sub-causes, so not one fix:** three panels overflow in the **body** (the
-  `scrollBody` prop applies directly); `/budgeting` overflows in the **header**, where
-  `scrollBody` does not help at all and the title/meta/actions need to wrap or truncate at 375.
-- **Also on `finance/dashboard` at all three viewports:**
-  `text.[object SVGAnimatedString] (64>52)` — a recharts `<text>` node wider than its box,
-  most likely an axis label. Lower impact, separate fix.
+- **Status:** **Resolved at 3 of 4 sites**; the `/budgeting` header **Open** ·
+  **Severity:** low-medium (silent clipping, no scrollbar)
+- **Fixed** — each panel opts in to the `scrollBody` capability F-004 added (opt-in, so no
+  unrelated panel changes):
+
+  | Site | Fix | Proof, same probe + same account |
+  |---|---|---|
+  | `spa/src/pages/dashboard/purchasing.tsx:107` (PR Action Queue) | `scrollBody` | ✓ purchasing `/dashboard@375`: overflow elements **4 → 0** |
+  | `spa/src/pages/dashboard/purchasing.tsx:233` (Upcoming Deliveries) | `scrollBody` | ✓ same capture (both were `462>333` / `426>333`) |
+  | `spa/src/pages/dashboard/finance.tsx:466` (Budget vs Actual; :459 is the empty-state variant) | `scrollBody` + `noPadding` + `px-1.5 pb-2` | ✓ finance `/dashboard@375`: **3 → 1** (the remaining 1 is the recharts text below) |
+
+- **Round-trip proof, not a before/after guess.** The `spa` service runs `vite dev` with
+  `./spa` bind-mounted (`docker-compose.yml:29,55`), so the captured origin **is the working
+  tree**. With this fix stashed the same routes re-measured the baseline numbers **exactly**
+  (purchasing 4, finance 3, `/budgeting` 2); with it applied they drop. The only variable was
+  the code — which also rules out the "the data changed" explanation for these routes.
+- **Still open — and it is a different defect.** `/budgeting` (finance), panel **"Budgets"**,
+  `@375`: the panel root *and* its header both measure **411px inside a 333px panel**.
+  `scrollBody` cannot help; the overflow is not the body. Measured cause: the header's `meta`
+  is a `SegmentedControl` whose min-content is **340px** against **301px** available.
+  - A `flex-wrap` on the header lowers it (411 → 356) but does **not** resolve it, because the
+    control alone does not fit. That change was also rejected for a measured second reason: it
+    re-spaced **54 headers across four dashboards** (the new geometry metric caught it — e.g.
+    "Payroll pipeline" was 373px of content in a 377px header and wrapped once a 12px gap was
+    added). A primitive used by 212 call sites should not change layout to serve one page; that
+    is the same reasoning that made F-004's fix opt-in, and `spa/src/components/ui/Panel.tsx`
+    was reverted to HEAD rather than shipped with the wider change.
+  - **Next unit:** a narrow-width mode for `SegmentedControl` (its options are fixed-height and
+    the wrapper is `overflow-hidden`, so this is a component change, not a class tweak), or move
+    that control out of the panel header.
+- **Also still open:** `finance/dashboard` at all three viewports — `text.[object
+  SVGAnimatedString] (64>52)`, a recharts `<text>` node wider than its box. A separate fix
+  with a separate cause; not addressed here.
 
 ## Measurement corrections (probe defects, not application defects)
-
-Recorded because both were published in `00-discovery.md` before being disproved, and the
-corrections change the numbers.
 
 ### C-001 — "20 interactive elements with no accessible name" was a false positive
 
@@ -229,6 +242,24 @@ corrections change the numbers.
   label overflowing its own text — the real F-002 defect — is still caught. Getting this wrong
   in either direction is how a probe either invents defects or hides them: the first version
   invented one, and the second version (element-children only) hid F-002 until the leaf rule was added.
+
+### C-003 — The capture harness silently ignored `--flag=value` and captured the wrong role
+
+- **Found and fixed 2026-10-13, in the harness itself.** `arg()` matched with
+  `process.argv.indexOf('--role')` — an exact-token match — so `--role=purchasing` **missed**
+  and fell through to the default. The harness then captured **admin** routes into the
+  **`before`** label: 18 screenshots, no error, and the wrong path printed only on its last line.
+- **Impact:** an untracked, uncited label (`screenshots/before/` — referenced by no document)
+  was overwritten with post-fix images and is not recoverable. It was moved out of the tree rather
+  than left where it could be mistaken for "before" evidence. **No cited claim depends on it:**
+  the record cites `before2`, `before3`, `after`, `baseline` and `baseline-roles`, all tracked.
+- **Fix:** `arg()` now throws on the `=` form and on a missing value, and `main()` prints the
+  resolved role, label and output path **before** the first capture.
+- **Why it is recorded with the probe defects:** same failure shape as C-001 and C-002 — a tool
+  that reports success while producing a wrong artifact. A silent fallback is worse than a crash.
+
+Recorded because both were published in `00-discovery.md` before being disproved, and the
+corrections change the numbers.
 
 ---
 
