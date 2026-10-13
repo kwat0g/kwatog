@@ -174,6 +174,9 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   mrp_run_completed: { icon: LuFactory, group: 'system', label: 'MRP' },
   'maintenance.assignment_needed': { icon: LuUsers, group: 'approvals', label: 'Maintenance' },
   'maintenance.assigned': { icon: LuWrench, group: 'system', label: 'Maintenance' },
+  // Warehouse confirmed the spare parts (F-007): status update to the technician,
+  // not an approval or an alert — "Repair can continue."
+  'maintenance.parts_handed_over': { icon: LuPackageCheck, group: 'system', label: 'Maintenance' },
   'maintenance.assignment_escalated': { icon: LuTriangleAlert, group: 'alerts', label: 'Maintenance' },
   'maintenance.repair_submitted': { icon: LuClipboardCheck, group: 'approvals', label: 'Maintenance' },
   'maintenance.repair_rejected': { icon: LuTriangleAlert, group: 'alerts', label: 'Maintenance' },
