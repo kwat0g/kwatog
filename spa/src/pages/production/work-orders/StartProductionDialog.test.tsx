@@ -194,6 +194,10 @@ it('shows one attendance warning and a short recovery instruction while keeping 
 });
 
 it('requires explicit approval of a late suggestion and clears approval when preferred day changes', async () => {
+  /* Manila-relative days: the dialog accepts today or later, so a fixed date
+     turns this red once the calendar passes it (same class as CrewPanel.test.tsx). */
+  const today = scheduleDateKey(new Date().toISOString(), 'Asia/Manila');
+  const nextDay = offsetScheduleDate(today, 1);
   vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue({
     ...readiness,
     ready: false,
@@ -243,10 +247,10 @@ it('requires explicit approval of a late suggestion and clears approval when pre
   fireEvent.click(await screen.findByRole('button', { name: 'Reschedule' }));
   await screen.findByLabelText('Delivery impact / reason');
   fireEvent.change(screen.getByLabelText('Preferred production day'), {
-    target: { value: '2026-10-09' },
+    target: { value: nextDay },
   });
   await waitFor(() =>
-    expect(workOrdersApi.rescheduleSuggestion).toHaveBeenCalledWith('wo', '2026-10-09'),
+    expect(workOrdersApi.rescheduleSuggestion).toHaveBeenCalledWith('wo', nextDay),
   );
   expect(await screen.findByLabelText('I approve production past the deadline.')).not.toBeChecked();
   expect(screen.getByLabelText('Delivery impact / reason')).toHaveValue('');
@@ -290,18 +294,22 @@ it('keeps future approved timing on reopen and loads suggestions only after expl
   expect(screen.queryByRole('button', { name: 'Start production' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Reschedule' }));
   const today = scheduleDateKey(new Date().toISOString(), 'Asia/Manila');
+  const nextDay = offsetScheduleDate(today, 1);
   await waitFor(() => expect(workOrdersApi.rescheduleSuggestion).toHaveBeenCalledWith('wo', today));
   fireEvent.change(screen.getByLabelText('Preferred production day'), {
-    target: { value: '2026-10-09' },
+    target: { value: nextDay },
   });
   await waitFor(() =>
-    expect(workOrdersApi.rescheduleSuggestion).toHaveBeenCalledWith('wo', '2026-10-09'),
+    expect(workOrdersApi.rescheduleSuggestion).toHaveBeenCalledWith('wo', nextDay),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Keep approved schedule' }));
   expect(screen.queryByLabelText('Preferred production day')).toBeNull();
   expect(workOrdersApi.reviewSlot).not.toHaveBeenCalled();
 });
 it('labels a later-day alternative and requires explicit approval', async () => {
+  const today = scheduleDateKey(new Date().toISOString(), 'Asia/Manila');
+  const requested = offsetScheduleDate(today, 1);
+  const alternative = offsetScheduleDate(today, 2);
   vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue({
     ...readiness,
     ready: false,
@@ -309,8 +317,8 @@ it('labels a later-day alternative and requires explicit approval', async () => 
     blockers: [{ code: 'schedule', message: 'Scheduled for a later time.' }],
   });
   vi.mocked(workOrdersApi.rescheduleSuggestion).mockResolvedValue({
-    scheduled_start: '2026-10-12T08:00:00+08:00',
-    scheduled_end: '2026-10-12T09:00:00+08:00',
+    scheduled_start: `${alternative}T08:00:00+08:00`,
+    scheduled_end: `${alternative}T09:00:00+08:00`,
     expected_schedule_id: 'slot',
     expected_schedule_updated_at: 'version',
     expected_crew_id: 'crew',
@@ -330,7 +338,7 @@ it('labels a later-day alternative and requires explicit approval', async () => 
   show();
   fireEvent.click(await screen.findByRole('button', { name: 'Reschedule' }));
   fireEvent.change(screen.getByLabelText('Preferred production day'), {
-    target: { value: '2026-10-11' },
+    target: { value: requested },
   });
   expect(await screen.findByText('Next available schedule · Asia/Manila')).toBeDefined();
   expect(workOrdersApi.reviewSlot).not.toHaveBeenCalled();
