@@ -82,6 +82,29 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
 - **Interim state:** the UI now clamps the rendered width and the ARIA value, so the screen is
   no longer broken while the number remains wrong.
 
+### F-006 — The same hand-rolled progress bar survives in five other dashboards
+
+- **Status:** Open · **Severity:** latent (the identical defect, not yet observed to trigger) · **Next unit**
+- **Evidence:** after migrating `quality.tsx` (F-003), the hand-rolled `role="progressbar"`
+  track + fill shape is still present at these sites — 7 instances, none of which use the shared
+  `ProgressBar`:
+
+  | File | Instances |
+  |---|---|
+  | `spa/src/pages/dashboard/hr.tsx` | 1 |
+  | `spa/src/pages/dashboard/plant-manager.tsx` | 2 |
+  | `spa/src/pages/dashboard/ppc.tsx` | 2 |
+  | `spa/src/pages/dashboard/purchasing.tsx` | 1 |
+  | `spa/src/pages/dashboard/warehouse.tsx` | 1 |
+
+- **Why not fixed in the same commit:** each needs its own check of whether its percentage can
+  exceed 100. F-003's QC bar could, because its service divides two different quantities; a bar
+  fed by a value the backend already clamps is not defective, and rewriting it would be churn
+  with a visual-regression risk and no bug fixed. The correct outcome is per site: **migrate**
+  or **prove safe**. Recording the list is what keeps that from being forgotten.
+- **Not a silent omission:** this is the class the brief's risk register calls "inconsistent
+  partial rollout" — one dashboard fixed and five left on a duplicate implementation.
+
 ---
 
 ## Measurement corrections (probe defects, not application defects)
