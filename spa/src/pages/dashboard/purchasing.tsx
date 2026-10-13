@@ -104,7 +104,7 @@ function PrActionQueuePanel({ items }: { items: PrActionItem[] }) {
  }
 
  return (
- <Panel title="PR Action Queue" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+ <Panel title="PR Action Queue" meta={items.length.toString()} noPadding scrollBody bodyClassName="px-1.5 pb-2">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
@@ -230,7 +230,7 @@ function UpcomingDeliveriesPanel({ items, horizonDays }: { items: UpcomingDelive
  }
 
  return (
- <Panel title={`Upcoming Deliveries (${horizonDays} days)`} meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+ <Panel title={`Upcoming Deliveries (${horizonDays} days)`} meta={items.length.toString()} noPadding scrollBody bodyClassName="px-1.5 pb-2">
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
