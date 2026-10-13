@@ -62,6 +62,7 @@ Single source of truth. A fresh session should be able to resume from this file 
 | F-003 unclamped progress bars | use shared `ProgressBar` (`quality.tsx`, 2 bars) | ✓ qc /dashboard `3 → 0` mobile, `1 → 0` tablet/desktop |
 | F-004 Panel clipped tables | opt-in `scrollBody` prop (`Panel.tsx`) | ✓ the `357>333` element is gone; 5 rows still render |
 | (withdrawn) unnamed a11y elements | none — probe defect | ✓ Chromium AX tree: **0** unnamed |
+| F-006 hand-rolled bars ×7 | `clampPercent` in `lib/progress.ts`; `ProgressBar` uses it | ✓ 3 clamped, 4 proven safe; overflow `0 → 0`, DOM counts identical |
 
 Checks run: `npm run typecheck` (exit 0) · `eslint` on the 3 changed files (exit 0) ·
 `vitest run src/components/dashboard src/components/ui` (**21 files / 89 tests passed**).
@@ -72,6 +73,8 @@ corrected probe) — same probe both sides, **NO REGRESSIONS**, data rows unchan
 
 - **F-001** — any `127.0.0.1` origin 419s on sign-in (`SANCTUM_STATEFUL_DOMAINS` pins the
   session to `APP_URL`). Capture must use the `APP_URL` origin.
+- **F-007** — pre-existing red test: `notificationMeta.test.ts` fails on the backend type
+  `maintenance.parts_handed_over` (reproduced with this PR stashed). One-line fix, own PR.
 - **F-005** — QC coverage `pct` can exceed 100 (two different quantities in the ratio); needs
   a business definition of the denominator before it can be fixed.
 - **Not measured:** axe/Lighthouse, bundle size, LCP/INP/CLS, full-suite duration.

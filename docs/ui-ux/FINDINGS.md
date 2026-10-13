@@ -82,29 +82,62 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
 - **Interim state:** the UI now clamps the rendered width and the ARIA value, so the screen is
   no longer broken while the number remains wrong.
 
-### F-006 — The same hand-rolled progress bar survives in five other dashboards
+### F-006 — The same hand-rolled progress bar survived in five other dashboards
 
-- **Status:** Open · **Severity:** latent (the identical defect, not yet observed to trigger) · **Next unit**
-- **Evidence:** after migrating `quality.tsx` (F-003), the hand-rolled `role="progressbar"`
-  track + fill shape is still present at these sites — 7 instances, none of which use the shared
-  `ProgressBar`:
+- **Status:** **Resolved** (all 7 sites given a verdict) · **Severity:** latent (never observed to trigger)
+- **Original evidence:** after migrating `quality.tsx` (F-003), the hand-rolled
+  `role="progressbar"` track + fill shape remained at 7 sites in 5 files.
+- **Verdict per site — two different problems, so two different answers:**
 
-  | File | Instances |
+  **1. At risk, and now clamped (3 sites).** Each rendered a backend-supplied `percent`
+  directly into `width` and `aria-valuenow` under `aria-valuemax={100}` — the exact F-003
+  shape. Warehouse zone occupancy is the clearest real-world case: a location holding more
+  than its nominal capacity legitimately exceeds 100%.
+
+  | Site | Value |
   |---|---|
-  | `spa/src/pages/dashboard/hr.tsx` | 1 |
-  | `spa/src/pages/dashboard/plant-manager.tsx` | 2 |
-  | `spa/src/pages/dashboard/ppc.tsx` | 2 |
-  | `spa/src/pages/dashboard/purchasing.tsx` | 1 |
-  | `spa/src/pages/dashboard/warehouse.tsx` | 1 |
+  | `spa/src/pages/dashboard/plant-manager.tsx:308` | `s.percent` |
+  | `spa/src/pages/dashboard/ppc.tsx:152,160` | `s.percent` (also the ARIA max violation) |
+  | `spa/src/pages/dashboard/warehouse.tsx:211,219` | `z.percent` (also the ARIA max violation) |
 
-- **Why not fixed in the same commit:** each needs its own check of whether its percentage can
-  exceed 100. F-003's QC bar could, because its service divides two different quantities; a bar
-  fed by a value the backend already clamps is not defective, and rewriting it would be churn
-  with a visual-regression risk and no bug fixed. The correct outcome is per site: **migrate**
-  or **prove safe**. Recording the list is what keeps that from being forgotten.
-- **Not a silent omission:** this is the class the brief's risk register calls "inconsistent
-  partial rollout" — one dashboard fixed and five left on a duplicate implementation.
+  **2. Proven safe — left untouched (4 sites).** Each derives its own ratio with a guarded
+  denominator, `Math.max(…counts, 1)`, so the result cannot exceed 100 and cannot be `NaN`:
 
+  | Site | Guard |
+  |---|---|
+  | `spa/src/pages/dashboard/hr.tsx:358` | `Math.max(...departments.map((d) => d.count), 1)` |
+  | `spa/src/pages/dashboard/plant-manager.tsx:389` | `Math.max(...defects.map((d) => d.count), 1)` |
+  | `spa/src/pages/dashboard/ppc.tsx:452` | `Math.round((i.count / maxCount) * 100)` over a guarded max |
+  | `spa/src/pages/dashboard/purchasing.tsx:163` | same |
+
+  Rewriting the four safe sites would be churn with a real visual-regression risk (the shared
+  `ProgressBar` only offers `h-1`/`h-2`, while these use `h-2.5` and `h-3`) and no bug
+  fixed. "Migrate or prove safe" was the test; four proved safe.
+
+- **Fix:** `spa/src/lib/progress.ts` → `clampPercent()` is now the single definition of the
+  0–100 rule, and `ProgressBar` imports it instead of keeping its own copy. `clampPercent`
+  also guards `NaN`/`Infinity` (the old `Math.min/Math.max` composition returned `NaN` for a
+  `NaN` input, which renders as the invalid declaration `width: NaN%` and silently drops the
+  fill to zero).
+- **Proof:** production / PPC / warehouse `/dashboard` at 375/768/1440 — overflow **0 → 0**,
+  no horizontal page scroll, **DOM counts byte-identical** (`screenshots/before3` vs
+  `after3`). `typecheck` exit 0, `eslint` exit 0. The guard is latent by design: today's data
+  is inside 0–100, so nothing visible should change — and nothing did.
+
+### F-007 — A backend notification type renders as a generic bell
+
+- **Status:** Open · **Severity:** low · **Separate PR** · pre-existing
+- **Evidence:** `npx vitest run src/lib/notificationMeta.test.ts` fails, with or without this
+  PR's changes (verified by stashing them):
+  ```
+  These backend types render as a generic bell. Add them to BY_TYPE in notificationMeta.ts:
+  maintenance.parts_handed_over: expected [ 'maintenance.parts_handed_over' ] to deeply equal []
+  ```
+  The guard reads the PHP notification catalog and asserts the SPA's icon map covers it; the
+  backend emitted a type the frontend never learned.
+- **Impact:** that notification shows a generic bell instead of its MaintenanceWorkOrder icon.
+- **Not fixed here:** functional, unrelated to layout, and the brief keeps functional fixes on
+  their own track. The fix is one entry in `BY_TYPE`.
 ---
 
 ## Measurement corrections (probe defects, not application defects)
