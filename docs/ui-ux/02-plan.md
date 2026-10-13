@@ -110,7 +110,7 @@ Ordered by traffic × visibility × pain. Effort: S ≤ 1 day, M ≤ 3 days, L >
 | W1.1 | Shell + dashboard shared fixes: clipped `w-12` slots, the 2×-wide progress track, the 375px card, accessible names | S | PR 1 |
 | W1.2 | Component gallery page + saved visual baselines for shared components | M | PR 2 |
 | W1.3 | Phone action surface: decide and implement Modal/BottomSheet rule; convert approval + self-service paths | M | PR 3 |
-| W1.4 | Quality gates: add axe to e2e, bundle budget, keep `audit:tokens` | S | PR 4 |
+| W1.4 | **Done** — axe gate (`spa/e2e/a11y.spec.ts`, 6 surfaces + negative control), bundle budget (5 measured budgets), `typecheck:e2e`; all enforced in `spa-tests.yml`. Audit: `PROGRESS.md` § Wave 1 PR 4 | S | PR 4 |
 | W1.5 | Chart palette tokens + docs; per-widget export component | M | PR 5 |
 
 **Wave 2 — chains, highest-traffic modules (one PR each)**
@@ -152,7 +152,8 @@ additive and independently revertable.
 
 **Every PR:** before/after captures at 375/768/1440 for the routes it touches
 (`node scripts/ui-ux-baseline-capture.mjs --role <r> --label after`), the module's own
-Playwright specs, `npm run typecheck`, `npm run audit:tokens`, and axe once W1.4 lands.
+Playwright specs, `npm run typecheck`, `npm run typecheck:e2e`, `npm run audit:tokens`,
+`npm run test:a11y` and `npm run audit:bundle` (the last two landed in W1.4).
 
 **Per phase:** full Vitest suite and the relevant Playwright specs; metrics into
 `docs/ui-ux/METRICS.md` alongside the Phase 0 numbers.

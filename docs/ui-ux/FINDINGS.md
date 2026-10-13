@@ -219,6 +219,85 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
   SVGAnimatedString] (64>52)`, a recharts `<text>` node wider than its box. A separate fix
   with a separate cause; not addressed here.
 
+### F-011 — `/sign-in` had two WCAG 2.2 AA failures, one of them a 6px tap target
+
+- **Status:** **Resolved** (`spa/src/layouts/AuthLayout.tsx`, `spa/src/pages/landing/components/AutoPartShowcase.tsx`) ·
+  **Severity:** medium (blocks users; "WCAG 2.2 AA" is a committed claim)
+- **Found:** 2026-10-13, by the new axe gate on its **first run** — which is what the gate was built for.
+- **Evidence (axe, before the fix):**
+  - `/sign-in` · **`link-name` (serious)** — the brand lockup link to `/` had no accessible name.
+    Its text came from `contact?.legal_name ?? ''`; an empty string is not nullish, so when the
+    landing request was slow or failed the link rendered with no text and an `<img>` whose alt
+    was also empty. A screen reader announces nothing; the link is unusable.
+  - `/sign-in` · **`target-size` (wcag22aa** — a rule new in WCAG 2.2) — the carousel dots were
+    `<button className="h-1.5 w-1.5">`: a **6×6px** touch target, the active one 20×6. WCAG
+    2.5.8 requires 24×24 unless an exception applies; none did here.
+- **Fix:** `contact?.legal_name || 'Ogami ERP'` (with the comment saying why `||` and not `??`);
+  each dot is now a 24×24 `flex` button with the 6px pill drawn **inside** it, so the visual is
+  unchanged while the hit area and the focus ring are the size a finger needs.
+- **Proof:** `npm run test:a11y` — **8 passed (~28s)**, with **zero violations at any impact
+  level** on all six surfaces (the first run carried these two on `/sign-in`). The spec prints
+  every non-blocking violation it finds and the green log carries none; critical/serious would
+  have failed the run. Playwright deletes test output for passing tests, so the console log is
+  the record — the per-surface attachment is what to read on a red run. The negative control
+  proves the gate can see a planted `button-name` violation, so "clean" is a measurement rather
+  than a mis-tagged run.
+
+### F-012 — All 51 Playwright specs were outside `npm run typecheck`; enabling it found 8 errors
+
+- **Status:** **Resolved as tooling** (`spa/tsconfig.e2e.json`, `npm run typecheck:e2e`, CI step) ·
+  **Severity:** medium (a whole suite's types were unchecked)
+- **Cause:** `tsconfig.json` includes only `src` and `vite.config.ts`. Nothing compiled `e2e/` or
+  `playwright.config.ts`. Found because the a11y negative control mapped over an `AxeResults`
+  object (`violations.map(...)`) — which **throws at runtime** while the browser reports nothing —
+  and `npm run typecheck` called the file fine.
+- **Evidence:** `npm run typecheck:e2e` on the day it was added → **8 errors**: 5 in the new a11y
+  spec (including that `.map` bug) and 3 pre-existing (`hardening.spec.ts`,
+  `return-case-workflow.spec.ts`, `rma-workflow.spec.ts`). All fixed; the command now exits 0 and
+  is enforced in `spa-tests.yml` beside `npm run typecheck`.
+- **Why it matters:** the e2e suite is this programme's measuring instrument, and an instrument
+  that is not compiled is the "the probe said fine" failure shape already recorded three times
+  below (C-001…C-003).
+
+### F-013 — Four vitest files are red outside this PR (stash-controlled)
+
+- **Status:** Open · **Severity:** low (unrelated modules) · pre-existing
+- **Evidence:** identical results with this PR's changes applied and with them stashed
+  (`git stash push -- spa/src`):
+  | File | Result |
+  |---|---|
+  | `src/lib/notificationMeta.test.ts` | 1 failing test — F-007 above |
+  | `src/pages/production/work-orders/CrewPanel.test.tsx` | 3 failing (`Unable to find a label with the text of: Number of workers`) |
+  | `src/pages/production/work-orders/StartProductionDialog.test.tsx` | 3 failing |
+  | `src/pages/crm/price-agreements/index.test.tsx` | passes **in isolation**, fails only in the full run (`Unable to find role="button" and name "Archive agreement"`) — order/parallelism-dependent |
+- **Consequence for this PR:** `vitest` is red before it starts, so "the suite passes" cannot be
+  claimed here. The dashboard/UI subtrees this PR touches were run separately and are green.
+- **Suggested fix (own PR):** the production pair and the CRM case all assert on date-derived UI;
+  they need their own investigation, not a test edit made from here.
+
+### F-014 — `npm run lint` fails on committed code, and CI enforces it
+
+- **Status:** Open · **Severity:** medium-high (it reds the job the new gates now share)
+- **Evidence:** `npm run lint` → `✖ 5 problems (5 errors, 0 warnings)`, every one
+  `no-restricted-syntax` *"toISOString() is UTC — use localIsoDate() from @/lib/formatDate for
+  calendar dates (Manila is UTC+8)"*:
+  ```
+  src/pages/return-management/detail.tsx:1167,1168
+  src/pages/return-management/dispose.tsx:205,230
+  src/pages/return-management/dispose.test.tsx:32
+  ```
+  Reproduced with this PR's changes stashed; none of these files is touched here.
+- **Provenance:** the rule entered `spa/eslint.config.js` on 2026-09-24 (`46a0e005`); and
+  `git blame` puts **all five offending lines** in `943e27ff` (2026-10-10, *"chore: consolidate
+  in-progress ERP work across modules"*) — i.e. written 16 days after the rule existed to catch
+  exactly this. It is red now.
+- **Why it is recorded and not fixed here:** correcting it is a semantics change (UTC instant vs
+  Manila calendar date) in RMA cancellation/disposition dates — functional, and the brief keeps
+  functional fixes on their own track. It also must not be fixed by relaxing the rule.
+- **Consequence:** `spa-tests.yml` runs `npm run lint` before the new `typecheck:e2e` and
+  `audit:bundle` steps, so while this is red the whole job is red and the new gates cannot yet be
+  observed passing in CI. That cost is why it is filed medium-high rather than low.
+
 ## Measurement corrections (probe defects, not application defects)
 
 ### C-001 — "20 interactive elements with no accessible name" was a false positive
