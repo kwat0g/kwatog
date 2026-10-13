@@ -259,10 +259,10 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
   that is not compiled is the "the probe said fine" failure shape already recorded three times
   below (C-001…C-003).
 
-### F-013 — Four vitest files are red outside this PR (stash-controlled)
+### F-013 — Four vitest files were red outside this PR (stash-controlled) — **fixed**
 
-- **Status:** Open · **Severity:** low (unrelated modules) · pre-existing
-- **Evidence:** identical results with this PR's changes applied and with them stashed
+- **Status:** **Resolved** (2026-10-13) · **Severity:** low · was pre-existing
+- **Evidence (at the time):** identical results with this PR's changes applied and with them stashed
   (`git stash push -- spa/src`):
   | File | Result |
   |---|---|
@@ -270,14 +270,35 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
   | `src/pages/production/work-orders/CrewPanel.test.tsx` | 3 failing (`Unable to find a label with the text of: Number of workers`) |
   | `src/pages/production/work-orders/StartProductionDialog.test.tsx` | 3 failing |
   | `src/pages/crm/price-agreements/index.test.tsx` | passes **in isolation**, fails only in the full run (`Unable to find role="button" and name "Archive agreement"`) — order/parallelism-dependent |
-- **Consequence for this PR:** `vitest` is red before it starts, so "the suite passes" cannot be
-  claimed here. The dashboard/UI subtrees this PR touches were run separately and are green.
-- **Suggested fix (own PR):** the production pair and the CRM case all assert on date-derived UI;
-  they need their own investigation, not a test edit made from here.
+- **Two causes, both fixed at the root:**
+  1. **Six production work-order tests were time-bombs.** `CrewPanel.test.tsx` ×3 and
+     `StartProductionDialog.test.tsx` ×3 hardcoded Manila days
+     (`preferred_production_date: '2026-10-10'`, `{ value: '2026-10-09' }`) while the components
+     accept today-or-later only (`preferredDay >= today`, `today` from the Manila clock). Once the
+     calendar passed those dates the day became invalid, the suggestion query was disabled, and
+     each test died at its first `getByLabelText`. One fixture also mocked
+     `scheduled_end: '2026-10-12T10:00+08:00'`, which `AssignmentEditor` reads as an expired
+     proposal and disables Confirm on. All six now derive their days from the Manila clock — the
+     idiom the files already used elsewhere (`scheduleDateKey(new Date().toISOString(),
+     'Asia/Manila')` + `offsetScheduleDate`) — and the mocked window stays ahead of the real clock.
+  2. **The CRM flake was a page bug, not test noise.** The Archive action was gated on
+     `r.effective_to < localIsoDate()` — the *viewer's* zone — while the Status chip three lines
+     above already computed the Philippine date inline, and the backend expires agreements on the
+     Manila date (`APP_TIMEZONE=Asia/Manila`). The test only held while
+     `vi.stubEnv('TZ', 'Asia/Manila')` had landed; that process-wide env write is what flipped
+     under full-suite load. The page now uses `manilaIsoDate()` for both, and the test freezes the
+     instant (`vi.useFakeTimers({ toFake: ['Date'] })`) without touching `process.env`.
+- **Proof:** `CrewPanel` + `StartProductionDialog` **43/43 pass**; the CRM file passes three
+  consecutive runs and **fails with the page fix stashed** — it now genuinely discriminates the
+  Manila date from a UTC one, so the fix is verified rather than asserted. Full suite afterwards:
+  **177 files / 1034 tests passed**.
+- **Class note:** 59 test files carry hardcoded 2026 dates, but such a date only breaks a test
+  when it feeds a today-relative control. A scan of every hardcoded date falling in the next two
+  weeks found no other live fixture — the rest is display data that will not fail as time passes.
 
-### F-014 — `npm run lint` fails on committed code, and CI enforces it
+### F-014 — `npm run lint` fails on committed code, and CI enforces it — **fixed**
 
-- **Status:** Open · **Severity:** medium-high (it reds the job the new gates now share)
+- **Status:** **Resolved** (2026-10-13) · **Severity:** was medium-high (it reds the job the new gates share)
 - **Evidence:** `npm run lint` → `✖ 5 problems (5 errors, 0 warnings)`, every one
   `no-restricted-syntax` *"toISOString() is UTC — use localIsoDate() from @/lib/formatDate for
   calendar dates (Manila is UTC+8)"*:
@@ -291,12 +312,16 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
   `git blame` puts **all five offending lines** in `943e27ff` (2026-10-10, *"chore: consolidate
   in-progress ERP work across modules"*) — i.e. written 16 days after the rule existed to catch
   exactly this. It is red now.
-- **Why it is recorded and not fixed here:** correcting it is a semantics change (UTC instant vs
-  Manila calendar date) in RMA cancellation/disposition dates — functional, and the brief keeps
-  functional fixes on their own track. It also must not be fixed by relaxing the rule.
-- **Consequence:** `spa-tests.yml` runs `npm run lint` before the new `typecheck:e2e` and
-  `audit:bundle` steps, so while this is red the whole job is red and the new gates cannot yet be
-  observed passing in CI. That cost is why it is filed medium-high rather than low.
+- **Resolution:** every site used `new Date().toISOString().slice(0, 10)` as "today" for a `date`
+  input's `min` and its guard — a UTC date, which is *yesterday* in Manila before 08:00. The
+  backend validates `after_or_equal:today` under `APP_TIMEZONE=Asia/Manila`
+  (`DisposeReturnRequest`, `ReturnRequestController`, and `ReturnRequestService`'s own
+  `now()->toDateString()` compare), so the front end now uses `manilaIsoDate()` at all five sites —
+  `detail.tsx` (`min`, submit guard), `dispose.tsx` (`min`, Record-disposition guard), and the
+  test's fixture. That matches `self-service/overtime.tsx`, the existing date-input precedent.
+  The rule itself was not touched.
+- **Proof:** `npm run lint` → **exit 0** across the SPA; return-management **52/52 tests pass**;
+  `npm run typecheck` exit 0.
 
 ## Measurement corrections (probe defects, not application defects)
 

@@ -2,7 +2,7 @@
 
 Single source of truth. A fresh session should be able to resume from this file alone.
 
-**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; F-010 closed at 3 of its 4 sites. W1.4 quality gates built, enforced, and green locally — axe (6 surfaces + negative control), bundle budget (5 measured budgets), e2e typecheck.**
+**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; F-010 closed at 3 of its 4 sites. W1.4 quality gates built, enforced, and green locally — axe (6 surfaces + negative control), bundle budget (5 measured budgets), e2e typecheck. The three red suites the gates surfaced (F-007, F-013, F-014) were fixed the same day: `npm run lint` is green and the full suite passes 177 files / 1034 tests.**
 
 - Branch: `feat/dss-w0-6-admin` (Phase 0–2 docs + Wave 1 PR 1, uncommitted at the time of writing)
 - Date: 2026-10-13
@@ -123,8 +123,10 @@ The axe gate earned its keep on its first run — it found **F-011** (two WCAG 2
 mis-configured run: the negative control fails if axe misses a planted violation.
 
 Checks run: `typecheck` **PASS** · `typecheck:e2e` **PASS** · `audit:tokens` **clean** ·
-`test:a11y` **8 passed** · `audit:bundle` **5/5 hold**. `lint` and `vitest` are **red on committed
-code outside this PR** — F-014 and F-013, both reproduced with this PR's changes stashed.
+`test:a11y` **8 passed** · `audit:bundle` **5/5 hold**. At the time, `lint` and `vitest` were **red
+on committed code outside this PR** — F-014 and F-013, both reproduced with this PR's changes
+stashed. Both were fixed the same day (see **Known gaps**), after which `lint` exits 0 and the
+full suite is green.
 
 ## Full-role baseline (label `baseline-roles`)
 
@@ -148,16 +150,15 @@ first — see Wave 1 PR 4 above.
 
 - **F-001** — any `127.0.0.1` origin 419s on sign-in (`SANCTUM_STATEFUL_DOMAINS` pins the
   session to `APP_URL`). Capture must use the `APP_URL` origin.
-- **F-007** — pre-existing red test: `notificationMeta.test.ts` fails on the backend type
-  `maintenance.parts_handed_over` (reproduced with this PR stashed). One-line fix, own PR.
-- **F-013** — three further vitest files are red outside this PR (production `CrewPanel` ×3,
-  `StartProductionDialog` ×3; CRM `price-agreements` fails only under full-suite parallelism),
-  reproduced with this PR's changes stashed. `vitest` is therefore red before this PR starts; the
-  dashboard/UI subtrees it touches were run separately and are green.
-- **F-014** — `npm run lint` fails on committed `return-management` code (5 × `toISOString()`
-  against the Manila rule), so the CI job that now also carries `typecheck:e2e` and
-  `audit:bundle` is red on its lint step. Own PR: it is RMA date semantics and must not be fixed
-  by relaxing the rule.
+- **F-007 / F-013 / F-014 — all three resolved 2026-10-13**, the day they were filed. Details and
+  proofs in `FINDINGS.md`; the short version:
+  - **F-007:** `maintenance.parts_handed_over` added to `BY_TYPE` (`LuPackageCheck`, system group).
+  - **F-013:** six production work-order tests hardcoded Manila days that had since passed — now
+    derived from the clock; the CRM price-agreement Archive gate used the *viewer's* zone — now
+    `manilaIsoDate()`, matching the backend, and the test **fails against the old code**.
+  - **F-014:** the five `toISOString()` sites in return-management now use `manilaIsoDate()`.
+  - Result: `npm run lint` **exit 0**; suite **177 files / 1034 tests passed**; `typecheck`,
+    `typecheck:e2e`, `audit:tokens`, `test:a11y` (8) and `audit:bundle` (5/5) all green.
 - **F-005** — QC coverage `pct` can exceed 100 (two different quantities in the ratio); needs
   a business definition of the denominator before it can be fixed.
 - **Unexplained, not credited:** in the same comparison `/accounting/invoices@375` and
