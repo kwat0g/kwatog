@@ -31,7 +31,8 @@ Single source of truth. A fresh session should be able to resume from this file 
 |---|---|
 | Route paths in the inventory | 356 |
 | Roles | 17 |
-| Rendered so far (Phase 0 baseline) | 4 roles · 12 routes · 51 captures (3 widths each) |
+| Rendered (full-role baseline) | **16 roles · 34 routes · 162 captures** (`screenshots/baseline-roles`) |
+| Not rendered | `maintenance_tech` only — no account with a derivable password (F-008) |
 | Explicitly deferred | 336 paths, 13 roles — see `02-plan.md` § 5 wave order |
 
 ## Patterns
@@ -68,6 +69,23 @@ Checks run: `npm run typecheck` (exit 0) · `eslint` on the 3 changed files (exi
 `vitest run src/components/dashboard src/components/ui` (**21 files / 89 tests passed**).
 Captures: `screenshots/before2` (unfixed, corrected probe) vs `screenshots/after` (fixed,
 corrected probe) — same probe both sides, **NO REGRESSIONS**, data rows unchanged.
+
+## Full-role baseline (label `baseline-roles`)
+
+162 captures · 16 roles · 34 routes · 3 viewports. Corrected probe throughout.
+
+| Metric | Result |
+|---|---|
+| Non-200 responses | **0** |
+| Interactive elements with no accessible name | **0** |
+| Captures with a horizontal page scroll | **1** — sales `/crm/sales-orders@375` (F-009) |
+| Captures with unintended overflow | **8** — finance ×6, purchasing ×1, sales ×1 (F-010) |
+
+Admin and QC dashboards read **clean**, which is W1.1 and F-006 holding up under the corrected
+probe at all three viewports.
+
+**Next unit:** F-009 (page-level scroll, shared figure component) and F-010 (three panels opt
+into the existing `scrollBody`; the budgeting header needs a different fix).
 
 ## Known gaps / blockers
 

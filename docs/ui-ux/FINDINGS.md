@@ -140,6 +140,69 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
   their own track. The fix is one entry in `BY_TYPE`.
 ---
 
+### F-008 — The deployed demo accounts do not match `DemoAccountSeeder`
+
+- **Status:** Open · **Severity:** medium (silently invalidates per-role verification) · pre-existing
+- **Evidence:** inside the running database —
+  ```
+  select u.email, r.slug from users u join roles r on r.id = u.role_id
+   where r.slug like 'maintenance%';
+  maintenance@ogami.test        | maintenance_supervisor
+  josefa.castillo125@ogami.local| maintenance_tech
+  marites.santos100@ogami.local | maintenance_tech
+  rafael.castillo199@ogami.local| maintenance_tech   (must_change_password = true)
+  ```
+  `DemoAccountSeeder` line 43 assigns `maintenance@ogami.test` to **`maintenance_tech`** and
+  line 49 creates a separate `maintenancehead@ogami.test` for the supervisor. Neither the email
+  nor the role matches the deployed row.
+- **Impact:** any per-role check keyed off that seeder tests the **wrong role** and reports a
+  pass. My own first full-role sweep did exactly that: it labelled a
+  `maintenance_supervisor` session as `maintenance` until the directory was re-checked against
+  the database. This is the same failure shape as the probes in *Measurement corrections* —
+  the tool said fine, the artefact was wrong.
+- **Consequence for coverage:** **`maintenance_tech` is not captured** in the baseline. Its three
+  holders are `@ogami.local` accounts whose password is not derivable from any seeder, and one
+  is forced to change it on first login. I did not guess or brute-force it.
+- **Suggested fix (separate PR, owner's call):** either re-seed the demo accounts to match the
+  seeder, or update the seeder to describe the deployed reality. Meanwhile the harness maps each
+  role to the account that genuinely holds it, with a comment saying why.
+
+### F-009 — `/crm/sales-orders` is the only page in 162 captures that scrolls horizontally
+
+- **Status:** Open · **Severity:** medium-high (the brief's "no horizontal page scroll" rule)
+- **Evidence:** `baseline-roles/sales/report.json` → `/crm/sales-orders@375`,
+  `horizontalPageScroll: true`. The cause is identified, not inferred:
+  ```
+  div.text-2xl font-medium font-mono tabular-nums text-p (175>132, overflow-x: visible)
+  ```
+- **Cause:** a large monospace figure — 175px of digits in a 132px slot — painting past its box
+  with `overflow: visible`. The same component is present on `/accounting/invoices@375`
+  (`143>132`) but does not yet widen the page there; the sales figure is simply larger. So this
+  is **F-002's defect class** (a fixed slot that cannot hold its content) one level up: there it
+  overlapped a neighbour, here it scrolls the whole document.
+- **Why it matters:** one report of a page that can be dragged sideways on a phone; the fix
+  belongs in the shared KPI/figure component, not on the sales page.
+
+### F-010 — F-004's Panel-clipping class is unfixed at four more call sites
+
+- **Status:** Open · **Severity:** low-medium (silent clipping, no scrollbar)
+- **Evidence:** `baseline-roles/*/report.json`, all at 375px —
+  ```
+  finance/dashboard     : div.bg-canvas border … overflow-hidden (396>333)  + div.p-4 (396>333)
+  finance/budgeting     : div.bg-canvas border … overflow-hidden (411>333)
+                          + div.flex items-center justify-between px-4 py-3 (411>333)  ← the HEADER
+  purchasing/dashboard  : (462>333) and (426>333), each with a clipped div.px-1.5 pb-2 body
+  ```
+- **Cause:** `Panel` clips its own overflow for rounded corners, so an over-wide child is cut
+  off with no scrollbar. `Panel.scrollBody` now exists (F-004) but it is **opt-in**, and these
+  four panels never opted in — the exact "inconsistent partial rollout" the risk register names.
+- **Two distinct sub-causes, so not one fix:** three panels overflow in the **body** (the
+  `scrollBody` prop applies directly); `/budgeting` overflows in the **header**, where
+  `scrollBody` does not help at all and the title/meta/actions need to wrap or truncate at 375.
+- **Also on `finance/dashboard` at all three viewports:**
+  `text.[object SVGAnimatedString] (64>52)` — a recharts `<text>` node wider than its box,
+  most likely an axis label. Lower impact, separate fix.
+
 ## Measurement corrections (probe defects, not application defects)
 
 Recorded because both were published in `00-discovery.md` before being disproved, and the

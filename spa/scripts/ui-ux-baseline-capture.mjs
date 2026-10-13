@@ -41,7 +41,11 @@ const ACCOUNTS = {
   sales: 'crm@ogami.test',
   warehouse: 'warehouse@ogami.test',
   qc: 'qc@ogami.test',
-  maintenance: 'maintenance@ogami.test',
+  // The deployed DB diverges from DemoAccountSeeder: maintenance@ogami.test holds
+  // maintenance_supervisor here, not maintenance_tech. Keys name the AUTHENTICATED role.
+  maintenance_supervisor: 'maintenance@ogami.test',
+  // maintenance_tech: intentionally absent — no account with a derivable password holds it
+  // (the three holders are @ogami.local accounts; one must change its password). FINDINGS F-008.
   impex: 'impex@ogami.test',
   depthead: 'depthead@ogami.test',
   driver: 'driver@ogami.test',
@@ -60,6 +64,18 @@ const DEFAULT_ROUTES = {
   qc: ['/dashboard', '/quality/inspections', '/quality/ncrs', '/quality/inspection-specs'],
   warehouse: ['/dashboard', '/inventory/items', '/inventory/grn', '/inventory/stock-levels'],
   employee: ['/dashboard', '/self-service/profile', '/self-service/payslips'],
+  hr: ['/dashboard', '/hr/employees', '/hr/leaves', '/payroll/periods'],
+  finance: ['/dashboard', '/accounting/invoices', '/accounting/bills', '/budgeting'],
+  production: ['/dashboard', '/production/work-orders', '/production/schedule'],
+  ppc: ['/dashboard', '/mrp/plans', '/production/schedule'],
+  purchasing: ['/dashboard', '/purchasing/purchase-orders', '/purchasing/purchase-requests'],
+  vp: ['/dashboard', '/approvals', '/chains'],
+  sales: ['/dashboard', '/crm/sales-orders', '/crm/customers'],
+  maintenance_supervisor: ['/dashboard', '/maintenance/work-orders', '/maintenance/schedules'],
+  impex: ['/dashboard', '/supply-chain/deliveries', '/supply-chain/fleet'],
+  depthead: ['/dashboard', '/approvals', '/hr/leaves'],
+  driver: ['/driver', '/dashboard'],
+  customer_service: ['/dashboard', '/crm/complaints', '/return-management'],
 };
 
 function arg(name, fallback = undefined) {
