@@ -21,6 +21,7 @@
     "audit:dashboard-routes": "node ../scripts/check-dashboard-route-parity.mjs",
     "audit:dss-routes": "node ../scripts/check-dss-route-parity.mjs",
     "audit:tokens": "node scripts/check-token-discipline.mjs",
+    "ui:capture": "node scripts/ui-ux-baseline-capture.mjs",
     "audit:panel-gates": "cross-env NODE_PATH=./node_modules node ../scripts/panel-gate-browser-check.js",
     "typecheck": "tsc --noEmit"
   },
