@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DSS;
 
+use App\Modules\DSS\Detectors\ApprovalBottleneckDetector;
 use App\Modules\DSS\Detectors\MasterHygieneDetector;
 use App\Modules\DSS\Services\DetectorRegistry;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +24,7 @@ class DssServiceProvider extends ServiceProvider
 
             // Core detectors register here, one line each, as they ship.
             $registry->register((new MasterHygieneDetector)->id(), MasterHygieneDetector::class);
+            $registry->register((new ApprovalBottleneckDetector)->id(), ApprovalBottleneckDetector::class);
 
             return $registry;
         });
