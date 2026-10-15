@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DSS\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Auth\Models\User;
 use App\Modules\DSS\Enums\RecommendationEventType;
 use App\Modules\DSS\Models\DssRecommendation;
@@ -89,7 +90,9 @@ class RecommendationService
         // join against the permission graph. Pages are small (≤100); filter
         // the collection and keep the paginator shape.
         $page->setCollection(
-            $page->getCollection()->filter(fn (DssRecommendation $rec): bool => $this->canSee($user, $rec->detector_id))->values()
+            $page->getCollection()->filter(
+                fn (DssRecommendation $rec): bool => $this->canSee($user, $rec->detector_id) && $this->audienceAllows($user, $rec)
+            )->values()
         );
 
         return $page;
@@ -167,9 +170,31 @@ class RecommendationService
 
     private function assertVisible(User $user, DssRecommendation $recommendation): void
     {
-        if (! $this->canSee($user, $recommendation->detector_id)) {
+        if (! $this->canSee($user, $recommendation->detector_id)
+            || ! $this->audienceAllows($user, $recommendation)) {
             abort(403, 'You do not have access to this recommendation.');
         }
+    }
+
+    /**
+     * Opt-in per-row audience gate. Detectors that aggregate across audiences
+     * (e.g. stuck documents) label each emission with audience_roles; rows
+     * without the label stay visible to everyone the detector admits. Same
+     * rule as ChainBottleneckController: own role slug plus delegated roles.
+     */
+    private function audienceAllows(User $user, DssRecommendation $recommendation): bool
+    {
+        $roles = $recommendation->rationale['audience_roles'] ?? null;
+        if (! is_array($roles) || $roles === []) {
+            return true;
+        }
+
+        $mine = array_values(array_filter(
+            array_merge([$user->role?->slug], ApprovalDelegation::actsForRoles($user->id, now())),
+            static fn ($slug): bool => is_string($slug) && $slug !== '',
+        ));
+
+        return count(array_intersect($roles, $mine)) > 0;
     }
 
     private function applyAccept(DssRecommendation $recommendation, User $user, string $from): DssRecommendation
