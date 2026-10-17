@@ -768,16 +768,8 @@ class WorkOrderService
             // recorded; each further output record gates its own increment.
             $this->materialUsage->assertProductionCoverage($lockedWo);
 
-            // Close any open downtime row for this WO.
-            $open = MachineDowntime::where('work_order_id', $lockedWo->id)
-                ->whereNull('end_time')->latest()->first();
-            if ($open) {
-                $end = Carbon::now();
-                $open->update([
-                    'end_time' => $end,
-                    'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
-                ]);
-            }
+            // Close every open downtime row for this WO.
+            $this->closeOpenDowntimeRows($lockedWo);
             $machine = $lockedWo->machine_id
                 ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
                 : null;
@@ -810,6 +802,25 @@ class WorkOrderService
         });
 
         return $result;
+    }
+
+    private function closeOpenDowntimeRows(WorkOrder $wo): int
+    {
+        $now = Carbon::now();
+        $rows = MachineDowntime::query()
+            ->where('work_order_id', $wo->id)
+            ->whereNull('end_time')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($rows as $row) {
+            $row->update([
+                'end_time' => $now,
+                'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($now, true)),
+            ]);
+        }
+
+        return $rows->count();
     }
 
     public function autoFinishIfTargetReached(WorkOrder $wo): bool
@@ -1107,6 +1118,8 @@ class WorkOrderService
                 'status' => WorkOrderStatus::Cancelled->value, 'scheduling_diagnostic' => null,
                 'pause_reason' => $reason,
             ]);
+
+            $this->closeOpenDowntimeRows($lockedWo);
 
             // Sprint 6 audit §1.1: release any reservations held by this WO.
             $this->releaseReservedMaterials($lockedWo);
