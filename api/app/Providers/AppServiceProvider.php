@@ -130,6 +130,7 @@ use App\Modules\Production\Listeners\CreateProductionReceiptOnOutputRequested;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
+use App\Modules\Production\Listeners\NotifyOnWorkOrderPaused;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Observers\ProductionStaffingObserver;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
@@ -360,6 +361,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SalesOrderConfirmed::class, [EmailCustomerOnSalesOrderConfirmed::class, 'handle']);
         // ADV7 — auto-trigger in-process QC on WO start.
         Event::listen(WorkOrderStatusChanged::class, [TriggerInProcessQC::class,          'handle']);
+        Event::listen(WorkOrderStatusChanged::class, [NotifyOnWorkOrderPaused::class, 'handle']);
         Event::listen(WorkOrderCompleted::class, [TriggerOutgoingQC::class,           'handle']);
         Event::listen(WorkOrderQualityResolved::class, [AutoCloseResolvedWorkOrder::class, 'handle']);
         Event::listen(WorkOrderCompleted::class, [NotifyOnWorkOrderCompleted::class,  'handle']);
