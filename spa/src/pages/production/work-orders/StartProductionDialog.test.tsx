@@ -458,10 +458,59 @@ it('extends running production without starting it again', async () => {
         expected_crew_id: 'crew',
         expected_schedule_id: 'slot',
         scheduled_end: '2026-10-06T12:00:00+08:00',
+        reason: 'Approved remaining production time extension.',
       }),
     ),
   );
   expect(workOrdersApi.start).not.toHaveBeenCalled();
+});
+
+it('sends an operator-entered extension reason', async () => {
+  vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue({
+    ...readiness,
+    start_mode: 'extend',
+    execution_end: '2026-10-06T12:00:00+08:00',
+    schedule: {
+      id: 'slot',
+      status: 'confirmed',
+      updated_at: '2026-10-06T08:00:00+08:00',
+      scheduled_start: '2026-10-06T08:00:00+08:00',
+      scheduled_end: '2026-10-06T10:00:00+08:00',
+      machine_id: 'machine',
+      mold_id: 'mold',
+    },
+  });
+  show('extend');
+  fireEvent.change(await screen.findByLabelText(/Extension reason/), {
+    target: { value: 'Machine slowed after mold change.' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Approve extension' }));
+  await waitFor(() =>
+    expect(workOrdersApi.extendRun).toHaveBeenCalledWith(
+      'wo',
+      expect.objectContaining({ reason: 'Machine slowed after mold change.' }),
+    ),
+  );
+});
+
+it('blocks the extension while the reason is blank', async () => {
+  vi.mocked(workOrdersApi.executionReadiness).mockResolvedValue({
+    ...readiness,
+    start_mode: 'extend',
+    execution_end: '2026-10-06T12:00:00+08:00',
+    schedule: {
+      id: 'slot',
+      status: 'confirmed',
+      updated_at: '2026-10-06T08:00:00+08:00',
+      scheduled_start: '2026-10-06T08:00:00+08:00',
+      scheduled_end: '2026-10-06T10:00:00+08:00',
+      machine_id: 'machine',
+      mold_id: 'mold',
+    },
+  });
+  show('extend');
+  fireEvent.change(await screen.findByLabelText(/Extension reason/), { target: { value: '   ' } });
+  expect(screen.getByRole('button', { name: 'Approve extension' })).toBeDisabled();
 });
 
 it('keeps the reviewed extension finish stable while the manager reads it', async () => {
