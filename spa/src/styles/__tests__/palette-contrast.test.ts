@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { contrastRatio, parseThemeBlocks } from '@/lib/contrast';
+import {
+  contrastRatio,
+  deltaE,
+  parseThemeBlocks,
+  simulateDeuteranopia,
+  simulateProtanopia,
+} from '@/lib/contrast';
 
 const css = readFileSync(resolve(__dirname, '../tokens.css'), 'utf8');
 const themes = parseThemeBlocks(css);
@@ -21,6 +27,33 @@ const SEMANTIC_MARKS = [
 ] as const;
 /** Paired semantic surfaces: foreground must be legible on its own background. */
 const SEMANTIC_PAIRS = ['success', 'warning', 'danger', 'info', 'purple'] as const;
+
+/**
+ * The categorical series palette (F-014). Eight IDs, never eight meanings.
+ *
+ * These are held to a different contract than the semantic tokens above: each
+ * must be legible as a MARK on the canvas, and every PAIR must be perceivably
+ * different — with normal vision, and with the two red-green deficiencies that
+ * turn a legend into eight identical swatches. A palette that passes contrast
+ * but fails pair separation is a chart nobody with deuteranopia can read.
+ *
+ * Thresholds are deliberately below what the committed values measure
+ * (min ΔE ≈ 22 normal / ≈ 19 simulated, min contrast 3.28) so a small retune is
+ * allowed, while a collapse — two series converging, or a value dragged onto
+ * the chip ramp — fails here.
+ */
+const CHART_SERIES = [
+  '--chart-1',
+  '--chart-2',
+  '--chart-3',
+  '--chart-4',
+  '--chart-5',
+  '--chart-6',
+  '--chart-7',
+  '--chart-8',
+] as const;
+const CHART_MIN_DELTA_E = 20;
+const CHART_MIN_DELTA_E_CVD = 10;
 
 /**
  * Saturated fills that carry ink directly, and the component that does it.
@@ -101,6 +134,61 @@ describe.each(['light', 'dark', 'floor'] as const)('%s palette', (theme) => {
       expect(contrastRatio(t['--accent-fg'], t[tint])).toBeLessThan(limits.essential);
     },
   );
+
+  describe('categorical chart palette', () => {
+    const values = CHART_SERIES.map((token) => t[token]);
+
+    it('declares all eight series', () => {
+      expect(values.filter((value) => !value)).toEqual([]);
+    });
+
+    it.each(CHART_SERIES)(`%s clears the mark contrast bar on canvas`, (token) => {
+      expect(contrastRatio(t[token], t['--bg-canvas'])).toBeGreaterThanOrEqual(limits.mark);
+    });
+
+    it('is not the semantic ramp under another name', () => {
+      // Identity vs state. If a series token equals --danger, the third bar of a
+      // breakdown reads as a failure rather than as "series 3".
+      const semantic = SEMANTIC_MARKS.map((mark) => t[mark].toLowerCase());
+      const collisions = CHART_SERIES.filter((token) =>
+        semantic.includes(t[token].toLowerCase()),
+      );
+      expect(collisions).toEqual([]);
+    });
+
+    it('keeps every pair apart with normal vision', () => {
+      const tooClose: string[] = [];
+
+      for (let i = 0; i < values.length; i++) {
+        for (let j = i + 1; j < values.length; j++) {
+          const distance = deltaE(values[i], values[j]);
+          if (distance < CHART_MIN_DELTA_E) {
+            tooClose.push(`${CHART_SERIES[i]}/${CHART_SERIES[j]} ΔE ${distance.toFixed(1)}`);
+          }
+        }
+      }
+
+      expect(tooClose).toEqual([]);
+    });
+
+    it.each([
+      ['deuteranopia', simulateDeuteranopia],
+      ['protanopia', simulateProtanopia],
+    ] as const)('keeps every pair apart under %s', (_, simulate) => {
+      const tooClose: string[] = [];
+
+      for (let i = 0; i < values.length; i++) {
+        for (let j = i + 1; j < values.length; j++) {
+          const distance = deltaE(simulate(values[i]), simulate(values[j]));
+          if (distance < CHART_MIN_DELTA_E_CVD) {
+            tooClose.push(`${CHART_SERIES[i]}/${CHART_SERIES[j]} ΔE ${distance.toFixed(1)}`);
+          }
+        }
+      }
+
+      expect(tooClose).toEqual([]);
+    });
+  });
 
   it('declares density tokens', () => {
     // Only :root and floor declare these; dark inherits :root via the cascade.

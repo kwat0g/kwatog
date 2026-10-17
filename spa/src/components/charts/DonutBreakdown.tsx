@@ -1,9 +1,16 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { chartColor } from '@/lib/chartPalette';
 
 interface DonutEntry {
- name: string;
- value: number;
- color: string;
+  name: string;
+  value: number;
+  /**
+   * Defaults to the categorical palette by slice position. Pass a colour only
+   * when the slice MEANS something (present/late/absent) — a plain category
+   * must not borrow a semantic hue, which is how "outgoing inspections" used
+   * to render in danger red.
+   */
+  color?: string;
 }
 
 interface DonutBreakdownProps {
@@ -34,10 +41,10 @@ export function DonutBreakdown({
  innerRadius={innerRadius}
  outerRadius={innerRadius + 25}
  paddingAngle={2}
- >
- {data.map((entry, i) => (
- <Cell key={i} fill={entry.color} />
- ))}
+        >
+          {data.map((entry, i) => (
+            <Cell key={i} fill={entry.color ?? chartColor(i)} />
+          ))}
  </Pie>
  <Tooltip
  contentStyle={{
@@ -57,8 +64,11 @@ export function DonutBreakdown({
  )}
  <div className="flex flex-wrap gap-3 justify-center mt-2">
  {data.map((entry, index) => (
- <div key={`${entry.name}-${index}`} className="flex items-center gap-1.5 text-xs">
- <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+          <div key={`${entry.name}-${index}`} className="flex items-center gap-1.5 text-xs">
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: entry.color ?? chartColor(index) }}
+            />
  <span className="text-muted">{entry.name}</span>
  <span className="font-mono tabular-nums">{entry.value}</span>
  </div>

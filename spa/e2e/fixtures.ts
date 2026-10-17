@@ -46,6 +46,17 @@ const EMPTY_RESPONSE = {};
 // Well-formed, nonempty support responses for reads unrelated to a spec's
 // subject. Spec-specific routes register later and override these defaults.
 const DEFAULT_READ_RESPONSES: Record<string, unknown> = {
+  /*
+   * The KPI strip every dashboard mounts asks for six months of trends for all
+   * of its codes. `kpiApi.trends` returns `response.data.data` verbatim, so the
+   * `{}` fallback hands React Query `undefined` and it throws
+   * "Query data cannot be undefined" — a console error the shared diagnostics
+   * fixture fails the test on. One `{ data: {} }` here answers with an empty map
+   * (`trends?.[code] ?? []` is the consumer's own guard), which is what "no
+   * trends" already means. Found while verifying W1.5 against the four dashboard
+   * specs, all of which were red before it (F-018).
+   */
+  '/api/v1/dashboard/kpi/trends': { data: {} },
   '/api/v1/dashboards/finance': { data: {} },
   '/api/v1/dashboards/hr': { data: { kpis: [], panels: {} } },
   '/api/v1/dashboards/admin': { data: { kpis: [], panels: {} } },

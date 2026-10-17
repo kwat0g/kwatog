@@ -21,6 +21,7 @@ import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { QC_KPIS } from '@/lib/dashboardKpis';
+import { chartColor } from '@/lib/chartPalette';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -304,17 +305,15 @@ export default function QcDashboard() {
  const stageCounts: Record<string, number> = {};
  (panels?.inspection_queue ?? []).forEach((ins) => {
  stageCounts[ins.stage] = (stageCounts[ins.stage] || 0) + 1;
- });
- const colorMap: Record<string, string> = {
- incoming: 'var(--info)',
- in_process: 'var(--warning)',
- outgoing: 'var(--danger)',
- };
- const inspectionStageData = Object.entries(stageCounts).map(([name, value]) => ({
- name,
- value,
- color: colorMap[name] ?? 'var(--text-muted)',
- }));
+ });        // Stage is IDENTITY here, not state: "outgoing" is not a failure, and
+        // painting it --danger (as this used to) told the reader it was. The
+        // categorical palette is colour-blind gated; the slice labels carry the
+        // name, so colour is never the only difference (F-016).
+        const inspectionStageData = Object.entries(stageCounts).map(([name, value], index) => ({
+          name,
+          value,
+          color: chartColor(index),
+        }));
 
  return (
  <>

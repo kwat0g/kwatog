@@ -1,9 +1,11 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { chartColor } from '@/lib/chartPalette';
 
 interface BarDef {
- dataKey: string;
- color: string;
- label: string;
+  dataKey: string;
+  /** Defaults to this bar's position in the categorical palette. */
+  color?: string;
+  label: string;
 }
 
 interface BarComparisonProps {
@@ -48,12 +50,11 @@ export function BarComparison({
  }}
  formatter={formatValue ? (v: number) => [formatValue(v), ''] : undefined}
  />
- <Legend wrapperStyle={{ fontSize: 11 }} />
- {bars.map((bar) => (
- <Bar
- key={bar.dataKey}
- dataKey={bar.dataKey}
- fill={bar.color}
+ <Legend wrapperStyle={{ fontSize: 11 }} />    {bars.map((bar, index) => (
+      <Bar
+        key={bar.dataKey}
+        dataKey={bar.dataKey}
+        fill={bar.color ?? chartColor(index)}
  name={bar.label}
  stackId={stacked ? 'stack' : undefined}
  radius={[2, 2, 0, 0]}
