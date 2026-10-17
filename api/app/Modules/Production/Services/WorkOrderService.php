@@ -18,12 +18,12 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
-use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
-use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
+use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Services\FinishedGoodInventoryService;
@@ -52,6 +52,8 @@ use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Support\WorkOrderStateMachine;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrStatus;
@@ -1102,7 +1104,7 @@ class WorkOrderService
                     }
                 };
                 $visit($lockedWo);
-                $requests = \App\Modules\Purchasing\Models\PurchaseRequest::whereIn('stock_production_work_order_id', $descendants->pluck('id')->push($lockedWo->id))
+                $requests = PurchaseRequest::whereIn('stock_production_work_order_id', $descendants->pluck('id')->push($lockedWo->id))
                     ->whereNotIn('status', ['cancelled', 'rejected'])->lockForUpdate()->get();
                 foreach ($requests as $request) {
                     if (! $request->is_auto_generated || $request->status->value !== 'draft'
@@ -1110,8 +1112,12 @@ class WorkOrderService
                         throw new BusinessRuleException("Review purchasing {$request->pr_number} before cancelling its stock production.");
                     }
                 }
-                foreach ($requests as $request) app(\App\Modules\Purchasing\Services\PurchaseRequestService::class)->cancel($request);
-                foreach ($descendants as $child) $this->cancel($child, $reason);
+                foreach ($requests as $request) {
+                    app(PurchaseRequestService::class)->cancel($request);
+                }
+                foreach ($descendants as $child) {
+                    $this->cancel($child, $reason);
+                }
             }
             $from = $lockedWo->status?->value ?? 'planned';
             $this->materialUsage->assertReservationLedgerConsistent($lockedWo);
