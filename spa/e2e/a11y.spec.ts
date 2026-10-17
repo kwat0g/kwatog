@@ -172,6 +172,10 @@ const SURFACES: Surface[] = [
   { name: 'QC inspections (list)', path: '/quality/inspections', auth: true },
   { name: 'QC new inspection (form)', path: '/quality/inspections/new', auth: true },
   { name: 'floor tablet (touch shell)', path: '/factory', auth: true },
+  /* W1.2 — every shared primitive in one place, in every state. The other
+   * surfaces audit the kit as the product uses it; this one audits the states
+   * a single page does not happen to exercise (disabled, error, empty). */
+  { name: 'component gallery (the shared kit)', path: '/admin/component-gallery', auth: true },
 ];
 
 /** Render the page and run axe. Returns every violation, unfiltered. */

@@ -26,6 +26,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "test:a11y": "playwright test e2e/a11y.spec.ts",
+    "test:gallery": "playwright test e2e/gallery.spec.ts",
+    "test:gallery:update": "playwright test e2e/gallery.spec.ts --grep \"@1280|@390\" --update-snapshots",
     "audit:bundle": "node scripts/check-bundle-budget.mjs"
   },
   "dependencies": {

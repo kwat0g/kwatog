@@ -750,6 +750,14 @@ export const SECTIONS: NavSection[] = [
         icon: LuMonitor,
         permission: 'admin.settings.manage',
       },
+      // W1.2 — the shared-component catalogue. Not a business destination, but a
+      // reviewer's page nobody would find if it were URL-only.
+      {
+        to: '/admin/component-gallery',
+        label: 'Component Gallery',
+        icon: LuLayers,
+        permission: 'admin.settings.manage',
+      },
       {
         to: '/accounting/portal-access',
         label: 'Portal Access',
