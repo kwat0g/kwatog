@@ -280,11 +280,7 @@ class HandleMachineBreakdown implements ShouldQueue
                 ->filter(fn (MachineDowntime $row): bool => $row->work_order_id === null
                     || $row->workOrder?->status !== WorkOrderStatus::Paused)
                 ->each(function ($row) use (&$closed): void {
-                    $end = now();
-                    $row->update([
-                        'end_time' => $end,
-                        'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($end, true)),
-                    ]);
+                    $row->closeAt();
                     $closed++;
                 });
 

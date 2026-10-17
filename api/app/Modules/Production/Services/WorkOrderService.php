@@ -547,6 +547,9 @@ class WorkOrderService
                 $inventory->ensureItem($lockedWo->product);
             }
 
+            // Close every open downtime row for this WO — a work order can
+            // also re-enter production through start after a pause.
+            $this->closeOpenDowntimeRows($lockedWo);
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
             $mold = $lockedWo->mold_id ? Mold::lockForUpdate()->find($lockedWo->mold_id) : null;
             if (! $machine || ! $mold) {
@@ -818,10 +821,7 @@ class WorkOrderService
             ->get();
 
         foreach ($rows as $row) {
-            $row->update([
-                'end_time' => $now,
-                'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($now, true)),
-            ]);
+            $row->closeAt($now);
         }
 
         return $rows->count();

@@ -282,6 +282,29 @@ class WorkOrderStartResumeOccupancyTest extends TestCase
         $this->assertNotNull($closed->duration_minutes);
     }
 
+    public function test_start_closes_open_downtime_rows_when_a_paused_work_order_goes_through_start(): void
+    {
+        $machine = $this->machine();
+        $mold = $this->mold();
+
+        $wo = $this->startedWo($machine, $mold);
+        $paused = $this->service->pause($wo, 'Material shortage', MachineDowntimeCategory::MaterialShortage);
+
+        MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'work_order_id' => $wo->id,
+            'start_time' => now()->subMinutes(30),
+            'category' => MachineDowntimeCategory::MaterialShortage->value,
+            'description' => 'Legacy leaked row',
+        ]);
+
+        $started = $this->service->start($paused, $this->productionManager->id);
+
+        $this->assertSame(WorkOrderStatus::InProgress, $started->status);
+        $this->assertSame(0, MachineDowntime::where('work_order_id', $wo->id)->whereNull('end_time')->count(),
+            'Starting a paused work order must close its open downtime rows.');
+    }
+
     public function test_start_on_a_machine_already_bound_to_this_work_order_keeps_existing_refusal(): void
     {
         $machine = $this->machine();
