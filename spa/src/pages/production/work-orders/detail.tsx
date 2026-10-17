@@ -1634,6 +1634,12 @@ export default function WorkOrderDetailPage() {
               </option>
             ))}
           </Select>
+          {pauseCategory === 'breakdown' && (
+            <p className="text-xs text-warning-fg">
+              Breakdown moves the machine into Breakdown and opens a corrective maintenance order.
+              This work order can only resume after the machine is repaired and released.
+            </p>
+          )}
           <Textarea
             label="Reason"
             required
