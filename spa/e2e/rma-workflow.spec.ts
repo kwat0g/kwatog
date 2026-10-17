@@ -19,7 +19,7 @@ test('RMA partial receipt preserves quantities and idempotency key across retry'
     resolution: 'credit', customer: { id: 'customer_01', name: 'Acme' }, vendor: null,
     source_label: 'DEL-0042', customer_notes: null, internal_notes: null, refund_amount: '100.00',
     items: [{ id: 'rma_line', quantity: '5.000', returned_quantity: '0.000', received_total: '0.000', remaining_quantity: '5.000', unit_price: '20.00', total: '100.00', condition: 'damaged', reason: 'Damaged in transit', product: { id: 'product_01', part_number: 'P-42', name: 'Part 42' }, item: null }],
-    receipt_open: true, receipts: [], inspection_handoff: null, inspections: [], approval_records: [],
+    receipt_open: true, receipts: [] as Array<Record<string, unknown>>, inspection_handoff: null, inspections: [], approval_records: [],
     created_at: '2026-09-25T00:00:00Z', approved_at: '2026-09-25T00:00:00Z', rejected_at: null, cancelled_at: null,
   };
   let current = base;

@@ -9,6 +9,10 @@ const CompareRolesPage = lazy(() => import('@/pages/admin/roles/compare'));
 const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions'));
 const PermissionSearchPage = lazy(() => import('@/pages/admin/roles/permission-search'));
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
+// W1.2 — shared-component catalogue + the subject of the visual baseline gate.
+// Lazy on purpose: it is a reviewer's page, so it must cost the app nothing until
+// somebody opens it (the bundle budget still measures the initial chunks).
+const ComponentGalleryPage = lazy(() => import('@/pages/admin/component-gallery'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
 const SodMatrixPage = lazy(() => import('@/pages/admin/sod'));
 // REC-03 — master-data CSV import
@@ -24,6 +28,12 @@ const AdminCreateUserPage = lazy(() => import('@/pages/admin/users/create'));
 
 // Alerts (Task A2)
 const AlertsListPage = lazy(() => import('@/pages/alerts'));
+
+// DSS Wave 0-4 — Decision Center (cross-cutting, like Alerts: PermissionGuard only)
+const DecisionCenterPage = lazy(() => import('@/pages/decision-center'));
+const RecommendationDetailPage = lazy(() => import('@/pages/decision-center/detail'));
+// DSS Wave 0-6 — admin console (detector fleet + kill switch)
+const DssAdminPage = lazy(() => import('@/pages/admin/dss'));
 
 // Gov tables
 const AdminGovTablesPage = lazy(() => import('@/pages/admin/gov-tables'));
@@ -82,9 +92,16 @@ export const adminRoutes = (
  <RolePermissionsPage />
  </PermissionGuard>
  }
- />
- <Route
- path="/admin/settings"
+ />  <Route
+    path="/admin/component-gallery"
+    element={
+      <PermissionGuard permission="admin.settings.manage">
+        <ComponentGalleryPage />
+      </PermissionGuard>
+    }
+  />
+  <Route
+    path="/admin/settings"
  element={
  <PermissionGuard permission="admin.settings.manage">
  <SettingsPage />
@@ -181,6 +198,30 @@ export const adminRoutes = (
  element={
  <PermissionGuard permission="alerts.view">
  <AlertsListPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/decision-center"
+ element={
+ <PermissionGuard permission="dss.view">
+ <DecisionCenterPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/decision-center/:id"
+ element={
+ <PermissionGuard permission="dss.view">
+ <RecommendationDetailPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/dss"
+ element={
+ <PermissionGuard permission="dss.manage">
+ <DssAdminPage />
  </PermissionGuard>
  }
  />

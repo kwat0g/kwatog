@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { clampPercent } from '@/lib/progress';
 
 export interface ProgressBarProps {
  /** 0–100. Clamped, so over-100 from rounding is safe to pass. */
@@ -38,7 +39,7 @@ export function ProgressBar({
  className,
  ariaLabel,
 }: ProgressBarProps) {
- const pct = Math.min(100, Math.max(0, Math.round(value)));
+ const pct = clampPercent(value);
 
  return (
  <div

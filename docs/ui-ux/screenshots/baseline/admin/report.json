@@ -1,0 +1,560 @@
+{
+  "role": "admin",
+  "label": "baseline",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/action-center",
+    "/approvals",
+    "/admin/users",
+    "/admin/roles",
+    "/chains"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2963,
+      "horizontalPageScroll": false,
+      "heading": "System AdministratorUpdated just now",
+      "title": "System Administrator · Dashboard · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 82,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/admin/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 3104,
+      "horizontalPageScroll": false,
+      "heading": "System AdministratorUpdated just now",
+      "title": "System Administrator · Dashboard · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 82,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/admin/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2828,
+      "horizontalPageScroll": false,
+      "heading": "System AdministratorUpdated just now",
+      "title": "System Administrator · Dashboard · ERP",
+      "counts": {
+        "buttons": 23,
+        "links": 82,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)",
+        "span.font-mono text-2xs uppercase shrink-0 mt-0.5 w-12  (78>48, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/admin/dashboard-1440.png"
+    },
+    {
+      "route": "/action-center",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 3045,
+      "horizontalPageScroll": false,
+      "heading": "Action CenterUpdated just now",
+      "title": "Action Center · ERP",
+      "counts": {
+        "buttons": 83,
+        "links": 76,
+        "inputs": 63,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/action-center-375.png"
+    },
+    {
+      "route": "/action-center",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2917,
+      "horizontalPageScroll": false,
+      "heading": "Action CenterUpdated just now",
+      "title": "Action Center · ERP",
+      "counts": {
+        "buttons": 83,
+        "links": 76,
+        "inputs": 63,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/action-center-768.png"
+    },
+    {
+      "route": "/action-center",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 3146,
+      "horizontalPageScroll": false,
+      "heading": "Action CenterUpdated just now",
+      "title": "Action Center · ERP",
+      "counts": {
+        "buttons": 96,
+        "links": 76,
+        "inputs": 63,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/action-center-1440.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2294,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 58,
+        "links": 76,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/approvals-375.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2399,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 58,
+        "links": 76,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/approvals-768.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2512,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 71,
+        "links": 76,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/approvals-1440.png"
+    },
+    {
+      "route": "/admin/users",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2203,
+      "horizontalPageScroll": false,
+      "heading": "User Management",
+      "title": "User Management · Administration · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 77,
+        "inputs": 31,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/admin-users-375.png"
+    },
+    {
+      "route": "/admin/users",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2588,
+      "horizontalPageScroll": false,
+      "heading": "User Management",
+      "title": "User Management · Administration · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 77,
+        "inputs": 31,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/admin-users-768.png"
+    },
+    {
+      "route": "/admin/users",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2246,
+      "horizontalPageScroll": false,
+      "heading": "User Management",
+      "title": "User Management · Administration · ERP",
+      "counts": {
+        "buttons": 32,
+        "links": 77,
+        "inputs": 31,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/admin-users-1440.png"
+    },
+    {
+      "route": "/admin/roles",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2203,
+      "horizontalPageScroll": false,
+      "heading": "Roles & permissionsUpdated just now",
+      "title": "Roles & permissions · Administration · ERP",
+      "counts": {
+        "buttons": 72,
+        "links": 77,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 17,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/admin-roles-375.png"
+    },
+    {
+      "route": "/admin/roles",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2286,
+      "horizontalPageScroll": false,
+      "heading": "Roles & permissionsUpdated just now",
+      "title": "Roles & permissions · Administration · ERP",
+      "counts": {
+        "buttons": 72,
+        "links": 77,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 17,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/admin-roles-768.png"
+    },
+    {
+      "route": "/admin/roles",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2372,
+      "horizontalPageScroll": false,
+      "heading": "Roles & permissionsUpdated just now",
+      "title": "Roles & permissions · Administration · ERP",
+      "counts": {
+        "buttons": 85,
+        "links": 77,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 17,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/admin/admin-roles-1440.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2371,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 76,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 2,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">",
+          "<input class=\"flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none px-\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/admin/chains-375.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2271,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 76,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<input class=\"flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none px-\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/admin/chains-768.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2304,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 29,
+        "links": 76,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<input class=\"flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none px-\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/admin/chains-1440.png"
+    }
+  ]
+}

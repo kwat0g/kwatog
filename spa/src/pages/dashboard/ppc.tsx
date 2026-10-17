@@ -12,6 +12,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { clampPercent } from '@/lib/progress';
 import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { chainApi } from '@/api/chain';
 import type { ChainBottleneckGroup, ChainBottleneckRow, ChainBottlenecks } from '@/types/chain';
@@ -149,7 +150,7 @@ function ChainStagePanel({ stages }: { stages: ChainStage[] }) {
  </div>
  <div
  role="progressbar"
- aria-valuenow={s.percent}
+ aria-valuenow={clampPercent(s.percent)}
  aria-valuemin={0}
  aria-valuemax={100}
  aria-label={`${s.label}: ${s.count} orders`}
@@ -157,7 +158,7 @@ function ChainStagePanel({ stages }: { stages: ChainStage[] }) {
  >
  <div
  className={stageFillClass(s.color)}
- style={{ width: `${s.percent}%` }}
+ style={{ width: `${clampPercent(s.percent)}%` }}
  />
  </div>
  </>

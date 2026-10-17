@@ -513,6 +513,17 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'budgeting.manage',  'name' => 'Create / Edit / Submit Budgets'],
                 ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets'],
             ],
+
+            // DSS Wave 0 — Decision Support. `dss.view` is reachability, not
+            // data access: every recommendation query is scoped to data the
+            // caller may already read. `dss.manage` = run-now + parameter
+            // edits (promotion approver only). `dss.admin` = detector on/off +
+            // kill switch (system_admin wildcard only, no grant needed).
+            'dss' => [
+                ['slug' => 'dss.view',   'name' => 'View Decision Center Recommendations'],
+                ['slug' => 'dss.manage', 'name' => 'Run DSS Detectors & Edit Parameters'],
+                ['slug' => 'dss.admin',  'name' => 'Manage DSS Detectors & Kill Switch'],
+            ],
         ];
     }
 
@@ -1127,6 +1138,12 @@ class RolePermissionSeeder extends Seeder
                             'approvals.board.view',
                             'hr.directory.view',
                             'dashboard.action_center.view',
+                            // DSS Wave 0 — Decision Center reachability for every
+                            // authenticated role (same nature as the action
+                            // center: a personal queue). Data access is NOT
+                            // granted here; every recommendation query is
+                            // scoped to data the caller may already read.
+                            'dss.view',
                             // Self-scoped layout reset — every role (see
                             // catalog comment under 'dashboards').
                             'dashboard.layout.reset',
@@ -1174,6 +1191,7 @@ class RolePermissionSeeder extends Seeder
             'approvals.board.view',
             'hr.directory.view',
             'dashboard.action_center.view',
+            'dss.view',
             'dashboard.layout.reset',
             'business_policies.view',
         ];

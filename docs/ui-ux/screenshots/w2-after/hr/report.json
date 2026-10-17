@@ -1,0 +1,292 @@
+{
+  "role": "hr",
+  "label": "w2-after",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2620,
+      "horizontalPageScroll": false,
+      "heading": "HR Officer DashboardUpdated just now",
+      "title": "HR Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 54,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Attendance Today",
+          "h": 42,
+          "y": 737
+        },
+        {
+          "t": "My Action Items",
+          "h": 42,
+          "y": 946
+        },
+        {
+          "t": "Headcount by Department",
+          "h": 42,
+          "y": 1138
+        },
+        {
+          "t": "Probation Alerts (next 30 days)",
+          "h": 42,
+          "y": 1562
+        },
+        {
+          "t": "Upcoming leaves",
+          "h": 42,
+          "y": 1781
+        },
+        {
+          "t": "Calendar events",
+          "h": 59,
+          "y": 1899
+        },
+        {
+          "t": "Recent Hires",
+          "h": 42,
+          "y": 2315
+        },
+        {
+          "t": "Pending Leave Requests",
+          "h": 42,
+          "y": 2571
+        },
+        {
+          "t": "Department Headcount Breakdown",
+          "h": 42,
+          "y": 2724
+        },
+        {
+          "t": "Attendance Today Breakdown",
+          "h": 42,
+          "y": 3097
+        },
+        {
+          "t": "Headcount Forecast",
+          "h": 45,
+          "y": 3388
+        },
+        {
+          "t": "Attendance Forecast",
+          "h": 45,
+          "y": 3651
+        },
+        {
+          "t": "Payroll Snapshot",
+          "h": 42,
+          "y": 3992
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/hr/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2388,
+      "horizontalPageScroll": false,
+      "heading": "HR Officer DashboardUpdated just now",
+      "title": "HR Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 54,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Attendance Today",
+          "h": 42,
+          "y": 453
+        },
+        {
+          "t": "My Action Items",
+          "h": 42,
+          "y": 662
+        },
+        {
+          "t": "Headcount by Department",
+          "h": 42,
+          "y": 854
+        },
+        {
+          "t": "Probation Alerts (next 30 days)",
+          "h": 42,
+          "y": 1278
+        },
+        {
+          "t": "Upcoming leaves",
+          "h": 42,
+          "y": 1482
+        },
+        {
+          "t": "Calendar events",
+          "h": 42,
+          "y": 1599
+        },
+        {
+          "t": "Recent Hires",
+          "h": 42,
+          "y": 1999
+        },
+        {
+          "t": "Pending Leave Requests",
+          "h": 42,
+          "y": 2255
+        },
+        {
+          "t": "Department Headcount Breakdown",
+          "h": 42,
+          "y": 2408
+        },
+        {
+          "t": "Attendance Today Breakdown",
+          "h": 42,
+          "y": 2726
+        },
+        {
+          "t": "Headcount Forecast",
+          "h": 45,
+          "y": 3018
+        },
+        {
+          "t": "Attendance Forecast",
+          "h": 45,
+          "y": 3281
+        },
+        {
+          "t": "Payroll Snapshot",
+          "h": 42,
+          "y": 3606
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/hr/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2405,
+      "horizontalPageScroll": false,
+      "heading": "HR Officer DashboardUpdated just now",
+      "title": "HR Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 54,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Attendance Today",
+          "h": 42,
+          "y": 339
+        },
+        {
+          "t": "My Action Items",
+          "h": 42,
+          "y": 339
+        },
+        {
+          "t": "Headcount by Department",
+          "h": 42,
+          "y": 548
+        },
+        {
+          "t": "Probation Alerts (next 30 days)",
+          "h": 42,
+          "y": 548
+        },
+        {
+          "t": "Upcoming leaves",
+          "h": 42,
+          "y": 972
+        },
+        {
+          "t": "Calendar events",
+          "h": 42,
+          "y": 972
+        },
+        {
+          "t": "Recent Hires",
+          "h": 42,
+          "y": 1371
+        },
+        {
+          "t": "Pending Leave Requests",
+          "h": 42,
+          "y": 1371
+        },
+        {
+          "t": "Department Headcount Breakdown",
+          "h": 42,
+          "y": 1627
+        },
+        {
+          "t": "Attendance Today Breakdown",
+          "h": 42,
+          "y": 1627
+        },
+        {
+          "t": "Headcount Forecast",
+          "h": 45,
+          "y": 1946
+        },
+        {
+          "t": "Attendance Forecast",
+          "h": 45,
+          "y": 2209
+        },
+        {
+          "t": "Payroll Snapshot",
+          "h": 42,
+          "y": 2534
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/hr/dashboard-1440.png"
+    }
+  ]
+}

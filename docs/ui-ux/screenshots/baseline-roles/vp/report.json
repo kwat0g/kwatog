@@ -1,0 +1,249 @@
+{
+  "role": "vp",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/approvals",
+    "/chains"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2809,
+      "horizontalPageScroll": false,
+      "heading": "Company OverviewUpdated just now",
+      "title": "Company Overview · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 38,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 2
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2557,
+      "horizontalPageScroll": false,
+      "heading": "Company OverviewUpdated just now",
+      "title": "Company Overview · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 38,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 2
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2420,
+      "horizontalPageScroll": false,
+      "heading": "Company OverviewUpdated just now",
+      "title": "Company Overview · Dashboard · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 38,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 2
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/dashboard-1440.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2160,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 47,
+        "links": 21,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/approvals-375.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2038,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 47,
+        "links": 21,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/approvals-768.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1927,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 54,
+        "links": 21,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/approvals-1440.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1926,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 8,
+        "links": 22,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/chains-375.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2050,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 8,
+        "links": 22,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/chains-768.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2259,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 15,
+        "links": 22,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/vp/chains-1440.png"
+    }
+  ]
+}

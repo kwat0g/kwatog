@@ -41,6 +41,7 @@ trait HasPassedInProcessQc
 
             $inspection->forceFill([
                 'status' => InspectionStatus::Passed,
+                'startup_trial_required' => $inspection->trialOutput()->exists() ? $inspection->startup_trial_required : false,
                 'inspector_id' => $inspection->inspector_id ?: $inspectorId,
                 'reviewed_by' => $reviewerId,
                 'reviewed_at' => $inspection->reviewed_at ?? now(),

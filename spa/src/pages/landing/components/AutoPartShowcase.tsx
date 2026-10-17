@@ -117,6 +117,11 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
       </span>
 
       {/* progress dots — also let a visitor step through by hand */}
+      {/* WCAG 2.2 AA 2.5.8 (target size): the pill is 6px tall by design and
+          cannot itself be a 24px target, so the BUTTON is 24px and the pill is
+          drawn inside it. The dots look the same; what grew is the area a
+          pointer can hit, and the focus ring now outlines that area rather than
+          the 6px sliver. */}
       <div className="absolute inset-x-0 bottom-[4.25rem] z-20 flex items-center justify-center gap-2">
         {PARTS.map((p, i) => (
           <button
@@ -126,11 +131,17 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
             aria-current={i === index}
             onClick={() => setIndex(i)}
             className={cn(
-              'h-1.5 rounded-full transition-[width] duration-300',
+              'group flex h-6 min-w-6 items-center justify-center rounded-md',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
-              i === index ? 'w-5 bg-accent' : 'w-1.5 bg-strong hover:bg-muted',
             )}
-          />
+          >
+            <span
+              className={cn(
+                'h-1.5 rounded-full transition-[width] duration-300',
+                i === index ? 'w-5 bg-accent' : 'w-1.5 bg-strong group-hover:bg-muted',
+              )}
+            />
+          </button>
         ))}
       </div>
 

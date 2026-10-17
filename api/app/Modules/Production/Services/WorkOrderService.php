@@ -18,12 +18,12 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
-use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
-use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
+use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Services\FinishedGoodInventoryService;
@@ -52,6 +52,8 @@ use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Support\WorkOrderStateMachine;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrStatus;
@@ -545,6 +547,9 @@ class WorkOrderService
                 $inventory->ensureItem($lockedWo->product);
             }
 
+            // Close every open downtime row for this WO — a work order can
+            // also re-enter production through start after a pause.
+            $this->closeOpenDowntimeRows($lockedWo);
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
             $mold = $lockedWo->mold_id ? Mold::lockForUpdate()->find($lockedWo->mold_id) : null;
             if (! $machine || ! $mold) {
@@ -664,9 +669,9 @@ class WorkOrderService
      * `parent_work_order_cannot_start_before_subassembly_child_is_ready`) and
      * produced finished goods from material that was never issued.
      */
-    public function releaseResources(WorkOrder $wo, string $reason): WorkOrder
+    public function releaseResources(WorkOrder $wo, string $reason, ?int $releasedBy = null): WorkOrder
     {
-        return DB::transaction(function () use ($wo, $reason) {
+        return DB::transaction(function () use ($wo, $reason, $releasedBy) {
             $wo = WorkOrder::query()->lockForUpdate()->findOrFail($wo->id);
             if ($wo->status !== WorkOrderStatus::Paused || trim($reason) === '') {
                 throw new BusinessRuleException('Only paused production can explicitly release resources; enter a reason.');
@@ -674,7 +679,9 @@ class WorkOrderService
             $machine = Machine::query()->lockForUpdate()->findOrFail($wo->machine_id);
             $mold = Mold::query()->lockForUpdate()->findOrFail($wo->mold_id);
             app(ProductionResourceService::class)->release($wo, $machine, $mold);
-            $wo->update(['production_released_at' => now(), 'pause_reason' => $reason]);
+            $wo->update(['production_released_at' => now()]);
+            app(ActivityFeedService::class)->record('production.work_order', 'resources_released', $wo,
+                'Paused resources released for '.$wo->wo_number.'.', ['reason' => trim($reason)], actorUserId: $releasedBy);
 
             return $this->show($wo->fresh());
         });
@@ -768,16 +775,8 @@ class WorkOrderService
             // recorded; each further output record gates its own increment.
             $this->materialUsage->assertProductionCoverage($lockedWo);
 
-            // Close any open downtime row for this WO.
-            $open = MachineDowntime::where('work_order_id', $lockedWo->id)
-                ->whereNull('end_time')->latest()->first();
-            if ($open) {
-                $end = Carbon::now();
-                $open->update([
-                    'end_time' => $end,
-                    'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
-                ]);
-            }
+            // Close every open downtime row for this WO.
+            $this->closeOpenDowntimeRows($lockedWo);
             $machine = $lockedWo->machine_id
                 ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
                 : null;
@@ -810,6 +809,22 @@ class WorkOrderService
         });
 
         return $result;
+    }
+
+    private function closeOpenDowntimeRows(WorkOrder $wo): int
+    {
+        $now = Carbon::now();
+        $rows = MachineDowntime::query()
+            ->where('work_order_id', $wo->id)
+            ->whereNull('end_time')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($rows as $row) {
+            $row->closeAt($now);
+        }
+
+        return $rows->count();
     }
 
     public function autoFinishIfTargetReached(WorkOrder $wo): bool
@@ -1089,7 +1104,7 @@ class WorkOrderService
                     }
                 };
                 $visit($lockedWo);
-                $requests = \App\Modules\Purchasing\Models\PurchaseRequest::whereIn('stock_production_work_order_id', $descendants->pluck('id')->push($lockedWo->id))
+                $requests = PurchaseRequest::whereIn('stock_production_work_order_id', $descendants->pluck('id')->push($lockedWo->id))
                     ->whereNotIn('status', ['cancelled', 'rejected'])->lockForUpdate()->get();
                 foreach ($requests as $request) {
                     if (! $request->is_auto_generated || $request->status->value !== 'draft'
@@ -1097,8 +1112,12 @@ class WorkOrderService
                         throw new BusinessRuleException("Review purchasing {$request->pr_number} before cancelling its stock production.");
                     }
                 }
-                foreach ($requests as $request) app(\App\Modules\Purchasing\Services\PurchaseRequestService::class)->cancel($request);
-                foreach ($descendants as $child) $this->cancel($child, $reason);
+                foreach ($requests as $request) {
+                    app(PurchaseRequestService::class)->cancel($request);
+                }
+                foreach ($descendants as $child) {
+                    $this->cancel($child, $reason);
+                }
             }
             $from = $lockedWo->status?->value ?? 'planned';
             $this->materialUsage->assertReservationLedgerConsistent($lockedWo);
@@ -1107,6 +1126,8 @@ class WorkOrderService
                 'status' => WorkOrderStatus::Cancelled->value, 'scheduling_diagnostic' => null,
                 'pause_reason' => $reason,
             ]);
+
+            $this->closeOpenDowntimeRows($lockedWo);
 
             // Sprint 6 audit §1.1: release any reservations held by this WO.
             $this->releaseReservedMaterials($lockedWo);

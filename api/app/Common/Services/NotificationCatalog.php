@@ -175,6 +175,7 @@ final class NotificationCatalog
                 ['key' => 'chain.so_confirmed', 'label' => 'Sales order confirmed', 'description' => 'A sales order has been confirmed by the customer.'],
                 ['key' => 'chain.in_process_qc_required', 'label' => 'In-process QC required', 'description' => 'A work order started and needs periodic in-process sampling.'],
                 ['key' => 'production.wo_completed', 'label' => 'Work order completed', 'description' => 'A production work order has finished. Outgoing QC is next.'],
+                ['key' => 'production.wo_paused', 'label' => 'Work order paused', 'description' => 'A production work order was paused; PPC and production management may need to respond.'],
                 ['key' => 'production.assignment.review', 'label' => 'Production assignment needs review', 'description' => 'A production slot, equipment or assigned crew needs PPC or production management review.'],
                 ['key' => 'production.crew.assigned', 'label' => 'Work order assigned', 'description' => 'You were assigned to a work-order crew.'],
                 ['key' => 'production.crew.changed', 'label' => 'Crew assignment changed', 'description' => 'Your previous work-order assignment ended.'],

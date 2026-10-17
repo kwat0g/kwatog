@@ -55,8 +55,28 @@ export function StatCard({
       {/* text-muted, not text-subtle: this string is what the number MEANS, so it
  is essential text at the 4.5:1 bar, not decoration at the 3:1 bar. */}
       <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1.5">{label}</div>
-      <div className="text-2xl font-medium font-mono tabular-nums text-primary leading-tight">
-        {value}
+      {/*
+       * The figure must never paint outside its own box (F-009). A fixed
+       * 26px (`text-2xl`) value is the spec, but the card is one track of a
+       * grid the caller chooses — at 375px a two-up grid leaves 132px of
+       * content, and `₱576,912.00` measures 175px there, so the whole
+       * document became draggable sideways.
+       *
+       * The wrapper is the measuring container (`container-type: inline-size`),
+       * so the step follows the CARD, not the viewport — correct in every grid
+       * the card is used in, unlike a `sm:`/`lg:` ladder. 12cqw maps onto the
+       * scale the design system already declares (`text-lg` 16px … `text-2xl`
+       * 26px, the KPI value); nothing else in the card changed.
+       *
+       * `overflow-wrap: anywhere` is the backstop, not the mechanism: a value
+       * too long for even the 16px floor wraps inside the card instead of
+       * dragging the page. Every digit stays on screen — a truncated or
+       * clipped figure is worse than a two-line one.
+       */}
+      <div className="@container">
+        <div className="text-[clamp(1rem,12cqw,1.625rem)] font-medium font-mono tabular-nums text-primary leading-tight [overflow-wrap:anywhere]">
+          {value}
+        </div>
       </div>
       {delta && (
         <div

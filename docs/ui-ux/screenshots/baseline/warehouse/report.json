@@ -1,0 +1,348 @@
+{
+  "role": "warehouse",
+  "label": "baseline",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/inventory/items",
+    "/inventory/grn",
+    "/inventory/stock-levels"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 3069,
+      "horizontalPageScroll": false,
+      "heading": "Warehouse DashboardUpdated just now",
+      "title": "Warehouse Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 45,
+        "inputs": 0,
+        "tables": 2,
+        "rows": 8,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2990,
+      "horizontalPageScroll": false,
+      "heading": "Warehouse DashboardUpdated just now",
+      "title": "Warehouse Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 45,
+        "inputs": 0,
+        "tables": 2,
+        "rows": 8,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2681,
+      "horizontalPageScroll": false,
+      "heading": "Warehouse DashboardUpdated just now",
+      "title": "Warehouse Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 45,
+        "inputs": 0,
+        "tables": 2,
+        "rows": 8,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/dashboard-1440.png"
+    },
+    {
+      "route": "/inventory/items",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2471,
+      "horizontalPageScroll": false,
+      "heading": "Items",
+      "title": "Items · Warehouse · ERP",
+      "counts": {
+        "buttons": 55,
+        "links": 24,
+        "inputs": 22,
+        "tables": 1,
+        "rows": 16,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-items-375.png"
+    },
+    {
+      "route": "/inventory/items",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2307,
+      "horizontalPageScroll": false,
+      "heading": "Items",
+      "title": "Items · Warehouse · ERP",
+      "counts": {
+        "buttons": 55,
+        "links": 24,
+        "inputs": 22,
+        "tables": 1,
+        "rows": 16,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-items-768.png"
+    },
+    {
+      "route": "/inventory/items",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2351,
+      "horizontalPageScroll": false,
+      "heading": "Items",
+      "title": "Items · Warehouse · ERP",
+      "counts": {
+        "buttons": 59,
+        "links": 24,
+        "inputs": 22,
+        "tables": 1,
+        "rows": 16,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-items-1440.png"
+    },
+    {
+      "route": "/inventory/grn",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1916,
+      "horizontalPageScroll": false,
+      "heading": "Goods Receipt Notes",
+      "title": "Goods Receipt Notes · Warehouse · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 20,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-grn-375.png"
+    },
+    {
+      "route": "/inventory/grn",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2398,
+      "horizontalPageScroll": false,
+      "heading": "Goods Receipt Notes",
+      "title": "Goods Receipt Notes · Warehouse · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 20,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-grn-768.png"
+    },
+    {
+      "route": "/inventory/grn",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2098,
+      "horizontalPageScroll": false,
+      "heading": "Goods Receipt Notes",
+      "title": "Goods Receipt Notes · Warehouse · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 20,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-grn-1440.png"
+    },
+    {
+      "route": "/inventory/stock-levels",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2102,
+      "horizontalPageScroll": false,
+      "heading": "Stock levelsUpdated just now",
+      "title": "Stock levels · Warehouse · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 20,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 16,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-stock-levels-375.png"
+    },
+    {
+      "route": "/inventory/stock-levels",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2087,
+      "horizontalPageScroll": false,
+      "heading": "Stock levelsUpdated just now",
+      "title": "Stock levels · Warehouse · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 20,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 16,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-stock-levels-768.png"
+    },
+    {
+      "route": "/inventory/stock-levels",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2287,
+      "horizontalPageScroll": false,
+      "heading": "Stock levelsUpdated just now",
+      "title": "Stock levels · Warehouse · ERP",
+      "counts": {
+        "buttons": 22,
+        "links": 20,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 16,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/warehouse/inventory-stock-levels-1440.png"
+    }
+  ]
+}

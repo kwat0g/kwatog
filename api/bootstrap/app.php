@@ -40,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withProviders([
         ModuleServiceProvider::class,
+        \App\Modules\DSS\DssServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         // Stateful SPA cookie auth (NEVER bearer tokens). This injects

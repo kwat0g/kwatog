@@ -1,0 +1,202 @@
+{
+  "role": "qc",
+  "label": "w2-ctl",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2400,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 32,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection Queue",
+          "h": 42,
+          "y": 759
+        },
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 1019
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 1279
+        },
+        {
+          "t": "QC Chain Coverage",
+          "h": 59,
+          "y": 1651
+        },
+        {
+          "t": "Inspection Queue by Stage",
+          "h": 42,
+          "y": 1866
+        },
+        {
+          "t": "Top Defects by Count",
+          "h": 42,
+          "y": 2127
+        },
+        {
+          "t": "Defect Rate Forecast (3 months)",
+          "h": 45,
+          "y": 2387
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-ctl/qc/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2155,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 32,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection Queue",
+          "h": 42,
+          "y": 514
+        },
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 774
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 1035
+        },
+        {
+          "t": "QC Chain Coverage",
+          "h": 42,
+          "y": 1291
+        },
+        {
+          "t": "Inspection Queue by Stage",
+          "h": 42,
+          "y": 1489
+        },
+        {
+          "t": "Top Defects by Count",
+          "h": 42,
+          "y": 1749
+        },
+        {
+          "t": "Defect Rate Forecast (3 months)",
+          "h": 45,
+          "y": 2009
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-ctl/qc/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2266,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 32,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection Queue",
+          "h": 42,
+          "y": 339
+        },
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 339
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 600
+        },
+        {
+          "t": "QC Chain Coverage",
+          "h": 42,
+          "y": 600
+        },
+        {
+          "t": "Inspection Queue by Stage",
+          "h": 42,
+          "y": 856
+        },
+        {
+          "t": "Top Defects by Count",
+          "h": 42,
+          "y": 856
+        },
+        {
+          "t": "Defect Rate Forecast (3 months)",
+          "h": 45,
+          "y": 1116
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-ctl/qc/dashboard-1440.png"
+    }
+  ]
+}

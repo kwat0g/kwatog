@@ -12,6 +12,7 @@ import {
   offsetScheduleDate,
 } from '@/components/production/scheduleDates';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import {
   AssignmentForm,
   LateProductionApproval,
@@ -45,6 +46,9 @@ export function StartProductionDialog({
     preferredDay <= offsetScheduleDate(today, 90);
   const [error, setError] = useState('');
   const [lateApproval, setLateApproval] = useState({ authorized: false, reason: '' });
+  const [extensionReason, setExtensionReason] = useState(
+    'Approved remaining production time extension.',
+  );
   const readiness = useQuery({
     queryKey: ['production', 'execution-readiness', woId],
     queryFn: () => workOrdersApi.executionReadiness(woId),
@@ -144,7 +148,7 @@ export function StartProductionDialog({
             expected_schedule_id: data!.schedule!.id,
             expected_schedule_updated_at: data!.schedule!.updated_at,
             scheduled_end: data!.execution_end!,
-            reason: 'Approved remaining production time extension.',
+            reason: extensionReason.trim(),
             presence_confirmed_employee_ids: present
               ? unknown.map((member) => member.employee_id)
               : [],
@@ -369,6 +373,18 @@ export function StartProductionDialog({
                       : 'Starting now reserves resources until '}
                     {productionDateTime(data.execution_end)}. Original schedule stays in history.
                   </p>
+                )}
+                {action === 'extend' && (
+                  <Textarea
+                    label="Extension reason"
+                    required
+                    rows={3}
+                    maxLength={500}
+                    value={extensionReason}
+                    onChange={(event) => setExtensionReason(event.target.value)}
+                    placeholder="Why does the run need more time?"
+                    disabled={busy || readiness.isFetching}
+                  />
                 )}
                 {data.requires_late_start_acknowledgement && (
                   <label className="flex items-start gap-2 rounded-md border border-default p-3 text-warning-fg">
@@ -633,7 +649,8 @@ export function StartProductionDialog({
                     !!data.requires_late_production_approval &&
                     (!lateApproval.authorized ||
                       !lateApproval.reason.trim() ||
-                      !data.can_approve_late_production))
+                      !data.can_approve_late_production)) ||
+                  (action === 'extend' && !extensionReason.trim())
                 }
               >
                 {action === 'extend'

@@ -18,7 +18,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { PriceAgreement } from '@/types/crm';
-import { localIsoDate } from '@/lib/formatDate';
+import { manilaIsoDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { PricingNavigation } from './PricingNavigation';
 
@@ -197,13 +197,7 @@ export default function PriceAgreementsListPage() {
           <Chip variant="neutral">Archived</Chip>
         ) : r.is_currently_active ? (
           <Chip variant="success">Active</Chip>
-        ) : r.effective_from >
-          new Intl.DateTimeFormat('en-CA', {
-            timeZone: 'Asia/Manila',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-          }).format(new Date()) ? (
+        ) : r.effective_from > manilaIsoDate() ? (
           <Chip variant="info">Scheduled</Chip>
         ) : (
           <Chip variant="neutral">Expired</Chip>
@@ -236,7 +230,10 @@ export default function PriceAgreementsListPage() {
                   >
                     <LuPencil size={14} />
                   </Link>
-                  {r.effective_to < localIsoDate() && (
+                  {/* Manila, not the viewer's zone: the backend expires agreements on the
+                      Philippine calendar date (APP_TIMEZONE=Asia/Manila), so a browser set to
+                      UTC would otherwise offer Archive a day late. */}
+                  {r.effective_to < manilaIsoDate() && (
                     <Button
                       type="button"
                       variant="ghost"

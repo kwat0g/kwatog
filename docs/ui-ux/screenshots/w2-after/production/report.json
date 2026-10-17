@@ -1,0 +1,262 @@
+{
+  "role": "production",
+  "label": "w2-after",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2727,
+      "horizontalPageScroll": false,
+      "heading": "Plant Manager DashboardUpdated just now",
+      "title": "Plant Manager Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 66,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Machine Utilization",
+          "h": 42,
+          "y": 854
+        },
+        {
+          "t": "Alerts & Attention",
+          "h": 42,
+          "y": 1311
+        },
+        {
+          "t": "Defect Pareto (top 8)",
+          "h": 42,
+          "y": 1567
+        },
+        {
+          "t": "Order-to-Cash Chain",
+          "h": 42,
+          "y": 1806
+        },
+        {
+          "t": "Machine Status Breakdown",
+          "h": 42,
+          "y": 2033
+        },
+        {
+          "t": "Chain bottlenecks",
+          "h": 42,
+          "y": 2324
+        },
+        {
+          "t": "Top Defects",
+          "h": 42,
+          "y": 2766
+        },
+        {
+          "t": "Stock-out Risk Forecast",
+          "h": 59,
+          "y": 2970
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 3365
+        },
+        {
+          "t": "Forecast Accuracy",
+          "h": 53,
+          "y": 4193
+        },
+        {
+          "t": "Capacity Forecast",
+          "h": 45,
+          "y": 4514
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/production/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2648,
+      "horizontalPageScroll": false,
+      "heading": "Plant Manager DashboardUpdated just now",
+      "title": "Plant Manager Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 66,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Machine Utilization",
+          "h": 42,
+          "y": 604
+        },
+        {
+          "t": "Alerts & Attention",
+          "h": 42,
+          "y": 935
+        },
+        {
+          "t": "Defect Pareto (top 8)",
+          "h": 42,
+          "y": 1190
+        },
+        {
+          "t": "Order-to-Cash Chain",
+          "h": 42,
+          "y": 1430
+        },
+        {
+          "t": "Machine Status Breakdown",
+          "h": 42,
+          "y": 1656
+        },
+        {
+          "t": "Chain bottlenecks",
+          "h": 42,
+          "y": 1948
+        },
+        {
+          "t": "Top Defects",
+          "h": 42,
+          "y": 2273
+        },
+        {
+          "t": "Stock-out Risk Forecast",
+          "h": 59,
+          "y": 2477
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 2477
+        },
+        {
+          "t": "Forecast Accuracy",
+          "h": 53,
+          "y": 3305
+        },
+        {
+          "t": "Capacity Forecast",
+          "h": 45,
+          "y": 3549
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/production/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2431,
+      "horizontalPageScroll": false,
+      "heading": "Plant Manager DashboardUpdated just now",
+      "title": "Plant Manager Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 26,
+        "links": 66,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Machine Utilization",
+          "h": 42,
+          "y": 410
+        },
+        {
+          "t": "Alerts & Attention",
+          "h": 42,
+          "y": 741
+        },
+        {
+          "t": "Defect Pareto (top 8)",
+          "h": 42,
+          "y": 741
+        },
+        {
+          "t": "Order-to-Cash Chain",
+          "h": 42,
+          "y": 1032
+        },
+        {
+          "t": "Machine Status Breakdown",
+          "h": 42,
+          "y": 1258
+        },
+        {
+          "t": "Chain bottlenecks",
+          "h": 42,
+          "y": 1550
+        },
+        {
+          "t": "Top Defects",
+          "h": 42,
+          "y": 1844
+        },
+        {
+          "t": "Stock-out Risk Forecast",
+          "h": 59,
+          "y": 2048
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 2048
+        },
+        {
+          "t": "Forecast Accuracy",
+          "h": 53,
+          "y": 2048
+        },
+        {
+          "t": "Capacity Forecast",
+          "h": 45,
+          "y": 2876
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/production/dashboard-1440.png"
+    }
+  ]
+}

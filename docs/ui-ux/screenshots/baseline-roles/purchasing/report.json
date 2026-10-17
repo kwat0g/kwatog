@@ -1,0 +1,254 @@
+{
+  "role": "purchasing",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/purchasing/purchase-orders",
+    "/purchasing/purchase-requests"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 3051,
+      "horizontalPageScroll": false,
+      "heading": "Purchasing DashboardUpdated just now",
+      "title": "Purchasing Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 47,
+        "inputs": 0,
+        "tables": 3,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.bg-canvas border border-default rounded-md overflo (462>333, overflow-x:hidden)",
+        "div.px-1.5 pb-2 (462>333, overflow-x:visible)",
+        "div.bg-canvas border border-default rounded-md overflo (426>333, overflow-x:hidden)",
+        "div.px-1.5 pb-2 (426>333, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2853,
+      "horizontalPageScroll": false,
+      "heading": "Purchasing DashboardUpdated just now",
+      "title": "Purchasing Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 47,
+        "inputs": 0,
+        "tables": 3,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2806,
+      "horizontalPageScroll": false,
+      "heading": "Purchasing DashboardUpdated just now",
+      "title": "Purchasing Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 47,
+        "inputs": 0,
+        "tables": 3,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/dashboard-1440.png"
+    },
+    {
+      "route": "/purchasing/purchase-orders",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2348,
+      "horizontalPageScroll": false,
+      "heading": "Purchase orders",
+      "title": "Purchase orders · Procurement · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 26,
+        "inputs": 8,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/purchasing-purchase-orders-375.png"
+    },
+    {
+      "route": "/purchasing/purchase-orders",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2122,
+      "horizontalPageScroll": false,
+      "heading": "Purchase orders",
+      "title": "Purchase orders · Procurement · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 26,
+        "inputs": 8,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/purchasing-purchase-orders-768.png"
+    },
+    {
+      "route": "/purchasing/purchase-orders",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2108,
+      "horizontalPageScroll": false,
+      "heading": "Purchase orders",
+      "title": "Purchase orders · Procurement · ERP",
+      "counts": {
+        "buttons": 23,
+        "links": 26,
+        "inputs": 8,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/purchasing-purchase-orders-1440.png"
+    },
+    {
+      "route": "/purchasing/purchase-requests",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2002,
+      "horizontalPageScroll": false,
+      "heading": "Purchase requests",
+      "title": "Purchase requests · Procurement · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 23,
+        "inputs": 5,
+        "tables": 1,
+        "rows": 17,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/purchasing-purchase-requests-375.png"
+    },
+    {
+      "route": "/purchasing/purchase-requests",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2103,
+      "horizontalPageScroll": false,
+      "heading": "Purchase requests",
+      "title": "Purchase requests · Procurement · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 23,
+        "inputs": 5,
+        "tables": 1,
+        "rows": 17,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/purchasing-purchase-requests-768.png"
+    },
+    {
+      "route": "/purchasing/purchase-requests",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1989,
+      "horizontalPageScroll": false,
+      "heading": "Purchase requests",
+      "title": "Purchase requests · Procurement · ERP",
+      "counts": {
+        "buttons": 25,
+        "links": 23,
+        "inputs": 5,
+        "tables": 1,
+        "rows": 17,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/purchasing/purchasing-purchase-requests-1440.png"
+    }
+  ]
+}

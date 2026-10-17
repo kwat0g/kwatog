@@ -1,0 +1,307 @@
+{
+  "role": "ppc",
+  "label": "w2-after",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2961,
+      "horizontalPageScroll": false,
+      "heading": "PPC DashboardUpdated just now",
+      "title": "PPC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 51,
+        "inputs": 0,
+        "tables": 4,
+        "rows": 35,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Active orders by chain stage",
+          "h": 42,
+          "y": 839
+        },
+        {
+          "t": "Alerts",
+          "h": 42,
+          "y": 1116
+        },
+        {
+          "t": "Machine utilisation",
+          "h": 42,
+          "y": 1372
+        },
+        {
+          "t": "MRP Overview",
+          "h": 42,
+          "y": 1945
+        },
+        {
+          "t": "Production Gantt (7-day)",
+          "h": 42,
+          "y": 2079
+        },
+        {
+          "t": "MRP Shortages",
+          "h": 42,
+          "y": 2455
+        },
+        {
+          "t": "Machine Availability (7-day)",
+          "h": 42,
+          "y": 2715
+        },
+        {
+          "t": "WO Status Breakdown",
+          "h": 42,
+          "y": 3220
+        },
+        {
+          "t": "Capacity Forecast",
+          "h": 45,
+          "y": 3483
+        },
+        {
+          "t": "WO Status Distribution",
+          "h": 42,
+          "y": 3808
+        },
+        {
+          "t": "Machine Status Distribution",
+          "h": 42,
+          "y": 4127
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 4395
+        },
+        {
+          "t": "Stock-out Risk",
+          "h": 53,
+          "y": 5222
+        },
+        {
+          "t": "Forecast Accuracy",
+          "h": 53,
+          "y": 5612
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/ppc/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2764,
+      "horizontalPageScroll": false,
+      "heading": "PPC DashboardUpdated just now",
+      "title": "PPC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 51,
+        "inputs": 0,
+        "tables": 4,
+        "rows": 35,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Active orders by chain stage",
+          "h": 42,
+          "y": 514
+        },
+        {
+          "t": "Alerts",
+          "h": 42,
+          "y": 791
+        },
+        {
+          "t": "Machine utilisation",
+          "h": 42,
+          "y": 1047
+        },
+        {
+          "t": "MRP Overview",
+          "h": 42,
+          "y": 1527
+        },
+        {
+          "t": "Production Gantt (7-day)",
+          "h": 42,
+          "y": 1660
+        },
+        {
+          "t": "MRP Shortages",
+          "h": 42,
+          "y": 2037
+        },
+        {
+          "t": "Machine Availability (7-day)",
+          "h": 42,
+          "y": 2297
+        },
+        {
+          "t": "WO Status Breakdown",
+          "h": 42,
+          "y": 2801
+        },
+        {
+          "t": "Capacity Forecast",
+          "h": 45,
+          "y": 3065
+        },
+        {
+          "t": "WO Status Distribution",
+          "h": 42,
+          "y": 3390
+        },
+        {
+          "t": "Machine Status Distribution",
+          "h": 42,
+          "y": 3681
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 3949
+        },
+        {
+          "t": "Stock-out Risk",
+          "h": 53,
+          "y": 3949
+        },
+        {
+          "t": "Forecast Accuracy",
+          "h": 53,
+          "y": 4776
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/ppc/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2805,
+      "horizontalPageScroll": false,
+      "heading": "PPC DashboardUpdated just now",
+      "title": "PPC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 51,
+        "inputs": 0,
+        "tables": 4,
+        "rows": 35,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Active orders by chain stage",
+          "h": 42,
+          "y": 339
+        },
+        {
+          "t": "Alerts",
+          "h": 42,
+          "y": 339
+        },
+        {
+          "t": "Machine utilisation",
+          "h": 42,
+          "y": 616
+        },
+        {
+          "t": "MRP Overview",
+          "h": 42,
+          "y": 1096
+        },
+        {
+          "t": "Production Gantt (7-day)",
+          "h": 42,
+          "y": 1096
+        },
+        {
+          "t": "MRP Shortages",
+          "h": 42,
+          "y": 1473
+        },
+        {
+          "t": "Machine Availability (7-day)",
+          "h": 42,
+          "y": 1473
+        },
+        {
+          "t": "WO Status Breakdown",
+          "h": 42,
+          "y": 1977
+        },
+        {
+          "t": "Capacity Forecast",
+          "h": 45,
+          "y": 2241
+        },
+        {
+          "t": "WO Status Distribution",
+          "h": 42,
+          "y": 2566
+        },
+        {
+          "t": "Machine Status Distribution",
+          "h": 42,
+          "y": 2566
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 2857
+        },
+        {
+          "t": "Stock-out Risk",
+          "h": 53,
+          "y": 2857
+        },
+        {
+          "t": "Forecast Accuracy",
+          "h": 53,
+          "y": 2857
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w2-after/ppc/dashboard-1440.png"
+    }
+  ]
+}
