@@ -243,7 +243,7 @@ desktop one; it did not exist.
 | `hooks/useMediaQuery.ts` (`useMediaQuery`, `useIsPhone`) | One query, `(max-width: 639px)`, so behaviour agrees with Tailwind's `sm`. Guards a missing `matchMedia` — jsdom has none, and every unit test in the suite renders dialogs |
 | `Modal` — `presentation: 'auto' \| 'dialog' \| 'sheet'` | No page opts in; a page that really wants a centred card on a phone can say so. `data-presentation` makes the state assertable |
 | Sheet header always rendered | On a phone the backdrop is a sliver and there is no Esc key — a titleless sheet would have been uncloseable. Untitled dialogs also gain `aria-label="Dialog"` instead of being nameless |
-| 44px floor on the **sheet surface** | Every `button`/`a` inside the sheet, not just `ModalFooter`'s children. `ConfirmDialog` hand-rolls its action row and owns confirm/revoke/delete in 63 files — a footer-only rule left exactly those at 32px, which the first version of this unit did, and an attribute-only test could not see it |
+| 44px floor on the **sheet surface** | Every `button`/`a` inside the sheet, not just `ModalFooter`'s children. `ConfirmDialog` (150 call sites across 79 files) hand-rolls its action row, so a footer-only rule left exactly those at 32px — which the first version of this unit did, and an attribute-only test could not see it |
 | `BottomSheet` → `<Modal presentation="sheet">` | One dialog implementation. The old component had **no focus trap**, so a keyboard or switch-control user could tab out of the self-service leave sheet into the page behind it |
 | `ReturnSparePartButton` | Dropped its own `desktop ? <Modal> : <BottomSheet>` copy of the breakpoint |
 

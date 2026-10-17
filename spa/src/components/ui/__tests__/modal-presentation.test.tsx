@@ -136,9 +136,10 @@ describe('Modal presentation', () => {
   it('gives the sheet surface the 44px touch floor and the dialog surface does not', () => {
     /*
      * On the PANEL, not on `ModalFooter`: dialogs hand-roll their action rows
-     * (`ConfirmDialog` does, and it owns the confirm/revoke/delete buttons in 63
-     * files). A floor scoped to the shared footer left exactly those at 32px on
-     * a phone — found by asserting the real height in a browser, not the class.
+     * (`ConfirmDialog` does, and it is the confirm/revoke/delete button in 150
+     * call sites across 79 files). A floor scoped to the shared footer left
+     * exactly those at 32px on a phone — found by asserting the real height in
+     * a browser, not the class.
      */
     stubMatchMedia(true);
     renderModal();
