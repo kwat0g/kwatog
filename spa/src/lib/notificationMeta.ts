@@ -79,6 +79,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'chain.so_confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Sales' },
   'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
+  'production.wo_paused': { icon: LuTriangleAlert, group: 'alerts', label: 'Production' },
   'production.assignment.review': { icon: LuCalendar, group: 'approvals', label: 'Production' },
   'production.crew.assigned': { icon: LuUsers, group: 'system', label: 'Production' },
   'production.crew.changed': { icon: LuUsers, group: 'system', label: 'Production' },
