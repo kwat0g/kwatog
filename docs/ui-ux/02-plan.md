@@ -22,8 +22,8 @@ claim:
 | 2 | **Fixed — a progress track whose fill was ≈2× the track** (`1276>638`, `1080>540`); **1 → 0 after the fix** | A | `FINDINGS.md → F-003` | A bar reading >100% is a wrong number on a screen people trust. Page now uses the shared clamping `ProgressBar`; the underlying 200% value is F-005 |
 | 3 | **Fixed — Panel clipped a table with no way to scroll** (`357>333` at 375px); gone after the fix | A | `FINDINGS.md → F-004` | Silent data loss on the smallest screen. `Panel` gained an opt-in `scrollBody` |
 | 4 | **~~20 interactive elements with no accessible name~~ — WITHDRAWN, probe defect.** Chromium's accessibility tree reports **0** on the same pages/viewports | A | `FINDINGS.md → C-001` | Nothing to fix. Kept in the list so the correction is visible, not quietly deleted |
-| 5 | **Phone actions are the thinnest layer**: `<BottomSheet>` 3 uses vs `<Modal>` 212 | A | Phase 0 § A.4 | `vice_president` approves from a phone and `employee` self-services on one; the mobile action pattern barely exists. **Next up (W1.3)** |
-| 6 | **`Modal` is the only action surface across 94 files** | A | same | Every mobile fix currently starts by converting a desktop modal. Standardise the phone path once |
+| 5 | **Fixed — phone actions were the thinnest layer**: `<BottomSheet>` 4 uses vs `<Modal>` 214 | A | Phase 0 § A.4 | The rule now lives in the primitive: `Modal` is a bottom sheet below 640px, so every approval and self-service flow gained the phone surface without a page edit. W1.3 |
+| 6 | **Fixed — `Modal` was the only action surface** across 90 files | A | same | One dialog implementation, two presentations; `BottomSheet` is the forced-sheet wrapper and gained the focus trap it never had. W1.3 |
 | 7 | **Permission-UI mismatch M1 (finance)** — page guard `dashboard.accounting.view` vs data guard `accounting.dashboard.view` vs widget permission are three different answers | B | `docs/dashboards/phase0/A-roles-access.md` | The brief's "permission inaccuracies" is *one live* case, not a systemic one; fix and prove with a test |
 | 8 | **Approval centre is board-blind for payroll + 14 custom approval types** (they write no ledger rows) | B | `docs/dashboards/phase0/C-approvals.md` | Approvers cannot see work waiting on them. Highest-impact correctness issue in the product, and it is partly backend |
 | 9 | **Notification darkness** — bill payment, salary adjustment, asset disposal, budget/transfers, invoice prebill, cost review fire nothing on submit/decide | B | same | A queue nobody is told about reads as idle, not blocked |
@@ -37,10 +37,8 @@ claim:
 | 17 | **Index debt on fact tables** (returns, budgets, `wo_operations`, `production_logs`, PR/PO dates, delivery actuals, `grn_items`) | B | `docs/dashboards/phase0/B-modules-data.md` | Aggregating before indexing makes every dashboard slower, not faster |
 | 18 | **KPI snapshots are monthly-only** (`kpi:compute-monthly`); sub-month widgets read source tables | B | same | A "missing" KPI early in the month is expected — must be explained in UI, not left as an empty tile |
 | 19 | **Landing/dashboards carry zero bundle budget** — no measured LCP/INP/CLS, no size ceiling | A | Phase 0 § C.4 | "Fast" is currently an aspiration; `manualChunks` splits exist but are unenforced |
-| 20 | **No component gallery**; 60 shared components and their states cannot be reviewed in isolation | A | `spa/src/components/dev/` holds only `DevErrorPanel` | Blocks safe refactoring and makes every future review a page hunt |
-
-**Progress:** I1–I3 shipped in Wave 1 PR 1 (see `PROGRESS.md`). I4 was withdrawn as a probe
-artifact. I5 is W1.3, the next unit of work.
+| 20 | **No component gallery**; 60 shared components and their states cannot be reviewed in isolation | A | `spa/src/components/dev/` holds only `DevErrorPanel` | Blocks safe refactoring and makes every future review a page hunt |**Progress:** I1–I3 shipped in Wave 1 PR 1, I5/I6 in Wave 1 PR 3 (W1.3), I2 in PR 2 (W1.2);
+see `PROGRESS.md`. I4 was withdrawn as a probe artifact.
 
 Tier-C rows 11, 13 and 18's UI treatment are the ones the brief's own "verify, don't trust"
 rule forbids me from asserting as defects. They are listed as *verification tasks* whose
@@ -109,7 +107,7 @@ Ordered by traffic × visibility × pain. Effort: S ≤ 1 day, M ≤ 3 days, L >
 |---|---|---|---|
 | W1.1 | Shell + dashboard shared fixes: clipped `w-12` slots, the 2×-wide progress track, the 375px card, accessible names | S | PR 1 |
 | W1.2 | **Done** — component gallery at `/admin/component-gallery`; 16 saved visual baselines + overflow assert + negative control (`npm run test:gallery`, CI job `gallery`). Audit: `PROGRESS.md` § Wave 1 PR 2 | M | PR 2 |
-| W1.3 | Phone action surface: decide and implement Modal/BottomSheet rule; convert approval + self-service paths | M | PR 3 |
+| W1.3 | **Done** — the rule lives in `Modal` (`bottom sheet < 640px`), `BottomSheet` is a forced-sheet wrapper, footer controls take the 44px floor, and the self-service path is asserted at both widths. Audit: `PROGRESS.md` § Wave 1 PR 3 | M | PR 3 |
 | W1.4 | **Done** — axe gate (`spa/e2e/a11y.spec.ts`, 6 surfaces + negative control), bundle budget (5 measured budgets), `typecheck:e2e`; all enforced in `spa-tests.yml`. Audit: `PROGRESS.md` § Wave 1 PR 4 | S | PR 4 |
 | W1.5 | Chart palette tokens + docs; per-widget export component | M | PR 5 |
 

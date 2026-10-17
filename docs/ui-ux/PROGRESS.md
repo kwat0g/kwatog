@@ -2,12 +2,12 @@
 
 Single source of truth. A fresh session should be able to resume from this file alone.
 
-**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; every finding from the shell pass is now closed — F-007/F-013/F-014 the same day, and F-009 + F-010 (the width pass) in the unit below. There is no route in the compared set with a horizontal page scroll and none with unintended overflow. W1.4 quality gates are built, enforced, and green locally — axe (7 surfaces + negative control, the gallery among them), bundle budget (5 measured budgets), e2e typecheck. W1.2 shipped: the shared component kit now has a gallery page and 16 committed visual baselines, both in CI.**
+**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; every finding from the shell pass is now closed — F-007/F-013/F-014 the same day, and F-009 + F-010 (the width pass) in the unit below. There is no route in the compared set with a horizontal page scroll and none with unintended overflow. W1.4 quality gates are built, enforced, and green locally — axe (7 surfaces + negative control, the gallery among them), bundle budget (5 measured budgets), e2e typecheck. W1.2 shipped: the shared component kit has a gallery page and 18 committed visual baselines, both in CI. W1.3 shipped: every dialog is a bottom sheet below 640px, decided inside `Modal`, with the self-service path measured at both widths.**
 
 - Branch: `fix/ui-ux-wave1-shell` (Wave 1 so far, uncommitted at the time of writing)
 - Date: 2026-10-13
 - Decisions taken on the proposed defaults: **Wave 1 only** · **axe approved** · **docs get their own commit**
-- Next unit: **W1.3** (the phone action surface), then **W1.5** (chart palette tokens + per-widget export) — the plan's Wave 1 remainder. The F-009/F-010 work below sat outside the W1.x numbering because both are findings, not planned work. **W1.4 was done early** so every later wave is measured by a gate rather than asserted; **W1.2 is now closed** (see below).
+- Next unit: **W1.5** (chart palette tokens + per-widget export) — the last of Wave 1. The F-009/F-010 work sat outside the W1.x numbering because both are findings, not planned work. **W1.4 was done early** so every later wave is measured by a gate rather than asserted; W1.2 and W1.3 are closed (see below).
 
 ---
 
@@ -18,7 +18,7 @@ Single source of truth. A fresh session should be able to resume from this file 
 | 0 — Discovery & baseline | **Done** | `00-discovery.md`, `screenshots/baseline/` (51 captures) |
 | 1 — Design direction | **Done** | `01-direction.md` |
 | 2 — Plan | **Done, awaiting review** | `02-plan.md` |
-| 3 — Design-system foundation | **In progress** | Wave 1 PR 1: `Panel.scrollBody`; both hand-rolled dashboard bars migrated to the shared `ProgressBar`. Wave 1 PR 2: the component gallery + visual baselines (W1.2) |
+| 3 — Design-system foundation | **In progress** | Wave 1 PR 1: `Panel.scrollBody`; both hand-rolled dashboard bars migrated to the shared `ProgressBar`. PR 2: the component gallery + visual baselines (W1.2). PR 3: the dialog/phone-surface rule (W1.3) |
 | 4 — Shared patterns | Not started | — |
 | 5 — Module polish | Not started | — |
 | 6 — Responsive / cross-device | Not started | — |
@@ -223,6 +223,52 @@ files** · `build` **ok** · `audit:bundle` **5/5 hold** (totalJs 1696.4/1900 �
 re-baseline, not a pass. Overlays and tooltips are deliberately not photographed
 (portal + hover), so their appearance is reviewed by hand.
 
+## Wave 1 PR 3 — W1.3 the phone action surface
+
+**The gap, measured:** 214 `<Modal>` call sites across 90 files, 4 `<BottomSheet>`, and no
+breakpoint hook anywhere in the SPA — so on a 390px screen every approval, QC form and
+self-service flow opened a centred desktop card. The phone path was not worse than the
+desktop one; it did not exist.
+
+**The rule, in one place.** `Modal` presents itself (the same leverage argument as F-009 in
+`StatCard` and F-010 in `SegmentedControl`):
+
+| Viewport | Presentation |
+|---|---|
+| ≥ 640px (`sm`) | centred dialog, `max-w-sm…4xl`, 20px body |
+| < 640px | bottom sheet: edge to edge, bottom-anchored, top corners only, sticky footer over `env(safe-area-inset-bottom)` |
+
+| Change | Why |
+|---|---|
+| `hooks/useMediaQuery.ts` (`useMediaQuery`, `useIsPhone`) | One query, `(max-width: 639px)`, so behaviour agrees with Tailwind's `sm`. Guards a missing `matchMedia` — jsdom has none, and every unit test in the suite renders dialogs |
+| `Modal` — `presentation: 'auto' \| 'dialog' \| 'sheet'` | No page opts in; a page that really wants a centred card on a phone can say so. `data-presentation` makes the state assertable |
+| Sheet header always rendered | On a phone the backdrop is a sliver and there is no Esc key — a titleless sheet would have been uncloseable. Untitled dialogs also gain `aria-label="Dialog"` instead of being nameless |
+| `ModalFooter` in sheet mode | Sticky to the bottom, safe-area padded, and its own `button`/`a` children get the 44px floor. Body content keeps its authored size |
+| `BottomSheet` → `<Modal presentation="sheet">` | One dialog implementation. The old component had **no focus trap**, so a keyboard or switch-control user could tab out of the self-service leave sheet into the page behind it |
+| `ReturnSparePartButton` | Dropped its own `desktop ? <Modal> : <BottomSheet>` copy of the breakpoint |
+
+**Proof — the primitive, then a real page:**
+
+- 10 unit tests (`__tests__/modal-presentation.test.tsx`): dialog with no `matchMedia` (the
+  whole suite's environment), sheet below `sm`, **live switch on a media change**, forced
+  presentations, footer touch floor present only in sheet mode, focus moved into the dialog,
+  `BottomSheet === sheet`.
+- Real page (`self-service-lookup-recovery.spec.ts`): the self-service leave dialog at 1280 is
+  `dialog`; at 390 it is `sheet` measuring **x = 0, width = 390, bottom = 844** on an 844px
+  viewport — bottom-anchored and edge to edge, not merely labelled so. Polled because the panel
+  rises on `animate-slide-up`.
+- Visual baselines hold the pair: `dialog-1280.png` **512×304** (a centred 512px card) vs
+  `dialog-390.png` **390×286** (full width, bottom).
+- Gallery axe surface and the existing 8 surfaces stay clean; `audit:bundle` 5/5 (totalJs
+  **1693.9/1900**, slightly *down* — one component fewer to ship).
+
+Checks run: `vitest` **180 files / 1057 tests** (was 179/1047) · `lint` **exit 0** ·
+`typecheck` / `typecheck:e2e` **exit 0** · `audit:tokens` **clean, 1049 files** · `test:a11y`
+**9 passed** · `test:gallery` **20 passed** · `build` + `audit:bundle` **5/5 hold** ·
+e2e batch (bulk actions, leave chain, RMA, ux-hardening, stock cancellation, self-service)
+**29 passed, 1 failed** — and that one, `chain-leave › employee files leave`, **fails
+identically with this unit's changes stashed** (F-015).
+
 ## Full-role baseline (label `baseline-roles`)
 
 162 captures · 16 roles · 34 routes · 3 viewports. Corrected probe throughout.
@@ -237,9 +283,9 @@ re-baseline, not a pass. Overlays and tooltips are deliberately not photographed
 Admin and QC dashboards read **clean**, which is W1.1 and F-006 holding up under the corrected
 probe at all three viewports.
 
-**Next unit:** W1.3 (phone action surface), then W1.5 (chart palette tokens + per-widget
-export). W1.2 shipped above. Both shell findings that were still open when this baseline was
-taken — F-009 and the `/budgeting` header — are closed above.
+**Next unit:** W1.5 (chart palette tokens + per-widget export). W1.2 and W1.3 shipped above.
+Both shell findings that were still open when this baseline was taken — F-009 and the
+`/budgeting` header — are closed above.
 
 ## Known gaps / blockers
 
@@ -259,6 +305,11 @@ taken — F-009 and the `/budgeting` header — are closed above.
   which reproduces identically in the control and the fixed capture.
 - **F-005** — QC coverage `pct` can exceed 100 (two different quantities in the ratio); needs
   a business definition of the denominator before it can be fixed.
+- **F-015 — two e2e specs are red on committed code** (found in W1.3, both reproduced with this
+  unit's changes stashed): `maintenance-responsive › unused spare part return` (the page header
+  now renders *Request spare parts*; the spec clicks a *Return …* button that the current
+  reconciliation panel does not render) and `chain-leave › employee files leave` (no submission
+  toast). Logged, not fixed here — a stale spec is its own unit.
 - **Drift, not credited:** the width pass settled two earlier readings as data rather than code —
   `/accounting/invoices@375` and `/accounting/bills@375` `1 → 0` (no change to those pages then,
   and none now), and `finance/dashboard`'s recharts text appearing to clear on one capture. Both

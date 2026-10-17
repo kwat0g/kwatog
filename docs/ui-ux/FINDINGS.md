@@ -385,6 +385,37 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
 - **Proof:** `npm run lint` → **exit 0** across the SPA; return-management **52/52 tests pass**;
   `npm run typecheck` exit 0.
 
+### F-015 — two e2e specs are red on committed code — **open**
+
+- **Status:** Open · **Severity:** medium (they red a suite people run before a release)
+- **Found:** 2026-10-17, while verifying W1.3 — not caused by it. Both were re-run with this
+  unit's changes stashed and fail identically, which is the proof below.
+- **Evidence:**
+  ```
+  cd spa
+  npx playwright test e2e/maintenance-responsive.spec.ts -g "unused spare part return"
+  #  wait timeout: getByRole('button', { name: 'Return Grease from lot LOT-A' })
+
+  npx playwright test e2e/chain-leave.spec.ts -g "employee files leave"
+  #  expect(getByText(/Leave request submitted for approval/i)) — element not found
+  ```
+- **What each one is:**
+  - `maintenance-responsive`: the spec expects an **Add part** header action and a **Return
+    …** control on the work-order detail page. The page now renders **Request spare parts**
+    (`pages/maintenance/work-orders/detail.tsx:230`, the shared `SparePartSheet`) and no
+    return control at that scroll position, so the spec is stale against an intentional UI
+    change. Two API errors are also visible in the page's dev error panel, so the return path
+    may not be reachable in this fixture at all.
+  - `chain-leave`: the leave form submits (the POST-level assertions in the sibling steps pass)
+    but the expected success toast never appears. Not yet diagnosed — could be a toast copy
+    change, a date default the spec no longer satisfies, or a real submission bug.
+- **Why not fixed here:** per the programme's rule for functional defects found in passing
+  (Q6: log, separate PR), and because the second one deserves a diagnosis rather than a test
+  edit — changing the assertion to match the toast would hide a submit failure if that is what
+  it is.
+- **Next step:** reproduce `chain-leave` by hand at `/self-service/leave`, capture the network
+  response, then either fix the defect or update the spec with the reason in its comment.
+
 ## Measurement corrections (probe defects, not application defects)
 
 ### C-001 — "20 interactive elements with no accessible name" was a false positive

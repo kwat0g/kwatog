@@ -482,6 +482,44 @@ the panel past its column and having `overflow-hidden` cut the options off
 unreachably (F-010). An over-wide child that is not a control should opt into
 `Panel scrollBody` rather than be clipped.
 
+### Dialog (Modal) and the phone action surface
+
+`Modal` is the only dialog in the system — 214 call sites, one implementation.
+It chooses its own presentation:
+
+| Viewport | Presentation | Shape |
+|---|---|---|
+| ≥ 640px (`sm`) | `dialog` | Centred card, `max-w-sm…4xl`, 20px body padding, rounded all corners |
+| < 640px | `sheet` | Edge to edge, anchored to the bottom, top corners only, header always present, sticky footer over the safe area |
+
+No page opts in, and no page should re-implement the branch:
+
+```tsx
+// Correct at every width — this is the whole API.
+<Modal isOpen={open} onClose={close} title="Return unused part" size="sm">
+  {fields}
+  <ModalFooter>
+    <Button variant="ghost">Cancel</Button>
+    <Button>Confirm</Button>
+  </ModalFooter>
+</Modal>
+
+// Escape hatches, both rare: force one presentation against the viewport.
+<Modal presentation="sheet" …>
+<Modal presentation="dialog" …>
+```
+
+In the sheet, `ModalFooter` is sticky, padded for `env(safe-area-inset-bottom)`,
+and gives its own `button`/`a` children the 44px floor (`min-h-11`). Page content
+inside the dialog keeps its authored size — only the dialog's own controls grow.
+The header is always rendered in sheet mode, so even a titleless dialog has a
+named close button: on a phone there is no visible backdrop to tap and no Esc key.
+
+`BottomSheet` still exists for surfaces that are phone-only by design (the
+self-service and shop-floor flows). It is now a thin wrapper over
+`Modal presentation="sheet"` — same focus trap, same topmost-only Esc stack, same
+scroll lock. It previously had none of the focus trapping the dialog had.
+
 ### Component gallery — the live reference
 
 `/admin/component-gallery` (Administration → Component Gallery) renders every
