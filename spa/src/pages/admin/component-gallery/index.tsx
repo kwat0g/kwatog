@@ -686,7 +686,7 @@ export default function ComponentGalleryPage() {
       <Section
         id="overlays"
         title="Overlays"
-        note="Interactive only, and deliberately outside the baseline: a dialog renders in a portal, so a section screenshot would photograph an empty frame. Open each one to review the surface."
+        note="Dialog, sheet and tooltip. The dialog rule lives in the primitive: Modal is a centred card at and above 640px and a bottom sheet below it, so no page opts in — the same one you see here is the one every approval and self-service flow opens. Sections are not photographed with their overlays open (a fixed dialog is not inside the section's box); the baseline photographs the two presentations directly instead."
         interactive
       >
         <Demo name="Triggers">

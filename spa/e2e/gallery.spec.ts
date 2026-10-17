@@ -180,6 +180,32 @@ test('gallery — nothing overflows horizontally at 390', async ({ page }) => {
 });
 
 /**
+ * W1.3 — the phone action surface, held at both widths.
+ *
+ * These two shots are the same dialog with the same props at the same scroll
+ * position; the only difference is the viewport, so the pair is the evidence for
+ * the rule itself. They are captured from the dialog's own box rather than from
+ * a section, because the dialog is `position: fixed` and lives outside the
+ * section it was opened from.
+ */
+for (const viewport of VIEWPORTS) {
+  test(`gallery — dialog presentation @${viewport.name}`, async ({ page }) => {
+    await openGallery(page, viewport.width, viewport.height);
+    // Deterministic backdrop: the dialog is translucent at 60%, so whatever the
+    // page is scrolled to shows through it.
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    await page.getByRole('button', { name: 'Open modal' }).click();
+
+    const expected = viewport.name === '390' ? 'sheet' : 'dialog';
+    const panel = page.locator(`[data-presentation="${expected}"]`);
+    await expect(panel, `a dialog at ${viewport.name} should be a ${expected}`).toBeVisible();
+
+    await expect(panel).toHaveScreenshot(`dialog-${viewport.name}.png`, SCREENSHOT);
+  });
+}
+
+/**
  * The negative control, and the reason the loop above can be trusted.
  *
  * A visual gate whose comparison never runs — wrong template path, tolerance so
