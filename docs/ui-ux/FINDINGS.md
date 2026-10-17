@@ -416,6 +416,98 @@ Status legend: **Open** · **Resolved** · **Won't fix (why)**
 - **Next step:** reproduce `chain-leave` by hand at `/self-service/leave`, capture the network
   response, then either fix the defect or update the spec with the reason in its comment.
 
+### F-016 — chart colour was semantic, or absent, but never categorical — **fixed**
+
+- **Status:** **Resolved** (2026-10-17) · **Severity:** medium (legibility, and a false signal)
+- **Evidence (Tier A, three tokens.css, zero chart tokens):**
+  ```
+  grep -n 'chart' spa/src/styles/tokens.css     # no matches
+  grep -rn "color: 'var(--" spa/src/pages/dashboard/*.tsx
+  #  quality.tsx:318  outgoing → 'var(--danger)'
+  #  hr.tsx:131-134  present/late/absent/on_leave → success/warning/danger/info
+  ```
+  Two different problems wore one symptom. The HR donut is *correct*: those
+  slices are states, and state colour is the semantic ramp's job. The QC
+  "Inspection Queue by Stage" donut is not — **outgoing inspections painted
+  danger red**, which reads as a failure count when the slice only means "this
+  stage". With no categorical tokens, the only options were the semantic ramp or
+  a hardcoded hex, and `audit:tokens` (rightly) forbids the second.
+- **Fix:** `--chart-1..8` in all three palettes (fixed hue order: clay, ochre,
+  olive, jade, teal, indigo, violet, wine), `lib/chartPalette.ts` as the only
+  consumer API, and `chartColor(index)` defaults in `BarComparison` /
+  `DonutBreakdown`. The QC stage donut now draws from the palette.
+- **Proof:** `styles/__tests__/palette-contrast.test.ts` gained **39** chart test cases
+  (13 per palette: 1 existence, 8 mark contrast, 1 semantic-collision, 1 normal-vision
+  pair matrix, 2 simulated pair matrices). Measured minimums: **contrast 3.28**
+  (office, bar 3), **ΔE 22.3** normal (bar 20), **ΔE 18.8 / 21.5** under
+  protanopia / deuteranopia (bar 10). A negative control was run by collapsing
+  `--chart-8` onto `--chart-1`: the pair test fails with
+  `--chart-1/--chart-8 ΔE 0.0`, and the semantic-collision test stays green (a
+  duplicate series is not a semantic reuse) — the right check, on the right
+  property.
+- **Why eight and not five:** the Pareto and stage breakdowns are the widest
+  categorical surfaces. Colour is never the only difference — every chart here
+  draws a legend or direct label — so a ninth series cycles rather than
+  inventing a hue that no longer separates under CVD.
+
+### F-017 — a dashboard tile's numbers could not leave the dashboard — **fixed**
+
+- **Status:** **Resolved** (2026-10-17) · **Severity:** medium (executives screenshot; finance re-types)
+- **Evidence:** `DashboardShell` and `LiveDashboardWidget` had no export affordance;
+  the only ways out of a tile were `Open →` and a screenshot. Server CSV/XLSX
+  exists for *list pages*, which is a different shape: the dashboard's numbers
+  come from `/dashboard/layout?rich=1` and `/dashboard/widget-data`.
+- **Fix:** `lib/widgetExport.ts` (payload → rows, one function per render kind),
+  `lib/csv.ts` (one RFC 4180 writer for the whole SPA), and
+  `WidgetExportButton` / `CsvDownloadButton` in the tile header, wired into
+  `LiveDashboardWidget` (every layout widget) and `MetricPanel` (the analytics
+  panels on production/returns). No request is made: the CSV is built from the
+  object the tile drew, so the file cannot disagree with the picture.
+- **Two rules worth stating:** raw numbers, never `₱1,234.50` (quoting a figure
+  makes Excel treat it as text and silently drop it from sums); and a table
+  widget that shows 6 of 300 rows writes a `Showing 6 of 300` row instead of
+  passing a truncated list off as the whole set.
+- **Spreadsheet-injection guard:** a string cell starting with `=`, `+`, `-` or
+  `@` is prefixed with an apostrophe — a customer/product name is data, not a
+  formula. Numbers are exempt, so `-5` stays a negative number.
+- **Proof:** 10 CSV tests (escaping, CRLF, null cells, four injection shapes,
+  negative numbers, filename slugging), 19 builder tests (per render kind,
+  truncation note, rich-over-summary preference, unavailable → no download, filename
+  stamped by data date) and 3 component tests (accessible name, exact download
+  arguments, absent control when there is nothing to export). Then through the
+  browser: `e2e/widget-export.spec.ts` (3 passed) logs in, renders two real tiles
+  against a mocked rich layout, clicks the control and reads the downloaded file —
+  asserting the exact bytes (`Segment,Value,Share of total (%)` … `Total,9,`) and the
+  suggested filename (`inspection-queue-2026-10-17.csv`). A download-event assertion
+  alone would have passed for a button that exported the wrong widget.
+- **Not claimed:** there is no page-level export. A multi-panel dashboard has no
+  single honest table shape; inventing one produces files nobody trusts.
+
+### F-018 — four dashboard e2e specs were red on committed code (a fixture gap) — **fixed**
+
+- **Status:** **Resolved** (2026-10-17) · **Severity:** medium (they red the suite a release runs)
+- **Found:** while verifying W1.5 — not caused by it. `dashboard-forecast-quality`
+  (6 tests), `-finance` (6) and `-hr` (6) failed on the shared diagnostics fixture with
+  ```
+  Error: Browser console errors; HTTP responses: []
+  +   "Query data cannot be undefined. Please make sure to return a value other than
+  +    undefined from your query function. Affected query key: [\"kpi\",\"trends\",\"dppm,first_pass_yield,ncr_closure_days\"]",
+  ```
+  Reproduced with this unit's files stashed (path-limited `git stash push -u`), so the
+  failure is pre-existing.
+- **Cause:** every dashboard mounts `KpiStrip`, which batches six months of trends for all of
+  its codes. `kpiApi.trends` returns `response.data.data` **verbatim**, and the shared API
+  fallback answers unmocked endpoints with `{}` — so that one endpoint handed React Query
+  `undefined`, which React Query v5 reports as a console error. The diagnostics fixture fails
+  a test on any unexpected console error, so the spec died on a strip it was not testing.
+- **Fix:** one line in `e2e/fixtures.ts` — `'/api/v1/dashboard/kpi/trends': { data: {} }` in
+  `DEFAULT_READ_RESPONSES` (an empty map, which the consumer's own `trends?.[code] ?? []`
+  already handles). The fallback's design contract is unchanged: a spec that needs data still
+  has to mock it.
+- **Proof:** the four dashboard specs went from **2 of 20 passing** to **20 of 20 passing**
+  with no edit to a spec and none to application code. The `{}` fallback had been hiding the
+  missing mock, not holding the line.
+
 ## Measurement corrections (probe defects, not application defects)
 
 ### C-001 — "20 interactive elements with no accessible name" was a false positive

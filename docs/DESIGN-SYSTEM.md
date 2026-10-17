@@ -168,6 +168,53 @@ measured reason: the dark values cleared the canvas but failed against
 `--bg-elevated`, the lightest floor surface, at floor's AAA bar (6.26 and 4.23).
 The contrast gate caught it.
 
+### Categorical chart series — `--chart-1..8`
+
+The semantic tokens answer *"is this good or bad?"*. A chart series asks a
+different question — *"which one is this?"* — so it has its own eight tokens:
+
+```
+1 clay    2 ochre   3 olive   4 jade
+5 teal    6 indigo  7 violet  8 wine
+```
+
+Fixed order, same hue roles in all three palettes, so series 3 stays series 3
+when the user switches theme. Values differ per palette because contrast is
+measured against that palette's canvas, not chosen by eye.
+
+**Identity is not state.** Painting the third bar of a breakdown with
+`--danger` tells the reader that bar failed at something; it did not — it is
+simply third. Use a `--chart-*` token for a category and a semantic token only
+when the colour *means* something (present/late/absent, pass/fail).
+
+```tsx
+import { chartColor } from '@/lib/chartPalette';
+
+// One colour per series, in palette order.
+{stages.map((stage, i) => <Cell key={stage.name} fill={chartColor(i)} />)}
+
+// BarComparison and DonutBreakdown default to this when no colour is passed,
+// so a new chart has no reason to name one.
+<DonutBreakdown data={stages} />
+```
+
+The palette is **red-green safe by measurement, not by convention**. The gate
+in `spa/src/styles/__tests__/palette-contrast.test.ts` holds every pair to all
+of:
+
+| Check | Bar |
+|---|---|
+| Mark contrast on canvas (WCAG 1.4.11) | 3:1 office · 4.5:1 floor |
+| Pairwise difference, normal vision | ΔE ≥ 20 (CIE76) |
+| Pairwise difference, simulated deuteranopia | ΔE ≥ 10 |
+| Pairwise difference, simulated protanopia | ΔE ≥ 10 |
+| Not a semantic token under another name | no `--chart-n` equals `--success`/`--warning`/`--danger`/`--info`/`--purple` |
+
+That is why the eight values vary in **lightness** as much as in hue: red-green
+deficiency collapses hue, so hue alone would leave a legend of near-identical
+swatches. Still, colour is never the only carrier — every chart here draws a
+legend or a direct label.
+
 ### Out of scope: `--landing-*`
 
 The landing page keeps its own namespace and has **not** been re-authored in
@@ -185,6 +232,7 @@ and asserts every text/background pair on every palette. It runs as part of
 | `--text-primary`, `--text-secondary`, `--text-muted`, all `-fg` | AA 4.5:1 | AAA 7:1 |
 | `--text-subtle` (decorative — placeholders, disabled captions) | AA-large 3:1 | AA 4.5:1 |
 | Semantic marks on canvas (chips, bars, icon strokes — WCAG 1.4.11) | 3:1 | 4.5:1 |
+| `--chart-1..8` on canvas, **plus** pairwise ΔE (see above) | 3:1 | 4.5:1 |
 
 **Never lower a threshold to make the gate pass.** Darken or lighten the token.
 
@@ -615,7 +663,24 @@ Rail | DashboardShell
 
 `DashboardShell` owns loading, error, empty, stale-data, and responsive layout states. Role dashboards
 use the permission-filtered widget layout; dedicated dashboards compose their own panels. The shared
-shell has no range selector or export action; pages add controls only when their data source supports them.
+shell has no range selector or page-level export action; pages add controls only when their data
+source supports them.
+
+**Per-widget export (F-017).** Each layout widget and each `MetricPanel` carries a CSV
+affordance in its header, beside `Open →`. It exports the payload the tile is
+already drawing — built by `lib/widgetExport.ts`, written by `lib/csv.ts` — so the
+file cannot disagree with the picture, and no request is made. Two rules the
+builder enforces:
+
+- **Raw numbers, not formatted strings.** `₱1,234.50` is for the screen;
+  `1234.5` is what a spreadsheet can sum.
+- **Truncation is stated.** A table widget showing 6 of 300 rows writes a
+  `Showing 6 of 300` row rather than letting a partial list pass for the whole set.
+
+When a widget has nothing available the button is absent, not disabled — a dead
+control that cannot explain itself is worse than no control. There is deliberately
+**no page-level export** yet: a multi-panel dashboard has no single honest table
+shape, and inventing one would produce files nobody trusts.
 
 ---
 
@@ -647,4 +712,8 @@ shell has no range selector or export action; pages add controls only when their
    you if the pairing fails.
 6. **Base components first.** Button, Input, Chip, DataTable, Panel, StatCard,
    ChainHeader before any module page.
+7. **Chart colour is a category, not a judgement.** Use `chartColor(i)` /
+   `--chart-1..8` for series identity; reserve semantic tokens for meaning.
+   Adding a series means retuning all eight in three palettes and letting the
+   contrast/CVD gate tell you whether it still works.
 7. **If a value isn't here, use the closest one.** Don't invent tokens.

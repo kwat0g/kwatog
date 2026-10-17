@@ -31,14 +31,14 @@ claim:
 | 11 | **`employee` session dies at 15 min with no work preservation** | C | `CLAUDE.md` session policy + `useUnsavedChangesGuard`/`useFormDraftAutosave` exist but coverage is unmeasured | Losing a half-typed form is the classic ERP grievance |
 | 12 | **356 route paths, 4 roles crawled** — long tail unverified (hr 36, accounting 32, inventory 28, crm 23, quality 21) | A | Phase 0 § A.2 + capture inventory | Coverage honesty: nothing can be called "done" that was never rendered |
 | 13 | **Raw-ID FK inputs unverified** | C | Phase 0 § A.7 | `SearchableSelect` exists; whether every FK uses it is unmeasured |
-| 14 | **Categorical chart colour does not exist**; dashboards risk inventing it | B | `docs/dashboards/phase0/E-frontend.md` | Colourblind-safe `--chart-1..8` per palette; tokens only |
-| 15 | **No per-widget/chart export**; server CSV/XLSX and doc PDFs exist, dashboard export absent | B | same | Executives screenshot dashboards; they should not have to |
+| 14 | **Fixed — categorical chart colour did not exist**, and the QC donut used `--danger` for a stage name | A | `FINDINGS.md → F-016` | Colourblind-safe `--chart-1..8` per palette, gated for contrast + pairwise ΔE under simulated deuteranopia/protanopia |
+| 15 | **Fixed — no per-widget export**; server CSV/XLSX and doc PDFs exist, dashboard export absent | A | `FINDINGS.md → F-017` | Executives screenshot dashboards; they should not have to. One CSV per tile, built from the payload it drew |
 | 16 | **Uncached hot paths**: widget-data + rich dashboard payloads recompute live on every 30–60s poll (R15), plus R1–R14 query risks | B | `docs/dashboards/phase0/F-realtime-perf.md` | Load scales with users × keys; felt as slow tiles |
 | 17 | **Index debt on fact tables** (returns, budgets, `wo_operations`, `production_logs`, PR/PO dates, delivery actuals, `grn_items`) | B | `docs/dashboards/phase0/B-modules-data.md` | Aggregating before indexing makes every dashboard slower, not faster |
 | 18 | **KPI snapshots are monthly-only** (`kpi:compute-monthly`); sub-month widgets read source tables | B | same | A "missing" KPI early in the month is expected — must be explained in UI, not left as an empty tile |
 | 19 | **Landing/dashboards carry zero bundle budget** — no measured LCP/INP/CLS, no size ceiling | A | Phase 0 § C.4 | "Fast" is currently an aspiration; `manualChunks` splits exist but are unenforced |
-| 20 | **No component gallery**; 60 shared components and their states cannot be reviewed in isolation | A | `spa/src/components/dev/` holds only `DevErrorPanel` | Blocks safe refactoring and makes every future review a page hunt |**Progress:** I1–I3 shipped in Wave 1 PR 1, I5/I6 in Wave 1 PR 3 (W1.3), I2 in PR 2 (W1.2);
-see `PROGRESS.md`. I4 was withdrawn as a probe artifact.
+| 20 | **No component gallery**; 60 shared components and their states cannot be reviewed in isolation | A | `spa/src/components/dev/` holds only `DevErrorPanel` | Blocks safe refactoring and makes every future review a page hunt |**Progress:** I1–I3 shipped in Wave 1 PR 1, I5/I6 in Wave 1 PR 3 (W1.3), I2 in PR 2 (W1.2),
+I14/I15 in PR 5 (W1.5); see `PROGRESS.md`. I4 was withdrawn as a probe artifact.
 
 Tier-C rows 11, 13 and 18's UI treatment are the ones the brief's own "verify, don't trust"
 rule forbids me from asserting as defects. They are listed as *verification tasks* whose
@@ -51,10 +51,11 @@ visual language, no redesign of a system that is already documented and CI-enfor
 
 Design-system work is therefore **additive and enforcement-focused**:
 
-1. `--chart-1..8` per palette (colourblind-safe, contrast-gated) + a categorical chart doc.
+1. **Done (W1.5)** — `--chart-1..8` per palette, colourblind-safe and contrast-gated, with the
+   identity-vs-state rule documented in `DESIGN-SYSTEM.md`.
 2. A density preference (comfortable/compact) as a token swap, persisted per user.
 3. Missing variants that currently cause page-level inlining: the phone action surface
-   (BottomSheet standardisation), export affordances, wizard/stepper.
+   (**done**, W1.3), export affordances (**done for widgets**, W1.5), wizard/stepper.
 4. Keep `audit:tokens` green and add: an axe gate, a bundle budget, and a saved-baseline
    visual-regression gate on the component gallery.
 
@@ -95,7 +96,7 @@ Each with its current-state problem (Tier A unless noted):
 | Status chip | `lib/statusVariants.ts`, typed | Extend the typed map to every enum; never a bare string |
 | Empty / error / stale | `EmptyState`, `QueryErrorState`, `ListEmptyState`, `WidgetErrorBoundary` | Audit that every one of the 356 routes actually renders all five states |
 | Approval panel | exists for ledger types | Surface preconditions (budget ack, vendor SoD, PPAP, truck-return guard) and the two leave arms |
-| Print / export | server PDFs + CSV exist | One export affordance in the page header, everywhere |
+| Print / export | server PDFs + CSV exist; widgets export their own CSV (W1.5) | One export affordance in the page header, everywhere |
 
 ## 5. Module roadmap
 
@@ -109,7 +110,7 @@ Ordered by traffic × visibility × pain. Effort: S ≤ 1 day, M ≤ 3 days, L >
 | W1.2 | **Done** — component gallery at `/admin/component-gallery`; 16 saved visual baselines + overflow assert + negative control (`npm run test:gallery`, CI job `gallery`). Audit: `PROGRESS.md` § Wave 1 PR 2 | M | PR 2 |
 | W1.3 | **Done** — the rule lives in `Modal` (`bottom sheet < 640px`), `BottomSheet` is a forced-sheet wrapper, footer controls take the 44px floor, and the self-service path is asserted at both widths. Audit: `PROGRESS.md` § Wave 1 PR 3 | M | PR 3 |
 | W1.4 | **Done** — axe gate (`spa/e2e/a11y.spec.ts`, 6 surfaces + negative control), bundle budget (5 measured budgets), `typecheck:e2e`; all enforced in `spa-tests.yml`. Audit: `PROGRESS.md` § Wave 1 PR 4 | S | PR 4 |
-| W1.5 | Chart palette tokens + docs; per-widget export component | M | PR 5 |
+| W1.5 | **Done** — `--chart-1..8` in all three palettes gated for contrast **and** red-green separation, `chartColor()` defaults in the chart primitives, and a per-widget CSV export on every dashboard tile (`lib/csv.ts` + `lib/widgetExport.ts`). Audit: `PROGRESS.md` § Wave 1 PR 5 | M | PR 5 |
 
 **Wave 2 — chains, highest-traffic modules (one PR each)**
 

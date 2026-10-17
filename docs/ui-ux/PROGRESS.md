@@ -2,12 +2,12 @@
 
 Single source of truth. A fresh session should be able to resume from this file alone.
 
-**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; every finding from the shell pass is now closed — F-007/F-013/F-014 the same day, and F-009 + F-010 (the width pass) in the unit below. There is no route in the compared set with a horizontal page scroll and none with unintended overflow. W1.4 quality gates are built, enforced, and green locally — axe (7 surfaces + negative control, the gallery among them), bundle budget (5 measured budgets), e2e typecheck. W1.2 shipped: the shared component kit has a gallery page and 18 committed visual baselines, both in CI. W1.3 shipped: every dialog is a bottom sheet below 640px, decided inside `Modal`, with the self-service path measured at both widths.**
+**Current state: Phases 0–2 complete, and **Wave 1 is finished**. PR 1 (shell/dashboard defects), PR 2 (W1.2 gallery + baselines), PR 3 (W1.3 phone action surface), PR 4 (W1.4 gates) and PR 5 (W1.5 chart palette + per-widget export) are all shipped and verified. Every finding from the shell pass is closed — F-007/F-013/F-014 the same day, F-009 + F-010 in the width pass, F-016/F-017 by W1.5, and F-018 (a dashboard e2e fixture gap found while verifying W1.5). There is no route in the compared set with a horizontal page scroll and none with unintended overflow.**
 
-- Branch: `fix/ui-ux-wave1-shell` (Wave 1 so far, uncommitted at the time of writing)
-- Date: 2026-10-13
+- Branch: `fix/ui-ux-wave1-shell` (Wave 1, uncommitted at the time of writing)
+- Date: 2026-10-13 → 2026-10-17
 - Decisions taken on the proposed defaults: **Wave 1 only** · **axe approved** · **docs get their own commit**
-- Next unit: **W1.5** (chart palette tokens + per-widget export) — the last of Wave 1. The F-009/F-010 work sat outside the W1.x numbering because both are findings, not planned work. **W1.4 was done early** so every later wave is measured by a gate rather than asserted; W1.2 and W1.3 are closed (see below).
+- Next unit: **Wave 2 begins at W2.1** (Quality — inspections, NCR, specs; tablet/glove use; 21 routes). Wave 1 is done: the F-009/F-010 work sat outside the W1.x numbering because both are findings, not planned work.
 
 ---
 
@@ -273,6 +273,63 @@ e2e batch (bulk actions, leave chain, RMA, ux-hardening, stock cancellation, sel
 **29 passed, 1 failed** — and that one, `chain-leave › employee files leave`, **fails
 identically with this unit's changes stashed** (F-015).
 
+## Wave 1 PR 5 — W1.5 chart palette + per-widget export
+
+**The two gaps:** charts had no categorical colour at all (`grep -n chart tokens.css` → nothing),
+so a chart that needed "which series is this?" had two options — a semantic token or a hex literal,
+and `audit:tokens` rightly forbids the second. The QC dashboard took the first and painted
+**outgoing inspections danger red**, turning a stage name into a failure signal (F-016). And a
+dashboard tile's numbers could not leave the dashboard except by screenshot (F-017).
+
+| Piece | What it is |
+|---|---|
+| `--chart-1..8` in all three palettes | Fixed hue order (clay, ochre, olive, jade, teal, indigo, violet, wine); per-palette values, so a series that clears 3:1 on warm paper also clears it on espresso |
+| `lib/chartPalette.ts` | `CHART_SERIES` + `chartColor(i)`; wraps past eight rather than inventing a ninth hue |
+| `BarComparison` / `DonutBreakdown` | `color` is now optional and defaults to the palette by series position, so a new chart has no reason to name a colour |
+| QC stage donut | The first real consumer — identity, not state |
+| `lib/csv.ts` | One RFC 4180 writer for the SPA (there were three hand-rolled copies, each escaping differently) |
+| `lib/widgetExport.ts` + `WidgetExportButton` | Payload → rows for every render kind; wired into `LiveDashboardWidget` (every layout tile) and `MetricPanel` |
+
+**Red-green safety is measured, not asserted.** The palette gate now holds every pair to contrast
+on canvas **and** to a perceivable difference — normal vision and simulated deuteranopia/
+protanopia (Machado 2009, applied in linear sRGB). Measured minimums: contrast **3.28** (bar 3),
+ΔE **22.3** normal (bar 20), ΔE **18.8 / 21.5** protan/deutan (bar 10). That is why the eight
+values differ in **lightness** as much as hue: red-green deficiency collapses hue, and hue alone
+would leave a legend of near-identical swatches.
+
+**The gate was proved, not trusted.** Collapsing `--chart-8` onto `--chart-1` fails with
+`--chart-1/--chart-8 ΔE 0.0` under all three conditions — and leaves the "not a semantic token
+under another name" assertion green, which is the right check firing on the right property.
+
+**Export is honest or absent.** Raw numbers (`1234.5`), never `₱1,234.50` — quoting a figure makes
+Excel treat it as text and drop it from sums. A table tile showing 6 of 300 rows writes a
+`Showing 6 of 300` row. A widget with nothing available renders **no** button rather than a
+disabled control that cannot explain itself. String cells beginning `=`, `+`, `-`, `@` are
+apostrophe-prefixed (CSV injection); numbers are exempt, so `-5` stays negative.
+
+**Proof, through the interface:** `e2e/widget-export.spec.ts` (3 passed) signs in, renders two
+real tiles against a mocked rich layout, clicks the control and reads the downloaded bytes —
+`inspection-queue-2026-10-17.csv` containing `Segment,Value,Share of total (%)` … `Total,9,`, and
+`open-purchase-orders-2026-10-17.csv` ending in `Showing 2 of 6,`. Unit side: 10 CSV + 19 builder
++ 3 component + 4 palette-helper + 39 token-gate cases.
+
+**Found while verifying (and fixed here, F-018):** `dashboard-forecast-quality`, `-finance` and
+`-hr` were red on committed code — 2 of 20 passing across the four dashboard specs. `KpiStrip`
+batches trends from `/dashboard/kpi/trends`, whose API helper returns `response.data.data`
+verbatim, and the shared e2e fallback answers unmocked endpoints with `{}` — so React Query got
+`undefined` and logged the console error the diagnostics fixture fails on. One line in
+`e2e/fixtures.ts` (`{ data: {} }`) took the four specs to **20 of 20**, with no edit to a spec and
+none to application code.
+
+Checks run: `vitest` **184 files / 1135 tests** (was 180/1057) · `lint` **exit 0** · `typecheck` /
+`typecheck:e2e` **exit 0** · `audit:tokens` **clean, 1057 files** · `test:a11y` **9 passed** ·
+`test:gallery` **20 passed** · dashboard e2e (4 specs) **20 passed** · `widget-export` **3 passed** ·
+`build` + `audit:bundle` **5/5 hold** (initialJs 185.0/205, totalJs 1695.7/1900).
+
+**Not claimed:** no page-level export — a multi-panel dashboard has no single honest table shape.
+Chart colours were **not** repainted across the module dashboards; that is Wave 2 work, and the
+tokens are now in place for it.
+
 ## Full-role baseline (label `baseline-roles`)
 
 162 captures · 16 roles · 34 routes · 3 viewports. Corrected probe throughout.
@@ -287,9 +344,9 @@ identically with this unit's changes stashed** (F-015).
 Admin and QC dashboards read **clean**, which is W1.1 and F-006 holding up under the corrected
 probe at all three viewports.
 
-**Next unit:** W1.5 (chart palette tokens + per-widget export). W1.2 and W1.3 shipped above.
-Both shell findings that were still open when this baseline was taken — F-009 and the
-`/budgeting` header — are closed above.
+**Next unit:** **W2.1 — Quality** (inspections, NCR, specs; 21 routes). Wave 1 is complete:
+W1.2, W1.3, W1.4 and W1.5 shipped (below), and both shell findings that were still open when
+this baseline was taken — F-009 and the `/budgeting` header — are closed.
 
 ## Known gaps / blockers
 
