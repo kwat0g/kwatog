@@ -664,9 +664,9 @@ class WorkOrderService
      * `parent_work_order_cannot_start_before_subassembly_child_is_ready`) and
      * produced finished goods from material that was never issued.
      */
-    public function releaseResources(WorkOrder $wo, string $reason): WorkOrder
+    public function releaseResources(WorkOrder $wo, string $reason, ?int $releasedBy = null): WorkOrder
     {
-        return DB::transaction(function () use ($wo, $reason) {
+        return DB::transaction(function () use ($wo, $reason, $releasedBy) {
             $wo = WorkOrder::query()->lockForUpdate()->findOrFail($wo->id);
             if ($wo->status !== WorkOrderStatus::Paused || trim($reason) === '') {
                 throw new BusinessRuleException('Only paused production can explicitly release resources; enter a reason.');
@@ -674,7 +674,9 @@ class WorkOrderService
             $machine = Machine::query()->lockForUpdate()->findOrFail($wo->machine_id);
             $mold = Mold::query()->lockForUpdate()->findOrFail($wo->mold_id);
             app(ProductionResourceService::class)->release($wo, $machine, $mold);
-            $wo->update(['production_released_at' => now(), 'pause_reason' => $reason]);
+            $wo->update(['production_released_at' => now()]);
+            app(ActivityFeedService::class)->record('production.work_order', 'resources_released', $wo,
+                'Paused resources released for '.$wo->wo_number.'.', ['reason' => trim($reason)], actorUserId: $releasedBy);
 
             return $this->show($wo->fresh());
         });

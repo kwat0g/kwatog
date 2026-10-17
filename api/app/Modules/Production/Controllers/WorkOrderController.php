@@ -337,7 +337,7 @@ class WorkOrderController
     {
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
 
-        return new WorkOrderResource($this->service->releaseResources($workOrder, $data['reason']));
+        return new WorkOrderResource($this->service->releaseResources($workOrder, $data['reason'], $request->user()->id));
     }
 
     public function pause(PauseWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse

@@ -83,7 +83,12 @@ class ProductionResourceReservationTest extends TestCase
         }
         $released = app(WorkOrderService::class)->releaseResources($wo->fresh(), 'Explicitly release equipment for the scheduled future work order.');
         $this->assertNotNull($released->production_released_at);
-        $this->assertSame('Explicitly release equipment for the scheduled future work order.', $released->pause_reason);
+        $this->assertNull($released->pause_reason, 'Releasing resources must not overwrite the pause cause.');
+        $this->assertDatabaseHas('activity_events', [
+            'subject_id' => $wo->id,
+            'type' => 'production.work_order',
+            'action' => 'resources_released',
+        ]);
         $this->slot($future, $machine, $mold);
         $service->acquire($future, $machine->fresh(), $mold->fresh());
         $this->assertSame($future->id, (int) $mold->fresh()->current_work_order_id);
