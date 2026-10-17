@@ -464,10 +464,47 @@ Tailwind colours — consume them as `bg-[var(--bg-thead)]`.
 Padding 14–16px, `--bg-surface`, hairline border, label 10px uppercase muted,
 value 26px mono medium, delta 11px mono in `--success` / `--danger`.
 
+26px is the design size, not a fixed one: the figure is sized against **its own
+card** (`@container` + `clamp(1rem, 12cqw, 1.625rem)`), because a two-up grid at
+375px leaves 132px of content and `₱576,912.00` measures 175px there. The step
+follows the card, so the same component is correct in a 4-up dashboard and a
+two-up phone layout. Every digit stays visible — it wraps inside the card rather
+than truncating or widening the page (F-009).
+
 ### Panel
 
 Hairline border, header 12px/16px padding with bottom border, title 14px medium,
 right-side meta 11px muted.
+
+Both flex links in that header carry `min-w-0`, so a wide `meta` control (a status
+filter with a lot of options) wraps or scrolls inside the slot instead of growing
+the panel past its column and having `overflow-hidden` cut the options off
+unreachably (F-010). An over-wide child that is not a control should opt into
+`Panel scrollBody` rather than be clipped.
+
+### Component gallery — the live reference
+
+`/admin/component-gallery` (Administration → Component Gallery) renders every
+shared primitive with all of its states: button variants and sizes, input states,
+chips, panels, KPI cards, selection controls, tables, the record patterns, and
+interactive overlays. It fetches nothing and uses literal fixtures only, which is
+what makes it photographable.
+
+It is also the subject of the visual baseline gate:
+
+```bash
+cd spa
+npm run test:gallery          # compare against the committed baselines
+npm run test:gallery:update   # re-baseline — review the PNGs, then say why
+```
+
+16 screenshots (8 sections × 1280 and 390) live in
+`spa/e2e/__screenshots__/gallery.spec.ts/`, run in CI beside the axe gate, and
+contain a **negative control** that plants a visible change and requires the
+comparison to catch it. A padding step of one Tailwind unit on `StatCard` moves
+the panels section from 780 to 819px tall — 1% of its pixels — so "the section
+looks the same" is not enough for a shared component to pass. Adding a primitive
+to the kit means adding it to the gallery in the same change.
 
 ---
 

@@ -108,7 +108,7 @@ Ordered by traffic × visibility × pain. Effort: S ≤ 1 day, M ≤ 3 days, L >
 | # | Work | Effort | PR |
 |---|---|---|---|
 | W1.1 | Shell + dashboard shared fixes: clipped `w-12` slots, the 2×-wide progress track, the 375px card, accessible names | S | PR 1 |
-| W1.2 | Component gallery page + saved visual baselines for shared components | M | PR 2 |
+| W1.2 | **Done** — component gallery at `/admin/component-gallery`; 16 saved visual baselines + overflow assert + negative control (`npm run test:gallery`, CI job `gallery`). Audit: `PROGRESS.md` § Wave 1 PR 2 | M | PR 2 |
 | W1.3 | Phone action surface: decide and implement Modal/BottomSheet rule; convert approval + self-service paths | M | PR 3 |
 | W1.4 | **Done** — axe gate (`spa/e2e/a11y.spec.ts`, 6 surfaces + negative control), bundle budget (5 measured budgets), `typecheck:e2e`; all enforced in `spa-tests.yml`. Audit: `PROGRESS.md` § Wave 1 PR 4 | S | PR 4 |
 | W1.5 | Chart palette tokens + docs; per-widget export component | M | PR 5 |

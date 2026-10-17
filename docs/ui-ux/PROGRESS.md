@@ -2,12 +2,12 @@
 
 Single source of truth. A fresh session should be able to resume from this file alone.
 
-**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; every finding from the shell pass is now closed — F-007/F-013/F-014 the same day, and F-009 + F-010 (the width pass) in the unit below. There is no route in the compared set with a horizontal page scroll and none with unintended overflow. W1.4 quality gates are built, enforced, and green locally — axe (6 surfaces + negative control), bundle budget (5 measured budgets), e2e typecheck.**
+**Current state: Phases 0–2 complete. Wave 1 PR 1 (shell/dashboard defects) shipped and verified; every finding from the shell pass is now closed — F-007/F-013/F-014 the same day, and F-009 + F-010 (the width pass) in the unit below. There is no route in the compared set with a horizontal page scroll and none with unintended overflow. W1.4 quality gates are built, enforced, and green locally — axe (7 surfaces + negative control, the gallery among them), bundle budget (5 measured budgets), e2e typecheck. W1.2 shipped: the shared component kit now has a gallery page and 16 committed visual baselines, both in CI.**
 
 - Branch: `fix/ui-ux-wave1-shell` (Wave 1 so far, uncommitted at the time of writing)
 - Date: 2026-10-13
 - Decisions taken on the proposed defaults: **Wave 1 only** · **axe approved** · **docs get their own commit**
-- Next unit: **W1.2/W1.3/W1.5** (component gallery + saved baselines, the phone action surface, chart palette tokens) — the plan's Wave 1 remainder; the F-009/F-010 work below sat outside the W1.x numbering because both are findings, not planned work. **W1.4 was done early** so every later wave is measured by a gate rather than asserted.
+- Next unit: **W1.3** (the phone action surface), then **W1.5** (chart palette tokens + per-widget export) — the plan's Wave 1 remainder. The F-009/F-010 work below sat outside the W1.x numbering because both are findings, not planned work. **W1.4 was done early** so every later wave is measured by a gate rather than asserted; **W1.2 is now closed** (see below).
 
 ---
 
@@ -18,7 +18,7 @@ Single source of truth. A fresh session should be able to resume from this file 
 | 0 — Discovery & baseline | **Done** | `00-discovery.md`, `screenshots/baseline/` (51 captures) |
 | 1 — Design direction | **Done** | `01-direction.md` |
 | 2 — Plan | **Done, awaiting review** | `02-plan.md` |
-| 3 — Design-system foundation | **Started** | Wave 1 PR 1: `Panel.scrollBody`; both hand-rolled dashboard bars migrated to the shared `ProgressBar` |
+| 3 — Design-system foundation | **In progress** | Wave 1 PR 1: `Panel.scrollBody`; both hand-rolled dashboard bars migrated to the shared `ProgressBar`. Wave 1 PR 2: the component gallery + visual baselines (W1.2) |
 | 4 — Shared patterns | Not started | — |
 | 5 — Module polish | Not started | — |
 | 6 — Responsive / cross-device | Not started | — |
@@ -74,8 +74,9 @@ Single source of truth. A fresh session should be able to resume from this file 
   ```
   cd spa && npm run test:a11y
   ```
-  Six surfaces (sign-in, admin dashboard, employee table, QC list, QC form, floor tablet) plus a
-  **negative control** that plants a nameless button and requires axe to see it — without it, a
+  Seven surfaces (sign-in, admin dashboard, employee table, QC list, QC form, floor tablet, the
+  component gallery) plus a **negative control** that plants a nameless button and requires axe to
+  see it — without it, a
   rule-less or mis-tagged run reports every page clean, which is the C-001…C-003 failure shape.
   `critical`/`serious` fail the run; `moderate`/`minor` are attached and printed.
   `INTENTIONAL_EXCLUSIONS` is empty, and a test refuses an exclusion without a stated reason.
@@ -87,6 +88,10 @@ Single source of truth. A fresh session should be able to resume from this file 
 - `npm run typecheck:e2e` — `tsconfig.e2e.json` extends the base config over `e2e/` and
   `playwright.config.ts`. Before this, `npm run typecheck` covered only `src/` and
   `vite.config.ts`, so all 51 Playwright specs were uncompiled (F-012).
+- `spa/e2e/gallery.spec.ts` + `/admin/component-gallery` — the shared kit's visual
+  baselines (`npm run test:gallery`, 16 PNGs + an overflow assertion + a negative
+  control). Re-baseline with `npm run test:gallery:update`, then review the diff.
+  Enforced in CI (`gallery` job).
 
 ## Wave 1 PR 1 — shipped and measured
 
@@ -108,7 +113,7 @@ corrected probe) — same probe both sides, **NO REGRESSIONS**, data rows unchan
 
 | Gate | Command | Result today | Enforcement |
 |---|---|---|---|
-| Accessibility — axe-core, WCAG 2.2 A/AA | `npm run test:a11y` | **8 passed (~28s)** · 6 surfaces · **0 violations at any impact level** | CI job `a11y` (firefox) |
+| Accessibility — axe-core, WCAG 2.2 A/AA | `npm run test:a11y` | **9 passed (~46s)** · 7 surfaces (the gallery joined in W1.2) · **0 violations at any impact level** | CI job `a11y` (firefox) |
 | Bundle budget (gzip) | `npm run audit:bundle` | **all 5 budgets hold** — initialJs 184.8/205 · entryJs 83.3/95 · totalJs 1686.1/1900 (579 chunks) · largestJs 123.8/140 · totalCss 27.4/32 kB | CI, after `npm run build` |
 | E2E spec types | `npm run typecheck:e2e` | **0 errors** (8 on the day it was added — F-012) | CI, beside `typecheck` |
 | Token discipline | `npm run audit:tokens` | clean — 1044 files | already in CI |
@@ -174,6 +179,50 @@ which is exactly the class that is now responsive. It now reads them inside thei
 (`within(...)`) — class-independent **and** a stronger assertion, since it also proves the number
 landed in the right card.
 
+## Wave 1 PR 2 — W1.2 component gallery + visual baselines
+
+**The gap:** ~60 shared components in `components/ui/`, and no way to look at one
+without finding a page that uses it. Two consequences: a component's *states*
+(focused, disabled, error, empty) were reviewed only if some page happened to
+render them, and a visual regression on a primitive had no check of its own — it
+surfaced as "this page looks off" weeks later.
+
+**The unit:**
+
+| Piece | What it is |
+|---|---|
+| `spa/src/pages/admin/component-gallery/index.tsx` | `/admin/component-gallery` — 9 sections, ~45 components, every state given its own tile. Literal fixtures only: no query, no clock, no random id. `Administration → Component Gallery` in the sidebar, `admin.settings.manage`, lazy-loaded (the chunk costs the app nothing until opened) |
+| `spa/e2e/gallery.spec.ts` | 8 sections × 2 viewports = **16 committed PNGs** in `spa/e2e/__screenshots__/gallery.spec.ts/`, plus a page-level **horizontal-overflow** assertion at 390 and a **negative control** |
+| `spa/src/pages/admin/component-gallery/index.test.tsx` | 5 tests: every section exists with its baseline id, overlays are excluded (a portal renders outside the section box), the F-009/F-010 preview cases stay, the page stays deterministic (no `Date.now`/`Math.random`/`useQuery`), and no icon-only control is nameless |
+| `spa/e2e/a11y.spec.ts` | the gallery joins the axe gate as its 7th surface — the one place the kit is audited in states no single page exercises |
+| `spa-tests.yml` | new `gallery` job (Firefox, same base the PNGs were generated on); uploads `-actual`/`-diff` images on failure |
+
+**No snapshot flake, by construction:** `snapshotPathTemplate` drops Playwright's
+default browser/platform suffix, so exactly one reviewed file per shot exists;
+the topbar (`header.sticky`) and sidebar (`aside`) are `visibility: hidden` during
+capture (an element screenshot paints the page region, and a sticky bar would
+cover the top of a scrolled section); fonts are awaited before every shot;
+`maxDiffPixelRatio: 0.002` absorbs antialiasing and nothing else.
+
+**The gate is proven, not asserted.** Two independent controls:
+
+1. **In the spec:** a planted 40px indent on the buttons section must produce a
+   difference — if it stops, the comparison is dead and the test says so.
+2. **Against real code:** `StatCard`'s base padding moved one step (`p-3.5` →
+   `p-4`). The panels baseline failed: **expected 1040×780, received 1040×819 —
+   7,937 pixels (1% of the image) different**, five times the tolerance. Restored,
+   re-ran green. That is the class of change the suite exists to catch.
+
+Checks run: `test:gallery` **18 passed** · `test:a11y` **9 passed** (was 8) ·
+`vitest` **179 files / 1047 tests** (was 178/1042) · `lint` **exit 0** ·
+`typecheck` **exit 0** · `typecheck:e2e` **exit 0** · `audit:tokens` **clean, 1047
+files** · `build` **ok** · `audit:bundle` **5/5 hold** (totalJs 1696.4/1900 — the
+16th lazy chunk, +10.3 kB gzip, is the gallery itself).
+
+**Not claimed:** the baselines are Firefox/Linux; a Mac or a WebKit run is a
+re-baseline, not a pass. Overlays and tooltips are deliberately not photographed
+(portal + hover), so their appearance is reviewed by hand.
+
 ## Full-role baseline (label `baseline-roles`)
 
 162 captures · 16 roles · 34 routes · 3 viewports. Corrected probe throughout.
@@ -188,9 +237,9 @@ landed in the right card.
 Admin and QC dashboards read **clean**, which is W1.1 and F-006 holding up under the corrected
 probe at all three viewports.
 
-**Next unit:** W1.2 (component gallery + saved visual baselines), then W1.3 (phone action
-surface). Both shell findings that were still open when this baseline was taken — F-009 and the
-`/budgeting` header — are closed above.
+**Next unit:** W1.3 (phone action surface), then W1.5 (chart palette tokens + per-widget
+export). W1.2 shipped above. Both shell findings that were still open when this baseline was
+taken — F-009 and the `/budgeting` header — are closed above.
 
 ## Known gaps / blockers
 
