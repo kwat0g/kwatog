@@ -509,9 +509,14 @@ No page opts in, and no page should re-implement the branch:
 <Modal presentation="dialog" …>
 ```
 
-In the sheet, `ModalFooter` is sticky, padded for `env(safe-area-inset-bottom)`,
-and gives its own `button`/`a` children the 44px floor (`min-h-11`). Page content
-inside the dialog keeps its authored size — only the dialog's own controls grow.
+In the sheet, `ModalFooter` is sticky and padded for `env(safe-area-inset-bottom)`,
+and **the sheet surface itself** puts the 44px touch floor on every `button`/`a`
+inside it (`[&_button]:min-h-11`). The floor is deliberately on the surface rather
+than on the shared footer: `ConfirmDialog` — which owns confirm/revoke/delete in 63
+files — hand-rolls its action row instead of using `ModalFooter`, and a footer-only
+rule left exactly those buttons at 32px on a phone. The dialog surface at `sm` and
+above is untouched, so desktop density does not change.
+
 The header is always rendered in sheet mode, so even a titleless dialog has a
 named close button: on a phone there is no visible backdrop to tap and no Esc key.
 

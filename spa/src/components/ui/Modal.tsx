@@ -240,7 +240,15 @@ export function Modal({
             ? // Edge to edge, top corners only, and clear of the iOS home
               // indicator — a footer button flush against the bottom edge is a
               // button the thumb cannot press.
-              'rounded-t-lg rounded-b-none border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)]'
+              [
+                'rounded-t-lg rounded-b-none border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)]',
+                // The touch floor applies to the SURFACE, not to `ModalFooter`:
+                // dialogs hand-roll their action rows too (`ConfirmDialog` is
+                // one of them), and a rule that only reached the shared footer
+                // would leave the most consequential buttons — confirm, revoke,
+                // delete — at the 32px desktop size on a phone.
+                '[&_button]:min-h-11 [&_a]:min-h-11',
+              ]
             : ['rounded-lg', sizes[size]],
           className,
         )}
@@ -285,11 +293,12 @@ export function ModalFooter({ children, className }: { children: ReactNode; clas
       className={cn(
         'border-t border-default bg-surface flex items-center justify-end gap-2 z-10',
         sheet
-          ? // Thumb-first footer: sticky to the bottom of the sheet, padded for
-            // the home indicator, and every shared action gets the 44px floor
-            // (`min-h-11`). The buttons stay side by side — stacking them would
-            // change every dialog's hierarchy for a phone-only gain.
-            'sticky bottom-0 -mx-4 -mb-4 mt-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] [&>button]:min-h-11 [&>a]:min-h-11'
+          ? // Thumb-first footer: sticky to the bottom of the sheet and padded
+            // for the home indicator. The 44px floor comes from the sheet panel
+            // so hand-rolled action rows get it too. Buttons stay side by side —
+            // stacking them would change every dialog's hierarchy for a
+            // phone-only gain.
+            'sticky bottom-0 -mx-4 -mb-4 mt-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
           : 'sticky bottom-[-20px] -mx-5 -mb-5 mt-5 px-5 py-4 rounded-b-md',
         className,
       )}

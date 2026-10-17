@@ -243,7 +243,7 @@ desktop one; it did not exist.
 | `hooks/useMediaQuery.ts` (`useMediaQuery`, `useIsPhone`) | One query, `(max-width: 639px)`, so behaviour agrees with Tailwind's `sm`. Guards a missing `matchMedia` — jsdom has none, and every unit test in the suite renders dialogs |
 | `Modal` — `presentation: 'auto' \| 'dialog' \| 'sheet'` | No page opts in; a page that really wants a centred card on a phone can say so. `data-presentation` makes the state assertable |
 | Sheet header always rendered | On a phone the backdrop is a sliver and there is no Esc key — a titleless sheet would have been uncloseable. Untitled dialogs also gain `aria-label="Dialog"` instead of being nameless |
-| `ModalFooter` in sheet mode | Sticky to the bottom, safe-area padded, and its own `button`/`a` children get the 44px floor. Body content keeps its authored size |
+| 44px floor on the **sheet surface** | Every `button`/`a` inside the sheet, not just `ModalFooter`'s children. `ConfirmDialog` hand-rolls its action row and owns confirm/revoke/delete in 63 files — a footer-only rule left exactly those at 32px, which the first version of this unit did, and an attribute-only test could not see it |
 | `BottomSheet` → `<Modal presentation="sheet">` | One dialog implementation. The old component had **no focus trap**, so a keyboard or switch-control user could tab out of the self-service leave sheet into the page behind it |
 | `ReturnSparePartButton` | Dropped its own `desktop ? <Modal> : <BottomSheet>` copy of the breakpoint |
 
@@ -257,6 +257,10 @@ desktop one; it did not exist.
   `dialog`; at 390 it is `sheet` measuring **x = 0, width = 390, bottom = 844** on an 844px
   viewport — bottom-anchored and edge to edge, not merely labelled so. Polled because the panel
   rises on `animate-slide-up`.
+- Approvals module (`approvals-responsive.spec.ts`): the delegation revoke confirm
+  (`ConfirmDialog`, the hand-rolled row the footer rule missed) is a `dialog` at 1280 and a
+  `sheet` at 390, and its **confirm button measures 44px** there. It measured **32px** before the
+  floor moved to the surface — the geometry assertion is what caught that, not the class.
 - Visual baselines hold the pair: `dialog-1280.png` **512×304** (a centred 512px card) vs
   `dialog-390.png` **390×286** (full width, bottom).
 - Gallery axe surface and the existing 8 surfaces stay clean; `audit:bundle` 5/5 (totalJs

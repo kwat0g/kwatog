@@ -133,19 +133,27 @@ describe('Modal presentation', () => {
     ).toHaveAttribute('data-presentation', 'sheet');
   });
 
-  it('gives the sheet footer the 44px touch floor and the dialog footer does not', () => {
+  it('gives the sheet surface the 44px touch floor and the dialog surface does not', () => {
+    /*
+     * On the PANEL, not on `ModalFooter`: dialogs hand-roll their action rows
+     * (`ConfirmDialog` does, and it owns the confirm/revoke/delete buttons in 63
+     * files). A floor scoped to the shared footer left exactly those at 32px on
+     * a phone — found by asserting the real height in a browser, not the class.
+     */
     stubMatchMedia(true);
     renderModal();
-    const sheetFooter = screen.getByRole('button', { name: 'Create' }).closest('div[class*="sticky"]');
-    expect(sheetFooter?.className).toContain('[&>button]:min-h-11');
+    const sheetPanel = screen.getByRole('dialog').querySelector('[data-presentation]');
+    expect(sheetPanel?.className).toContain('[&_button]:min-h-11');
     cleanup();
 
     stubMatchMedia(false);
     renderModal();
-    const dialogFooter = screen.getByRole('button', { name: 'Create' }).closest('div[class*="sticky"]');
-    expect(dialogFooter?.className).not.toContain('[&>button]:min-h-11');
+    const dialogPanel = screen.getByRole('dialog').querySelector('[data-presentation]');
+    expect(dialogPanel?.className).not.toContain('min-h-11');
     // The dialog footer keeps the offsets its body padding defines.
-    expect(dialogFooter?.className).toContain('-mx-5');
+    expect(
+      screen.getByRole('button', { name: 'Create' }).closest('div[class*="sticky"]')?.className,
+    ).toContain('-mx-5');
   });
 
   it('moves focus into the dialog on open — the behaviour BottomSheet used to lack', () => {
