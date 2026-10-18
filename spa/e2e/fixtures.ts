@@ -225,8 +225,21 @@ export const test = base.extend<{ apiFallback: void; browserDiagnostics: void }>
       const expectedConsoleErrors = testInfo.annotations
         .filter((annotation) => annotation.type === 'expected-console-error')
         .map((annotation) => annotation.description ?? '');
+      /*
+       * The browser echoes every non-2xx response as its own console error
+       * ("Failed to load resource: the server responded with a status of 500…").
+       * A spec that deliberately mocks a 4xx/5xx and annotates
+       * `expected-http-response` then failed on an echo of the very response it
+       * expected — which is why the three error-state mobile specs were red
+       * with an empty expected-console-error list. The echo is redundant here:
+       * `badResponses` already fails on any response that is not annotated,
+       * just below. Real page errors, app console errors, failed requests and
+       * unexpected status codes keep failing exactly as before.
+       */
+      const resourceLoadEcho = (message: string) =>
+        /^Failed to load resource: the server responded with a status of \d{3}/.test(message);
       expect(
-        diagnostics.consoleErrors,
+        diagnostics.consoleErrors.filter((message) => !resourceLoadEcho(message)),
         `Browser console errors; HTTP responses: ${JSON.stringify(diagnostics.badResponses)}`,
       ).toEqual(expectedConsoleErrors);
       expect(diagnostics.failedRequests, 'Failed browser requests').toEqual([]);
