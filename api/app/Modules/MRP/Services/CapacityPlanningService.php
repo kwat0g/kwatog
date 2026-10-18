@@ -650,7 +650,7 @@ class CapacityPlanningService
             'to' => $to->toIso8601String(),
             'timezone' => config('app.timezone'),
             'rows' => $rows->all(),
-            'conflicts' => WorkOrder::where('status', WorkOrderStatus::Planned->value)->whereNotNull('scheduling_diagnostic')->get()->pluck('scheduling_diagnostic')->all(),
+            'conflicts' => WorkOrder::where('status', WorkOrderStatus::Planned->value)->whereNotNull('scheduling_diagnostic')->pluck('scheduling_diagnostic')->all(),
         ];
     }
 
