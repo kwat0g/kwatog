@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DSS;
 
 use App\Modules\DSS\Detectors\ApprovalBottleneckDetector;
+use App\Modules\DSS\Detectors\CollectionPriorityDetector;
 use App\Modules\DSS\Detectors\MasterHygieneDetector;
 use App\Modules\DSS\Detectors\NcrSlaBreachDetector;
 use App\Modules\DSS\Detectors\StuckDocumentDetector;
@@ -29,6 +30,7 @@ class DssServiceProvider extends ServiceProvider
             $registry->register((new ApprovalBottleneckDetector)->id(), ApprovalBottleneckDetector::class);
             $registry->register(NcrSlaBreachDetector::ID, NcrSlaBreachDetector::class);
             $registry->register(StuckDocumentDetector::ID, StuckDocumentDetector::class);
+            $registry->register(CollectionPriorityDetector::ID, CollectionPriorityDetector::class);
 
             return $registry;
         });
