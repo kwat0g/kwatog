@@ -238,8 +238,22 @@ export const test = base.extend<{ apiFallback: void; browserDiagnostics: void }>
        */
       const resourceLoadEcho = (message: string) =>
         /^Failed to load resource: the server responded with a status of \d{3}/.test(message);
+      /*
+       * CI runs the SPA alone: there is no Reverb server on the configured
+       * ws:// port, and the suite mocks the HTTP API. An authenticated page
+       * still resolves the lazy Echo client by design (AppLayout →
+       * usePermissionSync → getEcho), so every such spec drew the browser's own
+       * "can't establish a connection to the server at ws://…/app/ogami_reverb"
+       * console error — which red the a11y and gallery gates on pages that do
+       * not touch realtime at all. Realtime is out of those gates' scope; a
+       * spec that does exercise it must stand up a server and assert through
+       * the app, never through this browser noise.
+       */
+      const realtimeSocketUnreachable = (message: string) =>
+        message.includes('/app/ogami_reverb?') &&
+        /(establish a connection to the server at wss?:\/\/|WebSocket connection to .+ failed)/.test(message);
       expect(
-        diagnostics.consoleErrors.filter((message) => !resourceLoadEcho(message)),
+        diagnostics.consoleErrors.filter((message) => !resourceLoadEcho(message) && !realtimeSocketUnreachable(message)),
         `Browser console errors; HTTP responses: ${JSON.stringify(diagnostics.badResponses)}`,
       ).toEqual(expectedConsoleErrors);
       expect(diagnostics.failedRequests, 'Failed browser requests').toEqual([]);
