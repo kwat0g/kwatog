@@ -52,10 +52,10 @@ final class CapacityForecastService
         foreach ($open as $wo) {
             $s = Carbon::parse((string) $wo->planned_start); $e = Carbon::parse((string) $wo->planned_end);
             if ($e->lt($s)) { [$s, $e] = [$e, $s]; }
-            $span = $s->copy()->startOfDay()->diffInDays($e->copy()->startOfDay()) + 1;
+            $span = $s->copy()->startOfDay()->diffInDays($e->copy()->startOfDay(), true) + 1;
             $os = $s->greaterThan($start) ? $s : $start; $oe = $e->lessThan($end) ? $e : $end;
             if ($oe->lt($os)) { continue; }
-            $load += (($e->timestamp - $s->timestamp) / 3600) * ($os->copy()->startOfDay()->diffInDays($oe->copy()->startOfDay()) + 1) / $span;
+            $load += (($e->timestamp - $s->timestamp) / 3600) * ($os->copy()->startOfDay()->diffInDays($oe->copy()->startOfDay(), true) + 1) / $span;
         }
         return $load;
     }
