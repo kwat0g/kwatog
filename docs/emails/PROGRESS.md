@@ -7,7 +7,7 @@ Updated: 2026-10-20
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
 - Phase 1 inventory: provisional source-code inventory; owner approved continuing with “proceed.” See [01-inventory.md](01-inventory.md).
 - Phase 2 shared foundation: complete in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; all per-email template redesigns remain pending.
-- Phase 4 mail queue isolation: implementation and focused checks pass on `email/reliability-foundation`; queued mailables and selected mail-only notifications use a dedicated queue with after-commit dispatch and bounded retry. See [03-delivery.md](03-delivery.md). Sync critical-alert delivery and payslip transport inside its existing queue job remain unchanged pending their own delivery-state/security review.
+- Phase 4 mail queue isolation: complete in draft PR [#214](https://github.com/kwat0g/kwatog/pull/214), stacked on #213; queued mailables and selected mail-only notifications use a dedicated queue with after-commit dispatch and bounded retry. See [03-delivery.md](03-delivery.md). Sync critical-alert delivery and payslip transport inside its existing queue job remain unchanged pending their own delivery-state/security review.
 - Phase 2 tests: 13 tests, 31 assertions. Phase 4 queue-policy and response-flow tests: 49 tests, 329 assertions. No mail transport was contacted.
 - Email delivery: none sent.
 
@@ -24,4 +24,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Open the queue-isolation PR based on #213. Continue with external-facing email types in separate PRs. Confirm company values with the company owner before any real send.
+Continue with external-facing email types in separate PRs. Confirm company values with the company owner before any real send.
