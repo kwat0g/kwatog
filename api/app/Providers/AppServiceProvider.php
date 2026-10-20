@@ -234,24 +234,28 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(MessageSending::class, static function (MessageSending $event): void {
             app(NonProductionEmailGuard::class)->protect($event->message);
 
-            $path = app(EmailBrandingService::class)->logoPath();
-            if ($path === null) {
-                return;
-            }
-
-            foreach ($event->message->getAttachments() as $attachment) {
-                if ($attachment instanceof DataPart && $attachment->getContentId() === 'ogami-logo@ogami') {
-                    return;
+            $branding = app(EmailBrandingService::class);
+            foreach ([
+                'ogami-logo@ogami' => $branding->logoPath(),
+                'ogami-logo-dark@ogami' => $branding->logoDarkPath(),
+            ] as $contentId => $path) {
+                if ($path === null) {
+                    continue;
                 }
+
+                foreach ($event->message->getAttachments() as $attachment) {
+                    if ($attachment instanceof DataPart && $attachment->getContentId() === $contentId) {
+                        continue 2;
+                    }
+                }
+
+                $mime = str_ends_with(strtolower($path), '.png') ? 'image/png' : 'image/svg+xml';
+                $event->message->addPart(
+                    (new DataPart(new File($path), basename($path), $mime))
+                        ->asInline()
+                        ->setContentId($contentId)
+                );
             }
-
-            $mime = str_ends_with(strtolower($path), '.png') ? 'image/png' : 'image/svg+xml';
-
-            $event->message->addPart(
-                (new DataPart(new File($path), basename($path), $mime))
-                    ->asInline()
-                    ->setContentId('ogami-logo@ogami')
-            );
         });
 
         // Keep N+1 detection + lazy-loading prevention in non-prod, but allow

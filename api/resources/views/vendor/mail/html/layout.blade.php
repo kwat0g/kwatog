@@ -31,6 +31,11 @@ a { color: #a44725; }
 @media (prefers-color-scheme: dark) {
 body, .wrapper, .body { background-color: #1f1b16 !important; color: #eee9e2 !important; }
 .inner-body, .header { background-color: #29241f !important; border-color: #51483f !important; }
+.brand-name { color: #f3f0ea !important; }
+.brand-tagline { color: #c5bcb1 !important; }
+.logo-light { display: none !important; }
+.logo-dark { display: block !important; }
+.logo-backing { background-color: transparent !important; }
 h1, h2, p, li, .table td { color: #eee9e2 !important; }
 .table th, .panel-content { background-color: #342d26 !important; color: #eee9e2 !important; }
 .footer { color: #c5bcb1 !important; }

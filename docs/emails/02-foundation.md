@@ -31,7 +31,7 @@ Existing settings rows:
 - `company.address` (required for mail)
 - `company.phone`, `company.email`, `company.sales_inbox_email`
 - `company.tin`, `company.vat_status`, `company.certification`
-- `company.logo_path` (bundled logo fallback exists in `api/resources/images`)
+- Landing-page logo art is bundled at `api/resources/images/ogami-mark.png`; dark mode uses its white recolor at `api/resources/images/ogami-mark-dark.png`.
 - `company.public_url`
 - `email.brand_name`
 - `email.footer_disclaimer` (optional; approved text only)
@@ -50,4 +50,4 @@ The local database has rows for core identity settings. The sales inbox and VAT 
 
 ## Verification status
 
-Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. Focused integration coverage passed: 6 tests, 17 assertions; a temporary logo render passed 1 test, 2 assertions. Browser preview inspected desktop and mobile widths in light/dark modes; screenshots are in `screenshots/email-shell-brand-logo-*.png`. No email was sent or transport contacted. Real-client rendering, actual provider delivery, domain authentication, and company-value approval remain unverified.
+Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The exact landing-page PNG is used in light mode; a white variant preserves its transparency for dark mode. Both variants use CID images, with CSS selecting by `prefers-color-scheme`. Focused integration coverage passed: 6 tests, 21 assertions, including a white-pixel check. Browser-rendered header previews inspected desktop/mobile widths in light/dark modes: `screenshots/email-logo-header-*.png`. Full shared-shell browser previews remain in `screenshots/email-shell-brand-logo-*.png`. Browser screenshots do not verify real email clients. Outlook/Gmail/Apple Mail dark-mode behavior, actual provider delivery, domain authentication, and company-value approval remain unverified. No email was sent or transport contacted.

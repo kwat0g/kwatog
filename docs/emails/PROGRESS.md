@@ -6,8 +6,8 @@ Updated: 2026-10-20
 
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
 - Phase 1 inventory: provisional source-code inventory; owner approved continuing. See [01-inventory.md](01-inventory.md).
-- Phase 2 shared foundation: in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; header uses the exact landing-page logo artwork instead of the letter icon. Shared shell browser screenshots are captured at desktop/mobile widths in light/dark modes. Existing per-email screenshots need regeneration as branches are rebased.
-- Tests: focused shared-shell coverage passed (6 tests, 17 assertions) plus temporary logo preview (1 test, 2 assertions); no mail transport was contacted.
+- Phase 2 shared foundation: in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; header uses the landing-page logo artwork, with a transparency-preserving white variant selected in dark mode. Header previews cover desktop/mobile and light/dark; existing per-email screenshots need regeneration as branches are rebased.
+- Tests: focused shared-shell coverage passed (6 tests, 21 assertions), including a white-pixel check; temporary rendered preview passed (1 test). Mailer forced to `array`; no mail transport was contacted.
 - Email delivery: none sent.
 
 ## Blockers
