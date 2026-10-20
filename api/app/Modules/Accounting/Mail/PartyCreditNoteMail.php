@@ -50,7 +50,8 @@ class PartyCreditNoteMail extends QueuedMailable
     public function envelope(): Envelope
     {
         $brand = app(EmailBrandingService::class)->data();
-        $subject = '['.$brand['name'].'] Credit note finalized: '.$this->snapshot['credit_note_number_subject'].' · '.$this->snapshot['total_amount'];
+        $partyType = $this->snapshot['type'] === 'customer' ? 'Customer' : 'Supplier';
+        $subject = '['.$brand['name'].'] '.$partyType.' credit note finalized: '.$this->snapshot['credit_note_number_subject'].' · '.$this->snapshot['total_amount'];
 
         return new Envelope(subject: $this->safeHeaderText($subject));
     }
@@ -60,7 +61,7 @@ class PartyCreditNoteMail extends QueuedMailable
         return new Content(
             markdown: 'emails/finance/credit-note-finalized',
             with: [
-                'preheader' => 'Credit note '.$this->snapshot['credit_note_number_subject'].' has been finalized.',
+                'preheader' => $this->snapshot['type_label'].' note '.$this->snapshot['credit_note_number_subject'].' finalized; total '.$this->snapshot['total_amount'].'.',
                 'snapshot' => $this->snapshot,
             ],
         );

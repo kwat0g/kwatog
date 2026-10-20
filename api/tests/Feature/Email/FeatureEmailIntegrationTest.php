@@ -342,8 +342,11 @@ class FeatureEmailIntegrationTest extends TestCase
             $this->assertStringNotContainsString('CN-CHANGED', $html);
             $this->assertStringContainsString('PHP 1,120.00', $html);
             $this->assertStringNotContainsString('9,999.00', $html);
-            $this->assertStringContainsString('Returned item', $html);
             $this->assertStringNotContainsString('Changed reason', $html);
+            $this->assertStringContainsString('<title>Customer Credit note CN-2026-001 finalized</title>', $html);
+            $this->assertStringContainsString('Open customer portal', $html);
+            $this->assertStringContainsString('Customer credit note finalized: CN-2026-001 · PHP 1,120.00', $mail->envelope()->subject);
+            $mail->assertSeeInText('PHP 1,120.00');
 
             return true;
         });
@@ -369,7 +372,8 @@ class FeatureEmailIntegrationTest extends TestCase
         Mail::assertQueued(PartyCreditNoteMail::class, fn (PartyCreditNoteMail $mail): bool =>
             $mail->hasTo('ap@example.test')
             && ! $mail->hasTo('unknown@example.test')
-            && str_contains($mail->render(), 'Supplier Credit')
+            && str_contains($mail->render(), 'Supplier Credit note SCN-2026-001 finalized')
+            && str_contains($mail->render(), 'Open supplier portal')
         );
     }
 

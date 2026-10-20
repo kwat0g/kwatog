@@ -1,24 +1,44 @@
 <x-mail::message>
-# Credit note {{ $snapshot['credit_note_number'] }} finalized
+# {{ $snapshot['type_label'] }} note {{ $snapshot['credit_note_number'] }} finalized
 
 Hello {{ $snapshot['party_name'] }},
 
-The following credit note has been finalized.
+@if ($snapshot['type'] === 'customer')
+A customer credit note has been finalized for your account.
+@else
+A supplier credit note has been finalized for your account.
+@endif
 
-| Detail | Value |
-|---|---|
+| Credit note detail | Value |
+|:--|--:|
+| Status | Finalized |
 | Credit note | {{ $snapshot['credit_note_number'] }} |
-| Type | {{ $snapshot['type_label'] }} |
 | Date | {{ $snapshot['date'] }} |
 | Subtotal | {{ $snapshot['subtotal'] }} |
 | VAT | {{ $snapshot['vat_amount'] }} |
 | Total credit | {{ $snapshot['total_amount'] }} |
-| Reason | {{ $snapshot['reason'] }} |
+| Applied at finalization | {{ $snapshot['applied_amount'] }} |
+| Remaining credit at finalization | {{ $snapshot['balance'] }} |
+@if ($snapshot['type'] === 'customer')
+| Related invoice | {{ $snapshot['invoice_number'] }} |
+@else
+| Related bill | {{ $snapshot['bill_number'] }} |
+@endif
 
-The credit is now posted and available for the applicable invoice or bill process.
+This summary reflects the credit note when it was finalized. Later applications or voids may not appear here. To request a copy or ask about how the credit is applied, contact the company using the details below and include the credit note number.
 
-<x-mail::button :url="$snapshot['portal_url']">Open portal</x-mail::button>
+@if ($snapshot['type'] === 'customer')
+<x-mail::button :url="$snapshot['portal_url']">Open customer portal</x-mail::button>
+@else
+<x-mail::button :url="$snapshot['portal_url']">Open supplier portal</x-mail::button>
+@endif
 
 Regards,<br>
-Ogami Philippines Finance
+@if ($snapshot['type'] === 'customer')
+Accounts Receivable
+@else
+Accounts Payable
+@endif
+
+You received this email because a credit note was finalized for your account.
 </x-mail::message>
