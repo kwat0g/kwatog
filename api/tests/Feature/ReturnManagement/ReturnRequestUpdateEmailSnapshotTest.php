@@ -44,6 +44,10 @@ final class ReturnRequestUpdateEmailSnapshotTest extends TestCase
         $rma->save();
 
         $event = new ReturnRequestUpdated($rma, 'approved');
+        $this->assertSame('Approved', $event->emailSnapshot['status_label']);
+        $this->assertSame('original@example.test', $event->emailSnapshot['party_email']);
+        $this->assertArrayNotHasKey('reason_description', $event->emailSnapshot);
+        $this->assertArrayNotHasKey('refund_amount', $event->emailSnapshot);
         $rma->update([
             'status' => 'completed',
             'reason_description' => 'Changed after notification',
@@ -66,9 +70,9 @@ final class ReturnRequestUpdateEmailSnapshotTest extends TestCase
 
         $html = $queued->first()->render();
         $this->assertStringContainsString('Approved', $html);
-        $this->assertStringContainsString('Damaged surface', $html);
-        $this->assertStringContainsString('1,234.50', $html);
         $this->assertStringContainsString('Aiko Tanaka', $html);
+        $this->assertStringNotContainsString('Damaged surface', $html);
+        $this->assertStringNotContainsString('1,234.50', $html);
         $this->assertStringNotContainsString('Changed after notification', $html);
         $this->assertStringNotContainsString('9,999.99', $html);
         $this->assertStringNotContainsString('Changed Contact', $html);

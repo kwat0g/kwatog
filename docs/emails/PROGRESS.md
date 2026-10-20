@@ -6,7 +6,7 @@ Updated: 2026-10-20
 
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
 - Phase 1 inventory: provisional source-code inventory; owner approved continuing with “proceed.” See [01-inventory.md](01-inventory.md).
-- Phase 2 shared foundation: complete in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; all per-email template redesigns remain pending.
+- Phase 2 shared foundation: complete in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`.
 - Phase 4 mail queue isolation and delivery ledger: complete in draft PR [#214](https://github.com/kwat0g/kwatog/pull/214), stacked on #213; queued mailables and selected mail-only notifications use a dedicated queue with after-commit dispatch, bounded retries, durable status logs, and ambiguous-retry suppression. See [03-delivery.md](03-delivery.md). Sync critical-alert delivery and payslip transport inside its existing queue job remain unchanged pending their own delivery-state/security review.
 - Invoice issue-time snapshot fix: in draft PR [#215](https://github.com/kwat0g/kwatog/pull/215), stacked on #214; captures customer email and invoice display values before the queued listener can rehydrate changed records. See finding EF-007 in [FINDINGS.md](FINDINGS.md).
 - E-001 invoice template: complete in draft PR [#216](https://github.com/kwat0g/kwatog/pull/216), stacked on #215. Shared Markdown layout, event-time recipient/data snapshot, portal link, 10-item display limit, plain text, and browser screenshots. See [E-001-invoice-finalized.md](E-001-invoice-finalized.md).
@@ -45,6 +45,9 @@ Updated: 2026-10-20
 - EF-034–EF-035 return-case email reliability: complete in draft PR #249, stacked on #247. Invalid addresses and enqueue failures no longer abort the rest of the recipient set; address duplicates are removed, active authorized internal viewers receive an in-app follow-up when delivery is incomplete, and event/contact delivery keys are deterministic. `ReturnCaseEmailReliabilityTest`: 1 passed, 5 assertions. Mailer faked; no email sent.
 - E-020 return case update: template redesign and verification complete in draft PR #250, stacked on #249. Notice includes only reference/status and authenticated party-specific portal link; no description or attachment. `ReturnCaseUpdateMailTest`: 2 passed, 30 assertions. Eight Chromium renders inspected at 1440px/390px in light/dark; no overflow. Mailer forced to `array`; no email sent. EF-034 and EF-035 were fixed separately in #249. Company settings require owner verification. See [E-020-return-case-update.md](E-020-return-case-update.md).
 - EF-036 RMA update event-time snapshot: fixed in draft PR #251, stacked on #250. Event now captures display values, party email, and a notification ID; queued listener uses the snapshot and stable per-recipient delivery key. `ReturnRequestUpdateEmailSnapshotTest`: 1 passed, 10 assertions. Mailer faked; no email sent. E-021 template redesign remains pending.
+- EF-037 RMA email data minimization and link: fixed in draft PR #252, stacked on #251. External body now contains only event-time reference/status/action summary, with customer record or supplier portal link and shared branding. `ReturnRequestUpdateEmailSnapshotTest` and `ReturnRequestUpdateMailDesignTest`: 3 passed, 58 assertions. Eight Chromium previews were regenerated and visually inspected at desktop/mobile, light/dark; CTA labels render, logos load, and no horizontal overflow. Screenshots are in `screenshots/e021-rma-update-return-request-*.png`. Mailer forced to `array`; no email sent.
+- E-021 return request update: complete in draft PR #252. Supplier link lands on portal root because no supplier return detail route exists. See [E-021-return-request-update.md](E-021-return-request-update.md).
+- E-001–E-021 template redesigns: complete in draft PRs #216, #218, #220, #222, #224, #226, #228, #230, #232, #234, #236, #238, #239, #243, #247, #250, and #252 (some PRs cover tightly related templates). Later email types remain pending.
 - Email delivery: none sent.
 
 ## Blockers
@@ -62,4 +65,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue with the E-021 RMA notice redesign; then continue remaining inventory. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue E-022 delivery confirmation, then remaining inventory. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
