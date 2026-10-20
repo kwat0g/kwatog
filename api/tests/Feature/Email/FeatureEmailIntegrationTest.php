@@ -271,6 +271,26 @@ class FeatureEmailIntegrationTest extends TestCase
         $this->assertStringContainsString(htmlspecialchars($brand['address'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $rendered);
         $this->assertStringContainsString('href="'.rtrim(config('app.frontend_url'), '/').'"', $rendered);
         $this->assertStringContainsString('cid:ogami-logo@ogami', $rendered);
+        $this->assertStringContainsString('cid:ogami-logo-dark@ogami', $rendered);
         $this->assertStringContainsString('alt="'.$brand['name'].' logo"', $rendered);
+        $this->assertStringContainsString('width="64" height="64"', $rendered);
+        $this->assertStringContainsString('Shared email shell preview text.', $rendered);
+        $this->assertStringContainsString('<title>AWS Mail Manager email integration test</title>', $rendered);
+        $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_path']), 0, 2, true));
+        $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_dark_path']), 0, 2, true));
+        $darkLogo = imagecreatefrompng($brand['logo_dark_path']);
+        $whitePixelFound = false;
+        for ($y = 0; $y < imagesy($darkLogo); $y++) {
+            for ($x = 0; $x < imagesx($darkLogo); $x++) {
+                $pixel = imagecolorat($darkLogo, $x, $y);
+                if ((($pixel >> 24) & 0x7f) === 0) {
+                    $this->assertSame(0xffffff, $pixel & 0xffffff);
+                    $whitePixelFound = true;
+                    break 2;
+                }
+            }
+        }
+        imagedestroy($darkLogo);
+        $this->assertTrue($whitePixelFound);
     }
 }
