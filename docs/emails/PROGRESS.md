@@ -5,16 +5,16 @@ Updated: 2026-10-20
 ## Status
 
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
-- Phase 1 inventory: provisional; awaiting owner review. See [01-inventory.md](01-inventory.md).
-- Phase 2 shared foundation: complete in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; all per-email template redesigns remain pending.
-- Tests: focused coverage passed (13 tests, 31 assertions); no mail transport was contacted.
+- Phase 1 inventory: provisional source-code inventory; owner approved continuing. See [01-inventory.md](01-inventory.md).
+- Phase 2 shared foundation: in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; header uses the exact landing-page logo artwork instead of the letter icon. Shared shell browser screenshots are captured at desktop/mobile widths in light/dark modes. Existing per-email screenshots need regeneration as branches are rebased.
+- Tests: focused shared-shell coverage passed (6 tests, 17 assertions) plus temporary logo preview (1 test, 2 assertions); no mail transport was contacted.
 - Email delivery: none sent.
 
 ## Blockers
 
 - Initial local SMTP credentials were cleared, both local mailers changed to `log`, and Horizon restarted. The code branch adds fail-closed recipient redirection for non-production mail.
 - Core company settings exist in the database; sales inbox and VAT status match old fallback literals and need owner verification. Runtime notification preferences were not queried.
-- Inventory needs owner review before any template changes, per execution gate.
+- Local `.env` SMTP was disabled during continued work; both local files now use `MAIL_MAILER=log`, credentials blank, API/Horizon restarted. Test commands additionally forced the `array` mailer.
 
 ## Findings
 
@@ -23,4 +23,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Owner has said “proceed.” Shared foundation is ready for review on `email/shared-foundation`. Pause before reliability and per-email redesign units. Confirm company values with the company owner before any real send.
+Owner has said “proceed.” Continue with reliability and per-email redesign units. Confirm company values with the company owner before any real send.

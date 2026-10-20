@@ -11,7 +11,7 @@ Keep Laravel's existing Markdown Mailable and `MailMessage` stack. The applicati
 - `lang` from application locale and `dir="ltr"`.
 - Light/dark color-scheme metadata and a dark-mode media rule; critical information remains text.
 - Hidden preheader is supported through a `preheader` value in each message's view data.
-- Header uses the inline CID logo with meaningful alt text and a text brand name.
+- Header uses the same bundled Ogami logo as the SPA landing page, inline via CID at 64px, with meaningful alt text and a text brand name. A small white backing keeps the black transparent logo visible in dark-mode clients; missing artwork falls back to the text brand name.
 - Header brand link uses the configured SPA `FRONTEND_URL`, never Laravel's API `APP_URL`.
 - Footer uses `company.legal_name` and `company.address` from settings. Missing required values fail rendering instead of displaying source-code fallback facts. Optional phone, email, certification, and disclaimer appear only when configured.
 - Existing PDF/company settings remain the source for company details. Optional approved email disclaimer is stored at `email.footer_disclaimer`; it is seeded from `EMAIL_FOOTER_DISCLAIMER` and editable through the admin settings endpoint.
@@ -50,4 +50,4 @@ The local database has rows for core identity settings. The sales inbox and VAT 
 
 ## Verification status
 
-Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The focused suite passed: 13 tests, 31 assertions. No email was sent or transport contacted. No email-client rendering was performed. Real-client rendering, actual provider delivery, domain authentication, and company-value approval remain unverified.
+Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. Focused integration coverage passed: 6 tests, 17 assertions; a temporary logo render passed 1 test, 2 assertions. Browser preview inspected desktop and mobile widths in light/dark modes; screenshots are in `screenshots/email-shell-brand-logo-*.png`. No email was sent or transport contacted. Real-client rendering, actual provider delivery, domain authentication, and company-value approval remain unverified.

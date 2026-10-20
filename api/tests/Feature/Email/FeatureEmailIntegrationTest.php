@@ -165,5 +165,7 @@ class FeatureEmailIntegrationTest extends TestCase
         $this->assertStringContainsString('href="'.rtrim(config('app.frontend_url'), '/').'"', $rendered);
         $this->assertStringContainsString('cid:ogami-logo@ogami', $rendered);
         $this->assertStringContainsString('alt="'.$brand['name'].' logo"', $rendered);
+        $this->assertStringContainsString('width="64" height="64"', $rendered);
+        $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_path']), 0, 2, true));
     }
 }
