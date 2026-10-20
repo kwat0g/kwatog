@@ -10,4 +10,4 @@ The outbox event carries supplier address/name, PO hash/number, order date, canc
 
 ## Verification
 
-The focused feature suite checks existing sent/never-sent recipient behavior, exclusion of internal remarks, event-time values after PO/vendor edits, and snapshot preservation through `OutboxEventCodec`. Five tests passed, 14 assertions; array mailer used, isolated DB removed. The template redesign will add desktop/mobile and light/dark browser previews.
+The focused feature suite checks existing sent/never-sent recipient behavior, exclusion of internal remarks, event-time values after PO/vendor edits, snapshot preservation through `OutboxEventCodec`, HTML escaping, frontend URL, title, preheader, and plain-text content. Five tests passed, 22 assertions; array mailer used, isolated DB removed. Browser preview was about 22 KB and measured 600px desktop and 390px mobile without overflow; light/dark logos switched as expected. Screenshots: `screenshots/e008-supplier-po-cancellation-{desktop,mobile}-{light,dark}.png`. Real email-client rendering remains unverified.

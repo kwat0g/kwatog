@@ -1,9 +1,9 @@
-<x-mail::message>
-# Purchase Order Cancelled
+<x-mail::message :preheader="$preheader" title="Purchase order cancelled">
+# Purchase order cancelled
 
 Hello {{ $purchaseOrder['supplier_name'] }},
 
-The following purchase order has been cancelled by Ogami Philippines. No further deliveries or invoices should be made against this purchase order.
+{{ $brand['name'] }} cancelled the purchase order below. Do not ship or invoice further items against this order.
 
 | Detail | Information |
 |---|---|
@@ -15,10 +15,12 @@ The following purchase order has been cancelled by Ogami Philippines. No further
 | Original total amount | {{ $purchaseOrder['display_total'] }} |
 
 {{-- The cancel reason lives in the PO's internal remarks, which are never shown to suppliers. --}}
-If you have already shipped any items for this order, please contact our Purchasing department immediately to arrange return or credit handling.
+If a shipment has already departed, contact your usual purchasing representative to coordinate next steps.
 
-<x-mail::button :url="$portalUrl">View Purchase Order Details</x-mail::button>
+<x-mail::button :url="$portalUrl">View purchase order</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ $brand['name'] }} Purchasing Team
+
+You received this email because this purchase order had previously been sent to your supplier account. To verify the request, open the supplier portal using the address you normally use.
 </x-mail::message>

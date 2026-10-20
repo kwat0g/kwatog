@@ -155,7 +155,7 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
     {
         $vendor = Vendor::factory()->create([
             'email' => 'snapshot-supplier@example.test',
-            'contact_person' => 'Original Contact',
+            'contact_person' => 'Original <img src=x onerror=alert(1)> Contact',
         ]);
         $po = PurchaseOrder::factory()->create([
             'vendor_id' => $vendor->id,
@@ -178,14 +178,22 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
         $html = $mail->render();
         self::assertSame('snapshot-supplier@example.test', $event->snapshot['recipient_email']);
         self::assertSame('PO-SNAPSHOT-42', $event->snapshot['po_number']);
-        self::assertSame('Original Contact', $event->snapshot['supplier_name']);
+        self::assertSame('Original <img src=x onerror=alert(1)> Contact', $event->snapshot['supplier_name']);
         self::assertSame($event->snapshot, $decoded->snapshot);
+        self::assertSame('[Ogami Philippines] Purchase order cancelled: PO-SNAPSHOT-42', $mail->envelope()->subject);
         self::assertStringContainsString('PO-SNAPSHOT-42', $html);
+        self::assertStringContainsString('<title>Purchase order cancelled</title>', $html);
+        self::assertStringContainsString('Purchase order PO-SNAPSHOT-42 was cancelled.', $html);
         self::assertStringNotContainsString('PO-CHANGED-99', $html);
-        self::assertStringContainsString('Original Contact', $html);
+        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+        self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
         self::assertStringNotContainsString('Changed Contact', $html);
         self::assertStringContainsString($event->snapshot['display_total'], $html);
-        $mail->assertSeeInText('Oct 19, 2026');
+        self::assertStringContainsString('https://ogamiph.dev/portal/supplier/purchase-orders/', $html);
+        self::assertStringContainsString('Block 2, Lots 1 &amp; 2', $html);
+        self::assertLessThan(102400, strlen($html));
+        self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
+        $mail->assertSeeInText('Do not ship or invoice further items');
     }
 
     public function test_cancellation_without_supplier_email_notifies_internal_users(): void

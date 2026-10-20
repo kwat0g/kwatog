@@ -29,9 +29,13 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 
     public function content(): Content
     {
+        $brand = app(EmailBrandingService::class)->data();
+
         return new Content(
             markdown: 'emails/supplier/purchase-order-cancelled',
             with: [
+                'brand' => $brand,
+                'preheader' => 'Purchase order '.$this->snapshot['po_number'].' was cancelled.',
                 'purchaseOrder' => $this->snapshot,
                 'portalUrl' => $this->snapshot['portal_url'],
             ],
