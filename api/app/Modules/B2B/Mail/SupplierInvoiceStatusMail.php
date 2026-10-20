@@ -5,19 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Modules\Accounting\Models\Bill;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
 
 class SupplierInvoiceStatusMail extends QueuedMailable
 {
-    use SerializesModels;
-
     /** @param list<int> $fallbackUserIds */
     public function __construct(
-        public readonly Bill $bill,
+        public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
     ) {
         $this->afterCommit();
@@ -25,19 +21,21 @@ class SupplierInvoiceStatusMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Supplier invoice '.($this->bill->supplierInvoice?->number ?? $this->bill->bill_number).' received');
+        return new Envelope(subject: 'Supplier invoice '.$this->snapshot['invoice_number'].' received');
     }
 
     public function content(): Content
     {
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-
         return new Content(
             markdown: 'emails/supplier/invoice-status',
             with: [
-                'bill' => $this->bill,
-                'supplierInvoice' => $this->bill->supplierInvoice,
-                'portalUrl' => $base.'/portal/supplier/invoices/'.($this->bill->supplierInvoice?->hash_id ?? $this->bill->hash_id),
+                'invoiceNumber' => $this->snapshot['invoice_number'],
+                'invoiceDate' => $this->snapshot['invoice_date'],
+                'matchCount' => $this->snapshot['match_count'],
+                'grossTotal' => $this->snapshot['gross_total'],
+                'purchaseOrderNumber' => $this->snapshot['purchase_order_number'],
+                'supplierName' => $this->snapshot['supplier_name'],
+                'portalUrl' => $this->snapshot['portal_url'],
             ],
         );
     }
@@ -47,11 +45,11 @@ class SupplierInvoiceStatusMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Supplier invoice email',
-            'The confirmation email for supplier invoice '.($this->bill->supplierInvoice?->number ?? $this->bill->bill_number).' could not be delivered. Review the submission and use the supplier portal or an approved channel.',
+            'The confirmation email for supplier invoice '.$this->snapshot['invoice_number'].' could not be delivered. Review the submission and use the supplier portal or an approved channel.',
             [
-                'link_to' => '/accounting/bills/'.$this->bill->hash_id,
+                'link_to' => '/accounting/bills/'.$this->snapshot['bill_hash_id'],
                 'entity_type' => 'bill',
-                'entity_id' => $this->bill->hash_id,
+                'entity_id' => $this->snapshot['bill_hash_id'],
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
         );
