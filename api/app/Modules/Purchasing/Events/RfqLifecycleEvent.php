@@ -34,6 +34,7 @@ final class RfqLifecycleEvent
             $kind,
             snapshot: [
                 'rfq_number' => (string) $rfq->rfq_number,
+                'rfq_hash_id' => (string) $rfq->hash_id,
                 'title' => (string) $rfq->title,
                 'closes_at' => $rfq->closes_at?->toIso8601String(),
                 'last_extension_reason' => $rfq->last_extension_reason,

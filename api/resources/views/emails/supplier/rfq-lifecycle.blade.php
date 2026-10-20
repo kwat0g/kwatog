@@ -1,42 +1,29 @@
-<x-mail::message>
-# {{ $snapshot['rfq_number'] ?? $rfq->rfq_number }} · {{ $snapshot['title'] ?? $rfq->title }}
+<x-mail::message :preheader="$preheader" :title="$title">
+# {{ $title }}
 
-Hello {{ $snapshot['contact_person'] ?? $snapshot['vendor_name'] ?? $invitation->vendor->contact_person ?? $invitation->vendor->name ?? 'supplier' }},
+Hello {{ $notice['recipient_name'] }},
 
-@switch($kind)
-@case('published')
-Ogami invites you to quote for **{{ $snapshot['title'] ?? $rfq->title }}**. Please submit your quotation in the supplier portal before
-**{{ isset($snapshot['closes_at']) ? \Illuminate\Support\Carbon::parse($snapshot['closes_at'])->format('M d, Y g:i A') : optional($rfq->closes_at)->format('M d, Y g:i A') }}**, with your quotation PDF and, for materials, the certificate of analysis.
-@break
-@case('extended')
-The quotation deadline for **{{ $snapshot['title'] ?? $rfq->title }}** is now **{{ isset($snapshot['closes_at']) ? \Illuminate\Support\Carbon::parse($snapshot['closes_at'])->format('M d, Y g:i A') : optional($rfq->closes_at)->format('M d, Y g:i A') }}**.
-@if ($snapshot['last_extension_reason'] ?? $rfq->last_extension_reason)
+{{ $notice['message'] }}
 
-Reason: {{ $snapshot['last_extension_reason'] ?? $rfq->last_extension_reason }}
+| Request detail | Information |
+|---|---:|
+| Request for quotation | {{ $notice['rfq_number'] }} |
+| Request title | {{ $notice['rfq_title'] }} |
+| Status | {{ $notice['status'] }} |
+@if (in_array($kind, ['published', 'extended'], true) && $notice['deadline'])
+| Submission deadline | {{ $notice['deadline'] }} |
 @endif
-@break
-@case('awarded')
-@if (($snapshot['status'] ?? $invitation->status?->value ?? $invitation->status) === 'awarded')
-Your quotation was selected for one or more lines. Ogami's purchasing team will send the purchase order after internal approval.
-@else
-Thank you for quoting. Your quotation was not selected this time.
-@endif
-@break
-@case('cancelled')
-This request for quotation has been cancelled. No award will be made.
-@if ($snapshot['cancellation_reason'] ?? $rfq->cancellation_reason)
 
-Reason: {{ $snapshot['cancellation_reason'] ?? $rfq->cancellation_reason }}
-@endif
-@break
-@default
-There is an update to this request for quotation.
-@endswitch
+**What to do:** {{ $notice['action'] }}
 
-Competitor pricing and rankings are never disclosed.
+<x-mail::button :url="$portalUrl">Open supplier portal</x-mail::button>
 
-<x-mail::button :url="$portalUrl">Open in supplier portal</x-mail::button>
+This message contains only your request status. Other suppliers' quotations and rankings are not included.
+
+You received this email because this address is listed for a supplier invited to this request for quotation. To verify it, open the supplier portal at the address you normally use and confirm the request is listed there.
+
+This is an automated notice. For help, use the company contact details in the footer.
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ $brand['name'] }} Purchasing Team
 </x-mail::message>
