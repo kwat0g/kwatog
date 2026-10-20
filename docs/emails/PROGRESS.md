@@ -19,7 +19,7 @@ Updated: 2026-10-20
 - E-007 supplier invoice confirmation snapshot is fixed in draft PR [#225](https://github.com/kwat0g/kwatog/pull/225), stacked on #224. The supplier-facing redesign is complete in draft PR [#226](https://github.com/kwat0g/kwatog/pull/226), stacked on #225; screenshots cover 600px/390px and light/dark.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: portal security suite 12 tests passed, 65 assertions; four actual-mail render screenshots inspected in desktop/mobile and light/dark. Mailer forced to `array`; no real transport contacted.
-- E-007 focused verification: 1 test passed, 15 assertions; four browser screenshots inspected in light/dark at desktop/mobile; rendered HTML about 24 KB. Mailer forced to `array`.
+- E-007 focused verification: 1 test passed, 16 assertions; four browser screenshots inspected in light/dark at desktop/mobile; rendered HTML about 24 KB. Mailer forced to `array`.
 - Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - Email delivery: none sent.
 
