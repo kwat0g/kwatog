@@ -14,7 +14,7 @@ Updated: 2026-10-20
 - E-002 official receipt template: complete in draft PR [#218](https://github.com/kwat0g/kwatog/pull/218), stacked on #217. See [E-002-official-receipt.md](E-002-official-receipt.md); EF-009 remains pending accountant direction.
 - Dunning findings EF-010 (queued snapshot), EF-011 (configurable tier copy), and EF-012 (per-invoice volume) are recorded. EF-010 is fixed in draft PR [#219](https://github.com/kwat0g/kwatog/pull/219), stacked on #218. E-003 redesign follows it; EF-012 remains pending product decision.
 - E-003 invoice dunning template: complete in draft PR [#220](https://github.com/kwat0g/kwatog/pull/220), stacked on #219. EF-011 fixed; EF-012 remains pending product direction. See [E-003-invoice-dunning.md](E-003-invoice-dunning.md).
-- E-004 audit found EF-013 (no external credit-note document route/PDF), EF-014 (queued snapshot drift), and EF-015 (unclassified reason text is exposed). EF-014 fix is underway separately; accountant direction needed on EF-013/015 before production delivery.
+- E-004 audit found EF-013 (no external credit-note document route/PDF), EF-014 (queued snapshot drift), and EF-015 (unclassified reason text is exposed). EF-014 is fixed in draft PR [#221](https://github.com/kwat0g/kwatog/pull/221), stacked on #220; accountant direction needed on EF-013/015 before production delivery.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: 8 integration tests passed, plus one temporary render fixture; 9 total tests and 38 assertions. Mail fake/array transport used; no mail transport contacted.
 - Email delivery: none sent.
