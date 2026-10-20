@@ -23,6 +23,8 @@ use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Listeners\EmailCustomerOnSalesOrderConfirmed;
 use App\Modules\CRM\Mail\CustomerSalesOrderConfirmedMail;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Purchasing\Mail\SupplierPurchaseOrderMail;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Support\SupplierDispatchResult;
@@ -66,11 +68,48 @@ class FeatureEmailIntegrationTest extends TestCase
             $mail->assertSeeInText('/portal/customer/orders/'.$salesOrder->hash_id);
 
             return $mail->hasTo('customer@example.test')
-                && $mail->salesOrder->is($salesOrder)
+                && $mail->snapshot['so_number'] === $salesOrder->so_number
                 && str_contains($rendered, $salesOrder->so_number)
                 && str_contains($rendered, '/portal/customer/orders/'.$salesOrder->hash_id)
                 && str_contains($rendered, '<v:roundrect')
                 && str_contains($rendered, 'Open this link if the button does not work');
+        });
+    }
+
+    public function test_customer_sales_order_email_uses_confirmation_time_values(): void
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'customer@example.test',
+            'contact_person' => 'Original Contact',
+        ]);
+        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id, 'total_amount' => '120.00']);
+        $product = Product::factory()->create(['name' => 'Original Part', 'part_number' => 'PART-OLD']);
+        $item = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity' => '2.00',
+            'unit_price' => '60.00',
+            'total' => '120.00',
+        ]);
+        $event = new SalesOrderConfirmed($salesOrder->fresh());
+
+        $customer->update(['email' => 'changed@example.test', 'contact_person' => 'Changed Contact']);
+        $salesOrder->update(['total_amount' => '999.00']);
+        $item->update(['quantity' => '9.00', 'unit_price' => '111.00', 'total' => '999.00']);
+        $product->update(['name' => 'Changed Part', 'part_number' => 'PART-NEW']);
+
+        app(EmailCustomerOnSalesOrderConfirmed::class)->handle($event);
+
+        Mail::assertQueued(CustomerSalesOrderConfirmedMail::class, function (CustomerSalesOrderConfirmedMail $mail): bool {
+            $rendered = $mail->render();
+
+            return $mail->hasTo('customer@example.test')
+                && str_contains($rendered, 'Original Contact')
+                && str_contains($rendered, '120.00')
+                && str_contains($rendered, 'Original Part')
+                && ! str_contains($rendered, 'Changed Contact')
+                && ! str_contains($rendered, '999.00')
+                && ! str_contains($rendered, 'Changed Part');
         });
     }
 

@@ -18,10 +18,8 @@ class EmailCustomerOnSalesOrderConfirmed implements ShouldQueue
 
     public function handle(SalesOrderConfirmed $event): void
     {
-        $salesOrder = $event->salesOrder->loadMissing([
-            'customer',
-            'items.product',
-        ]);
+        $salesOrder = $event->salesOrder;
+        $snapshot = $event->emailSnapshot;
 
         // The event carries the current row (ToleratesNewerModelState): never
         // email a confirmation for an order cancelled before this ran.
@@ -38,7 +36,7 @@ class EmailCustomerOnSalesOrderConfirmed implements ShouldQueue
         ];
         $feature = 'Customer sales order confirmation';
 
-        if (! filter_var($salesOrder->customer?->email, FILTER_VALIDATE_EMAIL)) {
+        if (! filter_var($snapshot['customer_email'] ?? null, FILTER_VALIDATE_EMAIL)) {
             $fallback->notifyPermission(
                 'crm.sales_orders.view',
                 $feature,
@@ -50,9 +48,10 @@ class EmailCustomerOnSalesOrderConfirmed implements ShouldQueue
         }
 
         try {
-            Mail::to($salesOrder->customer->email)->queue(new CustomerSalesOrderConfirmedMail(
+            Mail::to($snapshot['customer_email'])->queue(new CustomerSalesOrderConfirmedMail(
                 $salesOrder,
                 $this->fallbackUserIds(),
+                $snapshot,
             ));
         } catch (\Throwable $e) {
             $fallback->notifyPermission(

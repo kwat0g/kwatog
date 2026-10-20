@@ -21,7 +21,40 @@ class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public function __construct(public SalesOrder $salesOrder) {}
+    /** @var array<string, mixed> */
+    public readonly array $emailSnapshot;
+
+    /** @param array<string, mixed>|null $emailSnapshot */
+    public function __construct(public SalesOrder $salesOrder, ?array $emailSnapshot = null)
+    {
+        $this->emailSnapshot = $emailSnapshot ?? self::snapshotForEmail($salesOrder);
+    }
+
+    /** @return array<string, mixed> */
+    public static function snapshotForEmail(SalesOrder $salesOrder): array
+    {
+        $salesOrder->loadMissing(['customer:id,name,email,contact_person', 'items.product:id,name,part_number']);
+        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+
+        return [
+            'customer_email' => $salesOrder->customer?->email,
+            'customer_name' => $salesOrder->customer?->contact_person ?: ($salesOrder->customer?->name ?: 'Customer'),
+            'so_number' => (string) $salesOrder->so_number,
+            'date' => $salesOrder->date?->toDateString(),
+            'total_amount' => (string) $salesOrder->total_amount,
+            'payment_terms_days' => $salesOrder->payment_terms_days,
+            'delivery_terms' => $salesOrder->delivery_terms,
+            'items' => $salesOrder->items->map(static fn ($item): array => [
+                'name' => $item->product?->name ?: 'Item',
+                'part_number' => $item->product?->part_number,
+                'quantity' => (string) $item->quantity,
+                'unit_price' => (string) $item->unit_price,
+                'total' => (string) $item->total,
+            ])->all(),
+            'sales_order_hash_id' => (string) $salesOrder->hash_id,
+            'portal_url' => $base.'/portal/customer/orders/'.$salesOrder->hash_id,
+        ];
+    }
 
     /** @return array<int, PrivateChannel> */
     public function broadcastOn(): array
