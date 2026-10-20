@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\BusinessPolicyService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
@@ -26,6 +27,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseOrderResponse;
 use App\Modules\Purchasing\Models\PurchaseOrderResponseItem;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -456,14 +458,7 @@ class SupplierResponseService
     private function notifyPurchasingAudience(PurchaseOrder $po, PurchaseOrderResponse $response): void
     {
         try {
-            $audience = User::query()
-                ->where('is_active', true)
-                ->with('role')
-                ->get()
-                ->filter(fn (User $user) => $user->hasPermission('purchasing.po.responses.resolve')
-                    && app(\App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::class)->canView($user, $po));
-
-            $this->notifications->send($audience, 'supplier.po_responded', [
+            $this->notifications->send($this->purchasingAudience($po), 'supplier.po_responded', [
                 'title'       => "PO {$po->po_number} — supplier {$response->response_type->label()}",
                 'message'     => $this->responseSummary($response),
                 'link_to'     => "/purchasing/purchase-orders/{$po->hash_id}",
@@ -474,6 +469,18 @@ class SupplierResponseService
         } catch (\Throwable $e) {
             Log::warning('SupplierResponseService::notifyPurchasingAudience failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /** Active PO viewers who can resolve supplier responses. */
+    private function purchasingAudience(PurchaseOrder $po): Collection
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->with('role')
+            ->get()
+            ->filter(fn (User $user) => $user->hasPermission('purchasing.po.responses.resolve')
+                && app(\App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::class)->canView($user, $po))
+            ->values();
     }
 
     private function responseSummary(PurchaseOrderResponse $response): string
@@ -497,20 +504,34 @@ class SupplierResponseService
                 ->where('vendor_id', $response->vendor_id)
                 ->where('is_active', true)
                 ->pluck('email')
-                ->unique()
+                ->map(static fn ($email) => is_string($email) ? trim($email) : '')
+                ->filter(static fn (string $email): bool => filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
+                ->unique(static fn (string $email): string => strtolower($email))
                 ->values()
                 ->all();
             if ($recipients === []) {
                 $vendorEmail = $po?->vendor?->email;
-                if (! is_string($vendorEmail) || trim($vendorEmail) === '') {
-                    // No portal users and no vendor email — the decision is
-                    // already recorded on the response row; nothing to send.
+                if (! is_string($vendorEmail) || filter_var(trim($vendorEmail), FILTER_VALIDATE_EMAIL) === false) {
+                    app(EmailDeliveryFailureNotifier::class)->notify(
+                        $this->purchasingAudience($po),
+                        'Supplier purchase-order decision',
+                        'No valid supplier email address was available for this decision.',
+                        [
+                            'link_to' => '/purchasing/purchase-orders/'.$po->hash_id,
+                            'entity_type' => 'purchase_order',
+                            'entity_id' => $po->hash_id,
+                            'reason' => 'No valid active supplier portal address or vendor fallback address.',
+                        ],
+                    );
+
                     return;
                 }
-                $recipients = [$vendorEmail];
+                $recipients = [trim($vendorEmail)];
             }
 
-            Mail::to($recipients)->queue(new SupplierPoDecisionMail($po, $response, $decision));
+            foreach ($recipients as $recipient) {
+                Mail::to($recipient)->queue(new SupplierPoDecisionMail($po, $response, $decision));
+            }
         } catch (\Throwable $e) {
             // Notification failure must never break the resolution transaction;
             // the decision itself is durable on the response row.

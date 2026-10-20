@@ -34,6 +34,7 @@ Updated: 2026-10-20
 - EF-026 SPA return-path fix: complete in draft PR #237, stacked on #236. Preserves the exact internal route through sign-in and required password change. `AuthGuard.test.tsx`: 3 passed; SPA typecheck passed.
 - E-016 payslip email: complete in draft PR #238, stacked on #237. Removed sensitive PDF attachment; deep link opens authenticated, employee-owned confirmation page and downloads only after a deliberate click. Existing finalization queue/retry/status behavior preserved. Backend tests: 9 passed, 45 assertions across job, trigger, and owner-scope files; SPA download-page test passed; SPA typecheck passed. Four Chromium screenshots inspected at 1440px/390px, light/dark; 19.7 KB HTML, no payroll amounts. Mailer forced to `array`; no mail sent. EF-027 needs HR/legal/data-protection review.
 - E-017 supplier PO decision: complete in this draft PR, stacked on #238. Mailable captures PO/vendor/response/decision values at queue time; redesigned status notice uses shared brand shell, human response label, recorded total, proposed date, and supplier portal link. `SupplierPoDecisionMailTest`: 1 passed, 18 assertions. Four Chromium screenshots inspected at 1440px/390px, light/dark; HTML 25.3 KB, no overflow or missing logo. Mailer forced to `array`; no mail sent. EF-028 (shared external recipient list) remains a separate functional fix.
+- EF-028 recipient privacy and fallback: complete in draft PR #240, stacked on #239. Valid active supplier addresses are case-insensitively deduplicated and queued separately; invalid lists fall back to the vendor; no valid external address alerts only active PO viewers with the resolve permission. `SupplierPoDecisionRecipientsTest`: 3 passed, 10 assertions.
 - Email delivery: none sent.
 
 ## Blockers
@@ -51,4 +52,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue E-018 onward. E-017 external recipient-address exposure EF-028 remains separate. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue E-018 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.

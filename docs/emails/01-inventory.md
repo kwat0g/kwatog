@@ -24,7 +24,7 @@
 | E-014 | HR — interview scheduled | Applicant/candidate | Action-required | Highly sensitive (HR/personal data) | P2 | D → candidate | Interview scheduled → candidate email → application/interview schedule |
 | E-015 | HR — interview changed | Applicant/candidate | Status-update | Highly sensitive (HR/personal data) | P2 | D → candidate | Interview details changed → candidate email → application/interview schedule |
 | E-016 | Payroll — payslip available | Internal staff | Transactional-document | Highly sensitive (payroll) | P1 | B → secure document | Payroll finalized and feature toggle on → employee email → finalized payroll period; owner-only SPA payslip route, no attachment |
-| E-017 | Purchasing — supplier PO decision | External supplier | Status-update | Confidential (financial) | P1 | B → status | Supplier PO response decided → active supplier portal user email(s) or vendor fallback → PO/response/decision snapshot |
+| E-017 | Purchasing — supplier PO decision | External supplier | Status-update | Confidential (financial) | P1 | B → status | Supplier PO response decided → individually queued active valid portal addresses or valid vendor fallback → PO/response/decision snapshot |
 | E-018 | Purchasing — supplier PO published | External supplier | Transactional-document | Confidential (financial) | P1 | D → document | PO dispatch/publish → vendor email → purchase order and vendor |
 | E-019 | Purchasing — RFQ lifecycle | External supplier | Action-required / status-update | Confidential | P1 | D → action | RFQ invited/updated/closed lifecycle event → invited supplier contact(s) → RFQ/invitation |
 | E-020 | Returns — return case update | External customer or supplier | Status-update | Confidential | P2 | D → status | Case opened/updated/resolved/evidence received → party contacts filtered by visibility → case and public update |
@@ -135,7 +135,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 - E-023 generic notification mail can send operational detail to anyone who explicitly opted into that type; classify every runtime type and remove sensitive data from body where links suffice.
 - E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
-- E-017 shares active supplier portal addresses in a visible To header; see EF-028 for the separate fix.
+- E-017 invalid/missing recipients notify active purchasing users who can view the PO; see EF-028 and draft PR #240.
 
 ## Company data and infrastructure still unconfirmed
 
