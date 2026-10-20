@@ -23,8 +23,8 @@
 | E-013 | HR — application status | Applicant/candidate | Status-update | Highly sensitive (HR/personal data) | P2 | D → candidate | Stage/status changed → candidate email → application and stage transition |
 | E-014 | HR — interview scheduled | Applicant/candidate | Action-required | Highly sensitive (HR/personal data) | P2 | D → candidate | Interview scheduled → candidate email → application/interview schedule |
 | E-015 | HR — interview changed | Applicant/candidate | Status-update | Highly sensitive (HR/personal data) | P2 | D → candidate | Interview details changed → candidate email → application/interview schedule |
-| E-016 | Payroll — payslip available | Internal staff | Transactional-document | Highly sensitive (payroll) | P1 | D → secure document | Payroll finalized and feature toggle on → employee email → finalized payroll period; owner-only SPA payslip route, no attachment |
-| E-017 | Purchasing — supplier PO decision | External supplier | Status-update | Confidential (financial) | P1 | D → status | Supplier PO response decided → portal user email(s) or vendor fallback → PO/response/decision |
+| E-016 | Payroll — payslip available | Internal staff | Transactional-document | Highly sensitive (payroll) | P1 | B → secure document | Payroll finalized and feature toggle on → employee email → finalized payroll period; owner-only SPA payslip route, no attachment |
+| E-017 | Purchasing — supplier PO decision | External supplier | Status-update | Confidential (financial) | P1 | B → status | Supplier PO response decided → active supplier portal user email(s) or vendor fallback → PO/response/decision snapshot |
 | E-018 | Purchasing — supplier PO published | External supplier | Transactional-document | Confidential (financial) | P1 | D → document | PO dispatch/publish → vendor email → purchase order and vendor |
 | E-019 | Purchasing — RFQ lifecycle | External supplier | Action-required / status-update | Confidential | P1 | D → action | RFQ invited/updated/closed lifecycle event → invited supplier contact(s) → RFQ/invitation |
 | E-020 | Returns — return case update | External customer or supplier | Status-update | Confidential | P2 | D → status | Case opened/updated/resolved/evidence received → party contacts filtered by visibility → case and public update |
@@ -135,7 +135,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 - E-023 generic notification mail can send operational detail to anyone who explicitly opted into that type; classify every runtime type and remove sensitive data from body where links suffice.
 - E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
-- E-016 attaches a payslip PDF to email; assess whether secure authenticated delivery can meet the business need with less exposure.
+- E-017 shares active supplier portal addresses in a visible To header; see EF-028 for the separate fix.
 
 ## Company data and infrastructure still unconfirmed
 
@@ -146,7 +146,7 @@ Settings schema exists and PDF branding settings are reused. Read-only presence 
 1. Confirm local external SMTP is disabled and Mailpit/MailHog/log/catch-all is configured before any send-capable testing or browser preview that might dispatch.
 2. Review this inventory and missing-email recommendation track. Phase 2 template changes remain stopped until that review.
 3. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
-4. Confirm handling policy for payslip attachment and temporary-password paths; P0 credential/security fixes should be a separate functional-fix track.
+4. Confirm the secure payslip link meets employee needs; temporary-password paths remain a separate P0 security-fix track.
 5. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
 
 ## Manual real-client checklist for the later email phase

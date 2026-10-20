@@ -1,31 +1,35 @@
-<x-mail::message>
-# Purchase Order {{ $purchaseOrder->po_number }}
+<x-mail::message :preheader="$preheader" :title="$title">
+# {{ $title }}
 
-Hi {{ $purchaseOrder->vendor->contact_person ?? $purchaseOrder->vendor->name ?? 'there' }},
+Hello {{ $decisionEmail['vendor_name'] }},
 
-Purchasing has {{ $decision === 'accept' ? '**accepted**' : '**returned for revision**' }} your response to purchase order **{{ $purchaseOrder->po_number }}**.
+Purchasing has reviewed your response for purchase order **{{ $decisionEmail['po_number'] }}**.
 
-| Detail | Information |
-|---|---|
-| Purchase order | {{ $purchaseOrder->po_number }} |
-| Your response | {{ $response->response_type?->label() ?? $response->response_type }} |
-| Order total | ₱{{ number_format((float) $purchaseOrder->total_amount, 2) }} |
-@if ($response->proposed_delivery_date)
-| Agreed delivery | {{ $response->proposed_delivery_date->format('M d, Y') }} |
+<x-mail::panel>
+Decision: {{ ucfirst($decisionEmail['decision_label']) }}. The order total below reflects the purchase order when the decision was recorded.
+</x-mail::panel>
+
+| Purchase order detail | Information |
+|---|---:|
+| Purchase order | {{ $decisionEmail['po_number'] }} |
+| Your response | {{ $decisionEmail['response_type_label'] }} |
+| Order total | {{ $decisionEmail['total_amount'] }} |
+@if ($decisionEmail['proposed_delivery_date'])
+| Proposed delivery date | {{ $decisionEmail['proposed_delivery_date'] }} |
 @endif
 
-@if ($decision === 'accept' && $response->response_type?->value === 'propose')
-## Accepted counter-offer
-
-Your proposed quantities and prices were applied to the order. Please confirm the updated line items in the supplier portal and proceed with shipment.
-@elseif ($decision === 'reject')
-## Response returned
-
-Your response was returned for revision. Please review the purchase order and submit a new response through the supplier portal.
+@if ($decisionEmail['decision'] === 'accept' && $decisionEmail['response_type'] === 'propose')
+Your proposed quantities and prices were applied to the order. Review the updated order details in the supplier portal before arranging delivery.
+@elseif ($decisionEmail['decision'] === 'reject')
+Your response was returned for revision. Review the purchasing team's feedback in the supplier portal before submitting another response.
+@else
+Open the purchase order to review its current status and any next steps.
 @endif
 
-<x-mail::button :url="$portalUrl">Review Purchase Order</x-mail::button>
+<x-mail::button :url="$decisionEmail['portal_url']">Review your purchase order</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ $brand['name'] }} Purchasing Team
+
+You received this email because your supplier portal account is associated with this purchase order. To verify this message, open the supplier portal using the address you normally use.
 </x-mail::message>
