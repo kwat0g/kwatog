@@ -38,6 +38,8 @@ Updated: 2026-10-20
 - EF-029 publication ordering: complete in draft PR #241, stacked on #240. Publication, dispatch completion, and PO transition to supplier-visible `Sent` now commit together; after-commit mail dispatch cannot precede the portal visibility boundary. `SupplierDispatchTest`: 12 passed, 54 assertions, including a queue-ordering regression test. Mailer was `array`; no real email sent.
 - EF-030 supplier dispatch failure-notice visibility: complete in draft PR #242, stacked on #241. Immediate no-address alerts and queued failure fallbacks use active `purchasing.view` users who pass PO row visibility. Focused `SupplierDispatchTest`: 1 passed, 2 assertions.
 - E-018 supplier PO publication: complete in draft PR #243, stacked on #242. Event-time PO, vendor, terms, and item values; shared branded template, 10-item limit, source portal link, plain-text output, no attachment. `SupplierPurchaseOrderMailTest` and existing dispatch integration test: 2 passed, 27 assertions. Chromium inspection: 1440px/390px, light/dark; 33.1 KB HTML; no horizontal overflow or missing logo. Mailer forced to `array`; no email sent. Purchasing/accountant review required for supplier-facing financial terms.
+- EF-031 RFQ lifecycle snapshot: fixed in draft PR [#244](https://github.com/kwat0g/kwatog/pull/244), stacked on #243. Outbox captures RFQ display values, invitation status, and supplier address/name at event time; each queued supplier message receives only its own supplier snapshot. Old outbox payloads retain a current-record fallback. Regression test: 1 passed, 10 assertions. Full `RfqBiddingTest.php`: 18 passed, 2 existing PO status assertions fail (`Approved` expected, `Sent` actual) in unrelated approval tests; no email was sent.
+- E-019 RFQ lifecycle supplier notices: audit and snapshot fix complete; shared-template redesign and visual review pending.
 - Email delivery: none sent.
 
 ## Blockers
@@ -55,4 +57,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue E-018 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue E-019 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
