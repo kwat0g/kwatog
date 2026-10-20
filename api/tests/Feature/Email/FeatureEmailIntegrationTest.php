@@ -285,6 +285,11 @@ class FeatureEmailIntegrationTest extends TestCase
             $this->assertStringNotContainsString('99,999.00', $html);
             $this->assertStringContainsString('INV-RECEIPT-001', $html);
             $this->assertStringNotContainsString('INV-CHANGED', $html);
+            $this->assertStringContainsString('<title>Official receipt OR-2026-001 issued</title>', $html);
+            $this->assertStringContainsString('View related invoice', $html);
+            $this->assertStringContainsString('quote the receipt number', $html);
+            $this->assertStringContainsString('Official receipt issued: OR-2026-001 · PHP 15,000.00', $mail->envelope()->subject);
+            $mail->assertSeeInText('/portal/customer/invoices/'.$mail->officialReceipt->invoice->hash_id);
 
             return true;
         });

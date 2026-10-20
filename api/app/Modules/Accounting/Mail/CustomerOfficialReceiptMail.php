@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Mail;
 
 use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Mail\QueuedMailable;
 use App\Modules\Accounting\Models\OfficialReceipt;
@@ -44,7 +45,10 @@ class CustomerOfficialReceiptMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->safeHeaderText('Official receipt '.$this->snapshot['or_number_subject']));
+        $brand = app(EmailBrandingService::class)->data();
+        $subject = '['.$brand['name'].'] Official receipt issued: '.$this->snapshot['or_number_subject'].' · '.$this->snapshot['amount'];
+
+        return new Envelope(subject: $this->safeHeaderText($subject));
     }
 
     public function content(): Content
@@ -52,6 +56,7 @@ class CustomerOfficialReceiptMail extends QueuedMailable
         return new Content(
             markdown: 'emails/customer/official-receipt',
             with: [
+                'preheader' => 'Official receipt '.$this->snapshot['or_number_subject'].' records '.$this->snapshot['amount'].' received.',
                 'snapshot' => $this->snapshot,
             ],
         );
