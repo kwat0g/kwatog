@@ -436,20 +436,34 @@ class SalesOrderResponseService
                 ->where('customer_id', $response->customer_id)
                 ->where('is_active', true)
                 ->pluck('email')
-                ->unique()
+                ->map(static fn ($email): string => trim((string) $email))
+                ->filter(static fn (string $email): bool => filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
+                ->unique(static fn (string $email): string => strtolower($email))
                 ->values()
                 ->all();
             if ($recipients === []) {
-                $customerEmail = $so?->customer?->email;
-                if (! is_string($customerEmail) || trim($customerEmail) === '') {
-                    // No portal users and no customer email — the decision is
-                    // already recorded on the response row; nothing to send.
+                $customerEmail = trim((string) ($so?->customer?->email ?? ''));
+                if (! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+                    app(\App\Common\Services\EmailDeliveryFailureNotifier::class)->notifyPermission(
+                        'crm.sales_orders.confirm',
+                        'Customer sales order decision',
+                        "The decision for sales order {$so->so_number} was recorded, but no customer recipient has a usable email address.",
+                        [
+                            'link_to' => '/crm/sales-orders/'.$so->hash_id,
+                            'entity_type' => 'sales_order',
+                            'entity_id' => $so->hash_id,
+                            'reason' => 'No eligible customer portal or customer email address was available.',
+                        ],
+                    );
+
                     return;
                 }
                 $recipients = [$customerEmail];
             }
 
-            Mail::to($recipients)->queue(new CustomerSalesOrderDecisionMail($so, $response, $decision));
+            foreach ($recipients as $recipient) {
+                Mail::to($recipient)->queue(new CustomerSalesOrderDecisionMail($so, $response, $decision));
+            }
         } catch (\Throwable $e) {
             // Notification failure must never break the resolution transaction;
             // the decision itself is durable on the response row.

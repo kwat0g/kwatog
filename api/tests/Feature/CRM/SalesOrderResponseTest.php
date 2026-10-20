@@ -10,6 +10,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderResponseStatus;
@@ -257,6 +258,93 @@ class SalesOrderResponseTest extends TestCase
         Mail::assertQueued(CustomerSalesOrderDecisionMail::class, function ($mail) use ($so) {
             return $mail->decision === 'accept' && (int) $mail->salesOrder->id === (int) $so->id;
         });
+    }
+
+    public function test_decision_email_freezes_record_values_and_sends_separately_to_valid_portal_users(): void
+    {
+        $customer = Customer::factory()->create(['email' => 'fallback@example.test', 'contact_person' => 'Original Contact']);
+        foreach ([
+            ['name' => 'Portal One', 'email' => 'portal@example.test', 'is_active' => true],
+            ['name' => 'Portal Duplicate', 'email' => 'PORTAL@example.test', 'is_active' => true],
+            ['name' => 'Invalid Portal', 'email' => 'invalid-address', 'is_active' => true],
+            ['name' => 'Inactive Portal', 'email' => 'inactive@example.test', 'is_active' => false],
+        ] as $portalUser) {
+            CustomerPortalUser::create([
+                ...$portalUser,
+                'customer_id' => $customer->id,
+                'password' => 'test-password',
+            ]);
+        }
+        $so = $this->makeSo($customer);
+        $so->update(['total_amount' => '125.00']);
+        $response = $this->svc->respond($so, (int) $customer->id, null, ['type' => 'accept']);
+        $approver = $this->userWithRole('sales_officer');
+        Mail::fake();
+
+        $this->svc->resolve($response, $approver, 'accept');
+        $customer->update(['contact_person' => 'Changed Contact']);
+        $so->update(['total_amount' => '999.00']);
+        $response->update(['response_type' => 'decline']);
+
+        Mail::assertQueued(CustomerSalesOrderDecisionMail::class, 1);
+        Mail::assertQueued(CustomerSalesOrderDecisionMail::class, function (CustomerSalesOrderDecisionMail $mail): bool {
+            $html = $mail->render();
+
+            self::assertTrue($mail->hasTo('portal@example.test'));
+            self::assertCount(1, $mail->to);
+            self::assertSame('accept', $mail->snapshot['decision']);
+            self::assertStringContainsString('Original Contact', $html);
+            self::assertStringContainsString('accepted</strong>', $html);
+            self::assertStringContainsString('your response', $html);
+            self::assertStringContainsString('125.00', $html);
+            self::assertStringNotContainsString('Changed Contact', $html);
+            self::assertStringNotContainsString('999.00', $html);
+
+            return true;
+        });
+    }
+
+    public function test_decision_email_falls_back_to_customer_address_when_portal_addresses_are_invalid(): void
+    {
+        $customer = Customer::factory()->create(['email' => 'customer-fallback@example.test']);
+        CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Invalid Portal User',
+            'email' => 'invalid-address',
+            'password' => 'test-password',
+            'is_active' => true,
+        ]);
+        $so = $this->makeSo($customer);
+        $response = $this->svc->respond($so, (int) $customer->id, null, ['type' => 'accept']);
+        Mail::fake();
+
+        $this->svc->resolve($response, $this->userWithRole('sales_officer'), 'accept');
+
+        Mail::assertQueued(CustomerSalesOrderDecisionMail::class, fn (CustomerSalesOrderDecisionMail $mail): bool => $mail->hasTo('customer-fallback@example.test'));
+    }
+
+    public function test_decision_without_any_valid_customer_address_notifies_sales(): void
+    {
+        $customer = Customer::factory()->create(['email' => null]);
+        CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Invalid Portal User',
+            'email' => 'invalid-address',
+            'password' => 'test-password',
+            'is_active' => true,
+        ]);
+        $so = $this->makeSo($customer);
+        $response = $this->svc->respond($so, (int) $customer->id, null, ['type' => 'accept']);
+        $salesUser = $this->userWithRole('sales_officer');
+        Mail::fake();
+
+        $this->svc->resolve($response, $salesUser, 'accept');
+
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $salesUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 
     public function test_accept_of_propose_reruns_the_credit_gate(): void

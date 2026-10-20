@@ -26,7 +26,8 @@ Updated: 2026-10-20
 - E-009 complaint email content/security/snapshot fix: complete in draft PR [#229](https://github.com/kwat0g/kwatog/pull/229), stacked on #228. EF-022 records excessive customer data in external messages and queued-record drift. E-009 redesign is complete in draft PR [#230](https://github.com/kwat0g/kwatog/pull/230), stacked on #229; screenshots cover desktop/mobile and light/dark.
 - E-009 focused verification: 3 tests passed, 19 assertions; four browser screenshots inspected in light/dark at desktop/mobile; rendered HTML about 21 KB. Mailer forced to `array`; no transport contacted.
 - E-010 customer sales-order confirmation snapshot: complete in draft PR #231, stacked on #230. EF-023 records mutable customer/order/line values; event-time snapshot now carries recipient, order/line values, and SPA URL. Existing queued mailable payloads retain a fallback path.
-- E-010 customer sales-order confirmation redesign: complete in `email/customer-sales-order-confirmation`, stacked on #231; draft PR pending. Tests: 2 passed, 20 assertions. Outbox fact-event tests: 7 passed, 15 assertions. Four browser screenshots inspected at 1440px desktop and 390px mobile in light/dark. Rendered HTML 27 KB; mailer forced to `array`; no transport contacted.
+- E-010 customer sales-order confirmation redesign: complete in draft PR [#232](https://github.com/kwat0g/kwatog/pull/232), stacked on #231. Tests: 2 passed, 20 assertions. Outbox fact-event tests: 7 passed, 15 assertions. Four browser screenshots inspected at 1440px desktop and 390px mobile in light/dark. Rendered HTML 27 KB; mailer forced to `array`; no transport contacted.
+- E-011 customer sales-order decision snapshot: complete in `fix/customer-sales-order-decision-snapshot`, stacked on #232; draft PR pending. EF-024 covers mutable content, invalid addresses, grouped recipient disclosure, and no-recipient fallback. `SalesOrderResponseTest`: 18 passed, 70 assertions; mailer forced to `array`.
 - Email delivery: none sent.
 
 ## Blockers
@@ -44,4 +45,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Finish E-010 customer sales-order confirmation snapshot PR, then redesign its template. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Open E-011 customer sales-order decision snapshot PR, then redesign its template. Continue the remaining inventory types afterward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
