@@ -394,7 +394,6 @@ class RecruitmentService
                 'scheduled_at',
                 'location',
                 'interviewer_name',
-                'outcome',
             ])->contains(fn (string $field): bool => $locked->isDirty($field));
 
             if ($locked->isDirty()) {

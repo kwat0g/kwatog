@@ -29,6 +29,8 @@ Updated: 2026-10-20
 - E-010 customer sales-order confirmation redesign: complete in draft PR [#232](https://github.com/kwat0g/kwatog/pull/232), stacked on #231. Tests: 2 passed, 20 assertions. Outbox fact-event tests: 7 passed, 15 assertions. Four browser screenshots inspected at 1440px desktop and 390px mobile in light/dark. Rendered HTML 27 KB; mailer forced to `array`; no transport contacted.
 - E-011 customer sales-order decision snapshot: complete in draft PR [#233](https://github.com/kwat0g/kwatog/pull/233), stacked on #232. EF-024 covers mutable content, invalid addresses, grouped recipient disclosure, and no-recipient fallback.
 - E-011 customer sales-order decision redesign: complete in `email/customer-sales-order-decision`, stacked on #233; draft PR pending. `SalesOrderResponseTest`: 18 passed, 84 assertions. Four browser screenshots inspected at 1440px desktop and 390px mobile in light/dark. Rendered HTML about 24 KB; mailer forced to `array`; no transport contacted.
+- E-012–E-015 candidate-email snapshot/security fix: implementation and focused tests complete in draft PR #235, stacked on #234. EF-025 freezes event-time applicant/interview values and stops internal outcome-only changes from notifying candidates. See [E-012-015-candidate-emails.md](E-012-015-candidate-emails.md). Tracking code remains sensitive candidate access data and requires HR/legal/data-protection review.
+- E-012–E-015 visual/template redesign remains next; remove unverified interview instructions/address and exclude assessment outcomes.
 - Email delivery: none sent.
 
 ## Blockers
@@ -46,4 +48,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Finish E-011 template PR, then start E-012 applicant application receipt. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Finish E-012–E-015 candidate template family, then continue E-016 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.

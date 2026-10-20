@@ -14,6 +14,7 @@ use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Models\Position;
+use App\Modules\HR\Mail\ApplicationReceivedMail;
 use App\Modules\HR\Mail\ApplicationStatusUpdatedMail;
 use App\Modules\HR\Mail\InterviewDetailsUpdatedMail;
 use App\Modules\HR\Mail\InterviewScheduledMail;
@@ -266,6 +267,59 @@ class RecruitmentApplicationTest extends TestCase
         );
     }
 
+    public function test_application_received_email_keeps_submission_time_values(): void
+    {
+        $mail = new ApplicationReceivedMail($this->application, $this->posting);
+        Mail::to($this->application->email)->queue($mail);
+
+        $this->application->update(['first_name' => 'Changed', 'last_name' => 'Candidate']);
+        $this->posting->update(['title' => 'Changed Position']);
+
+        Mail::assertQueued(ApplicationReceivedMail::class, function (ApplicationReceivedMail $queued): bool {
+            $html = $queued->render();
+
+            return $queued->hasTo('juan@test.com')
+                && $queued->snapshot['applicant_name'] === 'Juan Test'
+                && str_contains($html, 'Juan Test')
+                && str_contains($html, 'Test Position')
+                && str_contains($html, 'RCT-TEST01')
+                && ! str_contains($html, 'Changed Candidate')
+                && ! str_contains($html, 'Changed Position');
+        });
+    }
+
+    public function test_interview_scheduled_email_keeps_scheduled_values(): void
+    {
+        $interview = ApplicationInterview::create([
+            'job_application_id' => $this->application->id,
+            'scheduled_at' => '2026-11-02 09:30:00',
+            'location' => 'Cavite interview room',
+            'interviewer_name' => 'Original Interviewer',
+            'created_by' => $this->hrUser->id,
+        ]);
+        $this->application->load('jobPosting');
+        Mail::to($this->application->email)->queue(new InterviewScheduledMail($this->application, $interview));
+
+        $interview->update([
+            'scheduled_at' => '2026-11-05 14:00:00',
+            'location' => 'Online meeting',
+            'interviewer_name' => 'Changed Interviewer',
+        ]);
+        $this->posting->update(['title' => 'Changed Position']);
+
+        Mail::assertQueued(InterviewScheduledMail::class, function (InterviewScheduledMail $queued): bool {
+            $html = $queued->render();
+
+            return str_contains($html, 'November 2, 2026 9:30 AM')
+                && str_contains($html, 'Cavite interview room')
+                && str_contains($html, 'Original Interviewer')
+                && str_contains($html, 'Test Position')
+                && ! str_contains($html, 'Online meeting')
+                && ! str_contains($html, 'Changed Interviewer')
+                && ! str_contains($html, 'Changed Position');
+        });
+    }
+
     public function test_hr_can_reject_application(): void
     {
         $response = $this->actingAs($this->hrUser)
@@ -330,11 +384,47 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.location', 'Zoom interview');
         $response->assertJsonPath('data.interviewer_name', 'Ana Reyes');
-        Mail::assertQueued(InterviewDetailsUpdatedMail::class, fn (InterviewDetailsUpdatedMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
-            && $mail->interview->location === 'Zoom interview'
-            && $mail->interview->outcome?->value === 'passed'
-        );
+        $scheduledAt = $interview->fresh()->scheduled_at->toIso8601String();
+        $interview->update([
+            'scheduled_at' => now()->addDays(8),
+            'location' => 'Changed location',
+            'interviewer_name' => 'Changed interviewer',
+        ]);
+        $this->application->update(['first_name' => 'Changed']);
+        $this->posting->update(['title' => 'Changed Position']);
+
+        Mail::assertQueued(InterviewDetailsUpdatedMail::class, function (InterviewDetailsUpdatedMail $mail) use ($scheduledAt): bool {
+            $html = $mail->render();
+
+            return $mail->hasTo('juan@test.com')
+                && $mail->snapshot['scheduled_at'] === $scheduledAt
+                && str_contains($html, 'Zoom interview')
+                && str_contains($html, 'Ana Reyes')
+                && str_contains($html, 'Test Position')
+                && ! str_contains($html, 'Changed location')
+                && ! str_contains($html, 'Changed interviewer')
+                && ! str_contains($html, 'Changed Position')
+                && ! str_contains($html, 'Passed');
+        });
+    }
+
+    public function test_internal_interview_outcome_change_does_not_email_candidate(): void
+    {
+        $this->application->stage = ApplicationStage::Interview;
+        $this->application->save();
+        $interview = ApplicationInterview::create([
+            'job_application_id' => $this->application->id,
+            'scheduled_at' => now()->addDays(2),
+            'location' => 'HR Office',
+            'interviewer_name' => 'Maria Santos',
+            'created_by' => $this->hrUser->id,
+        ]);
+
+        $response = $this->actingAs($this->hrUser)
+            ->patchJson("/api/v1/hr/recruitment/interviews/{$interview->hash_id}", ['outcome' => 'failed']);
+
+        $response->assertOk();
+        Mail::assertNothingQueued();
     }
 
     public function test_offer_requires_a_passed_interview_and_records_decision_history(): void
