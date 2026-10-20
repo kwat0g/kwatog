@@ -32,6 +32,7 @@ class EmailBrandingService
             'footer_disclaimer' => $this->value('email.footer_disclaimer'),
             'public_url' => rtrim($this->value('company.public_url', config('app.frontend_url', config('app.url'))), '/'),
             'logo_path' => $this->logoPath(),
+            'logo_dark_path' => $this->logoDarkPath(),
             'logo_data_uri' => $this->logoDataUri(),
         ];
     }
@@ -46,6 +47,13 @@ class EmailBrandingService
         $path = resource_path('images/ogami-mark.svg');
 
         return is_file($path) ? $path : null;
+    }
+
+    public function logoDarkPath(): ?string
+    {
+        $path = resource_path('images/ogami-mark-dark.png');
+
+        return is_file($path) ? $path : $this->logoPath();
     }
 
     public function logoDataUri(): ?string
