@@ -290,6 +290,7 @@ class SupplierInvoiceSubmissionTest extends TestCase
 
         self::assertSame('SUP-INV-42', $mail->snapshot['invoice_number']);
         self::assertSame('125.50', $mail->snapshot['gross_total']);
+        self::assertSame(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.50'), $mail->snapshot['display_total']);
         self::assertSame('Original Contact', $mail->snapshot['supplier_name']);
         self::assertSame('snapshot-supplier@example.test', $mail->snapshot['recipient_email']);
         self::assertSame('Supplier invoice SUP-INV-42 received', $mail->envelope()->subject);
