@@ -1,16 +1,16 @@
-<x-mail::message>
+<x-mail::message :preheader="$preheader" :title="$pageTitle">
 # {{ $title }}
 
-Hi {{ $recipientName ?? 'there' }},
+Hello {{ $recipientName }},
 
 {{ $body }}
 
-@if (! empty($linkTo))
-<x-mail::button :url="rtrim(config('app.frontend_url', config('app.url')), '/') . $linkTo">
-View Details
-</x-mail::button>
+@if ($linkUrl)
+<x-mail::button :url="$linkUrl">Open in OGAMI</x-mail::button>
+Sign in to OGAMI to review this notification. Any available action requires you to use the page.
 @endif
 
-Thanks,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }}
+You received this notification because OGAMI sent an update about your account or a business record associated with it.
+
+For help, use the company contact details below.
 </x-mail::message>
