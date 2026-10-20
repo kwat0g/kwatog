@@ -78,6 +78,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'attendance.punch_min_work_minutes', 'value' => 30, 'group' => 'attendance', 'label' => 'Punch: minimum work before time-out (min)', 'description' => 'Minimum minutes between the latest time-in punch and a time-out.'],
             ['key' => 'attendance.punch_late_in_cutoff_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch: late time-in cutoff (min)', 'description' => 'The first time-in of the day is refused later than this many minutes after shift start.'],
             ['key' => 'email.brand_name', 'value' => $emailBrandName, 'group' => 'email', 'label' => 'Email Display Name', 'description' => 'Customer-facing display name used in transactional email headers and footers.'],
+            ['key' => 'email.footer_disclaimer', 'value' => $envString('EMAIL_FOOTER_DISCLAIMER'), 'group' => 'email', 'label' => 'Email Footer Disclaimer', 'description' => 'Optional approved disclaimer shown in transactional email footers.'],
             ['key' => 'pdf.footer_disclaimer', 'value' => $envString('PDF_FOOTER_DISCLAIMER'), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
             ['key' => 'company.tagline', 'value' => $envString('COMPANY_TAGLINE'), 'group' => 'company', 'label' => 'Company Tagline', 'description' => 'Optional line under the company name on PDF letterheads.'],
             ['key' => 'pdf.accent_color', 'value' => $envString('PDF_ACCENT_COLOR') ?: '#b4542a', 'group' => 'company', 'label' => 'PDF Accent Color', 'description' => 'Hex accent for the PDF brand bar (Atelier clay #b4542a when empty).'],
@@ -449,7 +450,7 @@ class SettingsSeeder extends Seeder
             'company.email', 'company.sales_inbox_email', 'company.vat_status',
             'company.logo_path', 'company.certification', 'company.public_url',
             'company.latitude', 'company.longitude', 'company.employee_email_domain',
-            'email.brand_name',
+            'email.brand_name', 'email.footer_disclaimer',
             'pdf.footer_disclaimer', 'quality.coc.manager_name', 'quality.coc.manager_role',
             'accounting.functional_currency_code', 'tax.ph.vat_rate',
         ];

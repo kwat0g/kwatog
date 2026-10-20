@@ -21,14 +21,15 @@ class EmailBrandingService
     {
         return [
             'name' => $this->value('email.brand_name', 'Ogami Philippines'),
-            'legal_name' => $this->value('company.legal_name', 'Philippine Ogami Corporation'),
-            'address' => $this->value('company.address', 'FCIE Complex, Dasmariñas, Cavite, Philippines'),
-            'phone' => $this->value('company.phone', '+63 46 000 0000'),
-            'email' => $this->value('company.email', 'info@ogami.test'),
-            'sales_email' => $this->value('company.sales_inbox_email', 'sales@ogami.com.ph'),
-            'tin' => $this->value('company.tin', '000-000-000-000'),
-            'vat_status' => $this->value('company.vat_status', 'VAT Registered'),
-            'certification' => $this->value('company.certification', 'IATF 16949:2016 Certified'),
+            'legal_name' => $this->settings->requiredString('company.legal_name'),
+            'address' => $this->settings->requiredString('company.address'),
+            'phone' => $this->value('company.phone'),
+            'email' => $this->value('company.email'),
+            'sales_email' => $this->value('company.sales_inbox_email'),
+            'tin' => $this->value('company.tin'),
+            'vat_status' => $this->value('company.vat_status'),
+            'certification' => $this->value('company.certification'),
+            'footer_disclaimer' => $this->value('email.footer_disclaimer'),
             'public_url' => rtrim($this->value('company.public_url', config('app.frontend_url', config('app.url'))), '/'),
             'logo_path' => $this->logoPath(),
             'logo_data_uri' => $this->logoDataUri(),
@@ -69,16 +70,11 @@ class EmailBrandingService
     }
 
     /**
-     * Settings row, then hardcoded default. There is deliberately no env()
-     * tier: production runs `php artisan config:cache`
-     * (docker/php/prod-entrypoint.sh:15), after which env() returns null, so
-     * an env tier fires only in development and silently diverges from
-     * production. Every branding key is seeded into settings from env at
-     * migrate/seed time — migration 0123 for the company.* keys,
-     * SettingsSeeder for email.brand_name and company.sales_inbox_email —
-     * which is where environment values legitimately enter the system.
+     * Settings row, then an optional display-only fallback. Legal identity
+     * fields are required above so missing deployment data cannot be presented
+     * as company fact. Values enter settings through migrations and seeders.
      */
-    private function value(string $key, string $fallback): string
+    private function value(string $key, ?string $fallback = null): ?string
     {
         $configured = $this->settings->get($key);
         if (is_string($configured) && trim($configured) !== '') {

@@ -23,6 +23,7 @@ use App\Modules\SupplyChain\Mail\CustomerDeliveryConfirmedMail;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Auth\Models\User;
 use App\Common\Mail\EmailIntegrationTestMail;
+use App\Common\Services\EmailBrandingService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -51,10 +52,16 @@ class FeatureEmailIntegrationTest extends TestCase
             ->handle(new SalesOrderConfirmed($salesOrder));
 
         Mail::assertQueued(CustomerSalesOrderConfirmedMail::class, function (CustomerSalesOrderConfirmedMail $mail) use ($salesOrder): bool {
+            $rendered = $mail->render();
+            $mail->assertSeeInText($salesOrder->so_number);
+            $mail->assertSeeInText('/portal/customer/orders/'.$salesOrder->hash_id);
+
             return $mail->hasTo('customer@example.test')
                 && $mail->salesOrder->is($salesOrder)
-                && str_contains($mail->render(), $salesOrder->so_number)
-                && str_contains($mail->render(), '/portal/customer/orders/'.$salesOrder->hash_id);
+                && str_contains($rendered, $salesOrder->so_number)
+                && str_contains($rendered, '/portal/customer/orders/'.$salesOrder->hash_id)
+                && str_contains($rendered, '<v:roundrect')
+                && str_contains($rendered, 'Open this link if the button does not work');
         });
     }
 
@@ -150,11 +157,13 @@ class FeatureEmailIntegrationTest extends TestCase
     {
         $mail = new EmailIntegrationTestMail();
         $rendered = $mail->render();
+        $brand = app(EmailBrandingService::class)->data();
 
-        $this->assertStringContainsString('Ogami Philippines', $rendered);
-        $this->assertStringContainsString('Philippine Ogami Corporation', $rendered);
-        $this->assertStringContainsString('FCIE Complex, Dasmariñas, Cavite, Philippines', $rendered);
+        $this->assertStringContainsString($brand['name'], $rendered);
+        $this->assertStringContainsString($brand['legal_name'], $rendered);
+        $this->assertStringContainsString(htmlspecialchars($brand['address'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $rendered);
+        $this->assertStringContainsString('href="'.rtrim(config('app.frontend_url'), '/').'"', $rendered);
         $this->assertStringContainsString('cid:ogami-logo@ogami', $rendered);
-        $this->assertStringNotContainsString('alt="Ogami Philippines" width="52" height="52"', $rendered);
+        $this->assertStringContainsString('alt="'.$brand['name'].' logo"', $rendered);
     }
 }

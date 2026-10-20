@@ -6,6 +6,7 @@ namespace Tests\Feature\Email;
 
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -148,6 +149,15 @@ class EmailBrandingResolutionTest extends TestCase
         $brand = app(EmailBrandingService::class)->data();
 
         $this->assertSame('Ogami Philippines (Transactional)', $brand['name']);
+    }
+
+    public function test_missing_legal_company_identity_is_not_filled_with_a_fallback(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('company.legal_name', '');
+
+        $this->expectException(BusinessRuleException::class);
+        app(EmailBrandingService::class)->data();
     }
 
     /**

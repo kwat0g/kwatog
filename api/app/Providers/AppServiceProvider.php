@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Models\AuditLog;
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\NonProductionEmailGuard;
 use App\Common\Services\SchedulerExecutionLedger;
 use App\Common\Services\ScheduleTickFailureTracker;
 use App\Common\Services\SettingsService;
@@ -231,6 +232,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(JobExceptionOccurred::class, [ChainListenerRunService::class, 'markRetrying']);
         Event::listen(JobFailed::class, [ChainListenerRunService::class, 'markFailed']);
         Event::listen(MessageSending::class, static function (MessageSending $event): void {
+            app(NonProductionEmailGuard::class)->protect($event->message);
+
             $path = app(EmailBrandingService::class)->logoPath();
             if ($path === null) {
                 return;

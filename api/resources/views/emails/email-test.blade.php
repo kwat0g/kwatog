@@ -16,7 +16,7 @@ This is a live transactional-email test from **{{ $brand['name'] }}**.
 | VAT status | {{ $brand['vat_status'] }} |
 | Certification | {{ $brand['certification'] }} |
 
-The AWS Mail Manager SMTP queue accepted this message from the Ogami Philippines application.
+This message renders the shared email shell for preview and test.
 
 Thanks,<br>
 {{ $brand['name'] }}

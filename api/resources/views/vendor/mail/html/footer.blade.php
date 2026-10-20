@@ -16,6 +16,9 @@
 @if ($brand['certification'])
 <div style="margin-top: 8px; color: #98a2b3;">{{ $brand['certification'] }}</div>
 @endif
+@if ($brand['footer_disclaimer'])
+<div style="margin-top: 8px;">{{ $brand['footer_disclaimer'] }}</div>
+@endif
 <div style="margin-top: 12px; color: #98a2b3;">This is an automated message. Please do not reply unless instructed.</div>
 <div style="margin-top: 8px; color: #98a2b3;">© {{ date('Y') }} {{ $brand['legal_name'] }}. All rights reserved.</div>
 </td>

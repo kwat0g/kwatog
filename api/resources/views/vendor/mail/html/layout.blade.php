@@ -1,11 +1,11 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="ltr">
 <head>
 <title>{{ config('app.name') }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <style>
 body, body *:not(html):not(style):not(br):not(tr):not(code) {
 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
@@ -28,6 +28,13 @@ a { color: #a44725; }
 .panel-content { background-color: #fff8f4 !important; color: #475467 !important; padding: 16px 18px !important; }
 .panel-content p { color: #475467 !important; }
 .footer { width: 600px !important; }
+@media (prefers-color-scheme: dark) {
+body, .wrapper, .body { background-color: #1f1b16 !important; color: #eee9e2 !important; }
+.inner-body, .header { background-color: #29241f !important; border-color: #51483f !important; }
+h1, h2, p, li, .table td { color: #eee9e2 !important; }
+.table th, .panel-content { background-color: #342d26 !important; color: #eee9e2 !important; }
+.footer { color: #c5bcb1 !important; }
+}
 @media only screen and (max-width: 640px) {
 .inner-body, .footer { width: 100% !important; }
 .content-cell { padding: 30px 24px 28px !important; }
@@ -39,6 +46,9 @@ a { color: #a44725; }
 {!! $head ?? '' !!}
 </head>
 <body>
+@if (! empty($preheader))
+<div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent; mso-hide:all;">{{ $preheader }}</div>
+@endif
 
 <table class="wrapper" width="100%" cellpadding="0" cellspacing="0" role="presentation">
 <tr>
