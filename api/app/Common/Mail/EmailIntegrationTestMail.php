@@ -25,7 +25,10 @@ class EmailIntegrationTestMail extends QueuedMailable
     {
         return new Content(
             markdown: 'emails/email-test',
-            with: ['brand' => app(EmailBrandingService::class)->data()],
+            with: [
+                'brand' => app(EmailBrandingService::class)->data(),
+                'preheader' => 'Shared email shell preview text.',
+            ],
         );
     }
 
