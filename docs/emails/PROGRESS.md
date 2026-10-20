@@ -44,6 +44,7 @@ Updated: 2026-10-20
 - E-019 RFQ lifecycle supplier notices: complete in draft PR #247, stacked on #246. Uses the shared shell, event-time supplier-specific snapshot, concise status/action content, Manila deadline, authenticated supplier portal link, text alternative, and no attachment. `SupplierRfqLifecycleMailTest`: 1 passed, 73 assertions. Twenty Chromium renders inspected at 1440px/390px in light/dark; no horizontal overflow or missing logo; HTML remains below 102 KB. Mailer forced to `array`; no email sent. Company settings, production timezone, and supplier-facing content need owner/Purchasing review. See [E-019-rfq-lifecycle.md](E-019-rfq-lifecycle.md).
 - EF-034–EF-035 return-case email reliability: complete in draft PR #249, stacked on #247. Invalid addresses and enqueue failures no longer abort the rest of the recipient set; address duplicates are removed, active authorized internal viewers receive an in-app follow-up when delivery is incomplete, and event/contact delivery keys are deterministic. `ReturnCaseEmailReliabilityTest`: 1 passed, 5 assertions. Mailer faked; no email sent.
 - E-020 return case update: template redesign and verification complete in draft PR #250, stacked on #249. Notice includes only reference/status and authenticated party-specific portal link; no description or attachment. `ReturnCaseUpdateMailTest`: 2 passed, 30 assertions. Eight Chromium renders inspected at 1440px/390px in light/dark; no overflow. Mailer forced to `array`; no email sent. EF-034 and EF-035 were fixed separately in #249. Company settings require owner verification. See [E-020-return-case-update.md](E-020-return-case-update.md).
+- EF-036 RMA update event-time snapshot: fixed in draft PR #251, stacked on #250. Event now captures display values, party email, and a notification ID; queued listener uses the snapshot and stable per-recipient delivery key. `ReturnRequestUpdateEmailSnapshotTest`: 1 passed, 10 assertions. Mailer faked; no email sent. E-021 template redesign remains pending.
 - Email delivery: none sent.
 
 ## Blockers
@@ -61,4 +62,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue E-019 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue with the E-021 RMA notice redesign; then continue remaining inventory. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
