@@ -36,6 +36,7 @@ return [
 
     // Every non-production message is redirected here or blocked.
     'safety_recipient' => env('MAIL_TEST_TO'),
+    'log_retention_days' => (int) env('MAIL_LOG_RETENTION_DAYS', 90),
 
     'markdown' => [
         'theme' => 'default',

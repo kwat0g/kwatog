@@ -3,10 +3,16 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Services\AccountingPeriodService;
+use App\Common\Models\EmailDelivery;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('model:prune', ['--model' => [EmailDelivery::class]])
+    ->dailyAt('03:15')
+    ->withoutOverlapping(10)
+    ->onOneServer();
 
 Schedule::command('production:notify-upcoming-work-orders')
     ->everyMinute()
