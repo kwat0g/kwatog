@@ -18,7 +18,7 @@ class PortalAccessInvitationMail extends QueuedMailable
     public function __construct(
         public readonly string $portalType,
         public readonly string $recipientName,
-        public readonly string $temporaryPassword,
+        public readonly string $token,
         public readonly array $fallbackUserIds = [],
     ) {
         $this->afterCommit();
@@ -26,20 +26,20 @@ class PortalAccessInvitationMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your Ogami Philippines portal access');
+        return new Envelope(subject: 'Set up your Ogami Philippines '.$this->portalType.' portal access');
     }
 
     public function content(): Content
     {
         $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $url = $base.'/portal/password-reset?type='.urlencode($this->portalType).'&token='.urlencode($this->token);
 
         return new Content(
             markdown: 'emails/portal/access-invitation',
             with: [
                 'portalType' => $this->portalType,
                 'recipientName' => $this->recipientName,
-                'temporaryPassword' => $this->temporaryPassword,
-                'portalUrl' => $base.'/portal/'.$this->portalType.'/login',
+                'setupUrl' => $url,
             ],
         );
     }
@@ -49,7 +49,7 @@ class PortalAccessInvitationMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Portal access invitation',
-            "A {$this->portalType} portal invitation could not be delivered. Use an approved channel to provide the temporary password and ask the contact to reset it after signing in.",
+            "A {$this->portalType} portal invitation could not be delivered. Resend the invitation after verifying the contact's email address.",
             [
                 'link_to' => '/'.($this->portalType === 'supplier' ? 'purchasing/vendors' : 'accounting/customers'),
                 'entity_type' => $this->portalType.'_portal_user',
