@@ -1,17 +1,17 @@
 <x-mail::message>
 # Payment Reminder
 
-Hi {{ $customer->contact_person ?? $customer->name ?? 'there' }},
+Hi {{ $snapshot['customer_name'] }},
 
-Our records show that invoice **{{ $invoice->invoice_number }}** is currently
+Our records show that invoice **{{ $snapshot['invoice_number'] }}** is currently
 **{{ $daysOverdue }} days past due**.
 
-| Field        | Value                                                |
-|--------------|------------------------------------------------------|
-| Invoice No.  | {{ $invoice->invoice_number }}                       |
-| Issue Date   | {{ optional($invoice->date)->format('M d, Y') }}     |
-| Due Date     | {{ optional($invoice->due_date)->format('M d, Y') }} |
-| Balance Due  | ₱{{ number_format((float) $invoice->balance, 2) }}   |
+| Field        | Value |
+|--------------|------:|
+| Invoice No.  | {{ $snapshot['invoice_number'] }} |
+| Issue Date   | {{ $snapshot['invoice_date'] }} |
+| Due Date     | {{ $snapshot['due_date'] }} |
+| Balance Due  | {{ $snapshot['balance'] }} |
 
 @if ($tier >= 30)
 This invoice is **30+ days overdue**. Please remit payment immediately to

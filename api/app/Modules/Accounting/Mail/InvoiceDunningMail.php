@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Mail;
 
+use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Modules\Accounting\Models\Invoice;
 use App\Common\Mail\QueuedMailable;
+use App\Modules\Accounting\Models\Invoice;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -14,6 +16,8 @@ use Illuminate\Queue\SerializesModels;
 class InvoiceDunningMail extends QueuedMailable
 {
     use SerializesModels;
+
+    private readonly array $snapshot;
 
     public function __construct(
         public readonly Invoice $invoice,
@@ -24,14 +28,30 @@ class InvoiceDunningMail extends QueuedMailable
     ) {
         // Never enqueue a reminder that belongs to a rolled-back invoice scan.
         $this->afterCommit();
+
+        $invoice->loadMissing('customer');
+        $this->snapshot = [
+            'invoice_number' => $this->safeMarkdownText($invoice->invoice_number),
+            'invoice_number_subject' => $this->safeHeaderText($invoice->invoice_number),
+            'customer_email' => $invoice->customer?->email,
+            'customer_name' => $this->safeMarkdownText(
+                ($invoice->customer?->contact_person ?: $invoice->customer?->name),
+                'there',
+            ),
+            'invoice_date' => $this->formatDate($invoice->date?->toDateString()),
+            'due_date' => $this->formatDate($invoice->due_date?->toDateString()),
+            'balance' => app(CurrencyDisplayService::class)->format($invoice->balance),
+            'hash_id' => (string) $invoice->hash_id,
+        ];
     }
 
     public function envelope(): Envelope
     {
-        $no = $this->invoice->invoice_number ?? 'INV';
+        $brand = app(EmailBrandingService::class)->data();
+        $subject = "Reminder: Invoice {$this->snapshot['invoice_number_subject']} is {$this->daysOverdue} days overdue";
 
         return new Envelope(
-            subject: "Reminder: Invoice {$no} is {$this->daysOverdue} days overdue",
+            subject: $this->safeHeaderText('['.$brand['name'].'] '.$subject),
         );
     }
 
@@ -40,8 +60,7 @@ class InvoiceDunningMail extends QueuedMailable
         return new Content(
             markdown: 'emails.invoice-dunning',
             with: [
-                'invoice' => $this->invoice,
-                'customer' => $this->invoice->customer,
+                'snapshot' => $this->snapshot,
                 'daysOverdue' => $this->daysOverdue,
                 'tier' => $this->tier,
             ],
@@ -53,13 +72,35 @@ class InvoiceDunningMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Customer AR reminder',
-            "The overdue invoice reminder for {$this->invoice->invoice_number} could not be delivered. Contact the customer through an approved channel.",
+            "The overdue invoice reminder for {$this->snapshot['invoice_number_subject']} could not be delivered. Contact the customer through an approved channel.",
             [
                 'link_to' => '/accounting/invoices',
                 'entity_type' => 'invoice',
-                'entity_id' => $this->invoice->hash_id,
+                'entity_id' => $this->snapshot['hash_id'],
                 'reason' => 'The email provider rejected or could not deliver the reminder.',
             ],
         );
+    }
+
+    private function safeMarkdownText(?string $value, string $fallback = '—'): string
+    {
+        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', strip_tags((string) $value)) ?? '');
+        if ($text === '') {
+            return $fallback;
+        }
+
+        return preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\$1', $text) ?? $fallback;
+    }
+
+    private function safeHeaderText(?string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags((string) $value)) ?? '');
+    }
+
+    private function formatDate(?string $value): string
+    {
+        return $value === null || $value === ''
+            ? 'Not specified'
+            : \Illuminate\Support\Carbon::parse($value)->format('M j, Y');
     }
 }
