@@ -1,23 +1,23 @@
 <x-mail::message>
-# Credit note finalized
+# Credit note {{ $snapshot['credit_note_number'] }} finalized
 
-Hello {{ $party?->contact_person ?: $party?->name ?: 'there' }},
+Hello {{ $snapshot['party_name'] }},
 
-Ogami Philippines has finalized the following credit note.
+The following credit note has been finalized.
 
 | Detail | Value |
 |---|---|
-| Credit note | {{ $creditNote->credit_note_number }} |
-| Type | {{ $creditNote->type?->label() ?? $creditNote->type }} |
-| Date | {{ optional($creditNote->date)->format('F j, Y') }} |
-| Subtotal | {{ number_format((float) $creditNote->subtotal, 2) }} |
-| VAT | {{ number_format((float) $creditNote->vat_amount, 2) }} |
-| Total credit | {{ number_format((float) $creditNote->total_amount, 2) }} |
-| Reason | {{ $creditNote->reason ?: '—' }} |
+| Credit note | {{ $snapshot['credit_note_number'] }} |
+| Type | {{ $snapshot['type_label'] }} |
+| Date | {{ $snapshot['date'] }} |
+| Subtotal | {{ $snapshot['subtotal'] }} |
+| VAT | {{ $snapshot['vat_amount'] }} |
+| Total credit | {{ $snapshot['total_amount'] }} |
+| Reason | {{ $snapshot['reason'] }} |
 
 The credit is now posted and available for the applicable invoice or bill process.
 
-<x-mail::button :url="$portalUrl">Open portal</x-mail::button>
+<x-mail::button :url="$snapshot['portal_url']">Open portal</x-mail::button>
 
 Regards,<br>
 Ogami Philippines Finance
