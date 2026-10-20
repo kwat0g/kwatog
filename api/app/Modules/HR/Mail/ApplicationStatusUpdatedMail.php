@@ -7,16 +7,14 @@ namespace App\Modules\HR\Mail;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\EmailBrandingService;
 use App\Modules\HR\Enums\ApplicationStage;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ApplicationStatusUpdatedMail extends Mailable implements ShouldQueue
+class ApplicationStatusUpdatedMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(

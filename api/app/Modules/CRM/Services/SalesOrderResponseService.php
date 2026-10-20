@@ -449,7 +449,7 @@ class SalesOrderResponseService
                 $recipients = [$customerEmail];
             }
 
-            Mail::to($recipients)->send(new CustomerSalesOrderDecisionMail($so, $response, $decision));
+            Mail::to($recipients)->queue(new CustomerSalesOrderDecisionMail($so, $response, $decision));
         } catch (\Throwable $e) {
             // Notification failure must never break the resolution transaction;
             // the decision itself is durable on the response row.

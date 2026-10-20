@@ -6,17 +6,25 @@ namespace App\Modules\Production\Notifications;
 
 use App\Common\Services\SettingsService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
  * Task A10 — Daily 18:00 email to plant_manager / production_manager.
  */
-class DailyProductionSummary extends Notification
+class DailyProductionSummary extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public readonly array $summary) {}
+    public $tries = 3;
+
+    public $backoff = [60, 300, 900];
+
+    public function __construct(public readonly array $summary)
+    {
+        $this->onQueue('mail')->afterCommit();
+    }
 
     public function via(mixed $notifiable): array
     {

@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace App\Common\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -15,9 +12,9 @@ use Illuminate\Queue\SerializesModels;
 /**
  * OGAMI-016 — batched unread-notification digest email.
  */
-class NotificationDigestMail extends Mailable implements ShouldQueue
+class NotificationDigestMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /**
      * @param list<array{title:string, message:string, link_to:?string, type:string, created_at:string}> $items

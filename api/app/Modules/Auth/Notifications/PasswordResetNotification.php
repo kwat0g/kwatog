@@ -13,6 +13,10 @@ class PasswordResetNotification extends Notification
 {
     use Queueable;
 
+    public $tries = 3;
+
+    public $backoff = [60, 300, 900];
+
     /**
      * PROTECTED and NOT readonly — `private readonly` here kills the queued HR
      * subclass (EmployeePasswordResetNotification) exactly as it did the welcome
@@ -24,7 +28,10 @@ class PasswordResetNotification extends Notification
      * @see \App\Modules\Auth\Notifications\WelcomeNotification
      * @see \Tests\Feature\HR\EmployeeWelcomeNotificationTest
      */
-    public function __construct(protected string $tempPassword) {}
+    public function __construct(protected string $tempPassword)
+    {
+        $this->onQueue('mail')->afterCommit();
+    }
 
     /**
      * @return array<int, string>

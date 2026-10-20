@@ -6,6 +6,7 @@ namespace App\Modules\Auth\Notifications;
 
 use App\Common\Services\SettingsService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -14,14 +15,20 @@ use Illuminate\Notifications\Notification;
  * (which carries an admin-issued temporary password). This one carries a
  * one-time link the user follows to choose their own new password.
  */
-class PasswordResetLinkNotification extends Notification
+class PasswordResetLinkNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    public $tries = 3;
+
+    public $backoff = [60, 300, 900];
 
     public function __construct(
         private readonly string $resetUrl,
         private readonly int $expiryMinutes,
-    ) {}
+    ) {
+        $this->onQueue('mail')->afterCommit();
+    }
 
     /**
      * @return array<int, string>

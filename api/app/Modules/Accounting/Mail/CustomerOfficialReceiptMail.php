@@ -6,16 +6,14 @@ namespace App\Modules\Accounting\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Accounting\Models\OfficialReceipt;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class CustomerOfficialReceiptMail extends Mailable implements ShouldQueue
+class CustomerOfficialReceiptMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(

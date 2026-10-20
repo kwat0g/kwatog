@@ -162,6 +162,21 @@ services:
       - redis
     networks: [ogami-net]
 
+  queue-mail:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: ogami-queue-mail
+    working_dir: /var/www
+    volumes:
+      - ./api:/var/www
+      - ./scripts:/var/www/scripts:ro
+    command: php artisan queue:work --queue=mail --tries=3 --timeout=1800 --sleep=3
+    depends_on:
+      - api
+      - redis
+    networks: [ogami-net]
+
 networks:
   ogami-net:
     driver: bridge

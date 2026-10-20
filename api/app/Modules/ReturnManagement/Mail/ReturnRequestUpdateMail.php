@@ -6,16 +6,14 @@ namespace App\Modules\ReturnManagement\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ReturnRequestUpdateMail extends Mailable implements ShouldQueue
+class ReturnRequestUpdateMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(

@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace App\Common\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -19,9 +16,9 @@ use Illuminate\Queue\SerializesModels;
  * the same {title, message, link_to} payload produced by every caller of
  * NotificationService::send(). Queued so the HTTP request never blocks.
  */
-class UserNotificationMail extends Mailable implements ShouldQueue
+class UserNotificationMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /**
      * @param array{title: string, message: string, link_to?: string, entity_type?: string, entity_id?: string} $data

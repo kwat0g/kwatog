@@ -210,6 +210,31 @@ services:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
+  queue-mail:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.prod
+    container_name: ogami-queue-mail
+    restart: unless-stopped
+    working_dir: /var/www
+    env_file:
+      - path: .env
+        format: raw
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_MAINTENANCE_DRIVER: cache
+      APP_MAINTENANCE_STORE: redis
+    command: php artisan queue:work --queue=mail --tries=3 --timeout=1800 --sleep=3
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    volumes:
+      - appstorage:/var/www/storage/app
+    networks: [ogami-net]
+
   # Phase 4 — Scheduler. routes/console.php registers daily/hourly jobs
   # (mrp:run-daily, alerts:run, payroll:auto-create-period,
   # maintenance:request-preventive-generation, etc.). Without this container, none

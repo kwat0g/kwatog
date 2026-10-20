@@ -6,9 +6,7 @@ namespace App\Modules\CRM\Mail;
 
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderResponse;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -18,9 +16,9 @@ use Illuminate\Queue\SerializesModels;
  * portal users exist) after sales resolves a customer response. Mirror of
  * SupplierPoDecisionMail on the purchasing side.
  */
-class CustomerSalesOrderDecisionMail extends Mailable implements ShouldQueue
+class CustomerSalesOrderDecisionMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly SalesOrder $salesOrder,

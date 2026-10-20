@@ -7,16 +7,14 @@ namespace App\Modules\Purchasing\Mail;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-final class SupplierRfqLifecycleMail extends Mailable implements ShouldQueue
+final class SupplierRfqLifecycleMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(

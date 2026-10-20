@@ -6,16 +6,14 @@ namespace App\Modules\CRM\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\CRM\Models\CustomerComplaint;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class CustomerComplaintUpdateMail extends Mailable implements ShouldQueue
+class CustomerComplaintUpdateMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(

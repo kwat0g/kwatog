@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\ReturnManagement\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class ReturnCaseUpdateMail extends Mailable implements ShouldQueue
+class ReturnCaseUpdateMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly string $reference,

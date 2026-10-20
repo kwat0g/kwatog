@@ -6,9 +6,7 @@ namespace App\Modules\Purchasing\Mail;
 
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderResponse;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -17,9 +15,9 @@ use Illuminate\Queue\SerializesModels;
  * Sent to the supplier's portal-user email(s) (or vendor email when no
  * portal users exist) after purchasing resolves a supplier response.
  */
-class SupplierPoDecisionMail extends Mailable implements ShouldQueue
+class SupplierPoDecisionMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly PurchaseOrder $purchaseOrder,

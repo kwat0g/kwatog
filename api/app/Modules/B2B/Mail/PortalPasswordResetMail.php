@@ -5,16 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class PortalPasswordResetMail extends Mailable implements ShouldQueue
+class PortalPasswordResetMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(

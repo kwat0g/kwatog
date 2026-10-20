@@ -510,7 +510,7 @@ class SupplierResponseService
                 $recipients = [$vendorEmail];
             }
 
-            Mail::to($recipients)->send(new SupplierPoDecisionMail($po, $response, $decision));
+            Mail::to($recipients)->queue(new SupplierPoDecisionMail($po, $response, $decision));
         } catch (\Throwable $e) {
             // Notification failure must never break the resolution transaction;
             // the decision itself is durable on the response row.

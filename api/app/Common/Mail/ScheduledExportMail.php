@@ -9,9 +9,6 @@ use App\Common\Models\ScheduledExport;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\Export\ExportRunner;
 use App\Modules\Auth\Models\User;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -19,9 +16,9 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
-class ScheduledExportMail extends Mailable implements ShouldQueue
+class ScheduledExportMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly string $exportName,
