@@ -5,19 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
 
 class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 {
-    use SerializesModels;
-
     /** @param list<int> $fallbackUserIds */
     public function __construct(
-        public readonly PurchaseOrder $purchaseOrder,
+        public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
     ) {
         $this->afterCommit();
@@ -25,18 +22,18 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Purchase order {$this->purchaseOrder->po_number} has been cancelled");
+        $brand = str_replace(["\r", "\n"], ' ', (string) app(EmailBrandingService::class)->data()['name']);
+
+        return new Envelope(subject: '['.$brand.'] Purchase order cancelled: '.$this->snapshot['po_number']);
     }
 
     public function content(): Content
     {
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-
         return new Content(
             markdown: 'emails/supplier/purchase-order-cancelled',
             with: [
-                'purchaseOrder' => $this->purchaseOrder,
-                'portalUrl' => $base.'/portal/supplier/purchase-orders/'.$this->purchaseOrder->hash_id,
+                'purchaseOrder' => $this->snapshot,
+                'portalUrl' => $this->snapshot['portal_url'],
             ],
         );
     }
@@ -46,11 +43,11 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Supplier purchase order cancellation',
-            "The cancellation email for PO {$this->purchaseOrder->po_number} could not be delivered. Notify the supplier directly.",
+            "The cancellation email for PO {$this->snapshot['po_number']} could not be delivered. Notify the supplier directly.",
             [
-                'link_to' => '/purchasing/purchase-orders/'.$this->purchaseOrder->hash_id,
+                'link_to' => '/purchasing/purchase-orders/'.$this->snapshot['po_hash_id'],
                 'entity_type' => 'purchase_order',
-                'entity_id' => $this->purchaseOrder->hash_id,
+                'entity_id' => $this->snapshot['po_hash_id'],
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
         );

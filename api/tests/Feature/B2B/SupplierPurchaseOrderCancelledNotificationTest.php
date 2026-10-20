@@ -10,6 +10,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
+use App\Modules\B2B\Mail\SupplierPurchaseOrderCancelledMail;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -64,7 +66,7 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
             \App\Modules\B2B\Mail\SupplierPurchaseOrderCancelledMail::class,
             function ($mail) use ($vendor, $po) {
                 return $mail->hasTo($vendor->email)
-                    && $mail->purchaseOrder->id === $po->id;
+                    && $mail->snapshot['po_hash_id'] === $po->hash_id;
             }
         );
     }
@@ -141,12 +143,49 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
             function ($mail) use ($po, $cancelReason): bool {
                 $html = $mail->render();
 
-                return $mail->purchaseOrder->po_number === $po->po_number
+                return $mail->snapshot['po_number'] === $po->po_number
                     && str_contains($html, 'PO-202609-0042')
                     && ! str_contains($html, $cancelReason)
                     && ! str_contains($html, 'cheaper vendor');
             }
         );
+    }
+
+    public function test_cancellation_notice_keeps_event_time_values_when_purchase_order_changes(): void
+    {
+        $vendor = Vendor::factory()->create([
+            'email' => 'snapshot-supplier@example.test',
+            'contact_person' => 'Original Contact',
+        ]);
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id' => $vendor->id,
+            'status' => 'sent',
+            'sent_to_supplier_at' => now()->subDay(),
+            'po_number' => 'PO-SNAPSHOT-42',
+            'date' => '2026-10-19',
+            'total_amount' => '125.50',
+        ]);
+
+        $event = new PurchaseOrderCancelled($po->fresh());
+        $codec = app(\App\Common\Services\OutboxEventCodec::class);
+        $encoded = $codec->encode($event);
+        $decoded = $codec->decode($encoded['event_type'], $encoded['payload']);
+        $mail = new SupplierPurchaseOrderCancelledMail($event->snapshot);
+
+        $vendor->update(['email' => 'changed@example.test', 'contact_person' => 'Changed Contact']);
+        $po->update(['po_number' => 'PO-CHANGED-99', 'total_amount' => '999.00', 'date' => '2026-10-20']);
+
+        $html = $mail->render();
+        self::assertSame('snapshot-supplier@example.test', $event->snapshot['recipient_email']);
+        self::assertSame('PO-SNAPSHOT-42', $event->snapshot['po_number']);
+        self::assertSame('Original Contact', $event->snapshot['supplier_name']);
+        self::assertSame($event->snapshot, $decoded->snapshot);
+        self::assertStringContainsString('PO-SNAPSHOT-42', $html);
+        self::assertStringNotContainsString('PO-CHANGED-99', $html);
+        self::assertStringContainsString('Original Contact', $html);
+        self::assertStringNotContainsString('Changed Contact', $html);
+        self::assertStringContainsString($event->snapshot['display_total'], $html);
+        $mail->assertSeeInText('Oct 19, 2026');
     }
 
     public function test_cancellation_without_supplier_email_notifies_internal_users(): void

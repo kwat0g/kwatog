@@ -20,6 +20,7 @@ Updated: 2026-10-20
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: portal security suite 12 tests passed, 65 assertions; four actual-mail render screenshots inspected in desktop/mobile and light/dark. Mailer forced to `array`; no real transport contacted.
 - E-007 focused verification: 1 test passed, 16 assertions; four browser screenshots inspected in light/dark at desktop/mobile; rendered HTML about 24 KB. Mailer forced to `array`.
+- E-008 supplier PO cancellation snapshot fix: complete in draft PR [#227](https://github.com/kwat0g/kwatog/pull/227), stacked on #226. EF-021 covers queued recipient/data drift and render-time date. Template redesign follows in `email/supplier-po-cancel-template`.
 - Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - Email delivery: none sent.
 
@@ -38,4 +39,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue with E-008 supplier PO cancellation. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Finish E-008 snapshot, then redesign its supplier-facing template. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
