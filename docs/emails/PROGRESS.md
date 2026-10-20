@@ -18,6 +18,7 @@ Updated: 2026-10-20
 - E-005 reusable-password exposure is fixed in security PR [#223](https://github.com/kwat0g/kwatog/pull/223). E-005 invitation and E-006 password-reset templates are complete in shared portal-security PR [#224](https://github.com/kwat0g/kwatog/pull/224), stacked on #223; customer/supplier copy uses the same safe setup flow.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: portal security suite 12 tests passed, 65 assertions; four actual-mail render screenshots inspected in desktop/mobile and light/dark. Mailer forced to `array`; no real transport contacted.
+- Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - Email delivery: none sent.
 
 ## Blockers
