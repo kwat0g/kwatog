@@ -6,7 +6,7 @@ Updated: 2026-10-20
 
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
 - Phase 1 inventory: provisional; awaiting owner review. See [01-inventory.md](01-inventory.md).
-- Phase 2 shared foundation: in progress on branch `email/shared-foundation`; all per-email template redesigns remain pending.
+- Phase 2 shared foundation: complete in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; all per-email template redesigns remain pending.
 - Tests: focused coverage passed (13 tests, 31 assertions); no mail transport was contacted.
 - Email delivery: none sent.
 

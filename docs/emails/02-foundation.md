@@ -50,4 +50,4 @@ The local database has rows for core identity settings. The sales inbox and VAT 
 
 ## Verification status
 
-Code changes and focused tests are on branch `email/shared-foundation`. The focused suite passed: 13 tests, 31 assertions. No email was sent or transport contacted. No email-client rendering was performed. Real-client rendering, actual provider delivery, domain authentication, and company-value approval remain unverified.
+Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The focused suite passed: 13 tests, 31 assertions. No email was sent or transport contacted. No email-client rendering was performed. Real-client rendering, actual provider delivery, domain authentication, and company-value approval remain unverified.
