@@ -40,6 +40,7 @@ body, .wrapper, .body { background-color: #1f1b16 !important; color: #eee9e2 !im
 h1, h2, p, li, .table td { color: #eee9e2 !important; }
 .table th, .panel-content { background-color: #342d26 !important; color: #eee9e2 !important; }
 .content a:not(.button-primary):not(.button-blue) { color: #f4a582 !important; }
+.content .action a { color: #ffffff !important; }
 .footer, .footer td, .footer div, .footer a { color: #c5bcb1 !important; }
 .footer .footer-brand-name { color: #f3f0ea !important; }
 .footer .footer-divider { background-color: #51483f !important; }
