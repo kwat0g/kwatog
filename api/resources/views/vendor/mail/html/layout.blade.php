@@ -1,8 +1,8 @@
+@props(['preheader' => null, 'title' => null])
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="ltr">
 <head>
-@php(preg_match('/^\h*#\h+([^\r\n]+)/m', (string) $slot, $emailHeading))
-<title>{{ isset($emailHeading[1]) ? trim($emailHeading[1]) : config('app.name') }}</title>
+<title>{{ $title ?: config('app.name') }}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="color-scheme" content="light dark">
@@ -32,14 +32,22 @@ a { color: #a44725; }
 @media (prefers-color-scheme: dark) {
 body, .wrapper, .body { background-color: #1f1b16 !important; color: #eee9e2 !important; }
 .inner-body, .header { background-color: #29241f !important; border-color: #51483f !important; }
-.header div, .header a, h1, h2, p, li, .table td { color: #eee9e2 !important; }
+.brand-name { color: #f3f0ea !important; }
+.brand-tagline { color: #c5bcb1 !important; }
+.logo-light { display: none !important; }
+.logo-dark { display: block !important; }
+.logo-backing { background-color: transparent !important; }
+h1, h2, p, li, .table td { color: #eee9e2 !important; }
 .table th, .panel-content { background-color: #342d26 !important; color: #eee9e2 !important; }
+.content a { color: #f4a582 !important; }
+.content .action a { color: #ffffff !important; }
 .footer, .footer td, .footer div, .footer a { color: #c5bcb1 !important; }
-a { color: #f29a70 !important; }
-.action a { color: #ffffff !important; }
+.footer .footer-brand-name { color: #f3f0ea !important; }
+.footer .footer-divider { background-color: #51483f !important; }
 }
 @media only screen and (max-width: 640px) {
-.inner-body, .footer { width: 100% !important; }
+.content { table-layout: fixed !important; }
+.inner-body, .footer { width: 100% !important; max-width: 100% !important; }
 .content-cell { padding: 30px 24px 28px !important; }
 }
 @media only screen and (max-width: 500px) {
