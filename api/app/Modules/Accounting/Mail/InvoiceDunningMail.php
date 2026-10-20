@@ -42,13 +42,14 @@ class InvoiceDunningMail extends QueuedMailable
             'due_date' => $this->formatDate($invoice->due_date?->toDateString()),
             'balance' => app(CurrencyDisplayService::class)->format($invoice->balance),
             'hash_id' => (string) $invoice->hash_id,
+            'portal_url' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/customer/invoices/'.$invoice->hash_id,
         ];
     }
 
     public function envelope(): Envelope
     {
         $brand = app(EmailBrandingService::class)->data();
-        $subject = "Reminder: Invoice {$this->snapshot['invoice_number_subject']} is {$this->daysOverdue} days overdue";
+        $subject = "Payment reminder: {$this->snapshot['invoice_number_subject']} · {$this->snapshot['balance']} · {$this->daysOverdue} days overdue";
 
         return new Envelope(
             subject: $this->safeHeaderText('['.$brand['name'].'] '.$subject),
@@ -62,7 +63,7 @@ class InvoiceDunningMail extends QueuedMailable
             with: [
                 'snapshot' => $this->snapshot,
                 'daysOverdue' => $this->daysOverdue,
-                'tier' => $this->tier,
+                'preheader' => 'Invoice '.$this->snapshot['invoice_number_subject'].' is '.$this->daysOverdue.' days overdue. Balance at reminder generation: '.$this->snapshot['balance'].'.',
             ],
         );
     }

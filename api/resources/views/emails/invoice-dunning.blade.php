@@ -1,31 +1,26 @@
 <x-mail::message>
-# Payment Reminder
+# Payment reminder: {{ $snapshot['invoice_number'] }}
 
-Hi {{ $snapshot['customer_name'] }},
+Hello {{ $snapshot['customer_name'] }},
 
-Our records show that invoice **{{ $snapshot['invoice_number'] }}** is currently
-**{{ $daysOverdue }} days past due**.
+Invoice **{{ $snapshot['invoice_number'] }}** was due on **{{ $snapshot['due_date'] }}** and is {{ $daysOverdue }} days overdue. Please review its payment status and balance in the customer portal.
 
-| Field        | Value |
-|--------------|------:|
-| Invoice No.  | {{ $snapshot['invoice_number'] }} |
-| Issue Date   | {{ $snapshot['invoice_date'] }} |
-| Due Date     | {{ $snapshot['due_date'] }} |
-| Balance Due  | {{ $snapshot['balance'] }} |
+| Invoice detail | Value |
+|:--|--:|
+| Status | Overdue |
+| Invoice date | {{ $snapshot['invoice_date'] }} |
+| Due date | {{ $snapshot['due_date'] }} |
+| Days overdue | {{ $daysOverdue }} |
+| Balance due when reminder was generated | {{ $snapshot['balance'] }} |
 
-@if ($tier >= 30)
-This invoice is **30+ days overdue**. Please remit payment immediately to
-avoid further escalation.
-@elseif ($tier >= 15)
-This invoice is **{{ $daysOverdue }} days overdue**. Kindly settle the
-balance at your earliest convenience.
-@else
-A friendly reminder to settle this balance soon.
-@endif
+The balance above reflects the invoice when this reminder was generated. A recent payment may not yet appear. Please check the portal before making another payment.
 
-If payment has already been made, please disregard this notice and reply
-with proof of payment so we can update our records.
+<x-mail::button :url="$snapshot['portal_url']">Review invoice</x-mail::button>
 
-Thanks,
-{{ config('mail.from.name', 'Ogami Philippines') }} Accounts Receivable
+If the payment status still needs attention, contact the company using the details below and include the invoice number.
+
+Regards,<br>
+Accounts Receivable
+
+You received this reminder because the invoice was overdue when the dunning scan ran.
 </x-mail::message>
