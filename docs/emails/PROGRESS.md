@@ -7,7 +7,8 @@ Updated: 2026-10-20
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
 - Phase 1 inventory: provisional source-code inventory; owner approved continuing. See [01-inventory.md](01-inventory.md).
 - Phase 2 shared foundation: in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; header uses the landing-page logo artwork, with a transparency-preserving white variant selected in dark mode. Header previews cover desktop/mobile and light/dark; existing per-email screenshots need regeneration as branches are rebased.
-- Tests: focused shared-shell coverage passed (6 tests, 21 assertions), including a white-pixel check; temporary rendered preview passed (1 test). Mailer forced to `array`; no mail transport was contacted.
+- Tests: focused shared-shell coverage passed (6 tests, 22 assertions), including preheader delivery and white-logo pixel checks; temporary rendered preview passed (1 test). Mailer forced to `array`; no mail transport was contacted.
+- Shared preheader forwarding defect: stock Markdown message component dropped per-email preheaders before the layout. Fixed in #213; E-005/E-006 tests exposed and verify the shared forwarding behavior.
 - Email delivery: none sent.
 
 ## Blockers

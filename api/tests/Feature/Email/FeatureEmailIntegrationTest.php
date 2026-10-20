@@ -167,6 +167,7 @@ class FeatureEmailIntegrationTest extends TestCase
         $this->assertStringContainsString('cid:ogami-logo-dark@ogami', $rendered);
         $this->assertStringContainsString('alt="'.$brand['name'].' logo"', $rendered);
         $this->assertStringContainsString('width="64" height="64"', $rendered);
+        $this->assertStringContainsString('Shared email shell preview text.', $rendered);
         $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_path']), 0, 2, true));
         $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_dark_path']), 0, 2, true));
         $darkLogo = imagecreatefrompng($brand['logo_dark_path']);
