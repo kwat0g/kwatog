@@ -17,6 +17,7 @@ const SelfServiceOvertimePage = lazy(() => import('@/pages/self-service/overtime
 const SelfServiceDocumentsPage = lazy(() => import('@/pages/self-service/documents'));
 const SelfServiceNotifPrefsPage = lazy(() => import('@/pages/self-service/notification-preferences'));
 const SelfServicePayslipsPage = lazy(() => import('@/pages/self-service/payslips'));
+const SelfServicePayslipDetailPage = lazy(() => import('@/pages/self-service/payslip-detail'));
 
 const MyWorkOrdersPage = lazy(() => import('@/pages/self-service/work-orders'));
 const MyWorkOrderDetailPage = lazy(() => import('@/pages/self-service/work-orders').then((module) => ({ default: module.MyWorkOrderDetailPage })));
@@ -66,6 +67,10 @@ export const selfServiceRoutes = (
 
  {/* Payroll-gated */}
  <Route element={<ModuleGuard module="payroll" />}>
+ <Route
+ path="/self-service/payslips/:id"
+ element={<PermissionGuard permission="payroll.view"><SelfServicePayslipDetailPage /></PermissionGuard>}
+ />
  <Route
  path="/self-service/payslips"
  element={<PermissionGuard permission="payroll.view"><SelfServicePayslipsPage /></PermissionGuard>}

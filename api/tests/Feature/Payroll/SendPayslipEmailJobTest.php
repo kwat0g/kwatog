@@ -9,7 +9,8 @@ use App\Modules\Payroll\Jobs\SendPayslipEmailJob;
 use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
-use App\Modules\Payroll\Services\PayslipPdfService;
+use Database\Seeders\SettingsSeeder;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -22,10 +23,6 @@ class SendPayslipEmailJobTest extends TestCase
     {
         Mail::fake();
 
-        $pdf = \Mockery::mock(PayslipPdfService::class);
-        $pdf->shouldReceive('generate')->once()->andReturn('PDFBYTES');
-        $pdf->shouldReceive('filename')->once()->andReturn('payslip.pdf');
-
         $period = PayrollPeriod::factory()->create();
         $period->forceFill(['status' => 'finalized'])->saveQuietly();
         $employee = Employee::factory()->create(['email' => 'a@example.test']);
@@ -36,7 +33,7 @@ class SendPayslipEmailJobTest extends TestCase
             'payslip_email_queued_at' => now(),
         ]);
 
-        (new SendPayslipEmailJob($payroll->id))->handle($pdf);
+        (new SendPayslipEmailJob($payroll->id))->handle();
 
         Mail::assertSent(PayslipMail::class, fn (PayslipMail $mail): bool => $mail->hasTo('a@example.test'));
         $sent = $payroll->fresh();
@@ -70,9 +67,6 @@ class SendPayslipEmailJobTest extends TestCase
     public function test_job_cancels_a_queued_payslip_when_the_period_is_voided(): void
     {
         Mail::fake();
-        $pdf = \Mockery::mock(PayslipPdfService::class);
-        $pdf->shouldNotReceive('generate');
-
         $period = PayrollPeriod::factory()->create();
         $period->forceFill(['status' => 'voided'])->saveQuietly();
         $employee = Employee::factory()->create(['email' => 'a@example.test']);
@@ -83,7 +77,7 @@ class SendPayslipEmailJobTest extends TestCase
             'payslip_email_queued_at' => now(),
         ]);
 
-        (new SendPayslipEmailJob($payroll->id))->handle($pdf);
+        (new SendPayslipEmailJob($payroll->id))->handle();
 
         Mail::assertNothingSent();
         $cancelled = $payroll->fresh();
@@ -92,5 +86,39 @@ class SendPayslipEmailJobTest extends TestCase
             'Payroll period is no longer publishable; delivery cancelled.',
             $cancelled->payslip_email_last_error,
         );
+    }
+
+    public function test_payslip_notice_links_to_owner_only_page_without_attaching_payroll_data(): void
+    {
+        $this->seed(SettingsSeeder::class);
+        config(['app.frontend_url' => 'https://erp.example.test']);
+        $period = PayrollPeriod::factory()->create([
+            'period_start' => '2026-09-16',
+            'period_end' => '2026-09-30',
+        ]);
+        $employee = Employee::factory()->create(['email' => 'a@example.test']);
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'gross_pay' => '987654.32',
+            'net_pay' => '876543.21',
+        ]);
+        $mail = new PayslipMail($payroll->load('period'));
+        $content = $mail->content();
+        $html = $mail->render();
+        $text = (string) app(Markdown::class)->renderText($content->markdown, $content->with);
+
+        $this->assertSame([], $mail->attachments);
+        $this->assertSame([], $mail->rawAttachments);
+        $this->assertSame([], $mail->diskAttachments);
+        $this->assertStringContainsString('[Ogami Philippines] Payslip available', $mail->envelope()->subject);
+        $this->assertStringContainsString('Sep 16, 2026 – Sep 30, 2026', $html);
+        $this->assertStringContainsString('https://erp.example.test/self-service/payslips/'.$payroll->hash_id, $html);
+        $this->assertStringContainsString('https://erp.example.test/self-service/payslips/'.$payroll->hash_id, $text);
+        $this->assertStringNotContainsString('987654.32', $html);
+        $this->assertStringNotContainsString('876543.21', $html);
+        $this->assertStringNotContainsString('987654.32', $text);
+        $this->assertStringNotContainsString('876543.21', $text);
+        $this->assertStringContainsString('Philippine Ogami Corporation', $html);
     }
 }

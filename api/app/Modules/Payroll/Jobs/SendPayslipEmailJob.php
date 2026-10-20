@@ -8,7 +8,6 @@ use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
-use App\Modules\Payroll\Services\PayslipPdfService;
 use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,7 +22,7 @@ use Throwable;
 /**
  * Deliver one payslip and only stamp the sent marker after the mailer accepts
  * the message. The finalization listener owns claiming; this job owns the
- * retryable PDF/render/mail boundary.
+ * retryable mail delivery boundary.
  */
 class SendPayslipEmailJob implements ShouldQueue
 {
@@ -42,13 +41,13 @@ class SendPayslipEmailJob implements ShouldQueue
         $this->onQueue('low');
     }
 
-    public function handle(PayslipPdfService $pdf, ?PayrollPublicationPolicy $publication = null): void
+    public function handle(?PayrollPublicationPolicy $publication = null): void
     {
         $publication ??= app(PayrollPublicationPolicy::class);
         $missingEmail = false;
 
-        DB::transaction(function () use ($pdf, $publication, &$missingEmail): void {
-            // Lock both rows through the render/send boundary. A period void
+        DB::transaction(function () use ($publication, &$missingEmail): void {
+            // Lock both rows through the send boundary. A period void
             // cannot commit between the publication check and mail acceptance.
             $payroll = Payroll::query()
                 ->whereKey($this->payrollId)
@@ -92,13 +91,9 @@ class SendPayslipEmailJob implements ShouldQueue
                 return;
             }
 
-            $binary = $pdf->generate($payroll);
-            $filename = $pdf->filename($payroll);
-
-            // PayslipMail is intentionally sent synchronously inside this
-            // retryable job. The period row remains locked until the sent
-            // marker is committed, so void cannot race the final send check.
-            Mail::to($email)->send(new PayslipMail($payroll, $binary, $filename));
+            // Keep delivery synchronous inside this retryable job so the sent
+            // marker is committed only after the mailer accepts the message.
+            Mail::to($email)->send(new PayslipMail($payroll));
 
             $payroll->forceFill([
                 'payslip_emailed_at' => now(),
