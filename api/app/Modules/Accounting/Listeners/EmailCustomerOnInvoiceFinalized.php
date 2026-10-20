@@ -38,7 +38,8 @@ class EmailCustomerOnInvoiceFinalized implements ShouldQueue
         ];
         $feature = 'Customer invoice delivery';
 
-        if (! filter_var($invoice->customer?->email, FILTER_VALIDATE_EMAIL)) {
+        $recipient = $event->snapshot['customer_email'] ?? null;
+        if (! is_string($recipient) || ! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             $fallback->notifyPermission(
                 'accounting.invoices.view',
                 $feature,
@@ -50,8 +51,9 @@ class EmailCustomerOnInvoiceFinalized implements ShouldQueue
         }
 
         try {
-            Mail::to($invoice->customer->email)->queue(new CustomerInvoiceFinalizedMail(
+            Mail::to($recipient)->queue(new CustomerInvoiceFinalizedMail(
                 $invoice,
+                $event->snapshot,
                 $this->fallbackUserIds(),
             ));
         } catch (\Throwable $e) {

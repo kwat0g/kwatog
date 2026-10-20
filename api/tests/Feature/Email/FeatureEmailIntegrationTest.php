@@ -130,6 +130,43 @@ class FeatureEmailIntegrationTest extends TestCase
         });
     }
 
+    public function test_invoice_finalized_event_keeps_issue_time_recipient_and_values(): void
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'billing-at-issue@example.test',
+            'name' => 'Customer at issue',
+            'contact_person' => null,
+        ]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-SNAPSHOT-001',
+            'total_amount' => '1120.00',
+            'balance' => '1120.00',
+        ]);
+        $event = new InvoiceFinalized($invoice);
+        $this->assertSame('billing-at-issue@example.test', $event->snapshot['customer_email']);
+
+        $customer->update([
+            'email' => 'billing-after@example.test',
+            'name' => 'Changed customer',
+        ]);
+        $invoice->update(['total_amount' => '9999.00', 'balance' => '9999.00']);
+
+        app(\App\Modules\Accounting\Listeners\EmailCustomerOnInvoiceFinalized::class)->handle($event);
+
+        Mail::assertQueued(CustomerInvoiceFinalizedMail::class, function (CustomerInvoiceFinalizedMail $mail): bool {
+            $html = $mail->render();
+            $this->assertTrue($mail->hasTo('billing-at-issue@example.test'));
+            $this->assertFalse($mail->hasTo('billing-after@example.test'));
+            $this->assertStringContainsString('Customer at issue', $html);
+            $this->assertStringNotContainsString('Changed customer', $html);
+            $this->assertStringContainsString('1,120.00', $html);
+            $this->assertStringNotContainsString('9,999.00', $html);
+
+            return true;
+        });
+    }
+
     public function test_supplier_purchase_order_email_is_queued_with_supplier_data(): void
     {
         $vendor = \App\Modules\Accounting\Models\Vendor::factory()->create([

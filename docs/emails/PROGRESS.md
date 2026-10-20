@@ -8,7 +8,9 @@ Updated: 2026-10-20
 - Phase 1 inventory: provisional source-code inventory; owner approved continuing with “proceed.” See [01-inventory.md](01-inventory.md).
 - Phase 2 shared foundation: complete in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; all per-email template redesigns remain pending.
 - Phase 4 mail queue isolation and delivery ledger: complete in draft PR [#214](https://github.com/kwat0g/kwatog/pull/214), stacked on #213; queued mailables and selected mail-only notifications use a dedicated queue with after-commit dispatch, bounded retries, durable status logs, and ambiguous-retry suppression. See [03-delivery.md](03-delivery.md). Sync critical-alert delivery and payslip transport inside its existing queue job remain unchanged pending their own delivery-state/security review.
+- Invoice issue-time snapshot fix: implemented on `fix/invoice-finalized-snapshot`, pending PR; captures customer email and invoice display values before the queued listener can rehydrate changed records. See finding EF-007 in [FINDINGS.md](FINDINGS.md).
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
+- Focused invoice snapshot verification: 7 tests, 23 assertions passed; Mail fake used, no mail transport contacted.
 - Email delivery: none sent.
 
 ## Blockers
@@ -26,4 +28,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue with external-facing email types in separate PRs. Confirm company values with the company owner before any real send.
+Finish E-001 invoice email template redesign in its own stacked PR, then continue external-facing email types. Confirm company values with the company owner before any real send.

@@ -3,15 +3,15 @@
 
 Hi {{ $customer->contact_person ?? $customer->name ?? 'there' }},
 
-Invoice **{{ $invoice->invoice_number }}** has been issued for your account.
+ Invoice **{{ $invoiceData->invoice_number }}** has been issued for your account.
 
 | Detail | Information |
 |---|---|
-| Invoice number | {{ $invoice->invoice_number }} |
-| Invoice date | {{ optional($invoice->date)->format('M d, Y') }} |
-| Due date | {{ optional($invoice->due_date)->format('M d, Y') }} |
-| Total amount | ₱{{ number_format((float) $invoice->total_amount, 2) }} |
-| Balance due | ₱{{ number_format((float) $invoice->balance, 2) }} |
+| Invoice number | {{ $invoiceData->invoice_number }} |
+| Invoice date | {{ optional($invoiceData->date)->format('M d, Y') }} |
+| Due date | {{ optional($invoiceData->due_date)->format('M d, Y') }} |
+| Total amount | ₱{{ number_format((float) $invoiceData->total_amount, 2) }} |
+| Balance due | ₱{{ number_format((float) $invoiceData->balance, 2) }} |
 | Sales order | {{ $salesOrder?->so_number ?? '—' }} |
 
 ## Line items
