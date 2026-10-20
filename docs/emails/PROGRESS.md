@@ -14,6 +14,7 @@ Updated: 2026-10-20
 - E-002 official receipt template: complete in draft PR [#218](https://github.com/kwat0g/kwatog/pull/218), stacked on #217. See [E-002-official-receipt.md](E-002-official-receipt.md); EF-009 remains pending accountant direction.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: 8 integration tests passed, plus one temporary render fixture; 9 total tests and 38 assertions. Mail fake/array transport used; no mail transport contacted.
+- Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - Email delivery: none sent.
 
 ## Blockers
