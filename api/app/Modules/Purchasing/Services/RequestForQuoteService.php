@@ -639,7 +639,7 @@ class RequestForQuoteService
     private function recordLifecycle(RequestForQuote $rfq, string $kind, string $suffix): void
     {
         $this->outbox->record(
-            new RfqLifecycleEvent((int) $rfq->id, (string) $rfq->hash_id, $kind),
+            RfqLifecycleEvent::capture($rfq, $kind),
             'rfq:'.$rfq->id.':'.$suffix,
         );
     }

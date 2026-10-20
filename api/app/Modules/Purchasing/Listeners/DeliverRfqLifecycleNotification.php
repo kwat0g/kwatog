@@ -41,7 +41,7 @@ final class DeliverRfqLifecycleNotification implements ShouldQueue
             $this->notifyInternal($rfq, $event->kind);
             // A draft that was cancelled never reached a supplier.
             if (in_array($event->kind, self::SUPPLIER_KINDS, true) && $rfq->issued_at !== null) {
-                $this->deliverToSuppliers($rfq, $event->kind);
+                $this->deliverToSuppliers($rfq, $event->kind, $event->snapshot);
             }
         } catch (\Throwable $e) {
             Log::warning('RFQ lifecycle delivery failed', [
@@ -96,19 +96,37 @@ final class DeliverRfqLifecycleNotification implements ShouldQueue
         return User::query()->whereKey(array_filter($ids))->where('is_active', true)->get();
     }
 
-    private function deliverToSuppliers(RequestForQuote $rfq, string $kind): void
+    private function deliverToSuppliers(RequestForQuote $rfq, string $kind, array $snapshot): void
     {
         $fallback = app(EmailDeliveryFailureNotifier::class)->userIdsWithPermission('purchasing.rfq.manage');
-        foreach ($rfq->invitations as $invitation) {
+        $supplierSnapshots = $snapshot['suppliers'] ?? [];
+        if ($supplierSnapshots === []) {
+            // Older durable outbox events predate event-time supplier snapshots.
+            $supplierSnapshots = $rfq->invitations->map(fn ($invitation): array => [
+                'invitation_id' => (int) $invitation->id,
+                'email' => $invitation->vendor?->email,
+                'contact_person' => $invitation->vendor?->contact_person,
+                'vendor_name' => $invitation->vendor?->name,
+                'status' => $invitation->status?->value ?? $invitation->status,
+            ])->all();
+        }
+
+        foreach ($supplierSnapshots as $supplierSnapshot) {
+            $invitation = $rfq->invitations->firstWhere('id', $supplierSnapshot['invitation_id'] ?? null);
+            if ($invitation === null) {
+                continue;
+            }
             $invitation->forceFill(['portal_notified_at' => now(), 'last_notification_error' => null])->save();
-            $email = $invitation->vendor?->email;
+            $email = $supplierSnapshot['email'] ?? null;
             if (! is_string($email) || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $invitation->forceFill(['last_notification_error' => 'Supplier has no usable email address.'])->save();
 
                 continue;
             }
             try {
-                Mail::to($email)->queue(new SupplierRfqLifecycleMail($rfq, $invitation, $kind, $fallback));
+                $rfqSnapshot = $snapshot;
+                unset($rfqSnapshot['suppliers']);
+                Mail::to($email)->queue(new SupplierRfqLifecycleMail($rfq, $invitation, $kind, $fallback, $supplierSnapshot + $rfqSnapshot));
                 $invitation->forceFill(['email_notified_at' => now()])->save();
             } catch (\Throwable $e) {
                 $invitation->forceFill(['last_notification_error' => mb_substr($e->getMessage(), 0, 2000)])->save();
