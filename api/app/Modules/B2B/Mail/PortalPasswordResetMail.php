@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Mail;
 
-use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -26,17 +27,22 @@ class PortalPasswordResetMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Reset your Ogami Philippines portal password');
+        $brand = str_replace(["\r", "\n"], ' ', (string) app(EmailBrandingService::class)->data()['name']);
+
+        return new Envelope(subject: '['.$brand.'] Reset your '.$this->portalType.' portal password');
     }
 
     public function content(): Content
     {
         $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
         $url = $base.'/portal/password-reset?type='.urlencode($this->portalType).'&token='.urlencode($this->token);
+        $brand = app(EmailBrandingService::class)->data();
 
         return new Content(
             markdown: 'emails/portal/password-reset',
             with: [
+                'brand' => $brand,
+                'preheader' => 'Use your one-time link to reset your '.$this->portalType.' portal password.',
                 'portalType' => $this->portalType,
                 'recipientName' => $this->recipientName,
                 'resetUrl' => $url,

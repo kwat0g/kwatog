@@ -15,8 +15,9 @@ Updated: 2026-10-20
 - Dunning findings EF-010 (queued snapshot), EF-011 (configurable tier copy), and EF-012 (per-invoice volume) are recorded. EF-010 is fixed in draft PR [#219](https://github.com/kwat0g/kwatog/pull/219), stacked on #218. E-003 redesign follows it; EF-012 remains pending product decision.
 - E-003 invoice dunning template: complete in draft PR [#220](https://github.com/kwat0g/kwatog/pull/220), stacked on #219. EF-011 fixed; EF-012 remains pending product direction. See [E-003-invoice-dunning.md](E-003-invoice-dunning.md).
 - E-004 audit found EF-013 (no external credit-note document route/PDF), EF-014 (queued snapshot drift), and EF-015 (unclassified reason text is exposed). EF-014 is fixed in draft PR [#221](https://github.com/kwat0g/kwatog/pull/221), stacked on #220; E-004 template removes EF-015 in draft PR [#222](https://github.com/kwat0g/kwatog/pull/222), stacked on #221. EF-013 still needs accountant direction.
+- E-005 reusable-password exposure is fixed in security PR [#223](https://github.com/kwat0g/kwatog/pull/223). E-005 invitation and E-006 password-reset templates are complete in shared portal-security PR [#224](https://github.com/kwat0g/kwatog/pull/224), stacked on #223; customer/supplier copy uses the same safe setup flow.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
-- Focused email verification: 8 integration tests passed, plus one temporary render fixture; 9 total tests and 38 assertions. Mail fake/array transport used; no mail transport contacted.
+- Focused email verification: portal security suite 12 tests passed, 65 assertions; four actual-mail render screenshots inspected in desktop/mobile and light/dark. Mailer forced to `array`; no real transport contacted.
 - Email delivery: none sent.
 
 ## Blockers
@@ -34,4 +35,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue with E-005 portal invitation. Confirm company values with the company owner before external delivery.
+Continue with E-007 supplier invoice status. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.

@@ -67,6 +67,10 @@ class PortalPasswordResetTest extends TestCase
             return $queued->portalType === 'customer';
         });
         self::assertNotNull($mail);
+        $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
+        $this->assertSame('['.$brandName.'] Reset your customer portal password', $mail->envelope()->subject);
+        $this->assertStringContainsString('Use your one-time link to reset your customer portal password.', $mail->render());
+        $mail->assertSeeInText('/portal/password-reset?type=customer&token='.$mail->token);
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'portal.password.reset_requested',
             'model_type' => CustomerPortalUser::class,
@@ -136,7 +140,12 @@ class PortalPasswordResetTest extends TestCase
         $this->postJson('/api/v1/b2b/supplier/forgot-password', ['email' => $user->email])
             ->assertOk();
 
-        Mail::assertQueued(PortalPasswordResetMail::class, fn (PortalPasswordResetMail $mail): bool => $mail->portalType === 'supplier');
+        Mail::assertQueued(PortalPasswordResetMail::class, function (PortalPasswordResetMail $mail): bool {
+            $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
+
+            return $mail->portalType === 'supplier'
+                && $mail->envelope()->subject === '['.$brandName.'] Reset your supplier portal password';
+        });
     }
 
     public function test_supplier_reset_request_invalidates_the_previous_link(): void
@@ -206,7 +215,7 @@ class PortalPasswordResetTest extends TestCase
 
         $result = app(PortalInvitationService::class)->inviteCustomer(
             $customer,
-            'Invited Contact',
+            'Invited <img src=x onerror=alert(1)>',
             'invited-contact@example.test',
         );
 
@@ -217,9 +226,11 @@ class PortalPasswordResetTest extends TestCase
         Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $queued) use (&$mail): bool {
             $mail = $queued;
 
-            return $queued->portalType === 'customer' && $queued->recipientName === 'Invited Contact';
+            return $queued->portalType === 'customer' && $queued->recipientName === 'Invited <img src=x onerror=alert(1)>';
         });
         self::assertNotNull($mail);
+        $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
+        $this->assertSame('['.$brandName.'] Set up Customer portal access', $mail->envelope()->subject);
         self::assertDatabaseHas('portal_password_reset_tokens', [
             'portal_type' => 'customer',
             'email' => 'invited-contact@example.test',
@@ -229,8 +240,12 @@ class PortalPasswordResetTest extends TestCase
         self::assertTrue(\Illuminate\Support\Carbon::parse(
             DB::table('portal_password_reset_tokens')->where('email', 'invited-contact@example.test')->value('expires_at')
         )->isFuture());
-        self::assertStringContainsString('/portal/password-reset?type=customer&amp;token='.$mail->token, $mail->render());
-        self::assertStringNotContainsString('Temporary password', $mail->render());
+        $html = $mail->render();
+        self::assertStringContainsString('/portal/password-reset?type=customer&amp;token='.$mail->token, $html);
+        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+        self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
+        self::assertStringNotContainsString('temporary password', strtolower($html));
+        $mail->assertSeeInText('/portal/password-reset?type=customer&token='.$mail->token);
     }
 
     public function test_supplier_invitation_uses_the_supplier_password_setup_route(): void
@@ -246,6 +261,8 @@ class PortalPasswordResetTest extends TestCase
             return $queued->portalType === 'supplier';
         });
         self::assertNotNull($mail);
+        $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
+        $this->assertSame('['.$brandName.'] Set up Supplier portal access', $mail->envelope()->subject);
         self::assertStringContainsString('/portal/password-reset?type=supplier&amp;token='.$mail->token, $mail->render());
     }
 
