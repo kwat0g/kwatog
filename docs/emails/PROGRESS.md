@@ -49,6 +49,7 @@ Updated: 2026-10-20
 - E-021 return request update: complete in draft PR #252. Supplier link lands on portal root because no supplier return detail route exists. See [E-021-return-request-update.md](E-021-return-request-update.md).
 - E-001–E-021 template redesigns: complete in draft PRs #216, #218, #220, #222, #224, #226, #228, #230, #232, #234, #236, #238, #239, #243, #247, #250, and #252 (some PRs cover tightly related templates). Later email types remain pending.
 - EF-038 delivery-confirmed snapshot and idempotency: implementation/test in draft PR #253, stacked on #252. The durable event captures the customer address and delivery/order/invoice display fields; listener retry reuses one delivery/recipient key. Focused delivery email cases: 2 passed, 2 assertions. The full email integration file has 3 known failures, reproduced on parent #252 and recorded as EF-039; no SMTP transport was contacted. Existing body content is preserved pending E-022 redesign.
+- EF-040 and E-022 delivery confirmation notice: template redesign complete in draft PR #254, stacked on #253. `CustomerDeliveryConfirmedMailDesignTest`: 2 tests, 21 assertions passed. Four Chromium renders inspected at 1440px/390px in light/dark; logos and CTA visible, no horizontal overflow. Test mailer forced to `array`; no real email sent. Receiver identity and free-text remarks removed; invoice appears only when issued.
 - Email delivery: none sent.
 
 ## Blockers
@@ -66,4 +67,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Finish E-022 delivery confirmation redesign after EF-038; then continue remaining inventory. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue with E-023 generic user notifications, then remaining inventory. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
