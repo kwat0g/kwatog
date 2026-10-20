@@ -103,9 +103,9 @@ class ReturnCaseService
             }
             $actor = $portalUser ? ['type' => 'customer', 'id' => $portalUser->id, 'name' => $portalUser->name] : $this->internalActor($by);
             $notifySupplier = $portalUser !== null || $by->hasPermission('return_management.manage');
-            $this->event($case, 'submitted', 'Report submitted. '.($customer ? 'Customer Service' : 'Purchasing').' will review the quantities and next action.', $actor, $notifySupplier);
+            $caseEvent = $this->event($case, 'submitted', 'Report submitted. '.($customer ? 'Customer Service' : 'Purchasing').' will review the quantities and next action.', $actor, $notifySupplier);
             // Warehouse reports stay internal until Purchasing takes a public case action.
-            DB::afterCommit(fn () => $this->notify($case, 'New problem report awaiting review', $notifySupplier));
+            DB::afterCommit(fn () => $this->notify($case, 'New problem report awaiting review', $notifySupplier, $caseEvent->id));
 
             return $case;
         }, 3);
@@ -207,13 +207,13 @@ class ReturnCaseService
                 ])->save();
             }
 
-            $this->event(
+            $caseEvent = $this->event(
                 $case,
                 'submitted',
                 'Driver reported damage to goods accepted by the customer. Review the received quantities before confirmation or billing.',
                 $this->internalActor($by),
             );
-            DB::afterCommit(fn () => $this->notify($case, 'Customer damage report awaiting review'));
+            DB::afterCommit(fn () => $this->notify($case, 'Customer damage report awaiting review', true, $caseEvent->id));
             return $case->load('lines');
         }, 3);
     }
@@ -260,10 +260,10 @@ class ReturnCaseService
                 'preferred_resolution' => 'advice', 'description' => $message,
                 'request_key' => $key, 'request_fingerprint' => $fingerprint,
             ])->save();
-            $this->event($case, 'submitted', 'Shipment not received. Customer Service will check with Dispatch and post an update.',
+            $caseEvent = $this->event($case, 'submitted', 'Shipment not received. Customer Service will check with Dispatch and post an update.',
                 ['type' => 'customer', 'id' => $portalUser->id, 'name' => $portalUser->name]);
-            DB::afterCommit(function () use ($case): void {
-                $this->notify($case, 'Customer is waiting for their shipment');
+            DB::afterCommit(function () use ($case, $caseEvent): void {
+                $this->notify($case, 'Customer is waiting for their shipment', true, $caseEvent->id);
                 $dispatch = User::query()->where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->where('slug', 'supply_chain.deliveries.create'))->get();
                 $this->notifications->sendInApp($dispatch, 'return.case_updated', [
                     'title' => 'Check shipment arrival — '.$case->case_number,
@@ -472,8 +472,8 @@ class ReturnCaseService
                     throw ValidationException::withMessages(['action' => 'Choose an available case action.']);
             }
             $case->forceFill($patch)->save();
-            $this->event($case, $action, $message, $actor, $action === 'reply' && $internal ? (bool) ($data['is_public'] ?? true) : true);
-            DB::afterCommit(fn () => $this->notify($case, 'Problem report updated', ! ($action === 'reply' && $internal && ! ($data['is_public'] ?? true))));
+            $caseEvent = $this->event($case, $action, $message, $actor, $action === 'reply' && $internal ? (bool) ($data['is_public'] ?? true) : true);
+            DB::afterCommit(fn () => $this->notify($case, 'Problem report updated', ! ($action === 'reply' && $internal && ! ($data['is_public'] ?? true)), $caseEvent->id));
 
             return $case;
         });
@@ -502,9 +502,9 @@ class ReturnCaseService
                 return;
             }
             $case->forceFill(['status' => 'resolved', 'resolved_at' => now()])->save();
-            $this->event($case, 'resolve', 'Replacement receipt confirmed and all agreed work completed. Case closed automatically.',
+            $caseEvent = $this->event($case, 'resolve', 'Replacement receipt confirmed and all agreed work completed. Case closed automatically.',
                 ['type' => 'system', 'id' => null, 'name' => 'Automatic workflow']);
-            DB::afterCommit(fn () => $this->notify($case, 'Problem report resolved'));
+            DB::afterCommit(fn () => $this->notify($case, 'Problem report resolved', true, $caseEvent->id));
         });
     }
 
@@ -528,7 +528,7 @@ class ReturnCaseService
                 if ($case->status->value === 'information_needed' && $actor['type'] !== 'internal') {
                     $case->forceFill(['status' => $this->hasEffects($case) ? 'in_progress' : ($case->resolution ? 'action_agreed' : 'under_review')])->save();
                 }
-                DB::afterCommit(fn () => $this->notify($case, 'New evidence received'));
+                DB::afterCommit(fn () => $this->notify($case, 'New evidence received', true, $event->id));
                 return $attachment;
             });
         } catch (\Throwable $error) {
@@ -601,11 +601,14 @@ class ReturnCaseService
         ]);
     }
 
-    private function notify(ReturnCase $case, string $title, bool $public = true): void
+    private function notify(ReturnCase $case, string $title, bool $public, int $eventId): void
     {
         try {
-            $recipients = $case->assigned_to ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get()
-                : User::query()->where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->where('slug', 'return_management.manage'))->get();
+            $recipients = $case->assigned_to ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get() : collect();
+            if ($recipients->isEmpty()) {
+                $recipients = User::query()->where('is_active', true)
+                    ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'return_management.manage'))->get();
+            }
             if ($recipients->isNotEmpty()) {
                 $this->notifications->send($recipients, 'return.case_updated', [
                     'title' => $title.' — '.$case->case_number, 'message' => 'Open the case to review the latest quantities and next action.',
@@ -617,17 +620,42 @@ class ReturnCaseService
                 $portalClass = $realm === 'customer' ? \App\Modules\B2B\Models\CustomerPortalUser::class : \App\Modules\B2B\Models\SupplierPortalUser::class;
                 $contacts = $portalClass::query()->where($realm === 'customer' ? 'customer_id' : 'vendor_id', $realm === 'customer' ? $case->customer_id : $case->vendor_id)
                     ->where('is_active', true)->get();
+                $seenAddresses = [];
+                $needsFollowUp = $contacts->isEmpty();
                 foreach ($contacts as $contact) {
-                    \Illuminate\Support\Facades\Mail::to($contact->email)->queue(new \App\Modules\ReturnManagement\Mail\ReturnCaseUpdateMail(
-                        $case->case_number, $case->status->label(), $realm, $case->hash_id, $recipients->pluck('id')->all(),
-                    ));
+                    $email = trim((string) $contact->email);
+                    if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $needsFollowUp = true;
+
+                        continue;
+                    }
+                    $normalizedEmail = mb_strtolower($email);
+                    if (isset($seenAddresses[$normalizedEmail])) {
+                        continue;
+                    }
+                    $seenAddresses[$normalizedEmail] = true;
+
+                    $deliveryId = \App\Modules\ReturnManagement\Mail\ReturnCaseUpdateMail::deliveryIdFor($eventId, $normalizedEmail);
+                    try {
+                        \Illuminate\Support\Facades\Mail::to($email)->queue(new \App\Modules\ReturnManagement\Mail\ReturnCaseUpdateMail(
+                            $case->case_number, $case->status->label(), $realm, $case->hash_id, $recipients->pluck('id')->all(), $deliveryId,
+                        ));
+                    } catch (\Throwable $e) {
+                        $needsFollowUp = true;
+                        Log::warning('Return case email could not be queued', [
+                            'case_id' => $case->id,
+                            'event_id' => $eventId,
+                            'portal_contact_id' => $contact->getKey(),
+                            'error_type' => $e::class,
+                        ]);
+                    }
                 }
-                if ($contacts->isEmpty() && $recipients->isNotEmpty()) {
+                if ($needsFollowUp && $recipients->isNotEmpty()) {
                     $this->notifications->sendInApp($recipients, 'return.case_updated', [
                         'title' => $case->case_number.' needs direct follow-up',
-                        'message' => 'There is no active portal contact. Contact the customer or supplier about this report.',
+                        'message' => 'At least one portal contact could not be emailed. Review the contact addresses and follow up on this report.',
                         'link_to' => '/return-management/cases/'.$case->hash_id,
-                    ]);
+                    ], 'return-case-email-follow-up:'.$eventId);
                 }
             }
         } catch (\Throwable $e) {
