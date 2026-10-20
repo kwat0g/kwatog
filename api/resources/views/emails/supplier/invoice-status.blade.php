@@ -1,24 +1,30 @@
-<x-mail::message>
+<x-mail::message :preheader="$preheader" title="Supplier invoice received">
 # Supplier invoice received
 
 Hello {{ $supplierName }},
 
-Ogami Philippines received your invoice submission for Accounts Payable review.
+{{ $brand['name'] }} received your invoice submission. Accounts Payable will review it against the related records and agreed payment terms.
 
 | Detail | Value |
 |---|---|
-| Supplier invoice | {{ $invoiceNumber }} |
-| Invoice date | {{ $invoiceDate ?? 'Not provided' }} |
-| Receipt matches | {{ $matchCount }} |
-| Total amount | {{ $grossTotal }} |
+| Invoice reference | {{ $invoiceNumber }} |
+@if ($invoiceDate)
+| Invoice date | {{ $invoiceDate }} |
+@endif
+| Bills included | {{ $matchCount }} |
+| Submitted total | {{ $grossTotal }} |
 @if ($purchaseOrderNumber)
 | Purchase order | {{ $purchaseOrderNumber }} |
 @endif
 
-This confirmation means the submission was received; payment remains subject to review, matching, and the agreed payment terms.
+<x-mail::panel>
+This confirms receipt only. It is not approval for payment. The submitted amount and reference shown here are from the time of submission.
+</x-mail::panel>
 
-<x-mail::button :url="$portalUrl">View supplier portal</x-mail::button>
+<x-mail::button :url="$portalUrl">View submitted invoice</x-mail::button>
 
 Regards,<br>
-Ogami Philippines Accounts Payable
+{{ $brand['name'] }} Accounts Payable
+
+You received this email because this supplier invoice was submitted through the supplier portal. To verify the request, open the supplier portal using the address you normally use.
 </x-mail::message>

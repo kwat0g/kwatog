@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
 class SupplierInvoiceStatusMail extends QueuedMailable
 {
-    /** @param list<int> $fallbackUserIds */
+    /**
+     * @param array<string, mixed> $snapshot
+     * @param list<int> $fallbackUserIds
+     */
     public function __construct(
         public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
@@ -21,18 +25,24 @@ class SupplierInvoiceStatusMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Supplier invoice '.$this->snapshot['invoice_number'].' received');
+        $brand = str_replace(["\r", "\n"], ' ', (string) app(EmailBrandingService::class)->data()['name']);
+
+        return new Envelope(subject: '['.$brand.'] Supplier invoice received: '.$this->snapshot['invoice_number']);
     }
 
     public function content(): Content
     {
+        $brand = app(EmailBrandingService::class)->data();
+
         return new Content(
             markdown: 'emails/supplier/invoice-status',
             with: [
+                'brand' => $brand,
+                'preheader' => 'We received supplier invoice '.$this->snapshot['invoice_number'].' for review.',
                 'invoiceNumber' => $this->snapshot['invoice_number'],
                 'invoiceDate' => $this->snapshot['invoice_date'],
                 'matchCount' => $this->snapshot['match_count'],
-                'grossTotal' => $this->snapshot['gross_total'],
+                'grossTotal' => $this->snapshot['display_total'],
                 'purchaseOrderNumber' => $this->snapshot['purchase_order_number'],
                 'supplierName' => $this->snapshot['supplier_name'],
                 'portalUrl' => $this->snapshot['portal_url'],
