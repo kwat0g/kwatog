@@ -4,8 +4,8 @@
 <table class="footer" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto; text-align: center;">
 <tr>
 <td class="content-cell" align="center" style="padding: 26px 32px 36px; color: #667085; font-size: 12px; line-height: 1.65;">
-<div style="height: 1px; margin: 0 auto 22px; background-color: #e4e7ec; font-size: 0; line-height: 0;">&nbsp;</div>
-<div style="color: #344054; font-size: 13px; font-weight: 800;">{{ $brand['name'] }}</div>
+<div class="footer-divider" style="height: 1px; margin: 0 auto 22px; background-color: #e4e7ec; font-size: 0; line-height: 0;">&nbsp;</div>
+<div class="footer-brand-name" style="color: #344054; font-size: 13px; font-weight: 800;">{{ $brand['name'] }}</div>
 <div style="margin-top: 2px;">{{ $brand['legal_name'] }}</div>
 <div style="margin-top: 2px;">{{ $brand['address'] }}</div>
 <div>

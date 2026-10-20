@@ -19,6 +19,7 @@ Updated: 2026-10-20
 - E-007 supplier invoice confirmation snapshot fix: in progress in `fix/supplier-invoice-email-snapshot`, stacked on #224. EF-019 records the queued-model drift defect.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: portal security suite 12 tests passed, 65 assertions; four actual-mail render screenshots inspected in desktop/mobile and light/dark. Mailer forced to `array`; no real transport contacted.
+- Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - Email delivery: none sent.
 
 ## Blockers
