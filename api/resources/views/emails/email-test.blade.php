@@ -1,4 +1,4 @@
-<x-mail::message :preheader="$preheader">
+<x-mail::message :preheader="$preheader" title="AWS Mail Manager email integration test">
 # AWS Mail Manager email integration test
 
 Hello,

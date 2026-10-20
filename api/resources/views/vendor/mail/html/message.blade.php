@@ -1,4 +1,4 @@
-<x-mail::layout :preheader="$preheader ?? null">
+<x-mail::layout :preheader="$preheader ?? null" :title="$title ?? null">
 {{-- Header --}}
 <x-slot:header>
 <x-mail::header :url="config('app.url')">
