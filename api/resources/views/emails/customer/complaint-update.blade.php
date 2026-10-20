@@ -3,11 +3,15 @@
 
 Hello {{ $complaint['recipient_name'] }},
 
-We recorded an update to complaint **{{ $complaint['complaint_number'] }}** for {{ $brand['name'] }}.
+We recorded an update to complaint **{{ $complaint['complaint_number'] }}** with {{ $brand['name'] }}. Its current status is:
+
+<x-mail::panel>
+<strong>{{ $complaint['status_label'] }}</strong>
+</x-mail::panel>
 
 | Detail | Value |
 |---|---|
-| Status | {{ $complaint['status_label'] }} |
+| Complaint | {{ $complaint['complaint_number'] }} |
 @if ($complaint['received_date'])
 | Received | {{ $complaint['received_date'] }} |
 @endif
@@ -15,7 +19,7 @@ We recorded an update to complaint **{{ $complaint['complaint_number'] }}** for 
 | Product | {{ $complaint['product_label'] }} |
 @endif
 
-Complaint details are available in the customer portal.
+Open the customer portal to view the complaint record and its available updates.
 
 <x-mail::button :url="$portalUrl">View your complaints</x-mail::button>
 

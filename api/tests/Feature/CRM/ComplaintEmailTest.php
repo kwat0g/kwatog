@@ -11,6 +11,7 @@ use App\Modules\CRM\Listeners\EmailCustomerOnComplaintUpdated;
 use App\Modules\CRM\Mail\CustomerComplaintUpdateMail;
 use App\Modules\CRM\Models\CustomerComplaint;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -22,7 +23,7 @@ class ComplaintEmailTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(RolePermissionSeeder::class);
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
         Mail::fake();
     }
 
@@ -30,7 +31,7 @@ class ComplaintEmailTest extends TestCase
     {
         $customer = Customer::factory()->create([
             'email' => 'customer@example.test',
-            'contact_person' => 'A. Customer',
+            'contact_person' => 'A. <img src=x onerror=alert(1)> Customer',
         ]);
         $creator = User::factory()->withRole('system_admin')->create();
         $complaint = $this->complaint($customer, $creator);
@@ -38,18 +39,31 @@ class ComplaintEmailTest extends TestCase
         app(EmailCustomerOnComplaintUpdated::class)
             ->handle(new CustomerComplaintUpdated($complaint, 'created'));
 
-        $rendered = '';
-        Mail::assertQueued(CustomerComplaintUpdateMail::class, function (CustomerComplaintUpdateMail $mail) use (&$rendered, $complaint): bool {
-            $rendered = $mail->render();
+        $mail = null;
+        Mail::assertQueued(CustomerComplaintUpdateMail::class, function (CustomerComplaintUpdateMail $queued) use (&$mail, $complaint): bool {
+            $mail = $queued;
 
-            return $mail->hasTo('customer@example.test')
-                && $mail->snapshot['complaint_number'] === $complaint->complaint_number;
+            return $queued->hasTo('customer@example.test')
+                && $queued->snapshot['complaint_number'] === $complaint->complaint_number;
         });
 
+        self::assertNotNull($mail);
+        $rendered = $mail->render();
         $this->assertStringContainsString('Open', $rendered);
+        $this->assertStringContainsString('<title>Customer complaint update</title>', $rendered);
+        $this->assertStringContainsString('Status update for complaint '.$complaint->complaint_number.'.', $rendered);
+        $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $rendered);
+        $this->assertStringNotContainsString('<img src=x onerror=alert(1)>', $rendered);
+        $this->assertStringContainsString('https://ogamiph.dev/portal/customer/complaints', $rendered);
+        $this->assertStringContainsString('Philippine Ogami Corporation', $rendered);
         $this->assertStringNotContainsString('Critical', $rendered);
         $this->assertStringNotContainsString('Notification rendering test', $rendered);
         $this->assertStringNotContainsString('Affected quantity', $rendered);
+        $this->assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $rendered);
+        self::assertLessThan(102400, strlen($rendered));
+        $brandName = app(\App\Common\Services\EmailBrandingService::class)->data()['name'];
+        self::assertSame('['.$brandName.'] Customer complaint update: '.$complaint->complaint_number, $mail->envelope()->subject);
+        $mail->assertSeeInText('View your complaints');
     }
 
     public function test_complaint_notification_keeps_event_time_recipient_and_status(): void
