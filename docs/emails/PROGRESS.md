@@ -31,6 +31,7 @@ Updated: 2026-10-20
 - E-011 customer sales-order decision redesign: complete in `email/customer-sales-order-decision`, stacked on #233; draft PR pending. `SalesOrderResponseTest`: 18 passed, 84 assertions. Four browser screenshots inspected at 1440px desktop and 390px mobile in light/dark. Rendered HTML about 24 KB; mailer forced to `array`; no transport contacted.
 - E-012–E-015 candidate-email snapshot/security fix: implementation and focused tests complete in draft PR #235, stacked on #234. EF-025 freezes event-time applicant/interview values and stops internal outcome-only changes from notifying candidates. See [E-012-015-candidate-emails.md](E-012-015-candidate-emails.md). Tracking code remains sensitive candidate access data and requires HR/legal/data-protection review.
 - E-012–E-015 candidate template family: complete in draft PR #236, stacked on #235. Shared branding, safe labels, tracking CTA, escaping, event-time values, no assessment outcomes, and plain-text render verified. `RecruitmentApplicationTest`: 19 passed, 83 assertions; focused template/snapshot subset: 5 passed, 31 assertions. 16 Chromium screenshots inspected at 1440px/390px in light/dark; no horizontal overflow; HTML 21–23 KB. Mailer forced to `array`; no message sent. Real email clients remain unverified.
+- EF-026 SPA return-path fix: complete in draft PR #237, stacked on #236. Preserves the exact internal route through sign-in and required password change. `AuthGuard.test.tsx`: 3 passed; SPA typecheck passed.
 - Email delivery: none sent.
 
 ## Blockers
@@ -48,4 +49,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue with E-016 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Complete EF-026 return-path fix, then E-016 payslip email. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.

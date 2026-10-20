@@ -31,11 +31,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
  if (bootstrapError) return <SessionRetry />;
 
  if (!isAuthenticated) {
-  return <Navigate to="/sign-in" state={{ from: location.pathname }} replace />;
+  return <Navigate to="/sign-in" state={{ from: location.pathname + location.search + location.hash }} replace />;
  }
 
  if (user?.must_change_password && location.pathname !== '/change-password') {
- return <Navigate to="/change-password" replace />;
+ return <Navigate to="/change-password" state={{ from: location.pathname + location.search + location.hash }} replace />;
  }
 
  return <>{children}</>;

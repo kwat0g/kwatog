@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { LuEye, LuEyeOff } from '@/lib/icons';
@@ -37,6 +37,7 @@ type ChangePasswordForm = z.infer<typeof schema>;
 
 export default function ChangePasswordPage() {
  const navigate = useNavigate();
+ const location = useLocation();
  const refresh = useAuthStore((s) => s.refresh);
  const [showCurrent, setShowCurrent] = useState(false);
  const [showNew, setShowNew] = useState(false);
@@ -68,7 +69,9 @@ export default function ChangePasswordPage() {
  });
  toast.success('Password updated.');
  await refresh();
- navigate('/dashboard', { replace: true });
+ const requestedFrom = (location.state as { from?: string } | null)?.from;
+ const from = requestedFrom?.startsWith('/') && !requestedFrom.startsWith('//') ? requestedFrom : '/dashboard';
+ navigate(from, { replace: true });
  } catch (err) {
  const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;
  const status = axe.response?.status;
