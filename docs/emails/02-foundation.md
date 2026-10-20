@@ -10,8 +10,8 @@ Keep Laravel's existing Markdown Mailable and `MailMessage` stack. The applicati
 - System font stack; no remote CSS or JavaScript.
 - `lang` from application locale and `dir="ltr"`.
 - Light/dark color-scheme metadata and a dark-mode media rule; critical information remains text.
-- Hidden preheader is supported through a `preheader` value in each message's view data.
-- Header uses the inline CID logo with meaningful alt text and a text brand name.
+- Hidden preheader is forwarded by the shared Markdown message component from each email's view data into the HTML layout.
+- Header uses the same bundled Ogami logo as the SPA landing page, inline via CID at 64px, with meaningful alt text and a text brand name. A small white backing keeps the black transparent logo visible in dark-mode clients; missing artwork falls back to the text brand name.
 - Header brand link uses the configured SPA `FRONTEND_URL`, never Laravel's API `APP_URL`.
 - Footer uses `company.legal_name` and `company.address` from settings. Missing required values fail rendering instead of displaying source-code fallback facts. Optional phone, email, certification, and disclaimer appear only when configured.
 - Existing PDF/company settings remain the source for company details. Optional approved email disclaimer is stored at `email.footer_disclaimer`; it is seeded from `EMAIL_FOOTER_DISCLAIMER` and editable through the admin settings endpoint.
@@ -31,7 +31,7 @@ Existing settings rows:
 - `company.address` (required for mail)
 - `company.phone`, `company.email`, `company.sales_inbox_email`
 - `company.tin`, `company.vat_status`, `company.certification`
-- `company.logo_path` (bundled logo fallback exists in `api/resources/images`)
+- Landing-page logo art is bundled at `api/resources/images/ogami-mark.png`; dark mode uses its white recolor at `api/resources/images/ogami-mark-dark.png`. The SPA browser tab uses the same light/dark PNGs from `spa/public/`.
 - `company.public_url`
 - `email.brand_name`
 - `email.footer_disclaimer` (optional; approved text only)
@@ -50,4 +50,4 @@ The local database has rows for core identity settings. The sales inbox and VAT 
 
 ## Verification status
 
-Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The focused suite passed: 13 tests, 31 assertions. No email was sent or transport contacted. No email-client rendering was performed. Real-client rendering, actual provider delivery, domain authentication, and company-value approval remain unverified.
+Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The exact landing-page PNG is used in light mode; a white variant preserves its transparency for dark mode. Both variants use CID images in mail and scheme-aware PNG icons in the SPA browser tab. The shared Markdown message component forwards preheaders and per-message titles into the HTML layout. Light-mode inline colors now allow dark-mode CSS overrides, mobile tables fit the viewport, and dark-mode links use a brighter color. Focused integration coverage previously passed: 6 tests, 22 assertions; title assertion now added. Browser-rendered header previews inspected desktop/mobile widths in light/dark modes: `screenshots/email-logo-header-*.png`. Full email previews will be regenerated as each type is completed. Browser screenshots do not verify real email clients. Outlook/Gmail/Apple Mail dark-mode behavior, actual provider delivery, domain authentication, and company-value approval remain unverified. No email was sent or transport contacted.

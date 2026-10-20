@@ -11,6 +11,7 @@ Updated: 2026-10-20
 - Invoice issue-time snapshot fix: in draft PR [#215](https://github.com/kwat0g/kwatog/pull/215), stacked on #214; captures customer email and invoice display values before the queued listener can rehydrate changed records. See finding EF-007 in [FINDINGS.md](FINDINGS.md).
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused invoice snapshot verification: 7 tests, 23 assertions passed; Mail fake used, no mail transport contacted.
+- Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - Email delivery: none sent.
 
 ## Blockers
