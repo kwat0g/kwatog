@@ -17,35 +17,37 @@ class EmailCustomerOnOfficialReceiptIssued implements ShouldQueue
 
     public function handle(OfficialReceiptIssued $event): void
     {
-        $receipt = $event->officialReceipt->loadMissing(['customer', 'invoice']);
+        $receipt = $event->officialReceipt;
+        $snapshot = $event->snapshot;
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
-            'link_to' => '/accounting/invoices/'.($receipt->invoice?->hash_id ?? ''),
+            'link_to' => '/accounting/invoices/'.($snapshot['invoice_hash_id'] ?? ''),
             'entity_type' => 'official_receipt',
-            'entity_id' => $receipt->hash_id,
+            'entity_id' => $snapshot['receipt_hash_id'],
             'reason' => 'The customer email was missing, invalid, unreachable, or rejected by the email provider.',
         ];
 
-        if (! filter_var($receipt->customer?->email, FILTER_VALIDATE_EMAIL)) {
+        if (! filter_var($snapshot['customer_email'], FILTER_VALIDATE_EMAIL)) {
             $fallback->notifyPermission(
                 'accounting.invoices.view',
                 'Official receipt email',
-                "Official receipt {$receipt->or_number} was issued, but the customer has no usable email address. Send the receipt through an approved channel.",
+                "Official receipt {$snapshot['or_number']} was issued, but the customer has no usable email address. Send the receipt through an approved channel.",
                 $context,
             );
             return;
         }
 
         try {
-            Mail::to($receipt->customer->email)->queue(new CustomerOfficialReceiptMail(
+            Mail::to($snapshot['customer_email'])->queue(new CustomerOfficialReceiptMail(
                 $receipt,
+                $snapshot,
                 $fallback->userIdsWithPermission('accounting.invoices.view'),
             ));
         } catch (\Throwable $e) {
             $fallback->notifyPermission(
                 'accounting.invoices.view',
                 'Official receipt email',
-                "Official receipt {$receipt->or_number} could not be accepted by the email provider. Send the receipt through an approved channel.",
+                "Official receipt {$snapshot['or_number']} could not be accepted by the email provider. Send the receipt through an approved channel.",
                 $context,
             );
             Log::warning('Official receipt email enqueue failed', [
