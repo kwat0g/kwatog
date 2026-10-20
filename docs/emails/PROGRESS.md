@@ -12,7 +12,7 @@ Updated: 2026-10-20
 - E-001 invoice template: complete in draft PR [#216](https://github.com/kwat0g/kwatog/pull/216), stacked on #215. Shared Markdown layout, event-time recipient/data snapshot, portal link, 10-item display limit, plain text, and browser screenshots. See [E-001-invoice-finalized.md](E-001-invoice-finalized.md).
 - Official-receipt snapshot risk EF-008 is fixed in draft PR [#217](https://github.com/kwat0g/kwatog/pull/217), stacked on #216. Document-access gap EF-009 remains open: accountant must decide whether the email summary is sufficient or a receipt PDF/portal route is required.
 - E-002 official receipt template: complete in draft PR [#218](https://github.com/kwat0g/kwatog/pull/218), stacked on #217. See [E-002-official-receipt.md](E-002-official-receipt.md); EF-009 remains pending accountant direction.
-- Dunning findings EF-010 (queued snapshot), EF-011 (configurable tier copy), and EF-012 (per-invoice volume) are recorded. EF-010 fix is underway as a separate PR before E-003 redesign.
+- Dunning findings EF-010 (queued snapshot), EF-011 (configurable tier copy), and EF-012 (per-invoice volume) are recorded. EF-010 is fixed in draft PR [#219](https://github.com/kwat0g/kwatog/pull/219), stacked on #218. E-003 redesign follows it; EF-012 remains pending product decision.
 - Phase 2 tests: 13 tests, 31 assertions. Focused Phase 4 tests: 51 tests, 314 assertions. No mail transport was contacted.
 - Focused email verification: 8 integration tests passed, plus one temporary render fixture; 9 total tests and 38 assertions. Mail fake/array transport used; no mail transport contacted.
 - Email delivery: none sent.
