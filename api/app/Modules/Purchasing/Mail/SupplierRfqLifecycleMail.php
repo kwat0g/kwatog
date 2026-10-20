@@ -27,6 +27,14 @@ final class SupplierRfqLifecycleMail extends QueuedMailable
         array $snapshot = [],
     ) {
         $this->snapshot = $snapshot;
+        // Retries of the same outbox event must reuse its delivery-ledger key.
+        $this->deliveryKey = hash('sha256', implode('|', [
+            'rfq-lifecycle',
+            (string) $rfq->getKey(),
+            $kind,
+            (string) ($snapshot['closes_at'] ?? ''),
+            (string) $invitation->getKey(),
+        ]));
         $this->afterCommit();
     }
 
