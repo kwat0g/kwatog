@@ -55,9 +55,22 @@ class FeatureEmailIntegrationTest extends TestCase
     {
         $customer = Customer::factory()->create([
             'email' => 'customer@example.test',
-            'contact_person' => 'A. Customer',
+            'contact_person' => 'A. <img src=x onerror=alert(1)> Customer',
         ]);
-        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id]);
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'subtotal' => '120.00',
+            'vat_amount' => '14.40',
+            'total_amount' => '134.40',
+        ]);
+        $product = Product::factory()->create(['name' => 'Sample <img src=x onerror=alert(1)> molded component', 'part_number' => 'OG-TEST-01']);
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity' => '2.00',
+            'unit_price' => '60.00',
+            'total' => '120.00',
+        ]);
 
         app(EmailCustomerOnSalesOrderConfirmed::class)
             ->handle(new SalesOrderConfirmed($salesOrder));
@@ -67,12 +80,24 @@ class FeatureEmailIntegrationTest extends TestCase
             $mail->assertSeeInText($salesOrder->so_number);
             $mail->assertSeeInText('/portal/customer/orders/'.$salesOrder->hash_id);
 
-            return $mail->hasTo('customer@example.test')
-                && $mail->snapshot['so_number'] === $salesOrder->so_number
-                && str_contains($rendered, $salesOrder->so_number)
-                && str_contains($rendered, '/portal/customer/orders/'.$salesOrder->hash_id)
-                && str_contains($rendered, '<v:roundrect')
-                && str_contains($rendered, 'Open this link if the button does not work');
+            self::assertTrue($mail->hasTo('customer@example.test'));
+            self::assertSame($salesOrder->so_number, $mail->snapshot['so_number']);
+            self::assertStringContainsString('<title>Sales order confirmed</title>', $rendered);
+            self::assertStringContainsString('Order total', $rendered);
+            self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format($salesOrder->total_amount), $rendered);
+            self::assertStringContainsString('Sample molded component', $rendered);
+            self::assertStringContainsString('Hello A. Customer,', $rendered);
+            self::assertStringNotContainsString('<img src=x', $rendered);
+            self::assertStringNotContainsString('onerror', $rendered);
+            self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format('60.00'), $rendered);
+            self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $rendered);
+            self::assertLessThan(102400, strlen($rendered));
+            self::assertStringContainsString('/portal/customer/orders/'.$salesOrder->hash_id, $rendered);
+            self::assertStringContainsString('<v:roundrect', $rendered);
+            self::assertStringContainsString('Open this link if the button does not work', $rendered);
+            self::assertSame('['.app(\App\Common\Services\EmailBrandingService::class)->data()['name'].'] Sales order confirmed: '.$salesOrder->so_number.' · '.app(\App\Common\Services\CurrencyDisplayService::class)->format($salesOrder->total_amount), $mail->envelope()->subject);
+
+            return true;
         });
     }
 

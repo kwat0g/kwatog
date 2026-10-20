@@ -1,28 +1,40 @@
-<x-mail::message>
-# Sales Order Confirmed
+<x-mail::message :preheader="$preheader" :title="$title">
+# Sales order confirmed
 
-Hi {{ $customer->contact_person ?? $customer->name ?? 'there' }},
+Hello {{ $order['customer_name'] }},
 
-Your sales order **{{ $salesOrder->so_number }}** has been confirmed and is now being processed.
+Your sales order **{{ $order['so_number'] }}** has been confirmed and is being processed.
 
-| Detail | Information |
-|---|---|
-| Order number | {{ $salesOrder->so_number }} |
-| Order date | {{ optional($salesOrder->date)->format('M d, Y') }} |
-| Total amount | ₱{{ number_format((float) $salesOrder->total_amount, 2) }} |
-| Payment terms | {{ $salesOrder->payment_terms_days ?? '—' }} days |
-| Delivery terms | {{ $salesOrder->delivery_terms ?? '—' }} |
+<x-mail::panel>
+Confirmed — the details below reflect the order when it was confirmed.
+</x-mail::panel>
 
-## Items
+| Order detail | Information |
+|---|---:|
+| Order number | {{ $order['so_number'] }} |
+| Order date | {{ $order['date'] ?? '—' }} |
+| Order total | {{ $order['total_amount'] }} |
+| Payment terms | {{ $order['payment_terms_days'] !== null ? $order['payment_terms_days'].' days' : '—' }} |
+| Delivery terms | {{ $order['delivery_terms'] ?: '—' }} |
 
-@foreach ($items as $item)
-- **{{ $item->product?->name ?? 'Item' }}** — {{ number_format((float) $item->quantity, 2) }} × ₱{{ number_format((float) $item->unit_price, 2) }} = ₱{{ number_format((float) $item->total, 2) }}
-@endforeach
+## Order items
 
-<x-mail::button :url="$portalUrl">View Order in Customer Portal</x-mail::button>
+| Item | Quantity | Unit price | Line total |
+|---|---:|---:|---:|
+@forelse ($items as $item)
+| {{ $item['name'] }}@if ($item['part_number'])<br><small>{{ $item['part_number'] }}</small>@endif | {{ $item['quantity'] }} | {{ $item['unit_price'] }} | {{ $item['total'] }} |
+@empty
+| Item details are available in the customer portal. | — | — | — |
+@endforelse
 
-We will provide further updates as production and delivery progress.
+@if ($remainingItemCount > 0)
+And {{ $remainingItemCount }} more {{ \Illuminate\Support\Str::plural('item', $remainingItemCount) }} are listed in the customer portal.
+@endif
 
-Thanks,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }}
+<x-mail::button :url="$order['portal_url']">View your sales order</x-mail::button>
+
+Regards,<br>
+{{ $brand['name'] }} Customer Support
+
+You received this email because your customer account is associated with this sales order. To verify the request, open the customer portal using the address you normally use.
 </x-mail::message>
