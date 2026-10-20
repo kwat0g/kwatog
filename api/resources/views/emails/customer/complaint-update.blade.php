@@ -1,35 +1,26 @@
-@php
-    $status = $complaint->status instanceof \BackedEnum
-        ? $complaint->status->value
-        : (string) $complaint->status;
-    $severity = $complaint->severity instanceof \BackedEnum
-        ? $complaint->severity->value
-        : (string) $complaint->severity;
-@endphp
-
-<x-mail::message>
+<x-mail::message :preheader="$preheader" title="Customer complaint update">
 # Customer complaint update
 
-Hello {{ $complaint->customer?->contact_person ?: $complaint->customer?->name ?: 'Customer' }},
+Hello {{ $complaint['recipient_name'] }},
 
-Your complaint **{{ $complaint->complaint_number }}** has been updated by {{ config('mail.from.name', 'Ogami Philippines') }}.
+We recorded an update to complaint **{{ $complaint['complaint_number'] }}** for {{ $brand['name'] }}.
 
 | Detail | Value |
 |---|---|
-| Status | {{ \Illuminate\Support\Str::headline($status) }} |
-| Severity | {{ \Illuminate\Support\Str::headline($severity) }} |
-| Description | {{ $complaint->description }} |
-| Affected quantity | {{ $complaint->affected_quantity }} |
-@if ($complaint->product)
-| Product | {{ $complaint->product->part_number }} — {{ $complaint->product->name }} |
+| Status | {{ $complaint['status_label'] }} |
+@if ($complaint['received_date'])
+| Received | {{ $complaint['received_date'] }} |
+@endif
+@if ($complaint['product_label'])
+| Product | {{ $complaint['product_label'] }} |
 @endif
 
-We will continue to record containment, root-cause analysis, corrective action, and verification in the 8D process where applicable.
+Complaint details are available in the customer portal.
 
-@if (! empty($portalUrl))
-<x-mail::button :url="$portalUrl">View complaint status</x-mail::button>
-@endif
+<x-mail::button :url="$portalUrl">View your complaints</x-mail::button>
 
 Regards,<br>
-Ogami Philippines Customer Support
+{{ $brand['name'] }} Customer Support
+
+You received this email because your customer account is associated with this complaint. To verify the request, open the customer portal using the address you normally use.
 </x-mail::message>

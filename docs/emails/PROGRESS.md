@@ -23,6 +23,8 @@ Updated: 2026-10-20
 - E-008 supplier PO cancellation snapshot fix: complete in draft PR [#227](https://github.com/kwat0g/kwatog/pull/227), stacked on #226. EF-021 covers queued recipient/data drift and render-time date. E-008 redesign is complete in draft PR [#228](https://github.com/kwat0g/kwatog/pull/228), stacked on #227; screenshots cover desktop/mobile and light/dark.
 - Shared HTML shell in #213 now forwards per-message preheaders and document titles, preserves responsive width and dark-mode colors/links, and uses light/dark company-logo artwork.
 - E-008 focused verification: 5 tests passed, 22 assertions; four browser screenshots inspected in light/dark at desktop/mobile; rendered HTML about 22 KB. Mailer forced to `array`.
+- E-009 complaint email content/security/snapshot fix: in progress in `fix/customer-complaint-email-snapshot`, stacked on #228. EF-022 records excessive customer data in external messages and queued-record drift.
+- E-009 focused verification: 3 tests passed, 8 assertions; mailer forced to `array`; no transport contacted.
 - Email delivery: none sent.
 
 ## Blockers
@@ -40,4 +42,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue with E-009 customer complaint update. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Finish E-009 snapshot/privacy fix, then redesign its customer-facing template. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.

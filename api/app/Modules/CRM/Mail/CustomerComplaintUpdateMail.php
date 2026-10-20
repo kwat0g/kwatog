@@ -5,20 +5,19 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Modules\CRM\Models\CustomerComplaint;
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\EmailBrandingService;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
 
 class CustomerComplaintUpdateMail extends QueuedMailable
 {
-    use SerializesModels;
-
-    /** @param list<int> $fallbackUserIds */
+    /**
+     * @param array<string, mixed> $snapshot
+     * @param list<int> $fallbackUserIds
+     */
     public function __construct(
-        public readonly CustomerComplaint $complaint,
-        public readonly string $action,
+        public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
     ) {
         $this->afterCommit();
@@ -26,19 +25,23 @@ class CustomerComplaintUpdateMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Complaint {$this->complaint->complaint_number} update");
+        $brand = str_replace(["\r", "\n"], ' ', (string) app(EmailBrandingService::class)->data()['name']);
+        $number = str_replace(["\r", "\n"], '', $this->snapshot['complaint_number']);
+
+        return new Envelope(subject: '['.$brand.'] Customer complaint update: '.$number);
     }
 
     public function content(): Content
     {
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $brand = app(EmailBrandingService::class)->data();
 
         return new Content(
             markdown: 'emails/customer/complaint-update',
             with: [
-                'complaint' => $this->complaint,
-                'action' => $this->action,
-                'portalUrl' => $base.'/portal/customer/complaints',
+                'brand' => $brand,
+                'preheader' => 'Status update for complaint '.$this->snapshot['complaint_number'].'.',
+                'complaint' => $this->snapshot,
+                'portalUrl' => $this->snapshot['portal_url'],
             ],
         );
     }
@@ -48,11 +51,11 @@ class CustomerComplaintUpdateMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Customer complaint email',
-            "The update email for complaint {$this->complaint->complaint_number} could not be delivered. Contact the customer through an approved channel.",
+            "The update email for complaint {$this->snapshot['complaint_number']} could not be delivered. Contact the customer through an approved channel.",
             [
-                'link_to' => '/crm/complaints/'.$this->complaint->hash_id,
+                'link_to' => '/crm/complaints/'.$this->snapshot['complaint_hash_id'],
                 'entity_type' => 'customer_complaint',
-                'entity_id' => $this->complaint->hash_id,
+                'entity_id' => $this->snapshot['complaint_hash_id'],
                 'reason' => 'The customer email was unreachable or the email provider rejected the message.',
             ],
         );
