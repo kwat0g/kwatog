@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\HR\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Services\SettingsService;
 use App\Common\Services\EmailBrandingService;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
@@ -35,29 +34,33 @@ class InterviewScheduledMail extends QueuedMailable
     public function envelope(): Envelope
     {
         $snapshot = $this->snapshotData();
+        $brand = app(EmailBrandingService::class)->data();
 
         return new Envelope(
-            subject: "Interview Scheduled — {$snapshot['position_title']}",
+            subject: $this->safeHeaderText("[{$brand['name']}] Interview scheduled: {$snapshot['position_title']}"),
         );
     }
 
     public function content(): Content
     {
-        $settings = app(SettingsService::class);
         $brand = app(EmailBrandingService::class)->data();
         $snapshot = $this->snapshotData();
+        $scheduledAt = $snapshot['scheduled_at']
+            ? Carbon::parse($snapshot['scheduled_at'])->timezone(config('app.timezone'))->format('F j, Y g:i A').' (Asia/Manila)'
+            : 'To be confirmed';
 
         return new Content(
             markdown: 'emails.recruitment.interview-scheduled',
             with: [
-                'applicantName'   => $snapshot['applicant_name'],
-                'positionTitle'   => $snapshot['position_title'],
-                'scheduledAt'     => Carbon::parse($snapshot['scheduled_at'])->format('F j, Y g:i A'),
-                'location'        => $snapshot['location'],
-                'interviewerName' => $snapshot['interviewer_name'],
-                'companyName' => $brand['name'],
-                'companyAddress' => $settings->requiredString('company.address'),
-                'trackingCode' => $snapshot['tracking_code'],
+                'title' => 'Interview scheduled',
+                'preheader' => 'Interview details for '.$snapshot['position_title'].'.',
+                'applicantName'   => $this->safeMarkdownText($snapshot['applicant_name'], 'Applicant'),
+                'positionTitle'   => $this->safeMarkdownText($snapshot['position_title'], 'the position'),
+                'scheduledAt'     => $scheduledAt,
+                'location'        => $this->safeMarkdownText($snapshot['location'], 'To be confirmed'),
+                'interviewerName' => $this->safeMarkdownText($snapshot['interviewer_name'], 'To be confirmed'),
+                'companyName' => $this->safeMarkdownText($brand['name'], 'the company'),
+                'trackingCode' => $this->safeMarkdownText($snapshot['tracking_code'], 'Not available'),
                 'trackingUrl' => $snapshot['tracking_url'],
             ],
         );
@@ -99,5 +102,17 @@ class InterviewScheduledMail extends QueuedMailable
     private function snapshotData(): array
     {
         return $this->snapshot ?: self::snapshotForEmail($this->application, $this->interview);
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? 'Interview scheduled');
+    }
+
+    private function safeMarkdownText(?string $value, string $fallback): string
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $value)) ?? '');
+
+        return $text === '' ? $fallback : (preg_replace('/([\\\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? $fallback);
     }
 }

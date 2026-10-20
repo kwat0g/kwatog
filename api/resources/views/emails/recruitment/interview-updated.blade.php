@@ -1,24 +1,22 @@
-<x-mail::message>
+<x-mail::message :preheader="$preheader" :title="$title">
 # Interview details updated
 
-Dear {{ $applicantName }},
+Hello {{ $applicantName }},
 
-The interview details for your **{{ $positionTitle }}** application have been updated.
+The interview details for your **{{ $positionTitle }}** application have changed. Please use the updated details below.
 
-| Detail | Information |
-|---|---|
-| Date & time | **{{ $scheduledAt }}** |
-| Location | {{ $location }} |
-| Interviewer | {{ $interviewerName }} |
-@if ($outcome)
-| Interview outcome | **{{ $outcome }}** |
-@endif
-| Tracking code | **{{ $trackingCode }}** |
+<x-mail::panel>
+Date and time: **{{ $scheduledAt }}**<br>
+Location or meeting details: {{ $location }}<br>
+Interviewer: {{ $interviewerName }}
+</x-mail::panel>
 
-Please use the updated information above. If you have questions or cannot attend, contact the {{ $companyName }} HR Team through the contact details in this email.
+Your tracking code: **{{ $trackingCode }}**
 
-<x-mail::button :url="$trackingUrl">Track Your Application</x-mail::button>
+<x-mail::button :url="$trackingUrl">View application status</x-mail::button>
 
 Regards,<br>
-<strong>{{ $companyName }} HR Team</strong>
+{{ $companyName }} Recruitment Team
+
+You received this email because interview details for your application changed. Contact the recruitment team if you cannot attend.
 </x-mail::message>
