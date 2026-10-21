@@ -312,6 +312,7 @@ class SupplierShipmentTest extends TestCase
             'purchase_order_id' => $po->id,
             'shipped_date' => now()->subDay()->toDateString(),
             'estimated_arrival' => now()->addDay()->toDateString(),
+            'notes' => null,
         ]);
         $this->asSupplier();
 
