@@ -27,6 +27,7 @@ Updated: 2026-10-21
 - Shared foundation local commit `6967b23a` changes a missing `FRONTEND_URL` fallback from `APP_URL` to `http://localhost` (EF-029), so email links cannot silently target the API host.
 - E-017 through E-034 already have local or open draft PR work; E-017–E-034 are not untouched. Their checks, base-chain health, per-type tests, and screenshot evidence still need a consolidated audit. E-035 is test-only harness coverage, documented in PR #280.
 - Sampled remote failures show shared-base issues: E-017 PR #239 and E-023 PR #255 fail PHPStan on EF-027; E-034 PR #278 fails an E-008 test pinned to `https://ogamiph.dev` while CI uses `app.frontend_url`; E-001 PR #216 fails when an array-transport notification has no From header. PR #312 addresses EF-027; PR #275 contains the configured-URL assertion and reserved PHPUnit sender fixes. Those fixes still need to reach affected PR bases and checks must be rerun.
+- PR #275's current remote run (head `67be3750`) also failed because E-009's complaint-link test hardcoded `https://ogamiph.dev`. Local branch head `08194e93` now asserts `app.frontend_url` and records EF-064; it is not pushed or tested. Its rerun waits for active PR #312 PHPUnit run 39568212202.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
@@ -45,7 +46,7 @@ Updated: 2026-10-21
 ## Next steps
 
 1. PR #312 run 39568212202 is active in PHPUnit; poll this exact run before starting another suite or publishing commits that trigger CI. PR #311 run 39565852712 failed before PHPUnit on the inherited undefined `$creditNote`; PR #312 replaces that reference with the captured snapshot hash.
-2. After the active run ends, publish shared baseline fixes and align affected PR bases: E-011/E-012 with #312, and downstream PRs with the E-008 URL-test and array-sender fixes in #275. Rerun affected checks.
+2. After the active run ends, publish shared baseline fixes and align affected PR bases: E-011/E-012 with #312, and downstream PRs with the E-008/E-009 URL-test and array-sender fixes in #275. Rerun affected checks.
 3. Publish local E-013, E-014/E-015, and E-016 functional/design branches as independent draft PRs once their parent checks are current.
 4. Audit existing E-017–E-034 PRs and the E-035 harness against inventory, including current CI, dependencies, screenshots, and focused test evidence. Refresh stale findings and coverage docs.
 5. Finish the master coverage report, company/deliverability checklist, and visual review for every remaining email. Real email-client rendering remains unverified.
