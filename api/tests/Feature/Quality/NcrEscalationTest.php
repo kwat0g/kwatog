@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Enums\NcrActionType;
@@ -94,6 +95,31 @@ class NcrEscalationTest extends TestCase
 
         $this->assertSame(1, $count);
         $this->assertSame(1, (int) $ncr->fresh()->escalation_level);
+    }
+
+    public function test_escalation_does_not_notify_role_member_without_ncr_view_permission(): void
+    {
+        $qcInspector = User::query()->whereHas('role', fn ($q) => $q->where('slug', 'qc_inspector'))->firstOrFail();
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $qcInspector->id,
+            'permission_id' => Permission::query()->where('slug', 'quality.ncr.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'NCR visibility removed for recipient test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $ncr = $this->openNcr(NcrSeverity::Critical, now()->subHours(9));
+
+        $outcome = app(NcrEscalationService::class)->runWithOutcome();
+
+        $this->assertSame(1, $outcome['unstaffed']);
+        $this->assertSame(0, $qcInspector->notifications()->where('type', 'ncr.escalation')->count());
+        $this->assertSame(0, (int) $ncr->fresh()->escalation_level);
+        $this->assertDatabaseHas('ncr_escalation_deliveries', ['ncr_id' => $ncr->id, 'status' => 'pending']);
     }
 
     public function test_high_ncr_under_24h_does_not_escalate(): void

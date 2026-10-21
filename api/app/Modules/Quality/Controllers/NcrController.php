@@ -77,7 +77,9 @@ class NcrController
             'data' => User::query()
                 ->where('is_active', true)
                 ->orderBy('name')
-                ->get(['id', 'name'])
+                ->get(['id', 'name', 'role_id'])
+                ->filter(static fn (User $user): bool => $user->hasPermission('quality.ncr.view'))
+                ->values()
                 ->map(static fn (User $user): array => [
                     'id' => $user->hash_id,
                     'name' => $user->name,

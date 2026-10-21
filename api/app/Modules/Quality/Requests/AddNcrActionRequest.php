@@ -34,6 +34,12 @@ final class AddNcrActionRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::exists('users', 'id')->where(static fn ($query) => $query->where('is_active', true)),
+                static function (string $attribute, mixed $value, \Closure $fail): void {
+                    $owner = User::query()->find($value);
+                    if ($owner && ! $owner->hasPermission('quality.ncr.view')) {
+                        $fail('The selected owner cannot view NCRs.');
+                    }
+                },
             ],
             'due_date'     => ['nullable', 'date_format:Y-m-d'],
         ];
