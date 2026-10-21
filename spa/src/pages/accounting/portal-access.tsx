@@ -144,7 +144,7 @@ function SuppliersSection() {
    setInviteOpen(false);
    setInvite({ vendor_id: '', name: '', email: '' });
    refresh();
-   toast.success('Invitation queued. The temporary password was sent by email.');
+   toast.success('Invitation queued for email delivery.');
   },
   onError: (error) => reportMutationError(error, 'Could not queue the supplier invitation.'),
  });
@@ -225,7 +225,7 @@ function SuppliersSection() {
 
    <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite supplier contact">
     <form onSubmit={submitInvite} className="space-y-4">
-     <p className="text-sm text-muted">The contact receives a one-time temporary password by email and must set a new password on first sign-in.</p>
+     <p className="text-sm text-muted">The contact receives a one-time setup link by email and chooses a password before signing in.</p>
      <Select label="Vendor" required value={invite.vendor_id} onChange={(event) => setInvite((current) => ({ ...current, vendor_id: event.target.value }))}>
       <option value="">Choose a vendor…</option>
       {(vendors.data?.data ?? []).map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
@@ -290,7 +290,7 @@ function CustomersSection() {
    setInviteOpen(false);
    setInvite({ customer_id: '', name: '', email: '' });
    refresh();
-   toast.success('Invitation queued. The temporary password was sent by email.');
+   toast.success('Invitation queued for email delivery.');
   },
   onError: (error) => reportMutationError(error, 'Could not queue the customer invitation.'),
  });
@@ -371,7 +371,7 @@ function CustomersSection() {
 
    <Modal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite customer contact">
     <form onSubmit={submitInvite} className="space-y-4">
-     <p className="text-sm text-muted">The contact receives a one-time temporary password by email and must set a new password on first sign-in.</p>
+     <p className="text-sm text-muted">The contact receives a one-time setup link by email and chooses a password before signing in.</p>
      <Select label="Customer" required value={invite.customer_id} onChange={(event) => setInvite((current) => ({ ...current, customer_id: event.target.value }))}>
       <option value="">Choose a customer…</option>
       {(customers.data?.data ?? []).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
