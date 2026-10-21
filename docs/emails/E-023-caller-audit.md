@@ -115,6 +115,15 @@ These changes fix the route families found by static search. They do not complet
 - EF-056: supplier schedule cancellation notices used role permission rows directly and missed effective user grants/revocations. Fixed in draft PR #268 with the shared permission resolver. Regression coverage added for role access, grants, revocations, and inactive accounts. The remaining direct role checks found in this pass are intentional role-scoped/configured audiences or in-app-only paths; they remain subject to the per-caller audit below.
 - EF-090: training expiry notices gave employees an HR-only employee page link and sent configured HR recipients training details without checking effective permissions and employee row scope. Fixed in draft PR #301 with separate self/staff payloads and route-scope checks. HR/legal/data-protection review remains required.
 
+## Verified caller batch: maintenance parts
+
+| Call | Recipient and link check | Result |
+|---|---|---|
+| `MaintenancePartRequestService::request()` → `maintenance.parts_requested` | Starts with users who can create inventory issues and links to `/inventory/picking?maintenance_work_order_id={hash}`. That SPA page requires `inventory.picking.view`; the route check now requires both effective permissions. | PR #308 fixes the mismatch and tests that an issue creator without picking-page access is excluded. Message includes work-order number, requested quantity, unit, and item code. |
+| `MaintenancePartRequestService::confirm()` → `maintenance.parts_handed_over` | Recipient must be the active assigned employee in the Maintenance department, linked to an active `employee` or `maintenance_tech` account. Employee links use the assigned-work self-service route; technician links use the maintenance route. Employee access is limited to the assigned work order; `maintenance_tech` has `maintenance.view`. | Static route and role checks found no visibility mismatch. Notice includes work-order number and handover outcome only. |
+
+Both calls happen inside their state-changing database transaction. Generic notification mail remains opt-in per notification type and is dispatched after commit by the shared notification service. This batch is source-reviewed; it adds no new runtime test.
+
 ## Remaining audit work
 
 - Resolve each audience expression to role, permission, owner, approver, or external-contact rules; compare each recipient to route and record visibility.
