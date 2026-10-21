@@ -9,7 +9,7 @@
 
 ## Content and privacy
 
-The subject uses configured email branding and a CR/LF-scrubbed, length-limited alert title. The body shows the alert's stored title, message, human-readable type/severity, entity type, and creation time converted to Asia/Manila. It omits the internal entity database ID. The CTA opens the authenticated SPA alert list.
+The subject uses configured email branding and a CR/LF-scrubbed, length-limited alert title. The body shows the alert's stored title, message, human-readable type/severity and related area, plus creation time converted to Asia/Manila. The related-area label is derived from the entity model name with word spacing; internal entity database IDs remain omitted. The CTA opens the authenticated SPA alert list.
 
 The shared Markdown shell supplies the configured logo variants, company identity/footer, preheader, responsive layout, and plain-text alternative. Blade escapes alert text.
 

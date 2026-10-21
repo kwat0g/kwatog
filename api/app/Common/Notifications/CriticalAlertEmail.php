@@ -38,7 +38,7 @@ class CriticalAlertEmail extends Notification
                 'alertType' => $this->alert->type->label(),
                 'severity' => $this->alert->severity->label(),
                 'message' => $this->alert->message,
-                'entityType' => $this->alert->entity_type ? class_basename($this->alert->entity_type) : null,
+                'entityType' => $this->alert->entity_type ? Str::headline(class_basename($this->alert->entity_type)) : null,
                 'createdAt' => $this->alert->created_at?->copy()->timezone('Asia/Manila')->format('j M Y, g:i A P'),
                 'alertsUrl' => rtrim(config('app.frontend_url', config('app.url')), '/').'/alerts',
             ]);

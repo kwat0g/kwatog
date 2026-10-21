@@ -6,7 +6,7 @@ Ogami Philippines
 
 The job runner has not recorded a heartbeat.
 
-**Related area:** SchedulerTaskRun
+**Related area:** Scheduler Task Run
 
 **Recorded:** 21 Oct 2026, 8:15 AM +08:00
 

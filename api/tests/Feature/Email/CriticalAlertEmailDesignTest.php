@@ -50,6 +50,8 @@ class CriticalAlertEmailDesignTest extends TestCase
         $this->assertStringContainsString('['.app(EmailBrandingService::class)->data()['name'].'] Critical alert: Scheduler degraded', $message->getSubject());
         $this->assertStringContainsString('Scheduler degraded', $html);
         $this->assertStringContainsString('Scheduler stale', $html);
+        $this->assertStringContainsString('Related area: Scheduler Task Run', $text);
+        $this->assertStringNotContainsString('SchedulerTaskRun', $text);
         $this->assertStringContainsString('21 Oct 2026, 8:15 AM +08:00', $html);
         $this->assertStringNotContainsString('987654', $html);
         $this->assertStringNotContainsString('scheduler_stale', $html);
