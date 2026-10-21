@@ -15,7 +15,7 @@ Status: template redesign is in progress in the portal-security email draft PR.
 ## Verification
 
 - `PortalPasswordResetTest.php`: included in the 12 passing tests, 65 assertions documented under E-005; verifies supplier/customer trigger typing, subject, frontend route, and token reset behavior.
-- Browser previews inspected at 1440px desktop and 390px mobile in light/dark modes. All four showed no horizontal overflow; correct logo and dark colors selected. HTML size: 19,639 bytes. Screenshots: [desktop light](screenshots/portal-password-reset-desktop-light.png), [desktop dark](screenshots/portal-password-reset-desktop-dark.png), [mobile light](screenshots/portal-password-reset-mobile-light.png), [mobile dark](screenshots/portal-password-reset-mobile-dark.png).
+- Browser previews inspected at 1440px desktop and 390px mobile in light/dark modes. `PortalPasswordResetMail::render()` produced the preview with a dummy token; no mail was sent. All four browser captures fit their viewport and show the correct logo variant. HTML size: 20,594 bytes. Branding values come from the local seeded settings and need owner confirmation. Screenshots: [desktop light](screenshots/portal-password-reset-desktop-light.png), [desktop dark](screenshots/portal-password-reset-desktop-dark.png), [mobile light](screenshots/portal-password-reset-mobile-light.png), [mobile dark](screenshots/portal-password-reset-mobile-dark.png).
 - Browser rendering does not verify Outlook, Gmail, Apple Mail, Yahoo, or mobile mail clients. No real email was sent.
 
 ## Review still required

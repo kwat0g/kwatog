@@ -17,7 +17,7 @@ Status: shared security correction is in draft PR #223; template redesign is in 
 ## Verification
 
 - `PortalPasswordResetTest.php`: 12 tests passed, 65 assertions. Covers customer/supplier setup/reset routes, subject, preheader, plain-text link, escaped recipient input, token hashing/expiry/invalidation, and no temporary password.
-- Browser previews inspected at 1440px desktop and 390px mobile in light/dark modes. All four showed no horizontal overflow; correct logo and dark colors selected. HTML size: 21,399 bytes. Screenshots: [desktop light](screenshots/portal-invitation-desktop-light.png), [desktop dark](screenshots/portal-invitation-desktop-dark.png), [mobile light](screenshots/portal-invitation-mobile-light.png), [mobile dark](screenshots/portal-invitation-mobile-dark.png).
+- Browser previews inspected at 1440px desktop and 390px mobile in light/dark modes. `PortalAccessInvitationMail::render()` produced the preview with a dummy token; no mail was sent. All four browser captures fit their viewport and show the correct logo variant. HTML size: 22,351 bytes. Branding values come from the local seeded settings and need owner confirmation. Screenshots: [desktop light](screenshots/portal-invitation-desktop-light.png), [desktop dark](screenshots/portal-invitation-desktop-dark.png), [mobile light](screenshots/portal-invitation-mobile-light.png), [mobile dark](screenshots/portal-invitation-mobile-dark.png).
 - Browser rendering does not verify Outlook, Gmail, Apple Mail, Yahoo, or mobile mail clients. No real email was sent.
 
 ## Review still required
