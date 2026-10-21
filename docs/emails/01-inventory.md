@@ -1,6 +1,6 @@
 # Phase 1 — Email inventory and classification
 
-**Status:** provisional, based on static code inspection dated 2026-10-20. It is a review checkpoint, not approval to edit templates. `D` means current quality is below target based on source-level gaps; grades are provisional because unsafe local SMTP prevented rendering and runtime recipient checks. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
+**Status:** owner directed work to proceed. Inventory remains provisional, based on static code inspection dated 2026-10-20; runtime recipient checks remain outstanding. `D` means current quality is below target based on source-level gaps. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
 
 ## Master inventory
 
@@ -139,15 +139,15 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 
 ## Company data and infrastructure still unconfirmed
 
-Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an approved email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. SPF/DKIM/DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To require confirmation from domain/email administrators.
+Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. The owner reported DKIM setup succeeded for `ogamiph.dev` in the AWS Asia Pacific (Singapore) region. SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To remain unverified with domain/email administrators.
 
-## Decisions needed before Phase 2
+## Owner follow-up before production email
 
-1. Confirm local external SMTP is disabled and Mailpit/MailHog/log/catch-all is configured before any send-capable testing or browser preview that might dispatch.
-2. Review this inventory and missing-email recommendation track. Phase 2 template changes remain stopped until that review.
-3. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
-4. Confirm handling policy for payslip attachment and temporary-password paths; P0 credential/security fixes should be a separate functional-fix track.
-5. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
+1. Verify local and staging mail transports stay on a sink before any send-capable test. Never send real mail during development or testing.
+2. Verify company settings and approved disclaimer; accountant review required for statutory fields.
+3. Confirm secure payslip delivery and resolve the P0 temporary-password paths in the separate security-fix track.
+4. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
+5. Ask domain/email administrators to verify SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To. DKIM setup was reported successful for `ogamiph.dev` in Singapore; domain validation remains external to this code audit.
 
 ## Manual real-client checklist for the later email phase
 
