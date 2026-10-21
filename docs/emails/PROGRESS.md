@@ -183,3 +183,5 @@ Continue the E-023 caller-by-caller audience, route, row-scope, payload, and sna
 - E-023 index reconciled against current source: 83 generic `NotificationService::send()` call sites, 83 exact source-line anchors, no missing or stale entries. Audience, route, payload, and snapshot review remains partial as recorded in the caller audit.
 
 - EF-121: CI for RFQ requester-access PR #324 found `maintenance.parts_requested` missing from SPA notification metadata. Added its Maintenance action entry on separate branch `fix/notification-meta-parts-requested`; no extra feature scope. Focused verification and separate draft PR wait for the active API suite.
+
+- E-023 static review: checked prebill invoice, budget, budget-transfer, and bill-payment notices against active/delegated approver rules, maker-checker, exact SPA/API destination guards, payload, deduplication, and `NotificationService` after-commit/email-opt-in behavior. No defect found. Caller-by-caller audit remains partial.
