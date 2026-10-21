@@ -9,6 +9,8 @@ use App\Common\Mail\QueuedMailable;
 use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +46,37 @@ class NotificationServiceHardeningTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    public function test_permission_audience_honors_active_user_overrides(): void
+    {
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'test.notification.permission'],
+            ['name' => 'Test notification permission', 'module' => 'test'],
+        );
+        $role = Role::create(['name' => 'Notification permission role', 'slug' => 'test_notification_permission']);
+        $role->permissions()->attach($permission->id);
+        $roleUser = User::factory()->create(['role_id' => $role->id]);
+        $grant = User::factory()->create();
+        $revoked = User::factory()->create(['role_id' => $role->id]);
+        $inactiveGrant = User::factory()->create(['is_active' => false]);
+
+        foreach ([[$grant, 'grant'], [$revoked, 'revoke'], [$inactiveGrant, 'grant']] as [$user, $type]) {
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $user->id,
+                'permission_id' => $permission->id,
+                'type' => $type,
+                'granted_by' => $roleUser->id,
+                'reason' => 'Notification audience test',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [$roleUser->id, $grant->id],
+            $this->service->usersWithPermission('test.notification.permission')->modelKeys(),
+        );
     }
 
     /* ─── Transactional safety ─────────────────────────────────────────── */
