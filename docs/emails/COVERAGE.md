@@ -36,11 +36,11 @@ closing the corresponding row.
 | E-026 | Critical alert | [#269](https://github.com/kwat0g/kwatog/pull/269) | Desktop/mobile light/dark captures inspected and copied here; layout fits; preview timestamp incorrectly says PST, fix tracked in #276; logo/footer fixture refresh and RBAC follow-up pending |
 | E-027 | Daily production summary | [#272](https://github.com/kwat0g/kwatog/pull/272) | Desktop/mobile light/dark captures inspected and copied here; long but capped summary sections and “more in ERP” copy; responsive and permission follow-ups #277/#314 pending; logo/company values redacted in screenshot |
 | E-028 | Weekly production summary | [#272](https://github.com/kwat0g/kwatog/pull/272) | Desktop/mobile light/dark captures inspected and copied here; concise date-range and comparable-period copy; responsive and permission follow-ups #277/#314 pending; company values redacted in screenshot |
-| E-029 | Internal account welcome | [#273](https://github.com/kwat0g/kwatog/pull/273) | Secure-link change drafted; HR/security review and CI pending |
-| E-030 | Legacy temporary-password reset | [#273](https://github.com/kwat0g/kwatog/pull/273) | Legacy password email replaced by reset link; confirm no reachable caller remains |
-| E-031 | Auth welcome with temporary password | [#273](https://github.com/kwat0g/kwatog/pull/273) | Secure-link change drafted; security review and CI pending |
-| E-032 | Employee password reset | [#273](https://github.com/kwat0g/kwatog/pull/273) | Secure-link change drafted; HR/security review and CI pending |
-| E-033 | Employee welcome with temporary password | [#273](https://github.com/kwat0g/kwatog/pull/273) | Secure-link change drafted; HR/security review and CI pending |
+| E-029 | Internal account welcome | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute set-password link, no credential in body; replace old icon, verify company settings; security/CI review pending |
+| E-030 | Legacy temporary-password reset | [#273](https://github.com/kwat0g/kwatog/pull/273) | Legacy password email replaced by secure reset link; no separate preview; confirm no reachable caller remains |
+| E-031 | Auth welcome with temporary password | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute set-password link, no credential in body; replace old icon, verify company settings; security/CI review pending |
+| E-032 | Employee password reset | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute reset link, no credential in body; replace old icon, verify company settings; HR/security/CI review pending |
+| E-033 | Employee welcome with temporary password | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute set-password link, no credential in body; replace old icon, verify company settings; HR/security/CI review pending |
 | E-034 | Public contact inquiry alert | [#278](https://github.com/kwat0g/kwatog/pull/278) | Draft; visual and CI review pending |
 | E-035 | Test-only integration message | [#280](https://github.com/kwat0g/kwatog/pull/280) | Harness inventory drafted; excluded from production email redesign |
 
