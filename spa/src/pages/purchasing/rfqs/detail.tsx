@@ -55,7 +55,7 @@ export default function RfqDetailPage() {
   const purchaseOrders = useQuery({
     queryKey: ['purchasing', 'rfqs', id, 'purchase-orders'],
     queryFn: () => rfqsApi.purchaseOrders(id),
-    enabled: !!rfq && rfq.status === 'awarded',
+    enabled: !!rfq && rfq.status === 'awarded' && rfq.actions.can_compare,
   });
 
   const refreshAll = async () => {
@@ -142,8 +142,8 @@ export default function RfqDetailPage() {
       <PageHeader
         title={<span className="font-mono">{rfq.rfq_number}</span>}
         subtitle={rfq.title}
-        backTo="/purchasing/rfqs"
-        backLabel="Supplier RFQs"
+        backTo={rfq.actions.can_compare ? '/purchasing/rfqs' : undefined}
+        backLabel={rfq.actions.can_compare ? 'Supplier RFQs' : undefined}
         actions={
           <div className="flex flex-wrap gap-2">
             <Chip variant={rfqStatus(rfq.status).variant}>{rfqStatus(rfq.status).label}</Chip>
