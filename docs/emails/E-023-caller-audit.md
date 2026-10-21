@@ -135,6 +135,7 @@ These changes fix the route families found by static search. They do not complet
 - `Complaint8dEscalationService`: role-configured recipients and the direct assignee receive complaint number, SLA tier, and `/crm/complaints/{hash}`. The SPA/API route requires `crm.complaints.view`; draft PR #304 now filters both groups by effective permission. Regression coverage revokes the assignee's view permission and confirms they receive no notification.
 - `DeliveryService::notifyAutoInvoiceFailure()` and `NotifyFinanceOnDeliveryConfirmed`: invoice creators previously received a delivery link/number; invoice detail recipients were not filtered by invoice-view permission. Draft PR #305 sends manual handoffs to `/accounting/invoices/create` with no delivery identifiers, and requires effective `accounting.invoices.view` for existing-invoice detail notices. `AutoInvoiceOnDeliveryConfirmTest` covers the manual path and redaction.
 - `mrp:run-daily`: configured roles received run counts and `/mrp/plans` without effective plan visibility; the unused run entity ID had no detail route. Draft PR #306 filters by `mrp.plans.view` and removes that identifier. Regression coverage excludes a revoked PPC user.
+- `attendance:notify-missing-timeout`: HR and same-department head summaries linked to `/hr/attendance`, but role resolution ignored the page's effective permissions and the API row scope. Draft PR #307 requires attendance view plus HR-wide edit/import or department-head approval access; tests cover revoked recipients.
 
 ## Remaining audit work
 

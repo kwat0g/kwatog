@@ -74,6 +74,30 @@ class PunchCommandsTest extends TestCase
         $this->artisan('attendance:notify-missing-timeout')->assertFailed();
     }
 
+    public function test_exits_failure_when_hr_officer_cannot_open_attendance_page(): void
+    {
+        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        $hr = User::factory()->create(['role_id' => Role::query()->where('slug', 'hr_officer')->value('id')]);
+        $actor = User::factory()->withRole('system_admin')->create();
+        foreach (['attendance.edit', 'attendance.import'] as $permission) {
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $hr->id,
+                'permission_id' => DB::table('permissions')->where('slug', $permission)->value('id'),
+                'type' => 'revoke',
+                'granted_by' => $actor->id,
+                'reason' => 'Attendance notice visibility regression test',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        [$emp] = $this->worker();
+        $this->at('2026-10-08 06:00:00');
+        Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
+
+        $this->artisan('attendance:notify-missing-timeout')->assertFailed();
+        $this->assertSame(0, $this->missingTimeoutCount());
+    }
+
     private function departmentHead(Department $dept): User
     {
         $emp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $dept->id]);
@@ -95,18 +119,30 @@ class PunchCommandsTest extends TestCase
         $this->seed(\Database\Seeders\RolePermissionSeeder::class);
         User::factory()->create(['role_id' => Role::query()->where('slug', 'hr_officer')->value('id'), 'is_active' => true]);
         $dept = Department::factory()->create();
-        $this->departmentHead($dept);
-        $this->departmentHead($dept); // two heads: both notified
+        $eligibleHead = $this->departmentHead($dept);
+        $revokedHead = $this->departmentHead($dept);
+        $actor = User::factory()->withRole('system_admin')->create();
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedHead->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'attendance.ot.approve')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'Attendance notice visibility regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $emp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $dept->id]);
         $this->at('2026-10-08 06:00:00');
         Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
 
         $this->artisan('attendance:notify-missing-timeout')->assertSuccessful();
 
-        $this->assertSame(3, $this->missingTimeoutCount()); // 1 HR + 2 heads
+        $this->assertSame(2, $this->missingTimeoutCount()); // 1 HR + 1 eligible head
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $eligibleHead->id, 'type' => 'attendance.missing_time_out']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedHead->id, 'type' => 'attendance.missing_time_out']);
 
         $this->artisan('attendance:notify-missing-timeout')->assertSuccessful(); // rerun: deduped
-        $this->assertSame(3, $this->missingTimeoutCount());
+        $this->assertSame(2, $this->missingTimeoutCount());
     }
 
     public function test_a_department_without_a_head_is_reported_but_is_not_a_failure(): void
