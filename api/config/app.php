@@ -2,7 +2,8 @@
 
 return [
     'name' => env('APP_NAME', 'Ogami ERP'),
-    'env' => env('APP_ENV', 'production'),
+    // Keep an unset environment non-production so mail cannot bypass the test sink.
+    'env' => env('APP_ENV', 'local'),
     'debug' => (bool) env('APP_DEBUG', false),
     // Demo transactional records are opt-in; production and normal installs
     // must start from live/imported business data rather than fabricated rows.
