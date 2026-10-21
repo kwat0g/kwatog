@@ -1,6 +1,6 @@
 # Email audit progress
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Status
 
@@ -13,6 +13,11 @@ Updated: 2026-10-20
 - Markdown table styling: isolated follow-up branch `fix/email-markdown-table-style` styles Laravel's direct Markdown tables in light/dark, while excluding CTA tables. `FeatureEmailIntegrationTest::test_supplier_purchase_order_email_is_queued_with_supplier_data`: 1 test, 2 assertions passed; rendered test mail inspected at 1440px/390px in light/dark, no horizontal overflow. Preview contains test fixture company data. Focused test uses `MAIL_MAILER=array`; no message sent.
 - E-019 cross-template validation: rendered the RFQ lifecycle mailable with this PR's layout selectors. `SupplierRfqLifecycleMailTest` passed (1 test, 73 assertions); 20 Chromium screenshots cover five statuses at 1440px/390px and light/dark. Every document width matched its viewport; inspected captures show the styled table, logo, CTA, and footer. Test branding only; no email sent. Screenshots: `e019-rfq-lifecycle-*.png`.
 - Email delivery: none sent.
+
+## Email UI work — 2026-10-21
+
+- E-001 invoice issued, E-002 official receipt, and E-003 invoice dunning now use the shared email shell's preheader/title, clearer key-fact tables, and consistent peso display. Invoice line items now use the shared responsive Markdown table styling. No trigger, recipient, or record source changed.
+- Browser screenshots and template tests are pending; this worktree has no `api/vendor` or local `.env`. No email was sent. Do not mark this group complete until its rendered desktop/mobile and light/dark previews are inspected.
 
 ## Blockers
 
