@@ -22,7 +22,6 @@ class NotifyOnLowStockPrCreated implements ShouldQueue
     {
         try {
             $item = $event->item;
-            $pr   = $event->purchaseRequest;
 
             $roles = array_values(array_filter(
                 (array) $this->settings->get('inventory.low_stock.notification_roles', []),
@@ -30,14 +29,16 @@ class NotifyOnLowStockPrCreated implements ShouldQueue
             ));
             $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('inventory.view'))
+                ->values();
 
             $this->notifications->send($audience, 'inventory.low_stock', [
                 'title'       => "Low Stock — {$item->code}",
-                'message'     => "{$item->name} below reorder point. Auto-PR {$pr->pr_number} created.",
-                'link_to'     => "/purchasing/purchase-requests/{$pr->hash_id}",
-                'entity_type' => 'purchase_request',
-                'entity_id'   => $pr->hash_id,
+                'message'     => "{$item->name} is below its reorder point. A purchase request was created.",
+                'link_to'     => "/inventory/items/{$item->hash_id}",
+                'entity_type' => 'item',
+                'entity_id'   => $item->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnLowStockPrCreated failed', ['error' => $e->getMessage()]);

@@ -48,7 +48,7 @@ class LowStockNotificationTest extends TestCase
         ]);
     }
 
-    public function test_notification_contains_item_and_pr_details(): void
+    public function test_notification_links_to_item_without_exposing_unreadable_purchase_request(): void
     {
         $this->userWithRole('purchasing_officer');
 
@@ -66,8 +66,37 @@ class LowStockNotificationTest extends TestCase
         $data = json_decode($row->data, true);
         $this->assertStringContainsString('ITM-TEST01', $data['title']);
         $this->assertStringContainsString('Test Resin Pellets', $data['message']);
-        $this->assertStringContainsString('PR-202606-0001', $data['message']);
-        $this->assertStringContainsString('/purchasing/purchase-requests/', $data['link_to']);
+        $this->assertStringContainsString('purchase request was created', $data['message']);
+        $this->assertStringNotContainsString('PR-202606-0001', $data['message']);
+        $this->assertSame('/inventory/items/'.$item->hash_id, $data['link_to']);
+        $this->assertSame('item', $data['entity_type']);
+        $this->assertSame($item->hash_id, $data['entity_id']);
+    }
+
+    public function test_listener_excludes_role_user_whose_item_view_permission_was_revoked(): void
+    {
+        $warehouse = $this->userWithRole('warehouse_staff');
+        $admin = $this->userWithRole('system_admin');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $warehouse->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'inventory.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $warehouse->flushPermissionsCache();
+
+        app(NotifyOnLowStockPrCreated::class)->handle(new LowStockPrCreated(
+            Item::factory()->create(),
+            PurchaseRequest::factory()->create(),
+        ));
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $warehouse->id,
+            'type' => 'inventory.low_stock',
+        ]);
     }
 
     public function test_listener_class_exists(): void
