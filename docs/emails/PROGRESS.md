@@ -113,6 +113,7 @@ Updated: 2026-10-21
 - EF-081 / E-023 purchasing approval audiences: three PR/PO notices ignored current route permissions; pending-PO targeting also used role-only permission rows. Draft PR #292 filters by effective permissions and the record access policies, retaining configured roles/current approval role. `PurchaseApprovalNotificationAudienceTest`: 3 tests, 6 assertions passed on isolated `ogami_test_email_purchase_audience_20261021`; PHPUnit forces `MAIL_MAILER=array`. No real email sent.
 - EF-082 / inventory notice access: low-stock notices gave warehouse staff a purchase-request link they could not open and exposed its number; GRN notices ignored `inventory.view` revocations. Draft PR #293 routes low-stock notices to the visible item and filters both audiences by effective `inventory.view`. Focused tests added; test run pending. No real email sent.
 - EF-083 / supplier-listing review audience: direct reviewers could retain `purchasing.supplier_listings.review` after losing the view permission required by the link. Draft PR #294 filters all reviewers by effective view access. Regression test added; test run pending. No real email sent.
+- EF-084 / scheduled maintenance repeat-breakdown notice: active supervisors with a revoked `maintenance.view` still received machine incident details and a forbidden downtime link. Draft PR #295 filters the audience by effective permission. Regression test added; test run pending. No real email sent.
 
 ## Next step
 

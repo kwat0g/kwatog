@@ -6,6 +6,7 @@ namespace Tests\Feature\Maintenance;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Models\MachineDowntime;
@@ -17,6 +18,12 @@ use Tests\TestCase;
 class MaintenanceRepeatBreakdownTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
+    }
 
     public function test_distinct_breakdown_incidents_notify_once_per_threshold_crossing(): void
     {
@@ -48,5 +55,50 @@ class MaintenanceRepeatBreakdownTest extends TestCase
         }
         $this->artisan('maintenance:check-repeat-breakdowns')->assertSuccessful();
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.repeat_breakdown')->count());
+    }
+
+    public function test_repeat_breakdown_notice_skips_supervisor_without_view_permission(): void
+    {
+        $this->travelTo(now()->startOfMinute());
+        $role = Role::where('slug', 'maintenance_supervisor')->firstOrFail();
+        $supervisor = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $admin = User::factory()->create(['role_id' => Role::where('slug', 'system_admin')->value('id')]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $supervisor->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'maintenance.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $supervisor->flushPermissionsCache();
+
+        $machine = Machine::factory()->create();
+        $order = MaintenanceWorkOrder::create([
+            'mwo_number' => 'REPEAT-REVOKED',
+            'maintainable_type' => 'machine',
+            'maintainable_id' => $machine->id,
+            'type' => 'corrective',
+            'priority' => 'medium',
+            'description' => 'Repeated incident test',
+            'status' => 'open',
+            'created_by' => $admin->id,
+        ]);
+        foreach ([now()->subDays(5), now()->subDay()] as $at) {
+            MachineDowntime::create([
+                'machine_id' => $machine->id,
+                'maintenance_order_id' => $order->id,
+                'category' => 'breakdown',
+                'start_time' => $at,
+            ]);
+        }
+
+        $this->artisan('maintenance:check-repeat-breakdowns')->assertSuccessful();
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $supervisor->id,
+            'type' => 'maintenance.repeat_breakdown',
+        ]);
     }
 }
