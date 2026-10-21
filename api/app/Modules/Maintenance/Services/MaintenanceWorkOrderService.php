@@ -618,7 +618,10 @@ class MaintenanceWorkOrderService
             $log = $this->recordLifecycleLog($locked, 'Repair submitted. Diagnosis: '.$locked->diagnosis
                 .' Repair action: '.$locked->repair_action.' Functional test: '.$locked->functional_test_result, $by);
             $recipients = User::query()->where('is_active', true)->whereKeyNot($by->id)
-                ->whereHas('role', fn ($q) => $q->where('slug', $this->verifierRole($locked)))->get();
+                ->whereHas('role', fn ($q) => $q->where('slug', $this->verifierRole($locked)))->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('maintenance.wo.verify')
+                    && $user->hasPermission('maintenance.view'))
+                ->values();
             $this->notifications->send($recipients, 'maintenance.repair_submitted',
                 NotifyMaintenanceWorkOrder::payload($locked,
                     'Repair verification needed: '.$locked->mwo_number, 'Review technician evidence and independently verify recovery.'),

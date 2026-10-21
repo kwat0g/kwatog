@@ -184,6 +184,49 @@ class MaintenanceVerifiedRecoveryTest extends TestCase
         );
     }
 
+    public function test_repair_submission_notice_excludes_verifiers_with_revoked_permission(): void
+    {
+        $technician = $this->actor('maintenance_tech');
+        $eligibleManager = $this->actor('production_manager');
+        $revokedVerifier = $this->actor('production_manager');
+        $revokedViewer = $this->actor('production_manager');
+        foreach ([
+            [$revokedVerifier, 'maintenance.wo.verify'],
+            [$revokedViewer, 'maintenance.view'],
+        ] as [$revokedUser, $permission]) {
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $revokedUser->id,
+                'permission_id' => DB::table('permissions')->where('slug', $permission)->value('id'),
+                'type' => 'revoke',
+                'granted_by' => $eligibleManager->id,
+                'reason' => 'Maintenance notification access revoked for regression test.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $order = $this->order($technician, true);
+        $this->recordPass($order, $technician);
+
+        $this->actingAs($technician)->postJson("/api/v1/maintenance/work-orders/{$order->hash_id}/submit-repair", [
+            'diagnosis' => 'Loose connection.',
+            'repair_action' => 'Reconnected wiring.',
+            'functional_test_result' => 'Load test passed.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $eligibleManager->id,
+            'type' => 'maintenance.repair_submitted',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedVerifier->id,
+            'type' => 'maintenance.repair_submitted',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedViewer->id,
+            'type' => 'maintenance.repair_submitted',
+        ]);
+    }
+
     public function test_preventive_recovery_requires_supervisor_and_legacy_complete_remains_available(): void
     {
         $technician = $this->actor('maintenance_tech');
