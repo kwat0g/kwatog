@@ -604,9 +604,13 @@ class ReturnCaseService
     private function notify(ReturnCase $case, string $title, bool $public, int $eventId): void
     {
         try {
-            $recipients = $case->assigned_to ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get() : collect();
+            $recipients = $case->assigned_to
+                ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get()
+                    ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'))
+                : collect();
             if ($recipients->isEmpty()) {
-                $recipients = $this->notifications->usersWithPermission('return_management.manage');
+                $recipients = $this->notifications->usersWithPermission('return_management.manage')
+                    ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'));
             }
             if ($recipients->isNotEmpty()) {
                 $this->notifications->send($recipients, 'return.case_updated', [

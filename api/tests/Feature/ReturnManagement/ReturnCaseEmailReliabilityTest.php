@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\ReturnManagement;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -28,8 +29,20 @@ final class ReturnCaseEmailReliabilityTest extends TestCase
         Mail::fake();
 
         $role = Role::create(['name' => 'Return Manager Test', 'slug' => 'return_manager_test', 'is_system' => false]);
-        $role->permissions()->attach(Permission::query()->where('slug', 'return_management.manage')->value('id'));
+        $role->permissions()->attach(Permission::query()->whereIn('slug', [
+            'return_management.manage',
+            'return_management.view',
+        ])->pluck('id'));
         $manager = User::factory()->create(['role_id' => $role->id]);
+        $managerWithoutView = User::factory()->create(['role_id' => $role->id]);
+        UserPermissionOverride::create([
+            'user_id' => $managerWithoutView->id,
+            'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $manager->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $managerWithoutView->flushPermissionsCache();
         $customer = Customer::factory()->create();
         $case = (new ReturnCase)->forceFill([
             'case_number' => 'CASE-RELIABILITY-001',
@@ -81,5 +94,6 @@ final class ReturnCaseEmailReliabilityTest extends TestCase
         $followUps = $manager->notifications()->where('type', 'return.case_updated')->get()
             ->filter(fn ($notification) => str_contains($notification->data['title'] ?? '', 'needs direct follow-up'));
         $this->assertCount(1, $followUps);
+        $this->assertSame(0, $managerWithoutView->notifications()->where('type', 'return.case_updated')->count());
     }
 }
