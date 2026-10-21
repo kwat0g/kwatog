@@ -28,6 +28,7 @@ Updated: 2026-10-21
 - E-017 through E-034 already have local or open draft PR work; E-017–E-034 are not untouched. Their checks, base-chain health, per-type tests, and screenshot evidence still need a consolidated audit. E-035 is test-only harness coverage, documented in PR #280.
 - Sampled remote failures show shared-base issues: E-017 PR #239 and E-023 PR #255 fail PHPStan on EF-027; E-034 PR #278 fails an E-008 test pinned to `https://ogamiph.dev` while CI uses `app.frontend_url`; E-001 PR #216 fails when an array-transport notification has no From header. PR #312 addresses EF-027; PR #275 contains the configured-URL assertion and reserved PHPUnit sender fixes. Those fixes still need to reach affected PR bases and checks must be rerun.
 - PR #275's current remote run (head `67be3750`) also failed because E-009's complaint-link test hardcoded `https://ogamiph.dev`. Local branch head `08194e93` now asserts `app.frontend_url` and records EF-064; it is not pushed or tested. Publish after PR #312's queued suite finishes.
+- PR #273's remote run failed on the same missing array-transport From header seen in PR #216. PR #275 carries the shared `.test` sender fix but is not yet in PR #273's base. Local account-security branch commit `d70d6e2d` also changes Admin/HR toggles to “Send account setup email,” matching the new secure-link body; not pushed or checked.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
