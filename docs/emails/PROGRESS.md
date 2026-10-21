@@ -148,6 +148,8 @@ Owner review: E-016 and E-023 can both send payslip-ready mail for one finalizat
 
 EF-112 found during E-023 review: internal RFQ outcome emails include PR requesters whose row scope allows the exact RFQ, but frontend/API global guards block them without a broad RFQ permission. Recorded for a separate access-control PR.
 
+EF-113 found during E-023 review: missing outgoing QC escalations included work-order numbers and repair reasons for configured QC recipients lacking `production.work_orders.view`. The escalation now filters by effective access, falls back to active system administrators, and logs when no audience exists. Regression tests added; follow-up CI pending. No real email sent.
+
 ## Next step
 
 Continue the E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify the consolidated E-023 PR checks. Owner still needs to verify company values and sales inbox readers before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.

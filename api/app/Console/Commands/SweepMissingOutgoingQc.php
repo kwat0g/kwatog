@@ -174,7 +174,20 @@ class SweepMissingOutgoingQc extends Command
                 ->whereHas('role', fn ($q) => $q->whereIn('slug',
                     (array) $settings->get('quality.outgoing_qc.notification_roles', [])))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('production.work_orders.view'))
+                ->values();
+            if ($recipients->isEmpty()) {
+                $recipients = User::query()
+                    ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+                    ->where('is_active', true)
+                    ->get();
+                if ($recipients->isEmpty()) {
+                    Log::warning('Outgoing QC escalation has no work-order viewers or system admin.', [
+                        'work_order_ids' => collect($escalated)->map(fn (array $row): string => $row[0]->hash_id)->all(),
+                    ]);
+                }
+            }
 
             $lines = [];
             foreach ($escalated as [$wo, $reason]) {
