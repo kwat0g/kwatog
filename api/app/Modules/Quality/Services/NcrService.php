@@ -402,7 +402,8 @@ class NcrService
             $qcHeads = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $notificationRoles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('quality.ncr.view'));
             app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [
                 'title' => 'NCR auto-created',
                 'message' => $inspection->problem_description
