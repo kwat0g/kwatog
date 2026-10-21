@@ -16,6 +16,7 @@
 
 - `ReturnRequestUpdateEmailSnapshotTest` and `ReturnRequestUpdateMailDesignTest`: 3 tests passed, 58 assertions. Checks snapshot recipient/status, stable delivery key, removal of sensitive fields, customer/supplier links, action copy, hostile contact input, plain text, branding, and HTML size.
 - Chromium inspected 8 actual-rendered-HTML previews at 1440px and 390px, light/dark. Both logo images loaded, CTA text stayed visible, and document width matched viewport; no horizontal overflow. Screenshots are in `screenshots/e021-rma-update-return-request-*.png`.
+- Refreshed all 8 captures from the current rendered HTML and visually confirmed CTA labels in dark mode; earlier tracked captures showed stale blank labels.
 - Mailer forced to `array`; no transport contacted. Browser rendering does not prove Outlook, Gmail, Apple Mail, or mobile client behavior.
 
 ## Related findings
