@@ -1,24 +1,34 @@
-<x-mail::message>
-# Interview Scheduled
+<x-mail::message :preheader="'Interview for '.$positionTitle.' on '.$scheduledAt.'.'" title="Interview scheduled">
+# Interview invitation
 
-Dear {{ $applicantName }},
+Hello {{ $applicantName }},
 
-We are pleased to invite you for an interview for the **{{ $positionTitle }}** position.
+Your interview for **{{ $positionTitle }}** is scheduled. Please review the details below and contact {{ $companyName }} Human Resources if you cannot attend.
 
-**Date & Time:** {{ $scheduledAt }}<br>
-**Location:** {{ $location }}<br>
-**Interviewer:** {{ $interviewerName }}
+<x-mail::panel>
+**Date and time**<br>
+{{ $scheduledAt }}
+
+**Interview location**<br>
+{{ $location }}
+
+**Interviewer**<br>
+{{ $interviewerName }}
+
+**Application tracking code**<br>
+{{ $trackingCode }}
+</x-mail::panel>
 
 Please arrive 15 minutes early and bring a valid ID.
 
-**Company Address:**<br>
+**Company address**<br>
 {{ $companyName }}<br>
 {{ $companyAddress }}
 
-Your tracking code is **{{ $trackingCode }}**. You can use it to view your application status:
+<x-mail::button :url="$trackingUrl">Check application status</x-mail::button>
 
-<x-mail::button :url="$trackingUrl">Track Your Application</x-mail::button>
+You received this email because an interview was scheduled for your application.
 
 Regards,<br>
-<strong>{{ $companyName }} HR Team</strong>
+{{ $companyName }} Human Resources
 </x-mail::message>

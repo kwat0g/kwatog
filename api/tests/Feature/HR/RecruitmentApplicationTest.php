@@ -323,13 +323,19 @@ class RecruitmentApplicationTest extends TestCase
             'scheduled_at' => now()->addDays(6),
         ])->save();
         Mail::assertQueued(InterviewScheduledMail::class, function (InterviewScheduledMail $mail) use ($expectedScheduledAt): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText('HR Office, 2nd Floor');
+            $mail->assertSeeInText('Maria Santos');
+            $mail->assertSeeInText('RCT-TEST01');
+
             return $mail->hasTo('juan@test.com')
                 && $mail->applicantName === 'Juan Test'
                 && $mail->positionTitle === 'Test Position'
                 && $mail->interviewerName === 'Maria Santos'
                 && $mail->location === 'HR Office, 2nd Floor'
                 && $mail->scheduledAt === $expectedScheduledAt
-                && str_contains($mail->render(), 'HR Office, 2nd Floor');
+                && str_contains($html, '<title>Interview scheduled</title>')
+                && str_contains($html, 'Check application status');
         });
     }
 
@@ -357,12 +363,18 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertJsonPath('data.location', 'Zoom interview');
         $response->assertJsonPath('data.interviewer_name', 'Ana Reyes');
         $interview->fresh()->forceFill(['location' => 'Changed after queue', 'outcome' => 'failed'])->save();
-        Mail::assertQueued(InterviewDetailsUpdatedMail::class, fn (InterviewDetailsUpdatedMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
-            && $mail->location === 'Zoom interview'
-            && $mail->outcome === 'Passed'
-            && str_contains($mail->render(), 'Zoom interview')
-        );
+        Mail::assertQueued(InterviewDetailsUpdatedMail::class, function (InterviewDetailsUpdatedMail $mail): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText('Zoom interview');
+            $mail->assertSeeInText('Ana Reyes');
+            $mail->assertSeeInText('Passed');
+
+            return $mail->hasTo('juan@test.com')
+                && $mail->location === 'Zoom interview'
+                && $mail->outcome === 'Passed'
+                && str_contains($html, '<title>Interview details updated</title>')
+                && str_contains($html, 'Check application status');
+        });
     }
 
     public function test_offer_requires_a_passed_interview_and_records_decision_history(): void
