@@ -2,7 +2,7 @@
 
 ## Source and behavior
 
-- `AlertEngineService::attemptCriticalEmail()` sends only critical alerts, using active recipients from the per-alert-type `alerts.critical.notification_roles` setting.
+- `AlertEngineService::attemptCriticalEmail()` sends only critical alerts, using active recipients from the per-alert-type `alerts.critical.notification_roles` setting who also have effective `alerts.view` permission.
 - The alert engine records bounded retry state and keeps this transport synchronous so a send result updates the owning alert. This preserves the existing trigger and retry behavior.
 - Invalid addresses are excluded. If no configured recipient has a usable email, the attempt fails and follows the existing retry/fallback path.
 - The alert email is sent separately to each internal user. It has no attachment or state-changing link.
@@ -15,6 +15,6 @@ The shared Markdown shell supplies the configured logo variants, company identit
 
 ## Review and verification
 
-This is an internal operational notice. Confirm configured alert roles match operational ownership. No personal-data or statutory content is intentionally included. Local test mail remains array-only; no real email sent.
+This is an internal operational notice. Confirm configured alert roles match operational ownership. No personal-data or statutory content is intentionally included. Regression test excludes a configured-role user whose effective `alerts.view` permission was revoked. Local test mail remains array-only; no real email sent.
 
 Browser screenshots and actual rendered-MIME assertions are pending because this workspace has no PHP CLI or active Docker test services. Real email clients remain unverified.
