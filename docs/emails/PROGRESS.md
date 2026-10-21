@@ -5,7 +5,7 @@ Updated: 2026-10-21
 ## Status
 
 - Phase 0 discovery and Phase 1 inventory are documented in [00-discovery.md](00-discovery.md) and [01-inventory.md](01-inventory.md). Owner directed work to proceed.
-- Shared framework and non-production mail guard are implemented on `email/shared-foundation`; draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) is open. Local branch is at `c4b70bd5`; GitHub PR still points to `0d1917b9`, so local commits are not yet published.
+- Shared framework and non-production mail guard are implemented on `email/shared-foundation`; draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) is open. Local branch is at `312e8649`; GitHub PR still points to `0d1917b9`, so local commits are not yet published.
 - Reliability foundation draft PR [#214](https://github.com/kwat0g/kwatog/pull/214) depends on #213.
 - Per-email redesign and defect-fix work exists in draft PRs. GitHub currently lists 92 open PRs matching the email work branches or titles; each still needs a current check result and independent review.
 - E-001's four browser screenshots were refreshed in the local #216 worktree at `6913c986`; prior captures still showed the retired O mark. Current company logo variants now appear in light and dark previews. See [E-001 review](E-001-invoice-finalized.md).
