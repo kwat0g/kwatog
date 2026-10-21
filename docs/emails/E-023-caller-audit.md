@@ -54,7 +54,7 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Inventory/Services/StockAdjustmentService.php:379` | `app(NotificationService::class)->send($requester, $type, [` |
 | `api/app/Console/Commands/CheckMaintenanceRepeatBreakdowns.php:33` | `$notifications->send($supervisors, 'maintenance.repeat_breakdown', [` |
 | `api/app/Modules/Quality/Services/NcrService.php:405` | `app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [` |
-| `api/app/Modules/Quality/Services/NcrService.php:1277` | `$this->notifications->send($recipients, 'ncr.return_to_supplier', [` |
+| `api/app/Modules/Quality/Services/NcrService.php:1279` | `$this->notifications->send($recipients, 'ncr.return_to_supplier', [` |
 | `api/app/Modules/Quality/Services/NcrRecurrenceDetector.php:200` | `$this->notifications->send($recipients, 'ncr.recurrence', [` |
 | `api/app/Modules/Inventory/Services/ItemCostReviewService.php:95` | `app(NotificationService::class)->send($audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [` |
 | `api/app/Modules/Quality/Services/NcrEscalationService.php:179` | `$this->notifications->send($recipients, 'ncr.escalation', [` |
@@ -114,11 +114,13 @@ These changes fix the route families found by static search. They do not complet
 - EF-046: ten permission lookups across nine notification paths used role-only database queries, omitting active user grants and revocations. Replaced with the shared effective-permission resolver in draft PR #259. This fixes permission calculation only; the per-caller route and record-visibility checks below remain open.
 - EF-056: supplier schedule cancellation notices used role permission rows directly and missed effective user grants/revocations. Fixed in draft PR #268 with the shared permission resolver. Regression coverage added for role access, grants, revocations, and inactive accounts. The remaining direct role checks found in this pass are intentional role-scoped/configured audiences or in-app-only paths; they remain subject to the per-caller audit below.
 - EF-065: permission override grant, removal, and restore notices linked affected users to `/admin/users/{hash}`, which requires `admin.users.manage`. Removed those three links in draft PR #279; the recipient still receives the change notice without a forbidden destination.
+- EF-069: `NcrService::notifyPurchasing()` selected configured roles without checking the permission required by its `/quality/ncrs/{hash}` link. Purchasing can view return requests but need not have `quality.ncr.view`. The payload also quoted `ncr.affected_quantity`, which can differ from the quantity bounded into the RMA. PR #283 links to the created RMA, removes the stale quantity, and filters the email-capable audience through `return_management.view`. The generated in-app `return.supplier_defect` audience uses the same effective permission so users whose return visibility was revoked receive neither notice.
 
 ## Caller checks completed
 
 - `NotifyOnLeaveSubmitted`: the configured `department_head` role audience is filtered to the requester's department. This matches `/hr/leaves/{id}` route permission and `LeaveRequestController::authorizeView()` row scope. The employees schema requires `department_id`; an attempted null-department case was rejected by PostgreSQL, so it is not a valid runtime state. Regression coverage verifies matching-department heads receive the notice while other-department and unlinked heads do not. Remaining leave approval/completion callers still require their own audit.
 - `NotifyOnLeaveSubmitted` and `NotifyOnLeavePendingHR`: configured role membership alone did not honor individual permission revocations. Draft PR #281 now checks effective `leave.approve_dept` / `leave.approve_hr` permission before dispatch; tests ensure revoked users receive neither inbox notification nor email-eligible audience membership.
+- `NcrService::notifyPurchasing` and supplier-defect in-app notice: role membership alone did not enforce the permission required to open the linked RMA. PR #283 filters by effective `return_management.view`; the NCR notice now links to the exact created RMA. A regression test confirms purchasing can read that RMA while lacking NCR view permission.
 
 ## Remaining audit work
 

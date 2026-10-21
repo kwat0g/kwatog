@@ -839,7 +839,7 @@ class ReturnRequestService
         if (str_starts_with($dedupeKey, 'grn-rejection:')) {
             $audience = User::query()->where('is_active', true)
                 ->whereHas('role', fn ($query) => $query->where('slug', 'purchasing_officer'))
-                ->get()->filter(fn (User $user): bool => $user->hasPermission('return_management.manage'));
+                ->get()->filter(fn (User $user): bool => $user->hasPermission('return_management.view'));
             $this->notifications->sendInApp($audience, 'return.supplier_defect', [
                 'title' => "Supplier return {$rma->rma_number} needs review",
                 'message' => "Incoming QC separated defective goods. Review {$rma->rma_number}, arrange the supplier return, and decide replacement instructions.",
