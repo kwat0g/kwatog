@@ -209,6 +209,34 @@ class SweepMissingOutgoingQcTest extends TestCase
         ]);
     }
 
+    public function test_unexpected_repair_errors_are_not_copied_into_escalation_notice(): void
+    {
+        $wo = $this->completedWoWithOutput();
+        $manager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            'is_active' => true,
+        ]);
+        $inspectionService = \Mockery::mock(InspectionService::class);
+        $inspectionService->shouldReceive('createForOutput')
+            ->once()
+            ->andThrow(new \RuntimeException('SQLSTATE connection detail'));
+        $this->app->instance(InspectionService::class, $inspectionService);
+
+        $this->artisan(SweepMissingOutgoingQc::class)->assertExitCode(1);
+
+        $notice = DB::table('notifications')
+            ->where('type', 'chain.outgoing_qc_missing')
+            ->where('notifiable_id', $manager->id)
+            ->first();
+        $this->assertNotNull($notice);
+        $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($data);
+        $this->assertIsString($data['message'] ?? null);
+        $this->assertStringNotContainsString('SQLSTATE', $data['message']);
+        $this->assertStringContainsString('administrator', $data['message']);
+        $this->assertStringContainsString($wo->wo_number, $data['message']);
+    }
+
     public function test_repairs_a_missing_output_even_when_another_output_already_has_qc(): void
     {
         $wo = $this->completedWoWithOutput();

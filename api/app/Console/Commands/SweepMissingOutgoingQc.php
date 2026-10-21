@@ -160,7 +160,7 @@ class SweepMissingOutgoingQc extends Command
                     'wo_id' => $wo->id,
                     'error' => $e->getMessage(),
                 ]);
-                $escalated[] = [$wo, mb_substr($e->getMessage(), 0, 240)];
+                $escalated[] = [$wo, 'Automatic repair failed. Ask an administrator to review the recovery log.'];
                 $failed++;
             }
         }
