@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -193,7 +194,7 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
             rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/supplier/purchase-orders/',
             $html,
         );
-        self::assertStringContainsString('Block 2, Lots 1 &amp; 2', $html);
+        self::assertStringContainsString(e(app(SettingsService::class)->requiredString('company.address')), $html);
         self::assertLessThan(102400, strlen($html));
         self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
         $mail->assertSeeInText('Do not ship or invoice further items');
