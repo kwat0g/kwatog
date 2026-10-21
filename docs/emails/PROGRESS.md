@@ -10,6 +10,7 @@ Updated: 2026-10-20
 - Tests: focused shared-shell coverage passed (6 tests, 22 assertions), including preheader delivery and white-logo pixel checks; temporary rendered preview passed (1 test). Mailer forced to `array`; no mail transport was contacted.
 - Shared preheader forwarding defect: stock Markdown message component dropped per-email preheaders before the layout. Fixed in #213; E-005/E-006 tests exposed and verify the shared forwarding behavior.
 - Shared visual defects: inlined light colors blocked dark-mode overrides and 600px table width overflowed mobile browser previews. Fixes in #213 remove color priority conflicts and constrain mobile tables; recheck all template screenshots after foundation update.
+- Shared-table UI follow-up is prepared on `email/shared-layout-ui` (based on #213): raw Markdown tables now receive the same restrained headers, row borders, dark-mode colors, and narrow-screen wrapping as mail table components. A focused style assertion is added; CI and updated screenshots are pending. No email was sent.
 - Email delivery: none sent.
 
 ## Blockers
