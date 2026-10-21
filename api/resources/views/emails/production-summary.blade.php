@@ -19,10 +19,11 @@
 @if (! empty($summary['wos']))
 ## Work orders
 
-| Work order | Product | Target | Good | Reject | Status |
-|:--|:--|--:|--:|--:|:--|
 @foreach (array_slice($summary['wos'], 0, 10) as $wo)
-| {{ $wo['wo_number'] }} | {{ $wo['product_name'] ?? '—' }} | {{ number_format($wo['quantity_target']) }} | {{ number_format($wo['good']) }} | {{ number_format($wo['reject']) }} | {{ \Illuminate\Support\Str::headline($wo['status']) }} |
+**{{ $wo['wo_number'] }} · {{ $wo['product_name'] ?? '—' }}**
+
+Target {{ number_format($wo['quantity_target']) }} · Good {{ number_format($wo['good']) }} · Reject {{ number_format($wo['reject']) }} · Status: {{ \Illuminate\Support\Str::headline($wo['status']) }}
+
 @endforeach
 @if (count($summary['wos']) > 10)
 

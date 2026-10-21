@@ -1,0 +1,21 @@
+Ogami ERP API: https://ogamiph.dev
+
+# Weekly production summary
+
+**12 Oct 2026 – 18 Oct 2026**
+
+## Production totals
+
+| Measure | Result |
+|:--|--:|
+| Good units | 1,500 |
+| Rejected units | 24 |
+| Week-over-week change in good units | Not comparable; prior week had no good units |
+
+The comparison uses the same seven-day period immediately before this report.
+
+Open production work orders: https://app.ogamiph.test/production/work-orders
+
+You receive this weekly report because your role is configured for production summaries.
+
+© 2026 Ogami ERP API. All rights reserved.
