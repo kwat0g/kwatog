@@ -41,6 +41,8 @@ class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
             'customer_name' => $salesOrder->customer?->contact_person ?: ($salesOrder->customer?->name ?: 'Customer'),
             'so_number' => (string) $salesOrder->so_number,
             'date' => $salesOrder->date?->toDateString(),
+            'subtotal' => (string) $salesOrder->subtotal,
+            'vat_amount' => (string) $salesOrder->vat_amount,
             'total_amount' => (string) $salesOrder->total_amount,
             'payment_terms_days' => $salesOrder->payment_terms_days,
             'delivery_terms' => $salesOrder->delivery_terms,

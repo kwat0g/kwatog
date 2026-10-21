@@ -53,6 +53,10 @@ class FeatureEmailIntegrationTest extends TestCase
 
     public function test_customer_sales_order_email_contains_order_data_and_portal_link(): void
     {
+        config([
+            'app.frontend_url' => 'https://portal.example.test',
+            'app.url' => 'https://api.example.test',
+        ]);
         $customer = Customer::factory()->create([
             'email' => 'customer@example.test',
             'contact_person' => 'A. <img src=x onerror=alert(1)> Customer',
@@ -82,9 +86,15 @@ class FeatureEmailIntegrationTest extends TestCase
 
             self::assertTrue($mail->hasTo('customer@example.test'));
             self::assertSame($salesOrder->so_number, $mail->snapshot['so_number']);
+            self::assertSame('120.00', $mail->snapshot['subtotal']);
+            self::assertSame('14.40', $mail->snapshot['vat_amount']);
             self::assertStringContainsString('<title>Sales order confirmed</title>', $rendered);
+            self::assertStringContainsString('Subtotal', $rendered);
+            self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format('14.40'), $rendered);
             self::assertStringContainsString('Order total', $rendered);
             self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format($salesOrder->total_amount), $rendered);
+            self::assertStringContainsString('https://portal.example.test/portal/customer/orders/'.$salesOrder->hash_id, $rendered);
+            self::assertStringNotContainsString('https://api.example.test/portal/customer/orders/', $rendered);
             self::assertStringContainsString('Sample molded component', $rendered);
             self::assertStringContainsString('Hello A. Customer,', $rendered);
             self::assertStringNotContainsString('<img src=x', $rendered);
@@ -107,7 +117,12 @@ class FeatureEmailIntegrationTest extends TestCase
             'email' => 'customer@example.test',
             'contact_person' => 'Original Contact',
         ]);
-        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id, 'total_amount' => '120.00']);
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'subtotal' => '120.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '120.00',
+        ]);
         $product = Product::factory()->create(['name' => 'Original Part', 'part_number' => 'PART-OLD']);
         $item = SalesOrderItem::factory()->create([
             'sales_order_id' => $salesOrder->id,
@@ -119,7 +134,7 @@ class FeatureEmailIntegrationTest extends TestCase
         $event = new SalesOrderConfirmed($salesOrder->fresh());
 
         $customer->update(['email' => 'changed@example.test', 'contact_person' => 'Changed Contact']);
-        $salesOrder->update(['total_amount' => '999.00']);
+        $salesOrder->update(['subtotal' => '999.00', 'vat_amount' => '0.00', 'total_amount' => '999.00']);
         $item->update(['quantity' => '9.00', 'unit_price' => '111.00', 'total' => '999.00']);
         $product->update(['name' => 'Changed Part', 'part_number' => 'PART-NEW']);
 
@@ -132,6 +147,7 @@ class FeatureEmailIntegrationTest extends TestCase
                 && str_contains($rendered, 'Original Contact')
                 && str_contains($rendered, '120.00')
                 && str_contains($rendered, 'Original Part')
+                && str_contains($rendered, app(\App\Common\Services\CurrencyDisplayService::class)->format('120.00'))
                 && ! str_contains($rendered, 'Changed Contact')
                 && ! str_contains($rendered, '999.00')
                 && ! str_contains($rendered, 'Changed Part');

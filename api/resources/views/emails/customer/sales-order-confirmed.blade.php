@@ -13,6 +13,12 @@ Confirmed — the details below reflect the order when it was confirmed.
 |---|---:|
 | Order number | {{ $order['so_number'] }} |
 | Order date | {{ $order['date'] ?? '—' }} |
+@if ($order['subtotal'] !== null)
+| Subtotal | {{ $order['subtotal'] }} |
+@endif
+@if ($order['vat_amount'] !== null)
+| VAT | {{ $order['vat_amount'] }} |
+@endif
 | Order total | {{ $order['total_amount'] }} |
 | Payment terms | {{ $order['payment_terms_days'] !== null ? $order['payment_terms_days'].' days' : '—' }} |
 | Delivery terms | {{ $order['delivery_terms'] ?: '—' }} |

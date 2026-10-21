@@ -71,6 +71,8 @@ class CustomerSalesOrderConfirmedMail extends QueuedMailable
                     'so_number' => $this->safeMarkdownText($snapshot['so_number'], 'Sales order'),
                     'delivery_terms' => $this->safeMarkdownText($snapshot['delivery_terms'] ?? null, ''),
                     'date' => $snapshot['date'] ? \Illuminate\Support\Carbon::parse($snapshot['date'])->format('M d, Y') : null,
+                    'subtotal' => isset($snapshot['subtotal']) ? $currency->format($snapshot['subtotal']) : null,
+                    'vat_amount' => isset($snapshot['vat_amount']) ? $currency->format($snapshot['vat_amount']) : null,
                     'total_amount' => $currency->format($snapshot['total_amount']),
                 ],
                 'items' => $items,
