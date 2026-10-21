@@ -144,6 +144,8 @@ Updated: 2026-10-21
 
 - E-023 caller audit: refreshed all 83 `NotificationService::send()` source anchors and verified the customer-created RMA notice audience, preference gate, queue timing, SPA route, and payload. Full caller review remains open.
 
+- E-023 caller review: verified loan submission and decision audiences, route/row ownership, after-commit outbox dispatch, event-version handling, and existing regression coverage. No defect found; direct decision-recipient and link assertions remain absent.
+
 Owner review: E-016 and E-023 can both send payslip-ready mail for one finalization when both email controls are enabled and employee/user addresses match. No trigger changed.
 
 EF-112 found during E-023 review: internal RFQ outcome emails include PR requesters whose row scope allows the exact RFQ, but frontend/API global guards block them without a broad RFQ permission. Recorded for a separate access-control PR.
