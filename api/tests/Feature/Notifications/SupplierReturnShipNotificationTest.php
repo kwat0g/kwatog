@@ -96,7 +96,7 @@ class SupplierReturnShipNotificationTest extends TestCase
     {
         $role = Role::query()->create(['name' => 'Purchasing Notify Test', 'slug' => 'purchasing-notify-test']);
         $permissions = Permission::query()->whereIn('slug', ['purchasing.po.view', 'return_management.view'])->pluck('id');
-        $role->permissions()->attach($permissions);
+        $role->permissions()->attach($permissions->all());
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }

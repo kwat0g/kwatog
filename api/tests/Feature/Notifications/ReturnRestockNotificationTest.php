@@ -64,7 +64,7 @@ class ReturnRestockNotificationTest extends TestCase
     {
         $role = Role::query()->create(['name' => 'Warehouse Notify Test', 'slug' => 'warehouse-notify-test']);
         $permissions = Permission::query()->whereIn('slug', ['inventory.view', 'return_management.view'])->pluck('id');
-        $role->permissions()->attach($permissions);
+        $role->permissions()->attach($permissions->all());
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }

@@ -32,7 +32,7 @@ final class ReturnCaseEmailReliabilityTest extends TestCase
         $role->permissions()->attach(Permission::query()->whereIn('slug', [
             'return_management.manage',
             'return_management.view',
-        ])->pluck('id'));
+        ])->pluck('id')->all());
         $manager = User::factory()->create(['role_id' => $role->id]);
         $managerWithoutView = User::factory()->create(['role_id' => $role->id]);
         UserPermissionOverride::create([
