@@ -24,30 +24,30 @@ These changes fix the route families found by static search. They do not complet
 
 | Source | Call expression |
 |---|---|
-| `api/app/Modules/SupplyChain/Services/DeliveryService.php:2134` | `$this->notifications->send($recipients, 'invoice.auto_failed', [` |
+| `api/app/Modules/SupplyChain/Services/DeliveryService.php:2130` | `$this->notifications->send($recipients, 'invoice.auto_failed', [` |
 | `api/app/Modules/Accounting/Services/InvoiceService.php:170` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Accounting/Services/InvoiceService.php:330` | `app(NotificationService::class)->send($requester, 'approval.completed', [` |
 | `api/app/Modules/Accounting/Services/BudgetTransferService.php:87` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Accounting/Services/BudgetTransferService.php:194` | `app(NotificationService::class)->send($requester, $type, [` |
-| `api/app/Modules/CRM/Services/SalesOrderResponseService.php:442` | `$this->notifications->send($audience, 'customer.so_responded', [` |
+| `api/app/Modules/CRM/Services/SalesOrderResponseService.php:439` | `$this->notifications->send($audience, 'customer.so_responded', [` |
 | `api/app/Modules/Accounting/Services/BudgetService.php:135` | `$notifications->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Accounting/Services/BudgetService.php:203` | `app(NotificationService::class)->send($submitter, $type, [` |
 | `api/app/Modules/Accounting/Services/BillService.php:1038` | `app(NotificationService::class)->send($requester, 'bill_payment.posted', [` |
-| `api/app/Modules/Accounting/Services/ArDunningService.php:195` | `$this->notifications->send($officers, 'ar.dunning.escalation', [` |
+| `api/app/Modules/Accounting/Services/ArDunningService.php:192` | `$this->notifications->send($officers, 'ar.dunning.escalation', [` |
 | `api/app/Modules/CRM/Services/Complaint8dEscalationService.php:271` | `$this->notifications->send($audience->all(), '8d.sla', [` |
-| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:660` | `$this->notifications->send($audience, 'customer.rma_created', [` |
-| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:3322` | `$this->notifications->send($recipients, $type, [` |
+| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:657` | `$this->notifications->send($audience, 'customer.rma_created', [` |
+| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:3319` | `$this->notifications->send($recipients, $type, [` |
 | `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:39` | `$this->notifications->send($financeUsers, 'chain.delivery_confirmed', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php:38` | `$this->notifications->send($audience, 'leave.submitted', [` |
-| `api/app/Modules/ReturnManagement/Services/ReturnCaseService.php:613` | `$this->notifications->send($recipients, 'return.case_updated', [` |
+| `api/app/Modules/ReturnManagement/Services/ReturnCaseService.php:612` | `$this->notifications->send($recipients, 'return.case_updated', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveRejected.php:26` | `$this->notifications->send($user, 'leave.rejected', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeavePendingHR.php:30` | `$this->notifications->send($audience, 'leave.pending_hr', [` |
 | `api/app/Modules/CRM/Listeners/NotifyOnSalesOrderConfirmed.php:39` | `$this->notifications->send($audience, 'chain.so_confirmed', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveApproved.php:26` | `$this->notifications->send($user, 'leave.approved', [` |
 | `api/app/Console/Commands/SweepMissingOutgoingQc.php:186` | `$notifications->send($recipients, 'chain.outgoing_qc_missing', [` |
 | `api/app/Console/Commands/RunDailyMrp.php:49` | `app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [` |
-| `api/app/Modules/B2B/Services/SupplierDeliveryScheduleService.php:240` | `$this->notifications->send($audience, 'supplier.schedule_cancelled', [` |
-| `api/app/Modules/B2B/Services/CustomerPortalService.php:311` | `$this->notifications->send($audience, 'portal.order_awaiting_review', [` |
+| `api/app/Modules/B2B/Services/SupplierDeliveryScheduleService.php:237` | `$this->notifications->send($audience, 'supplier.schedule_cancelled', [` |
+| `api/app/Modules/B2B/Services/CustomerPortalService.php:308` | `$this->notifications->send($audience, 'portal.order_awaiting_review', [` |
 | `api/app/Console/Commands/NotifyMissingTimeOut.php:60` | `$notifications->send($hr, 'attendance.missing_time_out', [` |
 | `api/app/Console/Commands/NotifyMissingTimeOut.php:92` | `$notifications->send($head, 'attendance.missing_time_out', [` |
 | `api/app/Modules/Inventory/Services/StockAdjustmentService.php:215` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
@@ -60,7 +60,7 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Quality/Services/NcrEscalationService.php:179` | `$this->notifications->send($recipients, 'ncr.escalation', [` |
 | `api/app/Console/Commands/CheckMaintenanceAssignment.php:45` | `$notifications->send($recipients, 'maintenance.assignment_escalated', NotifyMaintenanceWorkOrder::payload(` |
 | `api/app/Console/Commands/CheckMaintenanceAssignment.php:68` | `$notifications->send($supervisors, 'maintenance.shift_handover', NotifyMaintenanceWorkOrder::payload(` |
-| `api/app/Modules/Quality/Services/InspectionService.php:2393` | `app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [` |
+| `api/app/Modules/Quality/Services/InspectionService.php:2391` | `app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [` |
 | `api/app/Modules/Quality/Services/EffectivenessService.php:279` | `$this->notifications->send($recipient, $type, [` |
 | `api/app/Modules/HR/Services/TrainingExpiryService.php:169` | `$this->notifications->send($recipients, 'training.expiry', [` |
 | `api/app/Modules/HR/Services/RecruitmentService.php:717` | `$this->notifications->send($hrUsers, 'recruitment.new_application', [` |
@@ -84,7 +84,7 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php:29` | `$this->notifications->send($audience, 'chain.pr_approved', [` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:29` | `app(NotificationService::class)->send($audience, 'purchasing.po_pending_approval', [` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:29` | `$this->notifications->send($audience, 'chain.po_approved', [` |
-| `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:84` | `$this->notifications->send($audience->unique('id')->values(), $type, [` |
+| `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:81` | `$this->notifications->send($audience->unique('id')->values(), $type, [` |
 | `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:254` | `$this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [` |
 | `api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php:59` | `$this->notifications->send($audience, 'purchasing.supplier_deterioration', [` |
 | `api/app/Modules/Admin/Services/UserPermissionOverrideService.php:167` | `$this->notifications->send($user, 'permission.override', [` |
@@ -100,7 +100,7 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:622` | `$this->notifications->send($recipients, 'maintenance.repair_submitted',` |
 | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:668` | `$this->notifications->send($technician, 'maintenance.repair_rejected',` |
 | `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:67` | `$notifications->send($notifications->usersWithPermission('inventory.issue.create'),` |
-| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:123` | `app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',` |
+| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:124` | `app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',` |
 | `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:77` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:175` | `app(NotificationService::class)->send($requester, $type, [` |
 | `api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php:63` | `$this->notifications->send($users, 'chain.payslip_ready', [` |
