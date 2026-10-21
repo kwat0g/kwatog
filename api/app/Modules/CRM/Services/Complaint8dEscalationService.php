@@ -361,7 +361,9 @@ class Complaint8dEscalationService
             $audience->push($assignee);
         }
         $audience = $audience
-            ->filter(static fn (mixed $user): bool => $user instanceof User && $user->is_active)
+            ->filter(static fn (mixed $user): bool => $user instanceof User
+                && $user->is_active
+                && $user->hasPermission('crm.complaints.view'))
             ->unique('id')
             ->values();
 
