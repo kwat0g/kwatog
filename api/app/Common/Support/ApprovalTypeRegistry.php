@@ -186,6 +186,17 @@ final class ApprovalTypeRegistry
         return false;
     }
 
+    public static function userCanViewRecord(User $user, string $class, int $id): bool
+    {
+        $meta = self::forClass($class);
+        if ($meta === null || ! $user->hasPermission($meta['view_permission'])) {
+            return false;
+        }
+
+        return ! ApprovalSourceScope::hasScope($class)
+            || isset(ApprovalSourceScope::visibleIds($class, [$id], $user)[$id]);
+    }
+
     public static function linkFor(string $class, string $hashId, ?string $parentHashId = null): string
     {
         $meta = self::forClass($class);
