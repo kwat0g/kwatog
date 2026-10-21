@@ -113,6 +113,7 @@ These changes fix the route families found by static search. They do not complet
 - EF-045: sales response notices used role permissions only, so individual grants and revocations were ignored. Fixed in draft PR #258.
 - EF-046: ten permission lookups across nine notification paths used role-only database queries, omitting active user grants and revocations. Replaced with the shared effective-permission resolver in draft PR #259. This fixes permission calculation only; the per-caller route and record-visibility checks below remain open.
 - EF-056: supplier schedule cancellation notices used role permission rows directly and missed effective user grants/revocations. Fixed in draft PR #268 with the shared permission resolver. Regression coverage added for role access, grants, revocations, and inactive accounts. The remaining direct role checks found in this pass are intentional role-scoped/configured audiences or in-app-only paths; they remain subject to the per-caller audit below.
+- EF-090: training expiry notices gave employees an HR-only employee page link and sent configured HR recipients training details without checking effective permissions and employee row scope. Fixed in draft PR #301 with separate self/staff payloads and route-scope checks. HR/legal/data-protection review remains required.
 
 ## Remaining audit work
 
