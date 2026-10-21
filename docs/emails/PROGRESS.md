@@ -169,3 +169,4 @@ Discovery cross-check: the master inventory contains 35 unique IDs (E-001–E-03
 ## Next step
 
 Continue the E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify the consolidated E-023 PR checks. Owner still needs to verify company values and sales inbox readers before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.
+- Added direct coverage for the E-023 overtime decision notice: employee-only recipient, exact self-service route, and unrelated-user exclusion. Awaiting active PR #310 CI; no email sent.

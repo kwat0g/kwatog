@@ -193,3 +193,4 @@ These changes fix the route families found by static search. They do not complet
 - Maintenance part-request notices in PR #308 require both issue-creation and picking-view permissions, matching the linked page.
 - Prebill approval notices in PR #309 require effective invoice-view access in addition to approval permission.
 - PR #310 covers financial outcomes, payroll adjustment, return management, auto-PO handoff, customer portal review, stock adjustment, and supplier/customer response notices. Recipients now need effective destination access; record-scoped links use the matching access policy. The CI-discovered missing `User` import in customer portal review was fixed in commit `3ca66cc9`.
+- Overtime decision notice is sent only to the employee's linked user and points to the authenticated self-service request route. Added a direct listener regression for the owner, exact link, and unrelated-user exclusion; awaits PR #310 CI.

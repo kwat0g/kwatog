@@ -6,6 +6,7 @@ namespace Tests\Feature\Notifications;
 
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
+use App\Modules\Attendance\Listeners\NotifyOnOvertimeDecided;
 use App\Modules\Attendance\Listeners\NotifyOnOvertimeSubmitted;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeService;
@@ -151,6 +152,30 @@ class OvertimeNotificationTest extends TestCase
             OvertimeRequestDecided::class,
             fn ($e) => $e->approved === false && $e->overtimeRequest->getKey() === $ot->getKey(),
         );
+    }
+
+    public function test_decision_notice_targets_employee_and_links_to_self_service_request(): void
+    {
+        $ot = OvertimeRequest::factory()->pending()->create();
+        $owner = User::factory()->create(['employee_id' => $ot->employee_id, 'is_active' => true]);
+        $other = User::factory()->create(['is_active' => true]);
+
+        app(NotifyOnOvertimeDecided::class)->handle(new OvertimeRequestDecided($ot, true));
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $owner->id)
+            ->where('type', 'attendance.ot_approved')
+            ->first();
+        $this->assertNotNull($notice);
+        $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame("/self-service/overtime/{$ot->hash_id}", $data['link_to']);
+        $this->assertSame($ot->hash_id, $data['entity_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $other->id,
+            'type' => 'attendance.ot_approved',
+        ]);
     }
 
     /**
