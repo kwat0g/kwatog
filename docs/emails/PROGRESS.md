@@ -44,7 +44,7 @@ Updated: 2026-10-20
 - E-019 RFQ lifecycle supplier notices: complete in draft PR #247, stacked on #246. Uses the shared shell, event-time supplier-specific snapshot, concise status/action content, Manila deadline, authenticated supplier portal link, text alternative, and no attachment. `SupplierRfqLifecycleMailTest`: 1 passed, 73 assertions. Twenty Chromium renders inspected at 1440px/390px in light/dark; no horizontal overflow or missing logo; HTML remains below 102 KB. Mailer forced to `array`; no email sent. Company settings, production timezone, and supplier-facing content need owner/Purchasing review. See [E-019-rfq-lifecycle.md](E-019-rfq-lifecycle.md).
 - Email delivery: none sent.
 
-- EF-064 / E-019 deadline timezone: formatter now forces `Asia/Manila`; `SupplierRfqLifecycleMailTest` sets app timezone to UTC to catch regressions. Focused test and screenshot check pending.
+- EF-111 / E-019 deadline timezone: formatter now forces `Asia/Manila`; `SupplierRfqLifecycleMailTest` sets app timezone to UTC to catch regressions. Focused test and screenshot check pending.
 
 ## Blockers
 
