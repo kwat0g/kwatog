@@ -40,6 +40,8 @@ class SendPayslipEmailJobTest extends TestCase
 
             return $mail->hasTo('a@example.test')
                 && str_contains($html, 'https://portal.example.test/self-service/payslips')
+                && str_contains($html, '<title>Payslip ready</title>')
+                && str_contains($html, 'Open secure payslip portal')
                 && ! $mail->hasAttachment('payslip.pdf');
         });
         $sent = $payroll->fresh();

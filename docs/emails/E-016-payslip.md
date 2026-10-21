@@ -12,7 +12,10 @@
 - `SendPayslipEmailJobTest`: 3 tests, 13 assertions passed. Checks SPA URL, no payslip attachment, sent/failure state, and void cancellation.
 - `EmailPayslipOnFinalizeTest`: 4 tests, 8 assertions passed. Checks recipients, queueing, idempotency, feature flag, and publication guard.
 - Tests used `Mail::fake()` or `Mail::assertNothingSent()`; no email sent.
-- UI screenshots and real email-client rendering are pending the separate E-016 design change.
+- Rendered HTML: 22,032 bytes before browser logo embedding.
+- Playwright screenshots inspected at 1440px desktop and 390px mobile in light/dark schemes; document width matched viewport.
+- Screenshots: [desktop light](screenshots/e016-payslip-desktop-light.png), [desktop dark](screenshots/e016-payslip-desktop-dark.png), [mobile light](screenshots/e016-payslip-mobile-light.png), [mobile dark](screenshots/e016-payslip-mobile-dark.png).
+- Browser checks do not prove Gmail, Outlook, Apple Mail, Yahoo, or mobile mail-client rendering.
 
 ## Review
 
