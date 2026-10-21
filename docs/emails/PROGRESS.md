@@ -1,12 +1,13 @@
 # Email audit progress
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Status
 
 - Phase 0 discovery: complete as static source/config inspection. See [00-discovery.md](00-discovery.md).
 - Phase 1 inventory: provisional source-code inventory; owner approved continuing. See [01-inventory.md](01-inventory.md).
-- Phase 2 shared foundation: in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; header uses the landing-page logo artwork, with a transparency-preserving white variant selected in dark mode. Header previews cover desktop/mobile and light/dark; existing per-email screenshots need regeneration as branches are rebased. CI fixes include reserved PHPUnit sender/sink values and audited SPA lockfile versions.
+- Phase 2 shared foundation: in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`; header uses the landing-page logo artwork, with a transparency-preserving white variant selected in dark mode. Header previews cover desktop/mobile and light/dark; existing per-email screenshots need regeneration as branches are rebased. Local commit `0e72558a` fixes the reserved PHPUnit sender/sink values and SPA lockfile audit findings; full API CI is still running on prerequisite PR #275 before these fixes can be pushed.
+- PR scope blocker: GitHub compares #213 against `main`, but its branch descends from PR #209. Current compare shows 628 files and 26,976 additions, including unrelated parent work. Retarget #213 to `fix/ui-ux-wave1-shell` before review; comparison against that base contains 39 files and 760 additions.
 - Tests: focused shared-shell coverage passed (6 tests, 22 assertions), including preheader delivery and white-logo pixel checks; temporary rendered preview passed (1 test). Mailer forced to `array`; no mail transport was contacted. Foundation CI rerun pending after the test sink and dependency lock fixes.
 - Shared preheader forwarding defect: stock Markdown message component dropped per-email preheaders before the layout. Fixed in #213; E-005/E-006 tests exposed and verify the shared forwarding behavior.
 - Shared visual defects: inlined light colors blocked dark-mode overrides and 600px table width overflowed mobile browser previews. Fixes in #213 remove color priority conflicts and constrain mobile tables; recheck all template screenshots after foundation update.
