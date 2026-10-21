@@ -101,6 +101,15 @@ class SalesOrderResponseTest extends TestCase
         $inactiveUser = $this->userWithRole('sales_officer');
         $inactiveUser->update(['is_active' => false]);
         $permissionId = Permission::query()->where('slug', 'crm.sales_orders.confirm')->value('id');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $grantUser->id,
+            'permission_id' => Permission::query()->where('slug', 'crm.sales_orders.view')->value('id'),
+            'type' => 'grant',
+            'granted_by' => $salesUser->id,
+            'reason' => 'Sales notification route test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         foreach ([[$grantUser, 'grant'], [$revokedUser, 'revoke']] as [$user, $type]) {
             DB::table('user_permission_overrides')->insert([
                 'user_id' => $user->id,

@@ -54,7 +54,7 @@ class ComplaintEmailTest extends TestCase
         $this->assertStringContainsString('Status update for complaint '.$complaint->complaint_number.'.', $rendered);
         $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $rendered);
         $this->assertStringNotContainsString('<img src=x onerror=alert(1)>', $rendered);
-        $this->assertStringContainsString('https://ogamiph.dev/portal/customer/complaints', $rendered);
+        $this->assertStringContainsString(rtrim(config('app.frontend_url'), '/').'/portal/customer/complaints', $rendered);
         $this->assertStringContainsString('Philippine Ogami Corporation', $rendered);
         $this->assertStringNotContainsString('Critical', $rendered);
         $this->assertStringNotContainsString('Notification rendering test', $rendered);
