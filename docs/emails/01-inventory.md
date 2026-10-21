@@ -143,6 +143,12 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 
 Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an approved email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. Owner reports DKIM setup succeeded for `ogamiph.dev` in Asia Pacific (Singapore); this has not been independently verified. SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To require confirmation from domain/email administrators.
 
+## Potentially redundant emails
+
+| Email path | Evidence | Recommendation |
+|---|---|---|
+| E-016 payslip email + E-023 `chain.payslip_ready` | The same payroll-finalized event starts both listeners. E-016 sends when `payroll.payslip_email.enabled` is on; E-023 email sends when the employee has opted into `chain.payslip_ready`. They can both reach one employee when the employee and user email addresses match. | Ask Payroll/HR whether both messages are useful. Keep current triggers and recipients until they decide. |
+
 ## Review and environment status
 
 The owner approved continuing after the inventory summary. Local test/render work must force the `array` mailer or use an isolated Mailpit sink; never send real mail. Company values and statutory fields still need owner/accountant verification before external use.
