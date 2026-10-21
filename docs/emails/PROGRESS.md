@@ -8,6 +8,7 @@ Updated: 2026-10-21
 - Shared framework and non-production mail guard are implemented on `email/shared-foundation`; draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) is open. Local branch is at `44719ed5`; GitHub PR still points to `0d1917b9`, so local commits are not yet published.
 - Reliability foundation draft PR [#214](https://github.com/kwat0g/kwatog/pull/214) depends on #213.
 - Per-email redesign and defect-fix work exists in draft PRs. GitHub currently lists 92 open PRs matching the email work branches or titles; each still needs a current check result and independent review.
+- E-001's four browser screenshots were refreshed in the local #216 worktree at `6913c986`; prior captures still showed the retired O mark. Current company logo variants now appear in light and dark previews. See [E-001 review](E-001-invoice-finalized.md).
 - Full PHPUnit run [39556310646](https://github.com/kwat0g/kwatog/actions/runs/39556310646) is active on `fix/phpunit-mail-from`. Wait for it to finish before starting another suite or publishing commits that trigger CI.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
