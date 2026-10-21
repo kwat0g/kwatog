@@ -11,6 +11,7 @@ use App\Common\Services\AlertEngineService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Notifications\DailyProductionSummary;
+use App\Modules\Production\Notifications\WeeklyProductionSummary;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -134,6 +135,37 @@ class ValidEmailRecipientFilterTest extends TestCase
             'notifiable_id' => $admin->id,
             'type' => 'email.delivery_failed',
         ]);
+    }
+
+    public function test_summary_emails_skip_users_whose_production_access_was_revoked(): void
+    {
+        Notification::fake();
+        $manager = $this->userWithRole('production_manager', 'manager@ogami.test');
+        $admin = $this->userWithRole('system_admin', 'admin@ogami.test');
+        DB::table('settings')->updateOrInsert(
+            ['key' => 'production.summary.notification_roles'],
+            ['value' => json_encode(['production_manager'])],
+        );
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $manager->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'production.work_orders.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Production access removed',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager->flushPermissionsCache();
+
+        $this->artisan('production:send-daily-summary')->assertSuccessful();
+        $this->artisan('production:send-weekly-summary')->assertSuccessful();
+
+        Notification::assertNotSentTo($manager, DailyProductionSummary::class);
+        Notification::assertNotSentTo($manager, WeeklyProductionSummary::class);
+        $this->assertSame(2, DB::table('notifications')
+            ->where('notifiable_id', $admin->id)
+            ->where('type', 'email.delivery_failed')
+            ->count());
     }
 
     /**
