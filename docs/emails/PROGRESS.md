@@ -72,7 +72,7 @@ Updated: 2026-10-21
 - EF-057 / E-026 critical alert redesign: shared branded shell, configured subject, readable labels, Manila timestamp, alert-list CTA, and no raw entity ID. Existing synchronous retry-owned delivery behavior preserved. Automated HTML/text test added. Visual screenshots and local test run pending; no email sent.
 - EF-058: SPA dependency lockfile updated to Vite 7.3.7 and `follow-redirects` 1.16.1 in draft PR #271 after the existing CI audit failed. `npm audit` reports zero vulnerabilities; SPA lint, typecheck, 1,140 Vitest tests, and production build pass. No application source changed.
 - EF-059 / E-027–028 production summaries: templates now use the shared shell, configured subject branding, readable statuses, bounded daily details, and text alternatives. Focused render/escaping tests added. Local PHP and browser verification pending; no mail sent.
-- EF-061–063 test fixes: draft PR #275 configures a reserved `.test` sender, uses the configured supplier portal URL, and makes a legacy-shipment fixture deterministic. The first full API run exposed EF-063; the focused `SupplierShipmentTest` then passed (19 tests, 131 assertions). No email sent.
+- EF-061–064 test fixes: draft PR #275 configures a reserved `.test` sender, uses configured frontend URLs in supplier and complaint email assertions, and makes a legacy-shipment fixture deterministic. Its latest API run failed on the complaint test's old hardcoded production URL; EF-064 is corrected locally but still needs focused test and CI verification. No email sent.
 - Email delivery: none sent.
 
 ## Blockers
