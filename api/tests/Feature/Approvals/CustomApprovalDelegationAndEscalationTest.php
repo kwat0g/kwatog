@@ -130,17 +130,21 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
         ]);
         $actionOnlyApprover->flushPermissionsCache();
         $this->assertFalse($actionOnlyApprover->hasPermission('budgeting.view'));
-        $viewRevokedApprover = $this->user('vice_president');
-        DB::table('user_permission_overrides')->insert([
-            'user_id' => $viewRevokedApprover->id,
-            'permission_id' => DB::table('permissions')->where('slug', 'budgeting.view')->value('id'),
-            'type' => 'revoke',
-            'granted_by' => $maker->id,
-            'reason' => 'Audience regression test.',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $viewRevokedApprover->flushPermissionsCache();
+        $ineligibleApprover = $this->user('vice_president');
+        foreach (['budgeting.view', 'budgeting.approve'] as $permission) {
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $ineligibleApprover->id,
+                'permission_id' => DB::table('permissions')->where('slug', $permission)->value('id'),
+                'type' => 'revoke',
+                'granted_by' => $maker->id,
+                'reason' => 'Audience regression test.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $ineligibleApprover->flushPermissionsCache();
+        $this->assertFalse($ineligibleApprover->hasPermission('budgeting.view'));
+        $this->assertFalse($ineligibleApprover->hasPermission('budgeting.approve'));
         $old = now()->subHours(3);
         app(SettingsService::class)->set('approvals.reminder_hours', 1, 'approval');
         app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 0, 'inventory');
@@ -210,7 +214,7 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             ->map(fn (string $json): ?string => json_decode($json, true)['link_to'] ?? null);
         $this->assertTrue($actionOnlyNoticeLinks->contains(fn (?string $link): bool => str_starts_with($link ?? '', '/budgeting/transfers/')));
         $this->assertDatabaseMissing('notifications', [
-            'notifiable_id' => $viewRevokedApprover->id,
+            'notifiable_id' => $ineligibleApprover->id,
             'type' => 'approval_reminder',
         ]);
     }
