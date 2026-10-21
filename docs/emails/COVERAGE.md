@@ -31,7 +31,7 @@ closing the corresponding row.
 | E-021 | Return request update | [#252](https://github.com/kwat0g/kwatog/pull/252) | Customer/supplier desktop/mobile light/dark browser captures inspected and copied here; compact facts and portal action fit; refresh logo and synthetic footer; CI pending |
 | E-022 | Customer delivery confirmation | [#254](https://github.com/kwat0g/kwatog/pull/254) | Desktop/mobile light/dark captures inspected and copied here; dates show Asia/Manila; mobile invoice-reference label wraps but stays readable; logo/footer refresh and CI pending |
 | E-023 | Generic user notification | [#255](https://github.com/kwat0g/kwatog/pull/255) | Desktop/mobile light/dark captures inspected and copied here; subject wraps at mobile but no overflow; recipient visibility, deep-link caller coverage, and grouped external To follow-ups remain open; logo/footer refresh pending |
-| E-024 | Notification digest | [#265](https://github.com/kwat0g/kwatog/pull/265) | Draft; visual and CI review pending |
+| E-024 | Notification digest | [#265](https://github.com/kwat0g/kwatog/pull/265) | Desktop/mobile light/dark captures inspected and copied here; exposes unread count only and keeps details behind login; logo/footer fixture values need refresh; CI pending |
 | E-025 | Scheduled export notice | [#267](https://github.com/kwat0g/kwatog/pull/267) | Draft; visual and CI review pending |
 | E-026 | Critical alert | [#269](https://github.com/kwat0g/kwatog/pull/269) | Draft; safety and time-zone follow-ups remain separate |
 | E-027 | Daily production summary | [#272](https://github.com/kwat0g/kwatog/pull/272) | Draft; recipient and responsive-layout follow-ups remain separate |
