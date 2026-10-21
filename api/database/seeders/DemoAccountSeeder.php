@@ -20,7 +20,7 @@ class DemoAccountSeeder extends Seeder
     private const PASSWORD = 'password';
 
     /** @var array<int, array{email:string,name:string,role:string,dept:string}> */
-    private array $accounts = [
+    public const ACCOUNTS = [
         ['email' => 'admin@ogami.test',       'name' => 'System Administrator', 'role' => 'system_admin',       'dept' => 'IT'],
         ['email' => 'hr@ogami.test',          'name' => 'Maria Santos',         'role' => 'hr_officer',         'dept' => 'HR'],
         ['email' => 'finance@ogami.test',     'name' => 'Ana Reyes',            'role' => 'finance_officer',    'dept' => 'FIN'],
@@ -55,7 +55,7 @@ class DemoAccountSeeder extends Seeder
 
         $created = 0;
 
-        foreach ($this->accounts as $index => $account) {
+        foreach (self::ACCOUNTS as $index => $account) {
             $role = Role::where('slug', $account['role'])->firstOrFail();
             $employee = $this->employeeFor($account, $index);
 

@@ -33,7 +33,7 @@ class DemoAccountSeederTest extends TestCase
 
         $users = User::query()->with('employee')->get();
 
-        $this->assertCount(18, $users);
+        $this->assertCount(count(DemoAccountSeeder::ACCOUNTS), $users);
         $this->assertCount($users->count(), $users->pluck('employee_id')->filter()->unique());
         $this->assertTrue($users->every(
             static fn (User $user): bool => $user->employee_id !== null && $user->employee !== null,
@@ -69,7 +69,7 @@ class DemoAccountSeederTest extends TestCase
         ksort($currentLinks);
 
         $this->assertSame($links, $currentLinks);
-        $this->assertSame(18, Employee::query()->count());
+        $this->assertSame(count(DemoAccountSeeder::ACCOUNTS), Employee::query()->count());
     }
 
     public function test_demo_accounts_cannot_be_seeded_in_production(): void
