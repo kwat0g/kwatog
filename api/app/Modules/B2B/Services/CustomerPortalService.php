@@ -14,6 +14,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Services\StatementOfAccountService;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\CustomerComplaint;
