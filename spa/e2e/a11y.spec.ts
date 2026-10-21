@@ -110,6 +110,10 @@ const AUDIT_MOCKS: Record<string, unknown> = {
   '/api/v1/quality/inspections/options': {
     data: { stages: [], statuses: [], entity_types: [], measurement_results: [], sampling_methods: [] },
   },
+  '/api/v1/quality/ncrs/options': {
+    data: { sources: [], severities: [], statuses: [], actions: [], dispositions: [], default_disposition: '' },
+  },
+  '/api/v1/quality/ncr-templates/active': { ...PAGINATED_EMPTY },
   '/api/v1/crm/products': PAGINATED_EMPTY,
 };
 
