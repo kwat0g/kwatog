@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -178,6 +179,35 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
             'notifiable_id' => $submitter->id,
             'type' => 'approval.completed',
         ]);
+    }
+
+    public function test_budget_outcome_notice_omits_detail_link_after_submitter_loses_view_access(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $submitter = User::factory()->withRole('finance_officer')->create();
+        $checker = User::factory()->withRole('vice_president')->create();
+        UserPermissionOverride::create([
+            'user_id' => $submitter->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'revoke',
+            'granted_by' => $checker->id,
+            'reason' => 'Notification link access test.',
+        ]);
+        $submitter->flushPermissionsCache();
+
+        $service = app(BudgetService::class);
+        $budget = $service->create([
+            'fiscal_year_id' => $this->currentFiscalYear()->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'No-read outcome notice',
+        ], [['account_id' => $this->expenseAccount()->id, 'jan' => '10.00']]);
+        $service->approve($service->submit($budget, $submitter->id), $checker->id);
+
+        $notice = DB::table('notifications')->where('notifiable_id', $submitter->id)
+            ->where('type', 'approval.completed')->first();
+        $this->assertNotNull($notice);
+        $this->assertNull(json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 
     public function test_eligible_approval_only_user_can_read_submitted_budget(): void

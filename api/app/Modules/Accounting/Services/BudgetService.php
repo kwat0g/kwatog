@@ -203,7 +203,7 @@ class BudgetService
         app(NotificationService::class)->send($submitter, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget was returned for revision.' : 'Your budget was approved.',
-            'link_to' => "/budgeting/{$budget->hash_id}",
+            'link_to' => $submitter->hasPermission('budgeting.view') ? "/budgeting/{$budget->hash_id}" : null,
             'entity_type' => 'budget',
             'entity_id' => $budget->hash_id,
         ], "budget:decision:{$budget->id}:".($budget->rejected_at?->timestamp ?? $budget->approved_at?->timestamp));

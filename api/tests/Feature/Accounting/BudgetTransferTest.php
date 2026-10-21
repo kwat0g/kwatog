@@ -17,6 +17,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -67,6 +68,33 @@ class BudgetTransferTest extends TestCase
         // annual_total is a stored generated column: it follows the buckets.
         $this->assertSame('700.00', $from->fresh()->annual_total);
         $this->assertSame('1300.00', $to->fresh()->annual_total);
+    }
+
+    public function test_transfer_outcome_notice_omits_detail_link_without_budget_view_access(): void
+    {
+        [$service, $maker, $checker, $from, $to] = $this->livePair('1000.00', '1000.00');
+        UserPermissionOverride::create([
+            'user_id' => $maker->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'revoke',
+            'granted_by' => $checker->id,
+            'reason' => 'Notification link access test.',
+        ]);
+        $maker->flushPermissionsCache();
+
+        $transfer = $service->request([
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '100.00',
+            'reason' => 'Access test transfer.',
+        ], $maker->id);
+        $service->approve($transfer, $checker->id);
+
+        $notice = DB::table('notifications')->where('notifiable_id', $maker->id)
+            ->where('type', 'approval.completed')->first();
+        $this->assertNotNull($notice);
+        $this->assertNull(json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 
     public function test_transfer_maker_checker_is_enforced_by_user_and_role(): void
