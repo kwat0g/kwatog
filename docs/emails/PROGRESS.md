@@ -127,6 +127,7 @@ Updated: 2026-10-21
 - EF-089 / supplier deterioration alert: configured role recipients could receive vendor score details without effective `purchasing.suppliers.performance.view`. Draft PR #300 filters the audience by destination permission. Regression test added; test run pending. No real email sent.
 - EF-090 / training expiry audience and link: role recipients could receive HR training details without current employee/training read access, and employees got an HR-only link. Draft PR #301 filters staff by effective route permissions and `EmployeeCompetenceScope`; employee-self alerts omit that link. Regression test added; CI pending. No real email sent.
 - EF-075 / sales-order confirmation access: draft PR #302 keeps configured recipients who can view the production schedule, removes customer/order identifiers, and replaces the forbidden CRM order link with `/production/schedule`. Regression coverage added; CI pending. No real email sent.
+- EF-097 / prebill approval notice access: direct approvers with `accounting.invoices.view` revoked could not open the linked invoice. The audience now checks effective invoice-view access; `InvoicePrebillApprovalTest` covers the revoked user. CI pending. No real email sent.
 
 ## Next step
 

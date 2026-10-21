@@ -166,6 +166,7 @@ class InvoiceService
 
             if ($lifecycle === 'prebill') {
                 $audience = ApprovalDelegation::approvalAudience('accounting.invoices.prebill_approve')
+                    ->filter(fn (User $approver): bool => $approver->hasPermission('accounting.invoices.view'))
                     ->reject(fn (User $approver): bool => (int) $approver->id === (int) $by->id);
                 app(NotificationService::class)->send($audience, 'approval.action_required', [
                     'title' => 'Prebill invoice needs approval',
