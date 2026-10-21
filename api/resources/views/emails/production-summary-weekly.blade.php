@@ -1,48 +1,21 @@
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Weekly Production Summary — {{ $summary['range_start'] }} to {{ $summary['range_end'] }}</title>
-</head>
-<body style="margin:0;padding:0;background:#fafafa;font-family:'Geist','Helvetica Neue',Arial,sans-serif;color:#09090b;font-size:13px;">
-<div style="max-width:720px;margin:0 auto;padding:20px;background:#ffffff;">
+<x-mail::message :preheader="$preheader" :title="$title">
+# Weekly production summary
 
-  <h1 style="font-size:18px;font-weight:500;margin:0 0 4px;color:#09090b;">Weekly Production Summary</h1>
-  <p style="margin:0 0 20px;color:#71717a;font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:11px;">
-    {{ $summary['range_start'] }} → {{ $summary['range_end'] }}
-  </p>
+**{{ \Illuminate\Support\Carbon::parse($summary['range_start'])->format('j M Y') }} – {{ \Illuminate\Support\Carbon::parse($summary['range_end'])->format('j M Y') }}**
 
-  <table cellpadding="0" cellspacing="0" border="0" style="width:100%;margin-bottom:20px;border-collapse:separate;border-spacing:8px 0;">
-    <tr>
-      <td style="border:1px solid #e4e4e7;border-radius:6px;padding:12px;background:#fafafa;width:33%;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#71717a;margin-bottom:6px;">Good</div>
-        <div style="font-family:'Geist Mono',monospace;font-variant-numeric:tabular-nums;font-size:22px;font-weight:500;color:#059669;">
-          {{ number_format($summary['good']) }}
-        </div>
-      </td>
-      <td style="border:1px solid #e4e4e7;border-radius:6px;padding:12px;background:#fafafa;width:33%;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#71717a;margin-bottom:6px;">Reject</div>
-        <div style="font-family:'Geist Mono',monospace;font-variant-numeric:tabular-nums;font-size:22px;font-weight:500;color:#DC2626;">
-          {{ number_format($summary['reject']) }}
-        </div>
-      </td>
-      <td style="border:1px solid #e4e4e7;border-radius:6px;padding:12px;background:#fafafa;width:34%;">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#71717a;margin-bottom:6px;">vs Last Week</div>
-        <div style="font-family:'Geist Mono',monospace;font-variant-numeric:tabular-nums;font-size:22px;font-weight:500;color:{{ ($summary['wow_delta_pct'] ?? 0) >= 0 ? '#059669' : '#DC2626' }};">
-          @if (is_null($summary['wow_delta_pct']))
-            —
-          @else
-            {{ ($summary['wow_delta_pct'] >= 0 ? '+' : '').$summary['wow_delta_pct'] }}%
-          @endif
-        </div>
-      </td>
-    </tr>
-  </table>
+## Production totals
 
-  <hr style="margin:32px 0 12px;border:0;border-top:1px solid #e4e4e7;" />
-  <p style="margin:0;font-size:10px;color:#a1a1aa;font-family:'Geist Mono',monospace;">
-    {{ $companyName }} at {{ now()->toDateTimeString() }}
-  </p>
-</div>
-</body>
-</html>
+| Measure | Result |
+|:--|--:|
+| Good units | {{ number_format($summary['good']) }} |
+| Rejected units | {{ number_format($summary['reject']) }} |
+| Week-over-week change in good units | {{ $summary['wow_delta_pct'] === null ? 'Not comparable; prior week had no good units' : ($summary['wow_delta_pct'] > 0 ? '+' : '').$summary['wow_delta_pct'].'%' }} |
+
+The comparison uses the same seven-day period immediately before this report.
+
+<x-mail::button :url="$workOrdersUrl">
+Open production work orders
+</x-mail::button>
+
+You receive this weekly report because your role is configured for production summaries.
+</x-mail::message>

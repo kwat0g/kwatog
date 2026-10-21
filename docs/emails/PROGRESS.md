@@ -71,6 +71,7 @@ Updated: 2026-10-21
 - EF-056: supplier schedule cancellation audience now uses effective `purchasing.po.approve` permissions in draft PR #268. Added regression test for role permissions, individual grants/revocations, and inactive accounts. Local PHP/Docker test services unavailable; PR CI pending. E-023 record-scope and dynamic-link audits remain open.
 - EF-057 / E-026 critical alert redesign: shared branded shell, configured subject, readable labels, Manila timestamp, alert-list CTA, and no raw entity ID. Existing synchronous retry-owned delivery behavior preserved. Automated HTML/text test added. Visual screenshots and local test run pending; no email sent.
 - EF-058: SPA dependency lockfile updated to Vite 7.3.7 and `follow-redirects` 1.16.1 in draft PR #271 after the existing CI audit failed. `npm audit` reports zero vulnerabilities; SPA lint, typecheck, 1,140 Vitest tests, and production build pass. No application source changed.
+- EF-059 / E-027–028 production summaries: templates now use the shared shell, configured subject branding, readable statuses, bounded daily details, and text alternatives. Focused render/escaping tests added. Local PHP and browser verification pending; no mail sent.
 - Email delivery: none sent.
 
 ## Blockers

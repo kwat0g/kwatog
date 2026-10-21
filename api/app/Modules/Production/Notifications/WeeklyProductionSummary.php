@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Notifications;
 
-use App\Common\Services\SettingsService;
+use App\Common\Services\EmailBrandingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -33,10 +33,15 @@ class WeeklyProductionSummary extends Notification implements ShouldQueue
 
     public function toMail(mixed $notifiable): MailMessage
     {
-        $companyName = app(SettingsService::class)->requiredString('company.legal_name');
+        $brandName = app(EmailBrandingService::class)->data()['name'];
 
         return (new MailMessage)
-            ->subject('Weekly Production Summary — '.$this->summary['range_start'].' to '.$this->summary['range_end'])
-            ->view('emails.production-summary-weekly', ['summary' => $this->summary, 'companyName' => $companyName]);
+            ->subject('['.$brandName.'] Weekly production summary: '.$this->summary['range_start'].' to '.$this->summary['range_end'])
+            ->markdown('emails.production-summary-weekly', [
+                'summary' => $this->summary,
+                'preheader' => 'Weekly production totals and comparison with the prior week.',
+                'title' => 'Weekly production summary',
+                'workOrdersUrl' => rtrim(config('app.frontend_url', config('app.url')), '/').'/production/work-orders',
+            ]);
     }
 }
