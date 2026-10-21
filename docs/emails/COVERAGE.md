@@ -29,7 +29,7 @@ closing the corresponding row.
 | E-019 | Supplier RFQ lifecycle | [#247](https://github.com/kwat0g/kwatog/pull/247) | All five lifecycle states visually spot-checked in mobile light mode, plus invited desktop/light and mobile/dark; no overflow; compact two-column facts lack separation; 20 captures copied here; shared table style #320 pending; inherited PHPStan failure blocks CI; logo unchanged from old shell |
 | E-020 | Return case update | [#250](https://github.com/kwat0g/kwatog/pull/250) | Customer/supplier desktop/mobile light/dark browser captures inspected and copied here; compact facts and secure portal CTA fit; refresh logo and synthetic footer; CI pending |
 | E-021 | Return request update | [#252](https://github.com/kwat0g/kwatog/pull/252) | Customer/supplier desktop/mobile light/dark browser captures inspected and copied here; compact facts and portal action fit; refresh logo and synthetic footer; CI pending |
-| E-022 | Customer delivery confirmation | [#254](https://github.com/kwat0g/kwatog/pull/254) | Draft; visual and CI review pending |
+| E-022 | Customer delivery confirmation | [#254](https://github.com/kwat0g/kwatog/pull/254) | Desktop/mobile light/dark captures inspected and copied here; dates show Asia/Manila; mobile invoice-reference label wraps but stays readable; logo/footer refresh and CI pending |
 | E-023 | Generic user notification | [#255](https://github.com/kwat0g/kwatog/pull/255) | Draft; recipient and deep-link follow-ups remain separate |
 | E-024 | Notification digest | [#265](https://github.com/kwat0g/kwatog/pull/265) | Draft; visual and CI review pending |
 | E-025 | Scheduled export notice | [#267](https://github.com/kwat0g/kwatog/pull/267) | Draft; visual and CI review pending |
