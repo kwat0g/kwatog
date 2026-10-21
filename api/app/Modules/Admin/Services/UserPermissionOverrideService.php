@@ -167,7 +167,6 @@ class UserPermissionOverrideService
             $this->notifications->send($user, 'permission.override', [
                 'title' => $title,
                 'message' => $message,
-                'link_to' => "/admin/users/{$user->hash_id}",
             ]);
         });
 
@@ -226,7 +225,6 @@ class UserPermissionOverrideService
             $this->notifications->send($removed['user'], 'permission.override', [
                 'title' => 'Permission Override Removed',
                 'message' => "Your override for \"{$removed['permissionSlug']}\" has been removed.",
-                'link_to' => "/admin/users/{$removed['user']->hash_id}",
             ]);
         });
     }
@@ -290,7 +288,6 @@ class UserPermissionOverrideService
             $this->notifications->send($user, 'permission.override', [
                 'title' => 'Permission Override Restored',
                 'message' => "Your \"{$restored['newType']->value}\" override for \"{$restored['permissionSlug']}\" has been restored.",
-                'link_to' => "/admin/users/{$user->hash_id}",
             ]);
         });
     }
