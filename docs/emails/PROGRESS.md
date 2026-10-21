@@ -146,7 +146,7 @@ Updated: 2026-10-21
 
 Owner review: E-016 and E-023 can both send payslip-ready mail for one finalization when both email controls are enabled and employee/user addresses match. No trigger changed.
 
-EF-112 found during E-023 review: internal RFQ outcome emails include PR requesters whose row scope allows the exact RFQ, but frontend/API global guards block them without a broad RFQ permission. Recorded for a separate access-control PR.
+EF-112 fix is on `fix/e023-rfq-requester-access` (local commit `99d31015`): detail access now reaches the existing row-level policy, unauthorized reads cannot lazy-close RFQs, and requesters cannot see supplier activity or award data. Feature test and CI pending. This is a separate functional fix from email redesign.
 
 ## Next step
 
