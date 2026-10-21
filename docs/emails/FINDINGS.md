@@ -15,4 +15,6 @@ Date: 2026-10-20. Static findings only; reachability and runtime impact remain u
 
 | EF-021 | Candidate status preview uses invalid stage fixture | E-013 captures pass `updated` as both stage values, but `updated` is not an `ApplicationStage`; the fallback renders “Application updated” twice and does not verify real stage labels. This is preview-data quality, not evidence of a production trigger defect. | Use valid, distinct stage values before refreshing E-013 screenshots. |
 
+| EF-022 | Supplier PO decision details are awkward on mobile | E-017 390px captures show the two-column Markdown table wrapping labels and values into narrow columns, reducing scanability. No clipping observed. | Replace table with stacked labeled facts in the E-017 template and rerender mobile captures. |
+
 No code-level fix was applied as part of Phase 0/1.
