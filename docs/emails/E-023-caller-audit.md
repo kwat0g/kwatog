@@ -109,6 +109,8 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Loans/Listeners/NotifyOnLoanSubmitted.php:48` | `$this->notifications->send($audience, 'loans.submitted', [` |
 | `api/app/Modules/Loans/Listeners/NotifyOnLoanDecided.php:39` | `$this->notifications->send($user, $type, [` |
 
+- Customer-created RMA notice: `createCustomerReturnFromPortal()` emits it after RMA creation. Audience is active users with effective `return_management.manage` and `return_management.view`; email requires their explicit `customer.rma_created` opt-in and is queued after commit. Body contains the RMA number and fixed review text; link `/return-management/{hash}` opens the guarded SPA detail page. Customer notes and line details are excluded. `return_management.view` covers all RMAs, so no record-specific filter applies.
+
 ### Follow-up fixes
 
 - EF-090 / training expiry: `TrainingExpiryService` now keeps employee-self alerts separate from configured staff recipients. Self alerts have no HR-only employee-detail link. Staff recipients must hold effective `hr.employees.view` and `hr.employees.trainings.view` and pass `EmployeeCompetenceScope` for the employee record. Draft PR #301 adds regression coverage for revoked access and the self-notice link.
