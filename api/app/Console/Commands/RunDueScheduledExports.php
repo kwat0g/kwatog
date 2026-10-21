@@ -183,6 +183,8 @@ class RunDueScheduledExports extends Command
                 true,
                 scheduleId: (int) $row->id,
                 authorizationContext: $authorizationContext,
+                generatedAt: $runAt->copy()->timezone((string) config('app.timezone'))->format('j M Y, g:i A T'),
+                deliveryKey: hash('sha256', 'scheduled-export|'.$row->id.'|'.$row->next_run_at->format('U.u')),
             ));
         } catch (\Throwable $e) {
             Storage::disk(ScheduledExportArtifactService::DISK)->delete($artifactPath);

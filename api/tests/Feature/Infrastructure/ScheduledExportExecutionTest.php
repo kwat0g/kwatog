@@ -72,6 +72,11 @@ class ScheduledExportExecutionTest extends TestCase
         $this->assertTrue($fresh->next_run_at->greaterThan($row->next_run_at));
 
         Mail::assertQueued(ScheduledExportMail::class);
+        Mail::assertQueued(ScheduledExportMail::class, function (ScheduledExportMail $mail) use ($row): bool {
+            $key = new \ReflectionProperty(\App\Common\Mail\QueuedMailable::class, 'deliveryKey');
+
+            return $key->getValue($mail) === hash('sha256', 'scheduled-export|'.$row->id.'|'.$row->next_run_at->format('U.u'));
+        });
 
         // The workbook is handed to the queue as a private path, never as an
         // unbounded base64 blob inside the Redis job payload.

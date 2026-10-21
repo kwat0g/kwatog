@@ -6,6 +6,7 @@ namespace App\Common\Mail;
 
 use App\Common\Enums\ExportFormat;
 use App\Common\Models\ScheduledExport;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\Export\ExportRunner;
 use App\Modules\Auth\Models\User;
@@ -14,6 +15,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ScheduledExportMail extends QueuedMailable
@@ -30,6 +32,8 @@ class ScheduledExportMail extends QueuedMailable
         bool $artifactPath = false,
         public readonly ?int $scheduleId = null,
         public readonly ?string $authorizationContext = null,
+        public readonly ?string $generatedAt = null,
+        ?string $deliveryKey = null,
     ) {
         // Queue payloads are JSON encoded by the Redis connector. XLSX/CSV
         // output is arbitrary binary data, so carrying it directly in a
@@ -38,6 +42,7 @@ class ScheduledExportMail extends QueuedMailable
         // preserving the original bytes for the attachment.
         $this->artifactPath = $artifactPath ? $bytes : null;
         $this->encodedBytes = $artifactPath ? null : base64_encode($bytes);
+        $this->deliveryKey = $deliveryKey;
         $this->afterCommit();
     }
 
@@ -96,20 +101,31 @@ class ScheduledExportMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
+        $brandName = app(EmailBrandingService::class)->data()['name'];
+        $safeName = Str::squish(str_replace(["\r", "\n"], ' ', $this->exportName));
+
         return new Envelope(
-            subject: '['.config('mail.from.name', 'Ogami Philippines').'] Scheduled export: '.$this->exportName,
+            subject: '['.$brandName.'] Scheduled export ready: '.$safeName,
         );
     }
 
     public function content(): Content
     {
+        $formatLabel = $this->format === ExportFormat::Csv ? 'CSV file' : 'Excel workbook';
+        $moduleLabel = Str::headline(str_replace('.', ' ', $this->module));
+        $moduleLabel = preg_replace('/\bHr\b/', 'HR', $moduleLabel) ?? $moduleLabel;
+
         return new Content(
             markdown: 'emails/scheduled-export',
             with: [
                 'exportName' => $this->exportName,
-                'module' => $this->module,
+                'moduleLabel' => $moduleLabel,
                 'filename' => $this->filename,
-                'format' => strtoupper($this->format->value),
+                'formatLabel' => $formatLabel,
+                'generatedAt' => $this->generatedAt,
+                'preheader' => 'Your scheduled report is ready. The selected export file is attached.',
+                'title' => 'Your scheduled export is ready',
+                'scheduleUrl' => rtrim(config('app.frontend_url', config('app.url')), '/').'/admin/scheduled-exports',
             ],
         );
     }
