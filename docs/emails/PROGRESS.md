@@ -24,6 +24,7 @@ Updated: 2026-10-21
 - E-014/E-015 interview notices redesigned in local commit `dfdcb121`, stacked on snapshot fix `fc4e76d4` (EF-026). Four light/dark desktop/mobile previews per type inspected. Focused queue, snapshot, and content tests passed (2 tests, 14 assertions) with `Mail::fake()`. No mail sent.
 - E-016 payslip attachment replaced with an authenticated SPA link in local commit `3d859a3d` (EF-028); UI redesign/screenshots are in local commit `c2fbafe6`. Focused job tests passed (3 tests, 13 assertions); finalization listener tests passed (4 tests, 8 assertions). Browser inspected at desktop/mobile light/dark; no email sent. HR/data-protection review remains required.
 - PR #312 isolates the inherited credit-note PHPStan error (EF-027) into a functional fix; targeted PHPStan passed, full CI run 39568212202 is running. E-012 run 39565852712 failed at PHPStan before PHPUnit for this same inherited error.
+- Shared foundation local commit `6967b23a` changes a missing `FRONTEND_URL` fallback from `APP_URL` to `http://localhost` (EF-029), so email links cannot silently target the API host.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
@@ -41,7 +42,7 @@ Updated: 2026-10-21
 
 ## Next steps
 
-1. Wait for PR #312 run 39568212202; if green, add its fix to E-011's base chain and rerun E-012 CI.
-2. Publish E-013, E-014/E-015, and E-016 functional/design PRs sequentially.
+1. Wait for PR #312 run 39568212202; if green, publish the shared-foundation URL fallback fix, add #312's fix to E-011's base chain, and rerun E-012 CI.
+2. Publish E-013, E-014/E-015, and E-016 functional/design PRs after their bases are current.
 3. Continue E-017–E-034 in inventory order, then finish coverage and company/deliverability checklists.
 4. Complete desktop/mobile light/dark review for remaining emails. Real email-client rendering remains unverified.
