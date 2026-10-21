@@ -21,6 +21,8 @@ This is an internal operational notice. Confirm configured alert roles match ope
 
 Rendered the Laravel `MailMessage` in Chromium at 1440px desktop and 390px mobile, in light/dark. All logo images loaded; document width matched viewport at both sizes; CTA and related-area text stayed readable. CID logos were mapped to the same image assets as data URIs for browser preview. Company contact/legal values are redacted in artifacts: [desktop light](screenshots/e026-critical-alert-desktop-light.png), [desktop dark](screenshots/e026-critical-alert-desktop-dark.png), [mobile light](screenshots/e026-critical-alert-mobile-light.png), [mobile dark](screenshots/e026-critical-alert-mobile-dark.png), [plain text](screenshots/e026-critical-alert.txt).
 
+The email's light-logo bytes match `spa/src/assets/brand-logo.png` exactly (SHA-256 `0a2b0b57932f0b93324c3a19b92fd7931382c1cbbd0d9fc3009466ea575b9d44`); the dark capture uses the white variant. This confirms the requested landing-page mark is used in this email.
+
 EF-115 records the Markdown injection risk and its fix. Real email clients remain unverified.
 
 Real email clients remain unverified.
