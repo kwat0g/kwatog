@@ -4,7 +4,7 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 
 | Inventory IDs | Email group | Implementation unit | State |
 |---|---|---|---|
-| E-001–E-003 | Customer invoice, official receipt, and dunning | [PR #325](https://github.com/kwat0g/kwatog/pull/325) | Draft; current branch includes browser previews at desktop/mobile and light/dark. Latest CI is running. |
+| E-001–E-003 | Customer invoice, official receipt, and dunning | [PR #325](https://github.com/kwat0g/kwatog/pull/325) | Draft; current branch includes browser previews at desktop/mobile and light/dark. Latest API CI failed because the stale branch lacks `MAIL_TEST_TO`; test configuration is in PR #213 and needs a rerun after syncing the stack. |
 | E-004 | Finalized credit note | [PR #222](https://github.com/kwat0g/kwatog/pull/222) | Draft |
 | E-005–E-006 | Portal invitation and password reset | [PR #224](https://github.com/kwat0g/kwatog/pull/224) | Draft; secure-link follow-up in [PR #223](https://github.com/kwat0g/kwatog/pull/223); current desktop/mobile light/dark previews refreshed at `75f1c70f`. |
 | E-007 | Supplier invoice status | [PR #226](https://github.com/kwat0g/kwatog/pull/226) | Draft; four desktop/mobile light/dark previews refreshed and inspected in `275319ac`. |
@@ -22,7 +22,7 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 | E-022 | Customer delivery confirmation | [PR #254](https://github.com/kwat0g/kwatog/pull/254) | Draft |
 | E-023 | Generic user notification | [PR #255](https://github.com/kwat0g/kwatog/pull/255) | Draft; caller-audit and recipient/link follow-ups include [PR #257](https://github.com/kwat0g/kwatog/pull/257), [PR #264](https://github.com/kwat0g/kwatog/pull/264), and [PR #310](https://github.com/kwat0g/kwatog/pull/310) |
 | E-024 | Notification digest | [PR #265](https://github.com/kwat0g/kwatog/pull/265) | Draft |
-| E-025 | Scheduled export | [PR #267](https://github.com/kwat0g/kwatog/pull/267) | Draft; stacked on the separate one-line PHPStan fix in [PR #326](https://github.com/kwat0g/kwatog/pull/326). E-025 now uses PR #326 as its base; checks pending. |
+| E-025 | Scheduled export | [PR #267](https://github.com/kwat0g/kwatog/pull/267) | Draft; stacked on the separate one-line PHPStan fix in [PR #326](https://github.com/kwat0g/kwatog/pull/326). E-025 now uses PR #326 as its base. The latest check on #326 failed before shared test sender settings reached its branch; rerun after stack sync. |
 | E-026 | Critical alert | [PR #269](https://github.com/kwat0g/kwatog/pull/269) | Draft |
 | E-027–E-028 | Daily and weekly production summaries | [PR #272](https://github.com/kwat0g/kwatog/pull/272) | Draft |
 | E-029–E-033 | Internal account-security messages | [PR #273](https://github.com/kwat0g/kwatog/pull/273) | Draft; replaces temporary-password content with secure links |
