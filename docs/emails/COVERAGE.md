@@ -41,7 +41,7 @@ closing the corresponding row.
 | E-031 | Auth welcome with temporary password | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute set-password link, no credential in body; replace old icon, verify company settings; security/CI review pending |
 | E-032 | Employee password reset | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute reset link, no credential in body; replace old icon, verify company settings; HR/security/CI review pending |
 | E-033 | Employee welcome with temporary password | [#273](https://github.com/kwat0g/kwatog/pull/273) | Desktop/mobile light/dark captures inspected and copied here; 60-minute set-password link, no credential in body; replace old icon, verify company settings; HR/security/CI review pending |
-| E-034 | Public contact inquiry alert | [#278](https://github.com/kwat0g/kwatog/pull/278) | Draft; visual and CI review pending |
+| E-034 | Public contact inquiry alert | [#278](https://github.com/kwat0g/kwatog/pull/278) | Desktop/mobile light/dark captures inspected and copied here; sensitive sender details stay in authorized CRM; mobile fits; replace old icon and verify company settings; CI pending |
 | E-035 | Test-only integration message | [#280](https://github.com/kwat0g/kwatog/pull/280) | Harness inventory drafted; excluded from production email redesign |
 
 ## Shared foundation
