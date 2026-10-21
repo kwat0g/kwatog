@@ -1,6 +1,6 @@
 # Phase 1 — Email inventory and classification
 
-**Status:** provisional, based on static code inspection dated 2026-10-20. It is a review checkpoint, not approval to edit templates. `D` means current quality is below target based on source-level gaps; grades are provisional because unsafe local SMTP prevented rendering and runtime recipient checks. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
+**Status:** source-derived inventory from 2026-10-20; owner approved proceeding. `Current → target` records the Phase 1 baseline grade, before the redesigns listed in [COVERAGE.md](COVERAGE.md). Static discovery did not prove runtime delivery or recipient authorization. Browser previews were later rendered with isolated `array` mail transport; no email was sent.
 
 ## Master inventory
 
@@ -31,17 +31,17 @@
 | E-021 | Returns — return request update | External customer or supplier | Status-update | Confidential | P2 | D → status | Return request lifecycle update → party email → return request/party |
 | E-022 | Supply Chain — delivery confirmed | External customer | Transactional-document | Confidential | P1 | D → document | Delivery confirmed → customer email → delivery/sales order/receiver details |
 | E-023 | Common — generic user notification | Internal staff, approvers, executives, system admins (varies by caller) | Action-required / status-update / alert-exception | Internal to highly sensitive (varies by type) | P1 | D → action/status/alert | Any `NotificationService::send()` caller and explicit per-type email opt-in → caller's permission/role/owner selection plus active user and non-empty email → caller-supplied title/message/link and related record |
-| E-024 | Common — unread notification digest | Internal staff, approvers, executives, system admins | Digest-report | Internal to highly sensitive (depends on unread items) | P2 | D → digest | Scheduled digest → users with global digest opt-in and usable email → persisted unread notification rows |
-| E-025 | Common — scheduled export | Internal staff / system admin | Digest-report | Internal to confidential (financial), may include personal data | P1 | D → report | Scheduled export due → export's configured recipients; exporter checks owner permission/scope → export query, filters, columns, artifact |
-| E-026 | Common — critical alert | Internal staff / system admin | Alert-exception | Internal; may include confidential record identifiers | P1 | D → alert | Critical alert with retry → recipients resolved through alert permission/role logic → alert row/title/message/entity |
-| E-027 | Production — daily production summary | Internal staff / executives | Digest-report | Internal | P2 | D → report | Daily scheduler → production summary audience → daily summary values |
-| E-028 | Production — weekly production summary | Internal staff / executives | Digest-report | Internal | P2 | D → report | Weekly scheduler → production summary audience → weekly summary values |
-| E-029 | Auth — password reset link | Internal staff / system admin | Account-security | Confidential | P1 | D → security | Password-reset request → affected user address → reset service token/expiry |
-| E-030 | Auth — temporary password reset | Internal staff / system admin | Account-security | Highly sensitive (credentials) | P0 | F → security | Legacy reset flow → affected user email → temporary password argument |
-| E-031 | Auth — welcome with temporary password | Internal staff / system admin | Account-security | Highly sensitive (credentials) | P0 | F → security | Admin user provisioning → new user email → temporary password and account record |
-| E-032 | HR — employee password reset | Internal staff | Account-security | Highly sensitive (credentials) | P0 | F → security | Employee account reset → user email → temporary password |
-| E-033 | HR — employee welcome with temporary password | Internal staff | Account-security | Highly sensitive (credentials) | P0 | F → security | Employee provisioning → new user's email → temporary password and employee/account record |
-| E-034 | Landing — contact inquiry received | System admin / sales inbox | Status-update | Confidential (personal data) | P2 | D → alert | Public inquiry submitted → configured sales/admin recipients → inquiry contact details and message |
+| E-024 | Common — unread notification digest | Active internal users with digest preference | Digest-report | Internal | P2 | D → digest | Scheduled digest → active users with global digest opt-in and valid email → unread count only; details stay behind authenticated notifications page |
+| E-025 | Common — scheduled export | Scheduled export owner | Digest-report | Confidential; export may contain personal data | P1 | D → report | Due schedule → active owner only; permission and row scope revalidated before send → selected export columns, filters, and generated artifact |
+| E-026 | Common — critical alert | Internal staff with configured alert role and effective permission | Alert-exception | Internal; alert text may include confidential operational detail | P1 | D → alert | Critical alert → configured eligible recipients → stored alert title/message/type/severity/entity type and timestamp; entity database ID omitted |
+| E-027 | Production — daily production summary | Configured production-summary roles | Digest-report | Internal | P2 | D → report | Daily scheduler → active eligible production recipients → daily summary service output |
+| E-028 | Production — weekly production summary | Configured production-summary roles | Digest-report | Internal | P2 | D → report | Weekly scheduler → active eligible production recipients → weekly summary service output |
+| E-029 | Auth — password reset link | Internal user requesting reset | Account-security | Confidential (reset link) | P1 | D → security | Password-reset request → affected active account address → one-time reset token and configured expiry |
+| E-030 | Auth — temporary password reset (removed) | None; legacy path removed | Account-security | Highly sensitive (credentials) | N/A | Removed | Legacy notification class removed in PR #273; no active send path or preview retained |
+| E-031 | Auth — welcome / password setup | Newly provisioned internal user | Account-security | Confidential (setup link) | P1 | F → security | Admin provisioning → new user address → expiring setup link; no temporary password |
+| E-032 | HR — employee password reset | Employee account requesting reset | Account-security | Confidential (reset link) | P1 | F → security | Employee reset request → employee account address → expiring secure password-reset link |
+| E-033 | HR — employee welcome / password setup | Newly provisioned employee | Account-security | Confidential (setup link) | P1 | F → security | Employee provisioning → new employee account address → expiring setup link; no temporary password |
+| E-034 | Landing — contact inquiry received | Configured internal inquiry recipients | Status-update | Internal alert; source inquiry contains personal data | P2 | D → alert | Public inquiry submitted → configured recipients → inquiry reference and submission time; sender details/message remain in authorized CRM |
 | E-035 | Test harness — email integration message | Test recipient only | System-ops (test-only) | Public-ish test data | N/A | N/A | Explicit feature-test path → fake mail transport expected → fixed test payload; excluded from production coverage |
 
 ## Generic notification email trigger coverage (E-023)
@@ -67,13 +67,13 @@ These are type families, not a claim that every similarly named event is mailed.
 
 | Module | Dedicated email IDs | Generic notifications (E-023) / other |
 |---|---|---|
-| Auth / Admin | E-029–E-031 | User provisioning and password reset paths |
+| Auth / Admin | E-029, E-031 | User password reset and secure account setup |
 | Accounting | E-001–E-004 | Approval, payment, bill, dunning-escalation notifications |
 | Assets | — | Monthly depreciation jobs found; no dedicated email path found |
 | Attendance | — | Overtime and missing-timeout notifications; generic email only where `send()` and opted-in |
 | B2B / supplier & customer portals | E-005–E-008 | Portal event notices include in-app-only delivery paths |
 | CRM | E-009–E-011 | Pricing, complaint SLA, customer response, order chain notifications |
-| HR / Recruitment | E-012–E-015, E-032–E-033 | Onboarding, separation, training, applicant alerts |
+| HR / Recruitment | E-012–E-015, E-032–E-033 | Employee account security, separation, training, applicant alerts |
 | Inventory | — | Low-stock, GRN, cost-review, replenishment notices |
 | Leave / Loans | — | Leave and loan status notifications |
 | Maintenance | — | Assignment, breakdown, repeat-breakdown, handover notices |
@@ -96,7 +96,7 @@ These are type families, not a claim that every similarly named event is mailed.
 | External customer | E-001–E-004, E-009–E-011, E-020–E-022 | Most use the customer/party email on the triggering record; some use portal-user email lists/fallbacks. App RBAC does not cover external addresses; verify ownership, public fields, and duplicates per flow. |
 | External supplier | E-004, E-005–E-008, E-017–E-021 | Vendor email, supplier contact, invitation email, or supplier portal user depending on trigger. Fallback and inactive portal-user handling need verification. |
 | Applicant/candidate | E-012–E-015 | Candidate-provided application email. Do not expose internal notes or interview details beyond intended recipient. |
-| Internal staff / approver | E-023, E-024, E-026–E-033 | Caller-specific role/permission or employee/user resolution; E-023 and digest require explicit preferences. Temporary credential messages are P0. |
+| Internal staff / approver | E-023–E-024, E-026–E-029, E-031–E-033 | Caller-specific role/permission or employee/user resolution; E-023 and digest require explicit preferences. E-030 is removed; current welcome/reset messages use secure links. |
 | Executive | E-023, E-027–E-028 | Summary audience is code-defined; verify exactly which roles/permissions and whether summaries contain sensitive rows. |
 | System admin / sales inbox | E-026, E-034 and failure notifications | Permission audience or configured inbox. Verify settings values, no open relay, and no broad body exposure. |
 
@@ -109,8 +109,8 @@ These are type families, not a claim that every similarly named event is mailed.
 | Recruitment | Candidate address stored on application | Application and interview records | PII minimization; public vs internal comments |
 | User and portal account security | Target account address | User/portal identity and reset/invitation token | No plaintext credentials; signed/expiring frontend link; no token logs |
 | Internal operational event | Caller-selected role/permission/owner; email opt-in and valid non-empty address | Business record plus generic notification payload | RBAC scope, in-app/email preference coherence, sensitive generic message content |
-| Digest | Global digest preference and user address | Persisted unread notification rows | Active account status, sensitive item summarization, deep-link authorization |
-| Scheduled export | Configured recipients; exporter's owner permission and row-scope checks | Shared exporter result, selected columns/filters/date range | Recipients must be authorized for exported records; exact artifact parity |
+| Digest | Active users with global digest opt-in and valid email | Unread notification count | Detail payloads stay in the authenticated app; verify preferences and SPA return path |
+| Scheduled export | Active schedule owner only; current permission and row-scope authorization rechecked before send | Export runner output for saved columns and filters | Attachment parity and authorization snapshot; personal-data exports need company review |
 | Payslip | Employee user address and enabled setting | Final payroll and generated PDF | Highly sensitive attachment, correct employee mapping, retry duplicates |
 
 ## Missing-email recommendation track
@@ -124,30 +124,31 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 | Maintenance due / work assigned / breakdown | Scheduled reminders and generic notices exist; some call paths only notify in-app | Assigned technician and maintenance supervisor | Identify missed high-severity/out-of-shift alerts; use dedupe and escalation criteria. |
 | Quality inspection/NCR overdue and containment actions | Generic alert notifications and scheduled escalation paths exist; no dedicated template | QC owner, production/quality approver | Decide whether high-severity containment requires guaranteed mail; never email restricted/customer details without review. |
 | Supplier/customer document delivery | PO, invoice, receipt, credit note, delivery, complaint and return emails exist; coverage is incomplete across related lifecycle events | External contact recorded on transaction | Identify missing lifecycle messages (e.g. shipment dispatched/ETA, payment received) and confirm recipient consent/contractual need. |
-| Account onboarding | Welcome messages exist but include temporary passwords; no onboarding guidance-only secure variant found | New staff/portal user | Replace credential delivery with secure activation/reset before treating as complete. |
+| Account onboarding | Internal welcome/reset and portal account messages now use secure setup/reset links; E-030 legacy temporary-password flow was removed | New staff/portal user | Consider role-specific onboarding guidance after HR/security review; no credentials in email. |
 | Scheduled export / production summary delivery failure | Failure notification is present for some commands; other job failures rely on Horizon/failed-job monitoring | Export owner / operations admin | Check all mail/scheduler failures reach a monitored channel; avoid sending full error details. |
 | Backup/restore and system health | Backup/restore jobs and scheduler-health mechanisms exist; no dedicated direct email found in static search | System administrators | Decide whether mail alert is needed; otherwise verify existing health dashboard/monitoring is monitored. |
 | Training expiry, onboarding, separation | In-app/generic messages and scheduled reminders exist | Employee, manager, HR based on visibility | Confirm sensitive content, preference policy, cadence, and stop conditions. |
 
 ## Likely unnecessary/noisy or sensitive email
 
-- E-030–E-033 temporary-password messages are inappropriate if live; confirm reachability and move to secure activation/reset flow in a separate security fix.
-- E-023 generic notification mail can send operational detail to anyone who explicitly opted into that type; classify every runtime type and remove sensitive data from body where links suffice.
-- E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
+- E-030 temporary-password reset was removed. E-031–E-033 now use expiring setup/reset links, not passwords in the body.
+- E-023 generic notification mail can still carry caller-provided operational details to opted-in users; classify each runtime type and keep sensitive detail behind the authenticated app.
+- E-024 sends only the unread count and can repeat it until items are read; confirm cadence and preference behavior.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
-- E-016 attaches a payslip PDF to email; assess whether secure authenticated delivery can meet the business need with less exposure.
+- E-016 now links to an authenticated employee-owned payslip download. Review that access pattern with HR, legal, and the data protection officer.
+- E-025 attaches the exact saved export artifact to its active owner; review schedules whose exports contain payroll, HR, or confidential financial data.
 
 ## Company data and infrastructure still unconfirmed
 
-Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an approved email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. SPF/DKIM/DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To require confirmation from domain/email administrators.
+Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. Owner reported DKIM setup success for `ogamiph.dev` in the Asia Pacific (Singapore) region; SPF/DMARC records, production signing, bounce/complaint handling, provider suppression, and monitored Reply-To still need domain/email administrator verification.
 
 ## Decisions needed before Phase 2
 
-1. Confirm local external SMTP is disabled and Mailpit/MailHog/log/catch-all is configured before any send-capable testing or browser preview that might dispatch.
-2. Review this inventory and missing-email recommendation track. Phase 2 template changes remain stopped until that review.
+1. Local SMTP is configured to `log`; all previews used `MAIL_MAILER=array` in network-isolated containers. Recheck deployed non-production safeguards before any real send.
+2. Owner approved proceeding after the inventory checkpoint; review remaining recipient and missing-email recommendations with process owners.
 3. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
-4. Confirm handling policy for payslip attachment and temporary-password paths; P0 credential/security fixes should be a separate functional-fix track.
-5. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
+4. Review payslip-link and scheduled-export handling with the accountant, HR, legal contact, and data protection officer; no compliance claim is made.
+5. Confirm mandatory vs opt-in email categories and escalation audiences; generic email defaults remain preference-controlled.
 
 ## Manual real-client checklist for the later email phase
 
