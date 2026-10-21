@@ -16,13 +16,14 @@ Updated: 2026-10-21
 - E-007's existing four screenshots were re-rendered from `SupplierInvoiceStatusMail::render()` with the snapshot fixture and current logo variants, then inspected. 24,492-byte HTML; 1440px/390px light/dark browser captures fit. No mail was sent. See [E-007](E-007-supplier-invoice-status.md).
 - E-008's four screenshots were re-rendered from `SupplierPurchaseOrderCancelledMail::render()` with the cancellation snapshot and current logo variants, then inspected. 23,141-byte HTML; 1440px/390px light/dark browser captures fit. No mail was sent. See [E-008](E-008-supplier-po-cancellation.md).
 - E-009's four screenshots were re-rendered from `CustomerComplaintUpdateMail::render()` with a safe customer-facing snapshot and configured test SPA URL. 24,202-byte HTML; 1440px/390px light/dark captures fit. No mail was sent. See [E-009](E-009-customer-complaint-update.md).
-- Full PHPUnit run [39556310646](https://github.com/kwat0g/kwatog/actions/runs/39556310646) completed with 1 failure in `ComplaintEmailTest`: test expected a fixed production domain while test config used `http://localhost`. Corrected test to assert a configured SPA URL distinct from API URL in PR #230. Its API run [39563277059](https://github.com/kwat0g/kwatog/actions/runs/39563277059) is queued; wait before starting another suite or publishing commits that trigger CI.
+- Full CI on E-009 commit `eb496edb` ([API run](https://github.com/kwat0g/kwatog/actions/runs/39563277059)) stopped at PHPStan before PHPUnit: undefined `$creditNote` in the E-004 enqueue-failure log. Fixed to log the event snapshot hash in PR #222 commit `7f734897`; GitHub had not reported a new run at the last check.
+- E-010 review found subtotal and VAT were missing from the sales-order email although included in the order total. Local PR #232 changes now snapshot subtotal/VAT and show them; rendered HTML is 29,277 bytes. Four 1440px/390px light/dark screenshots inspected; PHP 120.00 + PHP 14.40 = PHP 134.40, mobile has no horizontal overflow. Focused tests updated; CI pending. No mail sent.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
 ## Blockers
 
-- Do not publish another test-triggering commit while PHPUnit run 39563277059 is queued/running.
+- Do not publish another test-triggering commit while any API test suite is running; recheck GitHub Actions before publishing.
 - PR #213's current remote checks are from its older head and failed: API tests hit the non-production guard without a test inbox, and SPA dependency audit found advisories. The local branch contains subsequent fixes; rerun checks after publishing once the active suite finishes.
 - Owner reported DKIM setup succeeded for `ogamiph.dev` in AWS Asia Pacific (Singapore). Verify SPF, DMARC, bounce handling, and provider suppression with domain administrators. Verify company sales contact and VAT settings before real external delivery. Keep statutory, payroll, HR, and personal-data messages flagged for accountant/HR/legal/data-protection review.
 
