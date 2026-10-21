@@ -89,6 +89,7 @@ Initial inspection found local `.env` and `api/.env` configured with `APP_ENV=lo
 - The SPA base URL is `FRONTEND_URL`; app config falls back to `APP_URL`. Local values point to `ogamiph.dev`. A single link helper/route validator was not found in this pass.
 - PHP app timezone is set in `api/config/app.php`; exact value and display conversion in every email remain unverified. Do not infer Asia/Manila correctness from the prompt.
 - Environment examples describe SES SMTP / SES Mail Manager. From defaults are configured from `MAIL_FROM_ADDRESS` and `MAIL_FROM_NAME`; no explicit shared Reply-To policy was identified in repository config. SPF, DKIM, DMARC, bounce webhooks, suppression lists, and provider reputation cannot be verified from source.
+- Owner update (2026-10-21): DKIM setup reported successful for `ogamiph.dev` in Asia Pacific (Singapore). This source audit cannot verify DNS records or production signing; SPF and DMARC remain unconfirmed.
 - Horizon, Redis queues, failed-job persistence, and scheduler are present. Queue depth/failed job metrics have a health/operations surface; mail delivery success rate/provider event tracking was not found.
 
 ## Discovery limits and next safe step

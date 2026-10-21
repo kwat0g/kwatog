@@ -36,5 +36,5 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 - E-010's 4-column mobile item table had compressed descriptions and currency values; stacked details are now rendered and the four screenshots refreshed. E-010 preview uses synthetic PO and branding data.
 - All mapped implementation PRs are drafts. The stack has dependent base branches; independent merge/revert readiness has not been verified across the full stack.
 - Runtime recipient resolution, delivery safety, queues, logs, and tests remain subject to their linked PR checks and review. This report does not claim those gates passed.
-- Confirm company settings with the owner before any live send. Review external financial documents with the accountant and personal-data emails with HR/legal/data protection. Verify SPF/DKIM/DMARC with the mail provider; the code cannot prove DNS or provider configuration.
+- Confirm company settings with the owner before any live send. Review external financial documents with the accountant and personal-data emails with HR/legal/data protection. Owner reports DKIM setup success for `ogamiph.dev` in Asia Pacific (Singapore); SPF/DMARC and production signing still need domain/provider verification.
 - Missing-email recommendations and other-channel coordination remain in [the inventory](01-inventory.md).
