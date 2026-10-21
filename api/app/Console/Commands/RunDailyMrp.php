@@ -44,7 +44,8 @@ class RunDailyMrp extends Command
             $ppcHeads = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('mrp.plans.view'));
 
             app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [
                 'title' => 'Daily MRP run finished',
@@ -52,8 +53,6 @@ class RunDailyMrp extends Command
                 // There is no run-detail route; send operators to the existing
                 // MRP plans/run history surface instead of a dead URL.
                 'link_to' => '/mrp/plans',
-                'entity_type' => 'mrp_run',
-                'entity_id' => $run->hash_id,
                 'shortages_found' => $run->shortages_found,
                 'prs_created' => $run->prs_created,
                 'prs_updated' => $run->prs_updated,
