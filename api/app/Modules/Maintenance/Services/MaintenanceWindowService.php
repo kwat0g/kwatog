@@ -101,7 +101,7 @@ class MaintenanceWindowService
             if ($order->type->value !== 'preventive' || $order->status->value !== 'open') {
                 throw ValidationException::withMessages(['status' => ['Only open preventive work orders can reserve a window.']]);
             }
-            if ($start->lt(now()) || ! $start->lt($end) || $start->diffInMinutes($end) < 15 || $start->diffInMinutes($end) > 480) {
+            if ($start->lt(now()) || ! $start->lt($end) || $start->diffInMinutes($end, true) < 15 || $start->diffInMinutes($end, true) > 480) {
                 throw ValidationException::withMessages(['planned_start_at' => ['Choose a future interval lasting 15–480 minutes.']]);
             }
             $type = $order->maintainable_type->value;

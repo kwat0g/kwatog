@@ -84,7 +84,7 @@ class CustomApprovalEscalationService
                             continue;
                         }
 
-                        $ageHours = (int) Carbon::parse($candidate['since'])->diffInHours(now());
+                        $ageHours = (int) Carbon::parse($candidate['since'])->diffInHours(now(), true);
                         $type = $stage === 'reminder' ? 'approval_reminder' : 'approval_escalation';
                         $label = $stage === 'reminder' ? 'Approval reminder' : 'Approval escalation';
                         $dedupeKey = sprintf('approval:custom:%s:%s:%d:%s', $stage, $kind, $candidate['id'], sha1($candidate['epoch']));

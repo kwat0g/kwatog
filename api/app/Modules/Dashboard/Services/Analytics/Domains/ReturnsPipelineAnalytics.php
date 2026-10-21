@@ -80,7 +80,7 @@ final class ReturnsPipelineAnalytics extends DomainMetric
             'awaiting_approval' => $byStatus[ReturnRequestStatus::PendingApproval->value] ?? 0,
             'oldest_open_days' => $oldestOpen === null
                 ? null
-                : max(0, (int) Carbon::parse((string) $oldestOpen)->diffInDays(Carbon::now())),
+                : max(0, (int) Carbon::parse((string) $oldestOpen)->diffInDays(Carbon::now(), true)),
             'segments' => $this->segments($byStatus),
             'by_type' => $this->typeSegments($byType),
             'handoff' => [
