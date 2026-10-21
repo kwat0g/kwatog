@@ -209,8 +209,10 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
 
         $this->assertNotNull($note, 'AR clerk must receive an invoice.auto_failed notification.');
         $data = json_decode($note->data, true);
-        $this->assertStringContainsString($confirmed->delivery_number, (string) $data['title']);
-        $this->assertNotEmpty($data['message']);
+        $this->assertSame('Auto-invoice failed', $data['title']);
+        $this->assertSame('/accounting/invoices/create', $data['link_to']);
+        $this->assertStringNotContainsString($confirmed->delivery_number, $note->data);
+        $this->assertArrayNotHasKey('entity_id', $data);
     }
 
     public function test_invoice_handoff_replay_recovers_after_accounting_is_fixed_without_duplication(): void
