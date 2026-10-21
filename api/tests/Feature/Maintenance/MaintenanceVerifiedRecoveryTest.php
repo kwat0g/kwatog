@@ -184,6 +184,41 @@ class MaintenanceVerifiedRecoveryTest extends TestCase
         );
     }
 
+    public function test_repair_submission_only_notifies_verifiers_who_can_open_the_order(): void
+    {
+        $technician = $this->actor('maintenance_tech');
+        $manager = $this->actor('production_manager');
+        $revokedManager = $this->actor('production_manager');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedManager->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'maintenance.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $manager->id,
+            'reason' => 'Maintenance order visibility removed for notification audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $order = $this->order($technician, true);
+        $this->recordPass($order, $technician);
+
+        $this->actingAs($technician)->postJson("/api/v1/maintenance/work-orders/{$order->hash_id}/submit-repair", [
+            'diagnosis' => 'Loose connection.',
+            'repair_action' => 'Reconnected wiring.',
+            'functional_test_result' => 'Load test passed.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $manager->id,
+            'type' => 'maintenance.repair_submitted',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedManager->id,
+            'type' => 'maintenance.repair_submitted',
+        ]);
+        $this->actingAs($manager)->getJson("/api/v1/maintenance/work-orders/{$order->hash_id}")->assertOk();
+        $this->actingAs($revokedManager)->getJson("/api/v1/maintenance/work-orders/{$order->hash_id}")->assertForbidden();
+    }
+
     public function test_preventive_recovery_requires_supervisor_and_legacy_complete_remains_available(): void
     {
         $technician = $this->actor('maintenance_tech');
