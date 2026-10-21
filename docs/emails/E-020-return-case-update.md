@@ -18,6 +18,7 @@ Internal case notifications continue through the existing notification service a
 
 - `ReturnCaseUpdateMailTest`: 2 tests passed, 30 assertions. Checks both portal routes, settings-backed footer, subject, plain-text link, hostile HTML and header input, absence of unresolved values, and HTML size.
 - Chromium inspected 8 renders for customer and supplier recipients at 1440px and 390px in light/dark modes. All rendered logos loaded and all document widths matched the viewport; no horizontal overflow.
+- Refreshed all 8 captures from the current rendered HTML and visually confirmed the CTA label is visible in dark mode; earlier tracked captures showed a stale blank label.
 - Mailer was forced to `array`. No email transport was contacted.
 - Chromium previews do not establish rendering in Outlook, Gmail, Apple Mail, or other clients.
 
