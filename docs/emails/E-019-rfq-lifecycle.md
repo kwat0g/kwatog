@@ -11,7 +11,7 @@ Each email is queued after the lifecycle event commits. The outbox captures RFQ 
 - RFQ number, title, deadline, supplier contact name, and invitation status come from the event-time snapshot captured by `RfqLifecycleEvent`.
 - Lifecycle wording is selected by the event kind and invitation result. Award notices do not include competitor pricing, rankings, or other suppliers' results.
 - Extension and cancellation free-text reasons are intentionally omitted from the external message.
-- Deadlines use the application's configured timezone and are labeled “Philippine time.” Confirm the production timezone remains `Asia/Manila`.
+- Deadline snapshots are converted explicitly to `Asia/Manila`, independent of the API process timezone, and labeled “Philippine time.”
 - The message links to `/portal/supplier/rfqs/{hash_id}` on the configured frontend origin. Supplier portal authentication redirects to sign-in and preserves the intended route.
 - No attachment is included. No decision or mutation occurs from the email link; it opens the authenticated portal record.
 - Plain text is produced by Laravel's Markdown mail renderer. Company name, logo, address, contact, and disclaimer use the shared branding settings and layout.

@@ -20,7 +20,7 @@ final class SupplierRfqLifecycleMailTest extends TestCase
     public function test_lifecycle_variants_are_branded_actionable_private_and_accurate(): void
     {
         $this->seed(SettingsSeeder::class);
-        config(['app.frontend_url' => 'https://erp.example.test', 'app.timezone' => 'Asia/Manila']);
+        config(['app.frontend_url' => 'https://erp.example.test', 'app.timezone' => 'UTC']);
 
         $rfq = RequestForQuote::factory()->create([
             'rfq_number' => 'RFQ-2026-0032',

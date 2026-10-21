@@ -59,7 +59,7 @@ final class SupplierRfqLifecycleMail extends QueuedMailable
         $notice = $this->notice();
         $brand = app(EmailBrandingService::class)->data();
         $deadline = $snapshot['closes_at']
-            ? Carbon::parse($snapshot['closes_at'])->setTimezone((string) config('app.timezone'))->format('M d, Y g:i A').' Philippine time'
+            ? Carbon::parse($snapshot['closes_at'])->setTimezone('Asia/Manila')->format('M d, Y g:i A').' Philippine time'
             : null;
         $recipientName = ($snapshot['contact_person'] ?? null) ?: ($snapshot['vendor_name'] ?? $this->invitation->vendor?->contact_person ?: $this->invitation->vendor?->name);
 
