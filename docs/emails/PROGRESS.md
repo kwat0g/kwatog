@@ -187,3 +187,5 @@ Continue the E-023 caller-by-caller audience, route, row-scope, payload, and sna
 - E-023 static review: checked prebill invoice, budget, budget-transfer, and bill-payment notices against active/delegated approver rules, maker-checker, exact SPA/API destination guards, payload, deduplication, and `NotificationService` after-commit/email-opt-in behavior. No defect found. Caller-by-caller audit remains partial.
 
 - EF-122 found in permission-override email review: affected users receive raw permission slugs and `grant`/`revoke` values. Recorded in FINDINGS.md for a separate content fix; recipient, after-commit timing, opt-in, escaping, and data minimization checked.
+
+- E-023 sales-order responses audited: internal audience and CRM link match effective permissions; external decision mail snapshots the record, formats money through shared service, escapes labels, and uses the portal route. EF-123 records that one queue exception skips remaining external recipients. No browser login simulation; external financial copy needs owner/accountant review.
