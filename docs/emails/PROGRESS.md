@@ -16,7 +16,7 @@ Updated: 2026-10-21
 
 ## Email UI work — 2026-10-21
 
-- E-001 invoice issued, E-002 official receipt, and E-003 invoice dunning now use the shared email shell's preheader/title, clearer key-fact tables, and consistent peso display. Invoice line items now use the shared responsive Markdown table styling. No trigger, recipient, or record source changed.
+- E-001 invoice issued, E-002 official receipt, and E-003 invoice dunning now use the shared email shell's preheader/title, clearer key-fact tables, and consistent peso display. Invoice line items use a stacked, mobile-safe layout. No trigger, recipient, or record source changed.
 - Rendered the three mailables with synthetic fixture records in a network-isolated PHP container, with `MAIL_MAILER=array`; no email was sent. Playwright screenshots cover 1440px desktop and 390px mobile in light/dark (`e001-accounting-*`, `e002-accounting-*`, `e003-accounting-*`). Inspected all 12 captures; viewport and document widths match. The first invoice line-item table wrapped badly on mobile, so it now uses a stacked list. E-003 links to the existing customer invoice detail route; the portal layout redirects unauthenticated users to sign-in while preserving that path. Added a focused link assertion; no local PHPUnit rerun. PR #325's CI check was already running on an earlier commit. Real email clients remain unverified.
 
 ## Blockers
