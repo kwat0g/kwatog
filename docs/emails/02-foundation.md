@@ -31,7 +31,7 @@ Existing settings rows:
 - `company.address` (required for mail)
 - `company.phone`, `company.email`, `company.sales_inbox_email`
 - `company.tin`, `company.vat_status`, `company.certification`
-- Landing-page logo art is bundled at `api/resources/images/ogami-mark.png`; dark mode uses its white recolor at `api/resources/images/ogami-mark-dark.png`. The SPA browser tab uses the same light/dark PNGs from `spa/public/`.
+- Landing-page logo art is bundled at `api/resources/images/ogami-mark.png`; dark mode uses its white recolor at `api/resources/images/ogami-mark-dark.png`.
 - `company.public_url`
 - `email.brand_name`
 - `email.footer_disclaimer` (optional; approved text only)
@@ -50,4 +50,4 @@ The local database has rows for core identity settings. The sales inbox and VAT 
 
 ## Verification status
 
-Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The exact landing-page PNG is used in light mode; a white variant preserves its transparency for dark mode. Both variants use CID images in mail and scheme-aware PNG icons in the SPA browser tab. The shared Markdown message component forwards preheaders and per-message titles into the HTML layout. Light-mode inline colors now allow dark-mode CSS overrides, mobile tables fit the viewport, and dark-mode links use a brighter color. Focused integration coverage previously passed: 6 tests, 22 assertions; title assertion now added. Browser-rendered header previews inspected desktop/mobile widths in light/dark modes: `screenshots/email-logo-header-*.png`. Full email previews will be regenerated as each type is completed. Browser screenshots do not verify real email clients. Outlook/Gmail/Apple Mail dark-mode behavior, actual provider delivery, domain authentication, and company-value approval remain unverified. No email was sent or transport contacted.
+Code changes are in draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) on branch `email/shared-foundation`. The exact landing-page PNG is used in light mode; a white variant preserves its transparency for dark mode, and both variants are embedded in email as CID images. The shared Markdown message component forwards preheaders and per-message titles into the HTML layout. Light-mode inline colors now allow dark-mode CSS overrides, mobile tables fit the viewport, and dark-mode links use a brighter color. Focused integration coverage previously passed: 6 tests, 22 assertions; title assertion now added. Browser-rendered header previews inspected desktop/mobile widths in light/dark modes: `screenshots/email-logo-header-*.png`. Full email previews will be regenerated as each type is completed. Browser screenshots do not verify real email clients. Outlook/Gmail/Apple Mail dark-mode behavior, actual provider delivery, domain authentication, and company-value approval remain unverified. No email was sent or transport contacted.
