@@ -1,4 +1,4 @@
-<x-mail::message>
+<x-mail::message :title="'Payment reminder: '.$snapshot['invoice_number']">
 # Payment reminder: {{ $snapshot['invoice_number'] }}
 
 Hello {{ $snapshot['customer_name'] }},
