@@ -193,7 +193,9 @@ class LeaveNotificationTest extends TestCase
         $roleId = Role::query()->where('slug', 'hr_officer')->value('id');
         $eligibleHr = User::factory()->create(['role_id' => $roleId, 'is_active' => true]);
         $revokedHr = User::factory()->create(['role_id' => $roleId, 'is_active' => true]);
+        $noViewHr = User::factory()->create(['role_id' => $roleId, 'is_active' => true]);
         $this->revokePermission($revokedHr, 'leave.approve_hr');
+        $this->revokePermission($noViewHr, 'leave.view');
 
         app(NotifyOnLeavePendingHR::class)->handle(new LeaveRequestPendingHR($req->fresh(['employee', 'leaveType'])));
 
@@ -205,6 +207,11 @@ class LeaveNotificationTest extends TestCase
         $this->assertDatabaseMissing('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id' => $revokedHr->id,
+            'type' => 'leave.pending_hr',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $noViewHr->id,
             'type' => 'leave.pending_hr',
         ]);
     }
