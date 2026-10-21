@@ -92,7 +92,9 @@ class BudgetTransferTest extends TestCase
         $service->approve($transfer, $checker->id);
 
         $notice = DB::table('notifications')->where('notifiable_id', $maker->id)
-            ->where('type', 'approval.completed')->first();
+            ->where('type', 'approval.completed')
+            ->whereRaw("data->>'entity_id' = ?", [$transfer->hash_id])
+            ->first();
         $this->assertNotNull($notice);
         $this->assertNull(json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
