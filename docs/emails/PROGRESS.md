@@ -146,6 +146,8 @@ Updated: 2026-10-21
 
 Owner review: E-016 and E-023 can both send payslip-ready mail for one finalization when both email controls are enabled and employee/user addresses match. No trigger changed.
 
+EF-112 found during E-023 review: internal RFQ outcome emails include PR requesters whose row scope allows the exact RFQ, but frontend/API global guards block them without a broad RFQ permission. Recorded for a separate access-control PR.
+
 ## Next step
 
 Continue the E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify the consolidated E-023 PR checks. Owner still needs to verify company values and sales inbox readers before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.
