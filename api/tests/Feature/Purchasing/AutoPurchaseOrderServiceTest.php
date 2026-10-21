@@ -9,6 +9,7 @@ use App\Common\Services\ApprovalService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\TaxPolicyService;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -18,7 +19,9 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Services\AutoPurchaseOrderService;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Mockery;
 use Tests\TestCase;
 
@@ -29,6 +32,7 @@ class AutoPurchaseOrderServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
         $this->seed(WorkflowSeeder::class);
 
@@ -47,6 +51,26 @@ class AutoPurchaseOrderServiceTest extends TestCase
 
     public function test_critical_shortage_creates_a_canonical_pending_approval_po_once(): void
     {
+        $eligible = User::factory()->withRole('finance_officer')->create();
+        $revoked = User::factory()->withRole('finance_officer')->create();
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'purchasing.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $eligible->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $revoked->flushPermissionsCache();
+        $notifications = Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('send')->once()->withArgs(function ($audience, string $type, array $data) use ($eligible): bool {
+            return $type === 'auto_po_pending'
+                && collect($audience)->pluck('id')->all() === [$eligible->id]
+                && str_starts_with($data['link_to'], '/purchasing/purchase-orders/');
+        });
+        $this->app->instance(NotificationService::class, $notifications);
+
         $alerts = Mockery::mock(AlertEngineService::class);
         $alerts->shouldReceive('raise')->once();
         $this->app->instance(AlertEngineService::class, $alerts);

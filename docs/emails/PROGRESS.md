@@ -116,6 +116,7 @@ Updated: 2026-10-21
 - EF-084 / scheduled maintenance repeat-breakdown notice: active supervisors with a revoked `maintenance.view` still received machine incident details and a forbidden downtime link. Draft PR #295 filters the audience by effective permission. Regression test added; test run pending. No real email sent.
 - EF-085 / maintenance assignment/escalation notices: role-only supervisor/manager targeting ignored `maintenance.view` revocations. Draft PR #296 filters the creation listener and assignment/handover command audiences by effective view permission. Regression tests added; test run pending. No real email sent.
 - EF-086 / custom approval SLA notices: direct approvers with a revoked queue-read permission could receive reminder/escalation links, and budget transfer alerts linked approval-only users to a view-only list. Draft PR #297 checks each route's effective read alternatives and uses the transfer's approval-capable detail route. Tests cover both audiences and the link; test run pending. No real email sent.
+- EF-087 / auto-purchase-order approval notice: role-only targeting ignored effective approval, view, and PO row visibility. Draft PR #298 applies the current role plus effective permission and `PurchaseOrderAccessPolicy` checks. Regression test added; test run pending. No real email sent.
 
 ## Next step
 
