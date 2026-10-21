@@ -12,6 +12,7 @@ Updated: 2026-10-21
 - E-002's four browser screenshots were refreshed in the local #218 worktree with the current landing-page logo variants; see [E-002 review](E-002-official-receipt.md).
 - E-003's four browser screenshots were refreshed in the local #220 worktree with the current landing-page logo variants; see [E-003 review](E-003-invoice-dunning.md).
 - E-004's eight customer/supplier browser screenshots were refreshed in the local #222 worktree with the current landing-page logo variants; see [E-004 review](E-004-credit-note.md).
+- E-005 and E-006 browser previews were refreshed from the actual branch mailables with dummy tokens; no mail was sent. Four captures per type cover 1440px/390px and light/dark, with no viewport overflow. Local PR #224 commit `75f1c70f`; see [E-005](E-005-portal-invitation.md) and [E-006](E-006-portal-password-reset.md).
 - Full PHPUnit run [39556310646](https://github.com/kwat0g/kwatog/actions/runs/39556310646) is active on `fix/phpunit-mail-from`. Wait for it to finish before starting another suite or publishing commits that trigger CI.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
