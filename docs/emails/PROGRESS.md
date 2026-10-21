@@ -140,7 +140,7 @@ Updated: 2026-10-21
 - EF-076 / E-023 overtime submission audience: configured department heads already matched the requester's department, but permission revocations were ignored. Draft PR #290 now filters by effective `attendance.ot.approve`; `OvertimeNotificationTest` covers the revoked-recipient case. CI exposed a hard-coded supplier portal URL assertion in an existing cancellation-mail test; it now checks configured frontend URL. No real email sent. Full caller audit remains open.
 - E-011/E-017 discovery now matches the current callers: both use `Mail::to(...)->queue()` with `QueuedMailable`, and source review confirmed pending-state guards prevent repeat decision sends. Docs-only commits `b4ec94f2` and `51db2ca6` are local on this branch; waiting for PR #275 PHPUnit before pushing to avoid overlapping suites.
 - PR #275's first full API run failed one cancellation-mail assertion because it hard-coded an obsolete company address. Commit `cf742415` now asserts the escaped `company.address` setting; rerun's PHPStan passed and PHPUnit remains active in run `39550872843`.
-- E-023 maintenance work-order notices: EF-108 verifier/page access and EF-109 assignee/page access fixes with regression coverage are on separate local branches; verification and PRs pending.
+- E-023 maintenance work-order notices: EF-108 verifier/page access fix is in its tracked PR; EF-109 assignee/page access fix with regression coverage is on branch `fix/e023-maintenance-assignee-access`; verification and draft PR pending.
 
 - E-023 caller audit: refreshed all 83 `NotificationService::send()` source anchors and verified the customer-created RMA notice audience, preference gate, queue timing, SPA route, and payload. Full caller review remains open.
 
@@ -153,7 +153,7 @@ Updated: 2026-10-21
 - EF-118 found in the shared approval-outcome path: a requester could retain a final outcome email but lose access to its link before the decision. Local branch `fix/e023-approval-outcome-links` now applies the exact record read check and adds regression coverage; tests and independent PR await the active suite.
 - E-023 caller review: verified CAPA effectiveness reminder audiences, detail-route permission, bounded payload, retry de-duplication, and opt-in email handling. No recipient visibility defect found.
 - E-023 caller review: verified recruitment application alerts use active users with effective `hr.recruitment.view`, an exact application link, after-commit queueing, and explicit email opt-in. Added regression coverage for revoked access and inactive users; candidate-name PII needs HR/data-protection review. CI is running on PR #310; test not run locally.
-- EF-109 maintenance assignee visibility and EF-116 supplier-return date handling have standalone code/test commits prepared; both await verification before push. EF-116 fixes the five UTC-date lint violations blocking favicon PR #248. No local test suite started while PR #310's API suite is active.
+- EF-109 maintenance assignee visibility is prepared on `fix/e023-maintenance-assignee-access`; EF-116 supplier-return date handling has a standalone code/test commit prepared. Both await verification before push. EF-116 fixes the five UTC-date lint violations blocking favicon PR #248. No local test suite started while PR #310's API suite is active.
 
 Owner review: E-016 and E-023 can both send payslip-ready mail for one finalization when both email controls are enabled and employee/user addresses match. No trigger changed.
 

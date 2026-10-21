@@ -12,6 +12,17 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class MaintenanceWorkAccess
 {
+    public static function canOpenWorkOrderAsAssignee(?User $user): bool
+    {
+        if (! $user?->is_active) {
+            return false;
+        }
+
+        return $user->role?->slug === 'employee'
+            ? $user->hasPermission('maintenance.work.assigned')
+            : $user->role?->slug === 'maintenance_tech' && $user->hasPermission('maintenance.view');
+    }
+
     public static function canRecord(MaintenanceWorkOrder $order, ?User $user): bool
     {
         if (! $user?->is_active || $order->status !== MaintenanceWorkOrderStatus::InProgress

@@ -61,6 +61,38 @@ class MaintenanceRoutingNotificationTest extends TestCase
         $this->assertSame(0, DB::table('notifications')->count());
     }
 
+    public function test_assignee_options_and_assignment_require_the_linked_page_permission(): void
+    {
+        $supervisor = $this->actor('maintenance_supervisor');
+        $technician = $this->actor('maintenance_tech');
+        $employee = $this->actor('employee');
+        $revokedTechnician = $this->actor('maintenance_tech');
+        $revokedEmployee = $this->actor('employee');
+        $this->revokePermission($revokedTechnician, $supervisor, 'maintenance.view');
+        $this->revokePermission($revokedEmployee, $supervisor, 'maintenance.work.assigned');
+
+        $response = $this->actingAs($supervisor)
+            ->getJson('/api/v1/maintenance/work-orders/assignees')
+            ->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($technician->employee->hash_id, $ids);
+        $this->assertContains($employee->employee->hash_id, $ids);
+        $this->assertNotContains($revokedTechnician->employee->hash_id, $ids);
+        $this->assertNotContains($revokedEmployee->employee->hash_id, $ids);
+
+        $order = $this->order($supervisor);
+        foreach ([$revokedTechnician, $revokedEmployee] as $user) {
+            try {
+                app(MaintenanceWorkOrderService::class)->assign(
+                    $order, $user->employee_id, $supervisor, ['expected_assignee_id' => null],
+                );
+                $this->fail('A user without access to the linked page must not be assigned.');
+            } catch (\Illuminate\Validation\ValidationException $error) {
+                $this->assertArrayHasKey('employee_id', $error->errors());
+            }
+        }
+    }
+
     public function test_critical_escalation_is_due_once_and_assignment_closes_episode(): void
     {
         $supervisor = $this->actor('maintenance_supervisor');
@@ -138,9 +170,14 @@ class MaintenanceRoutingNotificationTest extends TestCase
 
     private function revokeView(User $user, User $grantedBy): void
     {
+        $this->revokePermission($user, $grantedBy, 'maintenance.view');
+    }
+
+    private function revokePermission(User $user, User $grantedBy, string $permission): void
+    {
         DB::table('user_permission_overrides')->insert([
             'user_id' => $user->id,
-            'permission_id' => DB::table('permissions')->where('slug', 'maintenance.view')->value('id'),
+            'permission_id' => DB::table('permissions')->where('slug', $permission)->value('id'),
             'type' => 'revoke',
             'granted_by' => $grantedBy->id,
             'reason' => 'Audience regression test.',
