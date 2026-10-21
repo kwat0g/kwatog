@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { returnManagementApi } from '@/api/returnManagement';
+import { manilaIsoDate } from '@/lib/formatDate';
 import DisposeDialog from './dispose';
 
 vi.mock('@/api/returnManagement', () => ({ returnManagementApi: { options: vi.fn(), dispose: vi.fn() } }));
@@ -24,12 +25,13 @@ it('arranges checked supplier defects without a second warehouse location', asyn
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const rma = { id: 'rma-2', type: 'supplier_return' as const, type_label: 'Supplier return', rma_number: 'RMA-2', status: 'approved', status_label: 'Approved', is_editable: false, requires_defect_evidence: true, created_at: '', updated_at: '', item_count: 1, items: [{ id: 'line-2', item_id: 'item-2', quantity: '2', returned_quantity: '2', receipt_recorded: true, moved_quantity: '2', unit_price: '0.50', total: '1.00' }] };
   render(<QueryClientProvider client={client}><DisposeDialog rma={rma} isOpen onClose={() => {}} /></QueryClientProvider>);
+  expect(screen.getByLabelText(/Required delivery date/)).toHaveAttribute('min', manilaIsoDate());
   await screen.findByRole('option', { name: 'Return to Supplier' });
   fireEvent.change(screen.getByRole('combobox', { name: 'Disposition' }), { target: { value: 'return_to_supplier' } });
   expect(screen.queryByLabelText('Restock location')).not.toBeInTheDocument();
   expect(screen.queryByRole('checkbox', { name: /Raise a replacement purchase order/ })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Finish earlier return' })).toBeDisabled();
-  const date = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const date = manilaIsoDate(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000));
   fireEvent.change(screen.getByLabelText(/Required delivery date/), { target: { value: date } });
   fireEvent.click(screen.getByRole('button', { name: 'Finish earlier return' }));
   await waitFor(() => expect(returnManagementApi.dispose).toHaveBeenCalledWith('rma-2', [{ item_id: 'line-2', disposition: 'return_to_supplier', notes: undefined }], true, undefined, date));
