@@ -1,6 +1,6 @@
 # Email audit progress
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Status
 
@@ -11,6 +11,13 @@ Updated: 2026-10-20
 - Shared preheader forwarding defect: stock Markdown message component dropped per-email preheaders before the layout. Fixed in #213; E-005/E-006 tests exposed and verify the shared forwarding behavior.
 - Shared visual defects: inlined light colors blocked dark-mode overrides and 600px table width overflowed mobile browser previews. Fixes in #213 remove color priority conflicts and constrain mobile tables; recheck all template screenshots after foundation update.
 - Email delivery: none sent.
+
+## Current hosted checks — 2026-10-21
+
+- PR #213 head `f9aa0220` adds isolated PHPUnit sender/sink values. PHPStan passed; PHPUnit remains in progress. Accessibility, visual-baseline, and finding-lifecycle gates passed. The web dependency audit still reports high-severity `vite` and `follow-redirects` advisories. The passing lockfile fix is [PR #271](https://github.com/kwat0g/kwatog/pull/271), on a separate 98-commit branch, so it is not present in #213's check merge.
+- Three shared API failures in `AssetAssociationTest` came from a midnight-sensitive attendance fixture (`now() - 1 hour` before a midnight shift). Test-only correction is in [PR #328](https://github.com/kwat0g/kwatog/pull/328); its PHPStan and PHPUnit checks are running.
+- PR #325's earlier API run failed because its stale base lacked `MAIL_TEST_TO`; the test sender config is now in PR #213. Rebase stacked branches after shared checks settle. No real email was sent.
+- Fresh sender/class scan confirms the inventory count: 34 production message implementations plus one test-only Mailable. The two HR account messages subclass the auth welcome/reset notifications, so a direct `extends Mailable|Notification` scan alone misses them; they are covered as E-032/E-033.
 
 ## Blockers
 
@@ -26,4 +33,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Owner has said “proceed.” Continue with reliability and per-email redesign units. Confirm company values with the company owner before any real send.
+Owner has said “proceed.” Finish shared CI gates, synchronize dependent draft branches, then report remaining owner/provider checks. Confirm company values with the company owner before any real send.
