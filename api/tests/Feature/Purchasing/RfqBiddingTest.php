@@ -466,6 +466,21 @@ final class RfqBiddingTest extends TestCase
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
     }
 
+    public function test_non_owner_cannot_trigger_lazy_rfq_closure_through_detail_get(): void
+    {
+        $requester = $this->roleUser('department_head');
+        [$pr] = $this->approvedPr('10.00');
+        $pr->forceFill(['requested_by' => $requester->id])->save();
+        [$vendor] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$vendor], publish: true);
+        RequestForQuote::query()->sole()->forceFill(['closes_at' => now()->subMinute()])->save();
+        $other = $this->roleUser('department_head');
+
+        $this->actingAsFresh($other)->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
+
+        $this->assertSame('open', RequestForQuote::query()->sole()->status->value);
+    }
+
     public function test_a_passed_deadline_closes_on_read_and_cannot_be_extended(): void
     {
         [$pr] = $this->approvedPr('10.00');
