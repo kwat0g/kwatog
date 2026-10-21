@@ -29,6 +29,7 @@ Updated: 2026-10-21
 - Sampled remote failures show shared-base issues: E-017 PR #239 and E-023 PR #255 fail PHPStan on EF-027; E-034 PR #278 fails an E-008 test pinned to `https://ogamiph.dev` while CI uses `app.frontend_url`; E-001 PR #216 fails when an array-transport notification has no From header. PR #312 addresses EF-027; PR #275 contains the configured-URL assertion and reserved PHPUnit sender fixes. Those fixes still need to reach affected PR bases and checks must be rerun.
 - PR #275's current remote run (head `67be3750`) also failed because E-009's complaint-link test hardcoded `https://ogamiph.dev`. Local branch head `08194e93` now asserts `app.frontend_url` and records EF-064; it is not pushed or tested. Publish after PR #312's queued suite finishes.
 - PR #273's remote run failed on the same missing array-transport From header seen in PR #216. PR #275 carries the shared `.test` sender fix but is not yet in PR #273's base. Local account-security branch commit `d70d6e2d` also changes Admin/HR toggles to “Send account setup email,” matching the new secure-link body; not pushed or checked.
+- PR #248's light/dark company-logo favicon update now uses the current theme; commit `e787c5c1` updates vulnerable frontend dependencies and is pushed. `npm audit --audit-level=high` reports zero vulnerabilities. CI run 39573300734 failed on five existing return-management date-input lint errors; current `origin/main` already uses `manilaIsoDate()` at those sites. Rerun PR checks after the active API suite ends.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
@@ -46,7 +47,7 @@ Updated: 2026-10-21
 
 ## Next steps
 
-1. Wait for PR #312 run 39571951294; do not start another suite or publish another CI-triggering commit while it runs. PR #311 run 39565852712 failed before PHPUnit on EF-027; PR #312 replaces the undefined `$creditNote` reference with the captured snapshot hash.
+1. Wait for PR #312 run 39571951294; do not start another test suite or publish another CI-triggering commit while it runs. PR #311 run 39565852712 failed before PHPUnit on EF-027; PR #312 replaces the undefined `$creditNote` reference with the captured snapshot hash. After it completes, rerun PR #248 against current `main` and publish PR #275's prepared fixes.
 2. After the active run ends, publish shared baseline fixes and align affected PR bases: E-011/E-012 with #312, and downstream PRs with the E-008/E-009 URL-test and array-sender fixes in #275. Rerun affected checks.
 3. Publish local E-013, E-014/E-015, and E-016 functional/design branches as independent draft PRs once their parent checks are current.
 4. Audit existing E-017–E-034 PRs and the E-035 harness against inventory, including current CI, dependencies, screenshots, and focused test evidence. Refresh stale findings and coverage docs.
