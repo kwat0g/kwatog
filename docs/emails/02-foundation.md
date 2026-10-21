@@ -17,6 +17,27 @@ Keep Laravel's existing Markdown Mailable and `MailMessage` stack. The applicati
 - Existing PDF/company settings remain the source for company details. Optional approved email disclaimer is stored at `email.footer_disclaimer`; it is seeded from `EMAIL_FOOTER_DISCLAIMER` and editable through the admin settings endpoint.
 - Laravel Markdown buttons now render a 48px VML button for Outlook, an inline-styled HTML button, a descriptive HTML fallback link, and Laravel's plain-text button link. Existing panel/table components remain available; per-message key-facts/detail/timeline blocks belong to the email groups that need them.
 
+## Content and subject rules
+
+- Use `[OGAMI] {action or outcome}: {document type and number} · {verified key fact}`. Omit unavailable facts; never manufacture a number, amount, date, or status.
+- Keep internal copy brief and action-led. Use a formal, complete signature for external recipients. State absolute dates in Asia/Manila; show relative timing only beside the date.
+- Keep sensitive values out of subjects. Do not put payroll amounts, credentials, reset tokens, or private HR details in the body.
+- Use the application's money/date helpers and human status labels. Templates display prepared values; they do not recalculate totals or derive business status.
+- Laravel Markdown supplies the text alternative. Keep the text part useful, with the same action, document reference, and destination as the HTML part.
+
+## Recipient, link, and attachment rules
+
+- Preserve the trigger's existing recipient and permission logic. Deduplicate recipients; do not broaden a role audience when a target address is missing or invalid. Verify each recipient against the record's access rule before exposing record data or a deep link.
+- Build record links from `FRONTEND_URL`, verify the SPA route, and preserve the intended destination through login. Email GET links must not mutate state. Reset, invitation, and sensitive-document links must use expiring tokens with the existing single-use behavior where supported.
+- Reuse the shared PDF/export generator for attachments. Include only the selected record or export scope, and do not recompute totals in the email. Prefer authenticated links for payroll and other highly sensitive files.
+
+## Accessibility and deliverability review
+
+- Keep essential information in text; use descriptive image alt text and links; keep body text at 14px or larger and action targets at 44px or larger; preserve readable contrast in both themes.
+- Check rendered HTML, plain text, links, mobile width, and dark mode in a browser. Then follow the [manual client checklist](01-inventory.md#manual-real-client-checklist-for-the-later-email-phase) in Gmail, Outlook, Apple Mail, and mobile clients. Browser captures do not prove client compatibility.
+- Verify SPF, DKIM, and DMARC records with the domain administrator and sender provider. DKIM setup was reported successful for `ogamiph.dev` in AWS Singapore; SPF, DMARC, bounce handling, and provider suppression remain unverified.
+- Payroll, statutory financial documents, HR notices, and personal-data handling need review by the company's accountant, HR, legal, or data-protection officer as applicable. This guide makes no compliance claim.
+
 ## Non-production delivery policy
 
 `config/mail.php` defaults to the `log` transport. In every environment except exactly `production`, the `MessageSending` hook redirects To to `MAIL_TEST_TO`, removes Cc/Bcc and the original Reply-To, sets Reply-To to the sink, and prefixes the subject with the environment. If `MAIL_TEST_TO` is absent or invalid, it throws before transport. Production keeps configured recipients and SMTP transport. Local `.env` files were also changed to `MAIL_MAILER=log`, SMTP credentials cleared, and the active Horizon process restarted.
@@ -31,7 +52,7 @@ Existing settings rows:
 - `company.address` (required for mail)
 - `company.phone`, `company.email`, `company.sales_inbox_email`
 - `company.tin`, `company.vat_status`, `company.certification`
-- Landing-page logo art is bundled at `api/resources/images/ogami-mark.png`; dark mode uses its white recolor at `api/resources/images/ogami-mark-dark.png`. The SPA browser tab uses the same light/dark PNGs from `spa/public/`.
+- The exact light-mode landing-page image is bundled at `api/resources/images/ogami-logo.png` from `spa/public/brand-logo.png`; dark mode uses the transparent white variant at `api/resources/images/ogami-mark-dark.png`.
 - `company.public_url`
 - `email.brand_name`
 - `email.footer_disclaimer` (optional; approved text only)
