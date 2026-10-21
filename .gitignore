@@ -82,3 +82,6 @@ spa/playwright-live-report/
 # committed by accident in 167de85e; a fresh checkout would resurrect stale locks
 # and every claim/release would show as a git change.
 audit/domains/*/*/.lock/
+
+# Cloudflare Origin CA cert/key (secrets)
+docker/caddy/certs/

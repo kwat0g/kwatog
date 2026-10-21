@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Common\Services\SettingsService;
-use App\Common\Support\HashIdFilter;
-use App\Modules\CRM\Models\Product;
-use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -21,7 +18,6 @@ use App\Modules\Quality\Requests\RecordMeasurementsRequest;
 use App\Modules\Quality\Requests\ReplaceInspectionChecklistRequest;
 use App\Modules\Quality\Requests\ReviewInspectionRequest;
 use App\Modules\Quality\Resources\InspectionResource;
-use App\Modules\Quality\Services\AqlSampleSizeService;
 use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Http\JsonResponse;
@@ -88,34 +84,6 @@ class InspectionController
         ]]);
     }
 
-    public function workOrderOutputs(Request $request): JsonResponse
-    {
-        $productId = HashIdFilter::decode($request->query('product_id'), Product::class);
-        if ($productId === null) {
-            return response()->json(['data' => []]);
-        }
-
-        $outputs = WorkOrderOutput::query()
-            ->with('workOrder:id,wo_number,product_id')
-            ->where('good_count', '>', 0)
-            ->whereHas('workOrder', fn ($q) => $q->where('product_id', $productId))
-            ->orderByDesc('recorded_at')
-            ->orderByDesc('id')
-            ->limit(100)
-            ->get();
-
-        return response()->json(['data' => $outputs->map(static fn (WorkOrderOutput $output): array => [
-            'id' => $output->hash_id,
-            'batch_code' => $output->batch_code,
-            'good_count' => (int) $output->good_count,
-            'recorded_at' => optional($output->recorded_at)?->toISOString(),
-            'work_order' => $output->workOrder ? [
-                'id' => $output->workOrder->hash_id,
-                'wo_number' => $output->workOrder->wo_number,
-            ] : null,
-        ])->values()]);
-    }
-
     /**
      * @OA\Get(
      *     path="/quality/inspections/{id}",
@@ -162,12 +130,12 @@ class InspectionController
      * @OA\Post(
      *     path="/quality/inspections",
      *     tags={"Inspections"},
-     *     summary="Create a new inspection",
-     *     description="Creates an inspection record with auto-generated number (QC-YYYYMM-NNNN). Links to inspection spec for tolerance evaluation.",
+     *     summary="Create an inspection from its source record",
+     *     description="Creates an inspection record with auto-generated number (QC-YYYYMM-NNNN). The source record (GRN, work order, output batch, or return) is required; standalone inspections are refused.",
      *     security={{"sanctum":{}}},
      *
      *     @OA\RequestBody(required=true, @OA\JsonContent(
-     *         required={"stage", "product_id", "batch_quantity"},
+     *         required={"stage", "product_id", "batch_quantity", "entity_type", "entity_id"},
      *
      *         @OA\Property(property="stage", type="string", enum={"incoming","in_process","outgoing","supplier_return","customer_return"}),
      *         @OA\Property(property="product_id", type="string", description="Product hash ID"),
@@ -325,13 +293,5 @@ class InspectionController
     public function coc(Request $request, Inspection $inspection, CoCService $coc): Response
     {
         return $coc->generateForInspection($inspection);
-    }
-
-    public function aqlPreview(Request $request): JsonResponse
-    {
-        $request->validate(['batch_quantity' => ['required', 'integer', 'min:1']]);
-        $plan = AqlSampleSizeService::forBatch((int) $request->query('batch_quantity'));
-
-        return response()->json(['data' => $plan]);
     }
 }

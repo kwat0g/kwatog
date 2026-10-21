@@ -518,6 +518,7 @@ class BusinessProcessAuditTest extends TestCase
                 'items' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'result' => 'passed'])->all(),
                 'coverage_confirmed' => true,
                 'inspected_quantity' => (int) $inspection->sample_size,
+                'sample_defect_count' => 0,
             ])
             ->assertOk();
         $inspection->refresh();
@@ -1192,6 +1193,7 @@ class BusinessProcessAuditTest extends TestCase
                 'items' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'result' => 'passed'])->all(),
                 'coverage_confirmed' => true,
                 'inspected_quantity' => (int) $inspection->sample_size,
+                'sample_defect_count' => 0,
             ])
             ->assertOk();
         $inspection->refresh();

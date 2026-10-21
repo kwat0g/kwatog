@@ -33,6 +33,7 @@ enum DocumentType: string
     case BulkPdf            = 'bulk_pdf';
     case PackingList        = 'packing_list';
     case CommercialInvoice  = 'commercial_invoice';
+    case DeliveryReceipt    = 'delivery_receipt';
     case Bir2307            = 'bir_2307';
     case AuditTrail         = 'audit_trail';
 
@@ -77,6 +78,7 @@ enum DocumentType: string
             self::BulkPdf            => 'Bulk PDF',
             self::PackingList        => 'Packing List',
             self::CommercialInvoice  => 'Commercial Invoice',
+            self::DeliveryReceipt    => 'Delivery Receipt',
             self::AuditTrail         => 'Audit Trail',
         };
     }
@@ -86,6 +88,7 @@ enum DocumentType: string
         return match ($this) {
             self::PackingList => 'packing-list',
             self::CommercialInvoice => 'commercial-invoice',
+            self::DeliveryReceipt => 'delivery-receipt',
             default => $this->value,
         };
     }

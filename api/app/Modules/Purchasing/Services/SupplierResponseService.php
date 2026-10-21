@@ -510,6 +510,14 @@ class SupplierResponseService
                 $recipients = [$vendorEmail];
             }
 
+            $recipients = array_values(array_filter(
+                $recipients,
+                static fn (mixed $email): bool => is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false,
+            ));
+            if ($recipients === []) {
+                return;
+            }
+
             Mail::to($recipients)->send(new SupplierPoDecisionMail($po, $response, $decision));
         } catch (\Throwable $e) {
             // Notification failure must never break the resolution transaction;

@@ -37,14 +37,14 @@ class EmailBrandingService
 
     public function logoPath(): ?string
     {
-        $path = resource_path('images/ogami-mark.png');
-        if (is_file($path)) {
-            return $path;
+        foreach (['images/ogami-logo.png', 'images/ogami-mark.png', 'images/ogami-mark.svg'] as $relative) {
+            $path = resource_path($relative);
+            if (is_file($path)) {
+                return $path;
+            }
         }
 
-        $path = resource_path('images/ogami-mark.svg');
-
-        return is_file($path) ? $path : null;
+        return null;
     }
 
     public function logoDataUri(): ?string

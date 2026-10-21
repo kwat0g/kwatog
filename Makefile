@@ -186,7 +186,7 @@ prod-up:
 		done; \
 		[ "$$status" = healthy ] || { echo 'ERROR: production database did not become healthy'; exit 1; }
 	$(PROD_COMPOSE) up migrate
-	$(PROD_COMPOSE) up -d api nginx reverb queue scheduler
+	$(PROD_COMPOSE) up -d api nginx reverb horizon scheduler
 
 prod-down:
 	$(PROD_COMPOSE) down
@@ -215,7 +215,7 @@ deploy: build-spa
 		[ "$$status" = healthy ] || { echo 'ERROR: production database did not become healthy'; exit 1; }
 	$(MAKE) prod-backup
 	$(PROD_COMPOSE) up migrate
-	$(PROD_COMPOSE) up -d api nginx reverb queue scheduler
+	$(PROD_COMPOSE) up -d api nginx reverb horizon scheduler
 	$(PROD_COMPOSE) exec -T api php artisan config:cache
 	$(PROD_COMPOSE) exec -T api php artisan route:cache
 	$(PROD_COMPOSE) exec -T api php artisan view:cache

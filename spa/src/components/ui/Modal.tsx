@@ -61,7 +61,10 @@ const sizes: Record<Size, string> = {
  * explicitly forced `presentation="dialog"` on a phone must keep dialog-sized
  * actions.
  */
-const PresentationContext = createContext<{ sheet: boolean }>({ sheet: false });
+const PresentationContext = createContext<{ sheet: boolean; inDialog: boolean }>({
+  sheet: false,
+  inDialog: false,
+});
 
 /**
  * Focusable element selector — matches all standard interactive elements
@@ -253,7 +256,7 @@ export function Modal({
           className,
         )}
       >
-        <PresentationContext.Provider value={{ sheet }}>
+        <PresentationContext.Provider value={{ sheet, inDialog: true }}>
           {hasHeader && (
             <div
               className={cn(
@@ -286,20 +289,35 @@ export function Modal({
 }
 
 export function ModalFooter({ children, className }: { children: ReactNode; className?: string }) {
-  const { sheet } = useContext(PresentationContext);
+  const { sheet, inDialog } = useContext(PresentationContext);
 
+  /*
+   * The negative offsets below are not decoration: they cancel the DIALOG
+   * body's own padding so the footer's rule spans the dialog and its bottom
+   * corners stay round inside it. Rendered anywhere else they hang the row out
+   * of its container instead — on `/quality/ncrs/new` the page used this as a
+   * form action bar and every child was 40px wider than its parent, at every
+   * width (F-020). Outside a dialog the row is therefore ordinary: no negative
+   * offsets, no sticky, no rounded corners, no safe-area padding.
+   *
+   * A page that wants the action row pinned to the bottom of the viewport on a
+   * phone wants `FormActions` (→ `StickyActionBar`), which is built for that
+   * and does not assume a gutter it cannot know.
+   */
   return (
     <div
       className={cn(
         'border-t border-default bg-surface flex items-center justify-end gap-2 z-10',
-        sheet
-          ? // Thumb-first footer: sticky to the bottom of the sheet and padded
-            // for the home indicator. The 44px floor comes from the sheet panel
-            // so hand-rolled action rows get it too. Buttons stay side by side —
-            // stacking them would change every dialog's hierarchy for a
-            // phone-only gain.
-            'sticky bottom-0 -mx-4 -mb-4 mt-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
-          : 'sticky bottom-[-20px] -mx-5 -mb-5 mt-5 px-5 py-4 rounded-b-md',
+        !inDialog
+          ? 'mt-4 pt-4'
+          : sheet
+            ? // Thumb-first footer: sticky to the bottom of the sheet and padded
+              // for the home indicator. The 44px floor comes from the sheet panel
+              // so hand-rolled action rows get it too. Buttons stay side by side —
+              // stacking them would change every dialog's hierarchy for a
+              // phone-only gain.
+              'sticky bottom-0 -mx-4 -mb-4 mt-4 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
+            : 'sticky bottom-[-20px] -mx-5 -mb-5 mt-5 px-5 py-4 rounded-b-md',
         className,
       )}
     >

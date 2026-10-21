@@ -275,6 +275,19 @@ async function main() {
                 .filter((el) => !String(el.className).includes('truncate'))
                 .filter((el) => !String(el.className).includes('sr-only'))
                 .filter((el) => !el.closest('[class*="overflow-x"], [class*="overflow-auto"]'))
+                /*
+                 * SVG has no CSS box to overflow. A recharts `<text>` is laid
+                 * out by the chart, and Chromium reports its scrollWidth from
+                 * the glyph run against a tick slot it never had to fit — which
+                 * flagged two correctly-rendered labels as defects (finance
+                 * 64>52, QC Pareto 118>84). Both were MEASURED as artifacts
+                 * rather than assumed to be: the Pareto's three x-axis labels
+                 * sit 19px and 23px apart inside a 335px panel, no overlap, and
+                 * neither chart scrolls its container. The HTML leaf rule below
+                 * — the one that catches a fixed-width slot holding a longer
+                 * word — is unchanged.
+                 */
+                .filter((el) => !el.closest('svg'))
                 .filter(hasInFlowOverflow)
                 .slice(0, 10)
                 .map((el) => {

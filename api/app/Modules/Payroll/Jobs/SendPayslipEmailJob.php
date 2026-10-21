@@ -37,9 +37,9 @@ class SendPayslipEmailJob implements ShouldQueue
 
     public function __construct(public int $payrollId)
     {
-        // Lane: low — finalize fans out ~200 of these; they must not flood
-        // the default lane that approvals and realtime share.
-        $this->onQueue('low');
+        // Lane: mail — finalize fans out ~200 of these; the mail pool keeps
+        // them off the lanes that carry approvals and automation.
+        $this->onQueue('mail');
     }
 
     public function handle(PayslipPdfService $pdf, ?PayrollPublicationPolicy $publication = null): void
@@ -82,11 +82,11 @@ class SendPayslipEmailJob implements ShouldQueue
             }
 
             $email = $payroll->employee?->email;
-            if (! $email) {
+            if (! is_string($email) || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
                 $payroll->forceFill([
                     'payslip_email_status' => Payroll::EMAIL_FAILED,
                     'payslip_email_queued_at' => null,
-                    'payslip_email_last_error' => 'Employee has no email address for payslip delivery.',
+                    'payslip_email_last_error' => 'Employee has no usable email address for payslip delivery.',
                 ])->saveQuietly();
                 $missingEmail = true;
                 return;
@@ -117,7 +117,7 @@ class SendPayslipEmailJob implements ShouldQueue
                     'link_to' => '/self-service/payslips',
                     'entity_type' => 'payroll',
                     'entity_id' => Payroll::find($this->payrollId)?->hash_id,
-                    'reason' => 'The employee has no email address for payslip delivery.',
+                    'reason' => 'The employee has no usable email address for payslip delivery.',
                 ],
             );
         }

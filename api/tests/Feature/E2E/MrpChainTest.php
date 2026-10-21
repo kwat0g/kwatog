@@ -40,6 +40,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\UomSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 /**
@@ -63,6 +64,7 @@ use Tests\TestCase;
  */
 class MrpChainTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     private User $soOfficer;
@@ -523,12 +525,14 @@ class MrpChainTest extends TestCase
         // running (production_manager holds the lifecycle permission).
         // ------------------------------------------------------------------
         $this->travelTo($schedule->scheduled_start);
-        $this->actingAs($this->productionManager)
+        $this->finishedGoodsItemFor($product);
+        $this->finishedGoodsLocation();
+        $startResponse = $this->actingAs($this->productionManager)
             ->postJson("/api/v1/production/work-orders/{$wo->hash_id}/start", [
                 'expected_crew_id' => $crew->hash_id,
                 'presence_confirmed_employee_ids' => [$employee->hash_id],
-            ])
-            ->assertOk();
+            ]);
+        $this->assertTrue($startResponse->isSuccessful(), $startResponse->getContent());
 
         $wo->refresh();
         $this->assertSame(WorkOrderStatus::InProgress->value, $wo->status->value);

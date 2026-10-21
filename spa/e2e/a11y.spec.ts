@@ -170,7 +170,7 @@ const SURFACES: Surface[] = [
   { name: 'dashboard (admin landing)', path: '/dashboard', auth: true },
   { name: 'employee list (table + filters)', path: '/hr/employees', auth: true },
   { name: 'QC inspections (list)', path: '/quality/inspections', auth: true },
-  { name: 'QC new inspection (form)', path: '/quality/inspections/new', auth: true },
+  { name: 'QC new NCR (form)', path: '/quality/ncrs/new', auth: true },
   { name: 'floor tablet (touch shell)', path: '/factory', auth: true },
   /* W1.2 — every shared primitive in one place, in every state. The other
    * surfaces audit the kit as the product uses it; this one audits the states

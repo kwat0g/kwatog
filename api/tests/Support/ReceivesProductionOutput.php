@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -233,18 +234,22 @@ trait ReceivesProductionOutput
             'standard_unit_cost' => '1.0000', 'standard_cost' => '1.00',
         ]);
         $warehouse = User::factory()->withRole('warehouse_staff')->create(['is_active' => true]);
-        app(MaterialIssueService::class)->create([
+        $issueSlip = app(MaterialIssueService::class)->create([
             'work_order_id' => $workOrder->id, 'issued_date' => now()->toDateString(),
             'items' => [['item_id' => $raw->id, 'location_id' => $rawLocation->id, 'quantity_issued' => '1.000']],
         ], $warehouse);
         $processInspection = $this->createInspectionThroughApi($workOrder, $product, $qcMaker, InspectionStage::InProcess, $outputQuantity);
-        $processInspection = $this->submitInspectionPassThroughApi($processInspection, $qcMaker);
-        $this->assertSame(InspectionStatus::Passed, $processInspection->fresh()->status);
-        $workOrder->fresh()->assertProcessQualityReleased();
 
         $this->finishedGoodsItemFor($product);
         $this->finishedGoodsLocation();
         $crew = $this->assignProductionCrew($workOrder, $production);
+        // Production may only record output after Warehouse confirms the
+        // material handover to the crew recorder (WorkOrderMaterialHandoverService).
+        $sourceMovement = $issueSlip->items()->firstOrFail()->stockMovement;
+        $this->actingAs($warehouse)->postJson('/api/v1/inventory/material-handovers/group', [
+            'received_by_employee_id' => Employee::findOrFail($crew->recorder_employee_id)->hash_id,
+            'sources' => [['movement_id' => $sourceMovement->hash_id, 'expected_quantity' => '1.000']],
+        ])->assertOk();
         ProductionSchedule::create([
             'work_order_id' => $workOrder->id, 'machine_id' => $machine->id, 'mold_id' => $mold->id,
             'scheduled_start' => now()->startOfMinute(), 'scheduled_end' => $workOrder->planned_end,
@@ -254,19 +259,32 @@ trait ReceivesProductionOutput
             'expected_crew_id' => $crew->hash_id,
         ]);
         $this->assertTrue($startResponse->isSuccessful(), $startResponse->getContent());
-        $outputResponse = $this->actingAs($production)
-            ->postJson("/api/v1/production/work-orders/{$workOrder->hash_id}/outputs", [
-                'crew_id' => $crew->hash_id,
-                'recording_reason' => 'Production manager records output for the assigned crew in this test.',
-                'good_count' => $outputQuantity,
-                'reject_count' => 0,
-            ]);
-        $this->assertTrue($outputResponse->isSuccessful(), $outputResponse->getContent());
-        $outputResponse->assertJsonPath('data.good_count', $outputQuantity);
 
+        // Startup-trial gate: in-process QC evidence for a root work order may
+        // only be saved after Production records the pinned trial pieces.
+        $trialResponse = $this->actingAs($production)
+            ->withHeaders(['X-Idempotency-Key' => 'e2e-trial-'.$workOrder->id])
+            ->postJson("/api/v1/production/work-orders/{$workOrder->hash_id}/trial-outputs", [
+                'crew_id' => $crew->hash_id,
+                'trial_quantity' => min((int) $processInspection->sample_size, (int) $workOrder->quantity_target),
+                'recording_reason' => 'Startup trial pieces for the pinned in-process QC sample.',
+            ]);
+        $this->assertTrue($trialResponse->isSuccessful(), $trialResponse->getContent());
+        // withHeaders() sticks to later requests on the same test case; the
+        // trial key must not leak into the plain output recordings.
+        $this->flushHeaders();
+
+        $processInspection = $this->submitInspectionPassThroughApi($processInspection, $qcMaker);
+        $this->assertSame(InspectionStatus::Passed, $processInspection->fresh()->status);
+        $workOrder->fresh()->assertProcessQualityReleased();
+
+        // QC acceptance settles the startup trial: the pinned sample IS this
+        // order's recorded good output (receipt included), so no separate
+        // output POST follows — trial == min(in-process sample, target) here.
         $output = WorkOrderOutput::query()->where('work_order_id', $workOrder->id)->sole();
         $this->assertSame($outputQuantity, (int) $workOrder->fresh()->quantity_good);
-        $this->assertNotNull($output->production_receipt_movement_id, 'Recorded good output must create its finished-goods receipt before completion.');
+        $this->assertNotNull($output->trial_settled_at, 'QC acceptance must settle the startup trial.');
+        $this->assertNotNull($output->production_receipt_movement_id, 'Settled trial output must create its finished-goods receipt before completion.');
 
         $this->actingAs($production)
             ->postJson("/api/v1/production/work-orders/{$workOrder->hash_id}/complete")

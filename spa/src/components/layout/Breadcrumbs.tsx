@@ -142,21 +142,25 @@ export function Breadcrumbs() {
  const last = i === crumbs.length - 1;
  return (
  <span
- key={c.key}
- className={
- // Below `sm` only the current page fits beside the logo; the
- // ancestors are the first thing to give up, not the whole trail.
- last ? 'flex items-center gap-1 min-w-0' : 'hidden sm:flex items-center gap-1'
- }
- >
- {i > 0 && <LuChevronRight size={12} className="text-subtle shrink-0 hidden sm:block" />}
- {last ? (
- <span className="text-primary font-medium truncate">{c.label}</span>
- ) : (
- <Link to={c.to} className="text-muted hover:text-primary whitespace-nowrap">
- {c.label}
- </Link>
- )}
+ key={c.key}              className={
+                // Below `sm` only the current page fits beside the logo; the
+                // ancestors are the first thing to give up, not the whole trail.
+                // `min-w-0` is what lets them ACTUALLY give up space: without it
+                // a flex item's automatic minimum is its content's, so the trail
+                // stayed full width and painted past the slot (F-019).
+                last
+                  ? 'flex min-w-0 items-center gap-1'
+                  : 'hidden min-w-0 items-center gap-1 sm:flex'
+              }
+            >
+              {i > 0 && <LuChevronRight size={12} className="text-subtle shrink-0 hidden sm:block" />}
+              {last ? (
+                <span className="text-primary font-medium truncate">{c.label}</span>
+              ) : (
+                <Link to={c.to} className="min-w-0 truncate text-muted hover:text-primary">
+                  {c.label}
+                </Link>
+              )}
  </span>
  );
  })}

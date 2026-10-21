@@ -155,6 +155,7 @@ class FeatureEmailIntegrationTest extends TestCase
         $this->assertStringContainsString('Philippine Ogami Corporation', $rendered);
         $this->assertStringContainsString('FCIE Complex, Dasmariñas, Cavite, Philippines', $rendered);
         $this->assertStringContainsString('cid:ogami-logo@ogami', $rendered);
+        $this->assertStringEndsWith('images/ogami-logo.png', app(\App\Common\Services\EmailBrandingService::class)->logoPath());
         $this->assertStringNotContainsString('alt="Ogami Philippines" width="52" height="52"', $rendered);
     }
 }

@@ -36,6 +36,9 @@ export default function CrmCustomerEditPage() {
  email: '',
  phone: '',
  address: '',
+ delivery_address: '',
+ delivery_contact_person: '',
+ delivery_contact_phone: '',
  is_active: true,
  },
  });
@@ -50,6 +53,9 @@ export default function CrmCustomerEditPage() {
  email: data.email ?? '',
  phone: data.phone ?? '',
  address: data.address ?? '',
+ delivery_address: data.delivery_address ?? '',
+ delivery_contact_person: data.delivery_contact_person ?? '',
+ delivery_contact_phone: data.delivery_contact_phone ?? '',
  credit_limit: data.credit_limit ? Number(data.credit_limit) : undefined,
  payment_terms_days: data.payment_terms_days,
  is_active: data.is_active,
@@ -65,6 +71,9 @@ export default function CrmCustomerEditPage() {
  email: values.email || undefined,
  phone: values.phone || undefined,
  address: values.address || undefined,
+ delivery_address: values.delivery_address || undefined,
+ delivery_contact_person: values.delivery_contact_person || undefined,
+ delivery_contact_phone: values.delivery_contact_phone || undefined,
  credit_limit: values.credit_limit != null ? String(values.credit_limit) : null,
  };
  return crmCustomersApi.update(id!, payload);

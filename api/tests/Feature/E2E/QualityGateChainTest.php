@@ -391,41 +391,31 @@ class QualityGateChainTest extends TestCase
             ])
             ->assertStatus(422);
 
-        // ACT — the Material Review Board (the independent checker) grants the
-        // concession: the whole lot enters stock and the held receipt is
-        // settled accepted in the same transaction.
+        // ACT — the Material Review Board (the independent checker) settles
+        // the failed receipt: an unaccepted supplier receipt may only go back
+        // to the supplier (use-as-is and local scrap are refused for it).
         $this->actingAs($this->qcChecker)
             ->patchJson("/api/v1/quality/ncrs/{$ncr->hash_id}/disposition", [
-                'disposition' => 'use_as_is',
+                'disposition' => 'return_to_supplier',
                 'root_cause' => 'Supplier packaging label was smudged; material identity is verified.',
                 'corrective_action' => 'Supplier corrective action request issued.',
-                'sorting_evidence' => [
-                    'inspected_quantity' => '100',
-                    'evidence_reference' => 'SORT-INCOMING-100',
-                    'performed_by' => $this->warehouse->hash_id,
-                    'recovery_passed' => true,
-                    'concession_approval_reference' => 'SUPPLIER-CONCESSION-QUALITY-20261006',
-                ],
             ])
             ->assertOk();
         $grn->refresh();
-        $this->assertSame(GrnStatus::Accepted->value, $grn->status->value);
+        $this->assertSame(GrnStatus::Rejected->value, $grn->status->value);
         $ncr->refresh();
+        $this->assertSame('return_to_supplier', $ncr->disposition->value);
         $this->assertSame($this->qcChecker->id, (int) $ncr->mrb_decided_by);
         $this->assertNotNull($ncr->mrb_decided_at);
-        $this->assertSame('100.000', (string) $ncr->sorting_inspected_quantity);
-        $this->assertSame($this->warehouse->id, (int) $ncr->sorting_performed_by);
-        $this->assertSame($this->qcChecker->id, (int) $ncr->sorting_approved_by);
-        $this->assertNotNull($ncr->sorting_approved_at);
-        $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->firstOrFail();
-        $this->assertSame(BillStatus::Draft->value, $bill->status->value);
-        $this->assertNull($bill->journal_entry_id, 'MRB acceptance must stage, not post, the supplier bill.');
+        $this->assertNull($ncr->sorting_inspected_quantity);
+        // A rejected receipt returns the goods and never stages a supplier bill.
+        $this->assertSame(0, Bill::query()->where('goods_receipt_note_id', $grn->id)->count());
 
         // Wrong time: the MRB decision is final — a different disposition is
         // refused once the receipt has been settled against it.
         $this->actingAs($this->qcChecker)
             ->patchJson("/api/v1/quality/ncrs/{$ncr->hash_id}/disposition", [
-                'disposition' => 'return_to_supplier',
+                'disposition' => 'use_as_is',
                 'root_cause' => 'Second thoughts.',
             ])
             ->assertStatus(422);
@@ -463,7 +453,7 @@ class QualityGateChainTest extends TestCase
 
         $ncr->refresh();
         $this->assertSame('closed', $ncr->status->value);
-        $this->assertSame('use_as_is', $ncr->disposition->value);
+        $this->assertSame('return_to_supplier', $ncr->disposition->value);
         $this->assertNotNull($ncr->closed_at);
 
         // Wrong time: actions on a closed NCR are refused.

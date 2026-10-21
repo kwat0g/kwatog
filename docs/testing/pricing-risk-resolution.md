@@ -27,12 +27,12 @@ The generic queue worker and Laravel scheduler now run under systemd. The worker
 Current-host units deliberately name `ec2-user`, `/home/ec2-user/kwatog`, and `ogami-api`. Adjust these for another deployment. Run one scheduler and one worker supervision method; do not also start duplicate Compose services.
 
 ```bash
-sudo install -m 0644 docker/systemd/ogami-queue.service docker/systemd/ogami-scheduler.service docker/systemd/ogami-scheduler.timer /etc/systemd/system/
+sudo install -m 0644 docker/systemd/ogami-scheduler.service docker/systemd/ogami-scheduler.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now ogami-queue.service ogami-scheduler.timer
+sudo systemctl enable --now ogami-scheduler.timer
 sudo systemctl disable --now ogami-pricing-refresh.timer ogami-pricing-review.timer
 docker exec ogami-api php artisan scheduler:health
-systemctl status ogami-queue.service ogami-scheduler.timer
+systemctl status ogami-scheduler.timer
 ```
 
 Disable the new timer and worker to stop host automation without deleting business records. A running scheduler tick can finish. Application rollback requires preserving the new negotiation and cost-review records; do not roll back their database migration on populated production data. Migration forward/backward permission preservation is tested on an isolated database.

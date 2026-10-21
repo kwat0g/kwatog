@@ -87,7 +87,9 @@ class SalesOrderResponseService
                 'link_to' => '/portal/customer/orders/'.$row->hash_id,
                 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id,
             ], 'so:delivery:'.$response->id.':proposed');
-            $emails = CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->pluck('email')->unique()->all();
+            $emails = CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->pluck('email')->unique()
+                ->filter(static fn (mixed $email): bool => is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
+                ->values()->all();
             if ($emails !== []) {
                 $mail = new UserNotificationMail('sales_order.delivery_proposed', [
                     'title' => "Delivery date proposal for {$row->so_number}",
@@ -447,6 +449,14 @@ class SalesOrderResponseService
                     return;
                 }
                 $recipients = [$customerEmail];
+            }
+
+            $recipients = array_values(array_filter(
+                $recipients,
+                static fn (mixed $email): bool => is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) !== false,
+            ));
+            if ($recipients === []) {
+                return;
             }
 
             Mail::to($recipients)->send(new CustomerSalesOrderDecisionMail($so, $response, $decision));

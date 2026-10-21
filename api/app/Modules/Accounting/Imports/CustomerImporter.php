@@ -13,7 +13,11 @@ use RuntimeException;
 /**
  * REC-03 — customer master importer.
  * CSV columns: name (required); optional code, contact_person, email, phone,
- * address, tin, credit_limit, payment_terms_days, is_active.
+ * address, delivery_address, delivery_contact_person, delivery_contact_phone,
+ * tin, credit_limit, payment_terms_days, is_active.
+ *
+ * The three delivery_* columns are optional and additive: an older CSV without
+ * them imports exactly as before rather than failing on missing keys.
  */
 class CustomerImporter implements EntityImporter
 {
@@ -54,6 +58,9 @@ class CustomerImporter implements EntityImporter
             'email'              => trim($row['email'] ?? '') ?: null,
             'phone'              => trim($row['phone'] ?? '') ?: null,
             'address'            => trim($row['address'] ?? '') ?: null,
+            'delivery_address'         => trim($row['delivery_address'] ?? '') ?: null,
+            'delivery_contact_person'  => trim($row['delivery_contact_person'] ?? '') ?: null,
+            'delivery_contact_phone'   => trim($row['delivery_contact_phone'] ?? '') ?: null,
             'tin'                => trim($row['tin'] ?? '') ?: null,
             'credit_limit'       => $credit !== '' ? $credit : null,
             'payment_terms_days' => $terms !== '' ? (int) $terms : $this->policies->customerPaymentTermsDays(),

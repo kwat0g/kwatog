@@ -8,8 +8,8 @@ use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Services\ArDunningService;
+use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -147,6 +147,33 @@ class RunArDunningCommandTest extends TestCase
         $result = app(ArDunningService::class)->run();
 
         $this->assertSame(1, $result['blocked']);
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $officer->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertSame(0, (int) $invoice->fresh()->last_dunning_tier);
+    }
+
+    public function test_invalid_customer_email_is_blocked_without_attempting_delivery(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        Mail::fake();
+
+        $officer = User::factory()->withRole('finance_officer')->create();
+        $customer = Customer::factory()->create(['email' => 'not-an-email']);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => 1000,
+            'last_dunning_tier' => 0,
+        ]);
+
+        $result = app(ArDunningService::class)->run();
+
+        $this->assertSame(1, $result['blocked']);
+        $this->assertSame(0, $result['failed']);
         Mail::assertNothingQueued();
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $officer->id,

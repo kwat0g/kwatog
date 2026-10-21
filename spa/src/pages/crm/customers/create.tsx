@@ -28,6 +28,9 @@ export default function CrmCustomerCreatePage() {
  email: '',
  phone: '',
  address: '',
+ delivery_address: '',
+ delivery_contact_person: '',
+ delivery_contact_phone: '',
  is_active: true,
  },
  });
@@ -47,6 +50,9 @@ export default function CrmCustomerCreatePage() {
  email: values.email || undefined,
  phone: values.phone || undefined,
  address: values.address || undefined,
+ delivery_address: values.delivery_address || undefined,
+ delivery_contact_person: values.delivery_contact_person || undefined,
+ delivery_contact_phone: values.delivery_contact_phone || undefined,
  credit_limit: values.credit_limit != null ? String(values.credit_limit) : null,
  };
  return crmCustomersApi.create(payload);

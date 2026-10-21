@@ -74,7 +74,8 @@ class NotificationDigestService
                 $evaluated++;
 
                 $user = $users->get((int) $userId);
-                if (! $user || ! is_string($user->email) || $user->email === '') {
+                if (! $user || ! is_string($user->email)
+                    || filter_var($user->email, FILTER_VALIDATE_EMAIL) === false) {
                     continue;
                 }
 
