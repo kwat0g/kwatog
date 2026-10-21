@@ -9,18 +9,18 @@
 
 ## Content and privacy
 
-The subject uses configured email branding and a CR/LF-scrubbed, length-limited alert title. The body shows the alert's stored title, message, human-readable type/severity and related area, plus creation time converted to Asia/Manila. The related-area label is derived from the entity model name with word spacing; internal entity database IDs remain omitted. The CTA opens the authenticated SPA alert list.
+The subject uses configured email branding and a sanitized, length-limited alert title. Alert title and message have HTML/control characters removed, URLs neutralized, and Markdown syntax escaped. The body shows the human-readable type/severity and related area, plus creation time converted to Asia/Manila. The related-area label is derived from the entity model name with word spacing; internal entity database IDs remain omitted. The CTA opens the authenticated SPA alert list.
 
-The shared Markdown shell supplies the configured logo variants, company identity/footer, preheader, responsive layout, and plain-text alternative. Blade escapes HTML; EF-115 separately tracks Markdown syntax and external URL neutralization.
+The shared Markdown shell supplies the configured logo variants, company identity/footer, preheader, responsive layout, and plain-text alternative. Blade escapes HTML; the alert-specific sanitizer also neutralizes Markdown links and formatting.
 
 ## Review and verification
 
 This is an internal operational notice. Confirm configured alert roles match operational ownership. No personal-data or statutory content is intentionally included.
 
-`CriticalAlertEmailDesignTest`: 1 test, 11 assertions passed on `ogami_test`. It verifies the Manila display as `+08:00`, humanized related area, omission of the internal entity ID, SPA alert link, and HTML size below 102,400 bytes. Mailer was `array`; no real email sent.
+`CriticalAlertEmailDesignTest`: the parent E-026 commit passed 1 test, 11 assertions on `ogami_test`; sanitizer regression was verified separately with hostile input. Mailer was `array`; no real email sent. CI for this branch remains pending.
 
 Rendered the Laravel `MailMessage` in Chromium at 1440px desktop and 390px mobile, in light/dark. All logo images loaded; document width matched viewport at both sizes; CTA and related-area text stayed readable. CID logos were mapped to the same image assets as data URIs for browser preview. Company contact/legal values are redacted in artifacts: [desktop light](screenshots/e026-critical-alert-desktop-light.png), [desktop dark](screenshots/e026-critical-alert-desktop-dark.png), [mobile light](screenshots/e026-critical-alert-mobile-light.png), [mobile dark](screenshots/e026-critical-alert-mobile-dark.png), [plain text](screenshots/e026-critical-alert.txt).
 
-EF-115 tracks Markdown syntax and external URL neutralization in a separate security fix branch. Real email clients remain unverified.
+EF-115 records the Markdown injection risk and its fix. Real email clients remain unverified.
 
 Real email clients remain unverified.
