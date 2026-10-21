@@ -29,6 +29,10 @@ class ComplaintEmailTest extends TestCase
 
     public function test_complaint_update_email_uses_safe_customer_facing_fields(): void
     {
+        config([
+            'app.frontend_url' => 'https://portal.example.test',
+            'app.url' => 'https://api.example.test',
+        ]);
         $customer = Customer::factory()->create([
             'email' => 'customer@example.test',
             'contact_person' => 'A. <img src=x onerror=alert(1)> Customer',
@@ -54,7 +58,8 @@ class ComplaintEmailTest extends TestCase
         $this->assertStringContainsString('Status update for complaint '.$complaint->complaint_number.'.', $rendered);
         $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $rendered);
         $this->assertStringNotContainsString('<img src=x onerror=alert(1)>', $rendered);
-        $this->assertStringContainsString('https://ogamiph.dev/portal/customer/complaints', $rendered);
+        $this->assertStringContainsString('https://portal.example.test/portal/customer/complaints', $rendered);
+        $this->assertStringNotContainsString('https://api.example.test/portal/customer/complaints', $rendered);
         $this->assertStringContainsString('Philippine Ogami Corporation', $rendered);
         $this->assertStringNotContainsString('Critical', $rendered);
         $this->assertStringNotContainsString('Notification rendering test', $rendered);
