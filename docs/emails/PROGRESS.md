@@ -135,6 +135,8 @@ Updated: 2026-10-21
 - EF-102 / auto-PO handoff: manual-conversion notices now require effective purchase-request view permission and row visibility. `ConsolidatePurchaseOrdersTest` covers a revoked purchasing officer; CI pending.
 - EF-103 / customer-portal order review: confirm-capable sales staff without effective sales-order view access no longer receive the CRM detail link. `CustomerPortalOrderTest` covers revocation; CI pending.
 - EF-104 / stock-adjustment outcome: requester keeps the approval result but loses the list link if `inventory.adjust` is revoked. `StockAdjustmentReasonTest` covers this; CI pending.
+- EF-105 / supplier response notice: recipients now also need `purchasing.view`, matching the PO detail route. `SupplierResponseTest` covers revocation; supplier decision snapshots and fallback checks already exist.
+- EF-106 / customer response alert: sales staff without effective order-view access no longer receive the CRM detail link. `SalesOrderResponseTest` covers revocation; CI pending.
 - EF-076 / E-023 overtime submission audience: configured department heads already matched the requester's department, but permission revocations were ignored. Draft PR #290 now filters by effective `attendance.ot.approve`; `OvertimeNotificationTest` covers the revoked-recipient case. CI exposed a hard-coded supplier portal URL assertion in an existing cancellation-mail test; it now checks configured frontend URL. No real email sent. Full caller audit remains open.
 
 ## Next step

@@ -253,6 +253,12 @@ class SupplierResponseTest extends TestCase
             'permission_id' => \App\Modules\Auth\Models\Permission::where('slug', 'purchasing.po.responses.resolve')->value('id'),
             'type' => 'revoke', 'reason' => 'Restricted negotiation', 'granted_by' => $buyer->id,
         ]);
+        $withoutView = $this->userWithRole('purchasing_officer');
+        \App\Modules\Admin\Models\UserPermissionOverride::create([
+            'user_id' => $withoutView->id,
+            'permission_id' => \App\Modules\Auth\Models\Permission::where('slug', 'purchasing.view')->value('id'),
+            'type' => 'revoke', 'reason' => 'No purchase-order read access', 'granted_by' => $buyer->id,
+        ]);
         $hidden = $this->userWithRole('employee');
         \App\Modules\Admin\Models\UserPermissionOverride::create([
             'user_id' => $hidden->id,
@@ -263,7 +269,7 @@ class SupplierResponseTest extends TestCase
         $po = $this->makePo($vendor, 'sent');
         $response = $this->svc->respond($po, (int) $vendor->id, null, ['type' => 'decline']);
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $buyer->id, 'type' => 'supplier.po_responded']);
-        foreach ([$revoked, $hidden] as $outsider) {
+        foreach ([$revoked, $withoutView, $hidden] as $outsider) {
             $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outsider->id, 'type' => 'supplier.po_responded']);
         }
         try {

@@ -479,6 +479,7 @@ class SupplierResponseService
             ->with('role')
             ->get()
             ->filter(fn (User $user) => $user->hasPermission('purchasing.po.responses.resolve')
+                && $user->hasPermission('purchasing.view')
                 && app(\App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::class)->canView($user, $po))
             ->values();
     }

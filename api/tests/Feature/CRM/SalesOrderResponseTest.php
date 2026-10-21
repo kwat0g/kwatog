@@ -97,6 +97,7 @@ class SalesOrderResponseTest extends TestCase
         $salesUser = $this->userWithRole('sales_officer');
         $grantUser = User::factory()->create();
         $revokedUser = $this->userWithRole('sales_officer');
+        $withoutView = $this->userWithRole('sales_officer');
         $inactiveUser = $this->userWithRole('sales_officer');
         $inactiveUser->update(['is_active' => false]);
         $permissionId = Permission::query()->where('slug', 'crm.sales_orders.confirm')->value('id');
@@ -111,6 +112,15 @@ class SalesOrderResponseTest extends TestCase
                 'updated_at' => now(),
             ]);
         }
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $withoutView->id,
+            'permission_id' => Permission::query()->where('slug', 'crm.sales_orders.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $salesUser->id,
+            'reason' => 'Sales notification route test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         Event::fake();
         Mail::fake();
         $customer = Customer::factory()->create();
@@ -125,7 +135,7 @@ class SalesOrderResponseTest extends TestCase
                 'type' => 'customer.so_responded',
             ]);
         }
-        foreach ([$revokedUser, $inactiveUser] as $excluded) {
+        foreach ([$revokedUser, $withoutView, $inactiveUser] as $excluded) {
             $this->assertDatabaseMissing('notifications', [
                 'notifiable_type' => User::class,
                 'notifiable_id' => $excluded->id,
