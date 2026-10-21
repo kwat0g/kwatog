@@ -17,4 +17,6 @@ Date: 2026-10-20. Static findings only; reachability and runtime impact remain u
 
 | EF-022 | Supplier PO decision details are awkward on mobile | E-017 390px captures show the two-column Markdown table wrapping labels and values into narrow columns, reducing scanability. No clipping observed. | Replace table with stacked labeled facts in the E-017 template and rerender mobile captures. |
 
+| EF-023 | Published PO email has no line-item cap | E-018 preview renders all ten line items in a long message, pushing the CTA and supplier verification copy far down; mobile view is especially long. | Limit displayed rows and state how many remain, with the PO portal link for the full record. Preserve source total and line-item values. |
+
 No code-level fix was applied as part of Phase 0/1.
