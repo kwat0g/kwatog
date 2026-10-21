@@ -52,7 +52,7 @@ class EmailPartyOnCreditNoteFinalized implements ShouldQueue
                 $context,
             );
             Log::warning('Credit note email enqueue failed', [
-                'credit_note_id' => $creditNote->id,
+                'credit_note_hash_id' => $snapshot['hash_id'],
                 'error' => $e->getMessage(),
             ]);
         }
