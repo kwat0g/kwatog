@@ -16,6 +16,6 @@ The button opens an authenticated portal page; it does not change state. The tem
 
 `SupplierPurchaseOrderMailTest` plus existing `FeatureEmailIntegrationTest` publication case: 2 passed / 27 assertions. Tests check event-time values after source mutations, line-item limit, system formatting, portal URL, settings-backed identity, safe output, HTML size, and queue integration. Mailer forced to `array`; no real email sent.
 
-Rendered HTML is 33,141 bytes. Chromium screenshots were inspected at 1440px and 390px, light and dark; no horizontal overflow or missing logo. This does not verify Gmail, Outlook, Apple Mail, Yahoo, delivery, or inbox placement. See [screenshots](screenshots/).
+The prior rendered HTML was 33,141 bytes. Its screenshots showed the three-column item table wrapping tightly on mobile; the template now stacks item details. Those screenshots predate commit `a18dde45` and must be regenerated before sign-off. This does not verify Gmail, Outlook, Apple Mail, Yahoo, delivery, or inbox placement. See [screenshots](screenshots/).
 
 Purchasing and the accountant must review PO terms and supplier-facing wording. Supplier contact handling requires data-protection review. No legal or compliance claim is made.
