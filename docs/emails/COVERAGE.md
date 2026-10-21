@@ -22,7 +22,7 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 | E-022 | Customer delivery confirmation | [PR #254](https://github.com/kwat0g/kwatog/pull/254) | Draft |
 | E-023 | Generic user notification | [PR #255](https://github.com/kwat0g/kwatog/pull/255) | Draft; caller-audit and recipient/link follow-ups include [PR #257](https://github.com/kwat0g/kwatog/pull/257), [PR #264](https://github.com/kwat0g/kwatog/pull/264), and [PR #310](https://github.com/kwat0g/kwatog/pull/310) |
 | E-024 | Notification digest | [PR #265](https://github.com/kwat0g/kwatog/pull/265) | Draft |
-| E-025 | Scheduled export | [PR #267](https://github.com/kwat0g/kwatog/pull/267) | Draft |
+| E-025 | Scheduled export | [PR #267](https://github.com/kwat0g/kwatog/pull/267) | Draft; current CI fails PHPStan on inherited `$creditNote` reference in `EmailPartyOnCreditNoteFinalized.php:55` ([run](https://github.com/kwat0g/kwatog/actions/runs/39534081860)); correction exists in PR #222 but is absent from this branch's base. |
 | E-026 | Critical alert | [PR #269](https://github.com/kwat0g/kwatog/pull/269) | Draft |
 | E-027–E-028 | Daily and weekly production summaries | [PR #272](https://github.com/kwat0g/kwatog/pull/272) | Draft |
 | E-029–E-033 | Internal account-security messages | [PR #273](https://github.com/kwat0g/kwatog/pull/273) | Draft; replaces temporary-password content with secure links |
