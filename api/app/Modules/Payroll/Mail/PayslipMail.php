@@ -7,7 +7,6 @@ namespace App\Modules\Payroll\Mail;
 use App\Modules\Payroll\Models\Payroll;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -18,8 +17,6 @@ class PayslipMail extends Mailable
 
     public function __construct(
         public readonly Payroll $payroll,
-        private readonly string $pdfBinary,
-        private readonly string $pdfFilename,
     ) {}
 
     public function envelope(): Envelope
@@ -32,24 +29,16 @@ class PayslipMail extends Mailable
 
     public function content(): Content
     {
+        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+
         return new Content(
             markdown: 'emails.payslip',
             with: [
                 'employee' => $this->payroll->employee,
                 'period'   => $this->payroll->period,
                 'payroll'  => $this->payroll,
+                'payslipUrl' => $base.'/self-service/payslips',
             ],
         );
-    }
-
-    /**
-     * @return array<int, Attachment>
-     */
-    public function attachments(): array
-    {
-        return [
-            Attachment::fromData(fn () => $this->pdfBinary, $this->pdfFilename)
-                ->withMime('application/pdf'),
-        ];
     }
 }

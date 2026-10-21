@@ -10,7 +10,6 @@ use App\Modules\Payroll\Jobs\SendPayslipEmailJob;
 use App\Modules\Payroll\Listeners\EmailPayslipPdfOnPayrollFinalized;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
-use App\Modules\Payroll\Services\PayslipPdfService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -24,13 +23,6 @@ class EmailPayslipOnFinalizeTest extends TestCase
     {
         parent::setUp();
 
-        // Stub the PDF service so the test does not depend on the Blade
-        // payslip template / DomPDF / vault wiring. The listener only cares
-        // about the binary bytes + filename.
-        $stub = \Mockery::mock(PayslipPdfService::class);
-        $stub->shouldReceive('generate')->andReturn('PDFBYTES');
-        $stub->shouldReceive('filename')->andReturn('payslip.pdf');
-        $this->instance(PayslipPdfService::class, $stub);
     }
 
     public function test_listener_queues_email_for_each_payroll_with_employee_email(): void

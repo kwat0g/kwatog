@@ -9,7 +9,6 @@ use App\Modules\Payroll\Jobs\SendPayslipEmailJob;
 use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
-use App\Modules\Payroll\Services\PayslipPdfService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -21,10 +20,7 @@ class SendPayslipEmailJobTest extends TestCase
     public function test_job_marks_sent_only_after_mail_send_succeeds(): void
     {
         Mail::fake();
-
-        $pdf = \Mockery::mock(PayslipPdfService::class);
-        $pdf->shouldReceive('generate')->once()->andReturn('PDFBYTES');
-        $pdf->shouldReceive('filename')->once()->andReturn('payslip.pdf');
+        config(['app.frontend_url' => 'https://portal.example.test']);
 
         $period = PayrollPeriod::factory()->create();
         $period->forceFill(['status' => 'finalized'])->saveQuietly();
@@ -36,9 +32,16 @@ class SendPayslipEmailJobTest extends TestCase
             'payslip_email_queued_at' => now(),
         ]);
 
-        (new SendPayslipEmailJob($payroll->id))->handle($pdf);
+        (new SendPayslipEmailJob($payroll->id))->handle();
 
-        Mail::assertSent(PayslipMail::class, fn (PayslipMail $mail): bool => $mail->hasTo('a@example.test'));
+        Mail::assertSent(PayslipMail::class, function (PayslipMail $mail): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText('secure Self-Service portal');
+
+            return $mail->hasTo('a@example.test')
+                && str_contains($html, 'https://portal.example.test/self-service/payslips')
+                && ! $mail->hasAttachment('payslip.pdf');
+        });
         $sent = $payroll->fresh();
         $this->assertNotNull($sent->payslip_emailed_at);
         $this->assertSame(Payroll::EMAIL_SENT, $sent->payslip_email_status);
@@ -70,8 +73,6 @@ class SendPayslipEmailJobTest extends TestCase
     public function test_job_cancels_a_queued_payslip_when_the_period_is_voided(): void
     {
         Mail::fake();
-        $pdf = \Mockery::mock(PayslipPdfService::class);
-        $pdf->shouldNotReceive('generate');
 
         $period = PayrollPeriod::factory()->create();
         $period->forceFill(['status' => 'voided'])->saveQuietly();
@@ -83,7 +84,7 @@ class SendPayslipEmailJobTest extends TestCase
             'payslip_email_queued_at' => now(),
         ]);
 
-        (new SendPayslipEmailJob($payroll->id))->handle($pdf);
+        (new SendPayslipEmailJob($payroll->id))->handle();
 
         Mail::assertNothingSent();
         $cancelled = $payroll->fresh();
