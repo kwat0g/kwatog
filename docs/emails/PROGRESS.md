@@ -121,4 +121,4 @@ Updated: 2026-10-21
 
 ## Next step
 
-Continue E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify CI for draft PRs #290–#292. Owner still needs to verify company values and the sales inbox before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.
+Continue E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify CI for draft PRs #290–#299. Owner still needs to verify company values and the sales inbox before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.
