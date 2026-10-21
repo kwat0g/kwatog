@@ -43,6 +43,7 @@ class WorkOrderNotificationTest extends TestCase
 
         $listener = app(NotifyOnWorkOrderCompleted::class);
         $listener->handle(new WorkOrderCompleted($wo));
+        $listener->handle(new WorkOrderCompleted($wo));
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $ppc->id,
@@ -56,6 +57,12 @@ class WorkOrderNotificationTest extends TestCase
             'notifiable_id' => $revokedPpc->id,
             'type'          => 'production.wo_completed',
         ]);
+        foreach ([$ppc, $pm] as $recipient) {
+            $this->assertSame(1, DB::table('notifications')
+                ->where('type', 'production.wo_completed')
+                ->where('notifiable_id', $recipient->id)
+                ->count());
+        }
     }
 
     public function test_listener_class_exists(): void
