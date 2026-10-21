@@ -2,7 +2,7 @@
 
 ## Trigger and recipients
 
-Sales resolves a customer response as accepted or returned for revision. Eligible recipients are active customer portal users attached to the response's customer, each receiving a separate message. Invalid or case-duplicate addresses are excluded. If no valid portal address remains, use the customer record's valid email; if that is also unusable, notify active users with `crm.sales_orders.confirm`.
+Sales resolves a customer response as accepted or returned for revision. The service sends only on the resolution transition; repeat requests against an already resolved response do not send another email. Eligible recipients are active customer portal users attached to the response's customer, each receiving a separate message. Invalid or case-duplicate addresses are excluded. If no valid portal address remains, use the customer record's valid email; if that is also unusable, notify active users with `crm.sales_orders.confirm`.
 
 ## Snapshot and privacy
 
