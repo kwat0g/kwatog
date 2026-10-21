@@ -64,7 +64,7 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
     Route::patch('/work-orders/{workOrder}/complete',   [MaintenanceWorkOrderController::class, 'complete'])
         ->middleware('permission_any:maintenance.wo.complete,maintenance.wo.assign');
     Route::post('/work-orders/{workOrder}/submit-repair', [MaintenanceWorkOrderController::class, 'submitRepair'])
-        ->middleware('permission_any:maintenance.wo.complete,maintenance.wo.assign');
+        ->middleware('permission_any:maintenance.wo.complete,maintenance.wo.assign,maintenance.work.assigned');
     Route::post('/work-orders/{workOrder}/reconcile-parts', [MaintenanceWorkOrderController::class, 'reconcileParts'])
         ->middleware(CheckMaintenanceWorkAccess::class.':reconcile');
     Route::post('/work-orders/{workOrder}/verify', [MaintenanceWorkOrderController::class, 'verifyRepair'])

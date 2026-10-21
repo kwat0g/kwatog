@@ -657,9 +657,16 @@ class MaintenanceWorkOrderService
                 ])->save();
                 $technician = User::find($locked->repair_submitted_by);
                 if ($technician) {
+                    $payload = NotifyMaintenanceWorkOrder::payload(
+                        $locked,
+                        'Repair rejected: '.$locked->mwo_number,
+                        $reason,
+                    );
+                    if ($technician->role?->slug === 'employee') {
+                        $payload['link_to'] = '/self-service/maintenance-work-orders/'.$locked->hash_id;
+                    }
                     $this->notifications->send($technician, 'maintenance.repair_rejected',
-                        NotifyMaintenanceWorkOrder::payload($locked,
-                            'Repair rejected: '.$locked->mwo_number, $reason),
+                        $payload,
                         'maintenance:rejected:'.$locked->id.':'.$log->id);
                 }
 

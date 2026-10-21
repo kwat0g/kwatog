@@ -18,6 +18,7 @@ use App\Modules\Production\Models\MachineDowntime;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -145,6 +146,42 @@ class MaintenanceVerifiedRecoveryTest extends TestCase
         $this->actingAs($manager)->postJson($url.'/verify', ['decision' => 'accept'])->assertOk();
         $this->assertSame('completed', $order->fresh()->status->value);
         $this->assertGreaterThanOrEqual(4, $order->logs()->count());
+    }
+
+    public function test_repair_rejection_links_employee_assignee_to_self_service_order(): void
+    {
+        $technician = $this->actor('employee');
+        $manager = $this->actor('production_manager');
+        $order = $this->order($technician, true);
+        $url = "/api/v1/maintenance/work-orders/{$order->hash_id}";
+        $this->recordPass($order, $technician);
+        $otherEmployee = $this->actor('employee');
+        $this->actingAs($otherEmployee)->postJson($url.'/submit-repair', [
+            'diagnosis' => 'Not assigned.',
+            'repair_action' => 'Attempted unrelated update.',
+            'functional_test_result' => 'Not applicable.',
+        ])->assertForbidden();
+        $submitResponse = $this->actingAs($technician)->postJson($url.'/submit-repair', [
+            'diagnosis' => 'Loose connection.',
+            'repair_action' => 'Reconnected wiring.',
+            'functional_test_result' => 'Load test passed.',
+        ]);
+        $submitResponse->assertOk($submitResponse->getContent());
+
+        $this->actingAs($manager)->postJson($url.'/verify', [
+            'decision' => 'reject',
+            'reason' => 'Document the second load test.',
+        ])->assertOk();
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_id', $technician->id)
+            ->where('type', 'maintenance.repair_rejected')
+            ->first();
+        $this->assertNotNull($notice);
+        $this->assertSame(
+            '/self-service/maintenance-work-orders/'.$order->hash_id,
+            json_decode($notice->data, true)['link_to'],
+        );
     }
 
     public function test_preventive_recovery_requires_supervisor_and_legacy_complete_remains_available(): void

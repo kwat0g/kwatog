@@ -11,7 +11,7 @@ class SubmitMaintenanceRepairRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->can('maintenance.wo.complete')
+        return MaintenanceWorkAccess::canRecord($this->route('workOrder'), $this->user())
             || MaintenanceWorkAccess::supervisorMayManage($this->route('workOrder'), $this->user());
     }
 
