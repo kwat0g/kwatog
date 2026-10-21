@@ -24,8 +24,8 @@ class RunArDunningCommandTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Cache::forget('settings:accounting.ar_dunning.enabled');
-        Cache::forget('settings:accounting.ar_dunning.tier_days_csv');
+        app(SettingsService::class)->set('accounting.ar_dunning.enabled', true, 'accounting');
+        app(SettingsService::class)->set('accounting.ar_dunning.tier_days_csv', '7,15,30', 'accounting');
     }
 
     public function test_sends_tier_email_for_invoice_8_days_overdue(): void
