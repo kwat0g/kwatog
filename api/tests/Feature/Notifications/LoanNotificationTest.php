@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Tests\Feature\Notifications;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Events\LoanDecided;
 use App\Modules\Loans\Events\LoanSubmitted;
+use App\Modules\Loans\Listeners\NotifyOnLoanSubmitted;
 use App\Modules\Loans\Services\LoanService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -77,6 +80,42 @@ class LoanNotificationTest extends TestCase
         Event::assertDispatched(LoanSubmitted::class);
     }
 
+    public function test_loan_submission_notice_excludes_recipient_without_route_view_permission(): void
+    {
+        Event::fake([LoanSubmitted::class]);
+        $employee = Employee::factory()->create();
+        $loan = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
+            'principal' => '5000.00',
+            'pay_periods' => 5,
+            'purpose' => 'Emergency expense',
+        ]);
+        $eligible = $this->userWithRole('finance_officer');
+        $revoked = $this->userWithRole('finance_officer');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => Permission::query()->where('slug', 'loans.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $eligible->id,
+            'reason' => 'Loan notice audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $revoked->flushPermissionsCache();
+
+        app(NotifyOnLoanSubmitted::class)->handle(new LoanSubmitted($loan->fresh(['employee'])));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $eligible->id,
+            'type' => 'loans.submitted',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $revoked->id,
+            'type' => 'loans.submitted',
+        ]);
+    }
+
     /**
      * Intermediate approvals do not fire a final decision event.
      */
@@ -85,13 +124,12 @@ class LoanNotificationTest extends TestCase
         Event::fake([LoanDecided::class]);
 
         $employee = Employee::factory()->create();
+        $approver = $this->departmentHeadFor($employee);
         $loan     = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal'   => '5000.00',
             'pay_periods' => 5,
             'purpose'     => 'Emergency expense',
         ]);
-
-        $approver = $this->departmentHeadFor($employee);
 
         app(LoanService::class)->approve($loan, $approver);
 
@@ -107,13 +145,12 @@ class LoanNotificationTest extends TestCase
         Event::fake([LoanDecided::class]);
 
         $employee = Employee::factory()->create();
+        $approver = $this->departmentHeadFor($employee);
         $loan     = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal'   => '5000.00',
             'pay_periods' => 5,
             'purpose'     => 'Emergency expense',
         ]);
-
-        $approver = $this->departmentHeadFor($employee);
 
         app(LoanService::class)->reject($loan, $approver, 'Insufficient budget.');
 

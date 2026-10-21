@@ -10,6 +10,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Events\LoanSubmitted;
+use App\Modules\Loans\Policies\LoanAccessPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
@@ -35,10 +36,13 @@ class NotifyOnLoanSubmitted implements ShouldQueue
                 : 'Company Loan';
 
             $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('loans.submitted.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+            $access = app(LoanAccessPolicy::class);
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('loans.view') && $access->canView($user, $loan))
+                ->values();
 
             $currency = $this->currency ?? app(CurrencyDisplayService::class);
             $this->notifications->send($audience, 'loans.submitted', [
