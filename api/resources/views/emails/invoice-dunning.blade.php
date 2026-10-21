@@ -13,6 +13,8 @@ Our records show that invoice **{{ $invoice->invoice_number }}** is **{{ $daysOv
 | Days overdue | **{{ $daysOverdue }}** |
 | Balance due | **₱{{ number_format((float) $invoice->balance, 2) }}** |
 
+<x-mail::button :url="$portalUrl">View invoice in customer portal</x-mail::button>
+
 @if ($tier >= 30)
 This invoice is **30+ days overdue**. Please remit payment immediately to
 avoid further escalation.
