@@ -7,6 +7,7 @@ namespace Tests\Feature\Quality;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -25,6 +26,7 @@ use App\Modules\SupplyChain\Models\DeliveryItem;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 use Tests\Support\HasPassedInProcessQc;
 
@@ -293,6 +295,32 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             ->handle(new InspectionPassed($inspection->fresh()));
 
         $this->assertSame(0, Delivery::query()->where('sales_order_id', $wo->sales_order_id)->count());
+    }
+
+    public function test_delivery_draft_notice_uses_exact_delivery_and_effective_view_permission(): void
+    {
+        [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
+        $warehouseRole = Role::query()->where('slug', 'warehouse_staff')->firstOrFail();
+        $allowed = User::factory()->create(['role_id' => $warehouseRole->id, 'is_active' => true]);
+        $revoked = User::factory()->create(['role_id' => $warehouseRole->id, 'is_active' => true]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => Permission::query()->where('slug', 'supply_chain.deliveries.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $wo->created_by,
+            'reason' => 'Delivery visibility removed for QC notice test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        app(CreateDeliveryDraftOnQcPass::class)->handle(new InspectionPassed($inspection));
+
+        $delivery = Delivery::query()->where('sales_order_id', $wo->sales_order_id)->firstOrFail();
+        $notice = $allowed->notifications()->where('type', 'chain.delivery_drafted')->firstOrFail();
+        $this->assertSame("/supply-chain/deliveries/{$delivery->hash_id}", $notice->data['link_to']);
+        $this->assertSame(0, $revoked->notifications()->where('type', 'chain.delivery_drafted')->count());
+        $this->actingAs($allowed)->getJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id)->assertOk();
+        $this->actingAs($revoked)->getJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id)->assertForbidden();
     }
 
     private function receipt(WorkOrderOutput $output, WorkOrder $wo): void

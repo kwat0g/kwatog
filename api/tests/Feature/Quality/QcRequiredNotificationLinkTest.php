@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Quality;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
@@ -25,9 +26,8 @@ use Tests\TestCase;
 
 /**
  * O2C audit 2026-09-25 — "In-process / Outgoing QC required" opened the work
- * order, so the inspector had to find the inspection from there. The notice
- * now opens the inspection; a completion that created several outgoing
- * batches still opens the work order, which lists them all.
+ * order, so the inspector had to find the inspection from there. Notices
+ * now open the inspection or the filtered outgoing queue for multi-batch work.
  */
 class QcRequiredNotificationLinkTest extends TestCase
 {
@@ -82,11 +82,17 @@ class QcRequiredNotificationLinkTest extends TestCase
     public function test_in_process_notice_opens_the_inspection(): void
     {
         $wo = $this->workOrder(WorkOrderStatus::InProgress);
+        $revokedInspector = User::factory()->create([
+            'is_active' => true,
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->revoke($revokedInspector, 'quality.inspections.view');
 
         app(TriggerInProcessQC::class)->handle(new WorkOrderStatusChanged($wo, 'confirmed', 'in_progress'));
 
         $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'in_process')->firstOrFail();
         $this->assertSame("/quality/inspections/{$inspection->hash_id}", $this->link('chain.in_process_qc_required'));
+        $this->assertSame(0, $revokedInspector->notifications()->where('type', 'chain.in_process_qc_required')->count());
     }
 
     public function test_outgoing_notice_opens_the_inspection_of_a_single_batch(): void
@@ -100,15 +106,41 @@ class QcRequiredNotificationLinkTest extends TestCase
         $this->assertSame("/quality/inspections/{$inspection->hash_id}", $this->link('chain.outgoing_qc_required'));
     }
 
-    public function test_outgoing_notice_for_several_batches_opens_the_work_order(): void
+    public function test_outgoing_notice_for_several_batches_opens_the_inspection_list(): void
     {
         $wo = $this->workOrder(WorkOrderStatus::Completed);
+        $revokedInspector = User::factory()->create([
+            'is_active' => true,
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->revoke($revokedInspector, 'quality.inspections.view');
         $this->recordBatch($wo, 60);
         $this->recordBatch($wo, 40);
 
         app(TriggerOutgoingQC::class)->handle(new WorkOrderCompleted($wo));
 
         $this->assertSame(2, Inspection::query()->where('entity_id', $wo->id)->where('stage', 'outgoing')->count());
-        $this->assertSame("/production/work-orders/{$wo->hash_id}", $this->link('chain.outgoing_qc_required'));
+        $this->assertSame(
+            "/quality/inspections?entity_type=work_order&entity_id={$wo->hash_id}&stage=outgoing",
+            $this->link('chain.outgoing_qc_required'),
+        );
+        $this->assertSame(0, $revokedInspector->notifications()->where('type', 'chain.outgoing_qc_required')->count());
+        $this->actingAs($this->inspector)->getJson(
+            '/api/v1/quality/inspections?entity_type=work_order&entity_id='.$wo->hash_id.'&stage=outgoing',
+        )->assertOk()->assertJsonCount(2, 'data');
+        $this->actingAs($this->inspector)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertForbidden();
+    }
+
+    private function revoke(User $user, string $permission): void
+    {
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => Permission::query()->where('slug', $permission)->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $this->inspector->id,
+            'reason' => 'Permission removed for QC notice audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

@@ -150,7 +150,8 @@ class TriggerOutgoingQC implements ShouldQueue
                 $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
-                    ->get();
+                    ->get()
+                    ->filter(fn (User $user): bool => $user->hasPermission('quality.inspections.view'));
 
                 $finalWorkOrderUrl = $wo->usesFinishFirstQc()
                     ? "/quality/work-orders/{$wo->hash_id}/final-inspection"
@@ -158,10 +159,10 @@ class TriggerOutgoingQC implements ShouldQueue
                 app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [
                     'title' => 'Outgoing QC required',
                     'message' => "Outgoing QC required for WO {$wo->wo_number}.",
-                    // One batch: open its inspection. Several: the WO page lists them all.
+                    // One batch opens directly; several open the filtered inspection queue.
                     'link_to' => $finalWorkOrderUrl ?? (count($created) === 1
                         ? "/quality/inspections/{$created[0]->hash_id}"
-                        : "/production/work-orders/{$wo->hash_id}"),
+                        : "/quality/inspections?entity_type=work_order&entity_id={$wo->hash_id}&stage=outgoing"),
                     'entity_type' => 'work_order',
                     'entity_id' => $wo->hash_id,
                     'wo_number' => $wo->wo_number,
