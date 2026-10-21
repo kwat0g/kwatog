@@ -32,6 +32,7 @@ Updated: 2026-10-21
 - PR #248's light/dark company-logo favicon update now uses the current theme; commit `e787c5c1` updates vulnerable frontend dependencies and is pushed. `npm audit --audit-level=high` reports zero vulnerabilities. CI run 39573300734 failed on five existing return-management date-input lint errors; current `origin/main` already uses `manilaIsoDate()` at those sites. Rerun PR checks after the active API suite ends.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
+- Mail safety rechecked 2026-10-21: root and API `.env` both use `MAIL_MAILER=log`; `MAIL_HOST`, `MAIL_USERNAME`, and `MAIL_PASSWORD` are empty. PHPUnit forces the `array` mailer. No real SMTP credentials were used.
 
 ## Blockers
 
