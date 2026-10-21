@@ -14,5 +14,5 @@ View Payslips
 </x-mail::button>
 
 Thanks,
-{{ config('mail.from.name', 'Ogami Philippines') }}
+{{ config('mail.from.name') }}
 </x-mail::message>

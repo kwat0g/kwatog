@@ -8,6 +8,7 @@ use App\Common\Services\EmailBrandingService;
 use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 /**
@@ -147,6 +148,17 @@ class EmailBrandingResolutionTest extends TestCase
         $brand = app(EmailBrandingService::class)->data();
 
         $this->assertSame('Ogami Philippines (Transactional)', $brand['name']);
+    }
+
+    public function test_email_views_do_not_hardcode_the_company_display_name(): void
+    {
+        foreach (File::allFiles(resource_path('views/emails')) as $view) {
+            $this->assertStringNotContainsString(
+                'Ogami Philippines',
+                File::get($view->getPathname()),
+                $view->getRelativePathname(),
+            );
+        }
     }
 
     public function test_missing_legal_company_identity_is_not_filled_with_a_fallback(): void

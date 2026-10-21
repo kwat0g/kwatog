@@ -28,7 +28,7 @@ class PortalAccessInvitationMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your Ogami Philippines portal access');
+        return new Envelope(subject: 'Your '.config('mail.from.name').' portal access');
     }
 
     public function content(): Content

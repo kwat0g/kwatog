@@ -12,7 +12,7 @@
 
 Hello {{ $complaint->customer?->contact_person ?: $complaint->customer?->name ?: 'Customer' }},
 
-Your complaint **{{ $complaint->complaint_number }}** has been updated by {{ config('mail.from.name', 'Ogami Philippines') }}.
+Your complaint **{{ $complaint->complaint_number }}** has been updated by {{ config('mail.from.name') }}.
 
 | Detail | Value |
 |---|---|
@@ -31,5 +31,5 @@ We will continue to record containment, root-cause analysis, corrective action, 
 @endif
 
 Regards,<br>
-Ogami Philippines Customer Support
+{{ config('mail.from.name') }} Customer Support
 </x-mail::message>

@@ -21,7 +21,7 @@ class EmailIntegrationTestMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Ogami Philippines · AWS Mail Manager email integration test');
+        return new Envelope(subject: '['.config('mail.from.name').'] AWS Mail Manager email integration test');
     }
 
     public function content(): Content

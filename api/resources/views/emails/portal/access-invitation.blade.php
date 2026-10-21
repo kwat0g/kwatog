@@ -3,7 +3,7 @@
 
 Hello {{ $recipientName }},
 
-Your secure Ogami Philippines portal account is ready. Use the details below to sign in for the first time.
+Your secure {{ config('mail.from.name') }} portal account is ready. Use the details below to sign in for the first time.
 
 <x-mail::panel>
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
@@ -24,9 +24,9 @@ Your secure Ogami Philippines portal account is ready. Use the details below to 
 
 <x-mail::panel>
 <strong>Security reminder</strong><br>
-If you were not expecting this invitation, do not use the account. Contact Ogami Philippines through an approved company channel so we can verify the request.
+If you were not expecting this invitation, do not use the account. Contact {{ config('mail.from.name') }} through an approved company channel so we can verify the request.
 </x-mail::panel>
 
 Regards,<br>
-<strong>Ogami Philippines Portal Support</strong>
+<strong>{{ config('mail.from.name') }} Portal Support</strong>
 </x-mail::message>

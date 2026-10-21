@@ -24,5 +24,5 @@ Please review the approved purchase order below and acknowledge it in the suppli
 Please acknowledge the order, provide shipment information, and upload the required shipping documents through the portal.
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ config('mail.from.name') }} Purchasing Team
 </x-mail::message>

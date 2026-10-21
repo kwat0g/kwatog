@@ -3,7 +3,7 @@
 
 Hello {{ $party?->contact_person ?: $party?->name ?: 'there' }},
 
-Your {{ $returnRequest->type?->label() ?? 'return request' }} **{{ $returnRequest->rma_number }}** has been updated by Ogami Philippines.
+Your {{ $returnRequest->type?->label() ?? 'return request' }} **{{ $returnRequest->rma_number }}** has been updated by {{ config('mail.from.name') }}.
 
 | Detail | Value |
 |---|---|
@@ -18,5 +18,5 @@ Your {{ $returnRequest->type?->label() ?? 'return request' }} **{{ $returnReques
 We will keep the return record updated as inspection, disposition, credit, replacement, or completion steps progress. Please contact your Ogami customer or supplier operations representative for the current record and any required action.
 
 Regards,<br>
-Ogami Philippines Customer and Supplier Operations
+{{ config('mail.from.name') }} Customer and Supplier Operations
 </x-mail::message>

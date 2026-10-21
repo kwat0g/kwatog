@@ -28,7 +28,7 @@ class PortalPasswordResetMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Reset your Ogami Philippines portal password');
+        return new Envelope(subject: 'Reset your '.config('mail.from.name').' portal password');
     }
 
     public function content(): Content
