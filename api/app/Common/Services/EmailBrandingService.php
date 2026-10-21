@@ -40,6 +40,11 @@ class EmailBrandingService
 
     public function logoPath(): ?string
     {
+        $path = resource_path('images/ogami-logo.png');
+        if (is_file($path)) {
+            return $path;
+        }
+
         $path = resource_path('images/ogami-mark.png');
         if (is_file($path)) {
             return $path;
