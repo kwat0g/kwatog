@@ -8,6 +8,7 @@ use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
@@ -24,7 +25,10 @@ class NotifyOnPurchaseOrderApproved implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('purchasing.view')
+                    && app(PurchaseOrderAccessPolicy::class)->canView($user, $po))
+                ->values();
 
             $this->notifications->send($audience, 'chain.po_approved', [
                 'title'       => "PO {$po->po_number} Approved",

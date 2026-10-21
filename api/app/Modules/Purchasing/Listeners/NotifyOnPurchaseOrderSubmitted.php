@@ -8,6 +8,7 @@ use App\Common\Services\ApprovalService;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Events\PurchaseOrderSubmitted;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
@@ -21,12 +22,14 @@ final class NotifyOnPurchaseOrderSubmitted implements ShouldQueue
             if ($next === null) {
                 return;
             }
-            $audience = User::query()
-                ->whereHas('role', fn ($query) => $query->where('slug', $next->role_slug))
-                ->whereHas('role.permissions', fn ($query) => $query->where('slug', 'purchasing.po.approve'))
-                ->where('is_active', true)
-                ->get();
-            app(NotificationService::class)->send($audience, 'purchasing.po_pending_approval', [
+            $notifications = app(NotificationService::class);
+            $access = app(PurchaseOrderAccessPolicy::class);
+            $audience = $notifications->usersWithPermission('purchasing.po.approve')
+                ->filter(fn (User $user): bool => $user->role?->slug === $next->role_slug
+                    && $user->hasPermission('purchasing.view')
+                    && $access->canView($user, $po))
+                ->values();
+            $notifications->send($audience, 'purchasing.po_pending_approval', [
                 'title' => "PO {$po->po_number} pending approval",
                 'message' => "Purchase order {$po->po_number} is waiting for {$next->role_slug} review.",
                 'link_to' => '/purchasing/purchase-orders/'.$po->hash_id,
