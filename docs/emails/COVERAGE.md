@@ -32,6 +32,7 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 ## Remaining sign-off
 
 - E-001–E-003 and E-019 have checked-in desktop/mobile and light/dark screenshot evidence. Other groups still need visual evidence checked against the current shared foundation before their coverage is considered complete.
+- E-005–E-006's checked-in dark screenshots show blank CTA labels. Fresh network-isolated renders of the current templates show white CTA text and no viewport overflow; refresh the checked-in captures before sign-off.
 - All mapped implementation PRs are drafts. The stack has dependent base branches; independent merge/revert readiness has not been verified across the full stack.
 - Runtime recipient resolution, delivery safety, queues, logs, and tests remain subject to their linked PR checks and review. This report does not claim those gates passed.
 - Confirm company settings with the owner before any live send. Review external financial documents with the accountant and personal-data emails with HR/legal/data protection. Verify SPF/DKIM/DMARC with the mail provider; the code cannot prove DNS or provider configuration.
