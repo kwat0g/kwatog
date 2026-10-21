@@ -200,6 +200,16 @@ class BillServiceTest extends TestCase
         ], $finance);
         $this->assertSame(BillPaymentStatus::PendingApproval, $first->status);
         $this->assertSame(['vice_president'], $first->approvalRecords->pluck('role_slug')->all());
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $finance->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'accounting.bills.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $vp->id,
+            'reason' => 'Outcome notice link access test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $finance->flushPermissionsCache();
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $vp->id,
             'type' => 'approval.action_required',
@@ -244,6 +254,10 @@ class BillServiceTest extends TestCase
             'notifiable_id' => $finance->id,
             'type' => 'bill_payment.posted',
         ]);
+        $postedNotice = DB::table('notifications')->where('notifiable_id', $finance->id)
+            ->where('type', 'bill_payment.posted')->first();
+        $this->assertNotNull($postedNotice);
+        $this->assertNull(json_decode((string) $postedNotice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
         $this->assertSame('20000.00', (string) $bill->fresh()->balance);
         $last = $service->recordPayment($bill->fresh(), [
             'cash_account_id' => $cashId, 'payment_date' => '2026-04-15',
