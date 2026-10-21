@@ -299,10 +299,7 @@ class CustomerPortalService
     private function notifySalesOrderReview(SalesOrder $so, CustomerPortalUser $portalUser): void
     {
         try {
-            $audience = \App\Modules\Auth\Models\User::query()
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.sales_orders.confirm'))
-                ->where('is_active', true)
-                ->get();
+            $audience = $this->notifications->usersWithPermission('crm.sales_orders.confirm');
 
             if ($audience->isEmpty()) {
                 return;

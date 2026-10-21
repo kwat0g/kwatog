@@ -606,8 +606,7 @@ class ReturnCaseService
         try {
             $recipients = $case->assigned_to ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get() : collect();
             if ($recipients->isEmpty()) {
-                $recipients = User::query()->where('is_active', true)
-                    ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'return_management.manage'))->get();
+                $recipients = $this->notifications->usersWithPermission('return_management.manage');
             }
             if ($recipients->isNotEmpty()) {
                 $this->notifications->send($recipients, 'return.case_updated', [

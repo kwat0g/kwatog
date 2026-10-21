@@ -71,10 +71,7 @@ final class DeliverRfqLifecycleNotification implements ShouldQueue
         }
         if ($audience->isEmpty()) {
             // The buyer left; any active buyer can pick the task up.
-            $audience = User::query()
-                ->where('is_active', true)
-                ->whereHas('role.permissions', fn ($query) => $query->where('slug', 'purchasing.rfq.manage'))
-                ->get();
+            $audience = $this->notifications->usersWithPermission('purchasing.rfq.manage');
         }
         if ($audience->isEmpty()) {
             return;

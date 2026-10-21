@@ -89,7 +89,7 @@ Route declarations are in `spa/src/routes/*.tsx`; approval links resolve through
 | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:348` | `$this->notifications->send($employee->user, 'maintenance.assigned', $payload,` |
 | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:622` | `$this->notifications->send($recipients, 'maintenance.repair_submitted',` |
 | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:668` | `$this->notifications->send($technician, 'maintenance.repair_rejected',` |
-| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:66` | `app(NotificationService::class)->send(User::where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->where('slug', 'inventory.issue.create'))->get(),` |
+| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:67` | `$notifications->send($notifications->usersWithPermission('inventory.issue.create'),` |
 | `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:123` | `app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',` |
 | `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:77` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:175` | `app(NotificationService::class)->send($requester, $type, [` |
@@ -100,6 +100,8 @@ Route declarations are in `spa/src/routes/*.tsx`; approval links resolve through
 ## Confirmed caller-level issue
 
 - EF-044: employee maintenance repair submission was blocked by route and request authorization despite the assigned-work rule. Repair rejection notice also used a supervisor-only link. Fixed in draft PR #257.
+- EF-045: sales response notices used role permissions only, so individual grants and revocations were ignored. Fixed in draft PR #258.
+- EF-046: ten permission lookups across nine notification paths used role-only database queries, omitting active user grants and revocations. Replaced with the shared effective-permission resolver in draft PR #259. This fixes permission calculation only; the per-caller route and record-visibility checks below remain open.
 
 ## Remaining audit work
 

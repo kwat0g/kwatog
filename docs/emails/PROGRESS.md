@@ -55,6 +55,9 @@ Updated: 2026-10-20
 - E-023 caller index: [E-023-caller-audit.md](E-023-caller-audit.md) records all 82 generic `NotificationService::send()` call sites found by full backend search. Audience/RBAC, record visibility, helper-built links, and payload source review remain incomplete.
 - EF-044 maintenance employee submit/rejection path: fixed in draft PR #257, stacked on #256. Assigned employees now pass the order-scoped maintenance access check; unassigned employees remain denied; rejection notices use the self-service order route. Focused `MaintenanceVerifiedRecoveryTest`: 1 passed, 6 assertions.
 - EF-045 sales response audience: fixed in draft PR #258, stacked on #257. Replaced role-only lookup with the existing effective permission resolver, honoring grants, revocations, and active-user status. Focused `SalesOrderResponseTest`: 1 passed, 5 assertions. Full E-023 caller RBAC audit remains open.
+- EF-046 generic notification audiences: fixed in draft PR #259, stacked on #258. Ten role-only permission lookups across nine paths now use the shared effective resolver, honoring active grants, revocations, system-admin access, and active-user status. Caller-level route/record visibility and helper-built link review remains open.
+- Focused caller verification: 108 tests, 594 assertions; 104 passed, 4 failed. All 4 failures reproduced on parent #258 and are tracked as EF-047; none touch the changed audience resolver. Test mailer forced to `array`; no transport contacted.
+- Effective-audience regressions: 8 targeted tests passed, 32 assertions across Sales, failure fallback, RFQ lifecycle, AR fallback, Quality, return-case, and customer portal paths. Test mailer forced to `array`; no transport contacted.
 - Email delivery: none sent.
 
 ## Blockers

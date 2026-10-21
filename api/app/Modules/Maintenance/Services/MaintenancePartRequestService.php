@@ -63,7 +63,8 @@ class MaintenancePartRequestService
                 'item_id' => $item->id, 'location_id' => $data['location_id'], 'quantity' => $quantity,
                 'operation_key' => $key, 'requested_by' => $actor->id, 'status' => 'requested']);
             $order->forceFill(['parts_reconciled_at' => null, 'parts_reconciled_by' => null])->save();
-            app(NotificationService::class)->send(User::where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->where('slug', 'inventory.issue.create'))->get(),
+            $notifications = app(NotificationService::class);
+            $notifications->send($notifications->usersWithPermission('inventory.issue.create'),
                 'maintenance.parts_requested', ['title' => 'Spare parts requested', 'message' => $order->mwo_number.' requires '.$quantity.' '.$item->unit_of_measure.' of '.$item->code.'.',
                     'link_to' => '/inventory/picking?maintenance_work_order_id='.$order->hash_id], 'maintenance-part-request:'.$request->id);
 
