@@ -18,24 +18,24 @@ describe('themeStore floor override', () => {
   it('applies floor to the document when pushed', () => {
     useThemeStore.getState().pushOverride('floor');
     expect(attr()).toBe('floor');
-    expect(favicon()).toBe('/brand-logo-dark.png?v=20261021');
+    expect(favicon()).toBe('/favicon-dark.svg?v=20261022');
   });
 
   it('restores the user preference when popped', () => {
     useThemeStore.getState().pushOverride('floor');
     useThemeStore.getState().popOverride();
     expect(attr()).toBe('light');
-    expect(favicon()).toBe('/brand-logo.png?v=20261021');
+    expect(favicon()).toBe('/favicon-light.svg?v=20261022');
   });
 
   it('uses the light logo when the app is in light mode', () => {
     useThemeStore.getState().init('light');
-    expect(favicon()).toBe('/brand-logo.png?v=20261021');
+    expect(favicon()).toBe('/favicon-light.svg?v=20261022');
   });
 
   it('switches the favicon with the selected theme', () => {
     useThemeStore.getState().setMode('dark');
-    expect(favicon()).toBe('/brand-logo-dark.png?v=20261021');
+    expect(favicon()).toBe('/favicon-dark.svg?v=20261022');
   });
 
   it('restores a dark preference, not a hardcoded light', () => {
