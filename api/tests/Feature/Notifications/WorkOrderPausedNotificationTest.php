@@ -34,7 +34,9 @@ class WorkOrderPausedNotificationTest extends TestCase
         $ppc = $this->userWithRole('ppc_head');
         $pm = $this->userWithRole('production_manager');
         $revokedPpc = $this->userWithRole('ppc_head');
+        $revokedModule = $this->userWithRole('ppc_head');
         $this->revoke($revokedPpc, 'production.work_orders.view', $pm);
+        $this->revoke($revokedModule, 'production.view', $pm);
         $wo = WorkOrder::factory()->create(['status' => WorkOrderStatus::Paused->value]);
 
         app(NotifyOnWorkOrderPaused::class)->handle(
@@ -44,8 +46,10 @@ class WorkOrderPausedNotificationTest extends TestCase
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $ppc->id, 'type' => 'production.wo_paused']);
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $pm->id, 'type' => 'production.wo_paused']);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedPpc->id, 'type' => 'production.wo_paused']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedModule->id, 'type' => 'production.wo_paused']);
         $this->actingAs($pm)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertOk();
         $this->actingAs($revokedPpc)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertForbidden();
+        $this->actingAs($revokedModule)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertForbidden();
     }
 
     public function test_message_names_the_work_order_and_reason(): void

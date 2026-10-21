@@ -30,12 +30,22 @@ class WorkOrderNotificationTest extends TestCase
         $ppc = $this->userWithRole('ppc_head');
         $pm  = $this->userWithRole('production_manager');
         $revokedPpc = $this->userWithRole('ppc_head');
+        $revokedModule = $this->userWithRole('ppc_head');
         DB::table('user_permission_overrides')->insert([
             'user_id' => $revokedPpc->id,
             'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
             'type' => 'revoke',
             'granted_by' => $pm->id,
             'reason' => 'Work-order visibility removed for notification audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedModule->id,
+            'permission_id' => Permission::query()->where('slug', 'production.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $pm->id,
+            'reason' => 'Production module access removed for notification audience test.',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -56,6 +66,11 @@ class WorkOrderNotificationTest extends TestCase
             'notifiable_id' => $revokedPpc->id,
             'type'          => 'production.wo_completed',
         ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedModule->id,
+            'type'          => 'production.wo_completed',
+        ]);
+        $this->actingAs($revokedModule)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertForbidden();
     }
 
     public function test_listener_class_exists(): void
