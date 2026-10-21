@@ -440,6 +440,20 @@ final class RfqBiddingTest extends TestCase
         $this->asBuyer();
         $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/close")->assertOk();
 
+        $admin = $this->roleUser('system_admin');
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', ['purchasing.rfq.view', 'purchasing.rfq.manage', 'purchasing.view'])
+            ->pluck('id');
+        DB::table('user_permission_overrides')->insert($permissionIds->map(fn ($permissionId): array => [
+            'user_id' => $requester->id,
+            'permission_id' => (int) $permissionId,
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Requester access must follow RFQ row scope.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->all());
+
         $this->actingAsFresh($requester);
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")
             ->assertOk()
