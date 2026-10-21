@@ -129,6 +129,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 | Scheduled export / production summary delivery failure | Failure notification is present for some commands; other job failures rely on Horizon/failed-job monitoring | Export owner / operations admin | Check all mail/scheduler failures reach a monitored channel; avoid sending full error details. |
 | Backup/restore and system health | Backup/restore jobs and scheduler-health mechanisms exist; no dedicated direct email found in static search | System administrators | Decide whether mail alert is needed; otherwise verify existing health dashboard/monitoring is monitored. |
 | Training expiry, onboarding, separation | In-app/generic messages and scheduled reminders exist | Employee, manager, HR based on visibility | Confirm sensitive content, preference policy, cadence, and stop conditions. |
+| Leave request cancelled while awaiting approval | `LeaveRequestService::cancel()` retires the pending approval record but dispatches no cancellation event or notification | Current eligible department-head/HR approvers; tell them to stop reviewing the withdrawn request | Confirm with HR whether an email or current in-app notice is needed; avoid leaking leave details beyond the authorized approval audience. |
 
 ## Likely unnecessary/noisy or sensitive email
 
