@@ -18,6 +18,7 @@ Updated: 2026-10-21
 - E-009's four screenshots were re-rendered from `CustomerComplaintUpdateMail::render()` with a safe customer-facing snapshot and configured test SPA URL. 24,202-byte HTML; 1440px/390px light/dark captures fit. No mail was sent. See [E-009](E-009-customer-complaint-update.md).
 - Full CI on E-009 commit `eb496edb` ([API run](https://github.com/kwat0g/kwatog/actions/runs/39563277059)) stopped at PHPStan before PHPUnit: undefined `$creditNote` in the E-004 enqueue-failure log. Fixed to log the event snapshot hash in PR #222 commit `7f734897`; GitHub had not reported a new run at the last check.
 - E-010 review found subtotal and VAT were missing from the sales-order email although included in the order total. Local PR #232 changes now snapshot subtotal/VAT and show them; rendered HTML is 29,277 bytes. Four 1440px/390px light/dark screenshots inspected; PHP 120.00 + PHP 14.40 = PHP 134.40, mobile has no horizontal overflow. Focused tests updated; CI pending. No mail sent.
+- E-011's existing four sales-order-decision screenshots were inspected at desktop/mobile and light/dark. Recipient fallback and event snapshot tests are documented in PR #234; the prior CI failure had the same E-004 PHPStan blocker. No mail sent.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
