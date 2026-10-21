@@ -13,6 +13,7 @@ Updated: 2026-10-21
 - Markdown table styling: isolated follow-up branch `fix/email-markdown-table-style` styles Laravel's direct Markdown tables in light/dark, while excluding CTA tables. `FeatureEmailIntegrationTest::test_supplier_purchase_order_email_is_queued_with_supplier_data`: 1 test, 2 assertions passed; rendered test mail inspected at 1440px/390px in light/dark, no horizontal overflow. Preview contains test fixture company data. Focused test uses `MAIL_MAILER=array`; no message sent.
 - E-019 cross-template validation: rendered the RFQ lifecycle mailable with this PR's layout selectors. `SupplierRfqLifecycleMailTest` passed (1 test, 73 assertions); 20 Chromium screenshots cover five statuses at 1440px/390px and light/dark. Every document width matched its viewport; inspected captures show the styled table, logo, CTA, and footer. Test branding only; no email sent. Screenshots: `e019-rfq-lifecycle-*.png`.
 - E-005/E-006 desktop/mobile light/dark previews were refreshed from their mailables with dummy tokens in PR #224 commit `75f1c70f`; 8 captures inspected with no clipping. PR #224's current head `6c15a115` includes that refresh. E-018's four previews are refreshed at PR #243 commit `8c244f17`; no stale-preview action remains for these three groups.
+- Refreshed and inspected E-007, E-008, and E-009's four desktop/mobile light/dark captures in their own PRs (`275319ac`, `ccf582d5`, `af2946a3`). Confirmed hostile supplier/customer text remains escaped and layouts fit; no mail sent.
 - Email delivery: none sent.
 
 ## Email UI work — 2026-10-21

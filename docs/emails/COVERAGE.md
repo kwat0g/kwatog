@@ -7,9 +7,9 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 | E-001–E-003 | Customer invoice, official receipt, and dunning | [PR #325](https://github.com/kwat0g/kwatog/pull/325) | Draft; current branch includes browser previews at desktop/mobile and light/dark. Latest CI is running. |
 | E-004 | Finalized credit note | [PR #222](https://github.com/kwat0g/kwatog/pull/222) | Draft |
 | E-005–E-006 | Portal invitation and password reset | [PR #224](https://github.com/kwat0g/kwatog/pull/224) | Draft; secure-link follow-up in [PR #223](https://github.com/kwat0g/kwatog/pull/223); current desktop/mobile light/dark previews refreshed at `75f1c70f`. |
-| E-007 | Supplier invoice status | [PR #226](https://github.com/kwat0g/kwatog/pull/226) | Draft |
-| E-008 | Supplier PO cancellation | [PR #228](https://github.com/kwat0g/kwatog/pull/228) | Draft |
-| E-009 | Customer complaint update | [PR #230](https://github.com/kwat0g/kwatog/pull/230) | Draft |
+| E-007 | Supplier invoice status | [PR #226](https://github.com/kwat0g/kwatog/pull/226) | Draft; four desktop/mobile light/dark previews refreshed and inspected in `275319ac`. |
+| E-008 | Supplier PO cancellation | [PR #228](https://github.com/kwat0g/kwatog/pull/228) | Draft; four desktop/mobile light/dark previews refreshed and inspected in `ccf582d5`. |
+| E-009 | Customer complaint update | [PR #230](https://github.com/kwat0g/kwatog/pull/230) | Draft; four desktop/mobile light/dark previews refreshed and inspected in `af2946a3`. |
 | E-010 | Customer sales-order confirmation | [PR #232](https://github.com/kwat0g/kwatog/pull/232) | Draft; mobile line items stack in `0006d775`; desktop/mobile light/dark captures refreshed in `ca2695d7`. |
 | E-011 | Customer sales-order decision | [PR #234](https://github.com/kwat0g/kwatog/pull/234) | Draft |
 | E-012–E-015 | Candidate receipt, status, and interview notices | [PR #236](https://github.com/kwat0g/kwatog/pull/236) | Draft |
