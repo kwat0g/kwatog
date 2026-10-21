@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -58,15 +59,12 @@ class ReturnRestockNotificationTest extends TestCase
         ]);
     }
 
-    /** A warehouse role holding only inventory.view. */
+    /** A warehouse role holding inventory and return-request view access. */
     private function warehouseUser(): User
     {
-        $permission = Permission::query()->firstOrCreate(
-            ['slug' => 'inventory.view'],
-            ['name' => 'View Inventory', 'module' => 'inventory'],
-        );
         $role = Role::query()->create(['name' => 'Warehouse Notify Test', 'slug' => 'warehouse-notify-test']);
-        $role->permissions()->attach($permission);
+        $permissions = Permission::query()->whereIn('slug', ['inventory.view', 'return_management.view'])->pluck('id');
+        $role->permissions()->attach($permissions);
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }
@@ -296,6 +294,15 @@ class ReturnRestockNotificationTest extends TestCase
         $admin = $this->admin();
         $outsider = $this->outsider();
         $warehouse = $this->warehouseUser();
+        $hiddenRmaViewer = $this->warehouseUser();
+        UserPermissionOverride::create([
+            'user_id' => $hiddenRmaViewer->id,
+            'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $hiddenRmaViewer->flushPermissionsCache();
         $reviewer = $this->warehouseStaff();
         $item = Item::factory()->create();
         $loc = WarehouseLocation::factory()->create();
@@ -320,6 +327,10 @@ class ReturnRestockNotificationTest extends TestCase
 
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $outsider->id,
+            'type'          => 'return.restocked',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $hiddenRmaViewer->id,
             'type'          => 'return.restocked',
         ]);
     }

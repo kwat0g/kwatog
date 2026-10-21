@@ -649,7 +649,8 @@ class ReturnRequestService
     private function notifyCustomerReturnCreated(ReturnRequest $rma): void
     {
         try {
-            $audience = $this->notifications->usersWithPermission('return_management.manage');
+            $audience = $this->notifications->usersWithPermission('return_management.manage')
+                ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'));
             if ($audience->isEmpty()) {
                 return;
             }
@@ -3291,24 +3292,9 @@ class ReturnRequestService
         string $permissionSlug,
     ): void {
         try {
-            // {permissionSlug} holders (inventory.view for restock,
-            // purchasing.po.view for ship-out), plus wildcard admins —
-            // system_admin holds a '*' permission rather than the explicit
-            // slug, so a plain whereHas would silently drop the very person
-            // performing the disposition.
-            $recipients = User::query()
-                // NotificationService only needs the identity envelope. User's
-                // model-wide role eager load is useful for authorization, but
-                // it is unnecessary here and made every disposition fetch a
-                // wide user row plus a second role query.
-                ->without('role')
-                ->select(['id', 'name', 'email'])
-                ->where(function ($q) use ($permissionSlug) {
-                    $q->whereHas('role', fn ($role) => $role->where('slug', 'system_admin'))
-                        ->orWhereHas('role.permissions', fn ($perm) => $perm->where('slug', $permissionSlug));
-                })
-                ->where('is_active', true)
-                ->get();
+            $recipients = $this->notifications->usersWithPermission($permissionSlug)
+                ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'))
+                ->values();
 
             if ($recipients->isEmpty()) {
                 return;

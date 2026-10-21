@@ -8,6 +8,8 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
@@ -181,6 +183,18 @@ class CustomerReturnPortalTest extends TestCase
             'role_id'   => Role::query()->where('slug', 'customer_service_officer')->value('id'),
             'is_active' => true,
         ]);
+        $managerWithoutView = User::factory()->create([
+            'role_id'   => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+            'is_active' => true,
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $managerWithoutView->id,
+            'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $manager->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $managerWithoutView->flushPermissionsCache();
 
         $this->actAs($user);
 
@@ -219,6 +233,11 @@ class CustomerReturnPortalTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id'   => $manager->id,
+            'type'            => 'customer.rma_created',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id'   => $managerWithoutView->id,
             'type'            => 'customer.rma_created',
         ]);
     }
