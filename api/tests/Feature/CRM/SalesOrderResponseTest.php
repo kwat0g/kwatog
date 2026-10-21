@@ -308,6 +308,7 @@ class SalesOrderResponseTest extends TestCase
 
     public function test_decision_email_freezes_record_values_and_sends_separately_to_valid_portal_users(): void
     {
+        config(['app.frontend_url' => 'https://erp.ogamiph.dev']);
         $customer = Customer::factory()->create([
             'email' => 'fallback@example.test',
             'contact_person' => 'Original <img src=x onerror=alert(1)> Contact',
@@ -349,7 +350,7 @@ class SalesOrderResponseTest extends TestCase
             self::assertStringContainsString('Decision: Accepted.', $html);
             self::assertStringContainsString('your response', $html);
             self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $html);
-            self::assertStringContainsString('https://ogamiph.dev/portal/customer/orders/'.$mail->snapshot['sales_order_hash_id'], $html);
+            self::assertStringContainsString(config('app.frontend_url').'/portal/customer/orders/'.$mail->snapshot['sales_order_hash_id'], $html);
             self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
             self::assertLessThan(102400, strlen($html));
             self::assertSame('['.app(\App\Common\Services\EmailBrandingService::class)->data()['name'].'] Sales order response accepted: '.$mail->snapshot['so_number'].' · '.app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $mail->envelope()->subject);

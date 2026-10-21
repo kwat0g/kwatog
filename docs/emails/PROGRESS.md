@@ -58,6 +58,7 @@ Updated: 2026-10-20
 - EF-046 generic notification audiences: fixed in draft PR #259, stacked on #258. Ten role-only permission lookups across nine paths now use the shared effective resolver, honoring active grants, revocations, system-admin access, and active-user status. Caller-level route/record visibility and helper-built link review remains open.
 - Focused caller verification: 108 tests, 594 assertions; 104 passed, 4 failed. All 4 failures reproduced on parent #258 and are tracked as EF-047; none touch the changed audience resolver. Test mailer forced to `array`; no transport contacted.
 - Effective-audience regressions: 8 targeted tests passed, 32 assertions across Sales, failure fallback, RFQ lifecycle, AR fallback, Quality, return-case, and customer portal paths. Test mailer forced to `array`; no transport contacted.
+- EF-047 link assertion: fixed in draft PR #260, stacked on #259. The test now sets the SPA base URL and asserts against the configured value. Focused test: 1 passed, 19 assertions.
 - Email delivery: none sent.
 
 ## Blockers
