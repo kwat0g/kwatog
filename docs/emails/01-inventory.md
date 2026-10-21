@@ -1,6 +1,6 @@
 # Phase 1 — Email inventory and classification
 
-**Status:** inventory reviewed; owner replied “proceed.” Source-level reclassification dated 2026-10-21; visual/client and selected runtime recipient checks remain incomplete. `D` means current quality is below target based on source-level gaps. E-030–E-033 now use secure links in the account-security implementation, pending test and visual verification. No email was sent.
+**Status:** inventory reviewed; owner replied “proceed.” Source-level reclassification dated 2026-10-21; selected runtime recipient checks remain incomplete. Browser visual inspections are recorded per email in [PROGRESS.md](PROGRESS.md); real email-client rendering remains unverified. `D` means current quality is below target based on source-level gaps. E-030–E-033 use secure setup/reset links in draft PR #273; focused tests and browser renders are recorded, while integrated CI remains pending. No email was sent.
 
 ## Master inventory
 
