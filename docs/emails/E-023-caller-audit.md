@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-Static repository search found 84 exact `->send(` call sites under `api/app`. Eighty-two are NotificationService generic email-capable calls. Excluded false positives: the auth forgot-password service call and direct payslip `Mail::send()`. The inventory below preserves every generic call site as an audit anchor.
+Static repository search found 85 exact `->send(` call sites under `api/app`. Eighty-three are NotificationService generic email-capable calls. Excluded false positives: the auth forgot-password service call and direct payslip `Mail::send()`. The inventory below preserves every generic call site as an audit anchor.
 
 `NotificationService::send()` creates an email only when that active internal user explicitly opted into the exact type. PR #256 rejects invalid addresses, excludes inactive users, deduplicates normalized mailboxes, and applies stable delivery keys when a caller supplies a dedupe key. The caller still controls audience selection; this audit is incomplete until every audience is checked against its SPA route guard and record-level API authorization.
 
@@ -18,7 +18,7 @@ Route declarations are in `spa/src/routes/*.tsx`; approval links resolve through
 - Authenticated return behavior was source-checked: `AuthGuard` stores the requested path, query, and hash; the login page restores it. Browser login was not exercised.
 - Focused checks: 31 API tests / 177 assertions and 9 SPA tests passed; SPA typecheck, targeted ESLint, and PHPStan passed. No email sent.
 
-These changes fix the route families found by static search. They do not complete the 82-call-site audience, payload-sensitivity, snapshot, or trigger audit below.
+These changes fix the route families found by static search. They do not complete the 83-call-site audience, payload-sensitivity, snapshot, or trigger audit below.
 
 ## Caller index
 
