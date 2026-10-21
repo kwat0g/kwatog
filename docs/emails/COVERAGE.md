@@ -23,7 +23,7 @@ closing the corresponding row.
 | E-013 | Candidate application status | [#236](https://github.com/kwat0g/kwatog/pull/236) | Desktop/mobile and light/dark captures inspected and copied here; layout fits, but fixture uses invalid `updated` for both stages and renders fallback labels; logo/footer refresh and fixture correction pending |
 | E-014 | Candidate interview scheduled | [#236](https://github.com/kwat0g/kwatog/pull/236) | Desktop/mobile and light/dark browser captures inspected and copied here; schedule block wraps cleanly; logo and synthetic footer need refresh; CI pending |
 | E-015 | Candidate interview changed | [#236](https://github.com/kwat0g/kwatog/pull/236) | Desktop/mobile and light/dark browser captures inspected and copied here; schedule block wraps cleanly; logo and synthetic footer need refresh; CI pending |
-| E-016 | Payslip ready notice | [#238](https://github.com/kwat0g/kwatog/pull/238) | Secure-link change drafted; visual and CI review pending |
+| E-016 | Payslip ready notice | [#238](https://github.com/kwat0g/kwatog/pull/238) | Desktop/mobile and light/dark browser captures inspected and copied here; no salary details in body; secure portal CTA clear; logo and synthetic footer refresh pending; CI pending |
 | E-017 | Supplier purchase order decision | [#239](https://github.com/kwat0g/kwatog/pull/239) | Draft; visual and CI review pending |
 | E-018 | Supplier purchase order published | [#243](https://github.com/kwat0g/kwatog/pull/243) | Draft; visual and CI review pending |
 | E-019 | Supplier RFQ lifecycle | [#247](https://github.com/kwat0g/kwatog/pull/247) | Draft; inherited PHPStan defect blocks review |
