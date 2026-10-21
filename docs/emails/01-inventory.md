@@ -1,6 +1,6 @@
 # Phase 1 — Email inventory and classification
 
-**Status:** provisional, based on static code inspection dated 2026-10-20. It is a review checkpoint, not approval to edit templates. `D` means current quality is below target based on source-level gaps; grades are provisional because unsafe local SMTP prevented rendering and runtime recipient checks. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
+**Status:** owner approved continuing after the inventory summary. Inventory is based on static code inspection dated 2026-10-20; grades remain provisional where runtime recipient behavior was not checked. `D` means current quality is below target based on source-level gaps. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
 
 ## Master inventory
 
@@ -135,19 +135,18 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 - E-023 generic notification mail can send operational detail to anyone who explicitly opted into that type; classify every runtime type and remove sensitive data from body where links suffice.
 - E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
-- E-016 attaches a payslip PDF to email; assess whether secure authenticated delivery can meet the business need with less exposure.
+- E-016's former PDF attachment is removed in draft PR #238; confirm the authenticated employee download flow meets the business need before production.
 
 ## Company data and infrastructure still unconfirmed
 
 Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an approved email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. Owner reports DKIM setup succeeded for `ogamiph.dev` in Asia Pacific (Singapore); this has not been independently verified. SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To require confirmation from domain/email administrators.
 
-## Decisions needed before Phase 2
+## Owner confirmations before production delivery
 
-1. Confirm local external SMTP is disabled and Mailpit/MailHog/log/catch-all is configured before any send-capable testing or browser preview that might dispatch.
-2. Review this inventory and missing-email recommendation track. Phase 2 template changes remain stopped until that review.
-3. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
-4. Confirm handling policy for payslip attachment and temporary-password paths; P0 credential/security fixes should be a separate functional-fix track.
-5. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
+1. Verify each environment uses a test sink before any send-capable test; feature tests force the array mailer and no real email was sent during this work.
+2. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
+3. Confirm the authenticated payslip download meets employee needs; confirm reachability and remediation of temporary-password paths in the separate P0 security track.
+4. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
 
 ## Manual real-client checklist for the later email phase
 

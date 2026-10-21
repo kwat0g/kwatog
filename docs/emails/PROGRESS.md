@@ -1,6 +1,6 @@
 # Email audit progress
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Status
 
@@ -50,4 +50,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Complete E-016 payslip email, then continue E-017 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue with E-017 onward. Recheck stacked PRs against the updated shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
