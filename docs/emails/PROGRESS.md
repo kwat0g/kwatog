@@ -146,6 +146,7 @@ Updated: 2026-10-21
 
 - E-023 caller review: verified loan submission and decision audiences, route/row ownership, after-commit outbox dispatch, event-version handling, and existing regression coverage. No defect found; direct decision-recipient and link assertions remain absent.
 - E-023 caller review: verified CAPA effectiveness reminder audiences, detail-route permission, bounded payload, retry de-duplication, and opt-in email handling. No recipient visibility defect found.
+- E-023 caller review: verified recruitment application alerts use active users with effective `hr.recruitment.view`, an exact application link, after-commit queueing, and explicit email opt-in. Added regression coverage for revoked access and inactive users; candidate-name PII needs HR/data-protection review. CI is running on PR #310; test not run locally.
 
 Owner review: E-016 and E-023 can both send payslip-ready mail for one finalization when both email controls are enabled and employee/user addresses match. No trigger changed.
 
