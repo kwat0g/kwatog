@@ -98,13 +98,7 @@ export const purchasingRoutes = (
       />
       <Route
         path="/purchasing/rfqs/:id"
-        element={
-          // PR requesters (e.g. department heads) follow RFQ notices here;
-          // the API scopes them to their own requests with prices sealed.
-          <PermissionGuard anyOf={['purchasing.rfq.view', 'purchasing.rfq.manage', 'purchasing.view']}>
-            <RfqDetailPage />
-          </PermissionGuard>
-        }
+        element={<RfqDetailPage />}
       />
 
       <Route

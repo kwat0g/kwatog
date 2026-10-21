@@ -29,8 +29,8 @@ export interface RfqItem {
   quantity: string;
   unit: string | null;
   required_delivery_date: string | null;
-  awarded_quantity: string;
-  remaining_quantity: string;
+  awarded_quantity?: string;
+  remaining_quantity?: string;
   item: { id: string; code: string; name: string; unit_of_measure: string | null } | null;
 }
 
@@ -163,6 +163,7 @@ export type SupplierQuoteWrite = {
 };
 
 export type RfqActions = {
+  can_view_supplier_activity: boolean;
   can_edit: boolean;
   can_publish: boolean;
   can_extend: boolean;

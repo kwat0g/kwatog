@@ -9,6 +9,7 @@ use App\Common\Services\OutboxEventCodec;
 use App\Common\Mail\QueuedMailable;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
@@ -434,6 +435,11 @@ final class RfqBiddingTest extends TestCase
     public function test_the_requester_can_follow_the_rfq_without_seeing_prices(): void
     {
         $requester = $this->roleUser('department_head');
+        $requester->role->permissions()->detach(Permission::query()->where('slug', 'purchasing.view')->sole()->id);
+        $requester->flushPermissionsCache();
+        $this->assertFalse($requester->hasPermission('purchasing.view'));
+        $this->assertFalse($requester->hasPermission('purchasing.rfq.view'));
+        $this->assertFalse($requester->hasPermission('purchasing.rfq.manage'));
         [$pr] = $this->approvedPr('10.00');
         $pr->forceFill(['requested_by' => $requester->id])->save();
         [$vendor, $portal] = $this->supplier();
@@ -447,8 +453,34 @@ final class RfqBiddingTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'closed')
             ->assertJsonPath('data.quotes', [])
+            ->assertJsonPath('data.invitations', [])
+            ->assertJsonPath('data.awards', [])
+            ->assertJsonPath('data.invited_count', 0)
+            ->assertJsonPath('data.responded_count', 0)
+            ->assertJsonPath('data.actions.can_view_supplier_activity', false)
+            ->assertJsonMissingPath('data.items.0.awarded_quantity')
             ->assertJsonPath('data.actions.can_award', false);
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/comparison")->assertForbidden();
+        $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/purchase-orders")->assertForbidden();
+
+        $this->asBuyer();
+        $quoteItemId = $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/comparison")
+            ->assertOk()->json('data.quotes.0.items.0.id');
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/award", [
+            'award_reason' => 'Best delivered cost.',
+            'lines' => [[
+                'request_for_quote_item_id' => $rfq['items'][0]['id'],
+                'supplier_quote_item_id' => $quoteItemId,
+            ]],
+        ])->assertOk();
+
+        $this->actingAsFresh($requester);
+        $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'awarded')
+            ->assertJsonPath('data.invitations', [])
+            ->assertJsonPath('data.awards', [])
+            ->assertJsonMissingPath('data.items.0.awarded_quantity');
 
         $this->actingAsFresh($this->roleUser('department_head'));
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
@@ -467,7 +499,13 @@ final class RfqBiddingTest extends TestCase
             'closes_at' => now()->addDay()->toIso8601String(),
             'reason' => 'Supplier asked for more time.',
         ])->assertStatus(422);
+
+        $this->actingAsFresh($this->roleUser('department_head'));
+        $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")->assertForbidden();
+        $this->assertSame(RfqStatus::Open, RequestForQuote::query()->sole()->status);
+
         // No scheduler needed: opening the RFQ closes it.
+        $this->asBuyer();
         $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}")
             ->assertOk()
             ->assertJsonPath('data.status', 'closed')

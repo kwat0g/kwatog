@@ -15,6 +15,7 @@ class RequestForQuoteResource extends JsonResource
     {
         $user = $request->user();
         $status = $this->status;
+        $canViewSupplierActivity = $user?->hasPermission('purchasing.rfq.view') || $user?->hasPermission('purchasing.rfq.manage');
         // Prices and supplier documents stay sealed until the RFQ closes, for
         // everyone — including the buyer who runs it.
         $sealed = ! in_array($status, [RfqStatus::Closed, RfqStatus::Awarded], true)
@@ -41,12 +42,12 @@ class RequestForQuoteResource extends JsonResource
             'creator' => $this->whenLoaded('creator', fn () => $this->creator
                 ? ['id' => $this->creator->hash_id, 'name' => $this->creator->name]
                 : null),
-            'invited_count' => (int) ($this->invitations_count ?? 0),
-            'responded_count' => (int) ($this->responded_count ?? 0),
+            'invited_count' => $canViewSupplierActivity ? (int) ($this->invitations_count ?? 0) : 0,
+            'responded_count' => $canViewSupplierActivity ? (int) ($this->responded_count ?? 0) : 0,
             'items' => RequestForQuoteItemResource::collection($this->whenLoaded('items')),
-            'invitations' => RfqInvitationResource::collection($this->whenLoaded('invitations')),
+            'invitations' => $this->whenLoaded('invitations', fn () => $canViewSupplierActivity ? RfqInvitationResource::collection($this->invitations) : []),
             'quotes' => $this->whenLoaded('quotes', fn () => $sealed ? [] : SupplierQuoteResource::collection($this->quotes)),
-            'awards' => RfqAwardResource::collection($this->whenLoaded('awards')),
+            'awards' => $this->whenLoaded('awards', fn () => $canViewSupplierActivity ? RfqAwardResource::collection($this->awards) : []),
             'documents' => $this->whenLoaded('documents', fn () => RfqDocumentResource::collection(
                 $this->documents->filter(fn ($document) => $document->document_type === 'requirement_document' || ! $sealed)->values(),
             )),

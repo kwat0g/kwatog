@@ -69,6 +69,7 @@ class RequestForQuoteAccessPolicy
         $open = $status === RfqStatus::Open && $rfq->closes_at !== null && $rfq->closes_at->isFuture();
 
         return [
+            'can_view_supplier_activity' => $user->hasPermission('purchasing.rfq.view') || $manage,
             'can_edit' => $manage && $status === RfqStatus::Draft,
             'can_publish' => $manage && $status === RfqStatus::Draft,
             'can_extend' => $manage && $status === RfqStatus::Open,
