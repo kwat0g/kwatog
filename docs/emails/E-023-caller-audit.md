@@ -6,6 +6,8 @@ Static repository search found 85 exact `->send(` call sites under `api/app`. Ei
 
 `NotificationService::send()` creates an email only when that active internal user explicitly opted into the exact type. PR #256 rejects invalid addresses, excludes inactive users, deduplicates normalized mailboxes, and applies stable delivery keys when a caller supplies a dedupe key. The caller still controls audience selection; this audit is incomplete until every audience is checked against its SPA route guard and record-level API authorization.
 
+Cross-check on 2026-10-21 found 83 generic `NotificationService::send()` call sites under `api/app`; all 83 appear in the caller index. Source line anchors below were refreshed against the current tree where prior fixes had shifted them.
+
 The customer delivery-date proposal is a direct `UserNotificationMail` path outside `NotificationService::send()`. PR #256 queues one message per valid active customer portal address and alerts CRM permission holders on delivery failure.
 
 Route declarations are in `spa/src/routes/*.tsx`; approval links resolve through `ApprovalTypeRegistry`. Extracted route presence alone does not prove recipient visibility. Dynamic helper paths, null links, role-setting audiences, data fields, and trigger conditions remain to be verified per caller.
@@ -44,7 +46,7 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Leave/Listeners/NotifyOnLeavePendingHR.php:32` | `$this->notifications->send($audience, 'leave.pending_hr', [` |
 | `api/app/Modules/CRM/Listeners/NotifyOnSalesOrderConfirmed.php:40` | `$this->notifications->send($audience, 'chain.so_confirmed', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveApproved.php:26` | `$this->notifications->send($user, 'leave.approved', [` |
-| `api/app/Console/Commands/SweepMissingOutgoingQc.php:186` | `$notifications->send($recipients, 'chain.outgoing_qc_missing', [` |
+| `api/app/Console/Commands/SweepMissingOutgoingQc.php:201` | `$notifications->send($recipients, 'chain.outgoing_qc_missing', [` |
 | `api/app/Console/Commands/RunDailyMrp.php:50` | `app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [` |
 | `api/app/Modules/B2B/Services/SupplierDeliveryScheduleService.php:237` | `$this->notifications->send($audience, 'supplier.schedule_cancelled', [` |
 | `api/app/Modules/B2B/Services/CustomerPortalService.php:310` | `$this->notifications->send($audience, 'portal.order_awaiting_review', [` |
@@ -77,13 +79,13 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php:29` | `$this->notifications->send($user, $type, [` |
 | `api/app/Modules/Purchasing/Services/SupplierListingService.php:350` | `app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [` |
 | `api/app/Common/Services/ApprovalService.php:367` | `$this->notifications->send($recipients, 'approval.action_required', [` |
-| `api/app/Common/Services/ApprovalService.php:389` | `$this->notifications->send($submitter, $type, [` |
+| `api/app/Common/Services/ApprovalService.php:392` | `$this->notifications->send($submitter, $type, [` |
 | `api/app/Common/Services/ApprovalEscalationService.php:86` | `$this->notifications->send($approver, 'approval_reminder', [` |
 | `api/app/Common/Services/ApprovalEscalationService.php:137` | `$this->notifications->send($recipients, 'approval_escalation', [` |
 | `api/app/Common/Services/ApprovalEscalationService.php:313` | `$this->notifications->send($recipients, 'approval_escalation', [` |
-| `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:209` | `app(NotificationService::class)->send($vps, 'auto_po_pending', [` |
+| `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:209` | `$notifications->send($vps, 'auto_po_pending', [` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php:33` | `$this->notifications->send($audience, 'chain.pr_approved', [` |
-| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:32` | `app(NotificationService::class)->send($audience, 'purchasing.po_pending_approval', [` |
+| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:32` | `$notifications->send($audience, 'purchasing.po_pending_approval', [` |
 | `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:33` | `$this->notifications->send($audience, 'chain.po_approved', [` |
 | `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:81` | `$this->notifications->send($audience->unique('id')->values(), $type, [` |
 | `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:259` | `$this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [` |
@@ -99,9 +101,9 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/Maintenance/Listeners/NotifyMaintenanceWorkOrder.php:30` | `$this->notifications->send($supervisors, 'maintenance.assignment_needed', self::payload(` |
 | `api/app/Modules/Payroll/Services/PayrollPeriodService.php:1011` | `app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:348` | `$this->notifications->send($employee->user, 'maintenance.assigned', $payload,` |
-| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:622` | `$this->notifications->send($recipients, 'maintenance.repair_submitted',` |
-| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:668` | `$this->notifications->send($technician, 'maintenance.repair_rejected',` |
-| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:70` | `$notifications->send($notifications->usersWithPermission('inventory.issue.create'),` |
+| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:624` | `$this->notifications->send($recipients, 'maintenance.repair_submitted',` |
+| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:670` | `$this->notifications->send($technician, 'maintenance.repair_rejected',` |
+| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:70` | `$notifications->send($recipients,` |
 | `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:127` | `app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',` |
 | `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:78` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:176` | `app(NotificationService::class)->send($requester, $type, [` |
