@@ -130,9 +130,11 @@ class MaintenanceWorkOrderController
     public function assignees(): JsonResponse
     {
         $employees = $this->service->eligibleAssignees()
+            ->with('user.role')
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get(['id', 'employee_no', 'first_name', 'last_name'])
+            ->filter(static fn (Employee $employee): bool => MaintenanceWorkAccess::canOpenWorkOrderAsAssignee($employee->user))
             ->map(static fn (Employee $employee): array => [
                 'id' => $employee->hash_id,
                 'employee_no' => $employee->employee_no,

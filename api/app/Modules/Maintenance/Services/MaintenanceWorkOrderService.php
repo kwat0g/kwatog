@@ -294,10 +294,10 @@ class MaintenanceWorkOrderService
         return DB::transaction(function () use ($wo, $employeeId, $by, $choice) {
             $locked = MaintenanceWorkOrder::query()->lockForUpdate()->findOrFail($wo->getKey());
             $this->assertRepairEditable($locked);
-            $employee = $this->eligibleAssignees()->with('user')->whereKey($employeeId)->first();
-            if (! $employee) {
+            $employee = $this->eligibleAssignees()->with('user.role')->whereKey($employeeId)->first();
+            if (! $employee || ! MaintenanceWorkAccess::canOpenWorkOrderAsAssignee($employee->user)) {
                 throw ValidationException::withMessages([
-                    'employee_id' => ['Select an active Maintenance employee or technician with an active account.'],
+                    'employee_id' => ['Select an active Maintenance employee or technician with access to work orders.'],
                 ]);
             }
 
