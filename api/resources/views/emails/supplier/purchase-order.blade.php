@@ -17,11 +17,14 @@ Purchase order **{{ $purchaseOrderEmail['po_number'] }}** has been approved and 
 
 ## Ordered items
 
-| Item | Quantity × unit price | Line total |
-|---|---:|---:|
-@foreach ($purchaseOrderEmail['items'] as $item)
-| {{ $item['description'] }} | {{ $item['quantity'] }} {{ $item['unit'] }} × {{ $item['unit_price'] }} | {{ $item['total'] }} |
-@endforeach
+@forelse ($purchaseOrderEmail['items'] as $item)
+**{{ $item['description'] }}**
+
+{{ $item['quantity'] }} {{ $item['unit'] }} × {{ $item['unit_price'] }} · **Line total: {{ $item['total'] }}**
+
+@empty
+Item details are available in the supplier portal.
+@endforelse
 
 @if ($purchaseOrderEmail['remainingItemCount'] > 0)
 {{ $purchaseOrderEmail['remainingItemCount'] }} more {{ $purchaseOrderEmail['remainingItemCount'] === 1 ? 'item is' : 'items are' }} available in the supplier portal.
