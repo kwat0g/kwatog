@@ -164,6 +164,13 @@ class SupplierShipmentService
                 'notes' => array_key_exists('notes', $data) ? $this->clean($data['notes']) : $shipment->notes,
                 'portal_user_id' => $portalUserId,
             ];
+            if ($auditAction === 'supplier_ship.update'
+                && $recordQuantities
+                && $shipment->exists
+                && ! $shipment->items()->exists()
+                && $this->clean($values['notes']) === null) {
+                throw new BusinessRuleException('Add notes when reconciling a shipment without recorded quantities.');
+            }
             $this->assertDates($values, $data);
 
             $shipment->forceFill($values)->save();
