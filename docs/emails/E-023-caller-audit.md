@@ -170,3 +170,13 @@ These changes fix the route families found by static search. They do not complet
 - `AutoPurchaseOrderService::notifyApprovers()` selected the next role but did not verify effective PO approval permission, page access, or `PurchaseOrderAccessPolicy` visibility. Draft PR #298 mirrors the submitted-PO notice's checks.
 - `InspectionService::notifyReviewers()` checked `quality.inspections.review` but ignored the `quality.inspections.view` permission required by its SPA detail link. Draft PR #299 filters the resolved reviewers by effective view access while preserving maker exclusion.
 - `AlertOnSupplierDeterioration` sent supplier score details to configured roles without checking `purchasing.suppliers.performance.view`, required by its linked page. Draft PR #300 applies the effective destination permission.
+- Training-expiry notices in PR #301 now filter staff by the effective route permissions and `EmployeeCompetenceScope`; employee-self notices omit the HR-only link.
+- Sales-order confirmations in PR #302 retain configured recipients who can view the production schedule, remove customer/order identifiers, and link to `/production/schedule`.
+- Leave outcomes in PR #303 show the full date range and year; the event-version check prevents stale status notices. Pending-request cancellation still has no notification.
+- Complaint SLA alerts in PR #304 filter both configured roles and assignees by effective `crm.complaints.view`.
+- Finance delivery notices in PR #305 require effective invoice-view access for invoice details. Auto-invoice failure handoffs use the invoice-creation page without exposing delivery identifiers.
+- Daily MRP notices in PR #306 require effective `mrp.plans.view` and omit the unused run identifier.
+- Missing-timeout notices in PR #307 require attendance view plus the HR-wide or same-department read scope used by the destination API.
+- Maintenance part-request notices in PR #308 require both issue-creation and picking-view permissions, matching the linked page.
+- Prebill approval notices in PR #309 require effective invoice-view access in addition to approval permission.
+- PR #310 covers financial outcomes, payroll adjustment, return management, auto-PO handoff, customer portal review, stock adjustment, and supplier/customer response notices. Recipients now need effective destination access; record-scoped links use the matching access policy. The CI-discovered missing `User` import in customer portal review was fixed in commit `3ca66cc9`.
