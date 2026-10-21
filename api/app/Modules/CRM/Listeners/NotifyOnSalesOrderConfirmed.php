@@ -22,7 +22,7 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
     public function handle(SalesOrderConfirmed $event): void
     {
         try {
-            $so = $event->salesOrder->loadMissing('customer:id,name');
+            $so = $event->salesOrder;
 
             // The event carries the current row (ToleratesNewerModelState): an
             // order cancelled before this ran must not be announced as confirmed.
@@ -34,14 +34,13 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('production.schedule.view'));
 
             $this->notifications->send($audience, 'chain.so_confirmed', [
-                'title'       => "SO {$so->so_number} Confirmed",
-                'message'     => "Sales order confirmed for {$so->customer?->name}. MRP planning has been queued and will update the production chain when it completes.",
-                'link_to'     => "/crm/sales-orders/{$so->hash_id}",
-                'entity_type' => 'sales_order',
-                'entity_id'   => $so->hash_id,
+                'title'       => 'Production planning: sales order confirmed',
+                'message'     => 'MRP planning has been queued. Check the production schedule after it completes.',
+                'link_to'     => '/production/schedule',
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnSalesOrderConfirmed failed', ['error' => $e->getMessage()]);
