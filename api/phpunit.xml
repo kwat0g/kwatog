@@ -254,6 +254,12 @@
         <env name="DB_USERNAME" value="ogami"/>
         <env name="MAIL_MAILER" value="array" force="true"/>
         <server name="MAIL_MAILER" value="array" force="true"/>
+        <env name="MAIL_FROM_ADDRESS" value="no-reply@example.test" force="true"/>
+        <server name="MAIL_FROM_ADDRESS" value="no-reply@example.test" force="true"/>
+        <env name="MAIL_FROM_NAME" value="Ogami Test" force="true"/>
+        <server name="MAIL_FROM_NAME" value="Ogami Test" force="true"/>
+        <env name="MAIL_TEST_TO" value="mailpit@example.test" force="true"/>
+        <server name="MAIL_TEST_TO" value="mailpit@example.test" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <server name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SEED_DEMO_DATA" value="false" force="true"/>
