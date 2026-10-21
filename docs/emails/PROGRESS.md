@@ -142,6 +142,8 @@ Updated: 2026-10-21
 - PR #275's first full API run failed one cancellation-mail assertion because it hard-coded an obsolete company address. Commit `cf742415` now asserts the escaped `company.address` setting; rerun's PHPStan passed and PHPUnit remains active in run `39550872843`.
 - Continued E-023 review for the three maintenance work-order notices. EF-108 is fixed locally on `fix/maintenance-verifier-notice-rbac`; regression test and CI pending. Further check found EF-109: assignment options accept active employees whose effective permission for the notification's SPA route was revoked. Logged separately; assignee-selection behavior needs a focused fix and regression test.
 
+- E-023 caller audit: refreshed all 83 `NotificationService::send()` source anchors and verified the customer-created RMA notice audience, preference gate, queue timing, SPA route, and payload. Full caller review remains open.
+
 ## Next step
 
 Continue the E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify the consolidated E-023 PR checks. Owner still needs to verify company values and sales inbox readers before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.
