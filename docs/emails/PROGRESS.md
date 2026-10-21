@@ -149,15 +149,13 @@ Updated: 2026-10-21
 - EF-117 found during the same route review: a pending-HR leave approver could retain `leave.approve_hr` after losing `leave.view`, while the linked detail API requires both. PR #310 now requires both permissions; `LeaveNotificationTest` covers the revoked-view case. Verification waits for active CI; no mail sent.
 - Audited `ItemCostReviewService::decide`: destination permission, list route, transaction timing, and status-only payload align. Existing service tests do not assert its notification envelope; noted in [E-023-caller-audit.md](E-023-caller-audit.md).
 - Audited NCR recurrence/escalation and low-stock/GRN notices against current route guards and focused tests; recipients, destinations, and payloads align. E-023 caller audit remains incomplete.
-- EF-112 route-access fix is committed in separate local branch `fix/rfq-requester-route-access`. Authenticated owners pass the existing row check with prices sealed; other users are denied before lazy deadline closure. API and SPA regression tests are present. Verification and independent draft PR wait until PR #310's active suite ends.
+- EF-112 row-scoped RFQ access: requester-owned detail pages now pass the existing API row check with prices sealed; other users are denied before lazy deadline closure. API and SPA regressions are in a separate draft PR; CI pending. No email sent.
 - EF-118 found in the shared approval-outcome path: a requester could retain a final outcome email but lose access to its link before the decision. Local branch `fix/e023-approval-outcome-links` now applies the exact record read check and adds regression coverage; tests and independent PR await the active suite.
 - E-023 caller review: verified CAPA effectiveness reminder audiences, detail-route permission, bounded payload, retry de-duplication, and opt-in email handling. No recipient visibility defect found.
 - E-023 caller review: verified recruitment application alerts use active users with effective `hr.recruitment.view`, an exact application link, after-commit queueing, and explicit email opt-in. Added regression coverage for revoked access and inactive users; candidate-name PII needs HR/data-protection review. CI is running on PR #310; test not run locally.
 - EF-109 maintenance assignee visibility and EF-116 supplier-return date handling have standalone code/test commits prepared; both await verification before push. EF-116 fixes the five UTC-date lint violations blocking favicon PR #248. No local test suite started while PR #310's API suite is active.
 
 Owner review: E-016 and E-023 can both send payslip-ready mail for one finalization when both email controls are enabled and employee/user addresses match. No trigger changed.
-
-EF-112 found during E-023 review: internal RFQ outcome emails include PR requesters whose row scope allows the exact RFQ, but frontend/API global guards block them without a broad RFQ permission. Recorded for a separate access-control PR.
 
 EF-113 found during E-023 review: missing outgoing QC escalations included work-order numbers and repair reasons for configured QC recipients lacking `production.work_orders.view`. The escalation now filters by effective access, falls back to active system administrators, and logs when no audience exists. Regression tests added; follow-up CI pending. No real email sent.
 
