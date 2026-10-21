@@ -159,7 +159,7 @@ EF-114 found in the same hourly sweep: identical unresolved work-order summaries
 
 EF-115 found in the same sweep: unexpected exception text was copied into the notice. It is now retained in the application log and replaced with a fixed administrator instruction in the notification. A regression test injects an SQLSTATE-style error; follow-up CI pending. No real email sent.
 
-Discovery cross-check: the master inventory contains 35 unique IDs (E-001–E-035); the E-023 index retains 83 generic `NotificationService::send()` anchors. A fresh scan of Laravel mail APIs/notifications and SPA `mailto:` links found no new email path. Pricing review and production staffing hits use `sendInApp()` only; `ReturnCaseUpdateMail` is already inventoried as E-020. E-023 caller-by-caller review remains partial.
+Discovery cross-check: the master inventory contains 35 unique IDs (E-001–E-035); the E-023 index retains 83 generic `NotificationService::send()` anchors. A fresh scan of Laravel mail APIs/notifications and SPA `mailto:` links found no new email path. Pricing review, production staffing, inspection-failure, and rework hits use `sendInApp()` only; `ReturnCaseUpdateMail` is already inventoried as E-020. E-023 caller-by-caller review remains partial. Critical-alert delivery still sends synchronously through `AlertEngineService` to preserve alert-owned retry state (EF-004/EF-057); separate queue-state redesign remains outstanding.
 
 ## Next step
 
