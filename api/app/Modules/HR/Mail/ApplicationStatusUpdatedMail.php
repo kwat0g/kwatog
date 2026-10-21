@@ -44,8 +44,8 @@ class ApplicationStatusUpdatedMail extends QueuedMailable
             with: [
                 'applicantName' => $this->applicantName,
                 'positionTitle' => $this->positionTitle,
-                'previousStage' => $this->label($this->previousStage),
-                'currentStage' => $this->label($this->currentStage),
+                'previousStageLabel' => $this->label($this->previousStage),
+                'currentStageLabel' => $this->label($this->currentStage),
                 'trackingCode' => $this->trackingCode,
                 'trackingUrl' => $base.'/careers/track',
                 'companyName' => $brand['name'],

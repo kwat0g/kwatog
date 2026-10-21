@@ -259,11 +259,16 @@ class RecruitmentApplicationTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('data.stage', 'screening');
-        Mail::assertQueued(ApplicationStatusUpdatedMail::class, fn (ApplicationStatusUpdatedMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
-            && $mail->previousStage === 'new'
-            && $mail->currentStage === 'screening'
-        );
+        Mail::assertQueued(ApplicationStatusUpdatedMail::class, function (ApplicationStatusUpdatedMail $mail): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText('Application Received');
+            $mail->assertSeeInText('Under Review');
+
+            return $mail->hasTo('juan@test.com')
+                && $mail->previousStage === 'new'
+                && $mail->currentStage === 'screening'
+                && ! str_contains($html, 'screening');
+        });
     }
 
     public function test_hr_can_reject_application(): void
@@ -280,10 +285,13 @@ class RecruitmentApplicationTest extends TestCase
             'id'                => $this->application->id,
             'rejected_at_stage' => 'new',
         ]);
-        Mail::assertQueued(ApplicationStatusUpdatedMail::class, fn (ApplicationStatusUpdatedMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
-            && $mail->currentStage === 'rejected'
-        );
+        Mail::assertQueued(ApplicationStatusUpdatedMail::class, function (ApplicationStatusUpdatedMail $mail): bool {
+            $mail->assertSeeInText('Not Selected');
+            $mail->assertSeeInText('move forward with other candidates');
+
+            return $mail->hasTo('juan@test.com')
+                && $mail->currentStage === 'rejected';
+        });
     }
 
     public function test_hr_can_schedule_interview(): void
