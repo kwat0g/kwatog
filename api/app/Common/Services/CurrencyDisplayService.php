@@ -27,6 +27,10 @@ final class CurrencyDisplayService
         $formatted = number_format((float) $amount, 2, '.', ',');
         $code = $this->code();
 
-        return $code === null ? $formatted : $code.' '.$formatted;
+        return match ($code) {
+            null => $formatted,
+            'PHP' => '₱'.$formatted,
+            default => $code.' '.$formatted,
+        };
     }
 }
