@@ -62,6 +62,18 @@ class ScheduledExportMail extends QueuedMailable
                 if (! $owner) {
                     throw ValidationException::withMessages(['owner' => 'Export owner no longer exists.']);
                 }
+                $ownerEmail = trim((string) $owner->email);
+                $queuedRecipients = array_map(
+                    static fn (mixed $recipient): string => is_array($recipient)
+                        ? trim((string) ($recipient['address'] ?? ''))
+                        : trim((string) $recipient),
+                    $this->to,
+                );
+                if (! $owner->is_active || filter_var($ownerEmail, FILTER_VALIDATE_EMAIL) === false
+                    || count($queuedRecipients) !== 1
+                    || strtolower($queuedRecipients[0]) !== strtolower($ownerEmail)) {
+                    throw ValidationException::withMessages(['recipients' => 'Scheduled exports can only be sent to the active schedule owner.']);
+                }
                 $runner = app(ExportRunner::class);
                 $runner->build($schedule->module, (array) $schedule->columns, (array) ($schedule->filters ?? []), $owner);
                 if (! hash_equals($this->authorizationContext, $runner->authorizationContext($owner, (array) $schedule->columns, (array) ($schedule->filters ?? [])))) {

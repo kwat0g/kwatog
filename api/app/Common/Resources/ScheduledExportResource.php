@@ -27,7 +27,7 @@ class ScheduledExportResource extends JsonResource
             'day_of_week'  => $this->day_of_week,
             'day_of_month' => $this->day_of_month,
             'time_of_day'  => $this->time_of_day,
-            'recipients'   => $this->recipients ?? [],
+            'recipients'   => $this->owner && $this->owner->email ? [$this->owner->email] : [],
             'last_run_at'  => optional($this->last_run_at)->toIso8601String(),
             'last_attempt_at' => optional($this->last_attempt_at)->toIso8601String(),
             'last_error'   => $this->last_error,
@@ -38,6 +38,7 @@ class ScheduledExportResource extends JsonResource
                 return $this->owner ? [
                     'id'   => $this->owner->hash_id,
                     'name' => $this->owner->name,
+                    'email' => $this->owner->email,
                 ] : null;
             }),
             'created_at'   => optional($this->created_at)->toIso8601String(),

@@ -30,6 +30,7 @@ class ScheduledExportAuthorizationTest extends TestCase
         self::assertMatchesRegularExpression('/\Aogami_test(?:_|$)/', (string) config('database.connections.pgsql.database'));
         Storage::fake('local');
         config(['mail.default' => 'array']);
+        config(['mail.from.address' => 'sender@example.test', 'mail.from.name' => 'OGAMI Test']);
     }
 
     private function owner(): User
@@ -65,12 +66,12 @@ class ScheduledExportAuthorizationTest extends TestCase
         Mail::assertNothingQueued();
     }
 
-    private function delivery(User $owner): array
+    private function delivery(User $owner, ?string $recipient = null): array
     {
         $row = ScheduledExport::create([
             'owner_id' => $owner->id, 'name' => 'Authorized export', 'module' => 'hr.employees',
             'columns' => ['employee_no'], 'filters' => [], 'format' => 'csv', 'frequency' => 'daily',
-            'recipients' => ['recipient@example.test'], 'next_run_at' => now()->addDay(), 'is_active' => true,
+            'recipients' => [$recipient ?? $owner->email], 'next_run_at' => now()->addDay(), 'is_active' => true,
         ]);
         $path = 'exports/scheduled/authorization.csv';
         Storage::disk('local')->put($path, 'employee_no\nPRIVATE');
@@ -79,7 +80,7 @@ class ScheduledExportAuthorizationTest extends TestCase
             scheduleId: $row->id,
             authorizationContext: app(ExportRunner::class)->authorizationContext($owner, $row->columns, $row->filters),
         );
-        $mail->to('recipient@example.test');
+        $mail->to($recipient ?? $owner->email);
 
         return [$row, $path, new SendQueuedMailable(unserialize(serialize($mail)))];
     }
@@ -159,5 +160,15 @@ class ScheduledExportAuthorizationTest extends TestCase
         self::assertCount(1, Mail::mailer('array')->getSymfonyTransport()->messages());
         self::assertTrue($row->fresh()->is_active);
         Storage::disk('local')->assertExists($path);
+    }
+
+    public function test_actual_queued_transport_rejects_non_owner_recipient(): void
+    {
+        [$row, $path, $job] = $this->delivery($this->owner(), 'other@example.test');
+        $job->handle(Mail::getFacadeRoot());
+
+        self::assertCount(0, Mail::mailer('array')->getSymfonyTransport()->messages());
+        self::assertFalse($row->fresh()->is_active);
+        Storage::disk('local')->assertMissing($path);
     }
 }

@@ -80,6 +80,23 @@ class ScheduledExportExecutionTest extends TestCase
         $this->assertNotSame('', (string) Storage::disk(ScheduledExportArtifactService::DISK)->get($artifacts[0]));
     }
 
+    public function test_due_export_ignores_stored_external_recipients_and_queues_only_to_its_owner(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+        $owner = $this->ownerWith('hr.employees.export');
+        $row = $this->dueExport([
+            'owner_id' => $owner->id,
+            'recipients' => ['external@example.test'],
+        ]);
+
+        $this->artisan('exports:run-due')->assertExitCode(0);
+
+        Mail::assertQueued(ScheduledExportMail::class, function (ScheduledExportMail $mail) use ($owner): bool {
+            return ($mail->to[0]['address'] ?? null) === $owner->email;
+        });
+    }
+
     public function test_a_schedule_whose_owner_lost_the_export_grant_does_not_run(): void
     {
         Storage::fake('local');

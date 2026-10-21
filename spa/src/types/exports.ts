@@ -36,7 +36,7 @@ export interface ScheduledExport {
  processing: boolean;
  next_run_at: string | null;
  is_active: boolean;
- owner: { id: string; name: string } | null;
+ owner: { id: string; name: string; email: string } | null;
  created_at: string | null;
 }
 

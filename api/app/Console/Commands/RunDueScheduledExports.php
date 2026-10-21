@@ -139,19 +139,15 @@ class RunDueScheduledExports extends Command
     {
         $format = $row->format instanceof ExportFormat ? $row->format : ExportFormat::Xlsx;
         $frequency = $row->frequency instanceof ExportFrequency ? $row->frequency : ExportFrequency::Daily;
-        $recipients = array_values(array_filter(
-            (array) ($row->recipients ?? []),
-            static fn (mixed $recipient): bool => is_string($recipient) && filter_var($recipient, FILTER_VALIDATE_EMAIL) !== false,
-        ));
-        if ($recipients === []) {
-            throw new \RuntimeException('Scheduled export has no valid recipients.');
-        }
-
         if ($row->owner === null) {
             throw new \RuntimeException('Scheduled export owner no longer exists.');
         }
 
         $row->setRelation('owner', $this->runner->freshActor($row->owner));
+        $recipient = trim((string) $row->owner->email);
+        if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
+            throw new \RuntimeException('Scheduled export owner has no valid email address.');
+        }
 
         // Revalidate the persisted module, columns, filters, implementation,
         // and owner capability immediately before background execution. A
@@ -177,7 +173,7 @@ class RunDueScheduledExports extends Command
         $name = $row->name;
         $module = $row->module;
         try {
-            Mail::to($recipients)->queue(new ScheduledExportMail(
+            Mail::to($recipient)->queue(new ScheduledExportMail(
                 $name,
                 $module,
                 $filename,

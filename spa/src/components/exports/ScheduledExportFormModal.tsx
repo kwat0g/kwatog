@@ -13,8 +13,8 @@ import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { Textarea } from '@/components/ui/Textarea';
 import { formatDateTime } from '@/lib/formatDate';
+import { useAuthStore } from '@/stores/authStore';
 
 interface ScheduledExportFormModalProps {
   isOpen: boolean;
@@ -40,17 +40,6 @@ function errorMessage(error: unknown): string {
   return firstFieldError ?? data?.message ?? 'Could not save the scheduled export.';
 }
 
-function parseRecipients(value: string): string[] {
-  return Array.from(
-    new Set(
-      value
-        .split(/[\s,;]+/u)
-        .map((recipient) => recipient.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  );
-}
-
 function cleanFilters(filters: Record<string, unknown> | undefined): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(filters ?? {}).filter(([, value]) => value !== null && value !== undefined && value !== ''),
@@ -72,10 +61,11 @@ export function ScheduledExportFormModal({
   const [dayOfWeek, setDayOfWeek] = useState('1');
   const [dayOfMonth, setDayOfMonth] = useState('1');
   const [timeOfDay, setTimeOfDay] = useState('06:00');
-  const [recipients, setRecipients] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<ScheduledExport | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const recipientEmail = initial ? initial.owner?.email ?? '' : user?.email ?? '';
 
   const columnsQuery = useQueryColumns(module, isOpen);
 
@@ -88,7 +78,6 @@ export function ScheduledExportFormModal({
     setDayOfWeek(String(initial?.day_of_week ?? 1));
     setDayOfMonth(String(initial?.day_of_month ?? 1));
     setTimeOfDay(initial?.time_of_day ?? '06:00');
-    setRecipients(initial?.recipients.join('\n') ?? '');
     setSaveError(null);
     setSaved(null);
   }, [initial, isOpen]);
@@ -122,9 +111,8 @@ export function ScheduledExportFormModal({
       return;
     }
 
-    const recipientList = parseRecipients(recipients);
-    if (recipientList.length === 0) {
-      setSaveError('Enter at least one recipient email address.');
+    if (!recipientEmail) {
+      setSaveError('The schedule owner must have a valid email address.');
       return;
     }
 
@@ -139,7 +127,7 @@ export function ScheduledExportFormModal({
       day_of_week: frequency === 'weekly' ? Number(dayOfWeek) : null,
       day_of_month: frequency === 'monthly' ? Number(dayOfMonth) : null,
       time_of_day: timeOfDay,
-      recipients: recipientList,
+      recipients: [recipientEmail],
       is_active: true,
     };
 
@@ -227,15 +215,13 @@ export function ScheduledExportFormModal({
             <div className="mt-1 text-xs text-muted">{selectedCount} selected · module {module}</div>
           </div>
 
-          <Textarea
+          <Input
             className="mt-4"
-            label="Recipients"
+            label="Recipient"
             required
-            value={recipients}
-            onChange={(event) => setRecipients(event.target.value)}
-            placeholder="hr@example.com\nfinance@example.com"
-            helper="Use one address per line or separate addresses with commas."
-            rows={3}
+            value={recipientEmail}
+            readOnly
+            helper="Only the schedule owner receives this export."
           />
 
           {nextRun && (
