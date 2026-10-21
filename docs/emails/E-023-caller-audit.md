@@ -24,93 +24,94 @@ These changes fix the route families found by static search. They do not complet
 
 | Source | Call expression |
 |---|---|
-| `api/app/Modules/SupplyChain/Services/DeliveryService.php:2134` | `$this->notifications->send($recipients, 'invoice.auto_failed', [` |
-| `api/app/Modules/Accounting/Services/InvoiceService.php:170` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
-| `api/app/Modules/Accounting/Services/InvoiceService.php:330` | `app(NotificationService::class)->send($requester, 'approval.completed', [` |
+| `api/app/Modules/SupplyChain/Services/DeliveryService.php:2130` | `$this->notifications->send($recipients, 'invoice.auto_failed', [` |
+| `api/app/Modules/Accounting/Services/InvoiceService.php:171` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
+| `api/app/Modules/Accounting/Services/InvoiceService.php:331` | `app(NotificationService::class)->send($requester, 'approval.completed', [` |
 | `api/app/Modules/Accounting/Services/BudgetTransferService.php:87` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Accounting/Services/BudgetTransferService.php:194` | `app(NotificationService::class)->send($requester, $type, [` |
-| `api/app/Modules/CRM/Services/SalesOrderResponseService.php:442` | `$this->notifications->send($audience, 'customer.so_responded', [` |
+| `api/app/Modules/CRM/Services/SalesOrderResponseService.php:440` | `$this->notifications->send($audience, 'customer.so_responded', [` |
 | `api/app/Modules/Accounting/Services/BudgetService.php:135` | `$notifications->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Accounting/Services/BudgetService.php:203` | `app(NotificationService::class)->send($submitter, $type, [` |
 | `api/app/Modules/Accounting/Services/BillService.php:1038` | `app(NotificationService::class)->send($requester, 'bill_payment.posted', [` |
-| `api/app/Modules/Accounting/Services/ArDunningService.php:195` | `$this->notifications->send($officers, 'ar.dunning.escalation', [` |
+| `api/app/Modules/Accounting/Services/ArDunningService.php:192` | `$this->notifications->send($officers, 'ar.dunning.escalation', [` |
 | `api/app/Modules/CRM/Services/Complaint8dEscalationService.php:271` | `$this->notifications->send($audience->all(), '8d.sla', [` |
-| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:660` | `$this->notifications->send($audience, 'customer.rma_created', [` |
-| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:3322` | `$this->notifications->send($recipients, $type, [` |
-| `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:39` | `$this->notifications->send($financeUsers, 'chain.delivery_confirmed', [` |
-| `api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php:38` | `$this->notifications->send($audience, 'leave.submitted', [` |
-| `api/app/Modules/ReturnManagement/Services/ReturnCaseService.php:613` | `$this->notifications->send($recipients, 'return.case_updated', [` |
+| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:658` | `$this->notifications->send($audience, 'customer.rma_created', [` |
+| `api/app/Modules/ReturnManagement/Services/ReturnRequestService.php:3305` | `$this->notifications->send($recipients, $type, [` |
+| `api/app/Modules/Accounting/Listeners/NotifyFinanceOnDeliveryConfirmed.php:47` | `$this->notifications->send($financeUsers, 'chain.delivery_confirmed', [` |
+| `api/app/Modules/Leave/Listeners/NotifyOnLeaveSubmitted.php:40` | `$this->notifications->send($audience, 'leave.submitted', [` |
+| `api/app/Modules/ReturnManagement/Services/ReturnCaseService.php:616` | `$this->notifications->send($recipients, 'return.case_updated', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveRejected.php:26` | `$this->notifications->send($user, 'leave.rejected', [` |
-| `api/app/Modules/Leave/Listeners/NotifyOnLeavePendingHR.php:30` | `$this->notifications->send($audience, 'leave.pending_hr', [` |
-| `api/app/Modules/CRM/Listeners/NotifyOnSalesOrderConfirmed.php:39` | `$this->notifications->send($audience, 'chain.so_confirmed', [` |
+| `api/app/Modules/Leave/Listeners/NotifyOnLeavePendingHR.php:32` | `$this->notifications->send($audience, 'leave.pending_hr', [` |
+| `api/app/Modules/CRM/Listeners/NotifyOnSalesOrderConfirmed.php:40` | `$this->notifications->send($audience, 'chain.so_confirmed', [` |
 | `api/app/Modules/Leave/Listeners/NotifyOnLeaveApproved.php:26` | `$this->notifications->send($user, 'leave.approved', [` |
 | `api/app/Console/Commands/SweepMissingOutgoingQc.php:186` | `$notifications->send($recipients, 'chain.outgoing_qc_missing', [` |
-| `api/app/Console/Commands/RunDailyMrp.php:49` | `app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [` |
-| `api/app/Modules/B2B/Services/SupplierDeliveryScheduleService.php:240` | `$this->notifications->send($audience, 'supplier.schedule_cancelled', [` |
-| `api/app/Modules/B2B/Services/CustomerPortalService.php:311` | `$this->notifications->send($audience, 'portal.order_awaiting_review', [` |
-| `api/app/Console/Commands/NotifyMissingTimeOut.php:60` | `$notifications->send($hr, 'attendance.missing_time_out', [` |
-| `api/app/Console/Commands/NotifyMissingTimeOut.php:92` | `$notifications->send($head, 'attendance.missing_time_out', [` |
+| `api/app/Console/Commands/RunDailyMrp.php:50` | `app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [` |
+| `api/app/Modules/B2B/Services/SupplierDeliveryScheduleService.php:237` | `$this->notifications->send($audience, 'supplier.schedule_cancelled', [` |
+| `api/app/Modules/B2B/Services/CustomerPortalService.php:310` | `$this->notifications->send($audience, 'portal.order_awaiting_review', [` |
+| `api/app/Console/Commands/NotifyMissingTimeOut.php:63` | `$notifications->send($hr, 'attendance.missing_time_out', [` |
+| `api/app/Console/Commands/NotifyMissingTimeOut.php:98` | `$notifications->send($head, 'attendance.missing_time_out', [` |
 | `api/app/Modules/Inventory/Services/StockAdjustmentService.php:215` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
 | `api/app/Modules/Inventory/Services/StockAdjustmentService.php:379` | `app(NotificationService::class)->send($requester, $type, [` |
-| `api/app/Console/Commands/CheckMaintenanceRepeatBreakdowns.php:33` | `$notifications->send($supervisors, 'maintenance.repeat_breakdown', [` |
-| `api/app/Modules/Quality/Services/NcrService.php:405` | `app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [` |
-| `api/app/Modules/Quality/Services/NcrService.php:1279` | `$this->notifications->send($recipients, 'ncr.return_to_supplier', [` |
-| `api/app/Modules/Quality/Services/NcrRecurrenceDetector.php:200` | `$this->notifications->send($recipients, 'ncr.recurrence', [` |
+| `api/app/Console/Commands/CheckMaintenanceRepeatBreakdowns.php:36` | `$notifications->send($supervisors, 'maintenance.repeat_breakdown', [` |
+| `api/app/Modules/Quality/Services/NcrService.php:407` | `app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [` |
+| `api/app/Modules/Quality/Services/NcrService.php:1280` | `$this->notifications->send($recipients, 'ncr.return_to_supplier', [` |
+| `api/app/Modules/Quality/Services/NcrRecurrenceDetector.php:201` | `$this->notifications->send($recipients, 'ncr.recurrence', [` |
 | `api/app/Modules/Inventory/Services/ItemCostReviewService.php:95` | `app(NotificationService::class)->send($audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [` |
-| `api/app/Modules/Quality/Services/NcrEscalationService.php:179` | `$this->notifications->send($recipients, 'ncr.escalation', [` |
-| `api/app/Console/Commands/CheckMaintenanceAssignment.php:45` | `$notifications->send($recipients, 'maintenance.assignment_escalated', NotifyMaintenanceWorkOrder::payload(` |
-| `api/app/Console/Commands/CheckMaintenanceAssignment.php:68` | `$notifications->send($supervisors, 'maintenance.shift_handover', NotifyMaintenanceWorkOrder::payload(` |
-| `api/app/Modules/Quality/Services/InspectionService.php:2393` | `app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [` |
-| `api/app/Modules/Quality/Services/EffectivenessService.php:279` | `$this->notifications->send($recipient, $type, [` |
+| `api/app/Modules/Quality/Services/NcrEscalationService.php:180` | `$this->notifications->send($recipients, 'ncr.escalation', [` |
+| `api/app/Console/Commands/CheckMaintenanceAssignment.php:48` | `$notifications->send($recipients, 'maintenance.assignment_escalated', NotifyMaintenanceWorkOrder::payload(` |
+| `api/app/Console/Commands/CheckMaintenanceAssignment.php:71` | `$notifications->send($supervisors, 'maintenance.shift_handover', NotifyMaintenanceWorkOrder::payload(` |
+| `api/app/Modules/Quality/Services/InspectionService.php:2392` | `app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [` |
+| `api/app/Modules/Quality/Services/EffectivenessService.php:283` | `$this->notifications->send($recipient, $type, [` |
 | `api/app/Modules/HR/Services/TrainingExpiryService.php:186` | `$this->notifications->send($employeeRecipients, 'training.expiry', $payload)` — employee self-notice; no HR detail link. |
 | `api/app/Modules/HR/Services/TrainingExpiryService.php:190` | `$this->notifications->send($staffRecipients, 'training.expiry', $payload)` — configured staff audience; employee detail link after access filtering. |
 | `api/app/Modules/HR/Services/RecruitmentService.php:717` | `$this->notifications->send($hrUsers, 'recruitment.new_application', [` |
-| `api/app/Modules/Inventory/Listeners/NotifyOnLowStockPrCreated.php:35` | `$this->notifications->send($audience, 'inventory.low_stock', [` |
-| `api/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:158` | `app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [` |
-| `api/app/Modules/Inventory/Listeners/NotifyOnGrnReceived.php:31` | `$this->notifications->send($audience, 'inventory.grn_received', [` |
+| `api/app/Modules/Inventory/Listeners/NotifyOnLowStockPrCreated.php:36` | `$this->notifications->send($audience, 'inventory.low_stock', [` |
+| `api/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:159` | `app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [` |
+| `api/app/Modules/Inventory/Listeners/NotifyOnGrnReceived.php:33` | `$this->notifications->send($audience, 'inventory.grn_received', [` |
 | `api/app/Common/Services/CustomApprovalEscalationService.php:95` | `$this->notifications->send($recipients, $type, [` |
-| `api/app/Modules/Quality/Listeners/TriggerIncomingQC.php:173` | `app(NotificationService::class)->send($recipients, 'chain.incoming_qc_required', [` |
-| `api/app/Modules/Quality/Listeners/TriggerInProcessQC.php:153` | `app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [` |
-| `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeSubmitted.php:36` | `$this->notifications->send($audience, 'attendance.ot_submitted', [` |
-| `api/app/Modules/Quality/Listeners/CreateDeliveryDraftOnQcPass.php:99` | `app(NotificationService::class)->send($recipients, 'chain.delivery_drafted', [` |
+| `api/app/Modules/Quality/Listeners/TriggerIncomingQC.php:174` | `app(NotificationService::class)->send($recipients, 'chain.incoming_qc_required', [` |
+| `api/app/Modules/Quality/Listeners/TriggerInProcessQC.php:154` | `app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [` |
+| `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeSubmitted.php:38` | `$this->notifications->send($audience, 'attendance.ot_submitted', [` |
+| `api/app/Modules/Quality/Listeners/CreateDeliveryDraftOnQcPass.php:100` | `app(NotificationService::class)->send($recipients, 'chain.delivery_drafted', [` |
 | `api/app/Modules/Purchasing/Services/SupplierResponseService.php:461` | `$this->notifications->send($this->purchasingAudience($po), 'supplier.po_responded', [` |
 | `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php:29` | `$this->notifications->send($user, $type, [` |
-| `api/app/Modules/Purchasing/Services/SupplierListingService.php:348` | `app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [` |
-| `api/app/Common/Services/ApprovalService.php:361` | `$this->notifications->send($recipients, 'approval.action_required', [` |
-| `api/app/Common/Services/ApprovalService.php:383` | `$this->notifications->send($submitter, $type, [` |
+| `api/app/Modules/Purchasing/Services/SupplierListingService.php:350` | `app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [` |
+| `api/app/Common/Services/ApprovalService.php:367` | `$this->notifications->send($recipients, 'approval.action_required', [` |
+| `api/app/Common/Services/ApprovalService.php:389` | `$this->notifications->send($submitter, $type, [` |
 | `api/app/Common/Services/ApprovalEscalationService.php:86` | `$this->notifications->send($approver, 'approval_reminder', [` |
 | `api/app/Common/Services/ApprovalEscalationService.php:137` | `$this->notifications->send($recipients, 'approval_escalation', [` |
 | `api/app/Common/Services/ApprovalEscalationService.php:313` | `$this->notifications->send($recipients, 'approval_escalation', [` |
-| `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:205` | `app(NotificationService::class)->send($vps, 'auto_po_pending', [` |
-| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php:29` | `$this->notifications->send($audience, 'chain.pr_approved', [` |
-| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:29` | `app(NotificationService::class)->send($audience, 'purchasing.po_pending_approval', [` |
-| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:29` | `$this->notifications->send($audience, 'chain.po_approved', [` |
-| `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:84` | `$this->notifications->send($audience->unique('id')->values(), $type, [` |
-| `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:254` | `$this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [` |
-| `api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php:59` | `$this->notifications->send($audience, 'purchasing.supplier_deterioration', [` |
+| `api/app/Modules/Purchasing/Services/AutoPurchaseOrderService.php:209` | `app(NotificationService::class)->send($vps, 'auto_po_pending', [` |
+| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseRequestApproved.php:33` | `$this->notifications->send($audience, 'chain.pr_approved', [` |
+| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderSubmitted.php:32` | `app(NotificationService::class)->send($audience, 'purchasing.po_pending_approval', [` |
+| `api/app/Modules/Purchasing/Listeners/NotifyOnPurchaseOrderApproved.php:33` | `$this->notifications->send($audience, 'chain.po_approved', [` |
+| `api/app/Modules/Purchasing/Listeners/DeliverRfqLifecycleNotification.php:81` | `$this->notifications->send($audience->unique('id')->values(), $type, [` |
+| `api/app/Modules/Purchasing/Listeners/ConsolidatePurchaseOrders.php:259` | `$this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [` |
+| `api/app/Modules/Purchasing/Listeners/AlertOnSupplierDeterioration.php:61` | `$this->notifications->send($audience, 'purchasing.supplier_deterioration', [` |
 | `api/app/Modules/Admin/Services/UserPermissionOverrideService.php:167` | `$this->notifications->send($user, 'permission.override', [` |
-| `api/app/Modules/Admin/Services/UserPermissionOverrideService.php:226` | `$this->notifications->send($removed['user'], 'permission.override', [` |
-| `api/app/Modules/Admin/Services/UserPermissionOverrideService.php:290` | `$this->notifications->send($user, 'permission.override', [` |
-| `api/app/Modules/HR/Listeners/NotifyOnSeparationInitiated.php:32` | `$this->notifications->send($audience, 'chain.separation_initiated', [` |
-| `api/app/Modules/Production/Listeners/NotifyOnWorkOrderPaused.php:53` | `$this->notifications->send($audience, 'production.wo_paused', [` |
-| `api/app/Modules/Production/Listeners/NotifyOnWorkOrderCompleted.php:31` | `$this->notifications->send($audience, 'production.wo_completed', [` |
+| `api/app/Modules/Admin/Services/UserPermissionOverrideService.php:225` | `$this->notifications->send($removed['user'], 'permission.override', [` |
+| `api/app/Modules/Admin/Services/UserPermissionOverrideService.php:288` | `$this->notifications->send($user, 'permission.override', [` |
+| `api/app/Modules/HR/Listeners/NotifyOnSeparationInitiated.php:34` | `$this->notifications->send($audience, 'chain.separation_initiated', [` |
+| `api/app/Modules/Production/Listeners/NotifyOnWorkOrderPaused.php:55` | `$this->notifications->send($audience, 'production.wo_paused', [` |
+| `api/app/Modules/Production/Listeners/NotifyOnWorkOrderCompleted.php:33` | `$this->notifications->send($audience, 'production.wo_completed', [` |
+
+| `api/app/Modules/Production/Listeners/NotifyOnMachineBreakdown.php:39` | `$this->notifications->send($audience, 'maintenance.breakdown', [` |
+| `api/app/Modules/Maintenance/Listeners/NotifyMaintenanceWorkOrder.php:30` | `$this->notifications->send($supervisors, 'maintenance.assignment_needed', self::payload(` |
+| `api/app/Modules/Payroll/Services/PayrollPeriodService.php:1011` | `app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [` |
+| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:348` | `$this->notifications->send($employee->user, 'maintenance.assigned', $payload,` |
+| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:622` | `$this->notifications->send($recipients, 'maintenance.repair_submitted',` |
+| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:668` | `$this->notifications->send($technician, 'maintenance.repair_rejected',` |
+| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:70` | `$notifications->send($notifications->usersWithPermission('inventory.issue.create'),` |
+| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:127` | `app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',` |
+| `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:78` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
+| `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:176` | `app(NotificationService::class)->send($requester, $type, [` |
+| `api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php:71` | `$this->notifications->send($users, 'chain.payslip_ready', [` |
+| `api/app/Modules/Loans/Listeners/NotifyOnLoanSubmitted.php:48` | `$this->notifications->send($audience, 'loans.submitted', [` |
+| `api/app/Modules/Loans/Listeners/NotifyOnLoanDecided.php:39` | `$this->notifications->send($user, $type, [` |
 
 ### Follow-up fixes
 
 - EF-090 / training expiry: `TrainingExpiryService` now keeps employee-self alerts separate from configured staff recipients. Self alerts have no HR-only employee-detail link. Staff recipients must hold effective `hr.employees.view` and `hr.employees.trainings.view` and pass `EmployeeCompetenceScope` for the employee record. Draft PR #301 adds regression coverage for revoked access and the self-notice link.
-| `api/app/Modules/Production/Listeners/NotifyOnMachineBreakdown.php:37` | `$this->notifications->send($audience, 'maintenance.breakdown', [` |
-| `api/app/Modules/Maintenance/Listeners/NotifyMaintenanceWorkOrder.php:27` | `$this->notifications->send($supervisors, 'maintenance.assignment_needed', self::payload(` |
-| `api/app/Modules/Payroll/Services/PayrollPeriodService.php:1012` | `app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [` |
-| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:348` | `$this->notifications->send($employee->user, 'maintenance.assigned', $payload,` |
-| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:622` | `$this->notifications->send($recipients, 'maintenance.repair_submitted',` |
-| `api/app/Modules/Maintenance/Services/MaintenanceWorkOrderService.php:668` | `$this->notifications->send($technician, 'maintenance.repair_rejected',` |
-| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:67` | `$notifications->send($notifications->usersWithPermission('inventory.issue.create'),` |
-| `api/app/Modules/Maintenance/Services/MaintenancePartRequestService.php:123` | `app(NotificationService::class)->send($user, 'maintenance.parts_handed_over', ['title' => 'Spare parts handed over',` |
-| `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:77` | `app(NotificationService::class)->send($audience, 'approval.action_required', [` |
-| `api/app/Modules/Payroll/Services/PayrollAdjustmentService.php:175` | `app(NotificationService::class)->send($requester, $type, [` |
-| `api/app/Modules/Payroll/Listeners/NotifyEmployeesOnPayrollFinalized.php:63` | `$this->notifications->send($users, 'chain.payslip_ready', [` |
-| `api/app/Modules/Loans/Listeners/NotifyOnLoanSubmitted.php:44` | `$this->notifications->send($audience, 'loans.submitted', [` |
-| `api/app/Modules/Loans/Listeners/NotifyOnLoanDecided.php:39` | `$this->notifications->send($user, $type, [` |
 
 ## Confirmed caller-level issue
 
