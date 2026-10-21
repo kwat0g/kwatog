@@ -25,6 +25,7 @@ Updated: 2026-10-21
 - E-016 payslip attachment replaced with an authenticated SPA link in local commit `3d859a3d` (EF-028); UI redesign/screenshots are in local commit `c2fbafe6`. Focused job tests passed (3 tests, 13 assertions); finalization listener tests passed (4 tests, 8 assertions). Browser inspected at desktop/mobile light/dark; no email sent. HR/data-protection review remains required.
 - PR #312 isolates the inherited credit-note PHPStan error (EF-027) into a functional fix; targeted PHPStan passed, full CI run 39568212202 is running. E-012 run 39565852712 failed at PHPStan before PHPUnit for this same inherited error.
 - Shared foundation local commit `6967b23a` changes a missing `FRONTEND_URL` fallback from `APP_URL` to `http://localhost` (EF-029), so email links cannot silently target the API host.
+- E-017 through E-034 already have local or open draft PR work; E-017–E-034 are not untouched. Their checks, base-chain health, per-type tests, and screenshot evidence still need a consolidated audit. E-035 is test-only harness coverage, documented in PR #280.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
@@ -42,7 +43,8 @@ Updated: 2026-10-21
 
 ## Next steps
 
-1. Wait for PR #312 run 39568212202; if green, publish the shared-foundation URL fallback fix, add #312's fix to E-011's base chain, and rerun E-012 CI.
-2. Publish E-013, E-014/E-015, and E-016 functional/design PRs after their bases are current.
-3. Continue E-017–E-034 in inventory order, then finish coverage and company/deliverability checklists.
-4. Complete desktop/mobile light/dark review for remaining emails. Real email-client rendering remains unverified.
+1. PR #312 run 39568212202 is active in PHPUnit; poll this exact run before starting another suite or publishing commits that trigger CI. PR #311 run 39565852712 failed before PHPUnit on the inherited undefined `$creditNote`; PR #312 replaces that reference with the captured snapshot hash.
+2. After the active run ends, publish the shared-foundation URL fallback fix and align E-011/E-012 bases with the credit-note fix, then rerun affected checks.
+3. Publish local E-013, E-014/E-015, and E-016 functional/design branches as independent draft PRs once their parent checks are current.
+4. Audit existing E-017–E-034 PRs and the E-035 harness against inventory, including current CI, dependencies, screenshots, and focused test evidence. Refresh stale findings and coverage docs.
+5. Finish the master coverage report, company/deliverability checklist, and visual review for every remaining email. Real email-client rendering remains unverified.
