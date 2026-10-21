@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Common\Events\UserNotificationCreated;
+use App\Common\Mail\QueuedMailable;
 use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
@@ -322,6 +323,55 @@ class NotificationServiceHardeningTest extends TestCase
         ]);
         Mail::assertQueued(UserNotificationMail::class, 1);
         Event::assertNotDispatched(UserNotificationCreated::class);
+    }
+
+    public function test_email_skips_inactive_and_invalid_recipients_and_deduplicates_shared_mailboxes(): void
+    {
+        $first = User::factory()->create(['email' => 'shared@ogami.test']);
+        $duplicate = User::factory()->create(['email' => 'shared-duplicate@ogami.test']);
+        DB::table('users')->where('id', $duplicate->id)->update(['email' => 'SHARED@ogami.test']);
+        $duplicate->refresh();
+        $invalid = User::factory()->create(['email' => 'not-an-email']);
+        $inactive = User::factory()->create(['email' => 'inactive@ogami.test', 'is_active' => false]);
+        foreach ([$first, $duplicate, $invalid, $inactive] as $user) {
+            $this->enableEmailFor($user, 'test.recipient_safety');
+        }
+
+        Event::fake();
+        Mail::fake();
+        $this->service->send([$first, $duplicate, $invalid, $inactive], 'test.recipient_safety', [
+            'title' => 'Recipient safety',
+            'message' => 'One message per valid mailbox.',
+        ]);
+
+        Mail::assertQueued(UserNotificationMail::class, 1);
+        Mail::assertQueued(UserNotificationMail::class, function (UserNotificationMail $mail) use ($first, $duplicate): bool {
+            self::assertCount(1, $mail->to);
+            self::assertSame('shared@ogami.test', $mail->to[0]['address']);
+            self::assertEqualsCanonicalizing([$first->id, $duplicate->id], $mail->recipientUserIds);
+
+            return true;
+        });
+        $this->assertSame(4, DB::table('notifications')->where('type', 'test.recipient_safety')->count());
+    }
+
+    public function test_replayed_deduplicated_notification_reuses_delivery_key(): void
+    {
+        $user = User::factory()->create(['email' => 'replay@ogami.test']);
+        $this->enableEmailFor($user, 'test.replay');
+        Event::fake();
+        Mail::fake();
+        $data = ['title' => 'Replay-safe', 'message' => 'Same business event.'];
+
+        $this->service->send($user, 'test.replay', $data, 'event:123');
+        $this->service->send($user, 'test.replay', $data, 'event:123');
+
+        $mailables = Mail::queued(UserNotificationMail::class);
+        $this->assertCount(2, $mailables);
+        $key = new \ReflectionProperty(QueuedMailable::class, 'deliveryKey');
+        $this->assertNotNull($key->getValue($mailables[0]));
+        $this->assertSame($key->getValue($mailables[0]), $key->getValue($mailables[1]));
+        $this->assertSame(1, DB::table('notifications')->where('type', 'test.replay')->count());
     }
 
     public function test_in_app_fallback_never_queues_email_even_when_email_is_enabled(): void

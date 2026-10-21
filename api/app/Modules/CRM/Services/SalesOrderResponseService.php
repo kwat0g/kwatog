@@ -87,21 +87,59 @@ class SalesOrderResponseService
                 'link_to' => '/portal/customer/orders/'.$row->hash_id,
                 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id,
             ], 'so:delivery:'.$response->id.':proposed');
-            $emails = CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->pluck('email')->unique()->all();
-            if ($emails !== []) {
-                $mail = new UserNotificationMail('sales_order.delivery_proposed', [
-                    'title' => "Delivery date proposal for {$row->so_number}",
-                    'message' => "Sales proposes delivery on {$date}. {$notes} Review and accept or decline in your customer portal.",
-                    'link_to' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/customer/orders/'.$row->hash_id,
-                ]);
-                DB::afterCommit(static function () use ($emails, $mail): void {
+            $recipients = CustomerPortalUser::query()
+                ->where('customer_id', $row->customer_id)
+                ->where('is_active', true)
+                ->get(['id', 'email'])
+                ->filter(fn (CustomerPortalUser $user): bool => is_string($user->email)
+                    && filter_var(trim($user->email), FILTER_VALIDATE_EMAIL) !== false)
+                ->unique(fn (CustomerPortalUser $user): string => strtolower(trim($user->email)))
+                ->values();
+            $notificationData = [
+                'title' => "Delivery date proposal for {$row->so_number}",
+                'message' => "Sales proposes delivery on {$date}. {$notes} Review and accept or decline in your customer portal.",
+                'link_to' => '/portal/customer/orders/'.$row->hash_id,
+                'entity_type' => 'sales_order',
+                'entity_id' => $row->hash_id,
+            ];
+            DB::afterCommit(function () use ($recipients, $notificationData, $response, $row): void {
+                if ($recipients->isEmpty()) {
+                    app(\App\Common\Services\EmailDeliveryFailureNotifier::class)->notifyPermission(
+                        'crm.sales_orders.confirm',
+                        'Customer delivery-date proposal',
+                        'The proposal was recorded, but no active customer portal user has a valid email address.',
+                        ['link_to' => '/crm/sales-orders/'.$row->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id],
+                    );
+
+                    return;
+                }
+
+                foreach ($recipients as $recipient) {
+                    $address = trim($recipient->email);
+                    $mail = new UserNotificationMail(
+                        'sales_order.delivery_proposed',
+                        $notificationData,
+                        recipientUserIds: [(int) $recipient->id],
+                        fallbackPermission: 'crm.sales_orders.confirm',
+                        deliveryKey: hash('sha256', 'sales-order-delivery-proposal|'.$response->id.'|'.strtolower($address)),
+                    );
                     try {
-                        Mail::to($emails)->queue($mail);
+                        Mail::to($address)->queue($mail);
                     } catch (\Throwable $e) {
-                        Log::warning('Delivery proposal email failed', ['error' => $e->getMessage()]);
+                        Log::warning('Delivery proposal email dispatch failed', [
+                            'response_id' => $response->id,
+                            'recipient_user_id' => $recipient->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        app(\App\Common\Services\EmailDeliveryFailureNotifier::class)->notifyPermission(
+                            'crm.sales_orders.confirm',
+                            'Customer delivery-date proposal',
+                            'The proposal was recorded, but an email could not be queued for a customer portal user.',
+                            ['link_to' => '/crm/sales-orders/'.$row->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id],
+                        );
                     }
-                });
-            }
+                }
+            });
             return $response->load('items');
         });
     }

@@ -199,8 +199,14 @@ class NotificationService
             // usable address, so we never mail someone who never asked.
             if ($emailEnabled
                 && ($prefs["{$userId}:email"] ?? false) === true
-                && is_string($user->email) && $user->email !== '') {
-                $emails[] = [$user->email, $userId, $user->name ?? null];
+                && $user->is_active
+                && is_string($user->email)
+                && filter_var(trim($user->email), FILTER_VALIDATE_EMAIL) !== false) {
+                $address = trim($user->email);
+                $key = strtolower($address);
+                $emails[$key] ??= ['address' => $address, 'userIds' => [], 'names' => []];
+                $emails[$key]['userIds'][] = $userId;
+                $emails[$key]['names'][] = $user->name;
             }
         }
 
@@ -240,7 +246,7 @@ class NotificationService
 
         // Deferred: a rollback after this point must not leave a broadcast or
         // an email behind. Runs inline when no transaction is open.
-        DB::afterCommit(function () use ($events, $emails, $type, $data): void {
+        DB::afterCommit(function () use ($events, $emails, $type, $data, $dedupeKey): void {
             foreach ($events as $notificationEvent) {
                 try {
                     // The notification row is the durable business result.
@@ -257,8 +263,13 @@ class NotificationService
                 }
             }
 
-            foreach ($emails as [$address, $userId, $name]) {
-                $this->queueEmail($address, $userId, $name, $type, $data);
+            foreach ($emails as $email) {
+                $recipientUserIds = array_values(array_unique($email['userIds']));
+                $name = count($recipientUserIds) === 1 ? $email['names'][0] : null;
+                $deliveryKey = $dedupeKey === null
+                    ? null
+                    : hash('sha256', $type.'|'.$dedupeKey.'|'.strtolower($email['address']));
+                $this->queueEmail($email['address'], $recipientUserIds, $name, $type, $data, $deliveryKey);
             }
         });
     }
@@ -377,13 +388,27 @@ class NotificationService
      *
      * @param  array<string, mixed>  $data
      */
-    private function queueEmail(string $address, int $userId, ?string $name, string $type, array $data): void
+    private function queueEmail(
+        string $address,
+        array $recipientUserIds,
+        ?string $name,
+        string $type,
+        array $data,
+        ?string $deliveryKey,
+    ): void
     {
         try {
-            Mail::to($address)->queue(new UserNotificationMail($type, $data, $name, $userId));
+            Mail::to($address)->queue(new UserNotificationMail(
+                $type,
+                $data,
+                $name,
+                $recipientUserIds[0] ?? null,
+                $recipientUserIds,
+                deliveryKey: $deliveryKey,
+            ));
         } catch (\Throwable $e) {
             Log::warning('Notification email dispatch failed', [
-                'user_id' => $userId,
+                'user_ids' => $recipientUserIds,
                 'type' => $type,
                 'error' => $e->getMessage(),
             ]);

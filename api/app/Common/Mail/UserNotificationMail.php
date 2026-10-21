@@ -30,7 +30,13 @@ class UserNotificationMail extends QueuedMailable
         public readonly array $data,
         public readonly ?string $recipientName = null,
         public readonly ?int $recipientUserId = null,
-    ) {}
+        public readonly array $recipientUserIds = [],
+        public readonly array $fallbackUserIds = [],
+        public readonly ?string $fallbackPermission = null,
+        ?string $deliveryKey = null,
+    ) {
+        $this->deliveryKey = $deliveryKey;
+    }
 
     public function envelope(): Envelope
     {
@@ -118,16 +124,33 @@ class UserNotificationMail extends QueuedMailable
 
     public function failed(\Throwable $e): void
     {
-        app(EmailDeliveryFailureNotifier::class)->notifyUserId(
-            $this->recipientUserId,
-            'Internal notification',
-            'An email copy of an in-app notification could not be delivered. Review the notification in the application.',
-            [
-                'link_to' => $this->data['link_to'] ?? null,
-                'entity_type' => $this->data['entity_type'] ?? null,
-                'entity_id' => $this->data['entity_id'] ?? null,
-                'reason' => 'The email provider rejected or could not deliver the message.',
-            ],
-        );
+        $failureNotifier = app(EmailDeliveryFailureNotifier::class);
+        $message = 'An email copy of an in-app notification could not be delivered. Review the notification in the application.';
+        $context = [
+            'link_to' => $this->data['link_to'] ?? null,
+            'entity_type' => $this->data['entity_type'] ?? null,
+            'entity_id' => $this->data['entity_id'] ?? null,
+            'reason' => 'The email provider rejected or could not deliver the message.',
+        ];
+
+        if ($this->fallbackPermission !== null) {
+            $failureNotifier->notifyPermission($this->fallbackPermission, 'Customer delivery-date proposal', $message, $context);
+
+            return;
+        }
+
+        if ($this->fallbackUserIds !== []) {
+            $failureNotifier->notifyUserIds($this->fallbackUserIds, 'Customer delivery-date proposal', $message, $context);
+
+            return;
+        }
+
+        if ($this->recipientUserIds !== []) {
+            $failureNotifier->notifyUserIds($this->recipientUserIds, 'Internal notification', $message, $context);
+
+            return;
+        }
+
+        $failureNotifier->notifyUserId($this->recipientUserId, 'Internal notification', $message, $context);
     }
 }

@@ -51,6 +51,7 @@ Updated: 2026-10-20
 - EF-038 delivery-confirmed snapshot and idempotency: implementation/test in draft PR #253, stacked on #252. The durable event captures the customer address and delivery/order/invoice display fields; listener retry reuses one delivery/recipient key. Focused delivery email cases: 2 passed, 2 assertions. The full email integration file has 3 known failures, reproduced on parent #252 and recorded as EF-039; no SMTP transport was contacted. Existing body content is preserved pending E-022 redesign.
 - EF-040 and E-022 delivery confirmation notice: template redesign complete in draft PR #254, stacked on #253. `CustomerDeliveryConfirmedMailDesignTest`: 2 tests, 21 assertions passed. Four Chromium renders inspected at 1440px/390px in light/dark; logos and CTA visible, no horizontal overflow. Test mailer forced to `array`; no real email sent. Receiver identity and free-text remarks removed; invoice appears only when issued.
 - E-023 generic user notifications: template and tests complete in draft PR #255, stacked on #254. Shared branded shell, subject prefix, text alternative, hostile-content neutralization, same-origin SPA link enforcement, and no raw notification type in body. `UserNotificationMailDesignTest` plus `NotificationServiceHardeningTest`: 20 passed, 65 assertions. Four Chromium renders inspected at 1440px/390px in light/dark; no horizontal overflow. Test mailer forced to `array`; no email sent. Caller-specific route audit remains incomplete. EF-041/042 are separate recipient fixes.
+- EF-041–043 recipient safety: implemented in draft PR #256, stacked on #255. Customer proposal mail now uses one valid active portal address per message; failure alerts resolve the current CRM permission audience, including overrides. Internal generic mail filters inactive/invalid recipients, deduplicates shared mailboxes, and reuses stable delivery keys on dedupe-key replay. Focused coverage: 25 tests, 89 assertions passed across notification service, customer proposal, and failure fallback. Test mailer array; no email sent. E-023 caller-by-caller visibility and route audit remains open; EF-042 is only partially resolved until that audit completes.
 - Email delivery: none sent.
 
 ## Blockers
@@ -64,9 +65,9 @@ Updated: 2026-10-20
 
 - See [FINDINGS.md](FINDINGS.md). Separate functional/security fixes from template work.
 - Inventory provisional count: 34 production Mailable/Notification implementations plus one test-only implementation. Generic `UserNotificationMail` represents multiple runtime trigger types.
-- EF-041: customer delivery-date proposal currently sends one message with all customer portal addresses in the visible To list. EF-042: the generic notification email path relies on caller-provided active-user/address filtering. EF-043: direct customer provider failures have no authorized Sales fallback. Fix in one separate recipient/reliability PR before E-024.
+- EF-041 and EF-043 are fixed in draft PR #256. EF-042 central activity/address filtering is fixed; caller-specific record visibility/RBAC review remains pending. Do not claim E-023 recipient safety complete until its callers are audited.
 - Delivery caveat: same-job ambiguous retries are suppressed and marked `unknown` to avoid duplicates. Separate duplicate dispatches are not deduplicated; provider acceptance does not prove inbox delivery.
 
 ## Next step
 
-Fix EF-041/042 in a separate recipient-safety PR, then continue with E-024 unread digest. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue E-023 caller-by-caller route and RBAC audit, then redesign E-024 unread digest. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
