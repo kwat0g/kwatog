@@ -7,10 +7,9 @@ namespace App\Common\Services;
 /**
  * Single source of truth for transactional email identity.
  *
- * The legal/company values come from the existing company settings. The
- * display name is intentionally separate: customer-facing mail should say
- * "Ogami Philippines" while official documents may continue to use the
- * configured legal entity name.
+ * The legal/company values come from the existing company settings. A display
+ * name may be configured separately; when absent, use the configured legal
+ * name rather than inventing a company label.
  */
 class EmailBrandingService
 {
@@ -19,9 +18,11 @@ class EmailBrandingService
     /** @return array<string, string|null> */
     public function data(): array
     {
+        $legalName = $this->settings->requiredString('company.legal_name');
+
         return [
-            'name' => $this->value('email.brand_name', 'Ogami Philippines'),
-            'legal_name' => $this->settings->requiredString('company.legal_name'),
+            'name' => $this->value('email.brand_name') ?? $legalName,
+            'legal_name' => $legalName,
             'address' => $this->settings->requiredString('company.address'),
             'phone' => $this->value('company.phone'),
             'email' => $this->value('company.email'),

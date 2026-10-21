@@ -36,7 +36,7 @@ class SettingsSeeder extends Seeder
             'latitude' => $envFloat('COMPANY_LATITUDE'),
             'longitude' => $envFloat('COMPANY_LONGITUDE'),
         ];
-        $emailBrandName = $envString('COMPANY_EMAIL_BRAND_NAME') ?: 'Ogami Philippines';
+        $emailBrandName = $envString('COMPANY_EMAIL_BRAND_NAME');
 
         $rows = [
             // ── Company ──────────────────────────────────────

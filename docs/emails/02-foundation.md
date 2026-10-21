@@ -33,7 +33,7 @@ Existing settings rows:
 - `company.tin`, `company.vat_status`, `company.certification`
 - Landing-page logo art is bundled at `api/resources/images/ogami-mark.png`; dark mode uses its white recolor at `api/resources/images/ogami-mark-dark.png`.
 - `company.public_url`
-- `email.brand_name`
+- `email.brand_name` (optional display name; falls back to required `company.legal_name` when empty)
 - `email.footer_disclaimer` (optional; approved text only)
 - `pdf.footer_disclaimer`, `pdf.accent_color`
 
