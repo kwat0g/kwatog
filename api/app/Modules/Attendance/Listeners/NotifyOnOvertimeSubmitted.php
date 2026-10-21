@@ -31,7 +31,9 @@ class NotifyOnOvertimeSubmitted implements ShouldQueue
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId))
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('attendance.ot.approve'))
+                ->values();
 
             $this->notifications->send($audience, 'attendance.ot_submitted', [
                 'title'       => "OT Request from {$emp->full_name}",
