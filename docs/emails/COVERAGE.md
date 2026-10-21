@@ -6,7 +6,7 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 |---|---|---|---|
 | E-001–E-003 | Customer invoice, official receipt, and dunning | [PR #325](https://github.com/kwat0g/kwatog/pull/325) | Draft; current branch includes browser previews at desktop/mobile and light/dark. Latest CI is running. |
 | E-004 | Finalized credit note | [PR #222](https://github.com/kwat0g/kwatog/pull/222) | Draft |
-| E-005–E-006 | Portal invitation and password reset | [PR #224](https://github.com/kwat0g/kwatog/pull/224) | Draft; secure-link follow-up in [PR #223](https://github.com/kwat0g/kwatog/pull/223) |
+| E-005–E-006 | Portal invitation and password reset | [PR #224](https://github.com/kwat0g/kwatog/pull/224) | Draft; secure-link follow-up in [PR #223](https://github.com/kwat0g/kwatog/pull/223); current desktop/mobile light/dark previews refreshed at `75f1c70f`. |
 | E-007 | Supplier invoice status | [PR #226](https://github.com/kwat0g/kwatog/pull/226) | Draft |
 | E-008 | Supplier PO cancellation | [PR #228](https://github.com/kwat0g/kwatog/pull/228) | Draft |
 | E-009 | Customer complaint update | [PR #230](https://github.com/kwat0g/kwatog/pull/230) | Draft |
@@ -31,10 +31,9 @@ Updated: 2026-10-21. IDs follow [the inventory](01-inventory.md). This maps disc
 
 ## Remaining sign-off
 
-- Full desktop/mobile light/dark screenshot sets are captured and checked for E-001–E-003, E-010, E-018, and E-019. Existing desktop/light and mobile/dark captures were reviewed for E-011–E-017 and E-020–E-022, but their full sets still need verification against the current shared foundation.
-- Existing desktop/light and mobile/dark captures were reviewed for E-011–E-017, E-020–E-022, E-026–E-027, E-029, and E-031–E-034. No clipping found. E-017's summary wraps on mobile; E-027's weekly comparison row wraps across columns; both remain readable. E-027 daily summary is long but its capped work-order and breakdown lists remain readable. E-029–E-033 use synthetic configured branding in captures. E-030 was removed with the temporary-password flow, so it has no retained preview. E-018's 3-column item table was too compressed on mobile and is changed to stacked item details; updated preview remains pending.
+- Full desktop/mobile light/dark screenshot sets are captured and checked for E-001–E-006, E-010, E-018, and E-019. E-005–E-006 previews were refreshed from the current mailables with dummy tokens; no email was sent. Existing desktop/light and mobile/dark captures were reviewed for E-011–E-017 and E-020–E-022, but their full sets still need verification against the current shared foundation.
+- Existing desktop/light and mobile/dark captures were reviewed for E-011–E-017, E-020–E-022, E-026–E-027, E-029, and E-031–E-034. No clipping found. E-017's summary wraps on mobile; E-027's weekly comparison row wraps across columns; both remain readable. E-027 daily summary is long but its capped work-order and breakdown lists remain readable. E-029–E-033 use synthetic configured branding in captures. E-030 was removed with the temporary-password flow, so it has no retained preview. E-018's mobile line items now stack, and the four previews were refreshed in `8c244f17`.
 - E-010's 4-column mobile item table had compressed descriptions and currency values; stacked details are now rendered and the four screenshots refreshed. E-010 preview uses synthetic PO and branding data.
-- E-005–E-006's checked-in dark screenshots show blank CTA labels. Fresh network-isolated renders of the current templates show white CTA text and no viewport overflow; refresh the checked-in captures before sign-off.
 - All mapped implementation PRs are drafts. The stack has dependent base branches; independent merge/revert readiness has not been verified across the full stack.
 - Runtime recipient resolution, delivery safety, queues, logs, and tests remain subject to their linked PR checks and review. This report does not claim those gates passed.
 - Confirm company settings with the owner before any live send. Review external financial documents with the accountant and personal-data emails with HR/legal/data protection. Verify SPF/DKIM/DMARC with the mail provider; the code cannot prove DNS or provider configuration.
