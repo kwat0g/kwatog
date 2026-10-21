@@ -14,6 +14,9 @@ class EmployeePasswordResetNotification extends PasswordResetNotification implem
     public function __construct(string $tempPassword)
     {
         parent::__construct($tempPassword);
+        // Lane: mail — see config/horizon.php. Notifications are mail too, and
+        // must not queue behind a listener an approver is waiting on.
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 

@@ -154,11 +154,14 @@ services:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
-  queue:
+  # One Horizon master, five lanes (api/config/horizon.php). Replaces the two
+  # `queue:work` services: those were one serial process per lane, mail shared
+  # `default` with approvals, and backup shared `low` with MRP/payroll.
+  horizon:
     build:
       context: .
       dockerfile: docker/php/Dockerfile.prod
-    container_name: ogami-queue
+    container_name: ogami-horizon
     restart: unless-stopped
     working_dir: /var/www
     env_file:
@@ -169,43 +172,20 @@ services:
       APP_DEBUG: "false"
       APP_MAINTENANCE_DRIVER: cache
       APP_MAINTENANCE_STORE: redis
-    # 1800s matches the longest durable listener; retry_after is kept above it
-    # so Redis does not redeliver a live long-running job.
-    # Lanes: high = realtime bus (outbox), default = interactive listeners.
-    # Bulk jobs (payroll/MRP/backup/payslip fan-out) run on queue-low below,
-    # so an urgent approval never waits behind a 30-min compute.
-    command: php artisan queue:work --queue=high,default --tries=3 --timeout=1800 --sleep=3
+    command: php artisan horizon
+    # Let a worker finish the job it holds (payroll compute, backup) rather
+    # than SIGKILLing it mid-transaction on deploy.
+    stop_grace_period: 60s
     depends_on:
       api:
         condition: service_started
       redis:
         condition: service_healthy
-    volumes:
-      - appstorage:/var/www/storage/app
-    networks: [ogami-net]
-
-  queue-low:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile.prod
-    container_name: ogami-queue-low
-    restart: unless-stopped
-    working_dir: /var/www
-    env_file:
-      - path: .env
-        format: raw
-    environment:
-      APP_ENV: production
-      APP_DEBUG: "false"
-      APP_MAINTENANCE_DRIVER: cache
-      APP_MAINTENANCE_STORE: redis
-    # Bulk lane only; 3600s covers backup/restore.
-    command: php artisan queue:work --queue=low --tries=3 --timeout=3600 --sleep=3
-    depends_on:
-      api:
-        condition: service_started
-      redis:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php artisan horizon:status | grep -q 'is running'"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
     volumes:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]

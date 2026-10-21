@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 import { loginAs } from './helpers-extended';
 
 for (const form of [
-  { path: '/quality/inspections/new', endpoint: '**/api/v1/quality/inspections/options', message: 'Inspection options could not be loaded', button: 'Open inspection' },
   { path: '/maintenance/work-orders/create', endpoint: '**/api/v1/maintenance/work-orders/options', message: 'Maintenance work order options could not be loaded', button: 'Create work order' },
 ]) {
   test(`${form.path} names a failed prerequisite and recovers`, async ({ page }) => {

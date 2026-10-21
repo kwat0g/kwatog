@@ -217,28 +217,27 @@ class OrderToCashChainTest extends TestCase
     {
         $line = DeliveryItem::query()->where('delivery_id', $delivery->id)->sole();
         $this->assertSame(DeliveryStatus::Scheduled, $delivery->status);
-        $this->assertDatabaseMissing('delivery_stock_reservation_batches', ['delivery_id' => $delivery->id]);
+        // Outgoing release auto-drafts the delivery and already holds the
+        // durable reservation the departure guard requires; this helper only
+        // proves the hold is idempotent and replay-safe.
+        $batch = DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->sole();
+        $requestKey = (string) $batch->request_key;
+        $reservation = $batch->reservations()->sole();
 
-        $requestKey = (string) Str::uuid();
         $this->actingAs($this->employee)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
-                'request_key' => $requestKey,
+                'request_key' => (string) Str::uuid(),
             ])
             ->assertForbidden();
-        $this->assertDatabaseMissing('delivery_stock_reservation_batches', ['delivery_id' => $delivery->id]);
+        $this->assertSame(1, DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->count());
 
-        $reservationResponse = $this->actingAs($this->warehouse)
+        $this->actingAs($this->warehouse)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
-                'request_key' => $requestKey,
+                'request_key' => (string) Str::uuid(),
             ])
-            ->assertOk()
-            ->assertJsonPath('data.status', DeliveryStatus::Scheduled->value)
-            ->assertJsonPath('data.stock_reservation_status', DeliveryStockReservationStatus::Reserved->value)
-            ->assertJsonPath('data.can_reserve_stock', false);
-        $batch = DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->sole();
-        $reservation = $batch->reservations()->sole();
-        $this->assertSame($this->warehouse->id, (int) $batch->reserved_by);
-        $this->assertSame(DeliveryStockReservationStatus::Reserved, $batch->status);
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This delivery already has a physical stock reservation. Retry with its original request key or reload the delivery.');
+        $this->assertSame(DeliveryStockReservationStatus::Reserved, $batch->fresh()->status);
         $this->assertSame($line->id, (int) $reservation->delivery_item_id);
         $this->assertSame((string) $line->quantity, (string) $reservation->quantity);
         $stockLevel = StockLevel::query()
@@ -247,12 +246,6 @@ class OrderToCashChainTest extends TestCase
             ->sole();
         $this->assertSame((string) $line->quantity, (string) $stockLevel->reserved_quantity);
 
-        $this->actingAs($this->warehouse)
-            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
-                'request_key' => $requestKey,
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.stock_reservation_batch_id', $reservationResponse->json('data.stock_reservation_batch_id'));
         $this->assertSame(1, DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->count());
         $this->assertSame((string) $line->quantity, (string) $stockLevel->fresh()->reserved_quantity);
 

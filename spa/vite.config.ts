@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
+    allowedHosts: ['ogamiph.dev', 'www.ogamiph.dev'],
     watch: { ignored: ['**/*test-results/**', '**/.playwright-artifacts*/**', '**/e2e-real/results/**', '**/*playwright*report/**'] },
     // Native Windows development serves the SPA on the standard localhost
     // port; Laravel remains on 8000 and receives the API proxy traffic below.

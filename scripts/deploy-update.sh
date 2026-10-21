@@ -9,7 +9,7 @@
 # It encodes the gotchas learned during the first deploy:
 #   • docker/nginx/prod.conf is rendered in-place with envsubst, so a raw
 #     `git pull` would conflict — we reset it before pulling, re-render after.
-#   • api / migrate / queue / reverb / scheduler are separate image consumers
+#   • api / migrate / horizon / reverb / scheduler are separate image consumers
 #     that bake the source at build time. Code changes need a rebuild, not just
 #     a restart.
 #   • `config:cache` must run at RUNTIME with the live .env, never the build-time
@@ -203,11 +203,11 @@ else
 fi
 
 # ── 4. Rebuild API images ─────────────────────────────────────────────────────
-# api / queue / reverb / scheduler each have their OWN build block and bake the
+# api / horizon / reverb / scheduler each have their OWN build block and bake the
 # source at build time. All four must be rebuilt for code/config changes to land.
 if [ "${DO_BUILD}" -eq 1 ]; then
-    log "Rebuilding API images (api queue reverb scheduler)"
-    ${COMPOSE} build api queue reverb scheduler
+    log "Rebuilding API images (api horizon reverb scheduler)"
+    ${COMPOSE} build api horizon reverb scheduler
     ok "Images rebuilt"
 else
     warn "Skipping image rebuild (--no-build)"
@@ -224,7 +224,7 @@ ok "nginx config rendered"
 # partially migrated schema) while migrations are pending. They are started
 # only after the API has migrated and rebuilt its runtime caches below.
 log "Stopping consumers before migration"
-${COMPOSE} stop nginx reverb queue scheduler
+${COMPOSE} stop nginx reverb horizon scheduler
 log "Starting infrastructure and API only"
 ${COMPOSE} up -d --force-recreate db redis api
 log "Waiting for database to report healthy"
@@ -253,9 +253,9 @@ ${COMPOSE} exec -T api php artisan tinker --execute='app(\App\Common\Services\Se
 ok "Caches rebuilt"
 
 # ── 9. Start consumers only after migration and cache rebuild ────────────────
-log "Starting consumers (nginx reverb queue scheduler)"
-${COMPOSE} up -d --force-recreate nginx reverb queue scheduler
-${COMPOSE} exec -T api php artisan queue:restart >/dev/null
+log "Starting consumers (nginx reverb horizon scheduler)"
+${COMPOSE} up -d --force-recreate nginx reverb horizon scheduler
+# Recreating Horizon starts a fresh master with this release's code and config.
 ok "Consumers started"
 
 # ── 10. Reload nginx ──────────────────────────────────────────────────────────
@@ -292,7 +292,7 @@ done
 [ "${SPA_CODE}" = "200" ] || die "SPA index returned HTTP ${SPA_CODE:-unreachable}; deployment is not complete."
 ok "SPA index: HTTP ${SPA_CODE}"
 
-for service in api nginx db redis reverb queue scheduler; do
+for service in api nginx db redis reverb horizon scheduler; do
     cid="$(${COMPOSE} ps -q "${service}")"
     [ -n "${cid}" ] || die "Expected service ${service} has no container."
     state="$(docker inspect -f '{{.State.Status}}' "${cid}")"

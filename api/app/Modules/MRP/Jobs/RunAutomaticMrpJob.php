@@ -47,8 +47,9 @@ class RunAutomaticMrpJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
     /** @param list<int> $salesOrderIds */
     public function __construct(array $salesOrderIds, string $reason, ?int $initiatedBy = null)
     {
-        // Lane: low — 15-min planning run, never ahead of realtime.
-        $this->onQueue('low');
+        // Lane: automation — 15-min planning run, with its own pool so a
+        // payroll run cannot starve it.
+        $this->onQueue('automation');
         $ids = array_values(array_unique(array_map('intval', $salesOrderIds)));
         sort($ids);
         $this->salesOrderIds = $ids;

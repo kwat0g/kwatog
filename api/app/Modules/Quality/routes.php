@@ -84,10 +84,6 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections', [InspectionController::class, 'index'])
         ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections/aql-preview', [InspectionController::class, 'aqlPreview'])
-        ->middleware('permission:quality.inspections.view');
-    Route::get('/inspections/work-order-outputs', [InspectionController::class, 'workOrderOutputs'])
-        ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/{inspection}', [InspectionController::class, 'show'])
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/{inspection}/chain', [InspectionController::class, 'chain'])

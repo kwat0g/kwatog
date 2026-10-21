@@ -39,6 +39,8 @@ class Delivery extends Model
         // ADV7 — Proof of Delivery receiver capture.
         'receiver_name', 'receiver_position', 'received_at', 'delivery_remarks',
         'cost_recognition_mode',
+        // Chain 1 — ship-to snapshot taken while the run sheet was prepared.
+        'delivery_address', 'delivery_contact_person', 'delivery_contact_phone',
     ];
 
     protected $casts = [
@@ -152,6 +154,64 @@ class Delivery extends Model
     public function reschedules(): HasMany
     {
         return $this->hasMany(DeliveryReschedule::class);
+    }
+
+    /**
+     * Where this run sheet tells the driver to go — the ONE resolution.
+     *
+     * Snapshot first (what dispatch actually issued), then the customer's
+     * ship-to, then the customer's registered/billing address so a delivery
+     * raised before the ship-to columns existed still prints something a driver
+     * can drive to instead of an empty row. Callers must NOT re-express this
+     * order; the office page, the driver PWA and the printed receipt all read
+     * these three methods.
+     */
+    public function resolvedDeliveryAddress(): ?string
+    {
+        $snapshot = trim((string) ($this->delivery_address ?? ''));
+        if ($snapshot !== '') {
+            return $snapshot;
+        }
+
+        $customer = $this->salesOrder?->customer;
+        $shipTo = trim((string) ($customer?->delivery_address ?? ''));
+        if ($shipTo !== '') {
+            return $shipTo;
+        }
+
+        $billing = trim((string) ($customer?->address ?? ''));
+
+        return $billing !== '' ? $billing : null;
+    }
+
+    public function resolvedDeliveryContactPerson(): ?string
+    {
+        return $this->firstFilledValue(
+            $this->delivery_contact_person,
+            $this->salesOrder?->customer?->delivery_contact_person,
+            $this->salesOrder?->customer?->contact_person,
+        );
+    }
+
+    public function resolvedDeliveryContactPhone(): ?string
+    {
+        return $this->firstFilledValue(
+            $this->delivery_contact_phone,
+            $this->salesOrder?->customer?->delivery_contact_phone,
+            $this->salesOrder?->customer?->phone,
+        );
+    }
+
+    private function firstFilledValue(?string ...$candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            $value = trim((string) ($candidate ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     public function scopeStatus(Builder $q, DeliveryStatus|string $s): Builder

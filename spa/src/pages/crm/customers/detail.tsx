@@ -14,6 +14,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail, SkeletonTable } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ShipToAddress } from '@/components/supply-chain/ShipToAddress';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
@@ -183,7 +184,7 @@ export default function CrmCustomerDetailPage() {
  <dd className="font-mono">{customer.phone ?? <span className="text-muted">—</span>}</dd>
  </div>
  <div>
- <dt className="text-muted text-xs">Address</dt>
+ <dt className="text-muted text-xs">Billing address</dt>
  <dd className="whitespace-pre-wrap">{customer.address ?? <span className="text-muted">—</span>}</dd>
  </div>
  <div>
@@ -197,6 +198,18 @@ export default function CrmCustomerDetailPage() {
  </dd>
  </div>
  </dl>
+ </Panel>
+
+ {/* Chain 1 — what the driver is actually sent to. Kept beside the contact
+ block so billing and ship-to are never confused for each other. */}
+ <Panel title="Delivery">
+ <ShipToAddress
+ heading={customer.name}
+ address={customer.delivery_address}
+ contactPerson={customer.delivery_contact_person}
+ contactPhone={customer.delivery_contact_phone}
+ emptyHint="No delivery address on file. Deliveries fall back to the billing address above."
+ />
  </Panel>
  </div>
 

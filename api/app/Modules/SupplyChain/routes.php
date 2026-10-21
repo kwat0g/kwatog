@@ -149,6 +149,9 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:accounting.journal.post');
     Route::get('/deliveries/{delivery}/receipt-photo', [DeliveryController::class, 'receiptPhoto'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
+    // Chain 1 — printable delivery receipt carrying the ship-to address.
+    Route::get('/deliveries/{delivery}/delivery-receipt', [DeliveryController::class, 'receiptPdf'])
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries/{delivery}/confirm', [DeliveryController::class, 'confirm'])
         ->middleware('permission:supply_chain.deliveries.confirm');
     Route::post('/deliveries/{delivery}/retry-coc', [DeliveryController::class, 'retryCoc'])

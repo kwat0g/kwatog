@@ -11,10 +11,9 @@ return [
     'files_directory' => env('BACKUP_FILES_DIRECTORY', storage_path('app/private')),
     'files_keep' => env('BACKUP_FILES_KEEP', env('BACKUP_KEEP', 14)),
     'files_script' => env('BACKUP_FILES_SCRIPT'),
-    // Restore runs inside the queue worker. Pause the same shared queue before
-    // entering maintenance so already-enqueued writers cannot mutate the
-    // database or private files while the restore is in progress. The TTL is a
-    // crash fence: a dead worker cannot leave the queue paused forever.
+    // Restore pauses every non-bulk Horizon lane before entering maintenance,
+    // so workers cannot start queued writes during the restore. The TTL is a
+    // crash fence: a dead worker cannot leave the lanes paused forever.
     'queue_connection' => env('BACKUP_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'redis')),
     'queue_name' => env('BACKUP_QUEUE', env('REDIS_QUEUE', 'default')),
     'queue_pause_seconds' => (int) env('BACKUP_QUEUE_PAUSE_SECONDS', 21600),

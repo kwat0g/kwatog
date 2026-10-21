@@ -195,6 +195,20 @@ class NotificationDigestServiceTest extends TestCase
         $this->assertSame(0, $result['emails_sent']);
     }
 
+    public function test_subscriber_with_an_invalid_email_address_is_skipped(): void
+    {
+        $user = User::factory()->create(['email' => 'not-an-email']);
+        $this->optIn($user);
+        $this->notify($user);
+
+        Mail::fake();
+
+        $result = (new NotificationDigestService)->run();
+
+        Mail::assertNothingQueued();
+        $this->assertSame(0, $result['emails_sent']);
+    }
+
     public function test_per_type_digest_row_is_not_treated_as_a_global_opt_in(): void
     {
         // Only '*' / 'all' / 'digest' are global opt-ins; a per-type row is not.

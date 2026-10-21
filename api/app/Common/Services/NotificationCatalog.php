@@ -257,6 +257,7 @@ final class NotificationCatalog
                 ['key' => 'mrp_run_completed', 'label' => 'MRP planning result', 'description' => 'MRP planning finished. Review material shortages, work orders, scheduling conflicts, and failed orders.'],
                 ['key' => 'maintenance.assignment_needed', 'label' => 'Maintenance assignment needed', 'description' => 'A new maintenance work order needs a technician.'],
                 ['key' => 'maintenance.assigned', 'label' => 'Maintenance assigned', 'description' => 'You have been assigned a maintenance work order.'],
+                ['key' => 'maintenance.parts_requested', 'label' => 'Maintenance parts requested', 'description' => 'Warehouse action is needed to pick and hand over maintenance parts.'],
                 ['key' => 'maintenance.parts_handed_over', 'label' => 'Spare parts handed over', 'description' => 'Warehouse confirmed the spare parts. Repair can continue.'],
                 ['key' => 'maintenance.assignment_escalated', 'label' => 'Critical maintenance unassigned', 'description' => 'A critical maintenance order has remained unassigned for 15 minutes.'],
                 ['key' => 'maintenance.repair_submitted', 'label' => 'Repair ready for verification', 'description' => 'A technician submitted maintenance evidence for review.'],
@@ -277,6 +278,9 @@ final class NotificationCatalog
             ['title' => 'Email delivery', 'hint' => 'Email failures that need an approved follow-up channel', 'types' => [
                 ['key' => 'email.delivery_failed', 'label' => 'Email delivery failed', 'description' => 'An email could not be delivered. Review the linked record and contact the recipient through an approved channel.'],
                 ['key' => 'supplier.dispatch_action_required', 'label' => 'Supplier dispatch action required', 'description' => 'An approved purchase order needs supplier notification or transmission confirmation.'],
+            ]],
+            ['title' => 'Queue operations', 'hint' => 'Background work that needs system administrator attention', 'types' => [
+                ['key' => 'queue.long_wait', 'label' => 'Queue backlog detected', 'description' => 'A Horizon queue exceeded its configured wait threshold.'],
             ]],
         ];
     }

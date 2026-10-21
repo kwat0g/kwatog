@@ -25,7 +25,8 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
-import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/Modal';
+import { FormActions } from '@/components/ui/FormActions';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
 import type { CreateNcrData, NcrTemplate, NcrSeverity, NcrSource } from '@/types/quality';
@@ -308,7 +309,9 @@ export default function CreateNcrPage() {
             </div>
           </Modal>
 
-          <ModalFooter>
+          {/* `FormActions`, not `ModalFooter`: this is a page form, and the
+              dialog footer's offsets assume a dialog body's padding (F-020). */}
+          <FormActions>
             <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
               Cancel
             </Button>
@@ -320,7 +323,7 @@ export default function CreateNcrPage() {
             >
               Open NCR
             </Button>
-          </ModalFooter>
+          </FormActions>
         </div>
       </form>
     </div>

@@ -235,7 +235,7 @@ export function DataTable<T>({
   // to 2, ticked 10 more and hit Approve approved only the visible 10, with a
   // badge that agreed. Reset when the visible set changes so the count on
   // screen is always the count that will be submitted.
-  const visibleIds = data.map((r, i) => idOf(r, i)).join(' ');
+  const visibleIds = data.map((r, i) => idOf(r, i)).join('\u0000');
   const lastVisibleIds = useRef(visibleIds);
   useEffect(() => {
     if (lastVisibleIds.current === visibleIds) return;

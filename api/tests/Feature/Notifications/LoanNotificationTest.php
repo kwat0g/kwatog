@@ -6,6 +6,7 @@ namespace Tests\Feature\Notifications;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Events\LoanDecided;
@@ -84,14 +85,18 @@ class LoanNotificationTest extends TestCase
     {
         Event::fake([LoanDecided::class]);
 
-        $employee = Employee::factory()->create();
+        // The department approver must exist before submission: without an
+        // eligible department head the first step is auto-skipped and the
+        // loan lands on the finance step instead.
+        $employee = Employee::factory()->create([
+            'department_id' => Department::factory()->create()->id,
+        ]);
+        $approver = $this->departmentHeadFor($employee);
         $loan     = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal'   => '5000.00',
             'pay_periods' => 5,
             'purpose'     => 'Emergency expense',
         ]);
-
-        $approver = $this->departmentHeadFor($employee);
 
         app(LoanService::class)->approve($loan, $approver);
 
@@ -106,14 +111,15 @@ class LoanNotificationTest extends TestCase
     {
         Event::fake([LoanDecided::class]);
 
-        $employee = Employee::factory()->create();
+        $employee = Employee::factory()->create([
+            'department_id' => Department::factory()->create()->id,
+        ]);
+        $approver = $this->departmentHeadFor($employee);
         $loan     = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal'   => '5000.00',
             'pay_periods' => 5,
             'purpose'     => 'Emergency expense',
         ]);
-
-        $approver = $this->departmentHeadFor($employee);
 
         app(LoanService::class)->reject($loan, $approver, 'Insufficient budget.');
 

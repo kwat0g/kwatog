@@ -153,9 +153,9 @@ For a clean local demo database, use the canonical sequence from
 recreates the selected database, so use it only when resetting a disposable
 demo environment:```bash
  docker compose up -d
- docker compose stop queue
+ docker compose stop horizon
  docker compose exec api php artisan migrate:fresh --seed
- docker compose start queue
+ docker compose start horizon
  # Batch numbers + the hero QC record are stamped onto the work orders the
  # queue just created — this re-run is load-bearing for traceability/CoC.
  docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder
