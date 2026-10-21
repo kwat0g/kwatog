@@ -15,6 +15,10 @@ The shared Markdown shell supplies the configured logo variants, company identit
 
 ## Review and verification
 
-This is an internal operational notice. Confirm configured alert roles match operational ownership. No personal-data or statutory content is intentionally included. Local test mail remains array-only; no real email sent.
+This is an internal operational notice. Confirm configured alert roles match operational ownership. No personal-data or statutory content is intentionally included.
 
-Browser screenshots and actual rendered-MIME assertions are pending because this workspace has no PHP CLI or active Docker test services. Real email clients remain unverified.
+`CriticalAlertEmailDesignTest`: 1 test, 9 assertions passed on an isolated test database. It verifies the Manila display as `+08:00`, omission of the internal entity ID, SPA alert link, and HTML size. A rendered `MailChannel` message measured 19,473 HTML bytes and 622 plain-text bytes. Mailer was `array`; no real email sent.
+
+Inspected Chromium screenshots at 1440px desktop and 390px mobile in light/dark. The message stays readable without clipping; company legal/address values are redacted in artifacts: [desktop light](screenshots/e026-critical-alert-desktop-light.png), [desktop dark](screenshots/e026-critical-alert-desktop-dark.png), [mobile light](screenshots/e026-critical-alert-mobile-light.png), [mobile dark](screenshots/e026-critical-alert-mobile-dark.png), [plain text](screenshots/e026-critical-alert.txt).
+
+Real email clients remain unverified.

@@ -10,6 +10,7 @@ use App\Common\Models\Alert;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Notifications\CriticalAlertEmail;
 use Database\Seeders\SettingsSeeder;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -36,8 +37,9 @@ class CriticalAlertEmailDesignTest extends TestCase
             'message' => 'The job runner has not recorded a heartbeat.',
             'entity_type' => 'App\\Common\\Models\\SchedulerTaskRun',
             'entity_id' => 987654,
-            'created_at' => '2026-10-21 00:15:00',
         ]);
+        $alert->created_at = CarbonImmutable::parse('2026-10-21 08:15:00', 'Asia/Manila');
+        $alert->save();
 
         Notification::route('mail', 'alerts@example.test')->notify(new CriticalAlertEmail($alert));
 
@@ -48,7 +50,7 @@ class CriticalAlertEmailDesignTest extends TestCase
         $this->assertStringContainsString('['.app(EmailBrandingService::class)->data()['name'].'] Critical alert: Scheduler degraded', $message->getSubject());
         $this->assertStringContainsString('Scheduler degraded', $html);
         $this->assertStringContainsString('Scheduler stale', $html);
-        $this->assertStringContainsString('21 Oct 2026, 8:15 AM +08', $html);
+        $this->assertStringContainsString('21 Oct 2026, 8:15 AM +08:00', $html);
         $this->assertStringNotContainsString('987654', $html);
         $this->assertStringNotContainsString('scheduler_stale', $html);
         $this->assertStringContainsString('https://app.ogamiph.test/alerts', $text);
