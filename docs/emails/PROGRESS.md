@@ -114,6 +114,7 @@ Updated: 2026-10-21
 - EF-082 / inventory notice access: low-stock notices gave warehouse staff a purchase-request link they could not open and exposed its number; GRN notices ignored `inventory.view` revocations. Draft PR #293 routes low-stock notices to the visible item and filters both audiences by effective `inventory.view`. Focused tests added; test run pending. No real email sent.
 - EF-083 / supplier-listing review audience: direct reviewers could retain `purchasing.supplier_listings.review` after losing the view permission required by the link. Draft PR #294 filters all reviewers by effective view access. Regression test added; test run pending. No real email sent.
 - EF-084 / scheduled maintenance repeat-breakdown notice: active supervisors with a revoked `maintenance.view` still received machine incident details and a forbidden downtime link. Draft PR #295 filters the audience by effective permission. Regression test added; test run pending. No real email sent.
+- EF-085 / maintenance assignment/escalation notices: role-only supervisor/manager targeting ignored `maintenance.view` revocations. Draft PR #296 filters the creation listener and assignment/handover command audiences by effective view permission. Regression tests added; test run pending. No real email sent.
 
 ## Next step
 

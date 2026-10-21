@@ -24,7 +24,10 @@ class CheckMaintenanceAssignment extends Command
         MaintenanceAssigneeSuggestionService $suggestions): int
     {
         $recipients = User::query()->where('is_active', true)
-            ->whereHas('role', fn ($query) => $query->whereIn('slug', ['maintenance_supervisor', 'production_manager']))->get();
+            ->whereHas('role', fn ($query) => $query->whereIn('slug', ['maintenance_supervisor', 'production_manager']))
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission('maintenance.view'))
+            ->values();
         $failed = false;
         MaintenanceWorkOrder::query()->where('priority', 'critical')->where('status', 'open')
             ->whereNull('assigned_to')->where('created_at', '<=', now()->subMinutes(15))

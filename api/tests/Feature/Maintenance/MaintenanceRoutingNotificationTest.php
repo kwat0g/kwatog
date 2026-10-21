@@ -16,6 +16,7 @@ use App\Modules\Maintenance\Listeners\NotifyMaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\MRP\Models\Machine;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -29,6 +30,7 @@ class MaintenanceRoutingNotificationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         Event::fake();
     }
 
@@ -36,7 +38,9 @@ class MaintenanceRoutingNotificationTest extends TestCase
     {
         $supervisor = $this->actor('maintenance_supervisor');
         $inactive = $this->actor('maintenance_supervisor');
+        $revoked = $this->actor('maintenance_supervisor');
         $inactive->update(['is_active' => false]);
+        $this->revokeView($revoked, $supervisor);
         $listener = app(NotifyMaintenanceWorkOrder::class);
         foreach (['preventive', 'corrective'] as $type) {
             $order = $this->order($supervisor, ['type' => $type]);
@@ -45,6 +49,7 @@ class MaintenanceRoutingNotificationTest extends TestCase
         }
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_needed')->count());
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $inactive->id]);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revoked->id]);
         $this->assertStringContainsString('/maintenance/work-orders/', json_decode(DB::table('notifications')->value('data'), true)['link_to']);
     }
 
@@ -59,6 +64,8 @@ class MaintenanceRoutingNotificationTest extends TestCase
     public function test_critical_escalation_is_due_once_and_assignment_closes_episode(): void
     {
         $supervisor = $this->actor('maintenance_supervisor');
+        $revokedSupervisor = $this->actor('maintenance_supervisor');
+        $this->revokeView($revokedSupervisor, $supervisor);
         $manager = $this->actor('production_manager');
         $technician = $this->actor('maintenance_tech');
         $this->makePresent($technician);
@@ -69,6 +76,7 @@ class MaintenanceRoutingNotificationTest extends TestCase
         $this->artisan('maintenance:check-assignment')->assertSuccessful();
         $this->assertSame(2, DB::table('notifications')->where('type', 'maintenance.assignment_escalated')->count());
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $manager->id, 'type' => 'maintenance.assignment_escalated']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedSupervisor->id, 'type' => 'maintenance.assignment_escalated']);
         $service = app(MaintenanceWorkOrderService::class);
         $service->assign($order, $technician->employee_id, $supervisor, ['expected_assignee_id' => null]);
         $service->assign($order, $technician->employee_id, $supervisor, ['expected_assignee_id' => $technician->employee_id]);
@@ -126,5 +134,19 @@ class MaintenanceRoutingNotificationTest extends TestCase
             'employee_id' => $user->employee_id, 'shift_id' => $shift->id,
             'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour(),
         ]);
+    }
+
+    private function revokeView(User $user, User $grantedBy): void
+    {
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'maintenance.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $grantedBy->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user->flushPermissionsCache();
     }
 }
