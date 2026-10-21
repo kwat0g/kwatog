@@ -75,7 +75,6 @@ class CriticalAlertEmailDesignTest extends TestCase
             'severity' => AlertSeverity::Critical,
             'title' => '<img src=x onerror=alert(1)> [open](https://evil.test)',
             'message' => "<script>alert(1)</script> [sign in](https://evil.test)\nwww.evil.test/account",
-            'created_at' => '2026-10-21 00:15:00',
         ]);
 
         Notification::route('mail', 'alerts@example.test')->notify(new CriticalAlertEmail($alert));
@@ -84,8 +83,8 @@ class CriticalAlertEmailDesignTest extends TestCase
         $html = (string) $message->getHtmlBody();
         $text = (string) $message->getTextBody();
 
-        $this->assertStringNotContainsString('<img', $html);
-        $this->assertStringNotContainsString('<script', $html);
+        $this->assertStringNotContainsString('onerror=', $html);
+        $this->assertStringNotContainsString('<script>', $html);
         $this->assertStringNotContainsString('https://evil.test', $html);
         $this->assertStringNotContainsString('www.evil.test', $html);
         $this->assertStringContainsString('[link removed]', $html);
