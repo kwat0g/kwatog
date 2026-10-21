@@ -41,8 +41,8 @@
 | E-031 | Auth — welcome account setup | Internal staff / system admin | Account-security | Confidential | B → security | Admin user provisioning with `send_welcome` → created user's address → fresh one-time setup link and configured expiry |
 | E-032 | HR — employee password reset | Internal staff | Account-security | Confidential | B → security | HR employee account reset → affected user's address → fresh one-time reset link and configured expiry |
 | E-033 | HR — employee welcome account setup | Internal staff | Account-security | Confidential | B → security | HR employee account provisioning → created user's address → fresh one-time setup link and configured expiry |
-| E-034 | Landing — contact inquiry received | System admin / sales inbox | Status-update | Confidential (personal data) | P2 | D → alert | Public inquiry submitted → configured sales/admin recipients → inquiry contact details and message |
-| E-035 | Test harness — email integration message | Test recipient only | System-ops (test-only) | Public-ish test data | N/A | N/A | Explicit feature-test path → fake mail transport expected → fixed test payload; excluded from production coverage |
+| E-034 | Landing — contact inquiry received | System admin / sales inbox | Status-update | Confidential (personal data) | P2 | D → alert | Public inquiry submitted → configured sales inbox → generated inquiry reference, server-side received time, and authenticated CRM inquiry link; personal contact fields stay in CRM |
+| E-035 | Test harness — email integration message | Test recipient only | System-ops (test-only) | Public-ish test data | N/A | N/A | Explicit feature-test construction; no production caller found → `MAIL_MAILER=array` under PHPUnit → fixed settings-backed branding payload with no record data or link; queued test mailable uses shared shell and text alternative |
 
 ## Generic notification email trigger coverage (E-023)
 
