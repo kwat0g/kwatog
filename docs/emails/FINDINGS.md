@@ -13,4 +13,6 @@ Date: 2026-10-20. Static findings only; reachability and runtime impact remain u
 | EF-018 | Shared email CSS blocked dark colors and forced 600px mobile overflow | Important light-mode styles overrode dark-mode media rules after CSS inlining, and the 600px table width exceeded a 390px viewport. | Fixed in shared foundation PR #213; browser previews verify responsive width and dark colors. Real email-client behavior remains unverified. |
 | EF-020 | Dark-mode fallback links had low contrast | Browser preview showed rust-colored text links too dim against the dark email background. | Shared foundation PR #213 now uses a brighter dark-mode link color; browser screenshots rechecked. |
 
+| EF-021 | Candidate status preview uses invalid stage fixture | E-013 captures pass `updated` as both stage values, but `updated` is not an `ApplicationStage`; the fallback renders “Application updated” twice and does not verify real stage labels. This is preview-data quality, not evidence of a production trigger defect. | Use valid, distinct stage values before refreshing E-013 screenshots. |
+
 No code-level fix was applied as part of Phase 0/1.
