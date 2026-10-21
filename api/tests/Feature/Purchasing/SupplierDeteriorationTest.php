@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Services\SupplierPerformanceService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Mockery;
 use Tests\TestCase;
@@ -53,6 +54,20 @@ class SupplierDeteriorationTest extends TestCase
 
     public function test_listener_notifies_purchasing_officers_on_score_drop_of_20_or_more(): void
     {
+        $revoked = User::factory()->create([
+            'role_id' => $this->officer->role_id,
+            'is_active' => true,
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'purchasing.suppliers.performance.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $this->officer->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $revoked->flushPermissionsCache();
         $vendor = Vendor::factory()->create(['name' => 'DropCo']);
 
         // Prior month snapshot: 90.
@@ -101,6 +116,7 @@ class SupplierDeteriorationTest extends TestCase
         // Recipient set must include our purchasing officer.
         $ids = collect($captured['recipients'])->pluck('id')->all();
         $this->assertContains($this->officer->id, $ids);
+        $this->assertNotContains($revoked->id, $ids);
     }
 
     public function test_listener_does_not_notify_when_drop_is_less_than_20(): void

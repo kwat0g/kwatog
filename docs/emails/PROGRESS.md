@@ -118,6 +118,7 @@ Updated: 2026-10-21
 - EF-086 / custom approval SLA notices: direct approvers with a revoked queue-read permission could receive reminder/escalation links, and budget transfer alerts linked approval-only users to a view-only list. Draft PR #297 checks each route's effective read alternatives and uses the transfer's approval-capable detail route. Tests cover both audiences and the link; test run pending. No real email sent.
 - EF-087 / auto-purchase-order approval notice: role-only targeting ignored effective approval, view, and PO row visibility. Draft PR #298 applies the current role plus effective permission and `PurchaseOrderAccessPolicy` checks. Regression test added; test run pending. No real email sent.
 - EF-088 / inspection review notice: review permission alone did not ensure access to the inspection detail page. Draft PR #299 also requires effective `quality.inspections.view`. Regression test added; test run pending. No real email sent.
+- EF-089 / supplier deterioration alert: configured role recipients could receive vendor score details without effective `purchasing.suppliers.performance.view`. Draft PR #300 filters the audience by destination permission. Regression test added; test run pending. No real email sent.
 
 ## Next step
 

@@ -48,7 +48,9 @@ class AlertOnSupplierDeterioration implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('purchasing.suppliers.performance.view'))
+                ->values();
 
             if ($audience->isEmpty()) return;
 
