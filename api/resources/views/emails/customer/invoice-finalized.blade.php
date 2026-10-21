@@ -16,10 +16,8 @@ Invoice **{{ $invoice->invoice_number }}** has been issued. Please review the ba
 
 ## Line items
 
-| Description | Quantity | Unit price | Amount |
-|---|---:|---:|---:|
 @foreach ($items as $item)
-| {{ $item->description }} | {{ number_format((float) $item->quantity, 2) }} | ₱{{ number_format((float) $item->unit_price, 2) }} | ₱{{ number_format((float) $item->total, 2) }} |
+- **{{ $item->description }}**<br>{{ number_format((float) $item->quantity, 2) }} × ₱{{ number_format((float) $item->unit_price, 2) }} = **₱{{ number_format((float) $item->total, 2) }}**
 @endforeach
 
 <x-mail::button :url="$portalUrl">View Invoice in Customer Portal</x-mail::button>
