@@ -193,6 +193,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
 
   // ── Security & administration ────────────────────────────────────────
   'permission.override': { icon: LuKeyRound, group: 'system', label: 'Access' },
+  'queue.long_wait': { icon: LuTriangleAlert, group: 'alerts', label: 'Queue operations' },
 };
 
 // Portal notices do not belong to internal users' notification preferences.
