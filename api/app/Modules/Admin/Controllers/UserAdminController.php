@@ -17,6 +17,7 @@ use App\Modules\Admin\Resources\LoginHistoryResource;
 use App\Modules\Admin\Services\UserAdminService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\Auth\Services\PasswordResetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -55,8 +56,8 @@ class UserAdminController
     {
         $validated = $request->validate([
             'department_id' => ['required', 'string', 'max:64'],
-            'search'        => ['nullable', 'string', 'max:120'],
-            'limit'         => ['nullable', 'integer', 'min:1', 'max:100'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         return response()->json(['data' => $this->service->employeeCandidates(
@@ -82,7 +83,8 @@ class UserAdminController
 
         if ($payload['send_welcome'] && $created->tempPassword !== '') {
             try {
-                $created->user->notify(new WelcomeNotification($created->tempPassword));
+                $setup = app(PasswordResetService::class)->createResetLink($created->user);
+                $created->user->notify(new WelcomeNotification($setup['url'], $setup['expiry_minutes']));
             } catch (\Throwable $e) {
                 app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                     'admin.users.manage',

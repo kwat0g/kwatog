@@ -4,19 +4,29 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Notifications;
 
-use App\Common\Services\SettingsService;
+use App\Common\Services\EmailBrandingService;
+use App\Modules\Auth\Services\PasswordResetService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Queue\SerializesModels;
 
 /**
  * Welcome email sent when an employee's system account is provisioned.
- * Carries the temporary password (one-time, will be force-changed on login).
+ * Carries a one-time setup link, never a password.
  */
 class WelcomeNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    protected ?string $resetUrl = null;
+
+    protected int $expiryMinutes = 0;
+
+    // Keep the serialized property name so already-queued legacy jobs hydrate;
+    // their password is ignored and replaced with a fresh setup link at send time.
+    protected string $tempPassword = '';
 
     public $tries = 3;
 
@@ -35,11 +45,13 @@ class WelcomeNotification extends Notification implements ShouldQueue
      *
      * Either way no new hire ever received their temporary password.
      *
-     * @see \Illuminate\Queue\SerializesModels::__serialize()
-     * @see \Illuminate\Queue\SerializesModels::__unserialize()
+     * @see SerializesModels::__serialize()
+     * @see SerializesModels::__unserialize()
      */
-    public function __construct(protected string $tempPassword)
+    public function __construct(string $resetUrl, int $expiryMinutes)
     {
+        $this->resetUrl = $resetUrl;
+        $this->expiryMinutes = $expiryMinutes;
         $this->onQueue('mail')->afterCommit();
     }
 
@@ -53,18 +65,24 @@ class WelcomeNotification extends Notification implements ShouldQueue
 
     public function toMail(mixed $notifiable): MailMessage
     {
-        $appUrl = config('app.frontend_url', config('app.url'));
-        $email = $notifiable->email ?? '';
-        $company = app(SettingsService::class)->requiredString('company.legal_name');
+        if ($this->resetUrl === null) {
+            $setup = app(PasswordResetService::class)->createResetLink($notifiable);
+            $this->resetUrl = $setup['url'];
+            $this->expiryMinutes = $setup['expiry_minutes'];
+        }
+        $brandName = app(EmailBrandingService::class)->data()['name'];
 
         return (new MailMessage)
-            ->subject("Welcome to {$company} ERP — Your Account is Ready")
-            ->greeting('Hi '.($notifiable->name ?? 'there').',')
-            ->line("Your {$company} ERP account has been created.")
-            ->line('Login URL: '.$appUrl)
-            ->line('Email: '.$email)
-            ->line('Temporary Password: '.$this->tempPassword)
-            ->line('You will be required to change your password on first login.')
-            ->salutation("— {$company} HR Department");
+            ->subject('['.$brandName.'] Your OGAMI ERP account is ready')
+            ->markdown('emails.account-access-link', [
+                'preheader' => 'Set a password to activate your OGAMI ERP account.',
+                'title' => 'Your account is ready',
+                'greeting' => 'Hello '.($notifiable->name ?? 'there'),
+                'message' => 'Your OGAMI ERP account has been created. Use the secure link to choose your password and sign in.',
+                'actionText' => 'Set your password',
+                'actionUrl' => $this->resetUrl,
+                'expiryMinutes' => $this->expiryMinutes,
+                'footerNote' => 'If you were not expecting this account, contact your company administrator.',
+            ]);
     }
 }

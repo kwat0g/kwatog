@@ -88,10 +88,10 @@ class MailQueueConfigurationTest extends TestCase
         $notifications = [
             new DailyProductionSummary([]),
             new WeeklyProductionSummary([]),
-            new WelcomeNotification('temporary-secret'),
+            new WelcomeNotification('https://app.ogami.test/reset-password?token=setup-token', 60),
             new PasswordResetLinkNotification('https://ogami.test/reset', 15),
-            new EmployeeWelcomeNotification('temporary-secret'),
-            new EmployeePasswordResetNotification('temporary-secret'),
+            new EmployeeWelcomeNotification('https://app.ogami.test/reset-password?token=setup-token', 60),
+            new EmployeePasswordResetNotification('https://app.ogami.test/reset-password?token=reset-token', 60),
             new ContactInquiryReceivedNotification(new ContactInquiry),
         ];
 

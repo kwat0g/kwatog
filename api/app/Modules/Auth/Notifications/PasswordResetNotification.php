@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Notifications;
 
-use App\Common\Services\SettingsService;
+use App\Common\Services\EmailBrandingService;
+use App\Modules\Auth\Services\PasswordResetService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Tests\Feature\HR\EmployeeWelcomeNotificationTest;
 
 class PasswordResetNotification extends Notification
 {
     use Queueable;
+
+    protected ?string $resetUrl = null;
+
+    protected int $expiryMinutes = 0;
+
+    // Keep the serialized property name so queued legacy password jobs can be
+    // converted into a fresh one-time reset link without mailing the password.
+    protected string $tempPassword = '';
 
     public $tries = 3;
 
@@ -25,11 +35,13 @@ class PasswordResetNotification extends Notification
      * cannot be initialized from the child's scope. Either way no employee
      * received their reset password.
      *
-     * @see \App\Modules\Auth\Notifications\WelcomeNotification
-     * @see \Tests\Feature\HR\EmployeeWelcomeNotificationTest
+     * @see WelcomeNotification
+     * @see EmployeeWelcomeNotificationTest
      */
-    public function __construct(protected string $tempPassword)
+    public function __construct(string $resetUrl, int $expiryMinutes)
     {
+        $this->resetUrl = $resetUrl;
+        $this->expiryMinutes = $expiryMinutes;
         $this->onQueue('mail')->afterCommit();
     }
 
@@ -43,16 +55,24 @@ class PasswordResetNotification extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
-        $appUrl = config('app.frontend_url', config('app.url'));
-        $company = app(SettingsService::class)->requiredString('company.legal_name');
+        if ($this->resetUrl === null) {
+            $reset = app(PasswordResetService::class)->createResetLink($notifiable);
+            $this->resetUrl = $reset['url'];
+            $this->expiryMinutes = $reset['expiry_minutes'];
+        }
+        $brandName = app(EmailBrandingService::class)->data()['name'];
 
         return (new MailMessage)
-            ->subject("Your {$company} ERP Password Has Been Reset")
-            ->greeting('Hi '.($notifiable->name ?? 'there').',')
-            ->line("An administrator has reset your {$company} ERP password.")
-            ->line('Login URL: '.$appUrl)
-            ->line('Temporary Password: '.$this->tempPassword)
-            ->line('You will be required to change your password on next login.')
-            ->salutation("— {$company} HR Department");
+            ->subject('['.$brandName.'] Your OGAMI ERP password was reset')
+            ->markdown('emails.account-access-link', [
+                'preheader' => 'Use a secure link to set a new OGAMI ERP password.',
+                'title' => 'Your password was reset',
+                'greeting' => 'Hello '.($notifiable->name ?? 'there'),
+                'message' => 'An administrator reset your password. Use the secure link to choose a new password before signing in.',
+                'actionText' => 'Set a new password',
+                'actionUrl' => $this->resetUrl,
+                'expiryMinutes' => $this->expiryMinutes,
+                'footerNote' => 'If you did not expect this change, contact your company administrator immediately.',
+            ]);
     }
 }

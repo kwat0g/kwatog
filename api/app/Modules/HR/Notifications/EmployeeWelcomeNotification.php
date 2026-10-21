@@ -16,9 +16,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
  */
 class EmployeeWelcomeNotification extends WelcomeNotification implements ShouldQueue
 {
-    public function __construct(string $tempPassword)
+    public function __construct(string $resetUrl, int $expiryMinutes)
     {
-        parent::__construct($tempPassword);
+        parent::__construct($resetUrl, $expiryMinutes);
         $this->afterCommit();
     }
 
@@ -27,7 +27,7 @@ class EmployeeWelcomeNotification extends WelcomeNotification implements ShouldQ
         app(EmailDeliveryFailureNotifier::class)->notifyPermission(
             'hr.employees.view',
             'Employee welcome email',
-            'The welcome email could not be delivered. Provide the temporary credentials through an approved channel.',
+            'The account setup link could not be delivered. Ask the employee to request a password reset or use an approved support process.',
             ['reason' => 'The queued welcome notification failed.'],
         );
     }

@@ -9,6 +9,7 @@ use App\Common\Services\TemporaryPasswordGenerator;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Services\PasswordResetService;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
 use App\Modules\HR\Exceptions\ProvisioningConfigurationException;
@@ -73,7 +74,10 @@ class UserProvisioningService
             ]);
 
             if (($options['send_welcome'] ?? true) === true) {
-                DB::afterCommit(fn () => $user->notify(new EmployeeWelcomeNotification($tempPassword)));
+                DB::afterCommit(function () use ($user): void {
+                    $setup = app(PasswordResetService::class)->createResetLink($user);
+                    $user->notify(new EmployeeWelcomeNotification($setup['url'], $setup['expiry_minutes']));
+                });
             }
 
             return $user->fresh(['role']);
@@ -161,7 +165,10 @@ class UserProvisioningService
             // the new temporary password can be used. Delivery is queued only
             // after this transaction commits.
             $this->revokeSessionsAndTokens($user);
-            DB::afterCommit(fn () => $user->notify(new EmployeePasswordResetNotification($temp)));
+            DB::afterCommit(function () use ($user): void {
+                $reset = app(PasswordResetService::class)->createResetLink($user);
+                $user->notify(new EmployeePasswordResetNotification($reset['url'], $reset['expiry_minutes']));
+            });
 
             return $temp;
         });

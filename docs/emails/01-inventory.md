@@ -1,6 +1,6 @@
 # Phase 1 — Email inventory and classification
 
-**Status:** provisional, based on static code inspection dated 2026-10-20. It is a review checkpoint, not approval to edit templates. `D` means current quality is below target based on source-level gaps; grades are provisional because unsafe local SMTP prevented rendering and runtime recipient checks. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
+**Status:** inventory reviewed; owner replied “proceed.” Source-level reclassification dated 2026-10-21; visual/client and selected runtime recipient checks remain incomplete. `D` means current quality is below target based on source-level gaps. E-030–E-033 now use secure links in the account-security implementation, pending test and visual verification. No email was sent.
 
 ## Master inventory
 
@@ -36,11 +36,11 @@
 | E-026 | Common — critical alert | Internal staff / system admin | Alert-exception | Internal | P1 | D → alert | Critical alert with retry → active recipients from per-alert configured roles → alert row/title/message/type/entity label/time |
 | E-027 | Production — daily production summary | Internal staff / executives | Digest-report | Internal | P2 | D → report | Daily scheduler → configured active role recipients → `ProductionSummaryService::forDate()` |
 | E-028 | Production — weekly production summary | Internal staff / executives | Digest-report | Internal | P2 | D → report | Weekly scheduler → configured active role recipients → `ProductionSummaryService::forWeek()` |
-| E-029 | Auth — password reset link | Internal staff / system admin | Account-security | Confidential | P1 | D → security | Password-reset request → affected user address → reset service token/expiry |
-| E-030 | Auth — temporary password reset | Internal staff / system admin | Account-security | Highly sensitive (credentials) | P0 | F → security | Legacy reset flow → affected user email → temporary password argument |
-| E-031 | Auth — welcome with temporary password | Internal staff / system admin | Account-security | Highly sensitive (credentials) | P0 | F → security | Admin user provisioning → new user email → temporary password and account record |
-| E-032 | HR — employee password reset | Internal staff | Account-security | Highly sensitive (credentials) | P0 | F → security | Employee account reset → user email → temporary password |
-| E-033 | HR — employee welcome with temporary password | Internal staff | Account-security | Highly sensitive (credentials) | P0 | F → security | Employee provisioning → new user's email → temporary password and employee/account record |
+| E-029 | Auth — password reset link | Internal staff / system admin | Account-security | Confidential | B → security | Password-reset request → affected active user's address → hashed one-time token and configured expiry |
+| E-030 | Auth — legacy temporary-password reset notification | Internal staff / system admin | Account-security | Highly sensitive (credentials) | B → security | Compatibility for already-queued reset jobs → original user → fresh one-time reset link; no active caller found |
+| E-031 | Auth — welcome account setup | Internal staff / system admin | Account-security | Confidential | B → security | Admin user provisioning with `send_welcome` → created user's address → fresh one-time setup link and configured expiry |
+| E-032 | HR — employee password reset | Internal staff | Account-security | Confidential | B → security | HR employee account reset → affected user's address → fresh one-time reset link and configured expiry |
+| E-033 | HR — employee welcome account setup | Internal staff | Account-security | Confidential | B → security | HR employee account provisioning → created user's address → fresh one-time setup link and configured expiry |
 | E-034 | Landing — contact inquiry received | System admin / sales inbox | Status-update | Confidential (personal data) | P2 | D → alert | Public inquiry submitted → configured sales/admin recipients → inquiry contact details and message |
 | E-035 | Test harness — email integration message | Test recipient only | System-ops (test-only) | Public-ish test data | N/A | N/A | Explicit feature-test path → fake mail transport expected → fixed test payload; excluded from production coverage |
 
@@ -125,14 +125,14 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 | Maintenance due / work assigned / breakdown | Scheduled reminders and generic notices exist; some call paths only notify in-app | Assigned technician and maintenance supervisor | Identify missed high-severity/out-of-shift alerts; use dedupe and escalation criteria. |
 | Quality inspection/NCR overdue and containment actions | Generic alert notifications and scheduled escalation paths exist; no dedicated template | QC owner, production/quality approver | Decide whether high-severity containment requires guaranteed mail; never email restricted/customer details without review. |
 | Supplier/customer document delivery | PO, invoice, receipt, credit note, delivery, complaint and return emails exist; coverage is incomplete across related lifecycle events | External contact recorded on transaction | Identify missing lifecycle messages (e.g. shipment dispatched/ETA, payment received) and confirm recipient consent/contractual need. |
-| Account onboarding | Welcome messages exist but include temporary passwords; no onboarding guidance-only secure variant found | New staff/portal user | Replace credential delivery with secure activation/reset before treating as complete. |
+| Account onboarding | Staff and portal welcome messages exist; E-005 and E-031/E-033 use one-time setup links in their redesigns | New staff/portal user | No new email recommended. Keep first-login steps in the secure setup page; HR review remains required. |
 | Scheduled export / production summary delivery failure | Failure notification is present for some commands; other job failures rely on Horizon/failed-job monitoring | Export owner / operations admin | Check all mail/scheduler failures reach a monitored channel; avoid sending full error details. |
 | Backup/restore and system health | Backup/restore jobs and scheduler-health mechanisms exist; no dedicated direct email found in static search | System administrators | Decide whether mail alert is needed; otherwise verify existing health dashboard/monitoring is monitored. |
 | Training expiry, onboarding, separation | In-app/generic messages and scheduled reminders exist | Employee, manager, HR based on visibility | Confirm sensitive content, preference policy, cadence, and stop conditions. |
 
 ## Likely unnecessary/noisy or sensitive email
 
-- E-030–E-033 temporary-password messages are inappropriate if live; confirm reachability and move to secure activation/reset flow in a separate security fix.
+- E-030 has no active constructor call; retain only while old queue payloads may exist, and remove after queue-retention/drain policy is confirmed. E-031–E-033 now use one-time setup/reset links in the pending account-security change.
 - E-023 generic notification mail spans internal event families and one customer portal delivery-date proposal. PR #256 adds central active-user/address validation and fixes customer address disclosure; the exhaustive caller-by-caller visibility audit remains pending (EF-042).
 - E-024 digest summarizes the unread count without marking items read; it may repeat the same backlog every run. Message bodies and titles are excluded to prevent sensitive notification details from entering email.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
@@ -142,10 +142,9 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 
 Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an approved email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. Owner reports DKIM setup succeeded for `ogamiph.dev` in Asia Pacific (Singapore); this has not been independently verified. SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To require confirmation from domain/email administrators.
 
-## Decisions needed before Phase 2
+## Review and environment status
 
-1. Confirm local external SMTP is disabled and Mailpit/MailHog/log/catch-all is configured before any send-capable testing or browser preview that might dispatch.
-2. Review this inventory and missing-email recommendation track. Phase 2 template changes remain stopped until that review.
+The owner approved continuing after the inventory summary. Local test/render work must force the `array` mailer or use an isolated Mailpit sink; never send real mail. Company values and statutory fields still need owner/accountant verification before external use.
 3. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
 4. Confirm the secure payslip link meets employee needs; temporary-password paths remain a separate P0 security-fix track.
 5. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
