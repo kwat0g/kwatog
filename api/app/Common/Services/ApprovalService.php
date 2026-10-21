@@ -352,9 +352,13 @@ class ApprovalService
             $recipients->where('id', '<>', $submitterId);
         }
         $recipients = $recipients->get()->filter(function (User $user) use ($approvable, $meta): bool {
+            if (! $user->hasPermission($meta['view_permission'])) {
+                return false;
+            }
+
             $class = $approvable->getMorphClass();
             if (! ApprovalSourceScope::hasScope($class)) {
-                return ApprovalTypeRegistry::userCanView($user, $meta);
+                return true;
             }
 
             $id = (int) $approvable->getKey();

@@ -30,7 +30,7 @@ final class ApprovalTypeRegistry
         'loan_write_off' => 'Loan write-offs',
     ];
 
-    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,link_record?:bool,permissions:array<int,string>}> */
+    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,view_permission:string,link_record?:bool,permissions:array<int,string>}> */
     private const TYPES = [
         'App\\Modules\\Leave\\Models\\LeaveRequest' => [
             'kind' => 'leave',
@@ -38,6 +38,7 @@ final class ApprovalTypeRegistry
             'table' => 'leave_requests',
             'number' => 'leave_request_no',
             'link' => '/hr/leaves/',
+            'view_permission' => 'leave.view',
             'permissions' => ['leave.view', 'leave.approve_dept', 'leave.approve_hr'],
         ],
         'App\\Modules\\Purchasing\\Models\\PurchaseRequest' => [
@@ -46,6 +47,7 @@ final class ApprovalTypeRegistry
             'table' => 'purchase_requests',
             'number' => 'pr_number',
             'link' => '/purchasing/purchase-requests/',
+            'view_permission' => 'purchasing.view',
             'permissions' => ['purchasing.view', 'purchasing.pr.approve'],
         ],
         'App\\Modules\\Purchasing\\Models\\PurchaseOrder' => [
@@ -54,6 +56,7 @@ final class ApprovalTypeRegistry
             'table' => 'purchase_orders',
             'number' => 'po_number',
             'link' => '/purchasing/purchase-orders/',
+            'view_permission' => 'purchasing.view',
             'permissions' => ['purchasing.view', 'purchasing.po.approve'],
         ],
         'App\\Modules\\Accounting\\Models\\BillPayment' => [
@@ -63,6 +66,7 @@ final class ApprovalTypeRegistry
             'number' => 'reference_number',
             'link' => '/accounting/bills/',
             'link_parent' => 'bill',
+            'view_permission' => 'accounting.bills.view',
             'permissions' => ['accounting.bills.view', 'accounting.bills.payment_approve'],
         ],
         'App\\Modules\\Loans\\Models\\EmployeeLoan' => [
@@ -71,6 +75,7 @@ final class ApprovalTypeRegistry
             'table' => 'employee_loans',
             'number' => 'loan_no',
             'link' => '/hr/loans/',
+            'view_permission' => 'loans.view',
             'permissions' => ['loans.view', 'loans.approve'],
         ],
         'App\\Modules\\Payroll\\Models\\PayrollPeriod' => [
@@ -79,6 +84,7 @@ final class ApprovalTypeRegistry
             'table' => 'payroll_periods',
             'number' => null,
             'link' => '/payroll/periods/',
+            'view_permission' => 'payroll.periods.view',
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
         ],
         // 2026-09-10 audit — both are ENFORCED chains (services call
@@ -94,6 +100,7 @@ final class ApprovalTypeRegistry
             // link_record=false tells linkFor() not to append the row hash.
             'link' => '/hr/employees',
             'link_record' => false,
+            'view_permission' => 'hr.salary_adjustments.view',
             'permissions' => ['hr.salary_adjustments.view', 'hr.salary_adjustments.act'],
         ],
         'App\\Modules\\Assets\\Models\\Asset' => [
@@ -102,6 +109,7 @@ final class ApprovalTypeRegistry
             'table' => 'assets',
             'number' => 'asset_code',
             'link' => '/assets/',
+            'view_permission' => 'assets.view',
             'permissions' => ['assets.view', 'assets.dispose.approve'],
         ],
         // Return Management has NO row scope, same as payroll: every holder of
@@ -116,6 +124,7 @@ final class ApprovalTypeRegistry
             'table' => 'return_requests',
             'number' => 'rma_number',
             'link' => '/return-management/',
+            'view_permission' => 'return_management.view',
             'permissions' => ['return_management.view', 'return_management.approve'],
         ],
     ];
