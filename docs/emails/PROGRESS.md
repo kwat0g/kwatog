@@ -16,11 +16,12 @@ Updated: 2026-10-21
 - E-007's existing four screenshots were re-rendered from `SupplierInvoiceStatusMail::render()` with the snapshot fixture and current logo variants, then inspected. 24,492-byte HTML; 1440px/390px light/dark browser captures fit. No mail was sent. See [E-007](E-007-supplier-invoice-status.md).
 - E-008's four screenshots were re-rendered from `SupplierPurchaseOrderCancelledMail::render()` with the cancellation snapshot and current logo variants, then inspected. 23,141-byte HTML; 1440px/390px light/dark browser captures fit. No mail was sent. See [E-008](E-008-supplier-po-cancellation.md).
 - E-009's four screenshots were re-rendered from `CustomerComplaintUpdateMail::render()` with a safe customer-facing snapshot and configured test SPA URL. 24,202-byte HTML; 1440px/390px light/dark captures fit. No mail was sent. See [E-009](E-009-customer-complaint-update.md).
-- Full CI on E-009 commit `eb496edb` ([API run](https://github.com/kwat0g/kwatog/actions/runs/39563277059)) stopped at PHPStan before PHPUnit: undefined `$creditNote` in the E-004 enqueue-failure log. Fixed to log the event snapshot hash in PR #222 commit `7f734897`; GitHub had not reported a new run at the last check.
+- E-012 PR #311 CI run [39565852712](https://github.com/kwat0g/kwatog/actions/runs/39565852712) failed at PHPStan before PHPUnit on the inherited E-004 undefined `$creditNote` enqueue-failure log. The correction exists in E-004 PR #222, but is not in E-011's current base branch; publish a small functional fix in the shared parent chain before expecting downstream CI to pass.
 - E-010 review found subtotal and VAT were missing from the sales-order email although included in the order total. Local PR #232 changes now snapshot subtotal/VAT and show them; rendered HTML is 29,277 bytes. Four 1440px/390px light/dark screenshots inspected; PHP 120.00 + PHP 14.40 = PHP 134.40, mobile has no horizontal overflow. Focused tests updated; CI pending. No mail sent.
 - E-011's existing four sales-order-decision screenshots were inspected at desktop/mobile and light/dark. Recipient fallback and event snapshot tests are documented in PR #234; the prior CI failure had the same E-004 PHPStan blocker. No mail sent.
 - E-012 applicant confirmation redesigned in draft PR [#311](https://github.com/kwat0g/kwatog/pull/311), stacked on E-011. Focused test passed (1 test, 6 assertions) with `Mail::fake()`; four light/dark desktop/mobile previews inspected. Candidate email still needs HR and data-protection review. No mail sent.
 - E-013 applicant status email redesigned and inspected in four light/dark desktop/mobile previews. Focused transition/rejection tests passed (2 tests, 11 assertions) with `Mail::fake()`. Found raw stage enums caused by public-property/view-data key collisions; isolated fix is in local commit `6b122579` with EF-025 coverage, and E-013 redesign is stacked on it in local commit `628cb1d3`. PR publication waits for E-012 run 39565852712 to finish. No mail sent.
+- E-014/E-015 interview notices redesigned in local commit `dfdcb121`, stacked on the interview snapshot fix. Four light/dark desktop/mobile previews per type inspected. Focused queue, snapshot, and content tests passed (2 tests, 14 assertions) with `Mail::fake()`. No mail sent.
 - Visual review and screenshots for every email are not complete. Real email-client rendering remains unverified.
 - No email was sent during this work.
 
@@ -40,6 +41,6 @@ Updated: 2026-10-21
 
 1. Wait for run 39556310646; inspect full test result.
 2. Publish the reviewed local foundation commits and rerun PR #213 checks.
-3. Validate reliability PR #214, then process the per-email PR chain in external/high-volume order; E-012 is in draft PR #311, E-013 awaits E-012 CI before publishing its fix/design PRs.
+3. Publish the inherited E-004 PHPStan fix into E-011's base chain, then rerun E-012 CI and publish the local E-013/E-014/E-015 fix and design PRs.
 4. Build/render every email in desktop/mobile and light/dark views; capture before/after screenshots in `docs/emails/screenshots/`.
 5. Complete the coverage report, missing-email recommendations, settings/deliverability checklist, and manual client checklist.
