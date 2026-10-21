@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Notifications;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Events\MachineBreakdownDetected;
@@ -28,6 +29,16 @@ class MachineBreakdownNotificationTest extends TestCase
     {
         $tech = $this->userWithRole('maintenance_tech');
         $pm = $this->userWithRole('production_manager');
+        $revokedTech = $this->userWithRole('maintenance_tech');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedTech->id,
+            'permission_id' => Permission::query()->where('slug', 'mrp.machines.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $pm->id,
+            'reason' => 'Machine visibility removed for notification audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $machine = Machine::factory()->create();
         $listener = app(NotifyOnMachineBreakdown::class);
@@ -41,6 +52,12 @@ class MachineBreakdownNotificationTest extends TestCase
             'notifiable_id' => $pm->id,
             'type' => 'maintenance.breakdown',
         ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedTech->id,
+            'type' => 'maintenance.breakdown',
+        ]);
+        $this->actingAs($pm)->getJson('/api/v1/mrp/machines/'.$machine->hash_id)->assertOk();
+        $this->actingAs($revokedTech)->getJson('/api/v1/mrp/machines/'.$machine->hash_id)->assertForbidden();
     }
 
     public function test_listener_includes_reason_and_machine_info_in_message(): void

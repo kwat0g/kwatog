@@ -26,7 +26,9 @@ class NotifyOnWorkOrderCompleted implements ShouldQueue
             $roles = array_values(array_filter((array) $this->settings->get('production.work_order_completed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('production.work_orders.view'))
+                ->values();
 
             $this->notifications->send($audience, 'production.wo_completed', [
                 'title' => "Work Order {$wo->wo_number} Completed",
