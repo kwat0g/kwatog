@@ -185,3 +185,5 @@ Continue the E-023 caller-by-caller audience, route, row-scope, payload, and sna
 - EF-121: CI for RFQ requester-access PR #324 found `maintenance.parts_requested` missing from SPA notification metadata. Added its Maintenance action entry on separate branch `fix/notification-meta-parts-requested`; no extra feature scope. Focused verification and separate draft PR wait for the active API suite.
 
 - E-023 static review: checked prebill invoice, budget, budget-transfer, and bill-payment notices against active/delegated approver rules, maker-checker, exact SPA/API destination guards, payload, deduplication, and `NotificationService` after-commit/email-opt-in behavior. No defect found. Caller-by-caller audit remains partial.
+
+- EF-122 found in permission-override email review: affected users receive raw permission slugs and `grant`/`revoke` values. Recorded in FINDINGS.md for a separate content fix; recipient, after-commit timing, opt-in, escaping, and data minimization checked.
