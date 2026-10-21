@@ -146,10 +146,14 @@ class FeatureEmailIntegrationTest extends TestCase
 
         $this->assertInstanceOf(SupplierDispatchResult::class, $result);
         Mail::assertQueued(SupplierPurchaseOrderMail::class, function (SupplierPurchaseOrderMail $mail) use ($purchaseOrder): bool {
+            $html = $mail->render();
+
             return $mail->hasTo('supplier@example.test')
                 && $mail->purchaseOrder->is($purchaseOrder)
-                && str_contains($mail->render(), 'PO-EMAIL-001')
-                && str_contains($mail->render(), '/portal/supplier/purchase-orders/'.$purchaseOrder->hash_id);
+                && str_contains($html, 'PO-EMAIL-001')
+                && str_contains($html, '/portal/supplier/purchase-orders/'.$purchaseOrder->hash_id)
+                && str_contains($html, 'background-color: #f9fafb')
+                && str_contains($html, 'border-bottom: 1px solid #f2f4f7');
         });
     }
 
