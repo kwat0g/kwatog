@@ -434,10 +434,7 @@ class SalesOrderResponseService
     private function notifySalesAudience(SalesOrder $so, SalesOrderResponse $response): void
     {
         try {
-            $audience = User::query()
-                ->where('is_active', true)
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.sales_orders.confirm'))
-                ->get();
+            $audience = $this->notifications->usersWithPermission('crm.sales_orders.confirm');
 
             $this->notifications->send($audience, 'customer.so_responded', [
                 'title'       => "Sales order {$so->so_number} — customer {$response->response_type->label()}",

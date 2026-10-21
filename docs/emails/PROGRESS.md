@@ -54,6 +54,7 @@ Updated: 2026-10-20
 - EF-041–043 recipient safety: implemented in draft PR #256, stacked on #255. Customer proposal mail now uses one valid active portal address per message; failure alerts resolve the current CRM permission audience, including overrides. Internal generic mail filters inactive/invalid recipients, deduplicates shared mailboxes, and reuses stable delivery keys on dedupe-key replay. Focused coverage: 25 tests, 89 assertions passed across notification service, customer proposal, and failure fallback. Test mailer array; no email sent. E-023 caller-by-caller visibility and route audit remains open; EF-042 is only partially resolved until that audit completes.
 - E-023 caller index: [E-023-caller-audit.md](E-023-caller-audit.md) records all 82 generic `NotificationService::send()` call sites found by full backend search. Audience/RBAC, record visibility, helper-built links, and payload source review remain incomplete.
 - EF-044 maintenance employee submit/rejection path: fixed in draft PR #257, stacked on #256. Assigned employees now pass the order-scoped maintenance access check; unassigned employees remain denied; rejection notices use the self-service order route. Focused `MaintenanceVerifiedRecoveryTest`: 1 passed, 6 assertions.
+- EF-045 sales response audience: fixed in draft PR #258, stacked on #257. Replaced role-only lookup with the existing effective permission resolver, honoring grants, revocations, and active-user status. Focused `SalesOrderResponseTest`: 1 passed, 5 assertions. Full E-023 caller RBAC audit remains open.
 - Email delivery: none sent.
 
 ## Blockers
@@ -68,6 +69,7 @@ Updated: 2026-10-20
 - See [FINDINGS.md](FINDINGS.md). Separate functional/security fixes from template work.
 - Inventory provisional count: 34 production Mailable/Notification implementations plus one test-only implementation. Generic `UserNotificationMail` represents multiple runtime trigger types.
 - EF-041 and EF-043 are fixed in draft PR #256. EF-042 central activity/address filtering is fixed; caller-specific record visibility/RBAC review remains pending. Do not claim E-023 recipient safety complete until its callers are audited.
+- EF-045 is fixed in draft PR #258; remaining callers may use role-only audience queries and still require review.
 - Delivery caveat: same-job ambiguous retries are suppressed and marked `unknown` to avoid duplicates. Separate duplicate dispatches are not deduplicated; provider acceptance does not prove inbox delivery.
 
 ## Next step
