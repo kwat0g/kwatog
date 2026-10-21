@@ -177,16 +177,19 @@ class BudgetController extends Controller
     /** Show a single budget with line items. */
     public function show(Request $request, Budget $budget): JsonResponse
     {
+        $actor = $request->user();
+        $canApprove = $actor instanceof User
+            && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budget->submitted_by])
+            && $budget->status === 'submitted'
+            && (int) $budget->submitted_by !== (int) $actor->id
+            && $this->budgetService->hasDifferentRoleFromSubmitter($budget, $actor);
+        abort_unless($actor instanceof User && ($actor->hasPermission('budgeting.view') || $canApprove), 403);
+
         $budget->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy', 'rejectedBy']);
         $this->consumption->hydrate(collect([$budget]));
-        $actor = $request->user();
         $budget->setAttribute(
             'can_approve',
-            $actor instanceof User
-                && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budget->submitted_by])
-                && $budget->status === 'submitted'
-                && (int) $budget->submitted_by !== (int) $actor->id
-                && $this->budgetService->hasDifferentRoleFromSubmitter($budget, $actor),
+            $canApprove,
         );
 
         return response()->json([

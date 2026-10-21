@@ -135,7 +135,7 @@ class BudgetService
             $notifications->send($audience, 'approval.action_required', [
                 'title' => "Budget {$locked->name} needs approval",
                 'message' => 'A submitted budget is waiting for review.',
-                'link_to' => "/budgeting/budgets/{$locked->hash_id}",
+                'link_to' => "/budgeting/{$locked->hash_id}",
                 'entity_type' => 'budget',
                 'entity_id' => $locked->hash_id,
             ], "budget:approval-required:{$locked->id}:{$locked->submitted_at->timestamp}");
@@ -203,7 +203,7 @@ class BudgetService
         app(NotificationService::class)->send($submitter, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget was returned for revision.' : 'Your budget was approved.',
-            'link_to' => "/budgeting/budgets/{$budget->hash_id}",
+            'link_to' => "/budgeting/{$budget->hash_id}",
             'entity_type' => 'budget',
             'entity_id' => $budget->hash_id,
         ], "budget:decision:{$budget->id}:".($budget->rejected_at?->timestamp ?? $budget->approved_at?->timestamp));

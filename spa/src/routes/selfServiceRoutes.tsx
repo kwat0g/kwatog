@@ -47,6 +47,7 @@ export const selfServiceRoutes = (
  {/* Attendance-gated */}
  <Route element={<ModuleGuard module="attendance" />}>
  <Route path="/self-service/dtr" element={<SelfServiceDtrPage />} />
+ <Route path="/self-service/overtime/:id" element={<SelfServiceOvertimePage />} />
  <Route path="/self-service/overtime" element={<SelfServiceOvertimePage />} />
  </Route>
 
@@ -62,6 +63,7 @@ export const selfServiceRoutes = (
 
  {/* Loans-gated */}
  <Route element={<ModuleGuard module="loans" />}>
+ <Route path="/self-service/loans/:id" element={<SelfServiceLoansPage />} />
  <Route path="/self-service/loans" element={<SelfServiceLoansPage />} />
  </Route>
 

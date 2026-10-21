@@ -199,4 +199,33 @@ class SelfServiceLoanLifecycleTest extends TestCase
             ->assertJsonCount(1, 'data.active')
             ->assertJsonCount(1, 'data.history');
     }
+
+    public function test_loan_deep_link_returns_only_the_owners_selected_request_beyond_history_limit(): void
+    {
+        $employee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $owner = User::factory()->create(['employee_id' => $employee->id]);
+        $otherEmployee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $other = User::factory()->create(['employee_id' => $otherEmployee->id]);
+        app(SettingsService::class)->set('self_service.history_limit', 1);
+        $linked = EmployeeLoan::factory()->create([
+            'employee_id' => $employee->id,
+            'loan_type' => LoanType::CashAdvance->value,
+            'status' => LoanStatus::Paid->value,
+        ]);
+        $linked->forceFill(['created_at' => now()->subDays(4), 'updated_at' => now()->subDays(4)])->save();
+        EmployeeLoan::factory()->create([
+            'employee_id' => $employee->id,
+            'loan_type' => LoanType::CompanyLoan->value,
+            'status' => LoanStatus::Cancelled->value,
+        ]);
+
+        $this->actingAs($owner)->getJson('/api/v1/hr/self-service/loans')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.history');
+        $this->actingAs($owner)->getJson("/api/v1/hr/self-service/loans/{$linked->hash_id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.history')
+            ->assertJsonPath('data.history.0.id', $linked->hash_id);
+        $this->actingAs($other)->getJson("/api/v1/hr/self-service/loans/{$linked->hash_id}")->assertNotFound();
+    }
 }

@@ -10,6 +10,8 @@ use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -260,6 +262,38 @@ class BudgetTransferTest extends TestCase
         // A role without the grant cannot even list.
         $outsider = User::factory()->withRole('employee')->create();
         $this->actingAs($outsider)->getJson('/api/v1/budget-transfers')->assertForbidden();
+    }
+
+    public function test_approval_only_user_can_open_only_transfer_they_can_approve(): void
+    {
+        [$service, $maker, , $from, $to] = $this->livePair('1000.00', '1000.00');
+        $transfer = $service->request([
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'Approval-only visibility probe.',
+        ], $maker->id);
+        $approver = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.approve')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $maker->id,
+            'reason' => 'Approval visibility regression test',
+        ]);
+
+        $this->assertFalse($approver->fresh()->hasPermission('budgeting.view'));
+        $this->actingAs($approver)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', true);
+
+        $sameRole = User::factory()->withRole('finance_officer')->create();
+        $this->actingAs($sameRole)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', false);
+        $outsider = User::factory()->withRole('employee')->create();
+        $this->actingAs($outsider)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")->assertForbidden();
     }
 
     /**

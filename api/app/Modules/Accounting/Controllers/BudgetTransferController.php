@@ -70,8 +70,14 @@ class BudgetTransferController extends Controller
     /** Show a single transfer. */
     public function show(Request $request, BudgetTransfer $budgetTransfer): JsonResponse
     {
+        $actor = $request->user();
+        $canApprove = $actor instanceof User
+            && ApprovalDelegation::canActForPermission($actor, 'budgeting.approve', [(int) $budgetTransfer->requested_by])
+            && $this->transfers->canApprove($budgetTransfer, $actor);
+        abort_unless($actor instanceof User && ($actor->hasPermission('budgeting.view') || $canApprove), 403);
+
         $budgetTransfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver', 'rejecter']);
-        $this->setCanApprove($budgetTransfer, $request);
+        $budgetTransfer->setAttribute('can_approve', $canApprove);
 
         return response()->json([
             'success' => true,

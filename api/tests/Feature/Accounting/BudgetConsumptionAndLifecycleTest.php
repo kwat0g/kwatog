@@ -13,6 +13,8 @@ use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Accounting\Services\BudgetFiscalYearResolver;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\FiscalYearService;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -176,6 +178,36 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
             'notifiable_id' => $submitter->id,
             'type' => 'approval.completed',
         ]);
+    }
+
+    public function test_eligible_approval_only_user_can_read_submitted_budget(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $service = app(BudgetService::class);
+        $budget = $service->create([
+            'fiscal_year_id' => $this->currentFiscalYear()->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Approval-only visibility probe',
+        ], [['account_id' => $this->expenseAccount()->id, 'jan' => '10.00']]);
+        $submitter = User::factory()->withRole('finance_officer')->create();
+        $service->submit($budget, $submitter->id);
+        $approver = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.approve')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $submitter->id,
+            'reason' => 'Approval-only visibility regression test',
+        ]);
+
+        $this->assertFalse($approver->fresh()->hasPermission('budgeting.view'));
+        $this->actingAs($approver)->getJson("/api/v1/budgets/{$budget->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.can_approve', true);
+
+        $outsider = User::factory()->withRole('employee')->create();
+        $this->actingAs($outsider)->getJson("/api/v1/budgets/{$budget->hash_id}")->assertForbidden();
     }
 
     public function test_submitted_budget_can_be_rejected_to_draft_with_a_reason(): void

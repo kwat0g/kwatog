@@ -5,13 +5,14 @@ import { NotFoundState } from '@/pages/error/NotFound';
 interface PermissionGuardProps {
  permission?: string;
  anyOf?: string[];
+ approvalAnyOf?: string[];
  standalone?: boolean;
  children: ReactNode;
 }
 
-export function PermissionGuard({ permission, anyOf, standalone = false, children }: PermissionGuardProps) {
- const { can } = usePermission();
- const allowed = permission ? can(permission) : Boolean(anyOf?.some(can));
+export function PermissionGuard({ permission, anyOf, approvalAnyOf, standalone = false, children }: PermissionGuardProps) {
+ const { can, canApprove } = usePermission();
+ const allowed = Boolean((permission && can(permission)) || anyOf?.some(can) || approvalAnyOf?.some(canApprove));
 
  if (!allowed) {
  // The backend deliberately answers permission middleware with 403, but a

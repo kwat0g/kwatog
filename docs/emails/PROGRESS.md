@@ -1,6 +1,6 @@
 # Email audit progress
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Status
 
@@ -63,6 +63,8 @@ Updated: 2026-10-20
 - EF-047 dunning email title and assertion: fixed in draft PR #262, stacked on #261. The template supplies an invoice-specific HTML title; test verifies scheduler result, tier, rendered content and subject. Queue deferral remains covered by shared queue tests because `RefreshDatabase` holds this test's transaction open. Focused test: 1 passed, 9 assertions.
 - EF-048 found in adjacent mail queue verification: `MailQueueConfigurationTest` omits a sender on its raw-message fixture, so Symfony's array transport fails before assertions. Test fixture correction tracked separately; no production transport contacted.
 - EF-048 test fixture: fixed in draft PR #263, stacked on #262. Test now sets a `.test` From name/address before using the array mailer. Focused test: 1 passed, 6 assertions.
+- EF-049 credit-note snapshot listener logged an undefined model variable after switching to snapshot data. Fixed in PR #221 branch `fix/credit-note-email-snapshot`; target-file PHPStan and 2 credit-note email tests / 12 assertions passed. CI rerun pending.
+- E-023 broken budget, budget-transfer, overtime, and loan deep links plus detail visibility are fixed in current draft PR #264, stacked on #263. HR deep-link APIs fetch the exact employee-owned record beyond list limits and return 404 cross-employee. Verification: 31 API tests / 177 assertions, 9 SPA tests, TypeScript typecheck, targeted lint, PHP syntax, targeted PHPStan, and route/auth source review passed. No email sent.
 - Email delivery: none sent.
 
 ## Blockers
@@ -82,4 +84,4 @@ Updated: 2026-10-20
 
 ## Next step
 
-Continue E-023 caller-by-caller route and RBAC audit, then redesign E-024 unread digest. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots for final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery.
+Continue E-023 caller-by-caller audience, record-visibility, payload-sensitivity, and data-source audit, then cover E-024–E-035. Recheck stacked PRs against the shared foundation; regenerate E-001–E-004 screenshots after final dark-mode/mobile CSS. Confirm company values with the company owner before external delivery. User reports DKIM setup succeeded for `ogamiph.dev` in AWS Asia Pacific (Singapore); DNS/provider state remains unverified here.
