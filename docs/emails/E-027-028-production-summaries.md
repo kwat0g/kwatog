@@ -9,7 +9,7 @@
 
 ## Content
 
-Daily values, quality counts, work-order rows, defects, and breakdown rows come directly from the summary service output. It shows at most ten work orders and five breakdowns, then reports the remaining row count and links to the production work-order page. User-controlled product and machine names are escaped by Blade; raw downtime descriptions are omitted.
+Daily values, quality counts, work-order rows, defects, and breakdown rows come directly from the summary service output. It shows at most ten work orders and five breakdowns, then reports the remaining row count and links to the production work-order page. User-controlled product, machine, and defect names have HTML tags stripped, whitespace collapsed, and retained text escaped by Blade; raw downtime descriptions are omitted.
 
 Weekly totals and week-over-week change come from `forWeek()`. A null comparison is reported as unavailable because the prior week had no good units; no percentage is invented.
 
@@ -17,4 +17,12 @@ Subjects use configured email branding and exact report dates. Both messages use
 
 ## Review and verification
 
-HTML/text assertions cover source values, labels, long reports, escaping, summary truncation, route, and subject. Local PHPUnit render and browser screenshots remain pending because PHP CLI and Docker test services are unavailable. Real email clients remain unverified. These internal production metrics need owner confirmation that the configured recipient roles match report access policy.
+The daily detail tables were changed to wrapping rows after a 390px preview showed their six columns clipping. User-provided product and machine names now have HTML tags stripped and whitespace collapsed before rendering; the hostile `<img>` sample displays as a dash in both alternatives. Singular “1 more work order/breakdown is” wording is covered.
+
+`ProductionSummaryEmailDesignTest`: 2 passed, 18 assertions, against isolated database `ogami_test_email_ef060_20261021`. The test subject includes the expected `[TESTING]` environment prefix. Mailer was `array`, with `mailpit@example.test` as the sink; no message was sent. Actual Markdown mail HTML/text were 34,250/1,739 bytes for daily and 21,061/696 bytes for weekly.
+
+All eight Chromium screenshots were inspected at 1440px and 390px in light and dark color schemes. Work-order and breakdown rows now wrap without horizontal clipping; totals, defect table, actions, and footer remain visible. Redacted plain-text renders are saved beside screenshots. Company address/contact values are hidden in screenshots and text samples.
+
+Screenshots: [daily desktop light](screenshots/e027-daily-desktop-light.png), [daily mobile light](screenshots/e027-daily-mobile-light.png), [daily desktop dark](screenshots/e027-daily-desktop-dark.png), [daily mobile dark](screenshots/e027-daily-mobile-dark.png), [weekly desktop light](screenshots/e027-weekly-desktop-light.png), [weekly mobile light](screenshots/e027-weekly-mobile-light.png), [weekly desktop dark](screenshots/e027-weekly-desktop-dark.png), [weekly mobile dark](screenshots/e027-weekly-mobile-dark.png).
+
+Browser rendering and plain-text content were inspected. Outlook, Gmail, Apple Mail, Yahoo, and mobile mail clients remain unverified. These internal production metrics still need owner confirmation that configured recipient roles match report access policy.
