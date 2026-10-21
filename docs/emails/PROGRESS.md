@@ -137,7 +137,7 @@ Updated: 2026-10-21
 - EF-104 / stock-adjustment outcome: requester keeps the approval result but loses the list link if `inventory.adjust` is revoked. `StockAdjustmentReasonTest` covers this; CI pending.
 - EF-105 / supplier response notice: recipients now also need `purchasing.view`, matching the PO detail route. `SupplierResponseTest` covers revocation; supplier decision snapshots and fallback checks already exist.
 - EF-106 / customer response alert: sales staff without effective order-view access no longer receive the CRM detail link. `SalesOrderResponseTest` covers revocation; CI pending.
-- EF-107 / work-order completion retry: listener retry could duplicate inbox and opted-in email notices. Draft PR adds a stable per-work-order dedupe key; `WorkOrderNotificationTest` covers a repeated event. CI pending; no real email sent.
+- EF-107 / work-order completion retry: listener retry could duplicate inbox and opted-in email notices. Local branch `fix/e023-work-order-completion-idempotency` adds a stable per-work-order dedupe key; `WorkOrderNotificationTest` covers replay and stored key. Commits `d956f58d` and `57df693f`; branch CI has not run. Existing PR #275 and #310 PHPUnit runs are still active, so no new suite has started. PHP is unavailable locally; no email sent.
 - EF-076 / E-023 overtime submission audience: configured department heads already matched the requester's department, but permission revocations were ignored. Draft PR #290 now filters by effective `attendance.ot.approve`; `OvertimeNotificationTest` covers the revoked-recipient case. CI exposed a hard-coded supplier portal URL assertion in an existing cancellation-mail test; it now checks configured frontend URL. No real email sent. Full caller audit remains open.
 
 ## Next step
