@@ -52,9 +52,18 @@
         -->
         <env name="APP_ENV" value="testing" force="true"/>
         <server name="APP_ENV" value="testing" force="true"/>
+        <env name="MAIL_TEST_TO" value="mail-test@example.test" force="true"/>
+        <server name="MAIL_TEST_TO" value="mail-test@example.test" force="true"/>
         <!-- Legacy measurement tests use a deterministic default; checklist tests opt in explicitly. -->
         <env name="QC_CHECKLIST_CAPTURE_ENABLED" value="false" force="true"/>
         <server name="QC_CHECKLIST_CAPTURE_ENABLED" value="false" force="true"/>
+        <env name="QC_COUNTED_CAPTURE_ENABLED" value="false" force="true"/>
+        <server name="QC_COUNTED_CAPTURE_ENABLED" value="false" force="true"/>
+        <!-- Finish-first QC is opt-in per test (config() in setUp); api/.env carries
+             WO_FINISH_FIRST_QC_ENABLED=true for the deployed app, which must not leak
+             into the suite and flip legacy-workflow fixtures. -->
+        <env name="WO_FINISH_FIRST_QC_ENABLED" value="false" force="true"/>
+        <server name="WO_FINISH_FIRST_QC_ENABLED" value="false" force="true"/>
         <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost,localhost:3000,localhost:5173,127.0.0.1,127.0.0.1:8000,::1" force="true"/>
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
         <env name="BCRYPT_ROUNDS" value="4"/>
