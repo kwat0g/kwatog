@@ -62,6 +62,7 @@ Updated: 2026-10-20
 - EF-047 RFQ state assertions: fixed in draft PR #261, stacked on #260. Approval tests now verify the existing automatic supplier-portal dispatch reaches `Sent` and records `sent_to_supplier_at`. Focused tests: 2 passed, 33 assertions.
 - EF-047 dunning email title and assertion: fixed in draft PR #262, stacked on #261. The template supplies an invoice-specific HTML title; test verifies scheduler result, tier, rendered content and subject. Queue deferral remains covered by shared queue tests because `RefreshDatabase` holds this test's transaction open. Focused test: 1 passed, 9 assertions.
 - EF-048 found in adjacent mail queue verification: `MailQueueConfigurationTest` omits a sender on its raw-message fixture, so Symfony's array transport fails before assertions. Test fixture correction tracked separately; no production transport contacted.
+- EF-048 test fixture: fixed in draft PR #263, stacked on #262. Test now sets a `.test` From name/address before using the array mailer. Focused test: 1 passed, 6 assertions.
 - Email delivery: none sent.
 
 ## Blockers
