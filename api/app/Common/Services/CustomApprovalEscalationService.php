@@ -171,12 +171,12 @@ class CustomApprovalEscalationService
         ])));
         $routes = [
             'overtime' => ['Overtime request', 'attendance.ot.approve', "/hr/attendance/overtime/{$hashId}", ['attendance.view']],
-            'stock_adjustment' => ['Stock adjustment', 'inventory.adjust.approve', '/inventory/stock-adjustments', ['inventory.adjust', 'inventory.adjust.approve']],
+            'stock_adjustment' => ['Stock adjustment', 'inventory.adjust.approve', '/inventory/stock-adjustments', ['inventory.adjust']],
             'item_cost_review' => ['Supplier cost review', 'inventory.costs.approve', '/crm/price-agreements/cost-reviews', ['inventory.costs.review']],
             'stock_count_variance' => ['Stock-count variance', 'inventory.stock_count.manage', '/inventory/stock-count?session_id='.app('hashids')->encode((int) ($row->session_id ?? 0)).'&count_item_id='.$hashId, ['inventory.stock_count.view']],
             'payroll_adjustment' => ['Payroll adjustment', ['payroll.adjustments.approve', 'payroll.adjustments.reject'], '/payroll/adjustments', ['payroll.adjustments.view']],
-            'budget' => ['Budget', 'budgeting.approve', "/budgeting/{$hashId}", ['budgeting.view', 'budgeting.approve']],
-            'budget_transfer' => ['Budget transfer', 'budgeting.approve', "/budgeting/transfers/{$hashId}", ['budgeting.view', 'budgeting.approve']],
+            'budget' => ['Budget', 'budgeting.approve', "/budgeting/{$hashId}", ['budgeting.view']],
+            'budget_transfer' => ['Budget transfer', 'budgeting.approve', "/budgeting/transfers/{$hashId}", ['budgeting.view']],
             'invoice_prebill' => ['Prebill invoice', 'accounting.invoices.prebill_approve', "/accounting/invoices/{$hashId}", ['accounting.invoices.view']],
             'supplier_listing' => ['Supplier listing', 'purchasing.supplier_listings.review', '/purchasing/supplier-listings', ['purchasing.supplier_listings.view']],
             'loan_write_off' => ['Loan write-off', 'loans.write_off.approve', "/hr/loans/{$hashId}", ['loans.view']],
