@@ -62,7 +62,8 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Console/Commands/CheckMaintenanceAssignment.php:68` | `$notifications->send($supervisors, 'maintenance.shift_handover', NotifyMaintenanceWorkOrder::payload(` |
 | `api/app/Modules/Quality/Services/InspectionService.php:2393` | `app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [` |
 | `api/app/Modules/Quality/Services/EffectivenessService.php:279` | `$this->notifications->send($recipient, $type, [` |
-| `api/app/Modules/HR/Services/TrainingExpiryService.php:169` | `$this->notifications->send($recipients, 'training.expiry', [` |
+| `api/app/Modules/HR/Services/TrainingExpiryService.php:186` | `$this->notifications->send($employeeRecipients, 'training.expiry', $payload)` — employee self-notice; no HR detail link. |
+| `api/app/Modules/HR/Services/TrainingExpiryService.php:190` | `$this->notifications->send($staffRecipients, 'training.expiry', $payload)` — configured staff audience; employee detail link after access filtering. |
 | `api/app/Modules/HR/Services/RecruitmentService.php:717` | `$this->notifications->send($hrUsers, 'recruitment.new_application', [` |
 | `api/app/Modules/Inventory/Listeners/NotifyOnLowStockPrCreated.php:35` | `$this->notifications->send($audience, 'inventory.low_stock', [` |
 | `api/app/Modules/Quality/Listeners/TriggerOutgoingQC.php:158` | `app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [` |
