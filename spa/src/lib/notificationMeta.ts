@@ -174,6 +174,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   // ── Maintenance, planning & approvals ────────────────────────────────
   mrp_run_completed: { icon: LuFactory, group: 'system', label: 'MRP' },
   'maintenance.assignment_needed': { icon: LuUsers, group: 'approvals', label: 'Maintenance' },
+  'maintenance.parts_requested': { icon: LuPackageCheck, group: 'approvals', label: 'Maintenance' },
   'maintenance.assigned': { icon: LuWrench, group: 'system', label: 'Maintenance' },
   // Warehouse confirmed the spare parts (F-007): status update to the technician,
   // not an approval or an alert — "Repair can continue."
