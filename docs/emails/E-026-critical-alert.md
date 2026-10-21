@@ -17,4 +17,4 @@ The shared Markdown shell supplies the configured logo variants, company identit
 
 This is an internal operational notice. Confirm configured alert roles match operational ownership. No personal-data or statutory content is intentionally included. Regression test excludes a configured-role user whose effective `alerts.view` permission was revoked. Local test mail remains array-only; no real email sent.
 
-Browser screenshots and actual rendered-MIME assertions are pending because this workspace has no PHP CLI or active Docker test services. Real email clients remain unverified.
+Rendered HTML was captured in Chromium at 1440px desktop and 390px mobile, in light and dark modes; the four screenshots show the logo, alert facts, CTA, and footer without viewport overflow. The network-isolated render used `MAIL_MAILER=array`; no email was sent. Rendered-MIME assertions remain pending. Real email clients remain unverified.
