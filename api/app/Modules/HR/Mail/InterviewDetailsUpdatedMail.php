@@ -6,30 +6,43 @@ namespace App\Modules\HR\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\EmailBrandingService;
-use App\Modules\HR\Enums\InterviewOutcome;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
 
 class InterviewDetailsUpdatedMail extends QueuedMailable
 {
-    use SerializesModels;
+    public readonly string $applicantName;
+    public readonly string $positionTitle;
+    public readonly string $scheduledAt;
+    public readonly string $location;
+    public readonly string $interviewerName;
+    public readonly ?string $outcome;
+    public readonly string $trackingCode;
+    private readonly string $applicationHashId;
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(
-        public readonly JobApplication $application,
-        public readonly ApplicationInterview $interview,
+        JobApplication $application,
+        ApplicationInterview $interview,
         public readonly array $fallbackUserIds = [],
     ) {
+        $this->applicantName = $application->full_name;
+        $this->positionTitle = $application->jobPosting->title;
+        $this->scheduledAt = $interview->scheduled_at->copy()->setTimezone((string) config('app.timezone', 'Asia/Manila'))->format('F j, Y g:i A');
+        $this->location = $interview->location ?? 'To be confirmed';
+        $this->interviewerName = $interview->interviewer_name;
+        $this->outcome = $interview->outcome?->label();
+        $this->trackingCode = $application->tracking_code;
+        $this->applicationHashId = $application->hash_id;
         $this->afterCommit();
     }
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Interview update — {$this->application->jobPosting->title}");
+        return new Envelope(subject: "Interview update — {$this->positionTitle}");
     }
 
     public function content(): Content
@@ -40,15 +53,13 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
         return new Content(
             markdown: 'emails.recruitment.interview-updated',
             with: [
-                'applicantName' => $this->application->full_name,
-                'positionTitle' => $this->application->jobPosting->title,
-                'scheduledAt' => $this->interview->scheduled_at->format('F j, Y g:i A'),
-                'location' => $this->interview->location ?? 'To be confirmed',
-                'interviewerName' => $this->interview->interviewer_name,
-                'outcome' => $this->interview->outcome instanceof InterviewOutcome
-                    ? $this->interview->outcome->label()
-                    : null,
-                'trackingCode' => $this->application->tracking_code,
+                'applicantName' => $this->applicantName,
+                'positionTitle' => $this->positionTitle,
+                'scheduledAt' => $this->scheduledAt,
+                'location' => $this->location,
+                'interviewerName' => $this->interviewerName,
+                'outcome' => $this->outcome,
+                'trackingCode' => $this->trackingCode,
                 'trackingUrl' => $base.'/careers/track',
                 'companyName' => $brand['name'],
             ],
@@ -60,11 +71,11 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment interview update',
-            "The interview update email for {$this->application->full_name} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+            "The interview update email for {$this->applicantName} could not be delivered. Review the interview and contact the candidate through an approved channel.",
             [
-                'link_to' => '/hr/recruitment/applications/'.$this->application->hash_id,
+                'link_to' => '/hr/recruitment/applications/'.$this->applicationHashId,
                 'entity_type' => 'job_application',
-                'entity_id' => $this->application->hash_id,
+                'entity_id' => $this->applicationHashId,
                 'reason' => 'The candidate interview update email job failed in the queue.',
             ],
         );

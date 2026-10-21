@@ -311,10 +311,26 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertStatus(201);
         $response->assertJsonPath('data.interviewer_name', 'Maria Santos');
         $this->assertDatabaseCount('application_interviews', 1);
-        Mail::assertQueued(InterviewScheduledMail::class, fn (InterviewScheduledMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
-            && $mail->interview->interviewer_name === 'Maria Santos'
-        );
+        $this->application->forceFill(['first_name' => 'Changed'])->save();
+        $this->posting->update(['title' => 'Changed title']);
+        $interview = ApplicationInterview::query()->firstOrFail();
+        $expectedScheduledAt = $interview->scheduled_at->copy()
+            ->setTimezone((string) config('app.timezone'))
+            ->format('F j, Y g:i A');
+        $interview->forceFill([
+            'location' => 'Changed after queue',
+            'interviewer_name' => 'Changed interviewer',
+            'scheduled_at' => now()->addDays(6),
+        ])->save();
+        Mail::assertQueued(InterviewScheduledMail::class, function (InterviewScheduledMail $mail) use ($expectedScheduledAt): bool {
+            return $mail->hasTo('juan@test.com')
+                && $mail->applicantName === 'Juan Test'
+                && $mail->positionTitle === 'Test Position'
+                && $mail->interviewerName === 'Maria Santos'
+                && $mail->location === 'HR Office, 2nd Floor'
+                && $mail->scheduledAt === $expectedScheduledAt
+                && str_contains($mail->render(), 'HR Office, 2nd Floor');
+        });
     }
 
     public function test_hr_can_reschedule_interview_and_candidate_update_email_is_queued(): void
@@ -340,10 +356,12 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.location', 'Zoom interview');
         $response->assertJsonPath('data.interviewer_name', 'Ana Reyes');
+        $interview->fresh()->forceFill(['location' => 'Changed after queue', 'outcome' => 'failed'])->save();
         Mail::assertQueued(InterviewDetailsUpdatedMail::class, fn (InterviewDetailsUpdatedMail $mail): bool =>
             $mail->hasTo('juan@test.com')
-            && $mail->interview->location === 'Zoom interview'
-            && $mail->interview->outcome?->value === 'passed'
+            && $mail->location === 'Zoom interview'
+            && $mail->outcome === 'Passed'
+            && str_contains($mail->render(), 'Zoom interview')
         );
     }
 
