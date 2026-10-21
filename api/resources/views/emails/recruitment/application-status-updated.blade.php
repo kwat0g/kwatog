@@ -1,28 +1,35 @@
-<x-mail::message>
-# Your application status has been updated
+<x-mail::message :preheader="'Your application for '.$positionTitle.' is now '.$currentStageLabel.'.'" title="Application status updated">
+# Application status update
 
-Dear {{ $applicantName }},
+Hello {{ $applicantName }},
 
-There is an update to your application for the **{{ $positionTitle }}** position at {{ $companyName }}.
+{{ $companyName }} has updated the status of your application for **{{ $positionTitle }}**.
 
-| Detail | Information |
-|---|---|
-| Previous status | {{ $previousStageLabel }} |
-| Current status | **{{ $currentStageLabel }}** |
-| Tracking code | **{{ $trackingCode }}** |
+<x-mail::panel>
+**Previous status**<br>
+{{ $previousStageLabel }}
+
+**Current status**<br>
+{{ $currentStageLabel }}
+
+**Application tracking code**<br>
+{{ $trackingCode }}
+</x-mail::panel>
 
 @if ($currentStageLabel === 'Not Selected')
-Thank you for your interest in {{ $companyName }}. After review, we have decided to move forward with other candidates for this position.
+Thank you for your interest in {{ $companyName }}. After reviewing your application, we have decided to move forward with other candidates.
 @elseif ($currentStageLabel === 'Hired')
-Congratulations. Our HR team will contact you with the next steps.
+Our HR team will contact you with information about next steps.
 @elseif ($currentStageLabel === 'Offer Extended')
 Our HR team will contact you with the offer details and next steps.
 @else
-Our recruitment team will continue to review your application and will contact you when there is another update.
+Our recruitment team will contact you if there is another update.
 @endif
 
-<x-mail::button :url="$trackingUrl">Track Your Application</x-mail::button>
+<x-mail::button :url="$trackingUrl">Check application status</x-mail::button>
+
+Keep your tracking code private. You received this email because an application was submitted using this email address.
 
 Regards,<br>
-<strong>{{ $companyName }} HR Team</strong>
+{{ $companyName }} Human Resources
 </x-mail::message>

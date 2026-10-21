@@ -267,6 +267,8 @@ class RecruitmentApplicationTest extends TestCase
             return $mail->hasTo('juan@test.com')
                 && $mail->previousStage === 'new'
                 && $mail->currentStage === 'screening'
+                && str_contains($html, '<title>Application status updated</title>')
+                && str_contains($html, 'Check application status')
                 && ! str_contains($html, 'screening');
         });
     }
