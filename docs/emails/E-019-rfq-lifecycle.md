@@ -20,6 +20,7 @@ Each email is queued after the lifecycle event commits. The outbox captures RFQ 
 
 - `SupplierRfqLifecycleMailTest`: 1 test passed, 73 assertions. Covers all five message variants, snapshot values, Manila date display, frontend link, footer settings, hostile markup, header newline neutralization, unresolved placeholders, and HTML size.
 - Chromium rendered 20 screenshots: five variants at 1440px and 390px, each in light and dark mode. All images loaded; measured document width matched viewport and no element overflowed horizontally. Screenshots are in `screenshots/`.
+- Reopened `e019-rfq-lifecycle-published-invited-desktop-light.png`: the raw Markdown detail table lacks the shared header fill and row separators. Shared CSS fix is in draft PR #320; refresh all 20 captures after it lands.
 - Rendered HTML used the array mailer and the supplied test branding values. No email transport was contacted.
 - Browser screenshots do not prove behavior in Outlook, Gmail, Apple Mail, or other real clients. Verify with the manual client checklist before external rollout.
 
