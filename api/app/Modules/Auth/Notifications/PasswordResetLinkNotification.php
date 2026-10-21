@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Notifications;
 
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Throwable;
 
 /**
  * Self-service "forgot password" link. Distinct from PasswordResetNotification
@@ -54,5 +56,15 @@ class PasswordResetLinkNotification extends Notification implements ShouldQueue
                 'expiryMinutes' => $this->expiryMinutes,
                 'footerNote' => 'If you did not request a reset, no action is required. Your current password will stay the same.',
             ]);
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+            'admin.users.manage',
+            'Password reset email',
+            'A requested password reset link could not be delivered. Ask the user to request a new link.',
+            ['reason' => 'The queued reset notification failed.'],
+        );
     }
 }

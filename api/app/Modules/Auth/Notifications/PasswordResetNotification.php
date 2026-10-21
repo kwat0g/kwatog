@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Notifications;
 
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Auth\Services\PasswordResetService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Throwable;
 use Tests\Feature\HR\EmployeeWelcomeNotificationTest;
 
 class PasswordResetNotification extends Notification
@@ -74,5 +76,15 @@ class PasswordResetNotification extends Notification
                 'expiryMinutes' => $this->expiryMinutes,
                 'footerNote' => 'If you did not expect this change, contact your company administrator immediately.',
             ]);
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+            'admin.users.manage',
+            'Password reset email',
+            'An administrator-issued password reset link could not be delivered. Assist the user through the approved reset flow.',
+            ['reason' => 'The queued reset notification failed.'],
+        );
     }
 }

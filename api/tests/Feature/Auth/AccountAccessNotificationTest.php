@@ -7,10 +7,13 @@ namespace Tests\Feature\Auth;
 use App\Modules\Auth\Models\PasswordResetRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\PasswordResetNotification;
+use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
+use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\Channels\MailChannel;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use ReflectionProperty;
 use Tests\TestCase;
@@ -22,6 +25,7 @@ class AccountAccessNotificationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
         config(['app.frontend_url' => 'https://app.ogamiph.test']);
     }
@@ -81,6 +85,37 @@ class AccountAccessNotificationTest extends TestCase
         $this->assertStringContainsString('Your account is ready', (string) $message->getHtmlBody());
         $this->assertStringContainsString('sample-setup-token', (string) $message->getTextBody());
         $this->assertStringNotContainsString('Legacy-Temp-Secret!', (string) $message->getHtmlBody());
+    }
+
+    public function test_failed_account_security_notifications_alert_admin_without_logging_the_token(): void
+    {
+        $admin = User::factory()->withRole('system_admin')->create();
+        $employee = User::factory()->withRole('employee')->create();
+        $token = 'must-not-appear-in-failure-alert';
+        $notifications = [
+            new WelcomeNotification('https://app.ogamiph.test/reset-password?token='.$token, 60),
+            new PasswordResetNotification('https://app.ogamiph.test/reset-password?token='.$token, 60),
+            new PasswordResetLinkNotification('https://app.ogamiph.test/reset-password?token='.$token, 60),
+        ];
+
+        foreach ($notifications as $notification) {
+            $notification->failed(new \RuntimeException('provider exception contains '.$token));
+        }
+
+        $rows = DB::table('notifications')
+            ->where('notifiable_id', $admin->id)
+            ->where('type', 'email.delivery_failed')
+            ->get();
+
+        $this->assertCount(3, $rows);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $employee->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        foreach ($rows as $row) {
+            $this->assertStringNotContainsString($token, $row->data);
+            $this->assertStringNotContainsString('provider exception', $row->data);
+        }
     }
 
     private function simulateLegacyQueuePayload(WelcomeNotification|PasswordResetNotification $notification, string $legacyPassword): void
