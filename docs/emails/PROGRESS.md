@@ -18,6 +18,7 @@ Updated: 2026-10-21
 
 - E-001 invoice issued, E-002 official receipt, and E-003 invoice dunning now use the shared email shell's preheader/title, clearer key-fact tables, and consistent peso display. Invoice line items use a stacked, mobile-safe layout. No trigger, recipient, or record source changed.
 - Rendered the three mailables with synthetic fixture records in a network-isolated PHP container, with `MAIL_MAILER=array`; no email was sent. Playwright screenshots cover 1440px desktop and 390px mobile in light/dark (`e001-accounting-*`, `e002-accounting-*`, `e003-accounting-*`). Inspected all 12 captures; viewport and document widths match. The first invoice line-item table wrapped badly on mobile, so it now uses a stacked list. E-003 links to the existing customer invoice detail route; the portal layout redirects unauthenticated users to sign-in while preserving that path. Added a focused link assertion; no local PHPUnit rerun. PR #325's CI check was already running on an earlier commit. Real email clients remain unverified.
+- Reviewed existing desktop/light and mobile/dark captures for E-011–E-017 and E-020–E-022. No visible clipping or theme defects found in those captures. E-017's summary table wraps on mobile but remains readable. E-010's compressed item table was changed to stacked details in PR #232 commit `0006d775`; the E-018 supplier PO item table received the same layout in local commit `a18dde45`. Both updated previews remain pending. No tests or mail sends were run for this review.
 
 ## Blockers
 
