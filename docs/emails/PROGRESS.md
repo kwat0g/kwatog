@@ -52,4 +52,4 @@ Updated: 2026-10-21
 2. After the active run ends, publish shared baseline fixes and align affected PR bases: E-011/E-012 with #312, and downstream PRs with the E-008/E-009 URL-test and array-sender fixes in #275. Rerun affected checks.
 3. Publish local E-013, E-014/E-015, and E-016 functional/design branches as independent draft PRs once their parent checks are current.
 4. Audit existing E-017–E-034 PRs and the E-035 harness against inventory, including current CI, dependencies, screenshots, and focused test evidence. Refresh stale findings and coverage docs.
-5. Finish the master coverage report, company/deliverability checklist, and visual review for every remaining email. Real email-client rendering remains unverified.
+5. Finish the master coverage report and visual review for every remaining email. The company/deliverability checklist is in [02-foundation.md](02-foundation.md); company values, SPF/DMARC, bounce handling, and Reply-To still need external verification. Real email-client rendering remains unverified.
