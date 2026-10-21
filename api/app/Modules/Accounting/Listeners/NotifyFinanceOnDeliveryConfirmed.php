@@ -21,28 +21,30 @@ class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
         try {
             $invoice = $event->invoiceId ? Invoice::find($event->invoiceId) : null;
 
-            $invoiceLabel = $invoice?->invoice_number ?? '(draft)';
-            $message = $invoice
-                ? "Delivery {$event->delivery->delivery_number} confirmed. Draft invoice {$invoiceLabel} ready."
-                : "Delivery {$event->delivery->delivery_number} confirmed. Manual invoicing required.";
-
-            $link = $invoice
-                ? "/accounting/invoices/{$invoice->hash_id}"
-                : "/supply-chain/deliveries/{$event->delivery->hash_id}";
+            $permission = $invoice ? 'accounting.invoices.view' : 'accounting.invoices.create';
 
             $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('accounting.delivery_confirmed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $financeUsers = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission($permission));
 
-            $this->notifications->send($financeUsers, 'chain.delivery_confirmed', [
-                'title'       => "Delivery {$event->delivery->delivery_number} Confirmed",
-                'message'     => $message,
-                'link_to'     => $link,
-                'entity_type' => 'delivery',
-                'entity_id'   => $event->delivery->hash_id,
-            ]);
+            $data = $invoice
+                ? [
+                    'title' => 'Draft invoice ready',
+                    'message' => "Draft invoice {$invoice->invoice_number} is ready for review.",
+                    'link_to' => "/accounting/invoices/{$invoice->hash_id}",
+                    'entity_type' => 'invoice',
+                    'entity_id' => $invoice->hash_id,
+                ]
+                : [
+                    'title' => 'Delivery confirmed; manual invoice needed',
+                    'message' => 'Automatic invoicing did not create a draft. Open invoice creation to continue manually.',
+                    'link_to' => '/accounting/invoices/create',
+                ];
+
+            $this->notifications->send($financeUsers, 'chain.delivery_confirmed', $data);
         } catch (\Throwable $e) {
             Log::warning('NotifyFinanceOnDeliveryConfirmed failed', ['error' => $e->getMessage()]);
             throw $e;
