@@ -193,7 +193,8 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
             rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/supplier/purchase-orders/',
             $html,
         );
-        self::assertStringContainsString('Block 2, Lots 1 &amp; 2', $html);
+        $companyAddress = app(\App\Common\Services\SettingsService::class)->requiredString('company.address');
+        self::assertStringContainsString(e($companyAddress), $html);
         self::assertLessThan(102400, strlen($html));
         self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
         $mail->assertSeeInText('Do not ship or invoice further items');
