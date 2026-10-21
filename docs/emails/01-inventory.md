@@ -31,7 +31,7 @@
 | E-021 | Returns — return request update | External customer or supplier | Status-update | Confidential | P2 | B → status | Return request lifecycle update → validated event-time party email; authorized internal fallback on failure → event-time return request snapshot |
 | E-022 | Supply Chain — delivery confirmed | External customer | Transactional-document | Confidential | P1 | B → document | Delivery confirmed → validated event-time customer email; authorized internal fallback on failure → event-time delivery/sales-order/invoice snapshot |
 | E-023 | Common — generic user notification | Internal staff, approvers, executives, system admins, and customer portal contacts (varies by caller) | Action-required / status-update / alert-exception | Internal to highly sensitive (varies by type) | P1 | B → action/status/alert | `NotificationService::send()` plus explicit internal per-type email opt-in; one direct customer delivery-date proposal path bypasses that preference → caller-selected users or active customer portal contacts → caller-supplied title/message/link and related record |
-| E-024 | Common — unread notification digest | Internal staff, approvers, executives, system admins | Digest-report | Internal to highly sensitive (depends on unread items) | P2 | D → digest | Scheduled digest → users with global digest opt-in and usable email → persisted unread notification rows |
+| E-024 | Common — unread notification digest | Internal staff, approvers, executives, system admins | Digest-report | Internal (unread count only) | P2 | D → digest | Scheduled digest → active users with a global digest opt-in and valid email → unread notification count; no notification body or title leaves the app |
 | E-025 | Common — scheduled export | Internal staff / system admin | Digest-report | Internal to confidential (financial), may include personal data | P1 | D → report | Scheduled export due → export's configured recipients; exporter checks owner permission/scope → export query, filters, columns, artifact |
 | E-026 | Common — critical alert | Internal staff / system admin | Alert-exception | Internal; may include confidential record identifiers | P1 | D → alert | Critical alert with retry → recipients resolved through alert permission/role logic → alert row/title/message/entity |
 | E-027 | Production — daily production summary | Internal staff / executives | Digest-report | Internal | P2 | D → report | Daily scheduler → production summary audience → daily summary values |
@@ -110,7 +110,7 @@ These are type families, not a claim that every similarly named event is mailed.
 | Recruitment | Candidate address stored on application | Application and interview records | PII minimization; public vs internal comments |
 | User and portal account security | Target account address | User/portal identity and reset/invitation token | No plaintext credentials; signed/expiring frontend link; no token logs |
 | Internal operational event | Caller-selected role/permission/owner; email opt-in and valid non-empty address | Business record plus generic notification payload | RBAC scope, in-app/email preference coherence, sensitive generic message content |
-| Digest | Global digest preference and user address | Persisted unread notification rows | Active account status, sensitive item summarization, deep-link authorization |
+| Digest | Active user with global digest preference and valid address | Persisted unread count only; item payloads stay in the app | Exact count, preference opt-in, authenticated SPA route |
 | Scheduled export | Configured recipients; exporter's owner permission and row-scope checks | Shared exporter result, selected columns/filters/date range | Recipients must be authorized for exported records; exact artifact parity |
 | Payslip | Employee user address and enabled setting | Final payroll and generated PDF | Highly sensitive attachment, correct employee mapping, retry duplicates |
 
@@ -134,7 +134,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 
 - E-030–E-033 temporary-password messages are inappropriate if live; confirm reachability and move to secure activation/reset flow in a separate security fix.
 - E-023 generic notification mail spans internal event families and one customer portal delivery-date proposal. PR #256 adds central active-user/address validation and fixes customer address disclosure; the exhaustive caller-by-caller visibility audit remains pending (EF-042).
-- E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
+- E-024 digest summarizes the unread count without marking items read; it may repeat the same backlog every run. Message bodies and titles are excluded to prevent sensitive notification details from entering email.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
 - E-017 invalid/missing recipients notify active purchasing users who can view the PO; see EF-028 and draft PR #240.
 

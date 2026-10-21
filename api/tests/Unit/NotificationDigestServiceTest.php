@@ -122,27 +122,55 @@ class NotificationDigestServiceTest extends TestCase
         );
     }
 
-    public function test_item_list_is_capped_but_total_is_not(): void
+    public function test_digest_contains_an_exact_unread_count_without_notification_details(): void
     {
         $user = User::factory()->create(['email' => 'sub@ogami.test']);
         $this->optIn($user);
 
         for ($i = 0; $i < 25; $i++) {
-            $this->notify($user, title: "Item {$i}");
+            $this->notify($user, title: "Private item {$i}");
         }
 
         Mail::fake();
 
-        $result = (new NotificationDigestService(maxItemsPerUser: 20))->run();
+        $result = (new NotificationDigestService)->run();
 
         Mail::assertQueued(NotificationDigestMail::class, function (NotificationDigestMail $mail): bool {
-            return count($mail->items) === 20 && $mail->totalUnread === 25;
+            $recipient = $mail->to[0]['address'] ?? null;
+
+            return $mail->totalUnread === 25
+                && $recipient === 'sub@ogami.test'
+                && $mail->envelope()->subject === '[OGAMI] Notification summary: 25 unread'
+                && ! property_exists($mail, 'items')
+                && str_contains($mail->render(), '25 unread notifications')
+                && ! str_contains($mail->render(), 'Private item');
         });
 
         $this->assertSame(25, $result['notifications_summarised']);
     }
 
-    public function test_large_backlog_uses_a_bounded_item_query_and_exact_count(): void
+    public function test_digest_renders_html_and_plain_text_alternatives(): void
+    {
+        config()->set('app.frontend_url', 'https://app.ogamiph.test');
+        Mail::mailer('array')->to('digest@ogami.test')->send(
+            (new NotificationDigestMail('Juan', 3))->from('noreply@ogami.test', 'OGAMI'),
+        );
+
+        $message = Mail::mailer('array')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
+
+        $html = (string) $message->getHtmlBody();
+        $text = (string) $message->getTextBody();
+        $this->assertNotEmpty($html);
+        $this->assertStringContainsString('3 unread notifications', $html);
+        $this->assertLessThan(102_400, strlen($html));
+        $this->assertStringNotContainsString('{{', $html);
+        $this->assertStringNotContainsString('null', strtolower($html));
+        $this->assertNotEmpty($text);
+        $this->assertStringContainsString('**3** unread notifications', $text);
+        $this->assertStringContainsString('https://app.ogamiph.test/notifications', $text);
+    }
+
+    public function test_large_backlog_uses_only_a_count_query_and_exact_total(): void
     {
         $user = User::factory()->create(['email' => 'sub@ogami.test']);
         $this->optIn($user);
@@ -155,7 +183,7 @@ class NotificationDigestServiceTest extends TestCase
         DB::flushQueryLog();
         DB::enableQueryLog();
 
-        $result = (new NotificationDigestService(maxItemsPerUser: 20))->run();
+        $result = (new NotificationDigestService)->run();
 
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
@@ -165,18 +193,11 @@ class NotificationDigestServiceTest extends TestCase
             static fn (array $query): bool => str_contains(strtolower($query['query']), 'notifications'),
         ));
 
-        $this->assertCount(2, $notificationQueries, 'Digest should use one count query and one bounded item query.');
-        $this->assertTrue(
-            str_contains(strtolower($notificationQueries[0]['query']), 'count(*)')
-            || str_contains(strtolower($notificationQueries[1]['query']), 'count(*)'),
-        );
-        $this->assertTrue(
-            str_contains(strtolower($notificationQueries[0]['query']), 'row_number()')
-            || str_contains(strtolower($notificationQueries[1]['query']), 'row_number()'),
-        );
+        $this->assertCount(1, $notificationQueries, 'Digest must never load notification bodies.');
+        $this->assertStringContainsString('count(*)', strtolower($notificationQueries[0]['query']));
 
         Mail::assertQueued(NotificationDigestMail::class, function (NotificationDigestMail $mail): bool {
-            return count($mail->items) === 20 && $mail->totalUnread === 100;
+            return $mail->totalUnread === 100;
         });
         $this->assertSame(100, $result['notifications_summarised']);
     }
@@ -193,6 +214,32 @@ class NotificationDigestServiceTest extends TestCase
 
         Mail::assertNothingQueued();
         $this->assertSame(0, $result['emails_sent']);
+    }
+
+    public function test_inactive_subscriber_is_not_emailed(): void
+    {
+        $user = User::factory()->create(['email' => 'inactive@ogami.test', 'is_active' => false]);
+        $this->optIn($user);
+        $this->notify($user);
+
+        Mail::fake();
+
+        (new NotificationDigestService)->run();
+
+        Mail::assertNothingQueued();
+    }
+
+    public function test_invalid_email_address_is_not_emailed(): void
+    {
+        $user = User::factory()->create(['email' => 'not-an-email']);
+        $this->optIn($user);
+        $this->notify($user);
+
+        Mail::fake();
+
+        (new NotificationDigestService)->run();
+
+        Mail::assertNothingQueued();
     }
 
     public function test_per_type_digest_row_is_not_treated_as_a_global_opt_in(): void

@@ -1,24 +1,15 @@
-<x-mail::message>
-# Your notification summary
+<x-mail::message :preheader="$preheader" :title="$title">
+# Notification summary
 
 Hi {{ $recipientName ?? 'there' }},
 
-You have **{{ $totalUnread }}** unread notification(s). Here are the most recent:
+You have **{{ number_format($totalUnread) }}** unread notifications in OGAMI ERP.
 
-@foreach ($items as $item)
-**{{ $item['title'] }}**
-{{ $item['message'] }}
-<br>
-@endforeach
+Sign in to review them in the application. Notification details stay behind your account login.
 
-@if ($totalUnread > count($items))
-…and {{ $totalUnread - count($items) }} more.
-@endif
+You receive this message because notification digests are enabled in your account preferences.
 
 <x-mail::button :url="rtrim(config('app.frontend_url', config('app.url')), '/') . '/notifications'">
-View All Notifications
+Review notifications
 </x-mail::button>
-
-Thanks,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }}
 </x-mail::message>
