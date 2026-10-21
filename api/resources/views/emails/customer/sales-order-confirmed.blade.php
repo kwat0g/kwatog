@@ -25,12 +25,15 @@ Confirmed — the details below reflect the order when it was confirmed.
 
 ## Order items
 
-| Item | Quantity | Unit price | Line total |
-|---|---:|---:|---:|
 @forelse ($items as $item)
-| {{ $item['name'] }}@if ($item['part_number'])<br><small>{{ $item['part_number'] }}</small>@endif | {{ $item['quantity'] }} | {{ $item['unit_price'] }} | {{ $item['total'] }} |
+**{{ $item['name'] }}**@if ($item['part_number'])<br><small>Part number: {{ $item['part_number'] }}</small>@endif
+
+- Quantity: {{ $item['quantity'] }}
+- Unit price: {{ $item['unit_price'] }}
+- Line total: {{ $item['total'] }}
+
 @empty
-| Item details are available in the customer portal. | — | — | — |
+Item details are available in the customer portal.
 @endforelse
 
 @if ($remainingItemCount > 0)
