@@ -195,6 +195,8 @@ class SweepMissingOutgoingQc extends Command
                 $this->warn("Escalated: {$wo->wo_number} — {$reason}");
             }
 
+            $dedupeKey = 'qc-missing-outgoing:'.now()->toDateString().':'.hash('sha256', implode("\n", $lines));
+
             try {
                 $notifications->send($recipients, 'chain.outgoing_qc_missing', [
                     'title' => 'Outgoing QC missing on completed work orders',
@@ -203,7 +205,7 @@ class SweepMissingOutgoingQc extends Command
                     'link_to' => '/production/work-orders',
                     'entity_type' => 'work_order',
                     'entity_id' => $escalated[0][0]->hash_id,
-                ]);
+                ], $dedupeKey);
             } catch (Throwable $e) {
                 // The escalation must surface here in the command output even
                 // if the notification channel is broken.

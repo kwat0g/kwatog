@@ -153,6 +153,8 @@ EF-112 found during E-023 review: internal RFQ outcome emails include PR request
 
 EF-113 found during E-023 review: missing outgoing QC escalations included work-order numbers and repair reasons for configured QC recipients lacking `production.work_orders.view`. The escalation now filters by effective access, falls back to active system administrators, and logs when no audience exists. Regression tests added; follow-up CI pending. No real email sent.
 
+EF-114 found in the same hourly sweep: identical unresolved work-order summaries could email the same audience every hour. The notification now deduplicates unchanged summaries per recipient per day; a changed summary can notify immediately. Regression test runs the sweep twice. Follow-up CI pending; no real email sent.
+
 ## Next step
 
 Continue the E-023 caller-by-caller audience, route, row-scope, payload, and snapshot review from [E-023-caller-audit.md](E-023-caller-audit.md). Verify the consolidated E-023 PR checks. Owner still needs to verify company values and sales inbox readers before external delivery. DKIM setup for `ogamiph.dev` is owner-reported; DNS state, SPF, DMARC, and provider delivery/bounce handling remain unverified.

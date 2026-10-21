@@ -20,6 +20,7 @@ use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\InspectionService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -164,6 +165,7 @@ class SweepMissingOutgoingQcTest extends TestCase
         ]);
 
         $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
+        $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
 
         $this->assertSame(0, Inspection::query()
             ->where('stage', InspectionStage::Outgoing->value)
@@ -179,6 +181,10 @@ class SweepMissingOutgoingQcTest extends TestCase
             'type' => 'chain.outgoing_qc_missing',
             'notifiable_id' => $this->user->id,
         ]);
+        $this->assertSame(1, DB::table('notifications')
+            ->where('type', 'chain.outgoing_qc_missing')
+            ->where('notifiable_id', $manager->id)
+            ->count(), 'An unchanged hourly escalation must not duplicate the inbox notice.');
     }
 
     public function test_escalation_falls_back_to_system_admin_when_configured_roles_cannot_view_work_orders(): void
