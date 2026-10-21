@@ -55,7 +55,7 @@ Initial inspection found local `.env` and `api/.env` configured with `APP_ENV=lo
 | E-031 | `Auth/Notifications/WelcomeNotification` | Admin-created user provisioning; new user's address | Laravel `MailMessage`; includes temporary password. Security defect candidate: plaintext credential delivery. |
 | E-032 | `HR/Notifications/EmployeePasswordResetNotification` | Employee account reset; employee user's address | Laravel `MailMessage`; includes temporary password. Security defect candidate: plaintext credential delivery. |
 | E-033 | `HR/Notifications/EmployeeWelcomeNotification` | Employee onboarding/user provisioning; new employee user's address | Laravel `MailMessage`; includes temporary password. Security defect candidate: plaintext credential delivery. |
-| E-034 | `Landing/Notifications/ContactInquiryReceivedNotification` | Public contact inquiry accepted; configured sales/admin recipients | Laravel `MailMessage`; inquiry fields include user-controlled contact/message data. Verify recipient configuration, output escaping, rate limiting, and no open-relay behavior. |
+| E-034 | `Landing/Mail/ContactInquiryReceivedMail` (replaces `ContactInquiryReceivedNotification`) | Public contact inquiry accepted; configured sales inbox | Queued `QueuedMailable`; baseline email rendered user-controlled inquiry fields and linked through `APP_URL`. Redesigned in draft PR #278 with scalar snapshot, minimal body, configured SPA link, and authorized failure fallback. |
 | E-035 | `Common/Mail/EmailIntegrationTestMail` | Explicit integration-test path only | Not a production email type. `Mail::fake()` appears in email feature tests; tests were not run. |
 
 ### Other mail dispatch paths and control points

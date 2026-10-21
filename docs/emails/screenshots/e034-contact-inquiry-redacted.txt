@@ -1,0 +1,21 @@
+Ogami Philippines
+
+# New website inquiry
+
+A new inquiry from the company website is waiting for review.
+
+**Reference:** INQ-202610-0001
+**Submitted:** 21 Oct 2026, 10:30 AM +08
+
+The sender's contact details and message are available to authorized CRM users.
+
+Open inquiry in CRM: https://app.ogamiph.test/crm/inquiries/preview-hash
+
+Sign in to OGAMI to review the inquiry and update its status.
+
+You received this alert because this address is configured for website contact inquiries.
+
+Ogami Philippines
+[company details hidden]
+[company details hidden]
+Automated message.

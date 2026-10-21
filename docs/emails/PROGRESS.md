@@ -77,6 +77,7 @@ Updated: 2026-10-21
 - EF-061 test transport sender: PR #272 CI exposed a 500 when a test queued email through the array transport without a From header. PHPUnit now forces a reserved `.test` sender name/address. The failing sales-response test passes locally (1 test, 7 assertions) with the array transport. Standalone draft PR [#275](https://github.com/kwat0g/kwatog/pull/275) targets #272's head branch; #274 also carries the setting for its own tests.
 - EF-062 critical-alert fixture mass-assignment failure: fixed in draft PR #276 by setting guarded `created_at` after model creation.
 - EF-063 production-summary mobile clipping and hostile plain-text markup: fixed in draft PR #277; details and screenshots in [E-027-028-production-summaries.md](E-027-028-production-summaries.md).
+- EF-064 / E-034 public contact inquiry alert: complete in draft PR #278, stacked on #277. Replaced model-backed `MailMessage` with shared queued mailable, scalar snapshot, reference-only body, configured SPA deep link, and permission-resolved failure alert. Focused coverage: 19 tests / 191 assertions. Actual render 19,025 HTML / 574 text bytes; four Chromium screenshots inspected at 1440px/390px in light/dark. Array mailer and test sink used; no real email sent. Owner must verify sales inbox readers; data-protection/legal review remains required. See [E-034-contact-inquiry.md](E-034-contact-inquiry.md).
 - Email delivery: none sent.
 
 ## Blockers
@@ -96,4 +97,4 @@ Updated: 2026-10-21
 
 ## Next step
 
-Next: recheck CI for #274–#277 and close the EF-061 test-harness fix; complete E-034 and the E-023 caller visibility audit; rerun E-025 idempotency coverage. Confirm company values with the company owner before external delivery. User reports DKIM setup succeeded for `ogamiph.dev` in AWS Asia Pacific (Singapore); DNS/provider state remains unverified here.
+Next: recheck CI for #274–#278 and close the EF-061 test-harness fix; complete the E-023 caller visibility audit and cover E-035. Confirm company values and sales inbox readers with the company owner before external delivery. User reports DKIM setup succeeded for `ogamiph.dev` in AWS Asia Pacific (Singapore); DNS/provider state remains unverified here.
