@@ -25,7 +25,7 @@ class NotifyOnLeaveRejected implements ShouldQueue
 
             $this->notifications->send($user, 'leave.rejected', [
                 'title'       => 'Leave Request Rejected',
-                'message'     => "Your {$req->leaveType?->name} ({$req->days} day(s)) from {$req->start_date->format('M j')} was not approved.",
+                'message'     => "Your {$req->leaveType?->name} ({$req->days} day(s)) from {$req->start_date->format('M j, Y')} to {$req->end_date->format('M j, Y')} was not approved.",
                 'link_to'     => "/self-service/leaves/{$req->hash_id}",
                 'entity_type' => 'leave_request',
                 'entity_id'   => $req->hash_id,

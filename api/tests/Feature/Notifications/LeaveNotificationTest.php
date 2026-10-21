@@ -14,6 +14,8 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Modules\Leave\Listeners\NotifyOnLeaveApproved;
+use App\Modules\Leave\Listeners\NotifyOnLeaveRejected;
 use App\Modules\Leave\Listeners\NotifyOnLeavePendingHR;
 use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
@@ -274,6 +276,33 @@ class LeaveNotificationTest extends TestCase
         app(LeaveRequestService::class)->reject($req, $deptHead, 'Insufficient leave balance.');
 
         Event::assertDispatched(LeaveRequestRejected::class, fn ($e) => $e->leaveRequest->is($req));
+    }
+
+    public function test_owner_notices_show_unambiguous_leave_date_ranges(): void
+    {
+        $approved = LeaveRequest::factory()->approved()->create([
+            'start_date' => '2026-12-31',
+            'end_date' => '2027-01-01',
+        ]);
+        User::factory()->create(['employee_id' => $approved->employee_id]);
+        app(NotifyOnLeaveApproved::class)->handle(new LeaveRequestApproved($approved));
+
+        $approvedData = json_decode((string) DB::table('notifications')
+            ->where('type', 'leave.approved')->value('data'), true);
+        $this->assertStringContainsString('Dec 31, 2026 to Jan 1, 2027', $approvedData['message']);
+        $this->assertSame("/self-service/leaves/{$approved->hash_id}", $approvedData['link_to']);
+
+        $rejected = LeaveRequest::factory()->rejected()->create([
+            'start_date' => '2026-12-31',
+            'end_date' => '2027-01-01',
+        ]);
+        User::factory()->create(['employee_id' => $rejected->employee_id]);
+        app(NotifyOnLeaveRejected::class)->handle(new LeaveRequestRejected($rejected));
+
+        $rejectedData = json_decode((string) DB::table('notifications')
+            ->where('type', 'leave.rejected')->value('data'), true);
+        $this->assertStringContainsString('Dec 31, 2026 to Jan 1, 2027', $rejectedData['message']);
+        $this->assertSame("/self-service/leaves/{$rejected->hash_id}", $rejectedData['link_to']);
     }
 
     /**
