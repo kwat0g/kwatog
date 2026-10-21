@@ -147,7 +147,7 @@ class LateProductionReportService
 
     private function assertValidInterval(WorkOrder $wo, WorkOrderCrew $crew, Carbon $start, Carbon $finish): void
     {
-        if ($finish->lte($start) || $finish->gt(now()) || $start->gt(now()) || $start->diffInSeconds($finish) > 86400) {
+        if ($finish->lte($start) || $finish->gt(now()) || $start->gt(now()) || $start->diffInSeconds($finish, true) > 86400) {
             throw new BusinessRuleException('Production interval must be a past, forward interval no longer than 24 hours.');
         }
         if (! $wo->actual_start || $start->lt($wo->actual_start)) {
