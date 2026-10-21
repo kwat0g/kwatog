@@ -1,5 +1,7 @@
 # Email audit progress
 
+Coverage ledger: [COVERAGE.md](COVERAGE.md).
+
 Updated: 2026-10-21
 
 ## Status
