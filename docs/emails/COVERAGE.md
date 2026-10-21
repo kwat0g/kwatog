@@ -18,7 +18,7 @@ closing the corresponding row.
 | E-008 | Supplier purchase order cancellation | [#228](https://github.com/kwat0g/kwatog/pull/228) | Desktop/mobile and light/dark captures inspected; hostile contact text is escaped; refresh logo after foundation update; CI pending |
 | E-009 | Customer complaint update | [#230](https://github.com/kwat0g/kwatog/pull/230) | Desktop/mobile and light/dark captures inspected; hostile contact text is escaped; refresh logo after foundation update; CI pending |
 | E-010 | Customer sales order confirmation | [#232](https://github.com/kwat0g/kwatog/pull/232) | Desktop/mobile and light/dark captures inspected; PHP amounts tracked by #319; refresh logo after foundation update; CI pending |
-| E-011 | Customer sales order decision | [#234](https://github.com/kwat0g/kwatog/pull/234) | Draft; visual and CI review pending |
+| E-011 | Customer sales order decision | [#234](https://github.com/kwat0g/kwatog/pull/234) | Desktop/mobile and light/dark captures inspected; PHP amount tracked by #319; refresh logo after foundation update; CI pending |
 | E-012 | Candidate application received | [#236](https://github.com/kwat0g/kwatog/pull/236) | Draft; visual and CI review pending |
 | E-013 | Candidate application status | [#236](https://github.com/kwat0g/kwatog/pull/236) | Draft; visual and CI review pending |
 | E-014 | Candidate interview scheduled | [#236](https://github.com/kwat0g/kwatog/pull/236) | Draft; visual and CI review pending |
