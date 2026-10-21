@@ -299,7 +299,8 @@ class CustomerPortalService
     private function notifySalesOrderReview(SalesOrder $so, CustomerPortalUser $portalUser): void
     {
         try {
-            $audience = $this->notifications->usersWithPermission('crm.sales_orders.confirm');
+            $audience = $this->notifications->usersWithPermission('crm.sales_orders.confirm')
+                ->filter(fn (User $user): bool => $user->hasPermission('crm.sales_orders.view'));
 
             if ($audience->isEmpty()) {
                 return;

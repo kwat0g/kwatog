@@ -6,6 +6,8 @@ namespace Tests\Feature\Purchasing;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
@@ -471,6 +473,18 @@ class ConsolidatePurchaseOrdersTest extends TestCase
             'role_id' => Role::where('slug', 'purchasing_officer')->value('id'),
             'is_active' => true,
         ]);
+        $officerWithoutView = User::factory()->create([
+            'role_id' => Role::where('slug', 'purchasing_officer')->value('id'),
+            'is_active' => true,
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $officerWithoutView->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $officer->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $officerWithoutView->flushPermissionsCache();
         app(SettingsService::class)->set(
             'purchasing.purchase_request_approved.notification_roles',
             ['purchasing_officer']
@@ -495,5 +509,9 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $data = json_decode((string) $row->data, true);
         $this->assertStringContainsString($pr->pr_number, (string) ($data['title'] ?? ''));
         $this->assertStringContainsString('/purchasing/purchase-requests/', (string) ($data['link_to'] ?? ''));
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.pr_auto_convert_skipped',
+            'notifiable_id' => $officerWithoutView->id,
+        ]);
     }
 }

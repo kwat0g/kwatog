@@ -10,6 +10,8 @@ use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
@@ -474,6 +476,15 @@ class CustomerPortalOrderTest extends TestCase
 
         $role = Role::query()->where('slug', 'sales_officer')->firstOrFail();
         $sales = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $salesWithoutView = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        UserPermissionOverride::create([
+            'user_id' => $salesWithoutView->id,
+            'permission_id' => Permission::query()->where('slug', 'crm.sales_orders.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $sales->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $salesWithoutView->flushPermissionsCache();
 
         $this->actAs($user)
             ->postOrder([
@@ -497,6 +508,11 @@ class CustomerPortalOrderTest extends TestCase
             ->first();
         $this->assertNotNull($notification);
         $this->assertStringContainsString($so->so_number, $notification->data);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $salesWithoutView->id,
+            'type' => 'portal.order_awaiting_review',
+        ]);
     }
 
     public function test_place_order_replays_the_original_result_for_the_same_key_and_payload(): void
