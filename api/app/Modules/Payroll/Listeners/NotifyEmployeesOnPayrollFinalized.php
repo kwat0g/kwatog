@@ -57,7 +57,15 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
                 return;
             }
 
-            $users = User::query()->whereIn('id', $userIds)->where('is_active', true)->get();
+            $users = User::query()
+                ->whereIn('id', $userIds)
+                ->where('is_active', true)
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('payroll.view'))
+                ->values();
+            if ($users->isEmpty()) {
+                return;
+            }
             $periodLabel = $this->periodLabel($period);
 
             $this->notifications->send($users, 'chain.payslip_ready', [
