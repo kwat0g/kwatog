@@ -692,8 +692,9 @@ final class RfqBiddingTest extends TestCase
             ->assertOk();
         $po = $po->fresh();
 
-        // (4) For < 50000, VP step is skipped - PO should be fully approved
-        $this->assertSame(PurchaseOrderStatus::Approved, $po->status);
+        // The VP step is skipped below 50000; portal-ready POs dispatch after approval.
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->status);
+        $this->assertNotNull($po->sent_to_supplier_at);
     }
 
     public function test_po_approval_above_50000_requires_vp_approval(): void
@@ -750,8 +751,9 @@ final class RfqBiddingTest extends TestCase
             ->assertOk();
         $po = $po->fresh();
 
-        // Now PO should be approved
-        $this->assertSame(PurchaseOrderStatus::Approved, $po->status);
+        // Approval publishes this portal-ready PO, so it is already sent.
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->status);
+        $this->assertNotNull($po->sent_to_supplier_at);
     }
 
     private function asBuyer(): void

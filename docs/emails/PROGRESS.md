@@ -59,6 +59,7 @@ Updated: 2026-10-20
 - Focused caller verification: 108 tests, 594 assertions; 104 passed, 4 failed. All 4 failures reproduced on parent #258 and are tracked as EF-047; none touch the changed audience resolver. Test mailer forced to `array`; no transport contacted.
 - Effective-audience regressions: 8 targeted tests passed, 32 assertions across Sales, failure fallback, RFQ lifecycle, AR fallback, Quality, return-case, and customer portal paths. Test mailer forced to `array`; no transport contacted.
 - EF-047 link assertion: fixed in draft PR #260, stacked on #259. The test now sets the SPA base URL and asserts against the configured value. Focused test: 1 passed, 19 assertions.
+- EF-047 RFQ state assertions: fixed in draft PR #261, stacked on #260. Approval tests now verify the existing automatic supplier-portal dispatch reaches `Sent` and records `sent_to_supplier_at`. Focused tests: 2 passed, 33 assertions.
 - Email delivery: none sent.
 
 ## Blockers
