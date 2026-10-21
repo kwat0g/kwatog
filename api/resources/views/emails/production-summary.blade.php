@@ -27,7 +27,7 @@ Target {{ number_format($wo['quantity_target']) }} · Good {{ number_format($wo[
 @endforeach
 @if (count($summary['wos']) > 10)
 
-{{ count($summary['wos']) - 10 }} more work orders are available in OGAMI ERP.
+{{ count($summary['wos']) - 10 }} additional work order{{ count($summary['wos']) - 10 === 1 ? '' : 's' }} available in OGAMI ERP.
 @endif
 @endif
 
@@ -41,7 +41,7 @@ Target {{ number_format($wo['quantity_target']) }} · Good {{ number_format($wo[
 @endforeach
 @if (count($summary['breakdowns']) > 5)
 
-{{ count($summary['breakdowns']) - 5 }} more breakdowns are available in OGAMI ERP.
+{{ count($summary['breakdowns']) - 5 }} additional breakdown{{ count($summary['breakdowns']) - 5 === 1 ? '' : 's' }} available in OGAMI ERP.
 @endif
 @endif
 

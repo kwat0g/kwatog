@@ -19,47 +19,47 @@ Ogami ERP API: https://ogamiph.dev
 
 ## Work orders
 
-**WO-001 · <img src=x onerror=alert(1)>**
+**WO-001 · Molded housing 1**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-002 · Product 2**
+**WO-002 · Molded housing 2**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-003 · Product 3**
+**WO-003 · Molded housing 3**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-004 · Product 4**
+**WO-004 · Molded housing 4**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-005 · Product 5**
+**WO-005 · Molded housing 5**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-006 · Product 6**
+**WO-006 · Molded housing 6**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-007 · Product 7**
+**WO-007 · Molded housing 7**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-008 · Product 8**
+**WO-008 · Molded housing 8**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-009 · Product 9**
+**WO-009 · Molded housing 9**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-**WO-010 · Product 10**
+**WO-010 · Molded housing 10**
 
 Target 100 · Good 90 · Reject 2 · Status: In Progress
 
-1 more work orders are available in OGAMI ERP.
+1 additional work order available in OGAMI ERP.
 
 ## Machine breakdowns
 
@@ -71,7 +71,7 @@ Target 100 · Good 90 · Reject 2 · Status: In Progress
 | M-04 · Machine 4 | 12 min |
 | M-05 · Machine 5 | 12 min |
 
-1 more breakdowns are available in OGAMI ERP.
+1 additional breakdown available in OGAMI ERP.
 
 ## Most reported defects
 

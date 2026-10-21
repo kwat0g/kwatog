@@ -54,8 +54,8 @@ class ProductionSummaryEmailDesignTest extends TestCase
         $this->assertStringNotContainsString('in_progress', $html);
         $this->assertStringContainsString('&lt;img', $html);
         $this->assertStringNotContainsString('<img src=x', $html);
-        $this->assertStringContainsString('1 more work orders', $html);
-        $this->assertStringContainsString('1 more breakdowns', $html);
+        $this->assertStringContainsString('1 additional work order available', $html);
+        $this->assertStringContainsString('1 additional breakdown available', $html);
         $this->assertStringNotContainsString('WO-011', $html);
         $this->assertStringContainsString('https://app.ogamiph.test/production/work-orders', $text);
         $this->assertLessThan(102_400, strlen($html));
