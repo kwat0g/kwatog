@@ -17,6 +17,7 @@ Updated: 2026-10-21
 - Refreshed all E-012–E-015 desktop/mobile light/dark previews from current mailables on PR #236; inspected all 16 views across the group. Logo, CTA labels, details, footer, and mobile widths render correctly. E-013's extra raw-URL paragraph was stale capture content, not a template defect. Synthetic branding/data only; no mail sent.
 - Refreshed all E-011 and E-016–E-017 desktop/mobile light/dark previews from current mailables; all 12 views fit. E-011 and E-017 show `PHP` from the functional-currency migration fixture. E-016 contains no salary details. Branding and recipient data are synthetic; no mail sent. Commits are in their own branches.
 - Refreshed E-020–E-022 desktop/mobile light/dark previews from current mailables on their own PR branches: both customer/supplier variants for E-020 and E-021, plus the customer delivery notice. Inspected 20 views; content fits, no message sent. Preview commits pushed: E-020 `3522cc26`, E-021 `81be6fa8`, E-022 `cf74c804`.
+- Inspected all 12 existing E-023–E-025 screenshots across desktop/mobile and light/dark: shared landing-page logo, legible copy, CTAs, and settings footer render cleanly. E-025 shows configured export metadata and its CSV attachment label. Preview fixtures are synthetic; no message sent.
 - Reopened all four E-016 and E-017 desktop/mobile light/dark captures. E-016 contains no salary data; its footer is fixture branding. E-017's two-column summary wraps on mobile but remains readable. CTA labels and dark logo are visible.
 - Email delivery: none sent.
 
