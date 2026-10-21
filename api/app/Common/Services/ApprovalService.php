@@ -9,6 +9,7 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
+use App\Common\Support\ApprovalSourceScope;
 use App\Common\Support\ApprovalTypeRegistry;
 use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
@@ -350,7 +351,16 @@ class ApprovalService
         if ($submitterId !== null) {
             $recipients->where('id', '<>', $submitterId);
         }
-        $recipients = $recipients->get();
+        $recipients = $recipients->get()->filter(function (User $user) use ($approvable, $meta): bool {
+            $class = $approvable->getMorphClass();
+            if (! ApprovalSourceScope::hasScope($class)) {
+                return ApprovalTypeRegistry::userCanView($user, $meta);
+            }
+
+            $id = (int) $approvable->getKey();
+
+            return isset(ApprovalSourceScope::visibleIds($class, [$id], $user)[$id]);
+        })->values();
         if ($recipients->isEmpty()) {
             return;
         }
