@@ -11,6 +11,7 @@ Updated: 2026-10-20
 - Shared preheader forwarding defect: stock Markdown message component dropped per-email preheaders before the layout. Fixed in #213; E-005/E-006 tests exposed and verify the shared forwarding behavior.
 - Shared visual defects: inlined light colors blocked dark-mode overrides and 600px table width overflowed mobile browser previews. Fixes in #213 remove color priority conflicts and constrain mobile tables; recheck all template screenshots after foundation update.
 - Markdown table styling: isolated follow-up branch `fix/email-markdown-table-style` styles Laravel's direct Markdown tables in light/dark, while excluding CTA tables. `FeatureEmailIntegrationTest::test_supplier_purchase_order_email_is_queued_with_supplier_data`: 1 test, 2 assertions passed; rendered test mail inspected at 1440px/390px in light/dark, no horizontal overflow. Preview contains test fixture company data. Focused test uses `MAIL_MAILER=array`; no message sent.
+- E-019 cross-template validation: rendered the RFQ lifecycle mailable with this PR's layout selectors. `SupplierRfqLifecycleMailTest` passed (1 test, 73 assertions); 20 Chromium screenshots cover five statuses at 1440px/390px and light/dark. Every document width matched its viewport; inspected captures show the styled table, logo, CTA, and footer. Test branding only; no email sent. Screenshots: `e019-rfq-lifecycle-*.png`.
 - Email delivery: none sent.
 
 ## Blockers
