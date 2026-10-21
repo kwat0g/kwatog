@@ -102,6 +102,40 @@ class ValidEmailRecipientFilterTest extends TestCase
         Notification::assertNotSentTo($bad, DailyProductionSummary::class);
     }
 
+    public function test_daily_summary_alerts_settings_managers_when_no_configured_recipient_exists(): void
+    {
+        $admin = $this->userWithRole('system_admin', 'admin@ogami.test');
+        DB::table('settings')->updateOrInsert(
+            ['key' => 'production.summary.notification_roles'],
+            ['value' => json_encode(['missing_role'])],
+        );
+
+        $this->artisan('production:send-daily-summary')->assertSuccessful();
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $admin->id,
+            'type' => 'email.delivery_failed',
+        ]);
+    }
+
+    public function test_weekly_summary_alerts_settings_managers_when_no_configured_recipient_exists(): void
+    {
+        $admin = $this->userWithRole('system_admin', 'admin@ogami.test');
+        DB::table('settings')->updateOrInsert(
+            ['key' => 'production.summary.notification_roles'],
+            ['value' => json_encode(['missing_role'])],
+        );
+
+        $this->artisan('production:send-weekly-summary')->assertSuccessful();
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $admin->id,
+            'type' => 'email.delivery_failed',
+        ]);
+    }
+
     /**
      * The alert-engine half, driven through the public `raise()` rather than a
      * test-only seam: `raise()` calls `emailCritical()` for any Critical alert.
