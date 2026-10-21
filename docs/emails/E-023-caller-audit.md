@@ -17,6 +17,7 @@ Route declarations are in `spa/src/routes/*.tsx`; approval links resolve through
 - Budget approval and outcome links now use `/budgeting/{hash}`, matching the SPA detail route. The API permits `budgeting.view` or an approver eligible for that exact submitted budget; rejection controls also follow record-level `can_approve`.
 - Budget-transfer links already used `/budgeting/transfers/{hash}` but lacked a SPA detail route. The added page loads that exact transfer. API detail requires global view access or eligibility for that record; decision controls require effective approval permission and `can_approve`.
 - Overtime and loan decision links now resolve to `/:id` self-service routes. Their API reads fetch that one hash within the signed-in employee's scope and return 404 for another employee's record. They bypass history-list limits without widening visibility.
+- Supplier delivery-schedule cancellation targeted PO approvers with a PO detail link, but the SPA and API read routes required `purchasing.view`. Align detail and PDF read gates with the existing PO policy: either `purchasing.view` or `purchasing.po.approve`; keep the broader PO list restricted to `purchasing.view` (EF-124).
 - Authenticated return behavior was source-checked: `AuthGuard` stores the requested path, query, and hash; the login page restores it. Browser login was not exercised.
 - Focused checks: 31 API tests / 177 assertions and 9 SPA tests passed; SPA typecheck, targeted ESLint, and PHPStan passed. No email sent.
 
