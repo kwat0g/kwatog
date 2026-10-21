@@ -13,6 +13,7 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Services\LeaveRequestService;
@@ -137,6 +138,42 @@ class LeaveNotificationTest extends TestCase
         LeaveRequestSubmitted::dispatch($req);
 
         Event::assertDispatched(LeaveRequestSubmitted::class, fn ($e) => $e->leaveRequest->is($req));
+    }
+
+    public function test_leave_submission_notifies_only_department_heads_with_matching_department(): void
+    {
+        $req = LeaveRequest::factory()->pendingDept()->create();
+        $departmentId = Employee::query()->whereKey($req->employee_id)->value('department_id');
+        $roleId = Role::query()->where('slug', 'department_head')->value('id');
+        $sameDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'employee_id' => Employee::factory()->create(['department_id' => $departmentId])->id,
+            'is_active' => true,
+        ]);
+        $otherDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'employee_id' => Employee::factory()->create()->id,
+            'is_active' => true,
+        ]);
+        $unlinkedDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'is_active' => true,
+        ]);
+
+        app(NotifyOnLeaveSubmitted::class)->handle(new LeaveRequestSubmitted($req->fresh(['employee', 'leaveType'])));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $sameDepartmentHead->id,
+            'type' => 'leave.submitted',
+        ]);
+        foreach ([$otherDepartmentHead, $unlinkedDepartmentHead] as $recipient) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_type' => User::class,
+                'notifiable_id' => $recipient->id,
+                'type' => 'leave.submitted',
+            ]);
+        }
     }
 
     /**

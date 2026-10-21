@@ -115,6 +115,10 @@ These changes fix the route families found by static search. They do not complet
 - EF-056: supplier schedule cancellation notices used role permission rows directly and missed effective user grants/revocations. Fixed in draft PR #268 with the shared permission resolver. Regression coverage added for role access, grants, revocations, and inactive accounts. The remaining direct role checks found in this pass are intentional role-scoped/configured audiences or in-app-only paths; they remain subject to the per-caller audit below.
 - EF-065: permission override grant, removal, and restore notices linked affected users to `/admin/users/{hash}`, which requires `admin.users.manage`. Removed those three links in draft PR #279; the recipient still receives the change notice without a forbidden destination.
 
+## Caller checks completed
+
+- `NotifyOnLeaveSubmitted`: the configured `department_head` role audience is filtered to the requester's department. This matches `/hr/leaves/{id}` route permission and `LeaveRequestController::authorizeView()` row scope. The employees schema requires `department_id`; an attempted null-department case was rejected by PostgreSQL, so it is not a valid runtime state. Regression coverage verifies matching-department heads receive the notice while other-department and unlinked heads do not. Remaining leave approval/completion callers still require their own audit.
+
 ## Remaining audit work
 
 - Resolve each audience expression to role, permission, owner, approver, or external-contact rules; compare each recipient to route and record visibility.
