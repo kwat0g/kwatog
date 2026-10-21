@@ -16,5 +16,6 @@
 ## Verification
 
 Snapshot behavior is tested by changing vendor/invoice/bill records after event creation and checking the rendered message retains event-time values. Hostile supplier name is checked for HTML escaping. `SupplierInvoiceStatusMail::render()` produced 24,492 bytes with the snapshot values and formatter; no email was sent. Browser previews at 1440px desktop and 390px mobile fit their viewports in light/dark themes. Branding shown comes from local seeded settings and needs owner confirmation. Screenshots: `screenshots/e007-supplier-invoice-{desktop,mobile}-{light,dark}.png`. Browser screenshots do not verify Outlook/Gmail/Apple Mail rendering.
+- Re-inspected all four captures: the hostile supplier name is visibly escaped as text, no viewport overflow, and submitted total uses `PHP`; EF-120 / PR #319 corrects the shared formatter.
 
 External financial wording and invoice handling need review by the company's accountant. Company address, legal name, and currency settings need owner/accountant confirmation before external delivery.
