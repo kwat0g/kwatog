@@ -15,7 +15,7 @@ closing the corresponding row.
 | E-005 | Supplier/customer portal invitation | [#224](https://github.com/kwat0g/kwatog/pull/224) | Desktop/mobile and light/dark captures inspected; 60-minute setup-link copy readable; refresh logo and verify company settings; CI pending |
 | E-006 | Supplier/customer portal password reset | [#224](https://github.com/kwat0g/kwatog/pull/224) | Desktop/mobile and light/dark captures inspected; 60-minute reset-link copy readable; refresh logo and verify company settings; CI pending |
 | E-007 | Supplier invoice status | [#226](https://github.com/kwat0g/kwatog/pull/226) | Desktop/mobile and light/dark captures inspected; hostile contact text is escaped; amount-format follow-up #319 and logo refresh pending; CI pending |
-| E-008 | Supplier purchase order cancellation | [#228](https://github.com/kwat0g/kwatog/pull/228) | Draft; visual and CI review pending |
+| E-008 | Supplier purchase order cancellation | [#228](https://github.com/kwat0g/kwatog/pull/228) | Desktop/mobile and light/dark captures inspected; hostile contact text is escaped; refresh logo after foundation update; CI pending |
 | E-009 | Customer complaint update | [#230](https://github.com/kwat0g/kwatog/pull/230) | Draft; visual and CI review pending |
 | E-010 | Customer sales order confirmation | [#232](https://github.com/kwat0g/kwatog/pull/232) | Draft; visual and CI review pending |
 | E-011 | Customer sales order decision | [#234](https://github.com/kwat0g/kwatog/pull/234) | Draft; visual and CI review pending |
