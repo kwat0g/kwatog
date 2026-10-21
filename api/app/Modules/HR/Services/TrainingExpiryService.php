@@ -10,8 +10,10 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\TrainingAlertLevel;
+use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\TrainingExpiryAlertDelivery;
+use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\HR\Support\EmployeeTrainingStateMachine;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -166,13 +168,27 @@ class TrainingExpiryService
             ],
         };
 
-        $this->notifications->send($recipients, 'training.expiry', [
+        $payload = [
             'title' => $title,
             'message' => $message,
             'entity_type' => 'employee_training',
             'entity_id' => $record->hash_id,
-            'link_to' => $employee ? "/hr/employees/{$employee->hash_id}" : null,
-        ]);
+        ];
+
+        $employeeRecipients = $recipients->filter(
+            fn (User $user): bool => $user->employee_id === $record->employee_id,
+        );
+        $staffRecipients = $recipients->reject(
+            fn (User $user): bool => $user->employee_id === $record->employee_id,
+        );
+
+        if ($employeeRecipients->isNotEmpty()) {
+            $this->notifications->send($employeeRecipients, 'training.expiry', $payload);
+        }
+        if ($staffRecipients->isNotEmpty()) {
+            $payload['link_to'] = $employee ? "/hr/employees/{$employee->hash_id}" : null;
+            $this->notifications->send($staffRecipients, 'training.expiry', $payload);
+        }
     }
 
     /**
@@ -313,6 +329,19 @@ class TrainingExpiryService
                 ->get());
         }
 
-        return $users->unique('id')->values();
+        return $users->unique('id')->filter(function (User $user) use ($record, $employeeUser): bool {
+            if ($employeeUser && $user->id === $employeeUser->id) {
+                return true;
+            }
+
+            if (! $user->hasPermission('hr.employees.view')
+                || ! $user->hasPermission('hr.employees.trainings.view')) {
+                return false;
+            }
+
+            return EmployeeCompetenceScope::employees(Employee::query(), $user)
+                ->whereKey($record->employee_id)
+                ->exists();
+        })->values();
     }
 }

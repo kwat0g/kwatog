@@ -93,6 +93,10 @@ These changes fix the route families found by static search. They do not complet
 | `api/app/Modules/HR/Listeners/NotifyOnSeparationInitiated.php:32` | `$this->notifications->send($audience, 'chain.separation_initiated', [` |
 | `api/app/Modules/Production/Listeners/NotifyOnWorkOrderPaused.php:53` | `$this->notifications->send($audience, 'production.wo_paused', [` |
 | `api/app/Modules/Production/Listeners/NotifyOnWorkOrderCompleted.php:31` | `$this->notifications->send($audience, 'production.wo_completed', [` |
+
+### Follow-up fixes
+
+- EF-090 / training expiry: `TrainingExpiryService` now keeps employee-self alerts separate from configured staff recipients. Self alerts have no HR-only employee-detail link. Staff recipients must hold effective `hr.employees.view` and `hr.employees.trainings.view` and pass `EmployeeCompetenceScope` for the employee record. Draft PR #301 adds regression coverage for revoked access and the self-notice link.
 | `api/app/Modules/Production/Listeners/NotifyOnMachineBreakdown.php:37` | `$this->notifications->send($audience, 'maintenance.breakdown', [` |
 | `api/app/Modules/Maintenance/Listeners/NotifyMaintenanceWorkOrder.php:27` | `$this->notifications->send($supervisors, 'maintenance.assignment_needed', self::payload(` |
 | `api/app/Modules/Payroll/Services/PayrollPeriodService.php:1012` | `app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [` |
