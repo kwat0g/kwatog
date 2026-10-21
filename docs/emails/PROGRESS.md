@@ -140,7 +140,7 @@ Updated: 2026-10-21
 - EF-076 / E-023 overtime submission audience: configured department heads already matched the requester's department, but permission revocations were ignored. Draft PR #290 now filters by effective `attendance.ot.approve`; `OvertimeNotificationTest` covers the revoked-recipient case. CI exposed a hard-coded supplier portal URL assertion in an existing cancellation-mail test; it now checks configured frontend URL. No real email sent. Full caller audit remains open.
 - E-011/E-017 discovery now matches the current callers: both use `Mail::to(...)->queue()` with `QueuedMailable`, and source review confirmed pending-state guards prevent repeat decision sends. Docs-only commits `b4ec94f2` and `51db2ca6` are local on this branch; waiting for PR #275 PHPUnit before pushing to avoid overlapping suites.
 - PR #275's first full API run failed one cancellation-mail assertion because it hard-coded an obsolete company address. Commit `cf742415` now asserts the escaped `company.address` setting; rerun is in progress, with PHPStan running and PHPUnit pending.
-- Continued E-023 review for the three maintenance work-order notices. Found EF-108: repair-submission notices ignore individual `maintenance.wo.verify` revocations. Logged for a separate small functional fix; no extra framework or test suite added.
+- Continued E-023 review for the three maintenance work-order notices. EF-108 is fixed locally on `fix/maintenance-verifier-notice-rbac`; regression test and CI pending. Further check found EF-109: assignment options accept active employees whose effective permission for the notification's SPA route was revoked. Logged separately; assignee-selection behavior needs a focused fix and regression test.
 
 ## Next step
 
