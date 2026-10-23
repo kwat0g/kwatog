@@ -7,6 +7,7 @@ namespace Tests\Feature\SupplyChain;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ChainListenerRun;
 use App\Common\Services\OutboxEventCodec;
+use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
@@ -20,6 +21,7 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
 use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
 use App\Modules\SupplyChain\Listeners\CreateDraftInvoiceOnDeliveryInvoiceRequested;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -209,8 +211,24 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
 
         $this->assertNotNull($note, 'AR clerk must receive an invoice.auto_failed notification.');
         $data = json_decode($note->data, true);
-        $this->assertStringContainsString($confirmed->delivery_number, (string) $data['title']);
-        $this->assertNotEmpty($data['message']);
+        $this->assertSame('Auto-invoice failed', $data['title']);
+        $this->assertSame('/accounting/invoices/create', $data['link_to']);
+        $this->assertStringNotContainsString($confirmed->delivery_number, $note->data);
+        $this->assertArrayNotHasKey('entity_id', $data);
+
+        app(\App\Common\Services\SettingsService::class)->set(
+            'accounting.delivery_confirmed.notification_roles',
+            [$arClerk->role->slug],
+        );
+        app(NotifyFinanceOnDeliveryConfirmed::class)->handle(new DeliveryConfirmed($confirmed));
+        $financeNotice = DB::table('notifications')
+            ->where('type', 'chain.delivery_confirmed')
+            ->where('notifiable_id', $arClerk->id)
+            ->first();
+        $this->assertNotNull($financeNotice);
+        $financeData = json_decode($financeNotice->data, true);
+        $this->assertSame('/accounting/invoices/create', $financeData['link_to']);
+        $this->assertStringNotContainsString($confirmed->delivery_number, $financeNotice->data);
     }
 
     public function test_invoice_handoff_replay_recovers_after_accounting_is_fixed_without_duplication(): void

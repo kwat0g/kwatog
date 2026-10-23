@@ -2193,11 +2193,9 @@ class DeliveryService
         }
 
         $this->notifications->send($recipients, 'invoice.auto_failed', [
-            'title' => "Auto-invoice failed for delivery {$d->delivery_number}",
-            'message' => 'Auto-invoice could not be created automatically. Please create the invoice manually.',
-            'link_to' => "/supply-chain/deliveries/{$d->hash_id}",
-            'entity_type' => 'delivery',
-            'entity_id' => $d->hash_id,
+            'title' => 'Auto-invoice failed',
+            'message' => 'Auto-invoice could not be created automatically. Open invoice creation to continue manually.',
+            'link_to' => '/accounting/invoices/create',
         ]);
     }
 
