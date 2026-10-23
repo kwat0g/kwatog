@@ -27,7 +27,9 @@ class NotifyOnSeparationInitiated implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('hr.separation.view'))
+                ->values();
 
             $this->notifications->send($audience, 'chain.separation_initiated', [
                 'title'       => 'Separation Initiated',
