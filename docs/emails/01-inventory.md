@@ -30,7 +30,7 @@
 | E-020 | Returns — return case update | External customer or supplier | Status-update | Confidential | P2 | D → status | Case opened/updated/resolved/evidence received → party contacts filtered by visibility → case and public update |
 | E-021 | Returns — return request update | External customer or supplier | Status-update | Confidential | P2 | B → status | Return request lifecycle update → validated event-time party email; authorized internal fallback on failure → event-time return request snapshot |
 | E-022 | Supply Chain — delivery confirmed | External customer | Transactional-document | Confidential | P1 | B → document | Delivery confirmed → validated event-time customer email; authorized internal fallback on failure → event-time delivery/sales-order/invoice snapshot |
-| E-023 | Common — generic user notification | Internal staff, approvers, executives, system admins (varies by caller) | Action-required / status-update / alert-exception | Internal to highly sensitive (varies by type) | P1 | D → action/status/alert | Any `NotificationService::send()` caller and explicit per-type email opt-in → caller's permission/role/owner selection plus active user and non-empty email → caller-supplied title/message/link and related record |
+| E-023 | Common — generic user notification | Internal staff, approvers, executives, system admins, and customer portal contacts (varies by caller) | Action-required / status-update / alert-exception | Internal to highly sensitive (varies by type) | P1 | B → action/status/alert | `NotificationService::send()` plus explicit internal per-type email opt-in; one direct customer delivery-date proposal path bypasses that preference → caller-selected users or active customer portal contacts → caller-supplied title/message/link and related record |
 | E-024 | Common — unread notification digest | Internal staff, approvers, executives, system admins | Digest-report | Internal to highly sensitive (depends on unread items) | P2 | D → digest | Scheduled digest → users with global digest opt-in and usable email → persisted unread notification rows |
 | E-025 | Common — scheduled export | Internal staff / system admin | Digest-report | Internal to confidential (financial), may include personal data | P1 | D → report | Scheduled export due → export's configured recipients; exporter checks owner permission/scope → export query, filters, columns, artifact |
 | E-026 | Common — critical alert | Internal staff / system admin | Alert-exception | Internal; may include confidential record identifiers | P1 | D → alert | Critical alert with retry → recipients resolved through alert permission/role logic → alert row/title/message/entity |
@@ -46,7 +46,7 @@
 
 ## Generic notification email trigger coverage (E-023)
 
-The following trigger families use the same generic email composition. They do **not** each have a dedicated template. Delivery requires the individual recipient's enabled email preference for that type; the default is no email. The business owner/permission rule is selected by each caller, so a generic mail is not proof of RBAC-safe access to every deep link.
+The following trigger families use the same generic email composition. They do **not** each have a dedicated template. Internal mail requires the individual recipient's enabled email preference for that type; the default is no email. The direct customer proposal path is a separate caller and does not use the internal preference table. The business owner/permission rule is selected by each caller, so a generic mail is not proof of RBAC-safe access to every deep link.
 
 | Module / trigger families found | Recipient rule found in callers | Inventory disposition |
 |---|---|---|
@@ -57,6 +57,7 @@ The following trigger families use the same generic email composition. They do *
 | Production and maintenance: work-order completed/paused, machine breakdown, assignment needed/escalated, shift handover, missing timeout, repeat breakdown, part handover, MRP completion | Department supervisors, assigned technician, permission audience, or user | Included E-023; some similar notices are in-app only. Check duplicate channels. |
 | HR/leave/attendance/training: leave submitted/pending HR/approved/rejected, separation initiated, recruitment new application, training expiry, missing time-out, loan submitted/decided | HR audience, employee/requester, or permission audience | Included E-023; employee-specific data requires privacy check. |
 | Returns, customer service, and supplier chain: RMA created, return/case updated, customer response, supplier schedule cancellation, supplier shipment late, 8D SLA | Case contacts, customer/vendor portal users, dispatch team, or permission audience | Included E-023 where `send()` is used; `sendInApp` and portal-only events are not emails. Verify public/internal filtering. |
+| Customer portal delivery negotiation: proposed delivery date | Active portal-user emails on the customer account, passed together to `Mail::to()` | Included E-023; current grouped To list reveals recipient addresses (EF-041). |
 | Chain alerts and system exceptions: delivery confirmation for finance, outgoing-QC missing, critical operational/chain outcome, email delivery failure | Relevant finance/ops audience, owner, or configured admin permission | Included E-023 or E-026. Some failure paths intentionally use in-app fallback only. |
 
 These are type families, not a claim that every similarly named event is mailed. Calls using `sendInApp()` and `sendPortalInApp()` deliberately do not email. Some types are built dynamically in services, so runtime preference rows and event instances are needed to finish a unique type-by-type count.
@@ -93,7 +94,7 @@ These are type families, not a claim that every similarly named event is mailed.
 
 | Role / audience | Known email IDs | Resolution rule and unresolved risk |
 |---|---|---|
-| External customer | E-001–E-004, E-009–E-011, E-020–E-022 | Most use the customer/party email on the triggering record; some use portal-user email lists/fallbacks. App RBAC does not cover external addresses; verify ownership, public fields, and duplicates per flow. |
+| External customer | E-001–E-004, E-009–E-011, E-020–E-023 | Most use the customer/party email on the triggering record; some use portal-user email lists/fallbacks. App RBAC does not cover external addresses; verify ownership, public fields, and duplicates per flow. |
 | External supplier | E-004, E-005–E-008, E-017–E-021 | Vendor email, supplier contact, invitation email, or supplier portal user depending on trigger. Fallback and inactive portal-user handling need verification. |
 | Applicant/candidate | E-012–E-015 | Candidate-provided application email. Do not expose internal notes or interview details beyond intended recipient. |
 | Internal staff / approver | E-023, E-024, E-026–E-033 | Caller-specific role/permission or employee/user resolution; E-023 and digest require explicit preferences. Temporary credential messages are P0. |
@@ -132,7 +133,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 ## Likely unnecessary/noisy or sensitive email
 
 - E-030–E-033 temporary-password messages are inappropriate if live; confirm reachability and move to secure activation/reset flow in a separate security fix.
-- E-023 generic notification mail can send operational detail to anyone who explicitly opted into that type; classify every runtime type and remove sensitive data from body where links suffice.
+- E-023 generic notification mail spans internal event families and one customer portal delivery-date proposal. The central service trusts caller activity/email validation; the direct customer path groups recipients into one To list. See EF-041 and EF-042.
 - E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
 - E-016 local security change removes the PDF attachment and links to authenticated self-service. HR and data-protection review remains required before production.
