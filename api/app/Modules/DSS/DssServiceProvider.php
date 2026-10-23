@@ -9,6 +9,7 @@ use App\Modules\DSS\Detectors\AtRiskOrderDetector;
 use App\Modules\DSS\Detectors\CollectionPriorityDetector;
 use App\Modules\DSS\Detectors\MasterHygieneDetector;
 use App\Modules\DSS\Detectors\NcrSlaBreachDetector;
+use App\Modules\DSS\Detectors\PrePayrollChecklistDetector;
 use App\Modules\DSS\Detectors\StuckDocumentDetector;
 use App\Modules\DSS\Services\DetectorRegistry;
 use Illuminate\Support\ServiceProvider;
@@ -33,6 +34,7 @@ class DssServiceProvider extends ServiceProvider
             $registry->register(StuckDocumentDetector::ID, StuckDocumentDetector::class);
             $registry->register(CollectionPriorityDetector::ID, CollectionPriorityDetector::class);
             $registry->register(AtRiskOrderDetector::ID, AtRiskOrderDetector::class);
+            $registry->register(PrePayrollChecklistDetector::ID, PrePayrollChecklistDetector::class);
 
             return $registry;
         });
