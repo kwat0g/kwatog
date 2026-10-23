@@ -362,9 +362,8 @@ export default function WorkOrderDetailPage() {
   const showComplete = data.status === 'in_progress' && !targetProduced && !processQcBlocked && handoverPending === 0 && Number(data.quantity_produced) > 0 && canLifecycle;
   const showClose = data.status === 'completed' && !data.quality_close_blocker && canLifecycle;
   const stockProduction = data.production_purpose === 'stock';
-  const showCancel = (stockProduction
-    ? ['planned', 'confirmed'].includes(data.status) && !data.actual_start && !data.parent && (canLifecycle || canCancelStock)
-    : !['completed', 'closed', 'cancelled', 'in_progress'].includes(data.status) && canLifecycle) &&
+  const showCancel = stockProduction &&
+    ['planned', 'confirmed'].includes(data.status) && !data.actual_start && !data.parent && (canLifecycle || canCancelStock) &&
     Number(data.quantity_produced) === 0 &&
     !data.outputs?.length;
   const showRecord = data.status === 'in_progress' && !targetProduced && !processQcBlocked && handoverPending === 0 && canRecord;

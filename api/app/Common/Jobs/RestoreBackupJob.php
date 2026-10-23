@@ -23,8 +23,8 @@ class RestoreBackupJob implements ShouldQueue
 
     public function __construct(public readonly string $operationId)
     {
-        // Lane: low — hour-scale restore, same reason as CreateBackupJob.
-        $this->onQueue('low');
+        // Lane: bulk — hour-scale restore, same reason as CreateBackupJob.
+        $this->onQueue('bulk');
     }
 
     /** @return array<int, object> */

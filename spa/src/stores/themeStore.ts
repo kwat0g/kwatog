@@ -36,6 +36,10 @@ const resolveTheme = (mode: ThemeMode): 'light' | 'dark' => {
 const applyToDocument = (theme: AppliedTheme) => {
  if (typeof document !== 'undefined') {
  document.documentElement.setAttribute('data-theme', theme);
+  const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (favicon) {
+   favicon.href = theme === 'light' ? '/favicon-light.svg?v=20261022' : '/favicon-dark.svg?v=20261022';
+  }
  const meta = document.querySelector('meta[name="theme-color"]');
  const canvas = getComputedStyle(document.documentElement).getPropertyValue('--bg-canvas').trim();
  if (canvas) meta?.setAttribute('content', canvas);

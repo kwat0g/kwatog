@@ -3,7 +3,7 @@
 
 Hello {{ $purchaseOrder->vendor?->contact_person ?: $purchaseOrder->vendor?->name ?: 'Supplier' }},
 
-The following purchase order has been cancelled by Ogami Philippines. No further deliveries or invoices should be made against this purchase order.
+The following purchase order has been cancelled by {{ config('mail.from.name') }}. No further deliveries or invoices should be made against this purchase order.
 
 | Detail | Information |
 |---|---|
@@ -18,5 +18,5 @@ If you have already shipped any items for this order, please contact our Purchas
 <x-mail::button :url="$portalUrl">View Purchase Order Details</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ config('mail.from.name') }} Purchasing Team
 </x-mail::message>

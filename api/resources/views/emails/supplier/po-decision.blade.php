@@ -27,5 +27,5 @@ Your response was returned for revision. Please review the purchase order and su
 <x-mail::button :url="$portalUrl">Review Purchase Order</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ config('mail.from.name') }} Purchasing Team
 </x-mail::message>

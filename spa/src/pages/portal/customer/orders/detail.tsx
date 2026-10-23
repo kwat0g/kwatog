@@ -60,10 +60,10 @@ export default function CustomerOrderDetailPage() {
 
   const cancelMutation = useMutation({
     mutationFn: () => customerPortalApi.cancelOrder(id!, cancelReason.trim() || undefined),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setCancelOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['portal', 'customer'] });
-      toast.success('Order cancelled.');
+      toast.success(result.message);
     },
     onError: (error: Error & { response?: { data?: { message?: string } } }) =>
       toast.error(error.response?.data?.message ?? 'Could not cancel order.'),
@@ -161,19 +161,38 @@ export default function CustomerOrderDetailPage() {
       {chainError && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
         Order progress could not be loaded. <Button variant="secondary" size="sm" onClick={() => refetchChain()}>Retry order progress</Button>
       </div>}
+      {order?.latest_response?.type === 'cancellation_request' && (
+        <div role="status" className="mx-5 mt-3 rounded-md border border-default bg-surface px-4 py-3 text-sm">
+          <p className="font-medium">Cancellation request {order.latest_response.status}</p>
+          <p className="mt-1 text-muted">
+            {order.latest_response.status === 'pending'
+              ? 'Sales is reviewing production and purchasing commitments. Order remains active until review is complete.'
+              : order.latest_response.status === 'accepted'
+                ? 'Sales approved the cancellation.'
+                : order.latest_response.status === 'rejected'
+                  ? `Sales could not approve the cancellation${order.latest_response.resolution_notes ? `: ${order.latest_response.resolution_notes}` : '.'}`
+                  : 'Review the latest decision with sales.'}
+          </p>
+          {order.latest_response.notes && <p className="mt-1 whitespace-pre-wrap text-muted">Reason: {order.latest_response.notes}</p>}
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={cancelOpen}
         onClose={() => setCancelOpen(false)}
-        title="Cancel this order?"
-        confirmLabel="Cancel order"
+        title={order && ['confirmed', 'in_production'].includes(order.status) ? 'Cancel or request cancellation?' : 'Cancel this order?'}
+        confirmLabel={order && ['confirmed', 'in_production'].includes(order.status) ? 'Continue' : 'Cancel order'}
         cancelLabel="Keep order"
         variant="danger"
         pending={cancelMutation.isPending}
         onConfirm={() => cancelMutation.mutate()}
         description={
           <>
-            <p>Cancellation is allowed only before sales confirms this order.</p>
+            <p>
+              {order && ['confirmed', 'in_production'].includes(order.status)
+                ? 'If no production or purchasing commitments exist, order cancels now. Otherwise, sales reviews your request and order stays active until a decision.'
+                : 'Cancel this order before sales confirms it.'}
+            </p>
             <Textarea
               label="Reason (optional)"
               rows={2}

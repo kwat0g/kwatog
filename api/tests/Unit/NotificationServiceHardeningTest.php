@@ -286,6 +286,23 @@ class NotificationServiceHardeningTest extends TestCase
         $this->assertSame(2, DB::table('notifications')->where('type', 'test.optin')->count());
     }
 
+    public function test_invalid_email_address_is_skipped_without_an_exception(): void
+    {
+        $user = User::factory()->create(['email' => 'not-an-email']);
+        $this->enableEmailFor($user, 'test.invalid_email');
+
+        Event::fake();
+        Mail::fake();
+
+        $this->service->send($user, 'test.invalid_email', ['title' => 'Skip me', 'message' => 'x']);
+
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'test.invalid_email',
+        ]);
+    }
+
     public function test_email_opt_in_is_independent_of_in_app_opt_out(): void
     {
         $user = User::factory()->create(['email' => 'email-only@ogami.test']);

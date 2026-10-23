@@ -84,8 +84,8 @@ class ArDunningService
                     }
 
                     $email = $locked->customer?->email;
-                    if (! $email) {
-                        Log::warning('ArDunning blocked: invoice customer has no email.', [
+                    if (! is_string($email) || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+                        Log::warning('ArDunning blocked: invoice customer has no usable email.', [
                             'invoice_id' => $locked->id,
                         ]);
 

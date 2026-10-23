@@ -893,17 +893,6 @@ class GoldenPathDemoSeeder extends Seeder
             ],
         );
 
-        DB::table('product_routings')->updateOrInsert(
-            ['product_id' => $productId, 'version' => 1],
-            [
-                'is_active' => true,
-                'total_cycle_time' => '0.00',
-                'notes' => 'Defense demo routing ready for operation setup.',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
-
         DB::table('purchase_request_templates')->updateOrInsert(
             ['name' => 'Defense Demo Monthly Supplies'],
             [

@@ -102,6 +102,17 @@ class NotificationCatalogTest extends TestCase
         }
     }
 
+    public function test_horizon_queue_alert_is_in_the_notification_catalog(): void
+    {
+        $this->mock(SettingsService::class, function ($mock): void {
+            $mock->shouldReceive('get')
+                ->with('notifications.catalog')
+                ->andReturn(null);
+        });
+
+        $this->assertContains('queue.long_wait', (new NotificationCatalog)->typeKeys());
+    }
+
     public function test_stale_stored_catalog_is_backfilled_with_new_defaults(): void
     {
         // Simulates the real failure: a snapshot saved before newer types existed.

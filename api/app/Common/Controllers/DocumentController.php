@@ -237,6 +237,8 @@ class DocumentController
             'bill' => 'accounting.bills.view',
             'journal_entry' => 'accounting.journal.view',
             'purchase_order', 'purchase_request' => 'purchasing.view',
+            // Outbound chain document: the narrow delivery read, not the admin fallback.
+            'delivery_receipt' => 'supply_chain.deliveries.view',
             'coc', 'complaint_8d', 'ncr' => 'quality.view',
             'work_order_traveler' => 'production.work_orders.view',
             'balance_sheet', 'income_statement', 'trial_balance' => 'accounting.statements.view',

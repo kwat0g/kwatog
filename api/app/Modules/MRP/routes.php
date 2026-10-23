@@ -85,4 +85,5 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::get('/runs',                  [MrpRunController::class, 'index']) ->middleware('permission:mrp.runs.view');
     Route::get('/runs/latest',           [MrpRunController::class, 'latest'])->middleware('permission:mrp.runs.view');
     Route::post('/runs',                 [MrpRunController::class, 'store']) ->middleware('permission:mrp.runs.trigger');
+    Route::post('/sales-orders/{salesOrder}/run', [MrpRunController::class, 'storeForSalesOrder'])->middleware('permission:mrp.plans.run');
 });

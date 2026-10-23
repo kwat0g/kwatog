@@ -45,9 +45,14 @@ and the **driver's proof** that the customer received them.
    pick the **sales order** being delivered, items + quantities.
 4. Click **Create delivery** (busy text: "Creating…").
 5. Open the delivery (`/supply-chain/deliveries/<id>`).
+   The **Deliver to** panel shows the ship-to address taken from the customer
+   record and captured on this delivery when it was drafted — editing the
+   customer later does not move a run sheet that already went out.
 6. Click **Assign driver & vehicle** (later edits read **Reassign**),
    pick the van and the driver, save.
 7. The driver now sees this delivery on his phone (Part D).
+   **Delivery receipt** in the header prints the same address for the
+   customer to sign at the gate.
 8. When the signed receipt photo is uploaded, the
    **Proof of delivery** panel turns complete.
 9. Click **Confirm** to confirm the delivery
@@ -62,7 +67,9 @@ Use a phone-sized browser window for the full effect.
 2. Go to `/driver` ("My Deliveries").
 3. You see ONLY this driver's assigned runs, with statuses.
 4. Tap a delivery to open `/driver/<id>`.
-5. Advance its status with the on-screen confirm sheet.
+5. **Deliver to** is the first panel: tap the address to open Google Maps
+   directions from the phone's current position, or tap the phone number to
+   call the receiving contact. Advance its status with the on-screen confirm sheet.
 6. After delivery, tap the photo step to open `/driver/<id>/photo`.
 7. Photograph the signed receipt (or goods + customer name visible).
 8. Tap **Upload photo** (warns if the file exceeds 8 MB).
@@ -79,6 +86,15 @@ Use a phone-sized browser window for the full effect.
    **Assign driver & vehicle** (driver: Nestor Flores).
 4. `driver@ogami.test`: open `/driver`, run the delivery, **Upload photo**.
 5. `impex@ogami.test`: reopen the delivery, show the proof, click **Confirm**.
+
+## Setting the delivery address
+
+1. As `customerservice@ogami.test` (or any holder of
+   `accounting.customers.manage`), open `/crm/customers/<id>/edit`.
+2. In the **Delivery** panel fill the delivery address, the receiving contact
+   and their phone. This is separate from the billing address used on invoices.
+3. Leave it blank and a delivery falls back to the billing address, but the
+   driver page says so rather than guessing silently.
 
 ## Who can do what (cheat sheet)
 

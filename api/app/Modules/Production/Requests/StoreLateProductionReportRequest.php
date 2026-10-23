@@ -15,7 +15,9 @@ use Illuminate\Validation\Validator;
 
 class StoreLateProductionReportRequest extends FormRequest
 {
-    use ResolvesHashIds;
+    use ResolvesHashIds {
+        prepareForValidation as private resolveHashIdFields;
+    }
 
     public function authorize(): bool
     {
@@ -31,6 +33,7 @@ class StoreLateProductionReportRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $this->resolveHashIdFields();
         $workOrder = $this->route('workOrder');
         if (! $workOrder instanceof WorkOrder || ! $workOrder->usesFinishFirstQc()
             || $this->exists('produced_count') || ! $this->exists('good_count')) {

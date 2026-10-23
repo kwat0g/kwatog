@@ -78,6 +78,17 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $this->assertSame('0.000', $service->lineCoverage($line)['uncovered']);
     }
 
+    public function test_fulfillment_preview_endpoint_loads_stock_source_quality_spec(): void
+    {
+        [$so, $line] = $this->stockFixture();
+        $reader = User::factory()->withRole('sales_officer')->create();
+
+        $response = $this->actingAs($reader)->getJson('/api/v1/crm/sales-orders/'.$so->hash_id.'/fulfillment');
+
+        $response->assertOk()->assertJsonPath('data.lines.0.policy', 'stock_first')
+            ->assertJsonPath('data.lines.0.proposed_stock', '10.000');
+    }
+
     public function test_second_order_cannot_spend_held_stock(): void
     {
         [$so, $line, $item, $location, $actor] = $this->stockFixture();

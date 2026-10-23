@@ -2,7 +2,7 @@
  * Series F — Task F2. Approval board types.
  */
 
-export type ApprovalKind = 'leave' | 'pr' | 'po' | 'loan' | 'payroll' | 'salary_adjustment' | 'return_request' | 'asset_disposal'
+export type ApprovalKind = 'leave' | 'pr' | 'po' | 'bill_payment' | 'loan' | 'payroll' | 'salary_adjustment' | 'return_request' | 'asset_disposal'
  | 'overtime' | 'stock_adjustment' | 'item_cost_review' | 'stock_count_variance' | 'payroll_adjustment'
  | 'budget' | 'budget_transfer' | 'invoice_prebill' | 'supplier_listing' | 'loan_write_off';
 

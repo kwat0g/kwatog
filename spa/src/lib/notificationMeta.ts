@@ -76,6 +76,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
     label: 'Inventory costing',
   },
   // ── Chain 1 · Order to Cash ──────────────────────────────────────────
+  'sales_order.cancellation_requested': { icon: LuFileText, group: 'approvals', label: 'Order cancellation' },
   'chain.so_confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Sales' },
   'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
@@ -174,6 +175,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   // ── Maintenance, planning & approvals ────────────────────────────────
   mrp_run_completed: { icon: LuFactory, group: 'system', label: 'MRP' },
   'maintenance.assignment_needed': { icon: LuUsers, group: 'approvals', label: 'Maintenance' },
+  'maintenance.parts_requested': { icon: LuPackage, group: 'approvals', label: 'Maintenance' },
   'maintenance.assigned': { icon: LuWrench, group: 'system', label: 'Maintenance' },
   // Warehouse confirmed the spare parts (F-007): status update to the technician,
   // not an approval or an alert — "Repair can continue."
@@ -193,6 +195,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
 
   // ── Security & administration ────────────────────────────────────────
   'permission.override': { icon: LuKeyRound, group: 'system', label: 'Access' },
+  'queue.long_wait': { icon: LuTriangleAlert, group: 'alerts', label: 'Queue operations' },
 };
 
 // Portal notices do not belong to internal users' notification preferences.

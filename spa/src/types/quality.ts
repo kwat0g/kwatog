@@ -217,17 +217,9 @@ export interface CreateInspectionData {
   product_id: string;
   batch_quantity: number;
   work_order_output_id?: string | null;
-  entity_type?: InspectionEntityType | null;
-  entity_id?: string | null;
+  entity_type: InspectionEntityType;
+  entity_id: string;
   notes?: string;
-}
-
-export interface WorkOrderOutputOption {
-  id: string;
-  batch_code: string | null;
-  good_count: number;
-  recorded_at: string | null;
-  work_order: { id: string; wo_number: string } | null;
 }
 
 export interface RecordInspectionItemResultsData {

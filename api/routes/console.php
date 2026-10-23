@@ -8,6 +8,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
+// Horizon's metrics graph is built from job/queue snapshots. Without this the
+// dashboard shows live state but no history, which is exactly the "was this
+// always slow, or only since the last deploy?" question the queue lanes exist
+// to answer.
+Schedule::command('horizon:snapshot')
+    ->everyFiveMinutes()
+    ->onOneServer();
+
 Schedule::command('production:notify-upcoming-work-orders')
     ->everyMinute()
     ->withoutOverlapping(5)

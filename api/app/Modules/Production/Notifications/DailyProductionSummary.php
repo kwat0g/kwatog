@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Notifications;
 
-use App\Common\Services\SettingsService;
+use App\Common\Services\EmailBrandingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -25,7 +25,7 @@ class DailyProductionSummary extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
-        $companyName = app(SettingsService::class)->requiredString('company.legal_name');
+        $companyName = app(EmailBrandingService::class)->data()['legal_name'];
 
         return (new MailMessage)
             ->subject('Production Summary — '.$this->summary['date'])

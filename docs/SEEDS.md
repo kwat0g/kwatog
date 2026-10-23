@@ -303,13 +303,18 @@ Overtime uses the attendance module's custom single-checker flow; its obsolete `
 
 ## 15. DEMO CUSTOMERS (5)
 
-| Name | Payment Terms |
-|---|---|
-| Toyota Motor Philippines, Inc. | Net 30 |
-| Nissan Philippines, Inc. | Net 30 |
-| Honda Philippines, Inc. | Net 30 |
-| Suzuki Philippines, Inc. | Net 45 |
-| Yamaha Motor Philippines, Inc. | Net 45 |
+| Name | Payment Terms | Delivery (ship-to) address |
+|---|---|---|
+| Toyota Motor Philippines, Inc. | Net 30 | Receiving Gate, Toyota SEZ, Santa Rosa, Laguna |
+| Nissan Philippines, Inc. | Net 30 | Nissan Plant, Santa Rosa, Laguna |
+| Honda Philippines, Inc. | Net 30 | Honda Plant, Tanauan, Batangas |
+| Suzuki Philippines, Inc. | Net 45 | Suzuki Plant, Canlubang, Calamba, Laguna |
+| Yamaha Motor Philippines, Inc. | Net 45 | Yamaha Plant, LIMA Estate, Malvar, Batangas |
+
+Each row also seeds a receiving contact (`Receiving Clerk`) and a demo
+`049-`/`043-` phone. The ship-to is what the driver run sheet and the printed
+delivery receipt show; the billing address stays generic (`Philippines`). These
+are demo records — the gate-level detail is illustrative, not a real address.
 
 ## 16. DEMO RAW MATERIALS (12)
 

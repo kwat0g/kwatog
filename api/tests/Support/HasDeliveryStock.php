@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
@@ -27,7 +28,13 @@ trait HasDeliveryStock
 {
     use HasPassedInProcessQc;
 
-    protected function deliveryWithApprovedStock(User $actor): array
+    /**
+     * @param  Customer|null  $customer  Optional customer to put on the sales
+     *     order. Callers that assert delivery-time data copied off the customer
+     *     (e.g. the ship-to snapshot) need the customer to exist before the
+     *     delivery is created; passing null keeps a factory-made one.
+     */
+    protected function deliveryWithApprovedStock(User $actor, ?Customer $customer = null): array
     {
         $this->seed([SettingsSeeder::class, ChartOfAccountsSeeder::class]);
         $checker = User::factory()->create();
@@ -35,7 +42,7 @@ trait HasDeliveryStock
         $order = SalesOrder::factory()->create([
             'created_by' => $actor->id, 'status' => 'confirmed', 'date' => today()->toDateString(),
             'subtotal' => '45.00', 'vat_amount' => '5.40', 'total_amount' => '50.40',
-        ]);
+        ] + ($customer !== null ? ['customer_id' => $customer->id] : []));
         $line = SalesOrderItem::factory()->create([
             'sales_order_id' => $order->id, 'product_id' => $product->id,
             'quantity' => '3.00', 'unit_price' => '15.00', 'total' => '45.00',

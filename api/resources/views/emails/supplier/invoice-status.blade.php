@@ -3,7 +3,7 @@
 
 Hello {{ $bill->vendor?->contact_person ?: $bill->vendor?->name ?: 'Supplier' }},
 
-Ogami Philippines received your invoice submission for Accounts Payable review.
+{{ config('mail.from.name') }} received your invoice submission for Accounts Payable review.
 
 | Detail | Value |
 |---|---|
@@ -20,5 +20,5 @@ This confirmation means the submission was received; payment remains subject to 
 <x-mail::button :url="$portalUrl">View supplier portal</x-mail::button>
 
 Regards,<br>
-Ogami Philippines Accounts Payable
+{{ config('mail.from.name') }} Accounts Payable
 </x-mail::message>

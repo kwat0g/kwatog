@@ -7,6 +7,7 @@ import {
   LuTag,
   LuTrash2,
   LuFileText,
+  LuFileDown,
   LuShieldCheck,
   LuArchiveRestore,
   LuTriangleAlert,
@@ -42,6 +43,7 @@ import { DeliveryAttemptPanel } from './DeliveryAttemptPanel';
 import { TruckReturnReceiptPanel } from './TruckReturnReceiptPanel';
 import { DeliveryStockCostPanel } from './DeliveryStockCostPanel';
 import { ShipmentPlanDialog } from './ShipmentPlanDialog';
+import { ShipToAddress } from '@/components/supply-chain/ShipToAddress';
 
 export default function DeliveryDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -234,6 +236,20 @@ export default function DeliveryDetailPage() {
         backLabel="Deliveries"
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* Chain 1 — the signed-paper counterpart of the driver's phone. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuFileDown size={14} />}
+              onClick={() =>
+                void downloadAuthenticatedFile(
+                  `/api/v1/supply-chain/deliveries/${data.id}/delivery-receipt`,
+                  { openInNewTab: true, errorMessage: 'Failed to open the delivery receipt.' },
+                )
+              }
+            >
+              Delivery receipt
+            </Button>
             {data.can_cancel && canEdit && (
               <Button
                 variant="danger"
@@ -298,6 +314,15 @@ export default function DeliveryDetailPage() {
               lines={data.items ?? []} outcome={data.attempt_outcome}
               canReceive={can('return_management.receive') && data.attempt_outcome.lines.some((line) => Number(line.unaccounted_quantity) > 0)} />}
           </>}
+          <Panel title="Deliver to">
+            <ShipToAddress
+              heading={data.sales_order?.customer?.name ?? undefined}
+              address={data.delivery_address}
+              contactPerson={data.delivery_contact_person}
+              contactPhone={data.delivery_contact_phone}
+              emptyHint="No delivery address on file for this customer. Add it on the customer record."
+            />
+          </Panel>
           <Panel title="Shipment details">
             <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <div>

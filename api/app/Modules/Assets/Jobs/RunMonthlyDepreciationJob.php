@@ -36,8 +36,8 @@ class RunMonthlyDepreciationJob implements ShouldQueue
         public readonly ?int $year = null,
         public readonly ?int $month = null,
     ) {
-        // Lane: low — monthly bulk run.
-        $this->onQueue('low');
+        // Lane: automation — monthly bulk run.
+        $this->onQueue('automation');
     }
 
     public function handle(DepreciationService $depreciation, SystemActorService $actors): void

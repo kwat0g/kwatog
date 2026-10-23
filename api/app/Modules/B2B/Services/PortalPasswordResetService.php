@@ -73,11 +73,27 @@ class PortalPasswordResetService
 
         $this->audit->portal('portal.password.reset_requested', $recipient, $request);
 
+        $notifier = app(EmailDeliveryFailureNotifier::class);
+        $fallbackUserIds = $notifier->userIdsWithPermission($this->fallbackPermission($type));
+
+        if (! is_string($recipient->email) || filter_var($recipient->email, FILTER_VALIDATE_EMAIL) === false) {
+            $notifier->notifyUserIds(
+                $fallbackUserIds,
+                'Portal password reset email',
+                'A portal password reset was requested but the account email is not deliverable. Contact the portal user through an approved channel and verify the account before assisting with access.',
+                [
+                    'reason' => 'The portal account email address is not valid.',
+                ],
+            );
+
+            return;
+        }
+
         Mail::to($recipient->email)->queue(new PortalPasswordResetMail(
             $type,
             $rawToken,
             $recipient->name,
-            app(EmailDeliveryFailureNotifier::class)->userIdsWithPermission($this->fallbackPermission($type)),
+            $fallbackUserIds,
         ));
     }
 

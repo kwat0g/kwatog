@@ -25,14 +25,15 @@ it('arranges checked supplier defects without a second warehouse location', asyn
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const rma = { id: 'rma-2', type: 'supplier_return' as const, type_label: 'Supplier return', rma_number: 'RMA-2', status: 'approved', status_label: 'Approved', is_editable: false, requires_defect_evidence: true, created_at: '', updated_at: '', item_count: 1, items: [{ id: 'line-2', item_id: 'item-2', quantity: '2', returned_quantity: '2', receipt_recorded: true, moved_quantity: '2', unit_price: '0.50', total: '1.00' }] };
   render(<QueryClientProvider client={client}><DisposeDialog rma={rma} isOpen onClose={() => {}} /></QueryClientProvider>);
+  expect(screen.getByLabelText(/Required delivery date/)).toHaveAttribute('min', manilaIsoDate());
   await screen.findByRole('option', { name: 'Return to Supplier' });
   fireEvent.change(screen.getByRole('combobox', { name: 'Disposition' }), { target: { value: 'return_to_supplier' } });
   expect(screen.queryByLabelText('Restock location')).not.toBeInTheDocument();
   expect(screen.queryByRole('checkbox', { name: /Raise a replacement purchase order/ })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Finish earlier return' })).toBeDisabled();
-  /* The dialog's minimum is the PHILIPPINE calendar date (`manilaIsoDate`, matching the
-     backend's `after_or_equal:today` under APP_TIMEZONE=Asia/Manila), so the fixture must
-     build its date the same way — a UTC-derived date is a day behind before 08:00 Manila. */
+  /* The dialog's minimum is the Philippine calendar date (`manilaIsoDate`, matching the
+     backend's `after_or_equal:today` under APP_TIMEZONE=Asia/Manila), so the fixture builds
+     its date the same way; a UTC-derived date is a day behind before 08:00 Manila. */
   const date = manilaIsoDate(new Date(Date.now() + 4 * 86_400_000));
   fireEvent.change(screen.getByLabelText(/Required delivery date/), { target: { value: date } });
   fireEvent.click(screen.getByRole('button', { name: 'Finish earlier return' }));

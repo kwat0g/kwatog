@@ -31,12 +31,23 @@ export function StickyActionBar({
   className?: string;
   offset?: Offset;
 }) {
+  /*
+   * No negative horizontal offset, and that is a fix rather than an omission.
+   * The bar used to bleed by a hardcoded `-mx-4` to reach the screen edges,
+   * which silently assumed its container was padded 16px. Where the assumption
+   * held (16px-padded forms) the bar stopped 4px short of the edge
+   * anyway; where it did not (`/quality/ncr-templates/new`, whose form pads by
+   * 20px) the bar hung 32px out of its container — an overflow no page could
+   * see, only the probe (F-021). Filling the container instead means the rule
+   * above the buttons lines up with the fields they submit, on every page, by
+   * construction.
+   */
   return (
     <div
       className={cn(
-        'sticky z-20 -mx-4 mt-2 border-t border-default bg-canvas px-4 py-3 safe-area-pb',
+        'sticky z-20 mt-2 border-t border-default bg-canvas py-3 safe-area-pb',
         offsets[offset],
-        'md:static md:mx-0 md:border-t-0 md:bg-transparent md:px-0 md:py-0',
+        'md:static md:border-t-0 md:bg-transparent md:py-0',
         className,
       )}
     >
