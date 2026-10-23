@@ -376,7 +376,7 @@ class AssetAssociationTest extends TestCase
         ]);
         Attendance::create([
             'employee_id' => $employee->id, 'shift_id' => $shift->id,
-            'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour(),
+            'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->startOfDay(),
         ]);
         $wo->update(['assigned_to' => $employee->id]);
     }
