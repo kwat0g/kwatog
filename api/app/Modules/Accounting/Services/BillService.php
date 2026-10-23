@@ -1038,7 +1038,9 @@ class BillService
             app(NotificationService::class)->send($requester, 'bill_payment.posted', [
                 'title' => 'Bill payment posted',
                 'message' => "Payment for bill {$bill->bill_number} was posted to the ledger.",
-                'link_to' => "/accounting/bills/{$bill->hash_id}",
+                'link_to' => $requester->hasPermission('accounting.bills.view')
+                    ? "/accounting/bills/{$bill->hash_id}"
+                    : null,
                 'entity_type' => 'bill_payment',
                 'entity_id' => $payment->hash_id,
             ], "bill-payment:posted:{$payment->id}");

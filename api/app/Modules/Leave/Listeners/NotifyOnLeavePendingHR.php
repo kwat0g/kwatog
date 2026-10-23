@@ -26,7 +26,7 @@ class NotifyOnLeavePendingHR implements ShouldQueue
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('leave.approve_hr'))
+                ->filter(fn (User $user): bool => $user->hasPermission('leave.approve_hr') && $user->hasPermission('leave.view'))
                 ->values();
 
             $this->notifications->send($audience, 'leave.pending_hr', [

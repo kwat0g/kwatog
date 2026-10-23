@@ -194,7 +194,7 @@ class BudgetTransferService
         app(NotificationService::class)->send($requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget transfer was rejected.' : 'Your budget transfer was approved.',
-            'link_to' => "/budgeting/transfers/{$transfer->hash_id}",
+            'link_to' => $requester->hasPermission('budgeting.view') ? "/budgeting/transfers/{$transfer->hash_id}" : null,
             'entity_type' => 'budget_transfer',
             'entity_id' => $transfer->hash_id,
         ], "budget-transfer:decision:{$transfer->id}:".($transfer->rejected_at?->timestamp ?? $transfer->approved_at?->timestamp));

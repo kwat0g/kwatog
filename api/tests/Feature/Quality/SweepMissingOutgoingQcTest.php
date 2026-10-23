@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Quality;
 
 use App\Console\Commands\SweepMissingOutgoingQc;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -17,7 +18,9 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\InspectionService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -38,6 +41,7 @@ class SweepMissingOutgoingQcTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -150,12 +154,17 @@ class SweepMissingOutgoingQcTest extends TestCase
             ->count(), 'the sweep must not duplicate covered output batches');
     }
 
-    public function test_escalates_a_wo_that_cannot_be_repaired_and_notifies_the_qc_roles(): void
+    public function test_escalates_a_wo_that_cannot_be_repaired_and_notifies_work_order_viewers(): void
     {
         // No active spec: the stateful refusal the sweep must escalate, not swallow.
         InspectionSpec::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
         $wo = $this->completedWoWithOutput();
+        $manager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            'is_active' => true,
+        ]);
 
+        $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
         $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
 
         $this->assertSame(0, Inspection::query()
@@ -166,8 +175,66 @@ class SweepMissingOutgoingQcTest extends TestCase
         // NotificationService writes the database channel directly.
         $this->assertDatabaseHas('notifications', [
             'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $manager->id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
             'notifiable_id' => $this->user->id,
         ]);
+        $this->assertSame(1, DB::table('notifications')
+            ->where('type', 'chain.outgoing_qc_missing')
+            ->where('notifiable_id', $manager->id)
+            ->count(), 'An unchanged hourly escalation must not duplicate the inbox notice.');
+    }
+
+    public function test_escalation_falls_back_to_system_admin_when_configured_roles_cannot_view_work_orders(): void
+    {
+        app(SettingsService::class)->set('quality.outgoing_qc.notification_roles', ['qc_inspector']);
+        InspectionSpec::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
+        $this->completedWoWithOutput();
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'is_active' => true,
+        ]);
+
+        $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
+
+        $this->assertDatabaseHas('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $admin->id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $this->user->id,
+        ]);
+    }
+
+    public function test_unexpected_repair_errors_are_not_copied_into_escalation_notice(): void
+    {
+        $wo = $this->completedWoWithOutput();
+        $manager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            'is_active' => true,
+        ]);
+        $inspectionService = \Mockery::mock(InspectionService::class);
+        $inspectionService->shouldReceive('createForOutput')
+            ->once()
+            ->andThrow(new \RuntimeException('SQLSTATE connection detail'));
+        $this->app->instance(InspectionService::class, $inspectionService);
+
+        $this->artisan(SweepMissingOutgoingQc::class)->assertExitCode(1);
+
+        $notice = DB::table('notifications')
+            ->where('type', 'chain.outgoing_qc_missing')
+            ->where('notifiable_id', $manager->id)
+            ->first();
+        $this->assertNotNull($notice);
+        $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($data);
+        $this->assertIsString($data['message'] ?? null);
+        $this->assertStringNotContainsString('SQLSTATE', $data['message']);
+        $this->assertStringContainsString('administrator', $data['message']);
+        $this->assertStringContainsString($wo->wo_number, $data['message']);
     }
 
     public function test_repairs_a_missing_output_even_when_another_output_already_has_qc(): void

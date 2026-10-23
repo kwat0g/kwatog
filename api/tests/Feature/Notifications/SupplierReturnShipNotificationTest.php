@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -90,15 +91,12 @@ class SupplierReturnShipNotificationTest extends TestCase
         ]);
     }
 
-    /** A purchasing role holding only purchasing.po.view. */
+    /** A purchasing role holding PO and return-request view access. */
     private function purchasingUser(): User
     {
-        $permission = Permission::query()->firstOrCreate(
-            ['slug' => 'purchasing.po.view'],
-            ['name' => 'View Purchase Orders', 'module' => 'purchasing'],
-        );
         $role = Role::query()->create(['name' => 'Purchasing Notify Test', 'slug' => 'purchasing-notify-test']);
-        $role->permissions()->attach($permission);
+        $permissions = Permission::query()->whereIn('slug', ['purchasing.po.view', 'return_management.view'])->pluck('id');
+        $role->permissions()->attach($permissions->all());
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }
@@ -289,6 +287,15 @@ class SupplierReturnShipNotificationTest extends TestCase
     {
         $admin = $this->admin();
         $outsider = $this->outsider();
+        $hiddenRmaViewer = $this->purchasingUser();
+        UserPermissionOverride::create([
+            'user_id' => $hiddenRmaViewer->id,
+            'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $hiddenRmaViewer->flushPermissionsCache();
         $ctx = $this->receivedShipment($admin);
         $rma = $this->inspectedRma($admin, $ctx);
 
@@ -304,6 +311,10 @@ class SupplierReturnShipNotificationTest extends TestCase
 
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $outsider->id,
+            'type'          => 'return.shipped_to_vendor',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $hiddenRmaViewer->id,
             'type'          => 'return.shipped_to_vendor',
         ]);
     }

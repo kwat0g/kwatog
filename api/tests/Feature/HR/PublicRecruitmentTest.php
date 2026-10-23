@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\HR;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
@@ -13,10 +15,12 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Services\RecruitmentService;
+use App\Modules\HR\Support\RecruitmentNotificationRecipients;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -250,5 +254,30 @@ class PublicRecruitmentTest extends TestCase
             'notifiable_id' => $hrUser->id,
             'type' => 'email.delivery_failed',
         ]);
+    }
+
+    public function test_new_application_notice_only_targets_active_users_who_can_view_applications(): void
+    {
+        $role = Role::query()->where('slug', 'hr_officer')->firstOrFail();
+        $allowed = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $revoked = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $inactive = User::factory()->create(['role_id' => $role->id, 'is_active' => false]);
+        app(SettingsService::class)->set('hr.recruitment.notification_roles', ['hr_officer']);
+
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => Permission::query()->where('slug', 'hr.recruitment.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $allowed->id,
+            'reason' => 'Recruitment notification audience access test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $recipientIds = RecruitmentNotificationRecipients::resolve(app(SettingsService::class))->modelKeys();
+
+        $this->assertContains($allowed->id, $recipientIds);
+        $this->assertNotContains($revoked->id, $recipientIds);
+        $this->assertNotContains($inactive->id, $recipientIds);
     }
 }

@@ -9,10 +9,13 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Events\LoanDecided;
 use App\Modules\Loans\Events\LoanSubmitted;
+use App\Modules\Loans\Listeners\NotifyOnLoanDecided;
 use App\Modules\Loans\Listeners\NotifyOnLoanSubmitted;
+use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Services\LoanService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -114,6 +117,35 @@ class LoanNotificationTest extends TestCase
             'notifiable_type' => User::class,
             'notifiable_id' => $revoked->id,
             'type' => 'loans.submitted',
+        ]);
+    }
+
+    public function test_loan_decision_notice_targets_owner_and_links_to_that_loan(): void
+    {
+        $employee = Employee::factory()->create();
+        $owner = $this->userWithRole('employee', $employee->id);
+        $otherEmployee = Employee::factory()->create();
+        $other = $this->userWithRole('employee', $otherEmployee->id);
+        $loan = EmployeeLoan::factory()->create([
+            'employee_id' => $employee->id,
+            'status' => LoanStatus::Rejected->value,
+        ]);
+
+        app(NotifyOnLoanDecided::class)->handle(new LoanDecided($loan, false));
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $owner->id)
+            ->where('type', 'loans.rejected')
+            ->first();
+        $this->assertNotNull($notice);
+        $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame("/self-service/loans/{$loan->hash_id}", $data['link_to']);
+        $this->assertSame($loan->hash_id, $data['entity_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $other->id,
+            'type' => 'loans.rejected',
         ]);
     }
 

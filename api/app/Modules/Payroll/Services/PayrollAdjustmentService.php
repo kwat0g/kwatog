@@ -73,6 +73,7 @@ class PayrollAdjustmentService
             $adj->forceFill(['status' => PayrollAdjustmentStatus::Pending->value])->save();
 
             $audience = ApprovalDelegation::approvalAudience('payroll.adjustments.approve')
+                ->filter(fn (User $approver): bool => $approver->hasPermission('payroll.adjustments.view'))
                 ->reject(fn (User $approver): bool => (int) $approver->id === (int) $user->id);
             app(NotificationService::class)->send($audience, 'approval.action_required', [
                 'title' => 'Payroll adjustment needs approval',
@@ -175,7 +176,7 @@ class PayrollAdjustmentService
         app(NotificationService::class)->send($requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your payroll adjustment was rejected.' : 'Your payroll adjustment was approved.',
-            'link_to' => '/payroll/adjustments',
+            'link_to' => $requester->hasPermission('payroll.adjustments.view') ? '/payroll/adjustments' : null,
             'entity_type' => 'payroll_adjustment',
             'entity_id' => $adjustment->hash_id,
         ], "payroll-adjustment:decision:{$adjustment->id}:{$type}");

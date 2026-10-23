@@ -6,6 +6,7 @@ namespace Tests\Feature\Purchasing;
 
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -16,6 +17,7 @@ use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -180,6 +182,34 @@ class ApprovalWorkflowTest extends TestCase
         $this->assertSame('approved', $step1->action);
         $this->assertSame($approver->id, $step1->approver_id);
         $this->assertNotNull($step1->acted_at);
+    }
+
+    public function test_approval_outcome_keeps_submitter_notice_but_omits_inaccessible_link(): void
+    {
+        $submitter = $this->makeUser('department_head');
+        $pr = $this->createDraftPurchaseRequest($submitter);
+        $submitted = app(PurchaseRequestService::class)->submit($pr);
+        $admin = $this->makeUser();
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $submitter->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Approval outcome link access regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $submitter->flushPermissionsCache();
+
+        app(ApprovalService::class)->approve($submitted, $this->makeUser('finance_officer'));
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $submitter->id)
+            ->where('type', 'approval.completed')
+            ->first();
+        $this->assertNotNull($notice);
+        $this->assertNull(json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 
     public function test_full_approval_chain_marks_entity_approved(): void

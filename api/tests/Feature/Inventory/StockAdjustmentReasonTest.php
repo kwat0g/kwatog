@@ -7,6 +7,8 @@ namespace Tests\Feature\Inventory;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
@@ -119,6 +121,14 @@ class StockAdjustmentReasonTest extends TestCase
             'notifiable_id' => $maker->id,
             'type' => 'approval.action_required',
         ]);
+        UserPermissionOverride::create([
+            'user_id' => $maker->id,
+            'permission_id' => Permission::query()->where('slug', 'inventory.adjust')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $this->admin->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $maker->flushPermissionsCache();
 
         // Approving posts the movement and flips to approved.
         $approved = $this->svc->approve($adj->fresh(), $this->admin);
@@ -128,6 +138,8 @@ class StockAdjustmentReasonTest extends TestCase
             'notifiable_id' => $maker->id,
             'type' => 'approval.completed',
         ]);
+        $outcome = $maker->notifications()->where('type', 'approval.completed')->latest()->firstOrFail();
+        $this->assertNull($outcome->data['link_to'] ?? null);
 
         $rejected = $this->svc->create(
             itemId: $this->item->id,

@@ -47,7 +47,7 @@ class NotifyOnWorkOrderPaused implements ShouldQueue
             $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('production.work_orders.view'))
+                ->filter(fn (User $user): bool => $user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view'))
                 ->values();
 
             $reason = $event->reason ? " Reason: {$event->reason}." : '';

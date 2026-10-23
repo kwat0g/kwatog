@@ -103,8 +103,9 @@ class Complaint8dSlaTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $complaint = $this->makeComplaint($revoked->id);
+        $complaint = $this->makeComplaint();
         DB::table('customer_complaints')->where('id', $complaint->id)->update([
+            'assigned_to' => $revoked->id,
             'created_at' => now()->subHours(49),
             'd3_due_at' => now()->subHour(),
             'd4_due_at' => now()->addDays(5),

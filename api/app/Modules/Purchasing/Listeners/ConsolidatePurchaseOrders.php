@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\VendorSourcingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -247,10 +248,14 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 (array) $this->settings->get('purchasing.purchase_request_approved.notification_roles', []),
                 static fn ($role): bool => is_string($role) && $role !== '',
             ));
+            $access = app(PurchaseRequestAccessPolicy::class);
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->with('role')
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('purchasing.view') && $access->canView($user, $pr))
+                ->values();
             $this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [
                 'title' => "PR {$pr->pr_number} needs manual conversion",
                 'message' => "Auto-PO was skipped: {$reason}",

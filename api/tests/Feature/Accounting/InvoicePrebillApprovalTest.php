@@ -261,6 +261,17 @@ class InvoicePrebillApprovalTest extends TestCase
         $this->assertSame('draft', $invoice->fresh()->status->value);
         $this->assertNull($invoice->fresh()->journal_entry_id);
 
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $maker->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'accounting.invoices.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $approver->id,
+            'reason' => 'Outcome notice link access test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $maker->flushPermissionsCache();
+
         $approveResponse = $this->actingAs($approver)->postJson($approveUrl);
         $approveResponse->assertOk();
         $approveResponse->assertJsonPath('data.status_history.1.event_type', 'prebill_approved')
@@ -277,6 +288,10 @@ class InvoicePrebillApprovalTest extends TestCase
             'notifiable_id' => $maker->id,
             'type' => 'approval.completed',
         ]);
+        $outcome = DB::table('notifications')->where('notifiable_id', $maker->id)
+            ->where('type', 'approval.completed')->first();
+        $this->assertNotNull($outcome);
+        $this->assertNull(json_decode((string) $outcome->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
 
         $approvalAuditCount = DB::table('audit_logs')
             ->where('model_type', $invoice->getMorphClass())

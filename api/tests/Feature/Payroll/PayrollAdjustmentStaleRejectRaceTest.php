@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
@@ -15,6 +17,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollAdjustmentService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -92,8 +95,18 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
             'payroll_period_id' => $period->id,
             'employee_id' => $employee->id,
         ]);
-        $requester = User::factory()->withRole('system_admin')->create();
+        $requester = User::factory()->withRole('hr_officer')->create(['employee_id' => $employee->id]);
         $approver = User::factory()->withRole('system_admin')->create();
+        $restrictedApprover = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $restrictedApprover->id,
+            'permission_id' => Permission::query()->where('slug', 'payroll.adjustments.approve')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $approver->id,
+            'reason' => 'Notification route access test.',
+        ]);
+        $restrictedApprover->flushPermissionsCache();
+        $this->assertFalse($restrictedApprover->hasPermission('payroll.adjustments.view'));
         $service = app(PayrollAdjustmentService::class);
 
         $adjustment = $service->create([
@@ -106,12 +119,29 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
             'notifiable_id' => $approver->id,
             'type' => 'approval.action_required',
         ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restrictedApprover->id,
+            'type' => 'approval.action_required',
+        ]);
+
+        UserPermissionOverride::create([
+            'user_id' => $requester->id,
+            'permission_id' => Permission::query()->where('slug', 'payroll.adjustments.view')->firstOrFail()->id,
+            'type' => 'revoke',
+            'granted_by' => $approver->id,
+            'reason' => 'Outcome notification link access test.',
+        ]);
+        $requester->flushPermissionsCache();
 
         $service->approve($adjustment, $approver);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $requester->id,
             'type' => 'approval.completed',
         ]);
+        $outcome = DB::table('notifications')->where('notifiable_id', $requester->id)
+            ->where('type', 'approval.completed')->first();
+        $this->assertNotNull($outcome);
+        $this->assertNull(json_decode((string) $outcome->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 
     public function test_rejecting_payroll_adjustment_notifies_requester(): void

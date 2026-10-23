@@ -2,7 +2,7 @@
 
 ## Trigger and recipients
 
-Purchasing accepts or rejects a supplier response. Price-increase proposals wait for the PO re-approval outcome before this email is queued. The current resolver selects active supplier portal users; if none exist, it falls back to the vendor address. It does not include CC or BCC.
+Purchasing accepts or rejects a supplier response. Immediate decisions queue one message per eligible mailbox; a price-increase proposal waits for the PO re-approval outcome before the email is queued. The pending-state guards prevent a repeated resolve or approval request from sending the same decision again. The current resolver selects active supplier portal users; if none exist, it falls back to the vendor address. It does not include CC or BCC.
 
 Draft PR #240 fixes EF-028: validate and deduplicate active portal addresses, queue one private copy per recipient, use a valid vendor fallback, and notify only active purchasing users who can view the PO if no external address is usable. `SupplierPoDecisionRecipientsTest`: 3 passed / 10 assertions.
 

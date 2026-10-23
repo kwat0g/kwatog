@@ -331,7 +331,9 @@ class InvoiceService
                 app(NotificationService::class)->send($requester, 'approval.completed', [
                     'title' => 'Prebill invoice approved',
                     'message' => 'Your manual invoice was approved for prebilling.',
-                    'link_to' => "/accounting/invoices/{$lockedInvoice->hash_id}",
+                    'link_to' => $requester->hasPermission('accounting.invoices.view')
+                        ? "/accounting/invoices/{$lockedInvoice->hash_id}"
+                        : null,
                     'entity_type' => 'invoice',
                     'entity_id' => $lockedInvoice->hash_id,
                 ], "prebill:decision:{$lockedInvoice->id}:{$lockedInvoice->prebill_approved_at->timestamp}");

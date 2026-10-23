@@ -499,9 +499,11 @@ class SalesOrderResponseService
     private function notifySalesAudience(SalesOrder $so, SalesOrderResponse $response): void
     {
         try {
-            $audience = $response->response_type === SalesOrderResponseType::CancellationRequest
-                ? $this->notifications->usersWithPermission('crm.sales_orders.cancel')
-                : $this->notifications->usersWithPermission('crm.sales_orders.confirm');
+            $permission = $response->response_type === SalesOrderResponseType::CancellationRequest
+                ? 'crm.sales_orders.cancel'
+                : 'crm.sales_orders.confirm';
+            $audience = $this->notifications->usersWithPermission($permission)
+                ->filter(fn (User $user): bool => $user->hasPermission('crm.sales_orders.view'));
 
             $this->notifications->send($audience, 'customer.so_responded', [
                 'title'       => "Sales order {$so->so_number} — customer {$response->response_type->label()}",
