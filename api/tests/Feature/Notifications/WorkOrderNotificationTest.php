@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Notifications;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class WorkOrderNotificationTest extends TestCase
@@ -27,6 +29,16 @@ class WorkOrderNotificationTest extends TestCase
     {
         $ppc = $this->userWithRole('ppc_head');
         $pm  = $this->userWithRole('production_manager');
+        $revokedPpc = $this->userWithRole('ppc_head');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedPpc->id,
+            'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $pm->id,
+            'reason' => 'Work-order visibility removed for notification audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $wo  = WorkOrder::factory()->create();
 
         $listener = app(NotifyOnWorkOrderCompleted::class);
@@ -38,6 +50,10 @@ class WorkOrderNotificationTest extends TestCase
         ]);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $pm->id,
+            'type'          => 'production.wo_completed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedPpc->id,
             'type'          => 'production.wo_completed',
         ]);
     }

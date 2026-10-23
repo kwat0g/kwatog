@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Notifications;
 
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
@@ -32,6 +33,8 @@ class WorkOrderPausedNotificationTest extends TestCase
     {
         $ppc = $this->userWithRole('ppc_head');
         $pm = $this->userWithRole('production_manager');
+        $revokedPpc = $this->userWithRole('ppc_head');
+        $this->revoke($revokedPpc, 'production.work_orders.view', $pm);
         $wo = WorkOrder::factory()->create(['status' => WorkOrderStatus::Paused->value]);
 
         app(NotifyOnWorkOrderPaused::class)->handle(
@@ -40,6 +43,9 @@ class WorkOrderPausedNotificationTest extends TestCase
 
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $ppc->id, 'type' => 'production.wo_paused']);
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $pm->id, 'type' => 'production.wo_paused']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedPpc->id, 'type' => 'production.wo_paused']);
+        $this->actingAs($pm)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertOk();
+        $this->actingAs($revokedPpc)->getJson('/api/v1/production/work-orders/'.$wo->hash_id)->assertForbidden();
     }
 
     public function test_message_names_the_work_order_and_reason(): void
@@ -82,5 +88,18 @@ class WorkOrderPausedNotificationTest extends TestCase
         $role = Role::where('slug', $slug)->firstOrFail();
 
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+    }
+
+    private function revoke(User $user, string $permission, User $grantedBy): void
+    {
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => Permission::query()->where('slug', $permission)->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $grantedBy->id,
+            'reason' => 'Work-order visibility removed for notification audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

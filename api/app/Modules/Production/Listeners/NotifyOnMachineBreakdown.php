@@ -26,7 +26,9 @@ class NotifyOnMachineBreakdown implements ShouldQueue
             $roles = array_values(array_filter((array) $this->settings->get('maintenance.machine_breakdown.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('mrp.machines.view'))
+                ->values();
 
             $woInfo = $event->pausedWorkOrder
                 ? " WO {$event->pausedWorkOrder->wo_number} was paused."
