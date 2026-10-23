@@ -154,8 +154,7 @@ describe('inspection spec editor accessibility', () => {
  it('preserves specification limits in the editor', async () => {
   renderEditor();
   await editExistingCheck();
-  expect(screen.getByDisplayValue('Offset')).toBeVisible();
-  expect(screen.getByRole('textbox', { name: 'Custom check name 1' })).toBeInTheDocument();
+  expect(await screen.findByRole('textbox', { name: 'Custom check name 1' })).toHaveValue('Offset');
   expect(screen.getByRole('textbox', { name: 'PASS requirement 1' })).toHaveValue('');
   expect(screen.getByRole('combobox', { name: 'Importance 1' })).toHaveValue('critical');
   expect(screen.getByRole('textbox', { name: 'Target 1' })).toHaveValue('-1.0000');
