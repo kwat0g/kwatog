@@ -86,9 +86,9 @@ Initial inspection found local `.env` and `api/.env` configured with `APP_ENV=lo
 ## Foundation facts
 
 - Existing company/PDF settings live in the `settings` table: `company.*`, `pdf.footer_disclaimer`, PDF accent/terms, and `email.brand_name`. A read-only presence check found legal name, address, phone, general/sales email, TIN, VAT status, certification, public URL, and display name populated. The configured sales inbox and VAT status match the old source fallback strings and need owner verification. `company.logo_path` is empty, but the API contains bundled logo assets. Values were not copied into this report.
-- The SPA base URL is `FRONTEND_URL`; app config falls back to `APP_URL`. Local values point to `ogamiph.dev`. A single link helper/route validator was not found in this pass.
+- The SPA base URL is `FRONTEND_URL`; app config now falls back to `http://localhost`, never `APP_URL`. Local values point to `ogamiph.dev`. A single link helper/route validator was not found in this pass.
 - PHP app timezone is set in `api/config/app.php`; exact value and display conversion in every email remain unverified. Do not infer Asia/Manila correctness from the prompt.
-- Environment examples describe SES SMTP / SES Mail Manager. From defaults are configured from `MAIL_FROM_ADDRESS` and `MAIL_FROM_NAME`; no explicit shared Reply-To policy was identified in repository config. SPF, DKIM, DMARC, bounce webhooks, suppression lists, and provider reputation cannot be verified from source.
+- Environment examples describe SES SMTP / SES Mail Manager. From defaults are configured from `MAIL_FROM_ADDRESS` and `MAIL_FROM_NAME`; no explicit shared Reply-To policy was identified in repository config. The owner reported DKIM setup succeeded for `ogamiph.dev` in AWS Asia Pacific (Singapore); this report does not independently verify DNS/provider state. SPF, DMARC, bounce webhooks, suppression lists, and provider reputation cannot be verified from source.
 - Horizon, Redis queues, failed-job persistence, and scheduler are present. Queue depth/failed job metrics have a health/operations surface; mail delivery success rate/provider event tracking was not found.
 
 ## Discovery limits and next safe step

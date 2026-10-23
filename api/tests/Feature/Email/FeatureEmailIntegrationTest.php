@@ -23,6 +23,7 @@ use App\Modules\SupplyChain\Mail\CustomerDeliveryConfirmedMail;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Auth\Models\User;
 use App\Common\Mail\EmailIntegrationTestMail;
+use App\Common\Services\EmailBrandingService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -51,10 +52,16 @@ class FeatureEmailIntegrationTest extends TestCase
             ->handle(new SalesOrderConfirmed($salesOrder));
 
         Mail::assertQueued(CustomerSalesOrderConfirmedMail::class, function (CustomerSalesOrderConfirmedMail $mail) use ($salesOrder): bool {
+            $rendered = $mail->render();
+            $mail->assertSeeInText($salesOrder->so_number);
+            $mail->assertSeeInText('/portal/customer/orders/'.$salesOrder->hash_id);
+
             return $mail->hasTo('customer@example.test')
                 && $mail->salesOrder->is($salesOrder)
-                && str_contains($mail->render(), $salesOrder->so_number)
-                && str_contains($mail->render(), '/portal/customer/orders/'.$salesOrder->hash_id);
+                && str_contains($rendered, $salesOrder->so_number)
+                && str_contains($rendered, '/portal/customer/orders/'.$salesOrder->hash_id)
+                && str_contains($rendered, '<v:roundrect')
+                && str_contains($rendered, 'Open this link if the button does not work');
         });
     }
 
@@ -139,10 +146,14 @@ class FeatureEmailIntegrationTest extends TestCase
 
         $this->assertInstanceOf(SupplierDispatchResult::class, $result);
         Mail::assertQueued(SupplierPurchaseOrderMail::class, function (SupplierPurchaseOrderMail $mail) use ($purchaseOrder): bool {
+            $html = $mail->render();
+
             return $mail->hasTo('supplier@example.test')
                 && $mail->purchaseOrder->is($purchaseOrder)
-                && str_contains($mail->render(), 'PO-EMAIL-001')
-                && str_contains($mail->render(), '/portal/supplier/purchase-orders/'.$purchaseOrder->hash_id);
+                && str_contains($html, 'PO-EMAIL-001')
+                && str_contains($html, '/portal/supplier/purchase-orders/'.$purchaseOrder->hash_id)
+                && str_contains($html, 'background-color: #f9fafb')
+                && str_contains($html, 'border-bottom: 1px solid #f2f4f7');
         });
     }
 
@@ -150,12 +161,33 @@ class FeatureEmailIntegrationTest extends TestCase
     {
         $mail = new EmailIntegrationTestMail();
         $rendered = $mail->render();
+        $brand = app(EmailBrandingService::class)->data();
 
-        $this->assertStringContainsString('Ogami Philippines', $rendered);
-        $this->assertStringContainsString('Philippine Ogami Corporation', $rendered);
-        $this->assertStringContainsString('FCIE Complex, Dasmariñas, Cavite, Philippines', $rendered);
+        $this->assertStringContainsString($brand['name'], $rendered);
+        $this->assertStringContainsString($brand['legal_name'], $rendered);
+        $this->assertStringContainsString(htmlspecialchars($brand['address'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $rendered);
+        $this->assertStringContainsString('href="'.rtrim(config('app.frontend_url'), '/').'"', $rendered);
         $this->assertStringContainsString('cid:ogami-logo@ogami', $rendered);
-        $this->assertStringEndsWith('images/ogami-logo.png', app(\App\Common\Services\EmailBrandingService::class)->logoPath());
-        $this->assertStringNotContainsString('alt="Ogami Philippines" width="52" height="52"', $rendered);
+        $this->assertStringContainsString('cid:ogami-logo-dark@ogami', $rendered);
+        $this->assertStringContainsString('alt="'.$brand['name'].' logo"', $rendered);
+        $this->assertStringContainsString('width="64" height="64"', $rendered);
+        $this->assertStringContainsString('Shared email shell preview text.', $rendered);
+        $this->assertStringContainsString('<title>AWS Mail Manager email integration test</title>', $rendered);
+        $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_path']), 0, 2, true));
+        $this->assertSame([0 => 275, 1 => 273], array_slice(getimagesize($brand['logo_dark_path']), 0, 2, true));
+        $darkLogo = imagecreatefrompng($brand['logo_dark_path']);
+        $whitePixelFound = false;
+        for ($y = 0; $y < imagesy($darkLogo); $y++) {
+            for ($x = 0; $x < imagesx($darkLogo); $x++) {
+                $pixel = imagecolorat($darkLogo, $x, $y);
+                if ((($pixel >> 24) & 0x7f) === 0) {
+                    $this->assertSame(0xffffff, $pixel & 0xffffff);
+                    $whitePixelFound = true;
+                    break 2;
+                }
+            }
+        }
+        imagedestroy($darkLogo);
+        $this->assertTrue($whitePixelFound);
     }
 }

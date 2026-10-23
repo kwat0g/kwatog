@@ -89,7 +89,7 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '['.config('mail.from.name', 'Ogami Philippines').'] Scheduled export: '.$this->exportName,
+            subject: '['.config('mail.from.name').'] Scheduled export: '.$this->exportName,
         );
     }
 

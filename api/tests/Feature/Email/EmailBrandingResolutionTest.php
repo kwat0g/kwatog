@@ -6,14 +6,16 @@ namespace Tests\Feature\Email;
 
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 /**
  * F-040 — transactional email branding must resolve from settings only.
  *
  * EmailBrandingService::value() used to fall back to env() between the
- * settings row and the legal-name fallback. Production runs `config:cache`
+ * settings row and its legal-name fallback. Production runs `config:cache`
  * (docker/php/prod-entrypoint.sh:15), after which env() returns null, so that
  * tier was dead in the only environment that mattered while still firing
  * locally — a silent dev/prod divergence.
@@ -46,11 +48,9 @@ use Tests\TestCase;
  * EMAIL_BRAND_NAME, the name value() derived from the setting key, and nothing
  * in this project ever defines it — that is the point of probing it.
  * COMPANY_EMAIL_BRAND_NAME is a different variable, and F-042's follow-up has
- * since declared it in api/phpunit.xml. So it is no longer one of "the keys
- * phpunit.xml never declares" and no longer reaches the suite from an untracked
- * api/.env. Tier 2 and tier 3 stay indistinguishable for it either way, which
- * is precisely why a sentinel on a third, undeclared name is still the only way
- * to prove the env tier is gone.
+ * since declared it in api/phpunit.xml. It does not prove whether an undeclared
+ * EMAIL_BRAND_NAME is read, so a sentinel on this name remains necessary to
+ * prove that environment variables are not an email-branding source.
  */
 class EmailBrandingResolutionTest extends TestCase
 {
@@ -110,7 +110,9 @@ class EmailBrandingResolutionTest extends TestCase
 
     public function test_environment_is_not_a_branding_source_when_the_setting_is_empty(): void
     {
-        app(SettingsService::class)->set(self::PROBE_KEY, '');
+        $settings = app(SettingsService::class);
+        $settings->set(self::PROBE_KEY, '');
+        $settings->set('company.legal_name', 'Configured Legal Entity');
         $this->injectEnvSentinel();
 
         // Guard the premise: if a future seeder populates this key, the test
@@ -130,13 +132,15 @@ class EmailBrandingResolutionTest extends TestCase
 
         $brand = app(EmailBrandingService::class)->data();
 
-        $legalName = app(SettingsService::class)->get('company.legal_name');
-        $expected = is_string($legalName) && trim($legalName) !== '' ? trim($legalName) : null;
-        $this->assertSame($expected, $brand['name'], 'Branding must use configured company identity only.');
+        $this->assertSame(
+            'Configured Legal Entity',
+            $brand['name'],
+            'An empty display-name setting must fall back to configured company identity.',
+        );
         $this->assertStringNotContainsString('SENTINEL', (string) $brand['name']);
     }
 
-    public function test_settings_row_is_authoritative_over_the_legal_name_fallback(): void
+    public function test_display_name_setting_overrides_the_legal_name_fallback(): void
     {
         app(SettingsService::class)->set(self::PROBE_KEY, 'Ogami Philippines (Transactional)');
         $this->injectEnvSentinel();
@@ -144,6 +148,26 @@ class EmailBrandingResolutionTest extends TestCase
         $brand = app(EmailBrandingService::class)->data();
 
         $this->assertSame('Ogami Philippines (Transactional)', $brand['name']);
+    }
+
+    public function test_email_views_do_not_hardcode_the_company_display_name(): void
+    {
+        foreach (File::allFiles(resource_path('views/emails')) as $view) {
+            $this->assertStringNotContainsString(
+                'Ogami Philippines',
+                File::get($view->getPathname()),
+                $view->getRelativePathname(),
+            );
+        }
+    }
+
+    public function test_missing_legal_company_identity_is_not_filled_with_a_fallback(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('company.legal_name', '');
+
+        $this->expectException(BusinessRuleException::class);
+        app(EmailBrandingService::class)->data();
     }
 
     /**

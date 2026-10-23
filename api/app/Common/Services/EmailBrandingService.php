@@ -7,7 +7,9 @@ namespace App\Common\Services;
 /**
  * Single source of truth for transactional email identity.
  *
- * Company identity comes from the existing company settings.
+ * The legal/company values come from the existing company settings. A display
+ * name may be configured separately; when absent, use the configured legal
+ * name rather than inventing a company label.
  */
 class EmailBrandingService
 {
@@ -16,32 +18,48 @@ class EmailBrandingService
     /** @return array<string, string|null> */
     public function data(): array
     {
+        $legalName = $this->settings->requiredString('company.legal_name');
+
         return [
-            'name' => $this->value('email.brand_name') ?? $this->value('company.legal_name'),
-            'legal_name' => $this->value('company.legal_name'),
-            'address' => $this->value('company.address'),
+            'name' => $this->value('email.brand_name') ?? $legalName,
+            'legal_name' => $legalName,
+            'address' => $this->settings->requiredString('company.address'),
             'phone' => $this->value('company.phone'),
             'email' => $this->value('company.email'),
             'sales_email' => $this->value('company.sales_inbox_email'),
             'tin' => $this->value('company.tin'),
             'vat_status' => $this->value('company.vat_status'),
             'certification' => $this->value('company.certification'),
-            'public_url' => rtrim($this->value('company.public_url') ?? config('app.frontend_url', config('app.url')), '/'),
+            'footer_disclaimer' => $this->value('email.footer_disclaimer'),
+            'public_url' => rtrim($this->value('company.public_url', config('app.frontend_url', config('app.url'))), '/'),
             'logo_path' => $this->logoPath(),
+            'logo_dark_path' => $this->logoDarkPath(),
             'logo_data_uri' => $this->logoDataUri(),
         ];
     }
 
     public function logoPath(): ?string
     {
-        foreach (['images/ogami-logo.png', 'images/ogami-mark.png', 'images/ogami-mark.svg'] as $relative) {
-            $path = resource_path($relative);
-            if (is_file($path)) {
-                return $path;
-            }
+        $path = resource_path('images/ogami-logo.png');
+        if (is_file($path)) {
+            return $path;
         }
 
-        return null;
+        $path = resource_path('images/ogami-mark.png');
+        if (is_file($path)) {
+            return $path;
+        }
+
+        $path = resource_path('images/ogami-mark.svg');
+
+        return is_file($path) ? $path : null;
+    }
+
+    public function logoDarkPath(): ?string
+    {
+        $path = resource_path('images/ogami-mark-dark.png');
+
+        return is_file($path) ? $path : $this->logoPath();
     }
 
     public function logoDataUri(): ?string
@@ -66,22 +84,17 @@ class EmailBrandingService
     }
 
     /**
-     * Settings row only. There is deliberately no env()
-     * tier: production runs `php artisan config:cache`
-     * (docker/php/prod-entrypoint.sh:15), after which env() returns null, so
-     * an env tier fires only in development and silently diverges from
-     * production. Every branding key is seeded into settings from env at
-     * migrate/seed time — migration 0123 for the company.* keys,
-     * SettingsSeeder for email.brand_name and company.sales_inbox_email —
-     * which is where environment values legitimately enter the system.
+     * Settings row, then an optional display-only fallback. Legal identity
+     * fields are required above so missing deployment data cannot be presented
+     * as company fact. Values enter settings through migrations and seeders.
      */
-    private function value(string $key): ?string
+    private function value(string $key, ?string $fallback = null): ?string
     {
         $configured = $this->settings->get($key);
         if (is_string($configured) && trim($configured) !== '') {
             return trim($configured);
         }
 
-        return null;
+        return $fallback;
     }
 }

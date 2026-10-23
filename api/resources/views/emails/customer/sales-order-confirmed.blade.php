@@ -24,5 +24,5 @@ Your sales order **{{ $salesOrder->so_number }}** has been confirmed and is now 
 We will provide further updates as production and delivery progress.
 
 Thanks,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }}
+{{ config('mail.from.name') }}
 </x-mail::message>

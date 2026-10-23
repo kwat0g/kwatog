@@ -1,6 +1,6 @@
 # Phase 1 — Email inventory and classification
 
-**Status:** provisional, based on static code inspection dated 2026-10-20. It is a review checkpoint, not approval to edit templates. `D` means current quality is below target based on source-level gaps; grades are provisional because unsafe local SMTP prevented rendering and runtime recipient checks. Four credential-bearing welcome/reset messages are marked `F` pending reachability/security review. No email was sent.
+**Status:** owner directed work to proceed. Inventory is based on the 2026-10-20 static inspection; later source changes are called out below and in `PROGRESS.md`. Runtime recipient checks remain outstanding. `D` records the initial grade before redesign. Four credential-bearing welcome/reset messages were marked `F` pending reachability/security review. No email was sent.
 
 ## Master inventory
 
@@ -23,7 +23,7 @@
 | E-013 | HR — application status | Applicant/candidate | Status-update | Highly sensitive (HR/personal data) | P2 | D → candidate | Stage/status changed → candidate email → application and stage transition |
 | E-014 | HR — interview scheduled | Applicant/candidate | Action-required | Highly sensitive (HR/personal data) | P2 | D → candidate | Interview scheduled → candidate email → application/interview schedule |
 | E-015 | HR — interview changed | Applicant/candidate | Status-update | Highly sensitive (HR/personal data) | P2 | D → candidate | Interview details changed → candidate email → application/interview schedule |
-| E-016 | Payroll — payslip | Internal staff | Transactional-document | Highly sensitive (payroll) | P1 | D → secure document | Payroll finalized and feature toggle on → employee email → finalized payroll and generated payslip PDF |
+| E-016 | Payroll — payslip ready notice | Internal staff | Transactional-document | Highly sensitive (payroll; email contains no salary data) | P1 | D → secure document | Payroll finalized and feature toggle on → employee email → finalized payroll/period and authenticated SPA self-service payslip page; no PDF attached |
 | E-017 | Purchasing — supplier PO decision | External supplier | Status-update | Confidential (financial) | P1 | D → status | Supplier PO response decided → portal user email(s) or vendor fallback → PO/response/decision |
 | E-018 | Purchasing — supplier PO published | External supplier | Transactional-document | Confidential (financial) | P1 | D → document | PO dispatch/publish → vendor email → purchase order and vendor |
 | E-019 | Purchasing — RFQ lifecycle | External supplier | Action-required / status-update | Confidential | P1 | D → action | RFQ invited/updated/closed lifecycle event → invited supplier contact(s) → RFQ/invitation |
@@ -111,7 +111,7 @@ These are type families, not a claim that every similarly named event is mailed.
 | Internal operational event | Caller-selected role/permission/owner; email opt-in and valid non-empty address | Business record plus generic notification payload | RBAC scope, in-app/email preference coherence, sensitive generic message content |
 | Digest | Global digest preference and user address | Persisted unread notification rows | Active account status, sensitive item summarization, deep-link authorization |
 | Scheduled export | Configured recipients; exporter's owner permission and row-scope checks | Shared exporter result, selected columns/filters/date range | Recipients must be authorized for exported records; exact artifact parity |
-| Payslip | Employee user address and enabled setting | Final payroll and generated PDF | Highly sensitive attachment, correct employee mapping, retry duplicates |
+| Payslip | Employee email and enabled setting | Final payroll/period and authenticated SPA self-service payslip page; PDF remains behind the authorized app route and is not attached | Correct employee mapping, portal authorization, retry duplicates; email body contains no salary data |
 
 ## Missing-email recommendation track
 
@@ -135,19 +135,19 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 - E-023 generic notification mail can send operational detail to anyone who explicitly opted into that type; classify every runtime type and remove sensitive data from body where links suffice.
 - E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
-- E-016 attaches a payslip PDF to email; assess whether secure authenticated delivery can meet the business need with less exposure.
+- E-016 local security change removes the PDF attachment and links to authenticated self-service. HR and data-protection review remains required before production.
 
 ## Company data and infrastructure still unconfirmed
 
-Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an approved email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. SPF/DKIM/DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To require confirmation from domain/email administrators.
+Settings schema exists and PDF branding settings are reused. Read-only presence checks found core identity rows populated, but values were not copied here. The sales inbox and VAT status equal prior code fallback strings and need owner verification. `company.logo_path` is empty; bundled API logo assets exist. The shared-foundation change removes fallback values for legal entity and address and adds an email footer disclaimer setting. Before external mail, verify legal company name, registered address, company phone, general and sales inboxes, TIN, VAT status, certification label, logo, public website, sender identity, Reply-To policy, and approved disclaimer. Keep statutory fields subject to accountant review. The owner reported DKIM setup succeeded for `ogamiph.dev` in the AWS Asia Pacific (Singapore) region. SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To remain unverified with domain/email administrators.
 
-## Decisions needed before Phase 2
+## Owner follow-up before production email
 
-1. Confirm local external SMTP is disabled and Mailpit/MailHog/log/catch-all is configured before any send-capable testing or browser preview that might dispatch.
-2. Review this inventory and missing-email recommendation track. Phase 2 template changes remain stopped until that review.
-3. Confirm actual company branding/settings data and whether any fallback/default values should be blocked at send time.
-4. Confirm handling policy for payslip attachment and temporary-password paths; P0 credential/security fixes should be a separate functional-fix track.
-5. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
+1. Verify local and staging mail transports stay on a sink before any send-capable test. Never send real mail during development or testing.
+2. Verify company settings and approved disclaimer; accountant review required for statutory fields.
+3. Confirm secure payslip delivery and resolve the P0 temporary-password paths in the separate security-fix track.
+4. Confirm mandatory vs opt-in email categories and escalation audiences; current database preference defaults disable generic mail unless explicitly enabled.
+5. Ask domain/email administrators to verify SPF, DMARC, bounce/complaint handling, provider suppression, and monitored Reply-To. DKIM setup was reported successful for `ogamiph.dev` in Singapore; domain validation remains external to this code audit.
 
 ## Manual real-client checklist for the later email phase
 
