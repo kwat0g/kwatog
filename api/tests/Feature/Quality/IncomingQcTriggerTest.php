@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
@@ -19,6 +21,7 @@ use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\ItemQualityPlan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class IncomingQcTriggerTest extends TestCase
@@ -29,6 +32,22 @@ class IncomingQcTriggerTest extends TestCase
     {
         $role = Role::create(['name' => 'Incoming QC Test', 'slug' => 'incoming-qc-test']);
         $user = User::factory()->create(['role_id' => $role->id]);
+        $revokedUser = User::factory()->create(['role_id' => $role->id]);
+        $permission = Permission::query()->firstOrCreate(
+            ['slug' => 'inventory.view'],
+            ['name' => 'View Inventory', 'module' => 'inventory'],
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedUser->id,
+            'permission_id' => $permission->id,
+            'type' => 'revoke',
+            'granted_by' => $user->id,
+            'reason' => 'Inventory view removed for incoming-QC notice test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(SettingsService::class)->set('quality.incoming_qc.notification_roles', ['incoming-qc-test']);
         $item = Item::factory()->create();
         $location = WarehouseLocation::factory()->create();
         $po = PurchaseOrder::factory()->create([
@@ -40,7 +59,7 @@ class IncomingQcTriggerTest extends TestCase
             'item_id' => $item->id,
             'description' => 'Incoming raw material',
             'quantity' => '25.000',
-            'unit' => 'kg',
+            'unit' => $item->unit_of_measure,
             'unit_price' => '10.00',
             'total' => '250.00',
             'quantity_received' => '25.000',
@@ -83,6 +102,11 @@ class IncomingQcTriggerTest extends TestCase
             'parameter_name' => 'Delivery documents (DR/invoice) match the PO item and quantity',
             'is_pass' => null,
         ]);
+        $notice = $user->notifications()->where('type', 'chain.incoming_qc_required')->firstOrFail();
+        $this->assertSame("/inventory/grns/{$grn->hash_id}", $notice->data['link_to']);
+        $this->assertSame(0, $revokedUser->notifications()->where('type', 'chain.incoming_qc_required')->count());
+        $this->actingAs($user)->getJson('/api/v1/inventory/grn/'.$grn->hash_id)->assertOk();
+        $this->actingAs($revokedUser)->getJson('/api/v1/inventory/grn/'.$grn->hash_id)->assertForbidden();
     }
 
     public function test_effective_item_plan_builds_versioned_measurement_scaffold(): void

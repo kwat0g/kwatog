@@ -148,7 +148,8 @@ class TriggerInProcessQC implements ShouldQueue
                 $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
-                    ->get();
+                    ->get()
+                    ->filter(fn (User $user): bool => $user->hasPermission('quality.inspections.view'));
 
                 app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [
                     'title' => 'In-process QC required',
