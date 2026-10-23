@@ -6,6 +6,7 @@ namespace Tests\Feature\Purchasing;
 
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Mail\QueuedMailable;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
@@ -541,15 +542,20 @@ final class RfqBiddingTest extends TestCase
         ])->save();
         Mail::fake();
 
-        (new DeliverRfqLifecycleNotification(Mockery::mock(NotificationService::class)))->handle($event);
+        $listener = new DeliverRfqLifecycleNotification(Mockery::mock(NotificationService::class));
+        $listener->handle($event);
+        $listener->handle($event);
 
-        Mail::assertQueued(SupplierRfqLifecycleMail::class);
-        $mail = Mail::queued(SupplierRfqLifecycleMail::class)->sole();
+        Mail::assertQueued(SupplierRfqLifecycleMail::class, 2);
+        $mails = Mail::queued(SupplierRfqLifecycleMail::class);
+        $mail = $mails->first();
         $this->assertTrue($mail->hasTo($originalEmail));
         $this->assertSame($rfq['rfq_number'], $mail->snapshot['rfq_number']);
         $this->assertSame($rfq['title'], $mail->snapshot['title']);
         $this->assertSame($originalVendorName, $mail->snapshot['vendor_name']);
         $this->assertArrayNotHasKey('suppliers', $mail->snapshot);
+        $deliveryKey = new \ReflectionProperty(QueuedMailable::class, 'deliveryKey');
+        $this->assertCount(1, $mails->map(fn (SupplierRfqLifecycleMail $queued): ?string => $deliveryKey->getValue($queued))->unique());
     }
 
     /* ─── helpers ─── */
