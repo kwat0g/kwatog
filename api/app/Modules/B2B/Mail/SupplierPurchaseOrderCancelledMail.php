@@ -42,12 +42,15 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
                 : null,
             'display_total' => (string) $this->snapshot['display_total'],
         ];
+        $brand = app(EmailBrandingService::class)->data();
+        $brand['name'] = $this->safeMarkdownText((string) $brand['name']);
 
         return new Content(
             markdown: 'emails/supplier/purchase-order-cancelled',
             with: [
-                'preheader' => 'Purchase order '.$poNumber.' has been cancelled.',
+                'preheader' => 'Purchase order '.$poNumber.' was cancelled.',
                 'purchaseOrder' => $purchaseOrder,
+                'brand' => $brand,
                 'portalUrl' => $this->snapshot['portal_url'],
             ],
         );

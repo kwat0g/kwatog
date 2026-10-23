@@ -23,6 +23,7 @@ Updated: 2026-10-23
 - Supplier invoice confirmations now snapshot the recipient and supplier-visible submission data before queuing.
 - E-007 supplier invoice confirmation is redesigned with branded subject, receipt-only notice, verified portal detail route, and four light/dark desktop/mobile previews; final API suite pending.
 - Supplier PO cancellation notices now use event snapshots and retain the sent-to-supplier eligibility rule; internal cancellation remarks remain excluded.
+- E-008 PO cancellation template and four light/dark desktop/mobile previews are integrated; supplier-only delivery gate remains intact.
 - E-001's four browser screenshots were refreshed in the local #216 worktree at `6913c986`; prior captures still showed the retired O mark. Current company logo variants now appear in light and dark previews. See [E-001 review](E-001-invoice-finalized.md).
 - E-002's four browser screenshots were refreshed in the local #218 worktree with the current landing-page logo variants; see [E-002 review](E-002-official-receipt.md).
 - E-003's four browser screenshots were refreshed in the local #220 worktree with the current landing-page logo variants; see [E-003 review](E-003-invoice-dunning.md).
