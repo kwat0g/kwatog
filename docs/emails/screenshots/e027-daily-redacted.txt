@@ -1,0 +1,86 @@
+Ogami Philippines
+
+# Daily production summary
+
+**21 Oct 2026**
+
+## Production totals
+
+| Measure | Result |
+|:--|--:|
+| Good units | 990 |
+| Rejected units | 22 |
+| Total units | 1,012 |
+| Scrap rate | 2.17% |
+
+## Quality checks
+
+5 passed · 1 failed · 6 total
+
+## Work orders
+
+**WO-001** · —
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-002** · Product 2
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-003** · Product 3
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-004** · Product 4
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-005** · Product 5
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-006** · Product 6
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-007** · Product 7
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-008** · Product 8
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-009** · Product 9
+Target 100 · Good 90 · Reject 2 · In Progress
+
+**WO-010** · Product 10
+Target 100 · Good 90 · Reject 2 · In Progress
+
+1 more work order is available in OGAMI ERP.
+
+## Machine breakdowns
+
+**M-01** · Machine 1
+Ongoing
+
+**M-02** · Machine 2
+12 min
+
+**M-03** · Machine 3
+12 min
+
+**M-04** · Machine 4
+12 min
+
+**M-05** · Machine 5
+12 min
+
+1 more breakdown is available in OGAMI ERP.
+
+## Most reported defects
+
+| Defect | Count |
+|:--|--:|
+| SHORT · Short shot | 4 |
+
+Open production work orders: https://app.ogamiph.test/production/work-orders
+
+You receive this daily report because your role is configured for production summaries.
+
+Ogami Philippines
+[company details hidden]
+[company details hidden]
+Automated message.

@@ -20,28 +20,29 @@
 ## Work orders
 
 @foreach (array_slice($summary['wos'], 0, 10) as $wo)
-**{{ $wo['wo_number'] }} · {{ $wo['product_name'] ?? '—' }}**
-
-Target {{ number_format($wo['quantity_target']) }} · Good {{ number_format($wo['good']) }} · Reject {{ number_format($wo['reject']) }} · Status: {{ \Illuminate\Support\Str::headline($wo['status']) }}
+**{{ $wo['wo_number'] }}** · {{ \Illuminate\Support\Str::squish(strip_tags((string) ($wo['product_name'] ?? ''))) ?: '—' }}<br />
+Target {{ number_format($wo['quantity_target']) }} · Good {{ number_format($wo['good']) }} · Reject {{ number_format($wo['reject']) }} · {{ \Illuminate\Support\Str::headline($wo['status']) }}
 
 @endforeach
 @if (count($summary['wos']) > 10)
+@php($moreWorkOrders = count($summary['wos']) - 10)
 
-{{ count($summary['wos']) - 10 }} additional work order{{ count($summary['wos']) - 10 === 1 ? '' : 's' }} available in OGAMI ERP.
+{{ $moreWorkOrders }} more work order{{ $moreWorkOrders === 1 ? '' : 's' }} {{ $moreWorkOrders === 1 ? 'is' : 'are' }} available in OGAMI ERP.
 @endif
 @endif
 
 @if (! empty($summary['breakdowns']))
 ## Machine breakdowns
 
-| Machine | Duration |
-|:--|--:|
 @foreach (array_slice($summary['breakdowns'], 0, 5) as $breakdown)
-| {{ $breakdown['machine_code'] }} · {{ $breakdown['machine_name'] }} | {{ $breakdown['end_time'] === 'ongoing' ? 'Ongoing' : number_format($breakdown['duration_min']).' min' }} |
+**{{ $breakdown['machine_code'] }}** · {{ \Illuminate\Support\Str::squish(strip_tags((string) $breakdown['machine_name'])) ?: '—' }}<br />
+{{ $breakdown['end_time'] === 'ongoing' ? 'Ongoing' : number_format($breakdown['duration_min']).' min' }}
+
 @endforeach
 @if (count($summary['breakdowns']) > 5)
+@php($moreBreakdowns = count($summary['breakdowns']) - 5)
 
-{{ count($summary['breakdowns']) - 5 }} additional breakdown{{ count($summary['breakdowns']) - 5 === 1 ? '' : 's' }} available in OGAMI ERP.
+{{ $moreBreakdowns }} more breakdown{{ $moreBreakdowns === 1 ? '' : 's' }} {{ $moreBreakdowns === 1 ? 'is' : 'are' }} available in OGAMI ERP.
 @endif
 @endif
 
@@ -51,7 +52,7 @@ Target {{ number_format($wo['quantity_target']) }} · Good {{ number_format($wo[
 | Defect | Count |
 |:--|--:|
 @foreach ($summary['defects'] as $defect)
-| {{ $defect['code'] }} · {{ $defect['name'] }} | {{ number_format($defect['count']) }} |
+| {{ $defect['code'] }} · {{ \Illuminate\Support\Str::squish(strip_tags((string) $defect['name'])) ?: '—' }} | {{ number_format($defect['count']) }} |
 @endforeach
 @endif
 

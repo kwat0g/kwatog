@@ -48,14 +48,16 @@ class ProductionSummaryEmailDesignTest extends TestCase
         $html = (string) $message->getHtmlBody();
         $text = (string) $message->getTextBody();
 
-        $this->assertStringStartsWith('['.app(EmailBrandingService::class)->data()['name'].'] Daily production summary:', $message->getSubject());
+        $this->assertStringStartsWith('[TESTING] ['.app(EmailBrandingService::class)->data()['name'].'] Daily production summary:', $message->getSubject());
         $this->assertStringContainsString('21 Oct 2026', $html);
         $this->assertStringContainsString('In Progress', $html);
         $this->assertStringNotContainsString('in_progress', $html);
-        $this->assertStringContainsString('&lt;img', $html);
-        $this->assertStringNotContainsString('<img src=x', $html);
-        $this->assertStringContainsString('1 additional work order available', $html);
-        $this->assertStringContainsString('1 additional breakdown available', $html);
+        $this->assertStringNotContainsString('onerror', $html);
+        $this->assertStringContainsString('WO-001</strong> · —', $html);
+        $this->assertStringNotContainsString('onerror', $text);
+        $this->assertStringContainsString('**WO-001** · —', $text);
+        $this->assertStringContainsString('1 more work order is available', $html);
+        $this->assertStringContainsString('1 more breakdown is available', $html);
         $this->assertStringNotContainsString('WO-011', $html);
         $this->assertStringContainsString('https://app.ogamiph.test/production/work-orders', $text);
         $this->assertLessThan(102_400, strlen($html));
@@ -77,7 +79,7 @@ class ProductionSummaryEmailDesignTest extends TestCase
         $html = (string) $message->getHtmlBody();
         $text = (string) $message->getTextBody();
 
-        $this->assertStringStartsWith('['.app(EmailBrandingService::class)->data()['name'].'] Weekly production summary:', $message->getSubject());
+        $this->assertStringStartsWith('[TESTING] ['.app(EmailBrandingService::class)->data()['name'].'] Weekly production summary:', $message->getSubject());
         $this->assertStringContainsString('12 Oct 2026 – 18 Oct 2026', $html);
         $this->assertStringContainsString('Not comparable; prior week had no good units', $html);
         $this->assertStringContainsString('Open production work orders', $text);
