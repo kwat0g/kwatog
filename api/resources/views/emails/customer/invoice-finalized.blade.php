@@ -1,29 +1,40 @@
-<x-mail::message :preheader="'Invoice '.$invoiceData->invoice_number.' has been issued.'" :title="'Invoice '.$invoiceData->invoice_number.' issued'">
-# Invoice issued
+<x-mail::message :preheader="$preheader" :title="'Invoice '.$snapshot['invoice_number'].' is ready'">
+# Invoice {{ $snapshot['invoice_number'] }} is ready
 
-Hi {{ $customer->contact_person ?? $customer->name ?? 'there' }},
+Hello {{ $snapshot['customer_name'] }},
 
-Invoice **{{ $invoiceData->invoice_number }}** has been issued. Please review the balance and due date below.
+Your invoice has been issued. Review the invoice and payment details in the customer portal.
 
-| Invoice summary | Details |
-|---|---|
-| Invoice number | **{{ $invoiceData->invoice_number }}** |
-| Invoice date | {{ optional($invoiceData->date)->format('M d, Y') }} |
-| Due date | **{{ optional($invoiceData->due_date)->format('M d, Y') }}** |
-| Total amount | ₱{{ number_format((float) $invoiceData->total_amount, 2) }} |
-| Balance due | **₱{{ number_format((float) $invoiceData->balance, 2) }}** |
-| Sales order | {{ $salesOrder?->so_number ?? '—' }} |
+| Invoice detail | Value |
+|:--|--:|
+| Status | Issued |
+| Invoice date | {{ $snapshot['invoice_date'] }} |
+| Due date | {{ $snapshot['due_date'] }} |
+| Invoice total | {{ $snapshot['total_amount'] }} |
+| Balance due at issue | {{ $snapshot['balance'] }} |
+| Sales order | {{ $snapshot['sales_order_number'] }} |
 
-## Line items
+The values above reflect the invoice when it was issued. A payment recorded afterward may not appear in this message.
 
-@foreach ($items as $item)
-- **{{ $item->description }}**<br>{{ number_format((float) $item->quantity, 2) }} × ₱{{ number_format((float) $item->unit_price, 2) }} = **₱{{ number_format((float) $item->total, 2) }}**
-@endforeach
+## Invoice items
 
-<x-mail::button :url="$portalUrl">View Invoice in Customer Portal</x-mail::button>
+@forelse ($snapshot['items'] as $item)
+- **{{ $item['description'] }}** — {{ $item['quantity'] }} {{ $item['unit'] }} × {{ $item['unit_price'] }} = {{ $item['total'] }}
+@empty
+No line items were available when this message was prepared. Review the invoice in the customer portal.
+@endforelse
 
-If payment has already been made, please reply with proof of payment so our Accounts Receivable team can update the record.
+@if ($snapshot['additional_item_count'] > 0)
 
-Thanks,<br>
-{{ config('mail.from.name', config('app.name')) }} Accounts Receivable
+{{ $snapshot['additional_item_count'] }} additional item(s) are listed in the portal invoice.
+@endif
+
+<x-mail::button :url="$snapshot['portal_url']">View invoice and download PDF</x-mail::button>
+
+For questions or to report a payment, contact Accounts Receivable using the company contact details below. Include the invoice number so we can locate the record.
+
+Regards,<br>
+Accounts Receivable
+
+You received this email because an invoice was issued to your customer account.
 </x-mail::message>

@@ -6,8 +6,10 @@ namespace Tests\Feature\Email;
 
 use App\Modules\Accounting\Events\InvoiceFinalized;
 use App\Modules\Accounting\Mail\CustomerInvoiceFinalizedMail;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
@@ -125,10 +127,16 @@ class FeatureEmailIntegrationTest extends TestCase
             ->handle(new InvoiceFinalized($invoice));
 
         Mail::assertQueued(CustomerInvoiceFinalizedMail::class, function (CustomerInvoiceFinalizedMail $mail) use ($invoice): bool {
+            $html = $mail->render();
+
             return $mail->hasTo('billing@example.test')
                 && $mail->invoice->is($invoice)
-                && str_contains($mail->render(), 'INV-EMAIL-001')
-                && str_contains($mail->render(), '1,120.00');
+                && str_contains($html, 'INV-EMAIL-001')
+                && str_contains($html, '<title>Invoice INV-EMAIL-001 is ready</title>')
+                && str_contains($html, 'PHP 1,120.00')
+                && $mail->assertSeeInText('Due date')
+                && $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id)
+                && str_contains($mail->envelope()->subject, 'Invoice issued: INV-EMAIL-001');
         });
     }
 
@@ -167,6 +175,68 @@ class FeatureEmailIntegrationTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_invoice_email_escapes_item_text_and_summarizes_long_lists(): void
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'billing@example.test',
+            'name' => 'Example Customer',
+            'contact_person' => "Finance [team](https://evil.example)\r\n<script>alert(1)</script>",
+        ]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => "INV-1\r\nBcc:bad",
+            'subtotal' => '1100.00',
+            'vat_amount' => '20.00',
+            'total_amount' => '1120.00',
+            'balance' => '1120.00',
+            'date' => '2026-10-20',
+            'due_date' => '2026-11-19',
+        ]);
+        $account = Account::create([
+            'code' => 'REV-EMAIL-TEST',
+            'name' => 'Email test revenue',
+            'type' => 'revenue',
+            'normal_balance' => 'credit',
+            'is_active' => true,
+        ]);
+
+        foreach (range(1, 11) as $index) {
+            InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'revenue_account_id' => $account->id,
+                'description' => $index === 1
+                    ? '[invoice](https://evil.example) <script>alert(1)</script>'
+                    : 'Molded component '.$index,
+                'quantity' => '2.00',
+                'unit' => 'pcs',
+                'unit_price' => '50.00',
+                'total' => '100.00',
+            ]);
+        }
+
+        app(\App\Modules\Accounting\Listeners\EmailCustomerOnInvoiceFinalized::class)
+            ->handle(new InvoiceFinalized($invoice));
+
+        $queued = null;
+        Mail::assertQueued(CustomerInvoiceFinalizedMail::class, function (CustomerInvoiceFinalizedMail $mail) use (&$queued): bool {
+            $queued = $mail;
+
+            return true;
+        });
+
+        $html = $queued->render();
+        $this->assertStringContainsString('Finance', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertStringNotContainsString('href="https://evil.example', $html);
+        $this->assertStringContainsString('Molded component 10', $html);
+        $this->assertStringNotContainsString('Molded component 11', $html);
+        $this->assertStringContainsString('1 additional item(s)', $html);
+        $queued->assertSeeInText('PHP 1,120.00');
+        $queued->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
+        $this->assertStringNotContainsString("\r", $queued->envelope()->subject);
+        $this->assertStringNotContainsString("\n", $queued->envelope()->subject);
     }
 
     public function test_supplier_purchase_order_email_is_queued_with_supplier_data(): void
