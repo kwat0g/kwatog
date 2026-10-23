@@ -16,27 +16,34 @@ final class SupplierRfqLifecycleMail extends QueuedMailable
 {
     use SerializesModels;
 
+    public array $snapshot = [];
+
     /** @param list<int> $fallbackUserIds */
     public function __construct(
         public readonly RequestForQuote $rfq,
         public readonly RequestForQuoteInvitation $invitation,
         public readonly string $kind,
         public readonly array $fallbackUserIds = [],
+        array $snapshot = [],
     ) {
-        // Lane: mail — see config/horizon.php. Kept off `default` so an
-        // email burst cannot sit in front of an approval or a GRN notice.
         $this->onQueue('mail');
+        $this->snapshot = $snapshot;
         $this->afterCommit();
+    }
+
+    public function rfqNumber(): string
+    {
+        return (string) ($this->snapshot['rfq_number'] ?? $this->rfq->rfq_number);
     }
 
     public function envelope(): Envelope
     {
         $subject = match ($this->kind) {
-            'published' => "Request for quotation {$this->rfq->rfq_number}",
-            'extended' => "RFQ {$this->rfq->rfq_number}: deadline extended",
-            'awarded' => "RFQ {$this->rfq->rfq_number}: result",
-            'cancelled' => "RFQ {$this->rfq->rfq_number} cancelled",
-            default => "RFQ {$this->rfq->rfq_number} update",
+            'published' => "Request for quotation {$this->rfqNumber()}",
+            'extended' => "RFQ {$this->rfqNumber()}: deadline extended",
+            'awarded' => "RFQ {$this->rfqNumber()}: result",
+            'cancelled' => "RFQ {$this->rfqNumber()} cancelled",
+            default => "RFQ {$this->rfqNumber()} update",
         };
 
         return new Envelope(subject: $subject);
@@ -50,6 +57,7 @@ final class SupplierRfqLifecycleMail extends QueuedMailable
                 'rfq' => $this->rfq,
                 'invitation' => $this->invitation,
                 'kind' => $this->kind,
+                'snapshot' => $this->snapshot,
                 'portalUrl' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/supplier/rfqs/'.$this->rfq->hash_id,
             ],
         );

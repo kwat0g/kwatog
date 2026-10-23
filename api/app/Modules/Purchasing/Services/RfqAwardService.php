@@ -124,7 +124,7 @@ class RfqAwardService
 
             $locked->forceFill(['status' => RfqStatus::Awarded, 'resolved_at' => now()])->save();
             $this->rfqs->handBack($locked, "RFQ {$locked->rfq_number} awarded part of this request. Convert the rest by Direct PO or start a new RFQ.");
-            $this->outbox->record(new RfqLifecycleEvent((int) $locked->id, (string) $locked->hash_id, 'awarded'), 'rfq:'.$locked->id.':awarded');
+            $this->outbox->record(RfqLifecycleEvent::capture($locked, 'awarded'), 'rfq:'.$locked->id.':awarded');
 
             return ['rfq' => $locked->fresh(), 'purchase_orders' => $created];
         });
