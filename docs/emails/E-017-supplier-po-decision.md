@@ -4,7 +4,7 @@
 
 Purchasing accepts or rejects a supplier response. Price-increase proposals wait for the PO re-approval outcome before this email is queued. The current resolver selects active supplier portal users; if none exist, it falls back to the vendor address. It does not include CC or BCC.
 
-EF-028 tracks recipient-address exposure: active portal users currently share one To header. Keep this fix separate from the template PR; send to the same eligible users individually after that review.
+Draft PR #240 fixes EF-028: validate and deduplicate active portal addresses, queue one private copy per recipient, use a valid vendor fallback, and notify only active purchasing users who can view the PO if no external address is usable. `SupplierPoDecisionRecipientsTest`: 3 passed / 10 assertions.
 
 ## Snapshot and content
 

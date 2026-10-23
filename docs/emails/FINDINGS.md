@@ -53,3 +53,5 @@ No code-level fix was applied as part of Phase 0/1.
 - **EF-027 — Payslip email avoids sensitive attachments.** PR #238 removes the PDF attachment and links to the authenticated employee portal.
 
 - **EF-028 — Supplier purchase order decisions use snapshot content and portal links.** PR #239 completes the visual redesign for the decision notice.
+
+- **EF-029 — Supplier decision emails are sent individually.** This avoids exposing other supplier portal users' email addresses to each recipient.
