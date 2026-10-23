@@ -23,10 +23,11 @@ class EmailSupplierOnPurchaseOrderCancelled implements ShouldQueue
 
     public function handle(PurchaseOrderCancelled $event): void
     {
-        $po = $event->purchaseOrder->loadMissing('vendor');
+        $po = $event->purchaseOrder;
+        $snapshot = $event->snapshot ?? [];
 
         // Only notify if the PO was actually sent to the supplier
-        if ($po->sent_to_supplier_at === null) {
+        if (! ($snapshot['sent_to_supplier'] ?? false)) {
             return;
         }
 
@@ -38,7 +39,7 @@ class EmailSupplierOnPurchaseOrderCancelled implements ShouldQueue
             'reason' => 'The supplier email was missing, invalid, unreachable, or rejected by the email provider.',
         ];
 
-        if (! filter_var($po->vendor?->email, FILTER_VALIDATE_EMAIL)) {
+        if (! filter_var($snapshot['recipient_email'] ?? null, FILTER_VALIDATE_EMAIL)) {
             $fallback->notifyPermission(
                 'purchasing.view',
                 'Supplier purchase order cancellation',
@@ -49,8 +50,8 @@ class EmailSupplierOnPurchaseOrderCancelled implements ShouldQueue
         }
 
         try {
-            Mail::to($po->vendor->email)->queue(new SupplierPurchaseOrderCancelledMail(
-                $po,
+            Mail::to($snapshot['recipient_email'])->queue(new SupplierPurchaseOrderCancelledMail(
+                $snapshot,
                 $fallback->userIdsWithPermission('purchasing.view'),
             ));
         } catch (\Throwable $e) {

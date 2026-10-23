@@ -5,19 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Queue\SerializesModels;
 
 class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 {
-    use SerializesModels;
-
     /** @param list<int> $fallbackUserIds */
     public function __construct(
-        public readonly PurchaseOrder $purchaseOrder,
+        public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
     ) {
         // Lane: mail — see config/horizon.php. Kept off `default` so an
@@ -28,18 +25,30 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Purchase order {$this->purchaseOrder->po_number} has been cancelled");
+        $brand = app(EmailBrandingService::class)->data()['name'];
+
+        return new Envelope(subject: $this->safeHeaderText('['.$brand.'] Purchase order cancelled: '.$this->snapshot['po_number']));
     }
 
     public function content(): Content
     {
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $poNumber = $this->safeMarkdownText((string) $this->snapshot['po_number']);
+        $purchaseOrder = [
+            'supplier_name' => $this->safeMarkdownText((string) $this->snapshot['supplier_name']),
+            'po_number' => $poNumber,
+            'cancelled_at' => $this->safeMarkdownText((string) $this->snapshot['cancelled_at']),
+            'purchase_order_date' => isset($this->snapshot['purchase_order_date'])
+                ? $this->safeMarkdownText((string) $this->snapshot['purchase_order_date'])
+                : null,
+            'display_total' => (string) $this->snapshot['display_total'],
+        ];
 
         return new Content(
             markdown: 'emails/supplier/purchase-order-cancelled',
             with: [
-                'purchaseOrder' => $this->purchaseOrder,
-                'portalUrl' => $base.'/portal/supplier/purchase-orders/'.$this->purchaseOrder->hash_id,
+                'preheader' => 'Purchase order '.$poNumber.' has been cancelled.',
+                'purchaseOrder' => $purchaseOrder,
+                'portalUrl' => $this->snapshot['portal_url'],
             ],
         );
     }
@@ -49,13 +58,25 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Supplier purchase order cancellation',
-            "The cancellation email for PO {$this->purchaseOrder->po_number} could not be delivered. Notify the supplier directly.",
+            "The cancellation email for PO {$this->snapshot['po_number']} could not be delivered. Notify the supplier directly.",
             [
-                'link_to' => '/purchasing/purchase-orders/'.$this->purchaseOrder->hash_id,
+                'link_to' => '/purchasing/purchase-orders/'.$this->snapshot['po_hash_id'],
                 'entity_type' => 'purchase_order',
-                'entity_id' => $this->purchaseOrder->hash_id,
+                'entity_id' => $this->snapshot['po_hash_id'],
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
         );
+    }
+
+    private function safeMarkdownText(string $value): string
+    {
+        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
+
+        return $text === '' ? '—' : (preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? '—');
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? '');
     }
 }
