@@ -59,3 +59,5 @@ No code-level fix was applied as part of Phase 0/1.
 - **EF-030 — Return case notices use per-address delivery keys.** The notice flow filters invalid addresses, deduplicates portal contacts, logs delivery failures, and gives staff an in-app follow-up when delivery cannot be queued.
 
 - **EF-031 — RMA update content is snapshotted before queueing.** Snapshot preserves event-time status and party data; delivery uses a stable key. Company name comes from email branding settings.
+
+- **EF-031 — Return request update content is snapshotted and minimized.** Email now shows only reference/status with portal link, while retaining the event-specific update message and per-recipient delivery key.

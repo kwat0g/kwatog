@@ -1,22 +1,20 @@
-<x-mail::message>
-# Return request update
+<x-mail::message :preheader="$preheader" :title="$title">
+# {{ $notice['title'] }}
 
-Hello {{ $snapshot['party_contact_name'] ?: $snapshot['party_name'] ?: 'there' }},
+Hello {{ $emailSnapshot['party_contact_name'] ?: $emailSnapshot['party_name'] ?: 'there' }},
 
-Your {{ $snapshot['type_label'] }} **{{ $snapshot['rma_number'] }}** has been updated by {{ $companyName }}.
+{{ $notice['message'] }}
 
-| Detail | Value |
-|---|---|
-| Status | {{ $snapshot['status_label'] }} |
-| Return date | {{ $snapshot['return_date'] ? \Illuminate\Support\Carbon::parse($snapshot['return_date'])->format('F j, Y') : '—' }} |
-| Reason | {{ $snapshot['reason_description'] ?: '—' }} |
-| Resolution | {{ $snapshot['resolution'] ?: 'Pending review' }} |
-@if ($snapshot['refund_amount'])
-| Refund / credit amount | {{ number_format((float) $snapshot['refund_amount'], 2) }} |
-@endif
+| Return request | Information |
+|---|---:|
+| Reference | {{ $emailSnapshot['rma_number'] }} |
+| Status | {{ $emailSnapshot['status_label'] }} |
 
-We will keep the return record updated as inspection, disposition, credit, replacement, or completion steps progress. Please contact your usual customer or supplier operations contact for the current record and any required action.
+<x-mail::button :url="$portalUrl">{{ $portalButtonLabel }}</x-mail::button>
 
-Regards,<br>
-{{ config('mail.from.name') }} Customer and Supplier Operations
+This message includes only the request reference and current status. {{ $portalInstruction }}
+
+You received this email because your contact address is listed on the {{ $portalLabel }} record for this return request. Verify the update by opening the portal address you normally use.
+
+This is an automated notice. Use the company contact details in the footer if you need help.
 </x-mail::message>

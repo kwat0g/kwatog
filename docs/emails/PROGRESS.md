@@ -103,3 +103,5 @@ Updated: 2026-10-23
 | E018 | Supplier purchase order publication | Snapshot and supplier portal link; shared layout; desktop/mobile light/dark screenshots integrated | Real-client rendering remains unverified |
 
 | E019 | Supplier RFQ lifecycle | Event snapshot and recipient-specific status/action summary; supplier portal link; scenario screenshots integrated | Real-client rendering remains unverified |
+
+| E020 | Return request updates | Snapshot, minimal status notice, authenticated customer/supplier portal links, shared layout integrated | Real-client rendering remains unverified |
