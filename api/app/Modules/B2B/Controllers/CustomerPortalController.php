@@ -133,10 +133,19 @@ class CustomerPortalController extends Controller
             ->respondToDeliveryProposal($salesOrder, $response, $this->user($request), $data['decision']));
     }
 
-    public function cancelOrder(Request $request, SalesOrder $salesOrder): SalesOrderResource
+    public function cancelOrder(Request $request, SalesOrder $salesOrder): JsonResponse
     {
         $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
-        return new SalesOrderResource($this->service->cancelOrder($salesOrder, $this->user($request), $data['reason'] ?? null));
+        $result = $this->service->cancelOrder($salesOrder, $this->user($request), $data['reason'] ?? null);
+        $outcome = $result->getAttribute('cancellation_outcome') ?? 'cancelled';
+
+        return response()->json([
+            'data' => (new SalesOrderResource($result))->resolve($request),
+            'outcome' => $outcome,
+            'message' => $outcome === 'cancelled'
+                ? 'Order cancelled.'
+                : 'Cancellation request sent to sales for review.',
+        ]);
     }
 
     /**

@@ -43,6 +43,7 @@ class ModuleServiceProvider extends ServiceProvider
         'Forecasting',
         'ReturnManagement',
         'Landing',
+        'DSS',
     ];
 
     public function boot(): void

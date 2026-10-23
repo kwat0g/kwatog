@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\HR\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Services\SettingsService;
 use App\Common\Services\EmailBrandingService;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
@@ -26,6 +25,9 @@ class InterviewScheduledMail extends Mailable implements ShouldQueue
         /** @var list<int> */
         public readonly array $fallbackUserIds = [],
     ) {
+        // Lane: mail — see config/horizon.php. Kept off `default` so an
+        // email burst cannot sit in front of an approval or a GRN notice.
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
@@ -38,7 +40,6 @@ class InterviewScheduledMail extends Mailable implements ShouldQueue
 
     public function content(): Content
     {
-        $settings = app(SettingsService::class);
         $brand = app(EmailBrandingService::class)->data();
         $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
 
@@ -51,7 +52,7 @@ class InterviewScheduledMail extends Mailable implements ShouldQueue
                 'location'        => $this->interview->location ?? 'To be confirmed',
                 'interviewerName' => $this->interview->interviewer_name,
                 'companyName' => $brand['name'],
-                'companyAddress' => $settings->requiredString('company.address'),
+                'companyAddress' => $brand['address'],
                 'trackingCode' => $this->application->tracking_code,
                 'trackingUrl' => $base.'/careers/track',
             ],

@@ -820,7 +820,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'ppc_head' => [
                 'name' => 'PPC Head',
-                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data; creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
+                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data; reads sales orders needed for planning, creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
                     $this->module('forecasting'),
@@ -841,7 +841,7 @@ class RolePermissionSeeder extends Seeder
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
                         // PPC owns the finished-good catalog used by its BOMs and plans.
-                        'crm.view', 'crm.products.view', 'crm.products.manage',
+                        'crm.view', 'crm.products.view', 'crm.products.manage', 'crm.sales_orders.view',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view', 'inventory.costs.review',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',

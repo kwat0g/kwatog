@@ -6,6 +6,7 @@ namespace App\Modules\Forecasting\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Forecasting\Enums\DemandSource;
+use App\Modules\Inventory\Support\DemandBasis;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -69,7 +70,8 @@ class StockOutProjectionService
         $mediumRiskDays = $this->settings->requiredInt('inventory.stockout.medium_risk_days', 1);
         $historyStart = $now->copy()->subDays($historyDays)->toDateTimeString();
         $consumption = DB::table('stock_movements')
-            ->whereIn('movement_type', ['material_issue', 'consume', 'production_issue'])
+            // F-02: the ONE demand set for projection (legacy values preserved verbatim).
+            ->whereIn('movement_type', app(DemandBasis::class)->movementTypes(DemandBasis::PROJECTION))
             ->where('created_at', '>=', $historyStart)
             ->groupBy('item_id')
             ->select('item_id', DB::raw('SUM(ABS(quantity)) as consumed_30d'))

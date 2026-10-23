@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
-import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { reportMutationError } from '@/lib/formErrors';
@@ -53,7 +52,9 @@ export function ReturnSparePartButton({ workOrderId, usage, desktop }: {
     <Button variant="secondary" size={desktop ? 'sm' : 'lg'}
       aria-label={`Return ${usage.item?.name ?? 'spare part'}${usage.lot_number ? ` from lot ${usage.lot_number}` : ''}`}
       onClick={() => setOpen(true)}>Return</Button>
-    {desktop ? <Modal isOpen={open} onClose={close} title="Return unused part" size="sm">{fields}</Modal>
-      : <BottomSheet isOpen={open} onClose={close} title="Return unused part">{fields}</BottomSheet>}
+    {/* One surface, one rule (W1.3): `Modal` presents as a centred dialog on a
+        desktop and a bottom sheet on a phone, so this site no longer keeps its
+        own `desktop ? Modal : BottomSheet` copy of the breakpoint. */}
+    <Modal isOpen={open} onClose={close} title="Return unused part" size="sm">{fields}</Modal>
   </>;
 }

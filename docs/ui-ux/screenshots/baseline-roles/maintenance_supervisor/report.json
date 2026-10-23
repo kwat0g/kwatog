@@ -1,0 +1,249 @@
+{
+  "role": "maintenance",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/maintenance/work-orders",
+    "/maintenance/schedules"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2741,
+      "horizontalPageScroll": false,
+      "heading": "MaintenanceUpdated just now",
+      "title": "Maintenance · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2320,
+      "horizontalPageScroll": false,
+      "heading": "MaintenanceUpdated just now",
+      "title": "Maintenance · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2167,
+      "horizontalPageScroll": false,
+      "heading": "MaintenanceUpdated just now",
+      "title": "Maintenance · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/dashboard-1440.png"
+    },
+    {
+      "route": "/maintenance/work-orders",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2071,
+      "horizontalPageScroll": false,
+      "heading": "Maintenance work orders",
+      "title": "Maintenance work orders · Maintenance · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 24,
+        "inputs": 7,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/maintenance-work-orders-375.png"
+    },
+    {
+      "route": "/maintenance/work-orders",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1953,
+      "horizontalPageScroll": false,
+      "heading": "Maintenance work orders",
+      "title": "Maintenance work orders · Maintenance · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 24,
+        "inputs": 7,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/maintenance-work-orders-768.png"
+    },
+    {
+      "route": "/maintenance/work-orders",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1934,
+      "horizontalPageScroll": false,
+      "heading": "Maintenance work orders",
+      "title": "Maintenance work orders · Maintenance · ERP",
+      "counts": {
+        "buttons": 24,
+        "links": 24,
+        "inputs": 7,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/maintenance-work-orders-1440.png"
+    },
+    {
+      "route": "/maintenance/schedules",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1892,
+      "horizontalPageScroll": false,
+      "heading": "Maintenance schedules",
+      "title": "Maintenance schedules · Maintenance · ERP",
+      "counts": {
+        "buttons": 39,
+        "links": 11,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/maintenance-schedules-375.png"
+    },
+    {
+      "route": "/maintenance/schedules",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1791,
+      "horizontalPageScroll": false,
+      "heading": "Maintenance schedules",
+      "title": "Maintenance schedules · Maintenance · ERP",
+      "counts": {
+        "buttons": 39,
+        "links": 11,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/maintenance-schedules-768.png"
+    },
+    {
+      "route": "/maintenance/schedules",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1796,
+      "horizontalPageScroll": false,
+      "heading": "Maintenance schedules",
+      "title": "Maintenance schedules · Maintenance · ERP",
+      "counts": {
+        "buttons": 42,
+        "links": 11,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 10,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/maintenance/maintenance-schedules-1440.png"
+    }
+  ]
+}

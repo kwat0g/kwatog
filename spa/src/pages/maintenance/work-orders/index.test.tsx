@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import MaintenanceWorkOrdersListPage from './index';
@@ -50,9 +50,15 @@ it('labels page-scoped cards and counts only critical orders on the loaded page'
   expect(await screen.findByText('57 orders')).toBeVisible();
   expect(screen.getByText('Critical priority')).toBeVisible();
   expect(screen.getByRole('link', { name: /Critical priority/ })).toHaveAttribute('href', '/?queue=critical');
-  expect(screen.getByText('1', { selector: '.text-2xl' })).toBeVisible();
-  expect(screen.getByText('Parts cost on this page')).toBeVisible();
-  expect(screen.getByText('200.00', { selector: '.text-2xl' })).toBeVisible();
+  // Read each figure from inside its own labelled card rather than by the
+  // value's class: the label is the card's public identity, and the figure's
+  // size is now responsive to the card width (F-009), so `text-2xl` is not a
+  // stable hook. Scoping to the card also proves the number landed in the
+  // right card, which a bare text query did not.
+  const criticalCard = screen.getByText('Critical priority').parentElement as HTMLElement;
+  expect(within(criticalCard).getByText('1')).toBeVisible();
+  const partsCostCard = screen.getByText('Parts cost on this page').parentElement as HTMLElement;
+  expect(within(partsCostCard).getByText('200.00')).toBeVisible();
   expect(screen.queryByText('Total Cost')).not.toBeInTheDocument();
   expect(screen.queryByText('High priority')).not.toBeInTheDocument();
 });

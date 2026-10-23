@@ -73,6 +73,9 @@ class LeaveBusinessDayValidationTest extends TestCase
             'department_id' => Department::query()->firstOrFail()->id,
         ]);
         $this->seedBalance($employee);
+        // With an eligible department approver on file the request stays on the
+        // department step; without one it is auto-routed to HR at submit.
+        $this->departmentHeadFor($employee);
         $businessDay = Carbon::parse($this->nextSunday())->addDay()->toDateString();
 
         $this->actingAs($this->employeeUser($employee))
@@ -184,6 +187,20 @@ class LeaveBusinessDayValidationTest extends TestCase
         ]);
     }
 
+    private function departmentHeadFor(Employee $employee): User
+    {
+        $approverEmployee = Employee::factory()->create([
+            'department_id' => $employee->department_id,
+        ]);
+
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => $approverEmployee->id,
+            'email' => 'leave-dept-head-'.uniqid().'@test.invalid',
+            'is_active' => true,
+        ]);
+    }
+
     private function seedBalance(Employee $employee): void
     {
         EmployeeLeaveBalance::create([
@@ -198,7 +215,10 @@ class LeaveBusinessDayValidationTest extends TestCase
 
     private function nextSunday(): string
     {
-        $date = Carbon::now()->startOfDay();
+        // Start from tomorrow: a Sunday request is only meaningful in the
+        // future, and requests dated today are refused by the min-date guard
+        // before the business-day check under test can run.
+        $date = Carbon::now()->startOfDay()->addDay();
         while (! $date->isSunday()) {
             $date->addDay();
         }

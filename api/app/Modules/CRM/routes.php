@@ -64,9 +64,9 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     // Declared before the `/sales-orders/{salesOrder}` wildcard group so the
     // literal `sales-order-responses` segment can never be param-bound.
     Route::patch('/sales-order-responses/{response}/accept', [SalesOrderResponseController::class, 'accept'])
-        ->middleware('permission:crm.sales_orders.confirm');
+        ->middleware('permission_any:crm.sales_orders.confirm,crm.sales_orders.cancel');
     Route::patch('/sales-order-responses/{response}/reject', [SalesOrderResponseController::class, 'reject'])
-        ->middleware('permission:crm.sales_orders.confirm');
+        ->middleware('permission_any:crm.sales_orders.confirm,crm.sales_orders.cancel');
 
     /* ─── Sales orders (Task 48) ─── */
     Route::get('/sales-orders/{salesOrder}/fulfillment', [\App\Modules\CRM\Controllers\SalesOrderFulfillmentController::class, 'show'])->middleware('permission_any:crm.sales_orders.view,production.wo.confirm,production.schedule.confirm');

@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Models\AuditLog;
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\NonProductionEmailGuard;
 use App\Common\Services\SchedulerExecutionLedger;
 use App\Common\Services\ScheduleTickFailureTracker;
 use App\Common\Services\SettingsService;
@@ -55,6 +56,7 @@ use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\PricingReviewService;
+use App\Modules\CRM\Services\SalesOrderSupplyService;
 use App\Modules\Dashboard\Observers\BadgeInvalidationObserver;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\EmployeeCreated;
@@ -99,9 +101,9 @@ use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Listeners\NotifyOnLoanDecided;
 use App\Modules\Loans\Listeners\NotifyOnLoanSubmitted;
 use App\Modules\Maintenance\Events\MaintenanceWorkOrderCreated;
-use App\Modules\Maintenance\Listeners\NotifyMaintenanceWorkOrder;
 use App\Modules\Maintenance\Events\PreventiveMaintenanceGenerationRequested;
 use App\Modules\Maintenance\Listeners\GeneratePreventiveMaintenanceOnRequested;
+use App\Modules\Maintenance\Listeners\NotifyMaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Events\BomPricingReviewRequested;
 use App\Modules\MRP\Events\MachineStatusChanged;
@@ -130,6 +132,7 @@ use App\Modules\Production\Listeners\CreateProductionReceiptOnOutputRequested;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
+use App\Modules\Production\Listeners\NotifyOnWorkOrderPaused;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Observers\ProductionStaffingObserver;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
@@ -164,6 +167,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
+use App\Modules\ReturnManagement\Listeners\CompleteCustomerReplacement;
 use App\Modules\ReturnManagement\Listeners\CreateReturnInspectionOnRequested;
 use App\Modules\ReturnManagement\Listeners\EmailPartyOnReturnRequestUpdated;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
@@ -197,7 +201,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ScheduleTickFailureTracker::class);
         $this->app->singleton(SchedulerExecutionLedger::class);
         $this->app->bind(SupplierDispatchGateway::class, SupplierPortalDispatchGateway::class);
-        $this->app->scoped(\App\Modules\CRM\Services\SalesOrderSupplyService::class);
+        $this->app->scoped(SalesOrderSupplyService::class);
     }
 
     public function boot(): void
@@ -228,24 +232,30 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(JobExceptionOccurred::class, [ChainListenerRunService::class, 'markRetrying']);
         Event::listen(JobFailed::class, [ChainListenerRunService::class, 'markFailed']);
         Event::listen(MessageSending::class, static function (MessageSending $event): void {
-            $path = app(EmailBrandingService::class)->logoPath();
-            if ($path === null) {
-                return;
-            }
+            app(NonProductionEmailGuard::class)->protect($event->message);
 
-            foreach ($event->message->getAttachments() as $attachment) {
-                if ($attachment instanceof DataPart && $attachment->getContentId() === 'ogami-logo@ogami') {
-                    return;
+            $branding = app(EmailBrandingService::class);
+            foreach ([
+                'ogami-logo@ogami' => $branding->logoPath(),
+                'ogami-logo-dark@ogami' => $branding->logoDarkPath(),
+            ] as $contentId => $path) {
+                if ($path === null) {
+                    continue;
                 }
+
+                foreach ($event->message->getAttachments() as $attachment) {
+                    if ($attachment instanceof DataPart && $attachment->getContentId() === $contentId) {
+                        continue 2;
+                    }
+                }
+
+                $mime = str_ends_with(strtolower($path), '.png') ? 'image/png' : 'image/svg+xml';
+                $event->message->addPart(
+                    (new DataPart(new File($path), basename($path), $mime))
+                        ->asInline()
+                        ->setContentId($contentId)
+                );
             }
-
-            $mime = str_ends_with(strtolower($path), '.png') ? 'image/png' : 'image/svg+xml';
-
-            $event->message->addPart(
-                (new DataPart(new File($path), basename($path), $mime))
-                    ->asInline()
-                    ->setContentId('ogami-logo@ogami')
-            );
         });
 
         // Keep N+1 detection + lazy-loading prevention in non-prod, but allow
@@ -336,13 +346,13 @@ class AppServiceProvider extends ServiceProvider
         // Task A4: Notify Finance when a delivery is confirmed (draft invoice ready).
         Event::listen(DeliveryConfirmed::class, [NotifyFinanceOnDeliveryConfirmed::class, 'handle']);
         Event::listen(DeliveryConfirmed::class, [EmailCustomerOnDeliveryConfirmed::class, 'handle']);
-        Event::listen(DeliveryConfirmed::class, [\App\Modules\ReturnManagement\Listeners\CompleteCustomerReplacement::class, 'handle']);
+        Event::listen(DeliveryConfirmed::class, [CompleteCustomerReplacement::class, 'handle']);
         Event::listen(InvoiceFinalized::class, [EmailCustomerOnInvoiceFinalized::class, 'handle']);
         Event::listen(OfficialReceiptIssued::class, [EmailCustomerOnOfficialReceiptIssued::class, 'handle']);
         Event::listen(CreditNoteFinalized::class, [EmailPartyOnCreditNoteFinalized::class, 'handle']);
         Event::listen(CustomerComplaintUpdated::class, [EmailCustomerOnComplaintUpdated::class, 'handle']);
         Event::listen(ReturnRequestUpdated::class, [EmailPartyOnReturnRequestUpdated::class, 'handle']);
-        Event::listen(ReturnRequestUpdated::class, [\App\Modules\ReturnManagement\Listeners\CompleteCustomerReplacement::class, 'handle']);
+        Event::listen(ReturnRequestUpdated::class, [CompleteCustomerReplacement::class, 'handle']);
         Event::listen(SupplierInvoiceSubmitted::class, [EmailSupplierOnInvoiceSubmitted::class, 'handle']);
         Event::listen(BudgetActualsSyncRequested::class, [RunBudgetActualsSyncOnRequested::class, 'handle']);
         Event::listen(MaintenanceWorkOrderCreated::class, [NotifyMaintenanceWorkOrder::class, 'handle']);
@@ -360,6 +370,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SalesOrderConfirmed::class, [EmailCustomerOnSalesOrderConfirmed::class, 'handle']);
         // ADV7 — auto-trigger in-process QC on WO start.
         Event::listen(WorkOrderStatusChanged::class, [TriggerInProcessQC::class,          'handle']);
+        Event::listen(WorkOrderStatusChanged::class, [NotifyOnWorkOrderPaused::class, 'handle']);
         Event::listen(WorkOrderCompleted::class, [TriggerOutgoingQC::class,           'handle']);
         Event::listen(WorkOrderQualityResolved::class, [AutoCloseResolvedWorkOrder::class, 'handle']);
         Event::listen(WorkOrderCompleted::class, [NotifyOnWorkOrderCompleted::class,  'handle']);

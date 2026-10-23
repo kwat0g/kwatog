@@ -161,7 +161,14 @@ export interface MrpMaterialDiagnostic {
   gross_cost?: string;
   net_cost?: string;
   net: number;
-  action: 'sufficient' | 'pr_created' | 'awaiting_qc' | 'awaiting_po_approval';
+  safety_stock?: number;
+  safety_stock_gap?: number;
+  action:
+    | 'sufficient'
+    | 'pr_created'
+    | 'awaiting_qc'
+    | 'awaiting_po_approval'
+    | 'safety_stock_warning';
   order_by?: string;
   priority?: string;
   lead_time_days?: number;
@@ -237,6 +244,7 @@ export interface MrpPlan {
     }>;
   }>;
   generated_at: string;
+  rerun_outcome?: 'unchanged' | 'updated' | null;
   created_at: string;
   updated_at: string;
 }

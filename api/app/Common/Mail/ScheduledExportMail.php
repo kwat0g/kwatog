@@ -41,6 +41,7 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
         // preserving the original bytes for the attachment.
         $this->artifactPath = $artifactPath ? $bytes : null;
         $this->encodedBytes = $artifactPath ? null : base64_encode($bytes);
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
@@ -88,7 +89,7 @@ class ScheduledExportMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '['.config('mail.from.name', 'Ogami Philippines').'] Scheduled export: '.$this->exportName,
+            subject: '['.config('mail.from.name').'] Scheduled export: '.$this->exportName,
         );
     }
 

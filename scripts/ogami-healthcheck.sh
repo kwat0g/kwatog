@@ -2,7 +2,7 @@
 # ogami-healthcheck.sh — independent production smoke check.
 #
 # This is intentionally host-level rather than an in-app route. It detects a
-# dead API/container, a broken public Cloudflare path, a stale scheduler, a
+# dead API/container, a broken local TLS origin, a stale scheduler, a
 # missing/corrupt database backup, or a nearly full root filesystem.
 
 set -euo pipefail
@@ -24,17 +24,22 @@ cd "$APP_ROOT"
 command -v docker >/dev/null 2>&1 || fail "docker is unavailable"
 command -v curl >/dev/null 2>&1 || fail "curl is unavailable"
 
-expected_services=(ogami-api ogami-db ogami-nginx ogami-queue ogami-redis ogami-reverb ogami-scheduler)
+expected_services=(ogami-api ogami-db ogami-nginx ogami-horizon ogami-redis ogami-reverb ogami-scheduler)
 running_services="$(docker compose -f "$COMPOSE_FILE" ps --format '{{.Name}} {{.State}}')"
 for service in "${expected_services[@]}"; do
     grep -Eq "^${service}[[:space:]]+running([[:space:]]|$)" <<<"$running_services" \
         || fail "container is not running: ${service}"
 done
 
-health_body="$(curl --fail --silent --show-error --max-time 15 "$HEALTH_URL")" \
-    || fail "public health endpoint failed: ${HEALTH_URL}"
+health_curl_options=()
+if [ -z "${OGAMI_HEALTH_URL:-}" ]; then
+    health_curl_options=(--resolve "ogamiph.dev:443:127.0.0.1")
+fi
+
+health_body="$(curl "${health_curl_options[@]}" --fail --silent --show-error --max-time 15 "$HEALTH_URL")" \
+    || fail "origin health endpoint failed: ${HEALTH_URL}"
 grep -q '"status":"ok"' <<<"$health_body" \
-    || fail "public health endpoint did not report status=ok"
+    || fail "origin health endpoint did not report status=ok"
 
 docker compose -f "$COMPOSE_FILE" exec -T api \
     php artisan scheduler:health --stale-minutes=15 --no-interaction >/dev/null \

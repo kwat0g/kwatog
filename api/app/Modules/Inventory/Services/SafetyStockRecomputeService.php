@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Support\DemandBasis;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -143,7 +144,7 @@ class SafetyStockRecomputeService
         $z = $this->settings->get('inventory.safety_stock.service_level_z');
         $historyDays = $this->settings->get('inventory.safety_stock.history_days');
         $minDemandDays = $this->settings->get('inventory.safety_stock.min_demand_days');
-        $issueMovementTypes = $this->settings->get('inventory.safety_stock.issue_movement_types');
+        $issueMovementTypes = app(DemandBasis::class)->movementTypes(DemandBasis::SAFETY_STOCK);
         if (! is_numeric($z) || (float) $z <= 0) {
             throw new BusinessRuleException('Required business setting inventory.safety_stock.service_level_z is missing or invalid.');
         }
@@ -154,11 +155,11 @@ class SafetyStockRecomputeService
             throw new BusinessRuleException('Required business setting inventory.safety_stock.min_demand_days is missing or invalid.');
         }
         if (! is_array($issueMovementTypes) || $issueMovementTypes === []) {
-            throw new BusinessRuleException('Required business setting inventory.safety_stock.issue_movement_types is missing or invalid.');
+            throw new BusinessRuleException('Required business setting inventory.demand.safety_stock_movement_types is missing or invalid.');
         }
         $issueMovementTypes = array_values(array_filter($issueMovementTypes, static fn ($type): bool => is_string($type) && trim($type) !== ''));
         if ($issueMovementTypes === []) {
-            throw new BusinessRuleException('Required business setting inventory.safety_stock.issue_movement_types is missing or invalid.');
+            throw new BusinessRuleException('Required business setting inventory.demand.safety_stock_movement_types is missing or invalid.');
         }
 
         return ['z' => (float) $z, 'history_days' => (int) $historyDays, 'min_demand_days' => (int) $minDemandDays, 'issue_movement_types' => $issueMovementTypes];

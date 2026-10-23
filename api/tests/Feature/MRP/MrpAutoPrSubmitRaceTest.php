@@ -33,8 +33,8 @@ use Tests\TestCase;
  * This test simulates the interleaving in-process: the moment the rerun reads
  * the prior draft auto-PR, the row is flipped to Pending (what
  * PurchaseRequestService::submit() commits). The rerun must then leave that PR
- * alone — status still Pending, line items intact — and consolidate demand
- * into a fresh draft PR instead.
+ * alone — status still Pending, line items intact — and treat it as
+ * already-covered demand (R2), never minting a duplicate draft PR.
  */
 class MrpAutoPrSubmitRaceTest extends TestCase
 {
@@ -127,15 +127,16 @@ class MrpAutoPrSubmitRaceTest extends TestCase
             'The submitted PR line items must not be deleted by the rerun.',
         );
 
-        // The rerun must have consolidated the demand into a fresh draft PR
-        // rather than reusing the submitted one.
-        $this->assertSame(1, PurchaseRequest::where('is_auto_generated', true)
+        // A mid-run submit is the same end state R2 pins for a pre-run submit:
+        // the Pending PR now covers the SO's demand, so the rerun must not
+        // mint a duplicate draft alongside it.
+        $this->assertSame(0, PurchaseRequest::where('is_auto_generated', true)
             ->where('status', PurchaseRequestStatus::Draft->value)
             ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
-            ->count(), 'The rerun must create a fresh draft auto-PR when the only candidate has been submitted.');
-        $this->assertSame(2, PurchaseRequest::where('is_auto_generated', true)
+            ->count(), 'An open submitted auto-PR already covers the shortage; no duplicate draft.');
+        $this->assertSame(1, PurchaseRequest::where('is_auto_generated', true)
             ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
-            ->count(), 'The submitted PR must survive alongside the replacement.');
+            ->count(), 'The submitted PR must remain the only auto-generated request for the SO.');
     }
 
     private function createBom(float $qtyPerUnit = 2.0, float $wasteFactor = 0.0): Bom

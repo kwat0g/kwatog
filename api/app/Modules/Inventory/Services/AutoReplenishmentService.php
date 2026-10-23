@@ -15,10 +15,10 @@ use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ReorderMethod;
-use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\LowStockPrCreated;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\DemandBasis;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -218,11 +218,8 @@ class AutoReplenishmentService
             $historyStart = now()->subDays($historyDays);
             $totalIssued = (string) StockMovement::query()
                 ->where('item_id', $item->id)
-                ->whereIn('movement_type', [
-                    StockMovementType::MaterialIssue->value,
-                    StockMovementType::Delivery->value,
-                    StockMovementType::Scrap->value,
-                ])
+                // F-02: the ONE demand set for replenishment (legacy default preserved).
+                ->whereIn('movement_type', app(DemandBasis::class)->movementTypes(DemandBasis::REPLENISHMENT))
                 ->where('created_at', '>=', $historyStart)
                 ->sum('quantity');
             $avgDaily = bcdiv($totalIssued, (string) $historyDays, 6);

@@ -117,7 +117,7 @@ class SalesOrderController
     public function cancel(CancelSalesOrderRequest $request, SalesOrder $salesOrder): SalesOrderResource|JsonResponse
     {
         try {
-            $so = $this->service->cancel($salesOrder, $request->input('reason'));
+            $so = $this->service->cancel($salesOrder, $request->input('reason'), null, $request->user());
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

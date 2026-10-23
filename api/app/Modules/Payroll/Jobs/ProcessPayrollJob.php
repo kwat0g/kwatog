@@ -64,8 +64,9 @@ class ProcessPayrollJob implements ShouldQueue
         public ?int $triggeredBy = null,
         public ?string $claimToken = null,
     ) {
-        // Lane: low — 30-min compute must not starve approvals/realtime.
-        $this->onQueue('low');
+        // Lane: automation — 30-min compute, with its own pool so approvals
+        // never wait behind it.
+        $this->onQueue('automation');
     }
 
     public function handle(

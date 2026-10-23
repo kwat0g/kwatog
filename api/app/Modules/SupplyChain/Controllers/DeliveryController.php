@@ -22,6 +22,7 @@ use App\Modules\SupplyChain\Requests\StoreDeliveryAttemptOutcomeRequest;
 use App\Modules\SupplyChain\Requests\StoreTruckReturnReceiptRequest;
 use App\Modules\SupplyChain\Resources\DeliveryResource;
 use App\Modules\SupplyChain\Services\DeliveryAttemptOutcomeService;
+use App\Modules\SupplyChain\Services\DeliveryReceiptService;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,7 +38,19 @@ class DeliveryController
         private readonly DeliveryAttemptOutcomeService $attemptOutcomes,
         private readonly DeliveryStockReservationService $reservations,
         private readonly DeliveryCostRecognitionService $costs,
+        private readonly DeliveryReceiptService $receipts,
     ) {}
+
+    /**
+     * Chain 1 — printable delivery receipt (ship-to + receiving signature).
+     *
+     * Carries the customer's delivery address, which is why it is its own
+     * document rather than a reprint of the invoice.
+     */
+    public function receiptPdf(Delivery $delivery): StreamedResponse
+    {
+        return $this->receipts->render($delivery);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {

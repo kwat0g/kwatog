@@ -1,0 +1,343 @@
+{
+  "role": "finance",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/accounting/invoices",
+    "/accounting/bills",
+    "/budgeting"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2867,
+      "horizontalPageScroll": false,
+      "heading": "Finance Officer DashboardUpdated just now",
+      "title": "Finance Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 52,
+        "inputs": 0,
+        "tables": 4,
+        "rows": 18,
+        "dialogs": 0,
+        "charts": 6
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.bg-canvas border border-default rounded-md overflo (396>333, overflow-x:hidden)",
+        "div.p-4 (396>333, overflow-x:visible)",
+        "text.[object SVGAnimatedString] (64>52, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2854,
+      "horizontalPageScroll": false,
+      "heading": "Finance Officer DashboardUpdated just now",
+      "title": "Finance Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 52,
+        "inputs": 0,
+        "tables": 4,
+        "rows": 18,
+        "dialogs": 0,
+        "charts": 6
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "text.[object SVGAnimatedString] (64>52, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2924,
+      "horizontalPageScroll": false,
+      "heading": "Finance Officer DashboardUpdated just now",
+      "title": "Finance Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 52,
+        "inputs": 0,
+        "tables": 4,
+        "rows": 18,
+        "dialogs": 0,
+        "charts": 6
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "text.[object SVGAnimatedString] (64>52, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/dashboard-1440.png"
+    },
+    {
+      "route": "/accounting/invoices",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2015,
+      "horizontalPageScroll": false,
+      "heading": "Invoices (AR)",
+      "title": "Invoices (AR) · Finance & Accounting · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 26,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.text-2xl font-medium font-mono tabular-nums text-p (143>132, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/accounting-invoices-375.png"
+    },
+    {
+      "route": "/accounting/invoices",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1866,
+      "horizontalPageScroll": false,
+      "heading": "Invoices (AR)",
+      "title": "Invoices (AR) · Finance & Accounting · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 26,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/accounting-invoices-768.png"
+    },
+    {
+      "route": "/accounting/invoices",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1868,
+      "horizontalPageScroll": false,
+      "heading": "Invoices (AR)",
+      "title": "Invoices (AR) · Finance & Accounting · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 26,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/accounting-invoices-1440.png"
+    },
+    {
+      "route": "/accounting/bills",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1876,
+      "horizontalPageScroll": false,
+      "heading": "Bills (AP)",
+      "title": "Bills (AP) · Finance & Accounting · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 25,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.text-2xl font-medium font-mono tabular-nums text-p (159>132, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/accounting-bills-375.png"
+    },
+    {
+      "route": "/accounting/bills",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2004,
+      "horizontalPageScroll": false,
+      "heading": "Bills (AP)",
+      "title": "Bills (AP) · Finance & Accounting · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 25,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/accounting-bills-768.png"
+    },
+    {
+      "route": "/accounting/bills",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1988,
+      "horizontalPageScroll": false,
+      "heading": "Bills (AP)",
+      "title": "Bills (AP) · Finance & Accounting · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 25,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 11,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/accounting-bills-1440.png"
+    },
+    {
+      "route": "/budgeting",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2129,
+      "horizontalPageScroll": false,
+      "heading": "Budget Overview",
+      "title": "Budget Overview · ERP",
+      "counts": {
+        "buttons": 20,
+        "links": 30,
+        "inputs": 2,
+        "tables": 2,
+        "rows": 8,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.bg-canvas border border-default rounded-md overflo (411>333, overflow-x:hidden)",
+        "div.flex items-center justify-between px-4 py-3 border (411>333, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/budgeting-375.png"
+    },
+    {
+      "route": "/budgeting",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2001,
+      "horizontalPageScroll": false,
+      "heading": "Budget Overview",
+      "title": "Budget Overview · ERP",
+      "counts": {
+        "buttons": 20,
+        "links": 30,
+        "inputs": 2,
+        "tables": 2,
+        "rows": 8,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/budgeting-768.png"
+    },
+    {
+      "route": "/budgeting",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2010,
+      "horizontalPageScroll": false,
+      "heading": "Budget Overview",
+      "title": "Budget Overview · ERP",
+      "counts": {
+        "buttons": 24,
+        "links": 30,
+        "inputs": 2,
+        "tables": 2,
+        "rows": 8,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/finance/budgeting-1440.png"
+    }
+  ]
+}

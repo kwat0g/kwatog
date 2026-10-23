@@ -1,0 +1,1437 @@
+{
+  "role": "qc",
+  "label": "w21-before",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/quality/dashboard",
+    "/quality/inspections",
+    "/quality/inspections/new",
+    "/quality/ncrs",
+    "/quality/ncrs/new",
+    "/quality/ncrs/effectiveness",
+    "/quality/inspection-specs",
+    "/quality/ncr-templates",
+    "/quality/ncr-templates/new",
+    "/quality/calibration",
+    "/quality/calibration/new",
+    "/quality/capability",
+    "/quality/traceability"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 3395,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 33,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection Queue",
+          "h": 42,
+          "y": 721
+        },
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 982
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 1242
+        },
+        {
+          "t": "QC Chain Coverage",
+          "h": 59,
+          "y": 1614
+        },
+        {
+          "t": "Inspection Queue by Stage",
+          "h": 42,
+          "y": 1829
+        },
+        {
+          "t": "Top Defects by Count",
+          "h": 42,
+          "y": 2089
+        },
+        {
+          "t": "Defect Rate Forecast (3 months)",
+          "h": 45,
+          "y": 2349
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2592,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 33,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection Queue",
+          "h": 42,
+          "y": 505
+        },
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 765
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 1025
+        },
+        {
+          "t": "QC Chain Coverage",
+          "h": 42,
+          "y": 1282
+        },
+        {
+          "t": "Inspection Queue by Stage",
+          "h": 42,
+          "y": 1480
+        },
+        {
+          "t": "Top Defects by Count",
+          "h": 42,
+          "y": 1740
+        },
+        {
+          "t": "Defect Rate Forecast (3 months)",
+          "h": 45,
+          "y": 2000
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2729,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 33,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection Queue",
+          "h": 42,
+          "y": 336
+        },
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 336
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 596
+        },
+        {
+          "t": "QC Chain Coverage",
+          "h": 42,
+          "y": 596
+        },
+        {
+          "t": "Inspection Queue by Stage",
+          "h": 42,
+          "y": 852
+        },
+        {
+          "t": "Top Defects by Count",
+          "h": 42,
+          "y": 852
+        },
+        {
+          "t": "Defect Rate Forecast (3 months)",
+          "h": 45,
+          "y": 1112
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/dashboard-1440.png"
+    },
+    {
+      "route": "/quality/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2703,
+      "horizontalPageScroll": false,
+      "heading": "Quality dashboard",
+      "title": "Quality dashboard · Quality Control · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 25,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "text.[object SVGAnimatedString] [panel: Defect Pareto] (118>84, overflow-x:visible)"
+      ],
+      "panels": [
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 483
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 910
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-dashboard-375.png"
+    },
+    {
+      "route": "/quality/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2296,
+      "horizontalPageScroll": false,
+      "heading": "Quality dashboard",
+      "title": "Quality dashboard · Quality Control · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 25,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 365
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 792
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-dashboard-768.png"
+    },
+    {
+      "route": "/quality/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2067,
+      "horizontalPageScroll": false,
+      "heading": "Quality dashboard",
+      "title": "Quality dashboard · Quality Control · ERP",
+      "counts": {
+        "buttons": 15,
+        "links": 25,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Defect Pareto",
+          "h": 42,
+          "y": 247
+        },
+        {
+          "t": "Open NCRs",
+          "h": 42,
+          "y": 247
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-dashboard-1440.png"
+    },
+    {
+      "route": "/quality/inspections",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2286,
+      "horizontalPageScroll": false,
+      "heading": "Inspections",
+      "title": "Inspections · Quality Control · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 19,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 23,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspections-375.png"
+    },
+    {
+      "route": "/quality/inspections",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2401,
+      "horizontalPageScroll": false,
+      "heading": "Inspections",
+      "title": "Inspections · Quality Control · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 19,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 23,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspections-768.png"
+    },
+    {
+      "route": "/quality/inspections",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2570,
+      "horizontalPageScroll": false,
+      "heading": "Inspections",
+      "title": "Inspections · Quality Control · ERP",
+      "counts": {
+        "buttons": 25,
+        "links": 19,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 23,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspections-1440.png"
+    },
+    {
+      "route": "/quality/inspections/new",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2343,
+      "horizontalPageScroll": false,
+      "heading": "Open inspection",
+      "title": "Open inspection · Quality Control · ERP",
+      "counts": {
+        "buttons": 14,
+        "links": 21,
+        "inputs": 5,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection details",
+          "h": 42,
+          "y": 299
+        },
+        {
+          "t": "Inspection coverage",
+          "h": 42,
+          "y": 680
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspections-new-375.png"
+    },
+    {
+      "route": "/quality/inspections/new",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2258,
+      "horizontalPageScroll": false,
+      "heading": "Open inspection",
+      "title": "Open inspection · Quality Control · ERP",
+      "counts": {
+        "buttons": 14,
+        "links": 21,
+        "inputs": 5,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection details",
+          "h": 42,
+          "y": 260
+        },
+        {
+          "t": "Inspection coverage",
+          "h": 42,
+          "y": 578
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspections-new-768.png"
+    },
+    {
+      "route": "/quality/inspections/new",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2119,
+      "horizontalPageScroll": false,
+      "heading": "Open inspection",
+      "title": "Open inspection · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 21,
+        "inputs": 5,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Inspection details",
+          "h": 42,
+          "y": 260
+        },
+        {
+          "t": "Inspection coverage",
+          "h": 42,
+          "y": 210
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspections-new-1440.png"
+    },
+    {
+      "route": "/quality/ncrs",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 3133,
+      "horizontalPageScroll": false,
+      "heading": "Non-conformance reports",
+      "title": "Non-conformance reports · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 19,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-375.png"
+    },
+    {
+      "route": "/quality/ncrs",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2433,
+      "horizontalPageScroll": false,
+      "heading": "Non-conformance reports",
+      "title": "Non-conformance reports · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 19,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-768.png"
+    },
+    {
+      "route": "/quality/ncrs",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2406,
+      "horizontalPageScroll": false,
+      "heading": "Non-conformance reports",
+      "title": "Non-conformance reports · Quality Control · ERP",
+      "counts": {
+        "buttons": 22,
+        "links": 19,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-1440.png"
+    },
+    {
+      "route": "/quality/ncrs/new",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2189,
+      "horizontalPageScroll": false,
+      "heading": "Open NCR",
+      "title": "Open NCR · Quality Control · ERP",
+      "counts": {
+        "buttons": 14,
+        "links": 20,
+        "inputs": 6,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.min-w-0 w-full space-y-4 (355>335, overflow-x:visible)"
+      ],
+      "panels": [
+        {
+          "t": "Classification",
+          "h": 42,
+          "y": 289
+        },
+        {
+          "t": "Subject",
+          "h": 42,
+          "y": 559
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-new-375.png"
+    },
+    {
+      "route": "/quality/ncrs/new",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2182,
+      "horizontalPageScroll": false,
+      "heading": "Open NCR",
+      "title": "Open NCR · Quality Control · ERP",
+      "counts": {
+        "buttons": 14,
+        "links": 20,
+        "inputs": 6,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.min-w-0 w-full space-y-4 (692>672, overflow-x:visible)"
+      ],
+      "panels": [
+        {
+          "t": "Classification",
+          "h": 42,
+          "y": 251
+        },
+        {
+          "t": "Subject",
+          "h": 42,
+          "y": 458
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-new-768.png"
+    },
+    {
+      "route": "/quality/ncrs/new",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2574,
+      "horizontalPageScroll": false,
+      "heading": "Open NCR",
+      "title": "Open NCR · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 20,
+        "inputs": 6,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.min-w-0 w-full space-y-4 (1180>1160, overflow-x:visible)"
+      ],
+      "panels": [
+        {
+          "t": "Classification",
+          "h": 42,
+          "y": 251
+        },
+        {
+          "t": "Subject",
+          "h": 42,
+          "y": 394
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-new-1440.png"
+    },
+    {
+      "route": "/quality/ncrs/effectiveness",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2052,
+      "horizontalPageScroll": false,
+      "heading": "CAPA effectiveness",
+      "title": "CAPA effectiveness · Quality Control · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-effectiveness-375.png"
+    },
+    {
+      "route": "/quality/ncrs/effectiveness",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2084,
+      "horizontalPageScroll": false,
+      "heading": "CAPA effectiveness",
+      "title": "CAPA effectiveness · Quality Control · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-effectiveness-768.png"
+    },
+    {
+      "route": "/quality/ncrs/effectiveness",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2154,
+      "horizontalPageScroll": false,
+      "heading": "CAPA effectiveness",
+      "title": "CAPA effectiveness · Quality Control · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncrs-effectiveness-1440.png"
+    },
+    {
+      "route": "/quality/inspection-specs",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2615,
+      "horizontalPageScroll": false,
+      "heading": "Inspection specs",
+      "title": "Inspection specs · Quality Control · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 19,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspection-specs-375.png"
+    },
+    {
+      "route": "/quality/inspection-specs",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2322,
+      "horizontalPageScroll": false,
+      "heading": "Inspection specs",
+      "title": "Inspection specs · Quality Control · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 19,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspection-specs-768.png"
+    },
+    {
+      "route": "/quality/inspection-specs",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2116,
+      "horizontalPageScroll": false,
+      "heading": "Inspection specs",
+      "title": "Inspection specs · Quality Control · ERP",
+      "counts": {
+        "buttons": 23,
+        "links": 19,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-inspection-specs-1440.png"
+    },
+    {
+      "route": "/quality/ncr-templates",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2275,
+      "horizontalPageScroll": false,
+      "heading": "NCR templates",
+      "title": "NCR templates · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 19,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 2,
+        "unnamedInteractiveDetail": [
+          "button",
+          "button"
+        ]
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncr-templates-375.png"
+    },
+    {
+      "route": "/quality/ncr-templates",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2159,
+      "horizontalPageScroll": false,
+      "heading": "NCR templates",
+      "title": "NCR templates · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 19,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 2,
+        "unnamedInteractiveDetail": [
+          "button",
+          "button"
+        ]
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncr-templates-768.png"
+    },
+    {
+      "route": "/quality/ncr-templates",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2336,
+      "horizontalPageScroll": false,
+      "heading": "NCR templates",
+      "title": "NCR templates · Quality Control · ERP",
+      "counts": {
+        "buttons": 22,
+        "links": 19,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 2,
+        "unnamedInteractiveDetail": [
+          "button",
+          "button"
+        ]
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncr-templates-1440.png"
+    },
+    {
+      "route": "/quality/ncr-templates/new",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2175,
+      "horizontalPageScroll": false,
+      "heading": "New NCR template",
+      "title": "New NCR template · Quality Control · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 21,
+        "inputs": 7,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.min-w-0 w-full space-y-4 (351>335, overflow-x:visible)"
+      ],
+      "panels": [
+        {
+          "t": "Template details",
+          "h": 42,
+          "y": 232
+        },
+        {
+          "t": "Defect details",
+          "h": 42,
+          "y": 566
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncr-templates-new-375.png"
+    },
+    {
+      "route": "/quality/ncr-templates/new",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2345,
+      "horizontalPageScroll": false,
+      "heading": "New NCR template",
+      "title": "New NCR template · Quality Control · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 21,
+        "inputs": 7,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Template details",
+          "h": 42,
+          "y": 210
+        },
+        {
+          "t": "Defect details",
+          "h": 42,
+          "y": 480
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncr-templates-new-768.png"
+    },
+    {
+      "route": "/quality/ncr-templates/new",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2284,
+      "horizontalPageScroll": false,
+      "heading": "New NCR template",
+      "title": "New NCR template · Quality Control · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 21,
+        "inputs": 7,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Template details",
+          "h": 42,
+          "y": 210
+        },
+        {
+          "t": "Defect details",
+          "h": 42,
+          "y": 417
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-ncr-templates-new-1440.png"
+    },
+    {
+      "route": "/quality/calibration",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2291,
+      "horizontalPageScroll": false,
+      "heading": "Calibration register",
+      "title": "Calibration register · Quality Control · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 19,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-calibration-375.png"
+    },
+    {
+      "route": "/quality/calibration",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2339,
+      "horizontalPageScroll": false,
+      "heading": "Calibration register",
+      "title": "Calibration register · Quality Control · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 19,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-calibration-768.png"
+    },
+    {
+      "route": "/quality/calibration",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2249,
+      "horizontalPageScroll": false,
+      "heading": "Calibration register",
+      "title": "Calibration register · Quality Control · ERP",
+      "counts": {
+        "buttons": 14,
+        "links": 19,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-calibration-1440.png"
+    },
+    {
+      "route": "/quality/calibration/new",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2085,
+      "horizontalPageScroll": false,
+      "heading": "New calibration instrument",
+      "title": "New calibration instrument · Quality Control · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 21,
+        "inputs": 9,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-calibration-new-375.png"
+    },
+    {
+      "route": "/quality/calibration/new",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2085,
+      "horizontalPageScroll": false,
+      "heading": "New calibration instrument",
+      "title": "New calibration instrument · Quality Control · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 21,
+        "inputs": 9,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-calibration-new-768.png"
+    },
+    {
+      "route": "/quality/calibration/new",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1921,
+      "horizontalPageScroll": false,
+      "heading": "New calibration instrument",
+      "title": "New calibration instrument · Quality Control · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 21,
+        "inputs": 9,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-calibration-new-1440.png"
+    },
+    {
+      "route": "/quality/capability",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2089,
+      "horizontalPageScroll": false,
+      "heading": "Capability Study",
+      "title": "Capability Study · Quality Control · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 19,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Parameters",
+          "h": 42,
+          "y": 145
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-capability-375.png"
+    },
+    {
+      "route": "/quality/capability",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2057,
+      "horizontalPageScroll": false,
+      "heading": "Capability Study",
+      "title": "Capability Study · Quality Control · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 19,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Parameters",
+          "h": 42,
+          "y": 145
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-capability-768.png"
+    },
+    {
+      "route": "/quality/capability",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2303,
+      "horizontalPageScroll": false,
+      "heading": "Capability Study",
+      "title": "Capability Study · Quality Control · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 19,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "Parameters",
+          "h": 42,
+          "y": 145
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-capability-1440.png"
+    },
+    {
+      "route": "/quality/traceability",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2067,
+      "horizontalPageScroll": false,
+      "heading": "Traceability search",
+      "title": "Traceability search · Quality Control · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 19,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-traceability-375.png"
+    },
+    {
+      "route": "/quality/traceability",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1871,
+      "horizontalPageScroll": false,
+      "heading": "Traceability search",
+      "title": "Traceability search · Quality Control · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 19,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-traceability-768.png"
+    },
+    {
+      "route": "/quality/traceability",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2119,
+      "horizontalPageScroll": false,
+      "heading": "Traceability search",
+      "title": "Traceability search · Quality Control · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 19,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [],
+      "file": "docs/ui-ux/screenshots/w21-before/qc/quality-traceability-1440.png"
+    }
+  ]
+}

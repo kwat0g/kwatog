@@ -39,10 +39,13 @@ const response: PaginatedResponse<PriceAgreement> = {
 };
 
 describe('PriceAgreementsListPage date actions', () => {
-  const originalTimezone = process.env.TZ;
-
   beforeEach(() => {
-    vi.stubEnv('TZ', 'Asia/Manila');
+    /* Freeze the instant, not the runner's timezone. The page compares against the
+       PHILIPPINE calendar date (`manilaIsoDate`), so 2026-10-03T17:00Z — 01:00 on
+       Oct 4 in Manila — is the boundary under test. This used to stub
+       `process.env.TZ`, which made the outcome depend on a process-wide env write
+       landing before the next Date lookup; it flipped under full-suite load. */
+    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-03T17:00:00.000Z'));
     vi.mocked(priceAgreementsApi.list).mockResolvedValue(response);
   });
@@ -50,8 +53,6 @@ describe('PriceAgreementsListPage date actions', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
-    if (originalTimezone === undefined) vi.unstubAllEnvs();
-    else vi.stubEnv('TZ', originalTimezone);
   });
 
   it('shows archive action after the Manila expiry date before UTC midnight', async () => {

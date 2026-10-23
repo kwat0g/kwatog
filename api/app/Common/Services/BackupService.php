@@ -341,7 +341,7 @@ class BackupService
 
         $temporaryFiles = [];
         $maintenance = false;
-        $queuePaused = false;
+        $pausedQueues = [];
         $destructiveStarted = false;
         $rollbackRequired = false;
         $metadata = (array) ($original['metadata'] ?? []);
@@ -414,7 +414,7 @@ class BackupService
                 )
                 : null;
 
-            $queuePaused = $this->pauseQueue();
+            $pausedQueues = $this->pauseQueues();
             $downExit = Artisan::call('down', ['--render' => 'errors::503']);
             if ($downExit !== 0) {
                 throw new \RuntimeException('Could not enter maintenance mode; restore was not started.');
@@ -504,8 +504,8 @@ class BackupService
                     ]);
                 }
             }
-            if ($queuePaused && ! $rollbackRequired) {
-                $this->resumeQueue();
+            if ($pausedQueues !== [] && ! $rollbackRequired) {
+                $this->resumeQueues($pausedQueues);
             }
             if ($rollbackRequired) {
                 Log::critical('Restore requires operator rollback before the application can resume.', [
@@ -731,7 +731,7 @@ class BackupService
 
         $temporaryFiles = [];
         $maintenance = false;
-        $queuePaused = false;
+        $pausedQueues = [];
         try {
             $databaseName = $this->validateArtifactName((string) ($databaseArtifact['name'] ?? ''), 'database');
             $databasePath = $this->materializeArtifact(
@@ -753,7 +753,7 @@ class BackupService
                 );
             }
 
-            $queuePaused = $this->pauseQueue();
+            $pausedQueues = $this->pauseQueues();
             if (! app()->maintenanceMode()->active()) {
                 $downExit = Artisan::call('down', ['--render' => 'errors::503']);
                 if ($downExit !== 0 || ! app()->maintenanceMode()->active()) {
@@ -815,8 +815,8 @@ class BackupService
                     ]);
                 }
             }
-            if ($queuePaused) {
-                $this->resumeQueue();
+            if ($pausedQueues !== []) {
+                $this->resumeQueues($pausedQueues);
             }
             foreach ($temporaryFiles as $temporaryFile) {
                 @unlink($temporaryFile);
@@ -824,28 +824,111 @@ class BackupService
         }
     }
 
-    private function pauseQueue(): bool
+    /** @return array<int, array{connection: string, queue: string}> */
+    private function pauseQueues(): array
     {
-        Queue::pauseFor(
-            (string) config('backup.queue_connection', config('queue.default', 'redis')),
-            (string) config('backup.queue_name', 'default'),
-            (int) config('backup.queue_pause_seconds', 21600),
+        $queues = [];
+        $environment = config('horizon.env') ?? config('app.env', 'production');
+        $supervisors = array_replace_recursive(
+            (array) config('horizon.defaults', []),
+            (array) config("horizon.environments.{$environment}", []),
         );
 
-        return true;
+        foreach ($supervisors as $supervisor) {
+            $connection = (string) ($supervisor['connection'] ?? config('queue.default', 'redis'));
+            foreach ((array) ($supervisor['queue'] ?? []) as $queue) {
+                if ($queue !== 'bulk') {
+                    $queues[$connection.':'.$queue] = ['connection' => $connection, 'queue' => $queue];
+                }
+            }
+        }
+
+        if ($queues === []) {
+            throw new \RuntimeException('No Horizon queues configured for restore pause.');
+        }
+
+        $paused = [];
+        try {
+            foreach ($queues as $target) {
+                Queue::pauseFor(
+                    $target['connection'],
+                    $target['queue'],
+                    (int) config('backup.queue_pause_seconds', 21600),
+                );
+                $paused[] = $target;
+            }
+
+            $this->waitForQueuesToDrain($paused);
+        } catch (Throwable $exception) {
+            $this->resumeQueues($paused);
+            throw $exception;
+        }
+
+        return $paused;
     }
 
-    private function resumeQueue(): void
+    /** @param array<int, array{connection: string, queue: string}> $queues */
+    private function waitForQueuesToDrain(array $queues): void
     {
-        try {
-            Queue::resume(
-                (string) config('backup.queue_connection', config('queue.default', 'redis')),
-                (string) config('backup.queue_name', 'default'),
+        $connections = [];
+        $quietSeconds = 1;
+        foreach ($queues as $target) {
+            $connection = $target['connection'];
+            $connections[$connection] ??= Queue::connection($connection);
+            if (! method_exists($connections[$connection], 'reservedSize')) {
+                throw new \RuntimeException("Cannot verify active jobs for queue connection [{$connection}].");
+            }
+            $blockFor = config("queue.connections.{$connection}.block_for");
+            if ($blockFor === 0) {
+                throw new \RuntimeException("Cannot safely drain queue connection [{$connection}] with infinite blocking.");
+            }
+            $quietSeconds = max(
+                $quietSeconds,
+                (int) ($blockFor ?? 0),
             );
-        } catch (Throwable $exception) {
-            Log::critical('Could not resume the backup queue.', [
-                'error' => $this->safeError($exception),
-            ]);
+        }
+
+        $timeoutSeconds = max(60, $quietSeconds + 1);
+        $deadline = microtime(true) + $timeoutSeconds;
+        $quietSince = null;
+        while (true) {
+            $busy = false;
+            foreach ($queues as $target) {
+                if ($connections[$target['connection']]->reservedSize($target['queue']) > 0) {
+                    $busy = true;
+                    break;
+                }
+            }
+
+            if ($busy) {
+                $quietSince = null;
+            } elseif ($quietSince === null) {
+                $quietSince = microtime(true);
+            } elseif (microtime(true) - $quietSince >= $quietSeconds) {
+                return;
+            }
+
+            if (microtime(true) >= $deadline) {
+                throw new \RuntimeException("Queued work did not drain within {$timeoutSeconds} seconds; restore was not started.");
+            }
+
+            usleep(250_000);
+        }
+    }
+
+    /** @param array<int, array{connection: string, queue: string}> $queues */
+    private function resumeQueues(array $queues): void
+    {
+        foreach ($queues as $target) {
+            try {
+                Queue::resume($target['connection'], $target['queue']);
+            } catch (Throwable $exception) {
+                Log::critical('Could not resume a queue after backup recovery.', [
+                    'connection' => $target['connection'],
+                    'queue' => $target['queue'],
+                    'error' => $this->safeError($exception),
+                ]);
+            }
         }
     }
 

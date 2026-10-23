@@ -23,6 +23,9 @@ class Customer extends Model
 
     protected $fillable = [
         'name', 'code', 'contact_person', 'email', 'phone', 'address',
+        // Chain 1 — where the truck actually goes, which is not the billing
+        // address above, and who signs for the goods at that gate.
+        'delivery_address', 'delivery_contact_person', 'delivery_contact_phone',
         'tin', 'credit_limit', 'payment_terms_days', 'is_active',
     ];
 

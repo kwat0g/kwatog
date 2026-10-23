@@ -30,6 +30,7 @@ use App\Modules\Production\Requests\ReviewWorkOrderSlotRequest;
 use App\Modules\Production\Requests\StoreWorkOrderRequest;
 use App\Modules\Production\Resources\WorkOrderOutputResource;
 use App\Modules\Production\Resources\WorkOrderResource;
+use App\Modules\Production\Services\StockProductionPlanningService;
 use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
@@ -107,7 +108,7 @@ class WorkOrderController
                     'id' => $product->hash_id,
                     'part_number' => $product->part_number,
                     'name' => $product->name,
-                    'stock_production' => app(\App\Modules\Production\Services\StockProductionPlanningService::class)->productReadiness($product),
+                    'stock_production' => app(StockProductionPlanningService::class)->productReadiness($product),
                 ])
                 ->values(),
             'machines' => Machine::query()
@@ -197,7 +198,7 @@ class WorkOrderController
         $payload = $request->validated();
         $payload['created_by'] = $request->user()->id;
         $wo = ($payload['production_purpose'] ?? null) === 'stock'
-            ? app(\App\Modules\Production\Services\StockProductionPlanningService::class)->create($payload, $request->user())
+            ? app(StockProductionPlanningService::class)->create($payload, $request->user())
             : $this->service->createDraft($payload);
 
         return (new WorkOrderResource($wo))->response()->setStatusCode(201);
@@ -337,7 +338,7 @@ class WorkOrderController
     {
         $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
 
-        return new WorkOrderResource($this->service->releaseResources($workOrder, $data['reason']));
+        return new WorkOrderResource($this->service->releaseResources($workOrder, $data['reason'], $request->user()->id));
     }
 
     public function pause(PauseWorkOrderRequest $request, WorkOrder $workOrder): WorkOrderResource|JsonResponse

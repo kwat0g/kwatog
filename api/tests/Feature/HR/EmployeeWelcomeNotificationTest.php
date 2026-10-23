@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
@@ -67,6 +68,18 @@ class EmployeeWelcomeNotificationTest extends TestCase
         $user->notify(new EmployeeWelcomeNotification('Tmp-XYZ789!'));
 
         $this->assertStringContainsString('Tmp-XYZ789!', $this->lastMailHtml());
+    }
+
+    public function test_the_welcome_email_renders_when_company_branding_is_missing(): void
+    {
+        app(SettingsService::class)->set('company.legal_name', '');
+
+        $html = (string) (new EmployeeWelcomeNotification('Tmp-ABC123!'))
+            ->toMail(User::factory()->make(['name' => 'Juan Cruz']))
+            ->render();
+
+        $this->assertStringContainsString('Philippine Ogami Corporation', $html);
+        $this->assertStringContainsString('Tmp-ABC123!', $html);
     }
 
     public function test_provisioning_delivers_the_welcome_email_with_a_temporary_password(): void

@@ -2,14 +2,15 @@
 
 return [
     'name' => env('APP_NAME', 'Ogami ERP'),
-    'env' => env('APP_ENV', 'production'),
+    // Keep an unset environment non-production so mail cannot bypass the test sink.
+    'env' => env('APP_ENV', 'local'),
     'debug' => (bool) env('APP_DEBUG', false),
     // Demo transactional records are opt-in; production and normal installs
     // must start from live/imported business data rather than fabricated rows.
     'seed_demo_data' => (bool) env('SEED_DEMO_DATA', false),
     'seed_reference_data' => (bool) env('SEED_REFERENCE_DATA', false),
     'url' => env('APP_URL', 'http://localhost'),
-    'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost'),
     'server_name' => env('SERVER_NAME', ''),
 
     'timezone' => env('APP_TIMEZONE', 'Asia/Manila'),

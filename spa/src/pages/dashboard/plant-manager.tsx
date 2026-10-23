@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { clampPercent } from '@/lib/progress';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -305,7 +306,7 @@ function StageBar({ stages }: { stages: NonNullable<PlantManagerData['panels']['
           <div className="flex-1 h-3 bg-elevated rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-[width] duration-500 ${SEVERITY[toSeverity(s.color)].fill}`}
-              style={{ width: `${s.percent}%` }}
+              style={{ width: `${clampPercent(s.percent)}%` }}
               role="progressbar"
               aria-valuenow={s.count}
               aria-valuemin={0}

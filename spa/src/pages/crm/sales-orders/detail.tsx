@@ -7,6 +7,7 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { invoicesApi } from '@/api/accounting/invoices';
+import { mrpRunsApi } from '@/api/mrp-runs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -58,6 +59,8 @@ export default function SalesOrderDetailPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancellationResolution, setCancellationResolution] = useState<'accept' | 'reject' | null>(null);
+  const [cancellationResolutionNotes, setCancellationResolutionNotes] = useState('');
   const [chainResult, setChainResult] = useState<SoChainResult | null>(null);
   const [confirmError, setConfirmError] = useState<{
     message: string;
@@ -80,6 +83,26 @@ export default function SalesOrderDetailPage() {
     queryFn: () => salesOrdersApi.chain(id!),
     enabled: !!id,
     refetchInterval: data && !['closed', 'cancelled'].includes(data.status) ? 10_000 : false,
+  });
+  const mrpFailed = chain.data?.some((step) => step.key === 'mrp_planned' && step.state === 'rejected') ?? false;
+
+  const retryMrp = useMutation({
+    mutationFn: () => mrpRunsApi.retrySalesOrder(id!),
+    onSuccess: (run) => {
+      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
+      qc.invalidateQueries({ queryKey: ['mrp', 'runs', 'latest'] });
+      qc.invalidateQueries({ queryKey: ['mrp', 'runs', 'history'] });
+      qc.invalidateQueries({ queryKey: ['mrp', 'plans'] });
+      const error = run.summary.per_sales_order?.find((row) => row.error)?.error ?? run.error_message;
+      if (run.status === 'completed') {
+        toast.success('MRP retry completed for this order.');
+      } else {
+        toast.error(error ?? 'MRP retry finished with planning issues. Review MRP Plans.');
+      }
+    },
+    onError: (error: AxiosError<{ message?: string }>) =>
+      toast.error(error.response?.data?.message ?? 'Could not retry MRP for this order.'),
   });
 
   // Series C — Task C4. Real-time chain progress.
@@ -147,6 +170,23 @@ export default function SalesOrderDetailPage() {
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to cancel sales order.');
     },
+  });
+
+  const resolveCancellationRequest = useMutation({
+    mutationFn: ({ responseId, decision, notes }: { responseId: string; decision: 'accept' | 'reject'; notes: string }) =>
+      decision === 'accept'
+        ? salesOrdersApi.acceptResponse(responseId, notes || undefined)
+        : salesOrdersApi.rejectResponse(responseId, notes),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
+      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
+      setCancellationResolution(null);
+      setCancellationResolutionNotes('');
+      toast.success(variables.decision === 'accept' ? 'Sales order cancelled.' : 'Cancellation request declined.');
+    },
+    onError: (error: AxiosError<{ message?: string }>) =>
+      toast.error(error.response?.data?.message ?? 'Could not resolve cancellation request.'),
   });
 
   const finalizeInvoice = useMutation({
@@ -320,17 +360,30 @@ export default function SalesOrderDetailPage() {
                 Process status could not load. Refresh to check what happened after confirmation.
               </p>
             )}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={chain.isFetching || isLoading}
-              onClick={() => {
-                void chain.refetch();
-                void refetch();
-              }}
-            >
-              {chain.isFetching ? 'Checking process…' : 'Refresh process'}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {mrpFailed && can('mrp.plans.run') && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={retryMrp.isPending}
+                  disabled={chain.isFetching || isLoading}
+                  onClick={() => retryMrp.mutate()}
+                >
+                  {retryMrp.isPending ? 'Retrying MRP…' : 'Retry MRP for this order'}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={chain.isFetching || isLoading}
+                onClick={() => {
+                  void chain.refetch();
+                  void refetch();
+                }}
+              >
+                {chain.isFetching ? 'Checking process…' : 'Refresh process'}
+              </Button>
+            </div>
           </div>
         }
       />
@@ -438,6 +491,41 @@ export default function SalesOrderDetailPage() {
                       <p role="status" className="mt-2 text-warning-fg">
                         Waiting for customer acceptance. Confirmation is blocked.
                       </p>
+                    )}
+                  </div>
+                )}
+                {data.latest_response?.type === 'cancellation_request' && (
+                  <div className="mt-4 border-t border-default pt-3 text-sm">
+                    <p className="font-medium">Cancellation request · {data.latest_response.status}</p>
+                    {data.latest_response.notes && (
+                      <p className="mt-1 whitespace-pre-wrap text-muted">Reason: {data.latest_response.notes}</p>
+                    )}
+                    {data.latest_response.status === 'pending' && can('crm.sales_orders.cancel') && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button variant="secondary" onClick={() => {
+                          setCancellationResolution('reject');
+                          setCancellationResolutionNotes('');
+                        }}>
+                          Decline request
+                        </Button>
+                        {data.is_cancellable && <Button variant="danger" onClick={() => {
+                          setCancellationResolution('accept');
+                          setCancellationResolutionNotes('');
+                        }}>
+                          Approve cancellation
+                        </Button>}
+                      </div>
+                    )}
+                    {data.latest_response.status === 'pending' && !data.is_cancellable && (
+                      <p role="status" className="mt-2 text-warning-fg">
+                        Resolve production, purchasing, delivery, or invoice commitments before approving.
+                      </p>
+                    )}
+                    {data.latest_response.status === 'accepted' && (
+                      <p role="status" className="mt-2 text-success-fg">Cancellation approved.</p>
+                    )}
+                    {data.latest_response.status === 'rejected' && data.latest_response.resolution_notes && (
+                      <p className="mt-2 text-muted">Decision: {data.latest_response.resolution_notes}</p>
                     )}
                   </div>
                 )}
@@ -833,6 +921,45 @@ export default function SalesOrderDetailPage() {
         confirmLabel="Cancel order"
         variant="danger"
         pending={cancel.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={cancellationResolution !== null}
+        onClose={() => {
+          setCancellationResolution(null);
+          setCancellationResolutionNotes('');
+        }}
+        onConfirm={() => {
+          if (data.latest_response && cancellationResolution) {
+            resolveCancellationRequest.mutate({
+              responseId: data.latest_response.id,
+              decision: cancellationResolution,
+              notes: cancellationResolutionNotes.trim(),
+            });
+          }
+        }}
+        title={cancellationResolution === 'accept' ? 'Approve cancellation?' : 'Decline cancellation request?'}
+        description={
+          <div className="space-y-3">
+            <p>
+              {cancellationResolution === 'accept'
+                ? 'This cancels the sales order and its unstarted work orders. Production or purchasing commitments block approval.'
+                : 'The order stays active. Add a reason for the customer.'}
+            </p>
+            <Textarea
+              label={cancellationResolution === 'accept' ? 'Decision note (optional)' : 'Reason for declining'}
+              required={cancellationResolution === 'reject'}
+              value={cancellationResolutionNotes}
+              onChange={(event) => setCancellationResolutionNotes(event.target.value)}
+              maxLength={2000}
+            />
+          </div>
+        }
+        confirmLabel={cancellationResolution === 'accept' ? 'Approve and cancel order' : 'Decline request'}
+        cancelLabel="Go back"
+        variant={cancellationResolution === 'accept' ? 'danger' : 'warning'}
+        pending={resolveCancellationRequest.isPending}
+        disabled={cancellationResolution === 'reject' && !cancellationResolutionNotes.trim()}
       />
 
       {/* 2026-08-08 — finalize the auto-created draft invoice from the SO. */}

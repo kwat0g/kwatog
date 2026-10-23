@@ -902,3 +902,40 @@ it('shows the exact completion blocker after reaching target', async () => {
   view.unmount();
   client.clear();
 });
+
+describe('pause downtime category guidance', () => {
+  afterEach(() => {
+    permissions.only = null;
+    permissions.allow = false;
+  });
+
+  it('warns that a breakdown pause moves the machine into breakdown and opens maintenance', async () => {
+    permissions.only = ['production.work_orders.view', 'production.work_orders.lifecycle'];
+    vi.mocked(workOrdersApi.show).mockResolvedValue({ ...workOrder, status: 'in_progress' });
+    vi.mocked(workOrdersApi.downtimeCategories).mockResolvedValue([
+      { value: 'breakdown', label: 'Breakdown', is_planned: false },
+      { value: 'material_shortage', label: 'Material shortage', is_planned: false },
+    ]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <WorkOrderDetailPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause' }));
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByRole('option', { name: 'Breakdown' });
+    fireEvent.change(within(dialog).getByLabelText(/Downtime category/), {
+      target: { value: 'breakdown' },
+    });
+    expect(within(dialog).getByText(/corrective maintenance/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Downtime category/), {
+      target: { value: 'material_shortage' },
+    });
+    expect(within(dialog).queryByText(/corrective maintenance/)).toBeNull();
+    view.unmount();
+  });
+});

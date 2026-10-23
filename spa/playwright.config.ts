@@ -32,6 +32,16 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
+  /*
+   * Visual baselines are committed (`e2e/__screenshots__/`) and compared by
+   * `e2e/gallery.spec.ts`. Playwright's default template appends the browser
+   * and platform (`…-firefox-linux`), which would fork the baseline set per
+   * developer machine and mean CI quietly creating a new file instead of
+   * comparing against the reviewed one. One file per shot, on purpose: the
+   * baselines are generated on the same Firefox/Ubuntu the CI job runs, and an
+   * update is a reviewable diff rather than a silent re-baseline.
+   */
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
   webServer: {
     command: 'npx vite --host 127.0.0.1 --port 5174 --strictPort',
     env: {

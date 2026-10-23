@@ -42,7 +42,11 @@ export default function MrpPlanDetailPage() {
     onSuccess: (plan) => {
       qc.invalidateQueries({ queryKey: ['mrp', 'plans'] });
       qc.setQueryData(['mrp', 'plans', 'detail', id], plan);
-      toast.success(`Re-ran MRP — new version v${plan.version}.`);
+      toast.success(
+        plan.rerun_outcome === 'unchanged'
+          ? 'MRP is already up to date. No plan records changed.'
+          : `MRP updated — new version v${plan.version}.`,
+      );
     },
     onError: (error) =>
       reportMutationError(
@@ -59,7 +63,12 @@ export default function MrpPlanDetailPage() {
     return {
       totalDemand: d.reduce((s, r) => s + r.gross, 0),
       shortageCount: d.filter((r) => r.net > 0).length,
+      legacySafetyStockDiagnostics: d.some((r) => r.safety_stock_gap === undefined),
       autoPrCount: data.auto_pr_count ?? 0,
+      draftAutoPrCount:
+        data.purchase_requests?.filter(
+          (pr) => pr.is_auto_generated && pr.status === 'draft',
+        ).length ?? 0,
       plannedCost: data.cost_summary?.planned_production_cost ?? null,
     };
   }, [data]);
@@ -127,6 +136,17 @@ export default function MrpPlanDetailPage() {
       {reviewFulfillment && data.sales_order && <FulfillmentDialog orderId={data.sales_order.id} onClose={() => setReviewFulfillment(false)} />}
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
+          {data.status === 'active' && summary?.legacySafetyStockDiagnostics && (
+            <div
+              role="status"
+              className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm text-warning-fg"
+            >
+              This plan predates separate safety-stock warnings. Re-run MRP to refresh its shortage
+              and purchase recommendations.
+              {summary.draftAutoPrCount > 0 &&
+                ' Re-running can cancel draft auto-PRs if no production shortage remains.'}
+            </div>
+          )}
           {/* Summary cards */}
           {summary && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -142,13 +162,19 @@ export default function MrpPlanDetailPage() {
               <div
                 className={`rounded-md border p-3 ${summary.shortageCount > 0 ? 'border-danger bg-danger-bg' : 'border-default bg-canvas'}`}
               >
-                <div className="text-2xs uppercase tracking-wider text-muted mb-1">Shortages</div>
+                <div className="text-2xs uppercase tracking-wider text-muted mb-1">
+                  {summary.legacySafetyStockDiagnostics ? 'Shortages' : 'Production shortages'}
+                </div>
                 <div
                   className={`text-lg font-mono tabular-nums font-medium ${summary.shortageCount > 0 ? 'text-danger-fg' : ''}`}
                 >
                   {summary.shortageCount}
                 </div>
-                <div className="text-2xs text-muted mt-0.5">materials short</div>
+                <div className="text-2xs text-muted mt-0.5">
+                  {summary.legacySafetyStockDiagnostics
+                    ? 'saved plan calculation'
+                    : 'production demand uncovered'}
+                </div>
               </div>
               <div
                 className={`rounded-md border p-3 ${summary.autoPrCount > 0 ? 'border-info bg-info-bg' : 'border-default bg-canvas'}`}
@@ -214,8 +240,8 @@ export default function MrpPlanDetailPage() {
                       <Th align="right">Usable now</Th>
                       <Th align="right">In transit</Th>
                       <Th align="right">Unit cost</Th>
-                      <Th align="right">Net</Th>
-                      <Th align="right">Net cost</Th>
+                      <Th align="right">Shortfall</Th>
+                      <Th align="right">Shortfall cost</Th>
                       <Th>Action</Th>
                     </tr>
                   </thead>
@@ -258,27 +284,37 @@ export default function MrpPlanDetailPage() {
                             {formatPeso(d.net_cost)}
                           </Td>
                           <Td>
-                            {d.action === 'pr_created' ? (
-                              <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>
-                                PR · {d.priority}
-                              </Chip>
-                            ) : d.action === 'awaiting_qc' ? (
-                              <Chip variant="warning">
-                                QC hold ·{' '}
-                                <span className="font-mono tabular-nums">
-                                  {d.awaiting_qc?.toFixed(3)}
-                                </span>
-                              </Chip>
-                            ) : d.action === 'awaiting_po_approval' ? (
-                              <Chip variant="info">
-                                PO pending ·{' '}
-                                <span className="font-mono tabular-nums">
-                                  {d.pending_purchase_orders?.toFixed(3)}
-                                </span>
-                              </Chip>
-                            ) : (
-                              <Chip variant="success">sufficient</Chip>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1">
+                              {(d.safety_stock_gap ?? 0) > 0 && (
+                                <Chip variant="warning">
+                                  Safety stock gap ·{' '}
+                                  <span className="font-mono tabular-nums">
+                                    {d.safety_stock_gap?.toFixed(3)}
+                                  </span>
+                                </Chip>
+                              )}
+                              {d.action === 'pr_created' ? (
+                                <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>
+                                  PR · {d.priority}
+                                </Chip>
+                              ) : d.action === 'awaiting_qc' ? (
+                                <Chip variant="warning">
+                                  QC hold ·{' '}
+                                  <span className="font-mono tabular-nums">
+                                    {d.awaiting_qc?.toFixed(3)}
+                                  </span>
+                                </Chip>
+                              ) : d.action === 'awaiting_po_approval' ? (
+                                <Chip variant="info">
+                                  PO pending ·{' '}
+                                  <span className="font-mono tabular-nums">
+                                    {d.pending_purchase_orders?.toFixed(3)}
+                                  </span>
+                                </Chip>
+                              ) : d.action === 'safety_stock_warning' ? null : (
+                                <Chip variant="success">sufficient</Chip>
+                              )}
+                            </div>
                           </Td>
                         </tr>
                       ),

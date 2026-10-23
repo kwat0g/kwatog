@@ -183,6 +183,10 @@ export interface Delivery extends DeliveryAttemptFields {
    message: string | null;
    attempted_at: string | null;
   };
+ /** Chain 1 — the resolved ship-to, snapshotted when the run sheet was issued. */
+ delivery_address: string | null;
+ delivery_contact_person: string | null;
+ delivery_contact_phone: string | null;
  /** ADV7 — Proof of Delivery receiver fields. */
  receiver_name: string | null;
  receiver_position: string | null;
@@ -190,7 +194,11 @@ export interface Delivery extends DeliveryAttemptFields {
  delivery_remarks: string | null;
  proofs?: DeliveryProof[];
  proof_count?: number;
- sales_order?: { id: string; so_number: string } | null;
+ sales_order?: {
+  id: string;
+  so_number: string;
+  customer?: { id: string; name: string } | null;
+ } | null;
  vehicle?: { id: string; plate_number: string; name: string } | null;
  driver?: { id: string; name: string } | null;
  invoice?: { id: string; invoice_number: string; total_amount: string; status: string; status_label?: string } | null;
