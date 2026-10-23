@@ -13,6 +13,7 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class MaintenanceShiftHandoverTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->travelTo(Carbon::parse('2026-10-09 15:40:00', config('app.timezone')));
     }
 
