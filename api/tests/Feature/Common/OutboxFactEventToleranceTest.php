@@ -71,10 +71,10 @@ class OutboxFactEventToleranceTest extends TestCase
         return (string) OutboxMessage::query()->whereKey($message->getKey())->value('status');
     }
 
-    private function soNoticeSent(SalesOrder $so): bool
+    private function soNoticeSent(): bool
     {
         return DB::table('notifications')->where('notifiable_id', $this->ppc->id)
-            ->where('type', 'chain.so_confirmed')->where('data', 'like', '%'.$so->so_number.'%')->exists();
+            ->where('type', 'chain.so_confirmed')->exists();
     }
 
     public function test_a_confirmed_order_touched_before_delivery_still_announces_its_confirmation(): void
@@ -86,7 +86,42 @@ class OutboxFactEventToleranceTest extends TestCase
         $so->forceFill(['notes' => 'MRP linked a plan'])->save();
 
         $this->assertSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
-        $this->assertTrue($this->soNoticeSent($so));
+        $this->assertTrue($this->soNoticeSent());
+        $notification = DB::table('notifications')->where('notifiable_id', $this->ppc->id)
+            ->where('type', 'chain.so_confirmed')->first();
+        $data = json_decode($notification->data, true);
+        $this->assertSame('/production/schedule', $data['link_to']);
+        $this->assertStringNotContainsString($so->so_number, $notification->data);
+        $this->assertArrayNotHasKey('entity_id', $data);
+    }
+
+    public function test_sales_order_notice_excludes_configured_users_without_schedule_access(): void
+    {
+        $revoked = User::factory()->create([
+            'is_active' => true,
+            'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
+        ]);
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'production.schedule.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'Sales-order notice access regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $so = $this->confirmedOrder();
+        $message = app(OutboxService::class)->record(new SalesOrderConfirmed($so));
+
+        $this->assertSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
+        $this->assertTrue($this->soNoticeSent());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revoked->id,
+            'type' => 'chain.so_confirmed',
+        ]);
     }
 
     public function test_an_order_cancelled_before_delivery_is_not_announced_as_confirmed(): void
@@ -98,7 +133,7 @@ class OutboxFactEventToleranceTest extends TestCase
         $so->forceFill(['status' => 'cancelled'])->save();
 
         $this->assertSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
-        $this->assertFalse($this->soNoticeSent($so));
+        $this->assertFalse($this->soNoticeSent());
         Mail::assertNothingQueued();
     }
 
@@ -122,7 +157,7 @@ class OutboxFactEventToleranceTest extends TestCase
         DB::table('event_outbox')->where('id', $message->getKey())->update(['payload' => json_encode($payload)]);
 
         $this->assertNotSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
-        $this->assertFalse($this->soNoticeSent($so));
+        $this->assertFalse($this->soNoticeSent());
     }
 
     public function test_events_that_did_not_opt_in_keep_the_strict_version_pin(): void
