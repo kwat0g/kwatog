@@ -13,14 +13,10 @@
 @if ($brand['phone'] && $brand['email']) <span style="padding: 0 4px;">·</span> @endif
 @if ($brand['email']) <a href="mailto:{{ $brand['email'] }}" style="color: #667085; text-decoration: none;">{{ $brand['email'] }}</a> @endif
 </div>
-@if ($brand['certification'])
-<div style="margin-top: 8px; color: #6b6259;">{{ $brand['certification'] }}</div>
-@endif
 @if ($brand['footer_disclaimer'])
 <div style="margin-top: 8px;">{{ $brand['footer_disclaimer'] }}</div>
 @endif
-<div style="margin-top: 12px; color: #6b6259;">This is an automated message. Please do not reply unless instructed.</div>
-<div style="margin-top: 8px; color: #6b6259;">© {{ date('Y') }} {{ $brand['legal_name'] }}. All rights reserved.</div>
+<div style="margin-top: 12px; color: #6b6259;">This is an automated message.</div>
 </td>
 </tr>
 </table>

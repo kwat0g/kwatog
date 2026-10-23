@@ -13,8 +13,6 @@ This is a live transactional-email test from **{{ $brand['name'] }}**.
 | Phone | {{ $brand['phone'] }} |
 | Company email | {{ $brand['email'] }} |
 | Sales email | {{ $brand['sales_email'] }} |
-| VAT status | {{ $brand['vat_status'] }} |
-| Certification | {{ $brand['certification'] }} |
 
 This message renders the shared email shell for preview and test.
 
