@@ -39,6 +39,7 @@ use App\Common\Mail\EmailIntegrationTestMail;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\OutboxEventCodec;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -173,8 +174,9 @@ class FeatureEmailIntegrationTest extends TestCase
         ]);
     }
 
-    public function test_customer_delivery_email_contains_delivery_and_receiver_data(): void
+    public function test_customer_delivery_email_contains_delivery_reference_and_portal_link(): void
     {
+        $this->seed(SettingsSeeder::class);
         $creator = User::factory()->create();
         $customer = Customer::factory()->create(['email' => 'delivery@example.test']);
         $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id]);
@@ -194,19 +196,24 @@ class FeatureEmailIntegrationTest extends TestCase
             ->handle(new DeliveryConfirmed($delivery, null));
 
         Mail::assertQueued(CustomerDeliveryConfirmedMail::class, function (CustomerDeliveryConfirmedMail $mail) use ($delivery): bool {
+            $html = $mail->render();
+
             return $mail->hasTo('delivery@example.test')
                 && $mail->delivery->is($delivery)
-                && str_contains($mail->render(), 'Receiving Clerk')
-                && str_contains($mail->render(), $delivery->delivery_number);
+                && str_contains($html, $delivery->delivery_number)
+                && str_contains($html, '/portal/customer/deliveries/'.$delivery->hash_id)
+                && ! str_contains($html, 'Receiving Clerk')
+                && ! str_contains($html, 'Warehouse Supervisor');
         });
     }
 
     public function test_customer_delivery_email_uses_confirmation_time_values_after_outbox_replay(): void
     {
+        $this->seed(SettingsSeeder::class);
         $creator = User::factory()->create();
         $customer = Customer::factory()->create([
             'email' => 'original-delivery@example.test',
-            'contact_person' => 'Original Receiver',
+            'contact_person' => 'Original Contact',
         ]);
         $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id]);
         $salesOrderNumber = $salesOrder->so_number;
@@ -228,6 +235,7 @@ class FeatureEmailIntegrationTest extends TestCase
         ]);
 
         $event = new DeliveryConfirmed($delivery->fresh(), $invoice->id);
+        $this->assertSame('original-delivery@example.test', $event->emailSnapshot['customer_email']);
         $encoded = app(OutboxEventCodec::class)->encode($event);
         $customer->update(['email' => 'changed-delivery@example.test', 'contact_person' => 'Changed Contact']);
         $salesOrder->update(['so_number' => 'SO-CHANGED']);
@@ -241,6 +249,7 @@ class FeatureEmailIntegrationTest extends TestCase
         ]);
 
         $replayed = app(OutboxEventCodec::class)->decode($encoded['event_type'], $encoded['payload']);
+        $this->assertSame('original-delivery@example.test', $replayed->emailSnapshot['customer_email']);
         app(EmailCustomerOnDeliveryConfirmed::class)->handle($replayed);
 
         Mail::assertQueued(CustomerDeliveryConfirmedMail::class, function (CustomerDeliveryConfirmedMail $mail) use ($salesOrderNumber): bool {
@@ -248,13 +257,14 @@ class FeatureEmailIntegrationTest extends TestCase
             $deliveryKey = (new \ReflectionProperty(\App\Common\Mail\QueuedMailable::class, 'deliveryKey'))->getValue($mail);
 
             return $mail->hasTo('original-delivery@example.test')
-                && $mail->envelope()->subject === 'Delivery DR-SNAPSHOT-001 confirmed'
-                && str_contains($html, 'Original Receiver')
+                && $mail->envelope()->subject === '[Ogami Philippines] Delivery confirmed: DR-SNAPSHOT-001'
+                && str_contains($html, 'Original Contact')
                 && str_contains($html, $salesOrderNumber)
                 && ! str_contains($html, 'SO-CHANGED')
-                && str_contains($html, 'Apr 03, 2026')
+                && str_contains($html, 'April 3, 2026 8:15 AM (Asia/Manila)')
                 && str_contains($html, 'INV-DELIVERY-OLD')
-                && str_contains($html, 'Original delivery note')
+                && ! str_contains($html, 'Original Receiver')
+                && ! str_contains($html, 'Original delivery note')
                 && ! str_contains($html, 'Changed Contact')
                 && ! str_contains($html, 'DR-CHANGED')
                 && ! str_contains($html, 'INV-DELIVERY-NEW')

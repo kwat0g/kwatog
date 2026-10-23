@@ -105,3 +105,5 @@ Updated: 2026-10-23
 | E019 | Supplier RFQ lifecycle | Event snapshot and recipient-specific status/action summary; supplier portal link; scenario screenshots integrated | Real-client rendering remains unverified |
 
 | E020 | Return request updates | Snapshot, minimal status notice, authenticated customer/supplier portal links, shared layout integrated | Real-client rendering remains unverified |
+
+| E021 | Customer delivery confirmation | Event-time snapshot, shared layout, customer portal link, and desktop/mobile light/dark screenshots integrated | Real-client rendering remains unverified |

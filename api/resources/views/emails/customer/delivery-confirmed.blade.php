@@ -1,24 +1,27 @@
-<x-mail::message>
-# Delivery Confirmed
+<x-mail::message :preheader="$preheader" :title="$title">
+# {{ $title }}
 
-Hi {{ $emailSnapshot['customer_contact_name'] ?: $emailSnapshot['customer_name'] ?: 'there' }},
+Hello {{ $emailSnapshot['customer_contact_name'] ?: $emailSnapshot['customer_name'] }},
 
-Delivery **{{ $emailSnapshot['delivery_number'] }}** for sales order **{{ $emailSnapshot['sales_order_number'] ?: '—' }}** has been confirmed in our system.
+Delivery **{{ $emailSnapshot['delivery_number'] }}** for sales order **{{ $emailSnapshot['sales_order_number'] }}** has been recorded as confirmed.
 
-| Detail | Information |
-|---|---|
-| Delivery number | {{ $emailSnapshot['delivery_number'] }} |
-| Delivered at | {{ $emailSnapshot['delivered_at'] ? \Illuminate\Support\Carbon::parse($emailSnapshot['delivered_at'])->format('M d, Y h:i A') : '—' }} |
-| Received by | {{ $emailSnapshot['receiver_name'] ?: '—' }} |
-| Receiver position | {{ $emailSnapshot['receiver_position'] ?: '—' }} |
-| Invoice | {{ $emailSnapshot['invoice_number'] ?: 'Pending invoice processing' }} |
-
-@if ($emailSnapshot['delivery_remarks'])
-**Delivery remarks:** {{ $emailSnapshot['delivery_remarks'] }}
+| Delivery | Information |
+|---|---:|
+| Reference | {{ $emailSnapshot['delivery_number'] }} |
+| Sales order | {{ $emailSnapshot['sales_order_number'] }} |
+| Status | Confirmed |
+@if ($deliveredAtDisplay)
+| Delivered | {{ $deliveredAtDisplay }} |
+@endif
+@if ($emailSnapshot['invoice_number'])
+| Invoice reference | {{ $emailSnapshot['invoice_number'] }} |
 @endif
 
-<x-mail::button :url="$portalUrl">View Delivery in Customer Portal</x-mail::button>
+<x-mail::button :url="$portalUrl">View delivery</x-mail::button>
 
-Thank you,<br>
-{{ config('mail.from.name') }} Supply Chain Team
+Sign in to your customer portal to review the delivery record. The link opens the delivery page and does not confirm or change anything.
+
+You received this email because your customer account is associated with this delivery. If this update looks unexpected, open the customer portal address you normally use or contact the company using the details in the footer.
+
+This is an automated notice from {{ $brand['name'] }}. Use the company contact details in the footer if you need help.
 </x-mail::message>
