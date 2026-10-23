@@ -89,7 +89,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::get('/purchase-orders/{purchaseOrder}/responses', [PurchaseOrderResponseController::class, 'index'])->middleware('permission:purchasing.view');
     Route::patch('/purchase-order-responses/{response}/accept', [PurchaseOrderResponseController::class, 'accept'])->middleware('permission:purchasing.po.responses.resolve');
     Route::patch('/purchase-order-responses/{response}/reject', [PurchaseOrderResponseController::class, 'reject'])->middleware('permission:purchasing.po.responses.resolve');
-    Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchasing.view');
+    Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware('permission_any:purchasing.view,purchasing.po.approve');
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->middleware('permission:purchasing.po.create');
@@ -102,7 +102,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::patch('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/close', [PurchaseOrderController::class, 'close'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/short-close', [PurchaseOrderController::class, 'shortClose'])->middleware('permission:purchasing.po.create');
-    Route::get('/purchase-orders/{purchaseOrder}/pdf', [PurchaseOrderController::class, 'pdf'])->middleware('permission:purchasing.view');
+    Route::get('/purchase-orders/{purchaseOrder}/pdf', [PurchaseOrderController::class, 'pdf'])->middleware('permission_any:purchasing.view,purchasing.po.approve');
 
     /* ─── Approved Suppliers ─── */
     Route::get('/approved-suppliers', [ApprovedSupplierController::class, 'index'])->middleware('permission:purchasing.po.create');

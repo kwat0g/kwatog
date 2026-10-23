@@ -116,7 +116,7 @@ export const purchasingRoutes = (
       <Route
         path="/purchasing/purchase-orders/:id"
         element={
-          <PermissionGuard permission="purchasing.view">
+          <PermissionGuard anyOf={['purchasing.view', 'purchasing.po.approve']}>
             <PurchaseOrderDetailPage />
           </PermissionGuard>
         }

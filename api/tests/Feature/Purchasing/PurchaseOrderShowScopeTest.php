@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -103,6 +104,31 @@ class PurchaseOrderShowScopeTest extends TestCase
         $this->actingAs($officer, 'sanctum')
             ->get("/api/v1/purchasing/purchase-orders/{$po->hash_id}/pdf")
             ->assertOk();
+    }
+
+    public function test_po_approver_without_purchasing_view_can_open_notice_target_but_not_purchase_order_list(): void
+    {
+        $role = Role::create([
+            'name' => 'PO approver without view '.substr(uniqid(), -5),
+            'slug' => 'po_approver_read_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $permission = Permission::query()->where('slug', 'purchasing.po.approve')->firstOrFail();
+        $role->permissions()->sync([$permission->id]);
+        $approver = User::factory()->create(['role_id' => $role->id]);
+        $po = $this->poIn(Department::factory()->create(), User::factory()->create()->id);
+
+        $this->actingAs($approver, 'sanctum')
+            ->getJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}")
+            ->assertOk();
+
+        $this->actingAs($approver, 'sanctum')
+            ->get("/api/v1/purchasing/purchase-orders/{$po->hash_id}/pdf")
+            ->assertOk();
+
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders')
+            ->assertForbidden();
     }
 
     public function test_non_head_role_sees_list_scope_but_not_foreign_po_detail(): void
