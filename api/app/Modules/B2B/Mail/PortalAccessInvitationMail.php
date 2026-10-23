@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Mail;
 
+use App\Common\Mail\QueuedMailable;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -28,19 +28,23 @@ class PortalAccessInvitationMail extends QueuedMailable
     public function envelope(): Envelope
     {
         $brand = app(EmailBrandingService::class)->data()['name'];
+        $portal = ucfirst($this->portalType);
 
-        return new Envelope(subject: $this->safeHeaderText('['.$brand.'] Set up your '.$this->portalType.' portal access'));
+        return new Envelope(subject: $this->safeHeaderText('['.$brand.'] Set up '.$portal.' portal access'));
     }
 
     public function content(): Content
     {
         $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
         $url = $base.'/portal/password-reset?type='.urlencode($this->portalType).'&token='.urlencode($this->token);
+        $brand = app(EmailBrandingService::class)->data();
+        $brand['name'] = $this->safeMarkdownText((string) $brand['name']);
 
         return new Content(
             markdown: 'emails/portal/access-invitation',
             with: [
-                'preheader' => 'Set a password for your '.$this->portalType.' portal account using a one-time link.',
+                'brand' => $brand,
+                'preheader' => 'Set a private password to activate your '.$this->portalType.' portal access.',
                 'portalType' => $this->portalType,
                 'recipientName' => $this->safeMarkdownText($this->recipientName),
                 'setupUrl' => $url,

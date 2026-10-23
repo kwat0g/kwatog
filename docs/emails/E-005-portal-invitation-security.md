@@ -1,6 +1,6 @@
 # E-005 — Customer or supplier portal invitation
 
-Status: credential delivery risk fixed in the current main rollup. Visual redesign remains pending.
+Status: credential delivery risk fixed in draft PR #223. E-005/E-006 shared security-template redesign is in draft PR #224.
 
 ## Audited paths
 
@@ -17,8 +17,8 @@ Status: credential delivery risk fixed in the current main rollup. Visual redesi
 - Link token remains a bearer secret in the email and queue payload until delivery; no token is stored raw in the database. Existing reset page lets the recipient choose a password without first logging in.
 - Existing triggers and invitee recipients remain unchanged. Re-inviting still rotates credentials and revokes existing API tokens.
 
-## Remaining E-005 template work
+## Template redesign
 
-- Current view uses the shared email framework with customer/supplier distinction, configured sender branding, and a plain-text alternative. Screenshot review remains pending.
-- Inspect both variants in desktop/mobile and light/dark previews. No real email sent.
+- Customer and supplier invitations use the shared portal-security template, settings-backed brand name, preheader, plain-text fallback, shared footer, and the light/dark logo variants.
+- Desktop/mobile and light/dark browser previews are in [E-005](E-005-portal-invitation.md). No real email sent.
 - Company identity values and recipient onboarding copy need owner review before production use.
