@@ -132,4 +132,27 @@ class MaintenancePartHandoverTest extends TestCase
         $this->postJson('/api/v1/inventory/stock-movements/'.$movement->hash_id.'/handover',
             ['received_by_employee_id' => $technician->employee->hash_id, 'expected_quantity' => '2'])->assertConflict();
     }
+
+    public function test_part_request_notice_excludes_issue_creators_who_cannot_open_picking(): void
+    {
+        [$technician, $warehouse, , $order, $log, $item, $location] = $this->fixture();
+        $role = Role::create(['name' => 'Issue Creator Without Picking', 'slug' => 'issue_creator_no_picking', 'description' => 'Test']);
+        $permission = \App\Modules\Auth\Models\Permission::firstOrCreate(
+            ['slug' => 'inventory.issue.create'],
+            ['name' => 'Create Issue', 'module' => 'inventory'],
+        );
+        $role->permissions()->sync([$permission->id]);
+        $restricted = User::factory()->create(['role_id' => $role->id]);
+
+        $this->request([$technician, $warehouse, null, $order, $log, $item, $location]);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $warehouse->id,
+            'type' => 'maintenance.parts_requested',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restricted->id,
+            'type' => 'maintenance.parts_requested',
+        ]);
+    }
 }

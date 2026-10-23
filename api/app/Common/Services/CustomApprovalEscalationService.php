@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Enums\PermissionOverrideType;
 use App\Common\Models\ApprovalDelegation;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
@@ -212,6 +214,15 @@ class CustomApprovalEscalationService
             ->flatMap(static fn (string $permission) => ApprovalDelegation::approvalAudience($permission))
             ->unique('id')
             ->values();
+        $primaryReadPermission = $candidate['read_permissions'][0] ?? null;
+        $revokedReadIds = count($candidate['read_permissions']) > 1 && $primaryReadPermission !== null
+            ? UserPermissionOverride::query()
+                ->whereIn('user_id', $audience->pluck('id'))
+                ->whereHas('permission', static fn ($query) => $query->where('slug', $primaryReadPermission))
+                ->where('type', PermissionOverrideType::Revoke->value)
+                ->where(static fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->pluck('user_id')->map(static fn ($id): int => (int) $id)->all()
+            : [];
         $invoiceEditors = [];
         if ($candidate['kind'] === 'invoice_prebill') {
             $updates = DB::table('audit_logs')
@@ -231,7 +242,10 @@ class CustomApprovalEscalationService
                 ->pluck('user_id')->map(static fn ($id): int => (int) $id)->all();
         }
 
-        return $audience->filter(function (User $user) use ($candidate, $sourceRow, $invoiceEditors): bool {
+        return $audience->filter(function (User $user) use ($candidate, $sourceRow, $invoiceEditors, $revokedReadIds): bool {
+            if (in_array((int) $user->id, $revokedReadIds, true)) {
+                return false;
+            }
             $mayApproveOwnPayroll = $candidate['kind'] === 'payroll' && $user->hasPermission('payroll.periods.self_approve_override');
             if ((! $mayApproveOwnPayroll && in_array((int) $user->id, $candidate['maker_ids'], true))
                 || ! collect($candidate['permissions'])->contains(
