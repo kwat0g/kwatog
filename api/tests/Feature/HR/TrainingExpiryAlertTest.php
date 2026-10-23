@@ -220,4 +220,45 @@ class TrainingExpiryAlertTest extends TestCase
             'status' => 'delivered',
         ]);
     }
+
+    public function test_training_expiry_notice_respects_employee_access_and_uses_safe_links(): void
+    {
+        $eligibleHr = $this->seedHrOfficer();
+        $revokedHr = $this->seedHrOfficer();
+        $actor = User::factory()->withRole('system_admin')->create();
+        [$employee, $training] = $this->setupEmpAndTraining();
+        $employeeUser = User::factory()->create(['employee_id' => $employee->id]);
+        $record = $this->makeCompleted($employee, $training, now()->addDays(30)->toDateString());
+
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedHr->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'hr.employees.trainings.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'Training expiry visibility regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(SettingsService::class)->set('hr.training_expiry.notification_roles', ['hr_officer']);
+
+        app(TrainingExpiryService::class)->check();
+
+        $eligibleNotification = DB::table('notifications')
+            ->where('notifiable_id', $eligibleHr->id)
+            ->where('type', 'training.expiry')
+            ->first();
+        $employeeNotification = DB::table('notifications')
+            ->where('notifiable_id', $employeeUser->id)
+            ->where('type', 'training.expiry')
+            ->first();
+
+        $this->assertNotNull($eligibleNotification);
+        $this->assertSame("/hr/employees/{$employee->hash_id}", json_decode($eligibleNotification->data, true)['link_to']);
+        $this->assertNotNull($employeeNotification);
+        $this->assertNull(json_decode($employeeNotification->data, true)['link_to'] ?? null);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revokedHr->id,
+            'type' => 'training.expiry',
+        ]);
+    }
 }
