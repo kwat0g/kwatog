@@ -25,6 +25,7 @@ const humanize = (value: string): string => value.replaceAll('_', ' ');
 
 function RunRow({ run }: { run: MrpRun }) {
   const conflicts = run.summary.scheduling?.conflicts.length ?? 0;
+  const unchanged = run.summary.orders_unchanged ?? 0;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-default py-2 text-xs">
@@ -34,6 +35,7 @@ function RunRow({ run }: { run: MrpRun }) {
       </Chip>
       <Chip variant={statusVariant[run.status]}>{run.status_label ?? humanize(run.status)}</Chip>
       <span className="text-muted">{run.shortages_found} shortages</span>
+      {unchanged > 0 && <span className="text-muted">{unchanged} already up to date</span>}
       {conflicts > 0 && (
         <span className="text-warning-fg">
           {conflicts} scheduling conflict{conflicts === 1 ? '' : 's'}
@@ -62,6 +64,7 @@ export function MrpRunStatusPanel({ latest, recent = [] }: Props) {
   if (!latest && recent.length === 0) return null;
 
   const conflicts = latest?.summary.scheduling?.conflicts.length ?? 0;
+  const unchanged = latest?.summary.orders_unchanged ?? 0;
   const reason = latest?.summary.trigger_reason;
   const planningErrors = latest?.summary.per_sales_order?.filter((row) => row.error) ?? [];
 
@@ -118,6 +121,11 @@ export function MrpRunStatusPanel({ latest, recent = [] }: Props) {
             <span>
               <span className="text-primary">{latest.plans_generated}</span> plans
             </span>
+            {unchanged > 0 && (
+              <span>
+                <span className="text-primary">{unchanged}</span> already up to date
+              </span>
+            )}
             <span>
               <span className="text-primary">{latest.failed_sales_orders ?? 0}</span> failed
             </span>

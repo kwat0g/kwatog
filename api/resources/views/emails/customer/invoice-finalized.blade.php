@@ -25,5 +25,5 @@ Invoice **{{ $invoice->invoice_number }}** has been issued for your account.
 If payment has already been made, please reply with proof of payment so our Accounts Receivable team can update the record.
 
 Thanks,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Accounts Receivable
+{{ config('mail.from.name') }} Accounts Receivable
 </x-mail::message>

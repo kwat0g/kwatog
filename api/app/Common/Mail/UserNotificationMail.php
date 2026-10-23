@@ -31,7 +31,9 @@ class UserNotificationMail extends Mailable implements ShouldQueue
         public readonly array $data,
         public readonly ?string $recipientName = null,
         public readonly ?int $recipientUserId = null,
-    ) {}
+    ) {
+        $this->onQueue('mail');
+    }
 
     public function envelope(): Envelope
     {

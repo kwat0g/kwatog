@@ -61,16 +61,31 @@ export function SegmentedControl<T extends string>({
  onChange(options[next].value);
  };
 
- return (
- <div
- role="radiogroup"
- aria-label={label}
- className={cn(
- 'inline-flex items-center rounded-md border border-default bg-canvas overflow-hidden',
- fullWidth && 'flex w-full',
- className,
- )}
- >
+ return (    <div
+      role="radiogroup"
+      aria-label={label}
+      className={cn(
+        'inline-flex items-center rounded-md border border-default bg-canvas',
+        /*
+         * Narrow-width mode (F-010). An option list is as wide as its labels
+         * make it — the /budgeting status filter is 340px min-content inside a
+         * 301px panel-header slot — and this control used to be `overflow-hidden`
+         * at that width, so the options past the edge were not merely clipped:
+         * they were unreachable, with no scrollbar to say so.
+         *
+         * Two stages, least-surprising first: WRAP the options onto a second
+         * row (they stay visible and tappable — the thing a filter strip is for),
+         * and only scroll if a single option still cannot fit. `max-w-full` is
+         * what lets the container be narrower than the labels at all; without it
+         * `flex-wrap` cannot engage, because a shrink-to-fit box sizes to
+         * max-content. Both stages are inert whenever the options fit, which is
+         * the overwhelmingly common case.
+         */
+        'max-w-full flex-wrap overflow-x-auto overflow-y-hidden',
+        fullWidth && 'flex w-full',
+        className,
+      )}
+    >
  {options.map((opt, i) => {
  const selected = opt.value === value;
  return (
@@ -92,10 +107,12 @@ export function SegmentedControl<T extends string>({
  e.preventDefault();
  move(i, -1);
  }
- }}
- className={cn(
- 'inline-flex items-center justify-center gap-1.5 transition-colors duration-fast cursor-pointer',
- 'border-r border-default last:border-r-0',
+ }}          className={cn(
+            'inline-flex items-center justify-center gap-1.5 transition-colors duration-fast cursor-pointer',
+            /* Never squashed to fit: an option that shrinks under its label is
+               unreadable, and the container scrolls instead (F-010). */
+            'shrink-0 whitespace-nowrap',
+            'border-r border-default last:border-r-0',
  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
  'disabled:opacity-60 disabled:cursor-not-allowed',
  fullWidth && 'flex-1',

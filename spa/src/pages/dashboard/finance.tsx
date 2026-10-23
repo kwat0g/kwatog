@@ -465,6 +465,9 @@ function BudgetVsActualPanel({
  <Panel
  title="Budget vs Actual (top variances)"
  actions={<Link className="text-xs text-link hover:underline" to="/budgeting/budget-vs-actual">Open →</Link>}
+ noPadding
+ scrollBody
+ bodyClassName="px-1.5 pb-2"
  >
  <table className={tableCls}>
  <thead>

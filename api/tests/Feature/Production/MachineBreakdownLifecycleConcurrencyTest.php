@@ -268,4 +268,40 @@ class MachineBreakdownLifecycleConcurrencyTest extends TestCase
         $this->assertNotNull($closed->duration_minutes);
         $this->assertGreaterThanOrEqual(15, $closed->duration_minutes);
     }
+
+    public function test_restoration_keeps_downtime_of_a_still_paused_work_order_open(): void
+    {
+        Queue::fake();
+
+        $machine = Machine::factory()->create(['status' => MachineStatus::Idle->value]);
+        $pausedWorkOrder = WorkOrder::factory()->create([
+            'machine_id' => $machine->id,
+            'status' => WorkOrderStatus::Paused->value,
+        ]);
+        $woRow = MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'work_order_id' => $pausedWorkOrder->id,
+            'start_time' => now()->subMinutes(20),
+            'category' => MachineDowntimeCategory::MaterialShortage->value,
+            'description' => 'Still paused',
+        ]);
+        $machineRow = MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'work_order_id' => null,
+            'start_time' => now()->subMinutes(10),
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Machine breakdown',
+        ]);
+
+        app(HandleMachineBreakdown::class)->handle(new MachineStatusChanged(
+            $machine->fresh(),
+            MachineStatus::Breakdown->value,
+            MachineStatus::Idle->value,
+            'Restoration complete',
+        ));
+
+        $this->assertNull($woRow->fresh()->end_time,
+            'A still-paused work order keeps its downtime open until resume or cancel.');
+        $this->assertNotNull($machineRow->fresh()->end_time);
+    }
 }

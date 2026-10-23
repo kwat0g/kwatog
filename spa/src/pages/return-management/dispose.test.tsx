@@ -31,7 +31,10 @@ it('arranges checked supplier defects without a second warehouse location', asyn
   expect(screen.queryByLabelText('Restock location')).not.toBeInTheDocument();
   expect(screen.queryByRole('checkbox', { name: /Raise a replacement purchase order/ })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Finish earlier return' })).toBeDisabled();
-  const date = manilaIsoDate(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000));
+  /* The dialog's minimum is the Philippine calendar date (`manilaIsoDate`, matching the
+     backend's `after_or_equal:today` under APP_TIMEZONE=Asia/Manila), so the fixture builds
+     its date the same way; a UTC-derived date is a day behind before 08:00 Manila. */
+  const date = manilaIsoDate(new Date(Date.now() + 4 * 86_400_000));
   fireEvent.change(screen.getByLabelText(/Required delivery date/), { target: { value: date } });
   fireEvent.click(screen.getByRole('button', { name: 'Finish earlier return' }));
   await waitFor(() => expect(returnManagementApi.dispose).toHaveBeenCalledWith('rma-2', [{ item_id: 'line-2', disposition: 'return_to_supplier', notes: undefined }], true, undefined, date));

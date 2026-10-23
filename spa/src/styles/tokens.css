@@ -59,6 +59,37 @@
   --purple-bg: #ede7f1;
   --purple-fg: #4c3862;
 
+  /*
+   * ─── Categorical chart series ───
+   *
+   * IDENTITY, not state. The semantic tokens above answer "is this good or
+   * bad"; these answer "which series is this". Using --danger for the third
+   * bar of a 5-part breakdown tells the reader that bar failed at something.
+   *
+   * Fixed order (clay → ochre → olive → jade → teal → indigo → violet → wine),
+   * same hue roles in every palette, so a reader switching to dark mode finds
+   * series 3 where it was. Values are per-palette because a colour that clears
+   * 3:1 on warm paper is far too dark on espresso.
+   *
+   * Finding F-016. Measured, not eyeballed —
+   * styles/__tests__/palette-contrast.test.ts holds
+   * every pair to contrast ≥ 3:1 on the canvas (4.5:1 on the floor palette) and
+   * to a perceivable difference with normal vision AND under simulated
+   * deuteranopia/protanopia. That is why the light set is darker and less
+   * saturated than the dark set: red-green deficiency collapses hue, so the
+   * eight values differ in LIGHTNESS as much as in hue.
+   *
+   * Never colour alone: a legend or a direct label always names the series.
+   */
+  --chart-1: #643e2b;
+  --chart-2: #a58a1d;
+  --chart-3: #568137;
+  --chart-4: #358d64;
+  --chart-5: #1d6a87;
+  --chart-6: #2a25b1;
+  --chart-7: #68188b;
+  --chart-8: #642b47;
+
   /* ─── Focus ring ─── */
   --ring: #b4542a;
   --ring-offset: #fdfcfa;
@@ -176,6 +207,16 @@
   --purple-bg: #312a2f;
   --purple-fg: #d3c2e4;
 
+  /* Same eight series roles as :root — lighter, because the canvas is. */
+  --chart-1: #bc8062;
+  --chart-2: #ddbe40;
+  --chart-3: #abe085;
+  --chart-4: #74dcac;
+  --chart-5: #81c2da;
+  --chart-6: #5256e0;
+  --chart-7: #a162bc;
+  --chart-8: #bc628f;
+
   --ring: #d97848;
   --ring-offset: #17140f;
 
@@ -240,6 +281,20 @@
   --purple: #c4b5fd;
   --purple-bg: #262040;
   --purple-fg: #ded5fe;
+
+  /*
+   * Same eight series roles, tuned for the fluorescent-light floor palette.
+   * Contrast is held to the stronger 4.5:1 bar this palette uses for marks,
+   * not the office 3:1.
+   */
+  --chart-1: #c59177;
+  --chart-2: #e2c75a;
+  --chart-3: #bbea9a;
+  --chart-4: #9cdebf;
+  --chart-5: #9dd3e7;
+  --chart-6: #6c70e5;
+  --chart-7: #ae77c5;
+  --chart-8: #c5779e;
 
   --ring: #ff8a4c;
   --ring-offset: #0d0b08;

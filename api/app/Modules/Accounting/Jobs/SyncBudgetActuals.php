@@ -36,8 +36,8 @@ class SyncBudgetActuals implements ShouldQueue
         private readonly ?int $fiscalYearId = null,
         private readonly ?string $requestId = null,
     ) {
-        // Lane: low — monthly GL rewrite that collides with depreciation.
-        $this->onQueue('low');
+        // Lane: automation — monthly GL rewrite that collides with depreciation.
+        $this->onQueue('automation');
     }
 
     public function handle(

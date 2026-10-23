@@ -11,6 +11,9 @@ use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Models\AssetDepreciation;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
+use App\Modules\Attendance\Models\Shift;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
@@ -227,9 +230,11 @@ class AssetsMaintenanceAuditTest extends TestCase
 
         // ── Assign an active employee, then start ──
         $tech = $this->techEmployee();
+        $this->makeTechnicianPresent($tech);
         $this->actingAs($this->maintenanceSupervisor)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo['id']}/assign", [
                 'employee_id' => $tech->hash_id,
+                'expected_assignee_id' => null,
             ])
             ->assertOk();
 
@@ -252,11 +257,12 @@ class AssetsMaintenanceAuditTest extends TestCase
             ->count(), 'start must open an open-ended downtime row');
 
         // ── Work log + spare-part issue decrements stock ──
-        $this->actingAs($this->maintenanceTech)
+        $workRecordId = $this->actingAs($this->maintenanceTech)
             ->postJson("/api/v1/maintenance/work-orders/{$wo['id']}/logs", [
                 'description' => 'Replaced hydraulic hose.',
             ])
-            ->assertCreated();
+            ->assertCreated()
+            ->json('data.id');
 
         $item = Item::factory()->create(['is_active' => true, 'item_type' => 'spare_part']);
         $location = WarehouseLocation::factory()->create();
@@ -272,6 +278,7 @@ class AssetsMaintenanceAuditTest extends TestCase
                 'operation_key' => Str::uuid()->toString(),
                 'item_id' => $item->hash_id,
                 'location_id' => $location->hash_id,
+                'work_record_id' => $workRecordId,
                 'quantity' => 2,
             ])
             ->assertCreated();
@@ -311,6 +318,7 @@ class AssetsMaintenanceAuditTest extends TestCase
 
         // ── Complete: the elapsed minutes post as machine downtime ──
         sleep(1);
+        $this->recordPassingWork($wo['id']);
         $this->actingAs($this->maintenanceTech)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo['id']}/complete", [
                 'remarks' => 'Hose replaced, machine back online.',
@@ -369,11 +377,13 @@ class AssetsMaintenanceAuditTest extends TestCase
             (int) app('hashids')->decode((string) $wo['id'])[0]
         );
 
+        $this->makeTechnicianPresent($this->techEmployee());
         $this->actingAs($this->maintenanceTech)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo['id']}/start")
             ->assertOk();
 
         // ── Completing a MOLD work order resets the shot counter ──
+        $this->recordPassingWork($wo['id']);
         $this->actingAs($this->maintenanceTech)
             ->patchJson("/api/v1/maintenance/work-orders/{$wo['id']}/complete", [
                 'remarks' => 'Full mold service: cleaned, greased, vents checked.',
@@ -410,15 +420,21 @@ class AssetsMaintenanceAuditTest extends TestCase
     public function test_in_use_mold_without_runtime_owner_blocks_maintenance_start_via_api(): void
     {
         $mold = $this->inUseMoldWithoutOwner();
+        // The create gate refuses an in-use target: create the MWO while the
+        // mold is selectable, then drift the mold into an ownerless in-use
+        // state — the exact production-ownership hole under test.
+        $mold->forceFill(['status' => 'available'])->save();
+        $created = $this->actingAs($this->maintenanceTech)
+            ->postJson('/api/v1/maintenance/work-orders', $this->mwoBody($mold))
+            ->assertCreated()
+            ->json('data');
         $productionWo = WorkOrder::factory()->create([
             'mold_id' => $mold->id,
             'product_id' => $mold->product_id,
             'status' => 'in_progress',
         ]);
-        $created = $this->actingAs($this->maintenanceTech)
-            ->postJson('/api/v1/maintenance/work-orders', $this->mwoBody($mold))
-            ->assertCreated()
-            ->json('data');
+        $this->makeTechnicianPresent($this->techEmployee());
+        $mold->forceFill(['status' => 'in_use'])->save();
         $maintenanceWo = MaintenanceWorkOrder::query()->findOrFail(
             (int) app('hashids')->decode((string) $created['id'])[0]
         );
@@ -462,6 +478,11 @@ class AssetsMaintenanceAuditTest extends TestCase
             'assigned_to' => $this->maintenanceTech->employee_id,
             'created_by' => $this->maintenanceTech->id,
         ]);
+        // The close gate demands a passing work record first; record it before
+        // snapshotting the audit/history/log counts so the probe itself is
+        // the only thing that may change them.
+        $this->makeTechnicianPresent($this->techEmployee());
+        $this->recordPassingWork($maintenanceWo->hash_id);
         $auditCount = $this->maintenanceAuditCount($maintenanceWo);
         $historyCount = MoldHistory::query()->where('mold_id', $mold->id)->count();
         $logCount = MaintenanceLog::query()->where('work_order_id', $maintenanceWo->id)->count();
@@ -559,6 +580,37 @@ class AssetsMaintenanceAuditTest extends TestCase
     private function techEmployee(): \App\Modules\HR\Models\Employee
     {
         return $this->maintenanceTech->employee;
+    }
+
+    /**
+     * HR working calendar + a clocked-in attendance row, so the assign/start
+     * gates see the technician as present (EmployeeAvailabilityService).
+     */
+    private function makeTechnicianPresent(\App\Modules\HR\Models\Employee $employee): void
+    {
+        $shift = Shift::create([
+            'name' => 'Maintenance audit shift', 'start_time' => '00:00', 'end_time' => '23:59', 'is_active' => true,
+        ]);
+        EmployeeShiftAssignment::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'effective_date' => now()->toDateString(), 'working_days' => [now()->dayOfWeekIso],
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour(),
+        ]);
+    }
+
+    /** The passing work record every completion now requires before close. */
+    private function recordPassingWork(string $woHash): void
+    {
+        $this->actingAs($this->maintenanceTech)
+            ->postJson("/api/v1/maintenance/work-orders/{$woHash}/work-records", [
+                'finding' => 'Wear found during the scheduled service walk.',
+                'action_taken' => 'Replaced the worn component and verified operation.',
+                'result' => 'passed',
+            ])
+            ->assertCreated();
     }
 
     private function disposalJeCount(Asset $asset): int

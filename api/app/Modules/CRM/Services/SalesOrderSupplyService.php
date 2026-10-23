@@ -212,6 +212,7 @@ final class SalesOrderSupplyService
 
     public function sources(SalesOrderItem $line, bool $lock = false): array
     {
+        $line->loadMissing('product.inspectionSpec.currentRevision');
         $product = $line->product;
         $items = Item::where('code', $product?->part_number)->where('is_active', true)->where('item_type', 'finished_good')->get();
         $spec = $product?->inspectionSpec;

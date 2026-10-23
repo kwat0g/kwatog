@@ -34,5 +34,5 @@ Competitor pricing and rankings are never disclosed.
 <x-mail::button :url="$portalUrl">Open in supplier portal</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Purchasing Team
+{{ config('mail.from.name') }} Purchasing Team
 </x-mail::message>

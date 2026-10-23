@@ -104,6 +104,10 @@ class WarehouseChainIntegrityTest extends TestCase
         ]);
         $mold->compatibleMachines()->sync([$machine->id]);
         $crew = $this->assignProductionCrew($wo, $production);
+        // Pin the in-process sample to 2 so the startup trial settles exactly
+        // the 2 good pieces this walk records; the remaining 2 pieces' worth
+        // of material is what the unused return below preserves.
+        app(SettingsService::class)->set('quality.in_process.sample_size', 2);
         $this->actingAs($ppc);
         app(WorkOrderService::class)->confirm($wo, $machine->id, $mold->id);
         $this->assertSame('4.000', (string) StockLevel::query()->where('item_id', $material->id)->sole()->reserved_quantity);
@@ -123,18 +127,31 @@ class WarehouseChainIntegrityTest extends TestCase
             'sources' => [['movement_id' => $source->hash_id, 'expected_quantity' => '4.000']],
         ])->assertOk();
         $this->assertSame($before, StockMovement::query()->count());
-        $this->actingAs($production)->postJson('/api/v1/production/work-orders/'.$wo->hash_id.'/start', [
-            'expected_crew_id' => $crew->hash_id,
-        ])->assertOk();
-        $process = Inspection::query()->where('entity_type', 'work_order')->where('entity_id', $wo->id)
-            ->where('stage', InspectionStage::InProcess->value)->firstOrFail();
-        $this->submitInspectionPassThroughApi($process, $quality);
         $this->finishedGoodsItemFor($product);
         $this->finishedGoodsLocation();
-        $this->actingAs($production)->postJson('/api/v1/production/work-orders/'.$wo->hash_id.'/outputs', [
-            'crew_id' => $crew->hash_id, 'good_count' => 2, 'reject_count' => 0,
-            'recording_reason' => 'Warehouse chain regression recording.',
-        ])->assertSuccessful();
+        $startResponse = $this->actingAs($production)->postJson('/api/v1/production/work-orders/'.$wo->hash_id.'/start', [
+            'expected_crew_id' => $crew->hash_id,
+        ]);
+        $this->assertTrue($startResponse->isSuccessful(), $startResponse->getContent());
+        $process = Inspection::query()->where('entity_type', 'work_order')->where('entity_id', $wo->id)
+            ->where('stage', InspectionStage::InProcess->value)->firstOrFail();
+        // Startup-trial gate: the pinned in-process sample may only receive
+        // QC evidence after Production records the trial pieces.
+        $trialResponse = $this->actingAs($production)
+            ->withHeaders(['X-Idempotency-Key' => 'warehouse-chain-trial'])
+            ->postJson('/api/v1/production/work-orders/'.$wo->hash_id.'/trial-outputs', [
+                'crew_id' => $crew->hash_id,
+                'trial_quantity' => min((int) $process->sample_size, (int) $wo->quantity_target),
+                'recording_reason' => 'Startup trial pieces for the pinned in-process QC sample.',
+            ]);
+        $this->assertTrue($trialResponse->isSuccessful(), $trialResponse->getContent());
+        // withHeaders() sticks to later requests on the same test case; without
+        // this flush the trial key collides with the plain output recording.
+        $this->flushHeaders();
+        $this->submitInspectionPassThroughApi($process, $quality);
+        // QC acceptance settles the startup trial: the 2 pinned sample pieces
+        // ARE this order's good output, receipt included — nothing left to
+        // record through the plain output endpoint.
         $this->assertSame(2, (int) $wo->fresh()->quantity_good);
         $output = $wo->outputs()->sole();
         $this->assertNotNull($output->production_receipt_movement_id);

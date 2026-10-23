@@ -34,6 +34,8 @@ import { formatInt } from '@/lib/formatNumber';
 import { formatMetricValue } from '@/lib/metricValue';
 import { useMetric } from '@/hooks/useMetric';
 import { WidgetBreakdown } from './WidgetBreakdown';
+import { CsvDownloadButton } from './WidgetExportButton';
+import { metricExportTable } from '@/lib/widgetExport';
 import type { WidgetValueKind } from '@/api/dashboard-layout';
 import type {
   MetricEnvelopeMeta,
@@ -341,21 +343,41 @@ export function MetricPanel({
   }
 
   const value = envelope.data.value;
+  const empty = isEmpty(definition.render_kind, value);
+  // Same rows the body draws, so the file and the tile cannot disagree. An
+  // empty window exports nothing — there is no figure to carry away.
+  const exportTable = empty
+    ? null
+    : metricExportTable({
+        name: heading,
+        renderKind: definition.render_kind,
+        unit: WIDGET_KIND[definition.unit],
+        value,
+      });
 
   return (
     <Panel
       title={heading}
       meta={<MetaLine meta={envelope.meta} isStale={isStale} />}
       actions={
-        detailsHref ? (
-          <Link to={detailsHref} className="text-xs text-link hover:underline">
-            Open →
-          </Link>
-        ) : undefined
+        <div className="flex items-center gap-1.5">
+          {detailsHref && (
+            <Link to={detailsHref} className="text-xs text-link hover:underline">
+              Open →
+            </Link>
+          )}
+          {exportTable && (
+            <CsvDownloadButton
+              name={heading}
+              table={exportTable}
+              timestamp={envelope.meta.period.to}
+            />
+          )}
+        </div>
       }
       className={className}
     >
-      {isEmpty(definition.render_kind, value) ? (
+      {empty ? (
         <EmptyState
           icon="inbox"
           title="No data in this window"

@@ -616,7 +616,10 @@ class ReturnCaseService
                 $realm = $case->type->value;
                 $portalClass = $realm === 'customer' ? \App\Modules\B2B\Models\CustomerPortalUser::class : \App\Modules\B2B\Models\SupplierPortalUser::class;
                 $contacts = $portalClass::query()->where($realm === 'customer' ? 'customer_id' : 'vendor_id', $realm === 'customer' ? $case->customer_id : $case->vendor_id)
-                    ->where('is_active', true)->get();
+                    ->where('is_active', true)->get()
+                    ->filter(static fn ($contact): bool => is_string($contact->email)
+                        && filter_var($contact->email, FILTER_VALIDATE_EMAIL) !== false)
+                    ->values();
                 foreach ($contacts as $contact) {
                     \Illuminate\Support\Facades\Mail::to($contact->email)->queue(new \App\Modules\ReturnManagement\Mail\ReturnCaseUpdateMail(
                         $case->case_number, $case->status->label(), $realm, $case->hash_id, $recipients->pluck('id')->all(),

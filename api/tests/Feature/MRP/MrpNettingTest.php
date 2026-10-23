@@ -38,8 +38,9 @@ use Tests\TestCase;
  *   reserved   = Σ stock_levels.reserved_quantity (all locations)
  *   in_transit = Σ (poi.quantity - poi.quantity_received) for POs in
  *                  approved / sent / partially_received
- *   available  = max(0, on_hand - reserved + in_transit - safety_stock)
+ *   available  = max(0, usable + eligible supply - other committed demand)
  *   net        = max(0, gross - available)
+ *   safety_stock_gap = max(0, safety_stock - projected available after demand)
  *
  * A PurchaseRequest (is_auto_generated=true, status=draft) is created iff net > 0;
  * each PR line quantity is the net ceiled to 2dp, then rounded up to the
@@ -633,31 +634,35 @@ class MrpNettingTest extends TestCase
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // MRP-01 — Safety stock is not consumable supply
+    // MRP-01 — Safety stock risk is warned separately from production shortage
     // ════════════════════════════════════════════════════════════════════════
 
     /**
      * Setup:
      *   BOM:     2 pcs material per finished unit, 0% waste
      *   SO line: 10 units → gross demand = 20 pcs
-     *   On-hand: 25 pcs, safety_stock = 5 → usable availability = 20
+     *   On-hand: 25 pcs, safety_stock = 30 → production availability = 25
      *
-     * Net = max(0, 20 - 20) = 0
+     * Net = max(0, 20 - 25) = 0; projected stock is 5, below the 30-unit target.
      *
-     * Expected: no PR. The plan consumes exactly the stock ABOVE the safety
-     * buffer — never the buffer itself.
+     * Expected: no PR. Production demand is covered; the safety-stock gap is
+     * a warning, not a production shortage.
      */
-    public function test_demand_consuming_stock_above_safety_stock_creates_no_pr(): void
+    public function test_demand_covered_below_safety_stock_creates_warning_without_pr(): void
     {
-        $this->material->update(['safety_stock' => 5]);
+        $this->material->update(['safety_stock' => 30]);
         $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
         $this->setOnHand(qty: 25.0, reserved: 0.0);
         $so = $this->createConfirmedSo(lineQty: 10);
 
         $plan = $this->engine->runForSalesOrder($so);
 
-        $this->assertSame(0, $plan->shortages_found, 'shortages_found must be 0 when stock above safety stock covers demand');
+        $this->assertSame(0, $plan->shortages_found, 'covered production demand is not a shortage');
         $this->assertSame(0, $plan->auto_pr_count,   'auto_pr_count must be 0');
+
+        $diagnostic = collect($plan->diagnostics)->firstWhere('item_id', $this->material->id);
+        $this->assertSame('safety_stock_warning', $diagnostic['action']);
+        $this->assertSame(25.0, (float) $diagnostic['safety_stock_gap']);
 
         $prCount = PurchaseRequest::where('is_auto_generated', true)
             ->where('mrp_plan_id', $plan->id)
@@ -669,16 +674,14 @@ class MrpNettingTest extends TestCase
      * Setup:
      *   BOM:     2 pcs per unit, 0% waste
      *   SO line: 10 units → gross = 20 pcs
-     *   On-hand: 15 pcs, safety_stock = 5 → usable availability = 10
+     *   On-hand: 15 pcs, safety_stock = 5 → production availability = 15
      *
-     * Net = max(0, 20 - 10) = 10
+     * Net = max(0, 20 - 15) = 5
      *
-     * Expected: PR for 10 — the 5 pcs of real shortfall PLUS the 5 pcs of
-     * safety stock the plan would otherwise consume, so the buffer survives
-     * the order. The diagnostic entry must expose the safety-stock floor so
-     * the gap between gross and net stays reconcilable.
+     * Expected: PR for 5 — only the actual production shortfall. The
+     * diagnostic separately reports the projected safety-stock gap.
      */
-    public function test_demand_dipping_into_safety_stock_orders_shortfall_plus_restoration(): void
+    public function test_demand_dipping_below_safety_stock_orders_only_actual_shortfall(): void
     {
         $this->material->update(['safety_stock' => 5]);
         $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
@@ -695,23 +698,24 @@ class MrpNettingTest extends TestCase
             ->items()
             ->where('item_id', $this->material->id)
             ->firstOrFail();
-        // net = 20 - (15 - 5) = 10
-        $this->assertSame('10.00', $prItem->quantity, 'PR qty must include the safety-stock restoration amount (10)');
+        // net = 20 - 15 = 5
+        $this->assertSame('5.00', $prItem->quantity, 'PR qty must cover only production shortfall');
 
         $diagnostic = collect($plan->diagnostics)->firstWhere('item_id', $this->material->id);
-        $this->assertSame(5.0, (float) $diagnostic['safety_stock'], 'diagnostics must expose the safety-stock floor');
-        $this->assertSame(10.0, (float) $diagnostic['net'], 'diagnostics net must be gross minus floored availability');
+        $this->assertSame(5.0, (float) $diagnostic['safety_stock'], 'diagnostics must expose the safety-stock target');
+        $this->assertSame(5.0, (float) $diagnostic['net'], 'net must be gross minus usable supply');
+        $this->assertSame(5.0, (float) $diagnostic['safety_stock_gap']);
     }
 
     /**
      * Setup:
      *   BOM: 2 pcs per unit, 0% waste; SO line: 10 units → gross = 20
      *   On-hand: 10, in-transit: 5 (approved PO), safety_stock = 30
-     *   usable availability = max(0, 10 + 5 - 30) = 0
+     *   production availability = 10 + 5 = 15
      *
-     * Net = 20. The safety-stock floor may not push availability negative.
+     * Net = 5. Safety stock does not inflate the production shortage.
      */
-    public function test_safety_stock_above_free_stock_clamps_usable_availability_to_zero(): void
+    public function test_safety_stock_does_not_inflate_a_real_production_shortage(): void
     {
         $this->material->update(['safety_stock' => 30]);
         $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
@@ -728,7 +732,7 @@ class MrpNettingTest extends TestCase
             ->where('item_id', $this->material->id)
             ->firstOrFail();
 
-        $this->assertSame('20.00', $prItem->quantity, 'net must be the full gross when safety stock exceeds free stock');
+        $this->assertSame('5.00', $prItem->quantity, 'PR must cover gross less on-hand and eligible in-transit supply');
     }
 
     // ════════════════════════════════════════════════════════════════════════

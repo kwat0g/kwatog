@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Support;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Auth\Models\User;
 
 /**
@@ -28,6 +29,19 @@ final class ApprovalTypeRegistry
         'invoice_prebill' => 'Invoice prebill',
         'supplier_listing' => 'Supplier listings',
         'loan_write_off' => 'Loan write-offs',
+    ];
+
+    /** @var array<string, array<int, string>> */
+    private const CUSTOM_KIND_PERMISSIONS = [
+        'overtime' => ['attendance.view'],
+        'stock_adjustment' => ['inventory.adjust', 'inventory.adjust.approve'],
+        'stock_count_variance' => ['inventory.stock_count.view'],
+        'payroll_adjustment' => ['payroll.adjustments.view'],
+        'budget' => ['budgeting.view'],
+        'budget_transfer' => ['budgeting.view'],
+        'invoice_prebill' => ['accounting.invoices.view'],
+        'supplier_listing' => ['purchasing.supplier_listings.view'],
+        'loan_write_off' => ['loans.view'],
     ];
 
     /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,link_record?:bool,permissions:array<int,string>}> */
@@ -150,7 +164,7 @@ final class ApprovalTypeRegistry
     }
 
     /** @return array<int, array{value:string,label:string}> */
-    public static function kindOptions(): array
+    public static function kindOptions(?User $user = null): array
     {
         $options = [];
         foreach (self::TYPES as $meta) {
@@ -163,7 +177,35 @@ final class ApprovalTypeRegistry
             $options[$kind] = ['value' => $kind, 'label' => $label];
         }
 
-        return array_values($options);
+        $options = array_values($options);
+
+        return $user === null
+            ? $options
+            : array_values(array_filter(
+                $options,
+                fn (array $option): bool => self::userCanViewKind($user, $option['value']),
+            ));
+    }
+
+    public static function userCanViewKind(User $user, string $kind): bool
+    {
+        $meta = self::forKind($kind);
+        if ($meta !== null) {
+            return self::userCanView($user, $meta);
+        }
+
+        if ($kind === 'item_cost_review') {
+            return $user->hasPermission('inventory.costs.review')
+                && ApprovalDelegation::canActForPermission($user, 'inventory.costs.approve');
+        }
+
+        foreach (self::CUSTOM_KIND_PERMISSIONS[$kind] ?? [] as $permission) {
+            if ($user->hasPermission($permission)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static function userCanView(User $user, array $meta): bool

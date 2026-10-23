@@ -302,11 +302,10 @@ class ChainListenerRecoveryControllerTest extends TestCase
         ]);
 
         foreach ($permissions as $slug) {
-            $permission = Permission::query()->create([
-                'name' => $slug,
-                'slug' => $slug,
-                'module' => 'test',
-            ]);
+            $permission = Permission::query()->firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $slug, 'module' => 'test'],
+            );
             $role->permissions()->attach($permission);
         }
 

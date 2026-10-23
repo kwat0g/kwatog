@@ -7,9 +7,9 @@
 > **Before the demo — canonical fresh build (validated 2026-09-03, demo:verify all-green):**
 > ```
 > docker compose up -d
-> docker compose stop queue          # avoid lock contention during the reset
+> docker compose stop horizon          # avoid lock contention during the reset
 > docker compose exec api php artisan migrate:fresh --seed
-> docker compose start queue         # drains seeded MRP/payslip jobs; MAIL_MAILER=log in api/.env so nothing e-mails
+> docker compose start horizon         # drains seeded MRP/payslip jobs; MAIL_MAILER=log in api/.env so nothing e-mails
 > docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder   # stamps batch numbers on the WOs the queue just created + hardens the hero QC trace
 > docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
 > docker compose exec api php artisan demo:verify   # must print PASSED — 0 critical failures

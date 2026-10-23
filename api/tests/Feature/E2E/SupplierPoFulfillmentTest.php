@@ -50,7 +50,6 @@ class SupplierPoFulfillmentTest extends TestCase
         $qc = $actor('qc_inspector');
         $qcChecker = $actor('production_manager');
         $finance = $actor('finance_officer');
-        $financeChecker = $actor('finance_officer');
         $vp = $actor('vice_president');
         $actor('system_admin');
         app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
@@ -68,13 +67,13 @@ class SupplierPoFulfillmentTest extends TestCase
         $po = PurchaseOrder::factory()->create([
             'vendor_id' => $vendor->id, 'created_by' => $buyer->id,
             'expected_delivery_date' => $day, 'confirmed_delivery_date' => $day,
-            'subtotal' => '1200.00', 'vat_amount' => '144.00', 'total_amount' => '1344.00', 'is_vatable' => true,
+            'subtotal' => '60000.00', 'vat_amount' => '7200.00', 'total_amount' => '67200.00', 'is_vatable' => true,
         ]);
         $po->forceFill(['status' => 'sent', 'sent_to_supplier_at' => now()])->save();
         $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $line = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id, 'item_id' => $item->id, 'description' => 'Test resin',
-            'quantity' => '100.00', 'unit' => 'kg', 'unit_price' => '12.00', 'total' => '1200.00',
+            'quantity' => '100.00', 'unit' => 'kg', 'unit_price' => '600.00', 'total' => '60000.00',
         ]);
         event(new PurchaseOrderSent($po->fresh()));
         $grn = GoodsReceiptNote::where('purchase_order_id', $po->id)->firstOrFail();
@@ -138,7 +137,8 @@ class SupplierPoFulfillmentTest extends TestCase
                 'amount' => (string) $bill->fresh()->total_amount, 'payment_method' => 'bank_transfer',
                 'reference_number' => 'SUP-E2E-PAY',
             ])->assertCreated()->json('data.id');
-        $this->actingAs($financeChecker, 'sanctum')->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$paymentId}/approve")->assertOk();
+        // The bill_payment chain is a single VP step at/above ₱50,000; kept
+        // above the threshold so the approval gate stays in the walk.
         $this->actingAs($vp, 'sanctum')->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$paymentId}/approve")->assertOk();
         $this->assertSame('paid', $bill->fresh()->status->value);
         $payment = BillPayment::where('bill_id', $bill->id)->firstOrFail();

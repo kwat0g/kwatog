@@ -1,0 +1,38 @@
+{
+  "_readme": [
+    "Gzipped kilobyte budgets for the production bundle, enforced by",
+    "`npm run audit:bundle` (spa/scripts/check-bundle-budget.mjs) after `npm run build`.",
+    "",
+    "Every number was MEASURED before it was written: the values below come from the",
+    "build of 2026-10-13 and carry roughly 10-15% headroom. A gate nobody can pass is",
+    "a gate somebody deletes, so the headroom is deliberate — but raising one of these",
+    "to turn a red run green is the failure mode this file exists to prevent. Raise it",
+    "with a reason, in a commit that says what grew and why.",
+    "",
+    "Why gzip: that is what the network carries. Why these five: each one catches a",
+    "different mistake, and a metric with no budget is a hard error in the checker, so",
+    "adding a measurement forces a decision about it."
+  ],
+  "budgets": {
+    "initialJs": {
+      "kb": 205,
+      "reason": "Entry chunk + its modulepreloads: what a first-time visitor downloads before anything paints. Measured 184.8 kB gzip. Every route pays this — the single number that decides whether the app feels fast on the shop floor's 4G."
+    },
+    "entryJs": {
+      "kb": 95,
+      "reason": "The entry chunk alone. Measured 83.3 kB gzip. Watching it separately from `initialJs` distinguishes 'we added an eager import' from 'we added a preloaded one'."
+    },
+    "totalJs": {
+      "kb": 1900,
+      "reason": "Every lazily-loaded chunk summed (579 chunks today). Measured 1686.1 kB gzip. No visitor downloads all of it, so this is not a speed budget — it is a growth guard on a dependency that ends up imported everywhere."
+    },
+    "largestJs": {
+      "kb": 140,
+      "reason": "No single chunk should dominate. Measured 123.8 kB gzip (vendor-three; charts is next at 115.9). A heavier chart, map or 3D library shows up here first, and it is the one place where a version bump can silently double a download."
+    },
+    "totalCss": {
+      "kb": 32,
+      "reason": "One stylesheet across three files, measured 27.4 kB gzip. Small, and that is the point: the token discipline audit keeps utilities from multiplying, and this catches it if that ever slips."
+    }
+  }
+}

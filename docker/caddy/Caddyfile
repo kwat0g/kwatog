@@ -2,6 +2,15 @@
 	default_sni 47.129.228.44
 }
 
+ogamiph.dev, www.ogamiph.dev {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
+	@reverb path /app/*
+	reverse_proxy @reverb reverb:8080
+
+	reverse_proxy nginx:80
+}
+
 47.129.228.44 {
 	tls {
 		issuer acme {
@@ -9,8 +18,5 @@
 		}
 	}
 
-	@reverb path /app/*
-	reverse_proxy @reverb reverb:8080
-
-	reverse_proxy nginx:80
+	redir https://ogamiph.dev{uri} permanent
 }

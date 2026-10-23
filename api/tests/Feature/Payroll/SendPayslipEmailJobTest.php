@@ -10,8 +10,8 @@ use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayslipPdfService;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class SendPayslipEmailJobTest extends TestCase
@@ -44,6 +44,35 @@ class SendPayslipEmailJobTest extends TestCase
         $this->assertSame(Payroll::EMAIL_SENT, $sent->payslip_email_status);
         $this->assertNull($sent->payslip_email_queued_at);
         $this->assertNull($sent->payslip_email_last_error);
+    }
+
+    public function test_invalid_employee_email_fails_fast_without_attempting_delivery(): void
+    {
+        Mail::fake();
+
+        $pdf = \Mockery::mock(PayslipPdfService::class);
+        $pdf->shouldNotReceive('generate');
+
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
+        $employee = Employee::factory()->create(['email' => 'not-an-email']);
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'payslip_email_status' => Payroll::EMAIL_QUEUED,
+            'payslip_email_queued_at' => now(),
+        ]);
+
+        (new SendPayslipEmailJob($payroll->id))->handle($pdf);
+
+        Mail::assertNothingSent();
+        $failed = $payroll->fresh();
+        $this->assertNull($failed->payslip_emailed_at);
+        $this->assertSame(Payroll::EMAIL_FAILED, $failed->payslip_email_status);
+        $this->assertSame(
+            'Employee has no usable email address for payslip delivery.',
+            $failed->payslip_email_last_error,
+        );
     }
 
     public function test_terminal_job_failure_leaves_a_retryable_failed_state(): void

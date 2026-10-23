@@ -14,6 +14,9 @@ const delivery: DriverDelivery = {
   id: 'dr-1', delivery_number: 'DR-202610-0001', status: 'in_transit',
   next_status: 'delivered', next_status_label: 'Delivered', scheduled_date: '2026-10-10',
   departed_at: null, delivered_at: null, confirmed_at: null,
+  delivery_address: 'Toyota Plant, Block 17, SEPZ, Santa Rosa, Laguna',
+  delivery_contact_person: 'Ana Reyes',
+  delivery_contact_phone: '049-500-1234',
   sales_order: { id: 'so-1', so_number: 'SO-202610-0025', customer: { id: 'customer-1', name: 'Acme' } },
   vehicle: null, carrier: 'Ogami truck', expected_delivery_date: '2026-10-11', proofs: [], proof_count: 0,
 };
@@ -39,6 +42,19 @@ it.each(['scheduled', 'loading'] as const)('leaves %s preparation and dispatch t
   expect(await screen.findByText(/The office records the loading photo and dispatches this delivery/)).toBeVisible();
   expect(screen.queryByRole('button', { name: /Mark |Record delivery|Capture receipt photo/ })).not.toBeInTheDocument();
   expect(driverApi.updateStatus).not.toHaveBeenCalled();
+});
+
+it('tells the driver where to deliver and opens Maps from the address', async () => {
+  show(delivery);
+  expect(await screen.findByText('Deliver to')).toBeVisible();
+  const mapLink = screen.getByRole('link', {
+    name: /open driving directions to toyota plant, block 17, sepz, santa rosa, laguna/i,
+  });
+  expect(mapLink).toHaveAttribute(
+    'href',
+    'https://www.google.com/maps/dir/?api=1&destination=Toyota%20Plant%2C%20Block%2017%2C%20SEPZ%2C%20Santa%20Rosa%2C%20Laguna',
+  );
+  expect(screen.getByRole('link', { name: /call the receiving contact/i })).toHaveAttribute('href', 'tel:0495001234');
 });
 
 it('records delivery through photo capture while preserving the problem report', async () => {

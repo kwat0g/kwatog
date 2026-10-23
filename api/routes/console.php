@@ -8,6 +8,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
+// Horizon's metrics graph is built from job/queue snapshots. Without this the
+// dashboard shows live state but no history, which is exactly the "was this
+// always slow, or only since the last deploy?" question the queue lanes exist
+// to answer.
+Schedule::command('horizon:snapshot')
+    ->everyFiveMinutes()
+    ->onOneServer();
+
 Schedule::command('production:notify-upcoming-work-orders')
     ->everyMinute()
     ->withoutOverlapping(5)
@@ -101,6 +109,13 @@ Schedule::command('mrp:reap-stale-runs')
 // A2 — Alert engine every 15 minutes
 Schedule::command('alerts:run')
     ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
+// DSS Wave 0-2 — detector run, hourly. Modes affect display only (W0-3), so
+// this is shadow-safe from day one; the kill switch silences it entirely.
+Schedule::command('dss:run')
+    ->hourly()
     ->withoutOverlapping(10)
     ->onOneServer();
 
@@ -359,6 +374,13 @@ Schedule::command('inventory:recompute-safety-stock')
 
 Schedule::command('inventory:reconcile-replenishment --limit=100')
     ->dailyAt('02:30')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+// DSS Wave 0-5 — daily stock snapshot AFTER the overnight safety-stock (02:15)
+// and replenishment (02:30) batches, so the position reflects settled state.
+Schedule::command('dss:snapshot-stock')
+    ->dailyAt('03:45')
     ->withoutOverlapping(120)
     ->onOneServer();
 

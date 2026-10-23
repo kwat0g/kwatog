@@ -129,7 +129,11 @@ export const customerPortalApi = {
  },
 
  cancelOrder: async (id: string, reason?: string) => {
-  const { data } = await portalClient.post<{ data: PortalSoDetail }>(`/b2b/customer/orders/${id}/cancel`, { reason });
+  const { data } = await portalClient.post<{
+   data: PortalSoDetail;
+   outcome: 'cancelled' | 'requested';
+   message: string;
+  }>(`/b2b/customer/orders/${id}/cancel`, { reason });
   return data;
  },
 

@@ -17,18 +17,24 @@ class EmailIntegrationTestMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public readonly ?int $fallbackUserId = null) {}
+    public function __construct(public readonly ?int $fallbackUserId = null)
+    {
+        $this->onQueue('mail');
+    }
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Ogami Philippines · AWS Mail Manager email integration test');
+        return new Envelope(subject: '['.config('mail.from.name').'] AWS Mail Manager email integration test');
     }
 
     public function content(): Content
     {
         return new Content(
             markdown: 'emails/email-test',
-            with: ['brand' => app(EmailBrandingService::class)->data()],
+            with: [
+                'brand' => app(EmailBrandingService::class)->data(),
+                'preheader' => 'Shared email shell preview text.',
+            ],
         );
     }
 

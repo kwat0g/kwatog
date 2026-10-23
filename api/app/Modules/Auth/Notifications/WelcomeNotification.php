@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Notifications;
 
-use App\Common\Services\SettingsService;
+use App\Common\Services\EmailBrandingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -47,7 +47,7 @@ class WelcomeNotification extends Notification
     {
         $appUrl = config('app.frontend_url', config('app.url'));
         $email = $notifiable->email ?? '';
-        $company = app(SettingsService::class)->requiredString('company.legal_name');
+        $company = app(EmailBrandingService::class)->data()['legal_name'];
 
         return (new MailMessage)
             ->subject("Welcome to {$company} ERP — Your Account is Ready")

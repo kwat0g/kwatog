@@ -25,7 +25,7 @@ class ApprovalBoardController
     public function index(Request $request): JsonResponse
     {
         $request->validate([
-            'type' => ['nullable', 'string', Rule::in(array_column($this->service->kindOptions(), 'value'))],
+            'type' => ['nullable', 'string', Rule::in(array_column($this->service->kindOptions($request->user()), 'value'))],
             'pending_limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'history_limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'pending_page' => ['nullable', 'integer', 'min:1'],
@@ -49,10 +49,10 @@ class ApprovalBoardController
         return response()->json(['data' => $board]);
     }
 
-    public function options(): JsonResponse
+    public function options(Request $request): JsonResponse
     {
         return response()->json(['data' => [
-            'kinds' => $this->service->kindOptions(),
+            'kinds' => $this->service->kindOptions($request->user()),
             'overdue_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
         ]]);
     }

@@ -29,10 +29,10 @@ class RunYearEndLeaveOnRequested implements ShouldQueue
 
     public int $timeout = ProcessYearEndLeave::TIMEOUT_SECONDS;
 
-    // Lane: low — the year-end sweep runs inline here (yearly bulk).
+    // Lane: automation — the year-end sweep runs inline here (yearly bulk).
     public function viaQueue(): string
     {
-        return 'low';
+        return 'automation';
     }
 
     /** @return array<int, WithoutOverlapping> */

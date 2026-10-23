@@ -22,6 +22,9 @@ class SupplierInvoiceStatusMail extends Mailable implements ShouldQueue
         public readonly Bill $bill,
         public readonly array $fallbackUserIds = [],
     ) {
+        // Lane: mail — see config/horizon.php. Kept off `default` so an
+        // email burst cannot sit in front of an approval or a GRN notice.
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 

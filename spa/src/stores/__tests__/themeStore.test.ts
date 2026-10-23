@@ -6,9 +6,11 @@ vi.mock('@/api/auth', () => ({
 }));
 
 const attr = () => document.documentElement.getAttribute('data-theme');
+const favicon = () => document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.getAttribute('href');
 
 describe('themeStore floor override', () => {
   beforeEach(() => {
+    document.head.innerHTML = '<link rel="icon" href="/brand-logo.png">';
     useThemeStore.getState().popOverride();
     useThemeStore.getState().init('light');
   });
@@ -16,12 +18,24 @@ describe('themeStore floor override', () => {
   it('applies floor to the document when pushed', () => {
     useThemeStore.getState().pushOverride('floor');
     expect(attr()).toBe('floor');
+    expect(favicon()).toBe('/favicon-dark.svg?v=20261022');
   });
 
   it('restores the user preference when popped', () => {
     useThemeStore.getState().pushOverride('floor');
     useThemeStore.getState().popOverride();
     expect(attr()).toBe('light');
+    expect(favicon()).toBe('/favicon-light.svg?v=20261022');
+  });
+
+  it('uses the light logo when the app is in light mode', () => {
+    useThemeStore.getState().init('light');
+    expect(favicon()).toBe('/favicon-light.svg?v=20261022');
+  });
+
+  it('switches the favicon with the selected theme', () => {
+    useThemeStore.getState().setMode('dark');
+    expect(favicon()).toBe('/favicon-dark.svg?v=20261022');
   });
 
   it('restores a dark preference, not a hardcoded light', () => {

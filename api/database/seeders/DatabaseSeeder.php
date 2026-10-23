@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             // is effectively a no-op (rows already exist), then payroll seeders.
             ChartOfAccountsSeeder::class,      // Task 31 (full ~45-account COA)
             PayrollChartAccountsSeeder::class, // Task 29 — idempotent upsert; preserved for back-compat.
+            AccountingPeriodSeeder::class,
 
             // Series R — Task R4. Catalog must run before role-default
             // layouts so widget keys exist when layouts reference them.
@@ -65,6 +66,8 @@ class DatabaseSeeder extends Seeder
                 MachineSeeder::class,
                 MoldSeeder::class,
                 MoldCompatibilitySeeder::class,
+                ProductRoutingSeeder::class,
+                DemoBomCostBasisSeeder::class,
                 DefectTypeSeeder::class,
                 VehicleSeeder::class,
             ]);
@@ -86,6 +89,8 @@ class DatabaseSeeder extends Seeder
                 RealisticDataSeeder::class,
                 GoldenPathDemoSeeder::class,
                 DemoRfqBudgetSeeder::class,
+                DemoInspectionEvidenceSeeder::class,
+                DemoItemQualityPlanSeeder::class,
             ]);
         }
     }

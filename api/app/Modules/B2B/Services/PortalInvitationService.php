@@ -144,6 +144,17 @@ class PortalInvitationService
     /** @param array<string, string> $context */
     private function queueInvitation(string $email, string $name, string $portalType, string $password, array $context): void
     {
+        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+                $context['permission'],
+                'Portal access invitation',
+                "The {$portalType} portal invitation for {$name} could not be sent because the email address is not usable. Use the returned temporary password through an approved channel and ask the contact to reset it after signing in.",
+                $context + ['reason' => 'The recipient email address is not valid.'],
+            );
+
+            return;
+        }
+
         try {
             Mail::to($email)->queue(new PortalAccessInvitationMail(
                 $portalType,

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Attendance;
 
 use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;

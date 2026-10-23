@@ -46,6 +46,17 @@ const EMPTY_RESPONSE = {};
 // Well-formed, nonempty support responses for reads unrelated to a spec's
 // subject. Spec-specific routes register later and override these defaults.
 const DEFAULT_READ_RESPONSES: Record<string, unknown> = {
+  /*
+   * The KPI strip every dashboard mounts asks for six months of trends for all
+   * of its codes. `kpiApi.trends` returns `response.data.data` verbatim, so the
+   * `{}` fallback hands React Query `undefined` and it throws
+   * "Query data cannot be undefined" — a console error the shared diagnostics
+   * fixture fails the test on. One `{ data: {} }` here answers with an empty map
+   * (`trends?.[code] ?? []` is the consumer's own guard), which is what "no
+   * trends" already means. Found while verifying W1.5 against the four dashboard
+   * specs, all of which were red before it (F-018).
+   */
+  '/api/v1/dashboard/kpi/trends': { data: {} },
   '/api/v1/dashboards/finance': { data: {} },
   '/api/v1/dashboards/hr': { data: { kpis: [], panels: {} } },
   '/api/v1/dashboards/admin': { data: { kpis: [], panels: {} } },
@@ -214,8 +225,35 @@ export const test = base.extend<{ apiFallback: void; browserDiagnostics: void }>
       const expectedConsoleErrors = testInfo.annotations
         .filter((annotation) => annotation.type === 'expected-console-error')
         .map((annotation) => annotation.description ?? '');
+      /*
+       * The browser echoes every non-2xx response as its own console error
+       * ("Failed to load resource: the server responded with a status of 500…").
+       * A spec that deliberately mocks a 4xx/5xx and annotates
+       * `expected-http-response` then failed on an echo of the very response it
+       * expected — which is why the three error-state mobile specs were red
+       * with an empty expected-console-error list. The echo is redundant here:
+       * `badResponses` already fails on any response that is not annotated,
+       * just below. Real page errors, app console errors, failed requests and
+       * unexpected status codes keep failing exactly as before.
+       */
+      const resourceLoadEcho = (message: string) =>
+        /^Failed to load resource: the server responded with a status of \d{3}/.test(message);
+      /*
+       * CI runs the SPA alone: there is no Reverb server on the configured
+       * ws:// port, and the suite mocks the HTTP API. An authenticated page
+       * still resolves the lazy Echo client by design (AppLayout →
+       * usePermissionSync → getEcho), so every such spec drew the browser's own
+       * "can't establish a connection to the server at ws://…/app/ogami_reverb"
+       * console error — which red the a11y and gallery gates on pages that do
+       * not touch realtime at all. Realtime is out of those gates' scope; a
+       * spec that does exercise it must stand up a server and assert through
+       * the app, never through this browser noise.
+       */
+      const realtimeSocketUnreachable = (message: string) =>
+        message.includes('/app/ogami_reverb?') &&
+        /(establish a connection to the server at wss?:\/\/|WebSocket connection to .+ failed)/.test(message);
       expect(
-        diagnostics.consoleErrors,
+        diagnostics.consoleErrors.filter((message) => !resourceLoadEcho(message) && !realtimeSocketUnreachable(message)),
         `Browser console errors; HTTP responses: ${JSON.stringify(diagnostics.badResponses)}`,
       ).toEqual(expectedConsoleErrors);
       expect(diagnostics.failedRequests, 'Failed browser requests').toEqual([]);

@@ -269,6 +269,10 @@ export interface Customer {
   email: string | null;
   phone: string | null;
   address: string | null;
+  /** Chain 1 — where the truck unloads, distinct from the billing `address`. */
+  delivery_address: string | null;
+  delivery_contact_person: string | null;
+  delivery_contact_phone: string | null;
   tin: string | null;
   credit_limit: string | null;
   credit_used: string | null;
@@ -286,6 +290,9 @@ export interface CreateCustomerData {
   email?: string;
   phone?: string;
   address?: string;
+  delivery_address?: string;
+  delivery_contact_person?: string;
+  delivery_contact_phone?: string;
   tin?: string;
   credit_limit?: string | null;
   payment_terms_days?: number;

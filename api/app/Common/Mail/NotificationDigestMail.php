@@ -27,7 +27,9 @@ class NotificationDigestMail extends Mailable implements ShouldQueue
         public readonly array $items,
         public readonly int $totalUnread,
         public readonly ?int $recipientUserId = null,
-    ) {}
+    ) {
+        $this->onQueue('mail');
+    }
 
     public function envelope(): Envelope
     {

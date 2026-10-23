@@ -43,4 +43,17 @@ class MachineDowntime extends Model
     {
         return $this->belongsTo(MaintenanceWorkOrder::class, 'maintenance_order_id');
     }
+
+    /**
+     * Close this open row and stamp its duration. The ONE place the
+     * end_time/duration pair is written, so timings cannot drift per caller.
+     */
+    public function closeAt(?\DateTimeInterface $end = null): void
+    {
+        $end ??= now();
+        $this->update([
+            'end_time' => $end,
+            'duration_minutes' => (int) max(0, $this->start_time->diffInMinutes($end, true)),
+        ]);
+    }
 }
