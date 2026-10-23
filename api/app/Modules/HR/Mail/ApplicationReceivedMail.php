@@ -17,6 +17,9 @@ class ApplicationReceivedMail extends QueuedMailable
 {
     use SerializesModels;
 
+    /** @var array<string, string> */
+    public array $snapshot = [];
+
     public function __construct(
         public readonly JobApplication $application,
         public readonly JobPosting $posting,
@@ -27,27 +30,30 @@ class ApplicationReceivedMail extends QueuedMailable
         // email burst cannot sit in front of an approval or a GRN notice.
         $this->onQueue('mail');
         $this->afterCommit();
+        $this->snapshot = self::snapshotForEmail($application, $posting);
     }
 
     public function envelope(): Envelope
     {
+        $snapshot = $this->snapshotData();
+
         return new Envelope(
-            subject: "Application Received — {$this->posting->title}",
+            subject: "Application Received — {$snapshot['position_title']}",
         );
     }
 
     public function content(): Content
     {
+        $snapshot = $this->snapshotData();
         $brand = app(EmailBrandingService::class)->data();
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
 
         return new Content(
             markdown: 'emails.recruitment.application-received',
             with: [
-                'applicantName' => $this->application->full_name,
-                'positionTitle' => $this->posting->title,
-                'trackingCode'  => $this->application->tracking_code,
-                'trackingUrl'   => $base . '/careers/track',
+                'applicantName' => $snapshot['applicant_name'],
+                'positionTitle' => $snapshot['position_title'],
+                'trackingCode'  => $snapshot['tracking_code'],
+                'trackingUrl'   => $snapshot['tracking_url'],
                 'companyName' => $brand['name'],
             ],
         );
@@ -66,5 +72,23 @@ class ApplicationReceivedMail extends QueuedMailable
                 'reason' => 'The candidate email job failed in the queue.',
             ],
         );
+    }
+
+    /** @return array<string, string> */
+    private static function snapshotForEmail(JobApplication $application, JobPosting $posting): array
+    {
+        return [
+            'applicant_name' => $application->full_name,
+            'position_title' => (string) $posting->title,
+            'tracking_code' => (string) $application->tracking_code,
+            'application_hash_id' => (string) $application->hash_id,
+            'tracking_url' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/careers/track',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function snapshotData(): array
+    {
+        return $this->snapshot ?: self::snapshotForEmail($this->application, $this->posting);
     }
 }

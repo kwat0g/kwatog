@@ -91,3 +91,5 @@ Updated: 2026-10-23
 | E011 | Customer sales order decision | Snapshot-based content and one-time response links integrated | Real-client rendering remains unverified |
 
 | E011 | Customer sales order decision | Snapshot, shared email layout, customer portal link, safe response summary | Real-client rendering remains unverified |
+
+| E012–E015 | Candidate application and interview emails | Event-time snapshots integrated; use configured company branding | Visual inspection evidence and real-client rendering remain unverified |

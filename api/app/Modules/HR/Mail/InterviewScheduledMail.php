@@ -11,11 +11,15 @@ use App\Modules\HR\Models\JobApplication;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Support\Carbon;
 use Illuminate\Queue\SerializesModels;
 
 class InterviewScheduledMail extends QueuedMailable
 {
     use SerializesModels;
+
+    /** @var array<string, mixed> */
+    public array $snapshot = [];
 
     public function __construct(
         public readonly JobApplication $application,
@@ -27,32 +31,35 @@ class InterviewScheduledMail extends QueuedMailable
         // email burst cannot sit in front of an approval or a GRN notice.
         $this->onQueue('mail');
         $this->afterCommit();
+        $this->snapshot = self::snapshotForEmail($application, $interview);
     }
 
     public function envelope(): Envelope
     {
+        $snapshot = $this->snapshotData();
+
         return new Envelope(
-            subject: "Interview Scheduled — {$this->application->jobPosting->title}",
+            subject: "Interview Scheduled — {$snapshot['position_title']}",
         );
     }
 
     public function content(): Content
     {
         $brand = app(EmailBrandingService::class)->data();
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $snapshot = $this->snapshotData();
 
         return new Content(
             markdown: 'emails.recruitment.interview-scheduled',
             with: [
-                'applicantName'   => $this->application->full_name,
-                'positionTitle'   => $this->application->jobPosting->title,
-                'scheduledAt'     => $this->interview->scheduled_at->format('F j, Y g:i A'),
-                'location'        => $this->interview->location ?? 'To be confirmed',
-                'interviewerName' => $this->interview->interviewer_name,
+                'applicantName'   => $snapshot['applicant_name'],
+                'positionTitle'   => $snapshot['position_title'],
+                'scheduledAt'     => Carbon::parse($snapshot['scheduled_at'])->format('F j, Y g:i A'),
+                'location'        => $snapshot['location'],
+                'interviewerName' => $snapshot['interviewer_name'],
                 'companyName' => $brand['name'],
-                'companyAddress' => $brand['address'],
-                'trackingCode' => $this->application->tracking_code,
-                'trackingUrl' => $base.'/careers/track',
+'companyAddress' => $brand['address'],
+                'trackingCode' => $snapshot['tracking_code'],
+                'trackingUrl' => $snapshot['tracking_url'],
             ],
         );
     }
@@ -70,5 +77,28 @@ class InterviewScheduledMail extends QueuedMailable
                 'reason' => 'The candidate interview email job failed in the queue.',
             ],
         );
+    }
+
+    /** @return array<string, mixed> */
+    private static function snapshotForEmail(JobApplication $application, ApplicationInterview $interview): array
+    {
+        $application->loadMissing('jobPosting');
+
+        return [
+            'applicant_name' => $application->full_name,
+            'position_title' => (string) $application->jobPosting->title,
+            'scheduled_at' => $interview->scheduled_at?->toIso8601String(),
+            'location' => $interview->location,
+            'interviewer_name' => $interview->interviewer_name,
+            'tracking_code' => (string) $application->tracking_code,
+            'application_hash_id' => (string) $application->hash_id,
+            'tracking_url' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/careers/track',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function snapshotData(): array
+    {
+        return $this->snapshot ?: self::snapshotForEmail($this->application, $this->interview);
     }
 }
