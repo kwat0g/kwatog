@@ -226,7 +226,7 @@ class CustomerPortalOrderTest extends TestCase
         $this->travelBack();
     }
 
-    public function test_customer_owns_draft_changes_and_sales_cannot_mutate_portal_orders(): void
+    public function test_customer_owns_draft_changes_and_sales_cannot_edit_or_delete_portal_orders(): void
     {
         $customer = Customer::factory()->create();
         $portalUser = $this->makePortalUser($customer);
@@ -256,7 +256,6 @@ class CustomerPortalOrderTest extends TestCase
             ->assertJsonPath('data.is_editable', false)->assertJsonPath('data.is_cancellable', true)
             ->assertJsonPath('data.capabilities.can_cancel', false);
         $this->putJson('/api/v1/crm/sales-orders/'.$id, ['date' => $date, 'items' => $change['items']])->assertStatus(422);
-        $this->postJson('/api/v1/crm/sales-orders/'.$id.'/cancel')->assertStatus(422);
         $this->deleteJson('/api/v1/crm/sales-orders/'.$id)->assertStatus(422);
         $this->assertSame('300.00', (string) $so->fresh()->total_amount);
 
@@ -264,6 +263,29 @@ class CustomerPortalOrderTest extends TestCase
             ->assertOk()->assertJsonPath('data.status', 'cancelled');
         $this->assertDatabaseHas('audit_logs', ['action' => 'customer.order.cancelled', 'model_id' => $so->id]);
         $this->putJson('/api/v1/b2b/customer/orders/'.$id, $change)->assertStatus(422);
+    }
+
+    public function test_sales_with_cancel_permission_can_cancel_customer_portal_order(): void
+    {
+        $customer = Customer::factory()->create();
+        $portalUser = $this->makePortalUser($customer);
+        $product = Product::factory()->create();
+        $this->agreement($customer, $product);
+        $this->actAs($portalUser);
+        $id = $this->postOrder(['items' => [[
+            'product_id' => $product->hash_id,
+            'quantity' => '2.00',
+            'delivery_date' => now()->addDays(4)->toDateString(),
+        ]]])->assertCreated()->json('data.id');
+
+        $sales = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+            'is_active' => true,
+        ]);
+        $this->actingAs($sales, 'sanctum')
+            ->postJson('/api/v1/crm/sales-orders/'.$id.'/cancel')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
     }
 
     public function test_customer_draft_edit_is_guarded_when_delivery_date_enters_lead_window(): void
@@ -325,7 +347,10 @@ class CustomerPortalOrderTest extends TestCase
         $staleResult = app(CustomerPortalService::class)->cancelOrder($stale, $portalUser, null);
         $this->assertSame('requested', $staleResult->getAttribute('cancellation_outcome'));
         $this->assertSame('confirmed', $so->fresh()->status->value);
-        $this->assertDatabaseHas('audit_logs', ['action' => 'customer.order.cancellation_requested', 'model_id' => $so->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'customer.order.cancellation_requested',
+            'actor_type' => 'customer_portal',
+        ]);
         $this->assertDatabaseMissing('audit_logs', ['action' => 'customer.order.cancelled', 'model_id' => $so->id]);
 
         $so->forceFill(['status' => 'draft', 'submission_source' => 'internal'])->save();
