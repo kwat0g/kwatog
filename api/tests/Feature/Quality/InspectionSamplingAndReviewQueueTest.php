@@ -127,6 +127,17 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
     {
         $maker = $this->userWithRole('qc_inspector');
         $checker = $this->userWithRole('production_manager');
+        $revokedChecker = $this->userWithRole('production_manager');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revokedChecker->id,
+            'permission_id' => Permission::query()->where('slug', 'quality.inspections.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $checker->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $revokedChecker->flushPermissionsCache();
         $outsider = $this->userWithRole('warehouse_staff');
 
         $inspection = $this->awaitingReviewOutgoing($maker);
@@ -135,6 +146,7 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         $notified = fn (User $u): bool => DB::table('notifications')
             ->where('notifiable_id', $u->id)->where('type', 'quality.inspection_awaiting_review')->exists();
         $this->assertTrue($notified($checker));
+        $this->assertFalse($notified($revokedChecker));
         $this->assertFalse($notified($maker));
         $this->assertFalse($notified($outsider));
         $this->assertSame(

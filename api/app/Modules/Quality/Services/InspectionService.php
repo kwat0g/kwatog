@@ -2381,6 +2381,7 @@ class InspectionService
     {
         $makers = array_values(array_unique(array_filter([(int) $by->id, (int) $inspection->inspector_id])));
         $reviewers = app(NotificationService::class)->usersWithPermission('quality.inspections.review')
+            ->filter(fn (User $user): bool => $user->hasPermission('quality.inspections.view'))
             ->whereNotIn('id', $makers)
             ->values();
 
