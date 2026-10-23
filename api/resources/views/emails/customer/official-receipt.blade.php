@@ -1,23 +1,21 @@
-<x-mail::message :preheader="'Official receipt '.$receipt->or_number.' for your payment.'" :title="'Official receipt '.$receipt->or_number">
-# Official receipt issued
+<x-mail::message :preheader="'Official receipt '.$snapshot['or_number'].' for your payment.'" :title="'Official receipt '.$snapshot['or_number'].' issued'">
+# Official receipt {{ $snapshot['or_number'] }} issued
 
-Hello {{ $receipt->customer?->contact_person ?: $receipt->customer?->name ?: 'Customer' }},
+Hello {{ $snapshot['customer_name'] }},
 
 An official receipt has been issued for your payment.
 
-| Receipt summary | Details |
+| Detail | Value |
 |---|---|
-| Official receipt | **{{ $receipt->or_number }}** |
-| Receipt date | {{ optional($receipt->date)->format('F j, Y') }} |
-| Amount received | **₱{{ number_format((float) $receipt->amount, 2) }}** |
-@if ($receipt->invoice)
-| Invoice | {{ $receipt->invoice->invoice_number }} |
-@endif
+| Official receipt | {{ $snapshot['or_number'] }} |
+| Receipt date | {{ $snapshot['date'] }} |
+| Amount received | {{ $snapshot['amount'] }} |
+| Invoice | {{ $snapshot['invoice_number'] }} |
 
 Please retain this message for your records.
 
-<x-mail::button :url="$portalUrl">View account documents</x-mail::button>
+<x-mail::button :url="$snapshot['portal_url']">View related invoice</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', config('app.name')) }} Finance
+Ogami Philippines Finance
 </x-mail::message>

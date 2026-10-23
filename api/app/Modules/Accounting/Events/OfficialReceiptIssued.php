@@ -13,5 +13,22 @@ class OfficialReceiptIssued implements ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public readonly OfficialReceipt $officialReceipt) {}
+    public readonly array $snapshot;
+
+    public function __construct(public readonly OfficialReceipt $officialReceipt)
+    {
+        $officialReceipt->loadMissing(['customer', 'invoice']);
+
+        $this->snapshot = [
+            'or_number' => (string) $officialReceipt->or_number,
+            'customer_email' => $officialReceipt->customer?->email,
+            'customer_contact' => $officialReceipt->customer?->contact_person,
+            'customer_name' => $officialReceipt->customer?->name,
+            'amount' => (string) $officialReceipt->amount,
+            'date' => $officialReceipt->date?->toDateString(),
+            'invoice_number' => $officialReceipt->invoice?->invoice_number,
+            'invoice_hash_id' => $officialReceipt->invoice?->hash_id,
+            'receipt_hash_id' => $officialReceipt->hash_id,
+        ];
+    }
 }

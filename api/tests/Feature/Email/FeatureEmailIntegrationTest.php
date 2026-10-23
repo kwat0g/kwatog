@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Email;
 
 use App\Modules\Accounting\Events\InvoiceFinalized;
+use App\Modules\Accounting\Events\OfficialReceiptIssued;
 use App\Modules\Accounting\Mail\CustomerInvoiceFinalizedMail;
+use App\Modules\Accounting\Mail\CustomerOfficialReceiptMail;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\Accounting\Models\OfficialReceipt;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
@@ -237,6 +240,56 @@ class FeatureEmailIntegrationTest extends TestCase
         $queued->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
         $this->assertStringNotContainsString("\r", $queued->envelope()->subject);
         $this->assertStringNotContainsString("\n", $queued->envelope()->subject);
+    }
+
+    public function test_official_receipt_event_keeps_issue_time_recipient_and_values(): void
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'receipt-at-issue@example.test',
+            'name' => 'Customer at receipt issue',
+            'contact_person' => null,
+        ]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-RECEIPT-001',
+        ]);
+        $receipt = OfficialReceipt::create([
+            'or_number' => 'OR-2026-001',
+            'customer_id' => $customer->id,
+            'invoice_id' => $invoice->id,
+            'amount' => '15000.00',
+            'date' => '2026-10-20',
+        ]);
+        $event = new OfficialReceiptIssued($receipt);
+
+        $customer->update([
+            'email' => 'receipt-after@example.test',
+            'name' => 'Changed customer',
+        ]);
+        $invoice->update(['invoice_number' => 'INV-CHANGED']);
+        $receipt->update([
+            'or_number' => 'OR-CHANGED',
+            'amount' => '99999.00',
+            'date' => '2026-12-31',
+        ]);
+
+        app(\App\Modules\Accounting\Listeners\EmailCustomerOnOfficialReceiptIssued::class)->handle($event);
+
+        Mail::assertQueued(CustomerOfficialReceiptMail::class, function (CustomerOfficialReceiptMail $mail): bool {
+            $html = $mail->render();
+            $this->assertTrue($mail->hasTo('receipt-at-issue@example.test'));
+            $this->assertFalse($mail->hasTo('receipt-after@example.test'));
+            $this->assertStringContainsString('Customer at receipt issue', $html);
+            $this->assertStringNotContainsString('Changed customer', $html);
+            $this->assertStringContainsString('OR-2026-001', $html);
+            $this->assertStringNotContainsString('OR-CHANGED', $html);
+            $this->assertStringContainsString('PHP 15,000.00', $html);
+            $this->assertStringNotContainsString('99,999.00', $html);
+            $this->assertStringContainsString('INV-RECEIPT-001', $html);
+            $this->assertStringNotContainsString('INV-CHANGED', $html);
+
+            return true;
+        });
     }
 
     public function test_supplier_purchase_order_email_is_queued_with_supplier_data(): void
