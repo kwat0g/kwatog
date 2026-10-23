@@ -262,7 +262,10 @@ class SalesOrderResponseTest extends TestCase
 
     public function test_decision_email_freezes_record_values_and_sends_separately_to_valid_portal_users(): void
     {
-        $customer = Customer::factory()->create(['email' => 'fallback@example.test', 'contact_person' => 'Original Contact']);
+        $customer = Customer::factory()->create([
+            'email' => 'fallback@example.test',
+            'contact_person' => 'Original <img src=x onerror=alert(1)> Contact',
+        ]);
         foreach ([
             ['name' => 'Portal One', 'email' => 'portal@example.test', 'is_active' => true],
             ['name' => 'Portal Duplicate', 'email' => 'PORTAL@example.test', 'is_active' => true],
@@ -293,10 +296,18 @@ class SalesOrderResponseTest extends TestCase
             self::assertTrue($mail->hasTo('portal@example.test'));
             self::assertCount(1, $mail->to);
             self::assertSame('accept', $mail->snapshot['decision']);
-            self::assertStringContainsString('Original Contact', $html);
-            self::assertStringContainsString('accepted</strong>', $html);
+            self::assertStringContainsString('<title>Sales order response accepted</title>', $html);
+            self::assertStringContainsString('Hello Original Contact,', $html);
+            self::assertStringNotContainsString('<img src=x', $html);
+            self::assertStringNotContainsString('onerror', $html);
+            self::assertStringContainsString('Decision: Accepted.', $html);
             self::assertStringContainsString('your response', $html);
-            self::assertStringContainsString('125.00', $html);
+            self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $html);
+            self::assertStringContainsString('https://ogamiph.dev/portal/customer/orders/'.$mail->snapshot['sales_order_hash_id'], $html);
+            self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
+            self::assertLessThan(102400, strlen($html));
+            self::assertSame('['.app(\App\Common\Services\EmailBrandingService::class)->data()['name'].'] Sales order response accepted: '.$mail->snapshot['so_number'].' · '.app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $mail->envelope()->subject);
+            $mail->assertSeeInText('Review your sales order');
             self::assertStringNotContainsString('Changed Contact', $html);
             self::assertStringNotContainsString('999.00', $html);
 
@@ -405,6 +416,18 @@ class SalesOrderResponseTest extends TestCase
         $this->assertSame('Price unacceptable.', $resolved->resolution_notes);
         $this->assertSame('100.00', (string) $line->fresh()->quantity);
         $this->assertSame('draft', $so->fresh()->status->value);
+
+        Mail::assertQueued(CustomerSalesOrderDecisionMail::class, function (CustomerSalesOrderDecisionMail $mail): bool {
+            $html = $mail->render();
+
+            self::assertSame('reject', $mail->snapshot['decision']);
+            self::assertStringContainsString('<title>Sales order response returned for revision</title>', $html);
+            self::assertStringContainsString('returned for revision', $html);
+            self::assertStringContainsString("Review the sales team's feedback", $html);
+            self::assertStringNotContainsString('Price unacceptable.', $html);
+
+            return true;
+        });
     }
 
     public function test_resolve_refuses_a_non_pending_response(): void

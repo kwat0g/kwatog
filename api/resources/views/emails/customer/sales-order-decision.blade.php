@@ -1,31 +1,35 @@
-<x-mail::message>
-# Sales Order {{ $salesOrder->so_number }}
+<x-mail::message :preheader="$preheader" :title="$title">
+# {{ $title }}
 
-Hi {{ $salesOrder->customer->contact_person ?? $salesOrder->customer->name ?? 'there' }},
+Hello {{ $decisionEmail['customer_name'] }},
 
-Our sales team has {{ $decision === 'accept' ? '**accepted**' : '**returned for revision**' }} your response to sales order **{{ $salesOrder->so_number }}**.
+Our sales team has reviewed your response for sales order **{{ $decisionEmail['so_number'] }}**.
 
-| Detail | Information |
-|---|---|
-| Sales order | {{ $salesOrder->so_number }} |
-| Your response | {{ $response->response_type?->label() ?? $response->response_type }} |
-| Order total | ₱{{ number_format((float) $salesOrder->total_amount, 2) }} |
-@if ($response->proposed_delivery_date)
-| Requested delivery | {{ $response->proposed_delivery_date->format('M d, Y') }} |
+<x-mail::panel>
+Decision: {{ ucfirst($decisionEmail['decision_label']) }}. The order total below reflects the order when the decision was recorded.
+</x-mail::panel>
+
+| Order detail | Information |
+|---|---:|
+| Sales order | {{ $decisionEmail['so_number'] }} |
+| Your response | {{ $decisionEmail['response_type_label'] }} |
+| Order total | {{ $decisionEmail['total_amount'] }} |
+@if ($decisionEmail['proposed_delivery_date'])
+| Proposed delivery date | {{ $decisionEmail['proposed_delivery_date'] }} |
 @endif
 
-@if ($decision === 'accept' && $response->response_type?->value === 'propose')
-## Accepted counter-offer
-
-Your proposed quantities and prices were applied to the order. We will confirm the order and keep you updated on production and delivery.
-@elseif ($decision === 'reject')
-## Response returned
-
-Your response was returned for revision. Please review the sales order and submit a new response through the customer portal.
+@if ($decisionEmail['decision'] === 'accept' && $decisionEmail['response_type'] === 'propose')
+Your proposed order quantities and prices are reflected in the order. Review the updated order details in the customer portal.
+@elseif ($decisionEmail['decision'] === 'reject')
+Your response was returned for revision. Review the sales team's feedback in the customer portal before submitting another response.
+@else
+Open the order to review its current status and any next steps.
 @endif
 
-<x-mail::button :url="$portalUrl">Review Sales Order</x-mail::button>
+<x-mail::button :url="$decisionEmail['portal_url']">Review your sales order</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name') }} Sales Team
+{{ $brand['name'] }} Sales Team
+
+You received this email because your customer portal account is associated with this sales order. To verify the message, open the customer portal using the address you normally use.
 </x-mail::message>
