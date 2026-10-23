@@ -27,9 +27,6 @@ class InvoiceDunningMail extends QueuedMailable
         public readonly array $fallbackUserIds = [],
     ) {
         // Never enqueue a reminder that belongs to a rolled-back invoice scan.
-        // Lane: mail — see config/horizon.php. Kept off `default` so an
-        // email burst cannot sit in front of an approval or a GRN notice.
-        $this->onQueue('mail');
         $this->afterCommit();
 
         $invoice->loadMissing('customer');
@@ -45,13 +42,14 @@ class InvoiceDunningMail extends QueuedMailable
             'due_date' => $this->formatDate($invoice->due_date?->toDateString()),
             'balance' => app(CurrencyDisplayService::class)->format($invoice->balance),
             'hash_id' => (string) $invoice->hash_id,
+            'portal_url' => rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/customer/invoices/'.$invoice->hash_id,
         ];
     }
 
     public function envelope(): Envelope
     {
         $brand = app(EmailBrandingService::class)->data();
-        $subject = "Reminder: Invoice {$this->snapshot['invoice_number_subject']} is {$this->daysOverdue} days overdue";
+        $subject = "Payment reminder: {$this->snapshot['invoice_number_subject']} · {$this->snapshot['balance']} · {$this->daysOverdue} days overdue";
 
         return new Envelope(
             subject: $this->safeHeaderText('['.$brand['name'].'] '.$subject),
@@ -60,16 +58,12 @@ class InvoiceDunningMail extends QueuedMailable
 
     public function content(): Content
     {
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-
         return new Content(
             markdown: 'emails.invoice-dunning',
             with: [
-                'preheader' => 'Invoice '.$this->snapshot['invoice_number_subject'].' is '.$this->daysOverdue.' days overdue.',
                 'snapshot' => $this->snapshot,
                 'daysOverdue' => $this->daysOverdue,
-                'tier' => $this->tier,
-                'portalUrl' => $base.'/portal/customer/invoices/'.$this->invoice->hash_id,
+                'preheader' => 'Invoice '.$this->snapshot['invoice_number_subject'].' is '.$this->daysOverdue.' days overdue. Balance at reminder generation: '.$this->snapshot['balance'].'.',
             ],
         );
     }

@@ -1,29 +1,26 @@
-<x-mail::message :preheader="$preheader" :title="'Payment reminder for invoice '.$snapshot['invoice_number']">
-# Payment Reminder
+<x-mail::message :preheader="$preheader" :title="'Payment reminder: '.$snapshot['invoice_number']">
+# Payment reminder: {{ $snapshot['invoice_number'] }}
 
-Hi {{ $snapshot['customer_name'] }},
+Hello {{ $snapshot['customer_name'] }},
 
-Our records show that invoice **{{ $snapshot['invoice_number'] }}** is currently
-**{{ $daysOverdue }} days past due**.
+Invoice **{{ $snapshot['invoice_number'] }}** was due on **{{ $snapshot['due_date'] }}** and is {{ $daysOverdue }} days overdue. Please review its payment status and balance in the customer portal.
 
-| Field        | Value |
-|--------------|------:|
-| Invoice No.  | {{ $snapshot['invoice_number'] }} |
-| Issue Date   | {{ $snapshot['invoice_date'] }} |
-| Due Date     | {{ $snapshot['due_date'] }} |
-| Balance Due  | {{ $snapshot['balance'] }} |
+| Invoice detail | Value |
+|:--|--:|
+| Status | Overdue |
+| Invoice date | {{ $snapshot['invoice_date'] }} |
+| Due date | {{ $snapshot['due_date'] }} |
+| Days overdue | {{ $daysOverdue }} |
+| Balance due when reminder was generated | {{ $snapshot['balance'] }} |
 
-@if ($tier >= 30)
-This invoice is more than 30 days overdue. Please review the balance and contact Accounts Receivable if you need help reconciling payment.
-@elseif ($tier >= 15)
-This invoice is {{ $daysOverdue }} days overdue. Please review the balance and contact Accounts Receivable if you need help reconciling payment.
-@else
-A reminder to review the balance shown above.
-@endif
+The balance above reflects the invoice when this reminder was generated. A recent payment may not yet appear. Please check the portal before making another payment.
 
-If payment has already been made, please disregard this notice and reply
-with proof of payment so we can update our records.
+<x-mail::button :url="$snapshot['portal_url']">Review invoice</x-mail::button>
+
+If the payment status still needs attention, contact the company using the details below and include the invoice number.
 
 Regards,<br>
-{{ config('mail.from.name', config('app.name')) }} Accounts Receivable
+Accounts Receivable
+
+You received this reminder because the invoice was overdue when the dunning scan ran.
 </x-mail::message>

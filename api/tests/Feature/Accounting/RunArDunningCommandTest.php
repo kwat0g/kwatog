@@ -44,16 +44,47 @@ class RunArDunningCommandTest extends TestCase
         app(ArDunningService::class)->run();
 
         Mail::assertQueued(InvoiceDunningMail::class, 1);
-        Mail::assertQueued(InvoiceDunningMail::class, function (InvoiceDunningMail $mail) use ($invoice): bool {
-            $html = $mail->render();
-            $invoiceUrl = rtrim((string) config('app.frontend_url'), '/').'/portal/customer/invoices/'.$invoice->hash_id;
+        Mail::assertQueued(
+            InvoiceDunningMail::class,
+            function (InvoiceDunningMail $mail) use ($invoice): bool {
+                $html = $mail->render();
+                $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
 
-            return $mail->hasTo('pay@example.test')
-                && $mail->tier === 7
-                && str_contains($html, 'View invoice in customer portal')
-                && str_contains($html, $invoiceUrl);
-        });
+                return $mail->hasTo('pay@example.test')
+                    && $mail->tier === 7
+                    && str_contains($html, '<title>Payment reminder: '.$invoice->invoice_number.'</title>')
+                    && str_contains($html, 'PHP 1,000.00')
+                    && str_contains($html, 'Balance due when reminder was generated')
+                    && str_contains($html, 'Review invoice')
+                    && str_contains($mail->envelope()->subject, 'Payment reminder: '.$invoice->invoice_number.' · PHP 1,000.00 · 8 days overdue');
+            },
+        );
         $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
+    }
+
+    public function test_dunning_copy_does_not_use_fixed_tier_language(): void
+    {
+        Mail::fake();
+        $customer = Customer::factory()->create(['email' => 'pay@example.test']);
+        Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(30)->toDateString(),
+            'balance' => 1000,
+            'last_dunning_tier' => 15,
+        ]);
+
+        app(ArDunningService::class)->run();
+
+        Mail::assertQueued(InvoiceDunningMail::class, function (InvoiceDunningMail $mail): bool {
+            $html = $mail->render();
+            $this->assertStringContainsString('30 days overdue', $html);
+            $this->assertStringNotContainsString('30+ days overdue', $html);
+            $this->assertStringNotContainsString('immediately', $html);
+            $this->assertStringNotContainsString('avoid further escalation', $html);
+
+            return true;
+        });
     }
 
     public function test_queued_reminder_keeps_scan_time_recipient_and_invoice_values(): void
