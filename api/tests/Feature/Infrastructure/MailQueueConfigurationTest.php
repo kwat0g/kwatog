@@ -11,8 +11,7 @@ use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
 use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
-use App\Modules\Landing\Models\ContactInquiry;
-use App\Modules\Landing\Notifications\ContactInquiryReceivedNotification;
+use App\Modules\Landing\Mail\ContactInquiryReceivedMail;
 use App\Modules\Production\Notifications\DailyProductionSummary;
 use App\Modules\Production\Notifications\WeeklyProductionSummary;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -69,6 +68,7 @@ class MailQueueConfigurationTest extends TestCase
             \App\Modules\HR\Mail\ApplicationStatusUpdatedMail::class,
             \App\Modules\HR\Mail\InterviewDetailsUpdatedMail::class,
             \App\Modules\HR\Mail\InterviewScheduledMail::class,
+            ContactInquiryReceivedMail::class,
             \App\Modules\Purchasing\Mail\SupplierPoDecisionMail::class,
             \App\Modules\Purchasing\Mail\SupplierPurchaseOrderMail::class,
             \App\Modules\Purchasing\Mail\SupplierRfqLifecycleMail::class,
@@ -92,7 +92,6 @@ class MailQueueConfigurationTest extends TestCase
             new PasswordResetLinkNotification('https://ogami.test/reset', 15),
             new EmployeeWelcomeNotification('https://app.ogami.test/reset-password?token=setup-token', 60),
             new EmployeePasswordResetNotification('https://app.ogami.test/reset-password?token=reset-token', 60),
-            new ContactInquiryReceivedNotification(new ContactInquiry),
         ];
 
         foreach ($notifications as $notification) {

@@ -9,10 +9,10 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
-use App\Modules\Landing\Notifications\ContactInquiryReceivedNotification;
+use App\Modules\Landing\Mail\ContactInquiryReceivedMail;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
@@ -51,7 +51,7 @@ class ContactInquiryTest extends TestCase
 
     public function test_guest_can_submit_contact_inquiry(): void
     {
-        Notification::fake();
+        Mail::fake();
 
         $this->post('/api/v1/landing/contact-inquiry', $this->validPayload(), ['Accept' => 'application/json'])
             ->assertCreated();
@@ -62,12 +62,16 @@ class ContactInquiryTest extends TestCase
         $this->assertMatchesRegularExpression('/^INQ-\d{6}-\d{4}$/', $record->inquiry_no);
         $this->assertNotNull($record->consent_at, 'Acceptance of the privacy notice must be recorded.');
 
-        Notification::assertSentOnDemand(ContactInquiryReceivedNotification::class);
+        Mail::assertQueued(ContactInquiryReceivedMail::class, function (ContactInquiryReceivedMail $mail) use ($record): bool {
+            return $mail->inquiryNumber === $record->inquiry_no
+                && $mail->inquiryHashId === $record->hash_id
+                && ($mail->to[0]['address'] ?? null) === app(SettingsService::class)->requiredString('company.sales_inbox_email');
+        });
     }
 
     public function test_company_and_phone_are_optional(): void
     {
-        Notification::fake();
+        Mail::fake();
 
         // A job seeker or a student has neither; rejecting them would only
         // teach people to type a placeholder.
@@ -82,7 +86,7 @@ class ContactInquiryTest extends TestCase
 
     public function test_user_agent_is_capped_to_the_database_column_length(): void
     {
-        Notification::fake();
+        Mail::fake();
 
         $this->withHeaders(['User-Agent' => str_repeat('U', 300)])
             ->postJson('/api/v1/landing/contact-inquiry', $this->validPayload())
@@ -109,7 +113,7 @@ class ContactInquiryTest extends TestCase
 
     public function test_consent_is_required_and_not_stored_from_client_input(): void
     {
-        Notification::fake();
+        Mail::fake();
 
         $this->postJson('/api/v1/landing/contact-inquiry', $this->validPayload(['consent' => false]))
             ->assertStatus(422)
@@ -120,7 +124,7 @@ class ContactInquiryTest extends TestCase
 
     public function test_submit_endpoint_is_throttled(): void
     {
-        Notification::fake();
+        Mail::fake();
 
         // public-form is 10/min; the 11th must be refused.
         for ($i = 0; $i < 10; $i++) {

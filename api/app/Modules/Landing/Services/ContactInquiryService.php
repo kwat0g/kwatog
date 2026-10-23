@@ -7,14 +7,13 @@ namespace App\Modules\Landing\Services;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\User;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
-use App\Modules\Landing\Notifications\ContactInquiryReceivedNotification;
+use App\Modules\Landing\Mail\ContactInquiryReceivedMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Mail;
 
 class ContactInquiryService
 {
@@ -52,16 +51,20 @@ class ContactInquiryService
         // Outside the transaction: a mail failure must not lose the inquiry.
         // The row is the record of truth; the notification is a convenience.
         try {
-            Notification::route('mail', $this->settings->requiredString('company.sales_inbox_email'))
-                ->notify(new ContactInquiryReceivedNotification($inquiry));
-        } catch (\Throwable $e) {
-            $recipients = User::query()
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.inquiries.view'))
-                ->where('is_active', true)
-                ->get();
+            $recipient = trim($this->settings->requiredString('company.sales_inbox_email'));
+            if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
+                throw new \RuntimeException('Configured sales inbox address is invalid.');
+            }
 
-            app(EmailDeliveryFailureNotifier::class)->notify(
-                $recipients,
+            Mail::to($recipient)->queue(new ContactInquiryReceivedMail(
+                $inquiry->inquiry_no,
+                (string) $inquiry->hash_id,
+                $inquiry->created_at->copy()->timezone((string) config('app.timezone'))->format('j M Y, g:i A T'),
+                hash('sha256', 'contact-inquiry|'.$inquiry->getKey()),
+            ));
+        } catch (\Throwable $e) {
+            app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+                'crm.inquiries.view',
                 'Contact inquiry',
                 "The sales inbox email for inquiry {$inquiry->inquiry_no} could not be delivered. Review the inquiry in the CRM.",
                 [
@@ -73,7 +76,7 @@ class ContactInquiryService
             );
             Log::warning('Contact inquiry notification failed', [
                 'inquiry_no' => $inquiry->inquiry_no,
-                'error' => $e->getMessage(),
+                'error_class' => $e::class,
             ]);
         }
 
