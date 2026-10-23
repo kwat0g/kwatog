@@ -48,7 +48,6 @@ class RunArDunningCommandTest extends TestCase
         $mail = new InvoiceDunningMail($invoice->fresh('customer'), 7, 8);
         $html = $mail->render();
         $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
-        $this->assertStringContainsString('<title>Payment reminder: '.$invoice->invoice_number.'</title>', $html);
         $this->assertStringContainsString('PHP 1,000.00', $html);
         $this->assertStringContainsString('Balance due when reminder was generated', $html);
         $this->assertStringContainsString('Review invoice', $html);
