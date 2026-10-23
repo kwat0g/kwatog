@@ -297,8 +297,7 @@ class SupplierPortalAccessLifecycleTest extends TestCase
             ->assertStatus(201)
             ->json('data');
 
-        // The temporary password travels by the invitation mail, not the API
-        // response — the response is logged, cached and rendered client-side.
+        // Setup credentials travel only through the short-lived, one-time mail link.
         $this->assertArrayNotHasKey('temporary_password', $body);
         $this->assertArrayNotHasKey('password', $body);
     }

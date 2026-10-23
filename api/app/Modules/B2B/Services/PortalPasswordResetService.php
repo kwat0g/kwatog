@@ -97,6 +97,43 @@ class PortalPasswordResetService
         ));
     }
 
+    /** @return array{token: string, email: string, name: string} */
+    public function issueInvitationToken(string $type, CustomerPortalUser|SupplierPortalUser $user): array
+    {
+        $model = $this->modelClass($type);
+        if (! $user instanceof $model) {
+            throw ValidationException::withMessages(['type' => 'Portal type does not match the account.']);
+        }
+
+        $rawToken = bin2hex(random_bytes(32));
+        $recipient = DB::transaction(function () use ($model, $user, $type, $rawToken): array {
+            $recipient = $model::query()->lockForUpdate()->find($user->getKey());
+            if (! $recipient || ! $recipient->is_active || ! $this->parentIsActive($recipient)) {
+                throw ValidationException::withMessages(['account' => 'This portal account is no longer active.']);
+            }
+
+            $email = strtolower((string) $recipient->email);
+            DB::table('portal_password_reset_tokens')
+                ->where('portal_type', $type)
+                ->where('email', $email)
+                ->whereNull('used_at')
+                ->update(['used_at' => now(), 'updated_at' => now()]);
+
+            DB::table('portal_password_reset_tokens')->insert([
+                'portal_type' => $type,
+                'email' => $email,
+                'token_hash' => hash('sha256', $rawToken),
+                'expires_at' => now()->addMinutes(60),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return ['email' => $email, 'name' => (string) $recipient->name];
+        });
+
+        return ['token' => $rawToken] + $recipient;
+    }
+
     public function reset(string $type, string $rawToken, string $password, Request $request): void
     {
         $tokenHash = hash('sha256', $rawToken);

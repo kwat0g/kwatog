@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Mail;
 
+use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
@@ -18,31 +19,31 @@ class PortalAccessInvitationMail extends QueuedMailable
     public function __construct(
         public readonly string $portalType,
         public readonly string $recipientName,
-        public readonly string $temporaryPassword,
+        public readonly string $token,
         public readonly array $fallbackUserIds = [],
     ) {
-        // Lane: mail — see config/horizon.php. Kept off `default` so an
-        // email burst cannot sit in front of an approval or a GRN notice.
-        $this->onQueue('mail');
         $this->afterCommit();
     }
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your '.config('mail.from.name').' portal access');
+        $brand = app(EmailBrandingService::class)->data()['name'];
+
+        return new Envelope(subject: $this->safeHeaderText('['.$brand.'] Set up your '.$this->portalType.' portal access'));
     }
 
     public function content(): Content
     {
         $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+        $url = $base.'/portal/password-reset?type='.urlencode($this->portalType).'&token='.urlencode($this->token);
 
         return new Content(
             markdown: 'emails/portal/access-invitation',
             with: [
+                'preheader' => 'Set a password for your '.$this->portalType.' portal account using a one-time link.',
                 'portalType' => $this->portalType,
-                'recipientName' => $this->recipientName,
-                'temporaryPassword' => $this->temporaryPassword,
-                'portalUrl' => $base.'/portal/'.$this->portalType.'/login',
+                'recipientName' => $this->safeMarkdownText($this->recipientName),
+                'setupUrl' => $url,
             ],
         );
     }
@@ -52,12 +53,27 @@ class PortalAccessInvitationMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Portal access invitation',
-            "A {$this->portalType} portal invitation could not be delivered. Use an approved channel to provide the temporary password and ask the contact to reset it after signing in.",
+            "A {$this->portalType} portal invitation could not be delivered. Resend the invitation after verifying the contact's email address.",
             [
                 'link_to' => '/'.($this->portalType === 'supplier' ? 'purchasing/vendors' : 'accounting/customers'),
                 'entity_type' => $this->portalType.'_portal_user',
-                'reason' => $e->getMessage(),
+                'reason' => 'The email provider rejected or could not deliver the portal invitation.',
             ],
         );
+    }
+
+    private function safeMarkdownText(string $value): string
+    {
+        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', strip_tags($value)) ?? '');
+        if ($text === '') {
+            return 'there';
+        }
+
+        return preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? '');
     }
 }

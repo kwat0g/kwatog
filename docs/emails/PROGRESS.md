@@ -19,6 +19,7 @@ Updated: 2026-10-23
 - E-004 customer/supplier templates and eight light/dark desktop/mobile previews are integrated; accountant review and credit-note document/portal decisions remain open.
 - E-027/E-028 production-summary templates and previews are included. Empty recipient sets now raise an in-app admin notice instead of silently skipping the scheduled summary.
 - E-029/E-031–E-033 account messages use expiring one-time setup/reset links; no password is included in the email. Existing serialized legacy jobs generate a fresh link at send time. HR/data-protection review remains required.
+- E-005 portal invitations now use expiring, one-time setup links and rotate credentials; recipient-entered names are Markdown-sanitized and mail copy uses configured branding. Template preview work remains in the chain.
 - E-001's four browser screenshots were refreshed in the local #216 worktree at `6913c986`; prior captures still showed the retired O mark. Current company logo variants now appear in light and dark previews. See [E-001 review](E-001-invoice-finalized.md).
 - E-002's four browser screenshots were refreshed in the local #218 worktree with the current landing-page logo variants; see [E-002 review](E-002-official-receipt.md).
 - E-003's four browser screenshots were refreshed in the local #220 worktree with the current landing-page logo variants; see [E-003 review](E-003-invoice-dunning.md).

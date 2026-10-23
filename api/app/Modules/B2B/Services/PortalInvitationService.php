@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use App\Common\Services\TemporaryPasswordGenerator;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
@@ -17,9 +16,7 @@ use Illuminate\Support\Facades\DB;
 
 class PortalInvitationService
 {
-    public function __construct(private readonly TemporaryPasswordGenerator $temporaryPasswords) {}
-
-    /** @return array{user: CustomerPortalUser, temporary_password: string} */
+    /** @return array{user: CustomerPortalUser} */
     public function inviteCustomer(Customer $customer, string $name, string $email): array
     {
         if (! $customer->is_active || $customer->trashed()) {
@@ -28,8 +25,8 @@ class PortalInvitationService
 
         $name = trim($name);
         $email = strtolower(trim($email));
-        $password = $this->temporaryPasswords->generate();
-        $user = DB::transaction(function () use ($customer, $name, $email, $password): CustomerPortalUser {
+        $unknownPassword = bin2hex(random_bytes(32));
+        $user = DB::transaction(function () use ($customer, $name, $email, $unknownPassword): CustomerPortalUser {
             // customer_portal_users.email is globally UNIQUE while the row holds
             // a single customer_id, so this lookup IS the tenant boundary. The
             // match must normalise case the same way the write does, or the
@@ -54,7 +51,7 @@ class PortalInvitationService
                 'customer_id' => $customer->id,
                 'name' => $name,
                 'email' => $email,
-                'password' => $password,
+                'password' => $unknownPassword,
                 'is_active' => true,
                 'must_change_password' => true,
                 'failed_login_attempts' => 0,
@@ -74,17 +71,18 @@ class PortalInvitationService
             return $user;
         });
 
-        $this->queueInvitation($user->email, $user->name, 'customer', $password, [
+        $invitation = app(PortalPasswordResetService::class)->issueInvitationToken('customer', $user);
+        $this->queueInvitation($invitation['email'], $invitation['name'], 'customer', $invitation['token'], [
             'permission' => 'accounting.customers.manage',
             'link_to' => '/accounting/customers/'.$customer->hash_id,
             'entity_type' => 'customer_portal_user',
             'entity_id' => $user->hash_id,
         ]);
 
-        return ['user' => $user, 'temporary_password' => $password];
+        return ['user' => $user];
     }
 
-    /** @return array{user: SupplierPortalUser, temporary_password: string} */
+    /** @return array{user: SupplierPortalUser} */
     public function inviteSupplier(Vendor $vendor, string $name, string $email): array
     {
         if (! $vendor->is_active || $vendor->trashed()) {
@@ -93,8 +91,8 @@ class PortalInvitationService
 
         $name = trim($name);
         $email = strtolower(trim($email));
-        $password = $this->temporaryPasswords->generate();
-        $user = DB::transaction(function () use ($vendor, $name, $email, $password): SupplierPortalUser {
+        $unknownPassword = bin2hex(random_bytes(32));
+        $user = DB::transaction(function () use ($vendor, $name, $email, $unknownPassword): SupplierPortalUser {
             $user = SupplierPortalUser::withTrashed()
                 ->whereRaw('LOWER(email) = ?', [$email])
                 ->lockForUpdate()
@@ -113,7 +111,7 @@ class PortalInvitationService
                 'vendor_id' => $vendor->id,
                 'name' => $name,
                 'email' => $email,
-                'password' => $password,
+                'password' => $unknownPassword,
                 'is_active' => true,
                 'must_change_password' => true,
                 'failed_login_attempts' => 0,
@@ -131,24 +129,25 @@ class PortalInvitationService
             return $user;
         });
 
-        $this->queueInvitation($user->email, $user->name, 'supplier', $password, [
+        $invitation = app(PortalPasswordResetService::class)->issueInvitationToken('supplier', $user);
+        $this->queueInvitation($invitation['email'], $invitation['name'], 'supplier', $invitation['token'], [
             'permission' => 'b2b.portal_access.manage',
             'link_to' => '/accounting/vendors/'.$vendor->hash_id,
             'entity_type' => 'supplier_portal_user',
             'entity_id' => $user->hash_id,
         ]);
 
-        return ['user' => $user, 'temporary_password' => $password];
+        return ['user' => $user];
     }
 
     /** @param array<string, string> $context */
-    private function queueInvitation(string $email, string $name, string $portalType, string $password, array $context): void
+    private function queueInvitation(string $email, string $name, string $portalType, string $token, array $context): void
     {
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                 $context['permission'],
                 'Portal access invitation',
-                "The {$portalType} portal invitation for {$name} could not be sent because the email address is not usable. Use the returned temporary password through an approved channel and ask the contact to reset it after signing in.",
+                "The {$portalType} portal invitation for {$name} could not be sent because the email address is not usable. Verify the address and resend the secure setup link.",
                 $context + ['reason' => 'The recipient email address is not valid.'],
             );
 
@@ -159,15 +158,15 @@ class PortalInvitationService
             Mail::to($email)->queue(new PortalAccessInvitationMail(
                 $portalType,
                 $name,
-                $password,
+                $token,
                 app(EmailDeliveryFailureNotifier::class)->userIdsWithPermission($context['permission']),
             ));
         } catch (\Throwable $e) {
             app(EmailDeliveryFailureNotifier::class)->notifyPermission(
                 $context['permission'],
                 'Portal access invitation',
-                "The {$portalType} portal invitation for {$name} could not be queued. Use the returned temporary password through an approved channel and ask the contact to reset it after signing in.",
-                $context + ['reason' => $e->getMessage()],
+                "The {$portalType} portal invitation for {$name} could not be queued. Resend the invitation after verifying the contact's email address.",
+                $context + ['reason' => 'The email provider rejected or could not queue the portal invitation.'],
             );
         }
     }

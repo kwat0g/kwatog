@@ -199,7 +199,7 @@ class PortalPasswordResetTest extends TestCase
         self::assertNull($fresh->locked_until);
     }
 
-    public function test_customer_invitation_creates_account_and_queues_branded_access_mail(): void
+    public function test_customer_invitation_creates_account_and_queues_one_time_password_setup_link(): void
     {
         Mail::fake();
         $customer = Customer::factory()->create();
@@ -211,11 +211,60 @@ class PortalPasswordResetTest extends TestCase
         );
 
         self::assertSame($customer->id, $result['user']->customer_id);
-        self::assertTrue(Hash::check($result['temporary_password'], $result['user']->fresh()->password));
+        self::assertArrayNotHasKey('temporary_password', $result);
         self::assertTrue($result['user']->fresh()->must_change_password);
-        Mail::assertQueued(PortalAccessInvitationMail::class, fn (PortalAccessInvitationMail $mail): bool =>
-            $mail->portalType === 'customer' && $mail->recipientName === 'Invited Contact'
+        $mail = null;
+        Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $queued) use (&$mail): bool {
+            $mail = $queued;
+
+            return $queued->portalType === 'customer' && $queued->recipientName === 'Invited Contact';
+        });
+        self::assertNotNull($mail);
+        self::assertDatabaseHas('portal_password_reset_tokens', [
+            'portal_type' => 'customer',
+            'email' => 'invited-contact@example.test',
+            'token_hash' => hash('sha256', $mail->token),
+            'used_at' => null,
+        ]);
+        self::assertTrue(\Illuminate\Support\Carbon::parse(
+            DB::table('portal_password_reset_tokens')->where('email', 'invited-contact@example.test')->value('expires_at')
+        )->isFuture());
+        self::assertStringContainsString('/portal/password-reset?type=customer&amp;token='.$mail->token, $mail->render());
+        self::assertStringNotContainsString('Temporary password', $mail->render());
+    }
+
+    public function test_portal_invitation_does_not_turn_contact_name_into_markdown_links(): void
+    {
+        Mail::fake();
+        $customer = Customer::factory()->create();
+        app(PortalInvitationService::class)->inviteCustomer(
+            $customer,
+            '[Billing](https://evil.example)<script>alert(1)</script>',
+            'billing-contact@example.test',
         );
+
+        Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $mail): bool {
+            $html = $mail->render();
+
+            return ! str_contains($html, 'href="https://evil.example"')
+                && ! str_contains($html, '<script>');
+        });
+    }
+
+    public function test_supplier_invitation_uses_the_supplier_password_setup_route(): void
+    {
+        Mail::fake();
+        $vendor = Vendor::factory()->create();
+        app(PortalInvitationService::class)->inviteSupplier($vendor, 'Supplier Contact', 'supplier-invite@example.test');
+
+        $mail = null;
+        Mail::assertQueued(PortalAccessInvitationMail::class, function (PortalAccessInvitationMail $queued) use (&$mail): bool {
+            $mail = $queued;
+
+            return $queued->portalType === 'supplier';
+        });
+        self::assertNotNull($mail);
+        self::assertStringContainsString('/portal/password-reset?type=supplier&amp;token='.$mail->token, $mail->render());
     }
 
     public function test_portal_reset_clears_first_login_requirement(): void
