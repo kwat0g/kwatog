@@ -13,9 +13,11 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\SupplierListingStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\SupplierItemListing;
+use App\Modules\Purchasing\Services\SupplierListingService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -129,6 +131,40 @@ class SupplierItemListingTest extends TestCase
         ]);
         // Nothing may touch approved_suppliers before approval.
         $this->assertDatabaseCount('approved_suppliers', 0);
+    }
+
+    public function test_listing_notice_excludes_reviewer_without_list_view_permission(): void
+    {
+        $revoked = User::factory()->create([
+            'role_id' => $this->purchasingOfficer->role_id,
+            'is_active' => true,
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'purchasing.supplier_listings.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $this->purchasingOfficer->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $revoked->flushPermissionsCache();
+
+        $notifications = Mockery::mock(NotificationService::class);
+        $notifications->shouldReceive('send')->once()->withArgs(function ($audience) use ($revoked): bool {
+            $ids = collect($audience)->pluck('id');
+
+            return $ids->contains($this->purchasingOfficer->id) && ! $ids->contains($revoked->id);
+        });
+        $this->app->instance(NotificationService::class, $notifications);
+
+        $item = Item::factory()->create(['is_active' => true]);
+        app(SupplierListingService::class)->submit($this->vendor->id, [
+            'item_id' => $item->id,
+            'supplier_item_code' => 'SAFE-01',
+            'price' => '100.00',
+            'lead_time_days' => 5,
+        ]);
     }
 
     public function test_duplicate_pending_listing_for_same_item_is_rejected(): void

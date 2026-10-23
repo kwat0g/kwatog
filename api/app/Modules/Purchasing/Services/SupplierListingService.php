@@ -343,7 +343,9 @@ class SupplierListingService
         try {
             $item = $listing->item;
             $vendor = $listing->vendor;
-            $reviewers = ApprovalDelegation::approvalAudience('purchasing.supplier_listings.review');
+            $reviewers = ApprovalDelegation::approvalAudience('purchasing.supplier_listings.review')
+                ->filter(fn (User $user): bool => $user->hasPermission('purchasing.supplier_listings.view'))
+                ->values();
 
             app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [
                 'title' => 'Supplier listing awaiting review',
