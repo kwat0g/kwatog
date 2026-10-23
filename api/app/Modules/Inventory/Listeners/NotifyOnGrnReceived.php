@@ -24,7 +24,9 @@ class NotifyOnGrnReceived implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('inventory.view'))
+                ->values();
 
             $ref = $grn->purchaseOrder?->po_number ?? $grn->grn_number;
 

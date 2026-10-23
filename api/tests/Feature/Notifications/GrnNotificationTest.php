@@ -54,6 +54,29 @@ class GrnNotificationTest extends TestCase
         ]);
     }
 
+    public function test_listener_excludes_role_user_without_grn_view_permission(): void
+    {
+        $purchasing = $this->userWithRole('purchasing_officer');
+        $admin = $this->userWithRole('system_admin');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $purchasing->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'inventory.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $admin->id,
+            'reason' => 'Audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $purchasing->flushPermissionsCache();
+
+        app(NotifyOnGrnReceived::class)->handle(new GoodsReceiptNoteCreated(GoodsReceiptNote::factory()->create()));
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $purchasing->id,
+            'type' => 'inventory.grn_received',
+        ]);
+    }
+
     public function test_delayed_grn_notification_does_not_claim_qc_is_still_in_progress(): void
     {
         $purchasing = $this->userWithRole('purchasing_officer');
