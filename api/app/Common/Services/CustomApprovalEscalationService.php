@@ -159,7 +159,7 @@ class CustomApprovalEscalationService
         ];
     }
 
-    /** @return array{id:int,kind:string,label:string,permissions:list<string>,since:mixed,epoch:string,link:string,maker_ids:list<int>,maker_role_id:?int,session_id:?int} */
+    /** @return array{id:int,kind:string,label:string,permissions:list<string>,read_permissions:list<string>,since:mixed,epoch:string,link:string,maker_ids:list<int>,maker_role_id:?int,session_id:?int} */
     private function candidate(string $kind, object $row): array
     {
         $id = (int) $row->id;
@@ -170,19 +170,19 @@ class CustomApprovalEscalationService
             $row->second_maker_id ?? null,
         ])));
         $routes = [
-            'overtime' => ['Overtime request', 'attendance.ot.approve', "/hr/attendance/overtime/{$hashId}"],
-            'stock_adjustment' => ['Stock adjustment', 'inventory.adjust.approve', '/inventory/stock-adjustments'],
-            'item_cost_review' => ['Supplier cost review', 'inventory.costs.approve', '/crm/price-agreements/cost-reviews'],
-            'stock_count_variance' => ['Stock-count variance', 'inventory.stock_count.manage', '/inventory/stock-count?session_id='.app('hashids')->encode((int) ($row->session_id ?? 0)).'&count_item_id='.$hashId],
-            'payroll_adjustment' => ['Payroll adjustment', ['payroll.adjustments.approve', 'payroll.adjustments.reject'], '/payroll/adjustments'],
-            'budget' => ['Budget', 'budgeting.approve', "/budgeting/{$hashId}"],
-            'budget_transfer' => ['Budget transfer', 'budgeting.approve', '/budgeting/transfers'],
-            'invoice_prebill' => ['Prebill invoice', 'accounting.invoices.prebill_approve', "/accounting/invoices/{$hashId}"],
-            'supplier_listing' => ['Supplier listing', 'purchasing.supplier_listings.review', '/purchasing/supplier-listings'],
-            'loan_write_off' => ['Loan write-off', 'loans.write_off.approve', "/hr/loans/{$hashId}"],
-            'payroll' => ['Payroll period', 'payroll.periods.approve', "/payroll/periods/{$hashId}"],
+            'overtime' => ['Overtime request', 'attendance.ot.approve', "/hr/attendance/overtime/{$hashId}", ['attendance.view']],
+            'stock_adjustment' => ['Stock adjustment', 'inventory.adjust.approve', '/inventory/stock-adjustments', ['inventory.adjust', 'inventory.adjust.approve']],
+            'item_cost_review' => ['Supplier cost review', 'inventory.costs.approve', '/crm/price-agreements/cost-reviews', ['inventory.costs.review']],
+            'stock_count_variance' => ['Stock-count variance', 'inventory.stock_count.manage', '/inventory/stock-count?session_id='.app('hashids')->encode((int) ($row->session_id ?? 0)).'&count_item_id='.$hashId, ['inventory.stock_count.view']],
+            'payroll_adjustment' => ['Payroll adjustment', ['payroll.adjustments.approve', 'payroll.adjustments.reject'], '/payroll/adjustments', ['payroll.adjustments.view']],
+            'budget' => ['Budget', 'budgeting.approve', "/budgeting/{$hashId}", ['budgeting.view', 'budgeting.approve']],
+            'budget_transfer' => ['Budget transfer', 'budgeting.approve', "/budgeting/transfers/{$hashId}", ['budgeting.view', 'budgeting.approve']],
+            'invoice_prebill' => ['Prebill invoice', 'accounting.invoices.prebill_approve', "/accounting/invoices/{$hashId}", ['accounting.invoices.view']],
+            'supplier_listing' => ['Supplier listing', 'purchasing.supplier_listings.review', '/purchasing/supplier-listings', ['purchasing.supplier_listings.view']],
+            'loan_write_off' => ['Loan write-off', 'loans.write_off.approve', "/hr/loans/{$hashId}", ['loans.view']],
+            'payroll' => ['Payroll period', 'payroll.periods.approve', "/payroll/periods/{$hashId}", ['payroll.periods.view']],
         ];
-        [$label, $permissions, $link] = $routes[$kind];
+        [$label, $permissions, $link, $readPermissions] = $routes[$kind];
         $permissions = (array) $permissions;
 
         return [
@@ -190,6 +190,7 @@ class CustomApprovalEscalationService
             'kind' => $kind,
             'label' => $label,
             'permissions' => $permissions,
+            'read_permissions' => $readPermissions,
             'since' => $row->since,
             'epoch' => (string) ($row->epoch ?? $row->since),
             'link' => $link,
@@ -199,7 +200,7 @@ class CustomApprovalEscalationService
         ];
     }
 
-    /** @param array{id:int,kind:string,label:string,permissions:list<string>,since:mixed,epoch:string,link:string,maker_ids:list<int>,maker_role_id:?int,session_id:?int} $candidate */
+    /** @param array{id:int,kind:string,label:string,permissions:list<string>,read_permissions:list<string>,since:mixed,epoch:string,link:string,maker_ids:list<int>,maker_role_id:?int,session_id:?int} $candidate */
     private function eligibleApprovers(array $candidate): Collection
     {
         $sourceRow = match ($candidate['kind']) {
@@ -235,6 +236,9 @@ class CustomApprovalEscalationService
             if ((! $mayApproveOwnPayroll && in_array((int) $user->id, $candidate['maker_ids'], true))
                 || ! collect($candidate['permissions'])->contains(
                     static fn (string $permission): bool => ApprovalDelegation::canActForPermission($user, $permission, $candidate['maker_ids']),
+                )
+                || ! collect($candidate['read_permissions'])->contains(
+                    static fn (string $permission): bool => $user->hasPermission($permission),
                 )) {
                 return false;
             }
