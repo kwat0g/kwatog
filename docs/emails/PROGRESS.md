@@ -101,3 +101,5 @@ Updated: 2026-10-23
 | E017 | Supplier purchase order decision | Shared email layout, decision snapshot, supplier portal link, and desktop/mobile light/dark screenshots integrated | Real-client rendering remains unverified |
 
 | E018 | Supplier purchase order publication | Snapshot and supplier portal link; shared layout; desktop/mobile light/dark screenshots integrated | Real-client rendering remains unverified |
+
+| E019 | Supplier RFQ lifecycle | Event snapshot and recipient-specific status/action summary; supplier portal link; scenario screenshots integrated | Real-client rendering remains unverified |

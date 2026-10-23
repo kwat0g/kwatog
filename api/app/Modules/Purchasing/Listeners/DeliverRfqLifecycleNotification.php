@@ -124,8 +124,7 @@ final class DeliverRfqLifecycleNotification implements ShouldQueue
                 continue;
             }
             try {
-                $rfqSnapshot = $snapshot;
-                unset($rfqSnapshot['suppliers']);
+                $rfqSnapshot = array_intersect_key($snapshot, array_flip(['rfq_number', 'rfq_hash_id', 'title', 'closes_at']));
                 Mail::to($email)->queue(new SupplierRfqLifecycleMail($rfq, $invitation, $kind, $fallback, $supplierSnapshot + $rfqSnapshot));
                 $invitation->forceFill(['email_notified_at' => now()])->save();
             } catch (\Throwable $e) {
