@@ -16,6 +16,7 @@ Keep Laravel's existing Markdown Mailable and `MailMessage` stack. The applicati
 - Footer uses `company.legal_name` and `company.address` from settings. Missing required values fail rendering instead of displaying source-code fallback facts. Optional phone, email, certification, and disclaimer appear only when configured.
 - Existing PDF/company settings remain the source for company details. Optional approved email disclaimer is stored at `email.footer_disclaimer`; it is seeded from `EMAIL_FOOTER_DISCLAIMER` and editable through the admin settings endpoint.
 - Laravel Markdown buttons now render a 48px VML button for Outlook, an inline-styled HTML button, a descriptive HTML fallback link, and Laravel's plain-text button link. Existing panel/table components remain available; per-message key-facts/detail/timeline blocks belong to the email groups that need them.
+- Shared table styling covers both `<x-mail::table>` wrappers and raw tables emitted by Laravel Markdown, without applying data-table styles to CTA tables. Mobile raw tables use fixed layout and tighter cell padding.
 
 ## Non-production delivery policy
 

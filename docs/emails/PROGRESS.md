@@ -1,13 +1,14 @@
 # Email audit progress
 
-Updated: 2026-10-21
+Updated: 2026-10-23
 
 ## Status
 
+- E-018/E-019 previews: PR #320 merged as `06540f88`, adding 28 desktop/mobile, light/dark browser captures and regression coverage for supplier PO line text and peso totals. Main's warmer brand palette remains authoritative. Real email-client behavior remains unverified.
 - Phase 0 discovery and Phase 1 inventory are documented in [00-discovery.md](00-discovery.md) and [01-inventory.md](01-inventory.md). Owner directed work to proceed.
-- Shared framework and non-production mail guard are implemented on `email/shared-foundation`; draft PR [#213](https://github.com/kwat0g/kwatog/pull/213) is open at `0d1917b9`. Its local branch contains many unpushed commits mixing foundation changes with per-email fixes and review notes; do not push it wholesale. Split/rebase before updating #213.
-- Reliability foundation draft PR [#214](https://github.com/kwat0g/kwatog/pull/214) depends on #213.
-- Per-email redesign and defect-fix work exists in draft PRs. GitHub currently lists 95 open PRs matching the email work branches or titles; a status snapshot found 91 with failed checks, 3 pending or missing checks, and none all-green. Each still needs current verification and independent review.
+- Shared framework and non-production mail guard merged in PR [#213](https://github.com/kwat0g/kwatog/pull/213), main commit `dc4f335b`.
+- Queued delivery, after-commit dispatch, retry logging, and mail queue worker merged from PR [#214](https://github.com/kwat0g/kwatog/pull/214), main commit `a74476ef`.
+- Per-email redesigns remain incomplete. Inventory lists 34 production Mailable/Notification implementations plus one test-only implementation; each remaining type still needs current verification.
 - E-001's four browser screenshots were refreshed in the local #216 worktree at `6913c986`; prior captures still showed the retired O mark. Current company logo variants now appear in light and dark previews. See [E-001 review](E-001-invoice-finalized.md).
 - E-002's four browser screenshots were refreshed in the local #218 worktree with the current landing-page logo variants; see [E-002 review](E-002-official-receipt.md).
 - E-003's four browser screenshots were refreshed in the local #220 worktree with the current landing-page logo variants; see [E-003 review](E-003-invoice-dunning.md).
@@ -23,7 +24,7 @@ Updated: 2026-10-21
 - E-013 applicant status redesign is local commit `628cb1d3`; focused transition/rejection tests passed (2 tests, 11 assertions) with `Mail::fake()`. Raw enums were fixed in separate local commit `6b122579` (EF-025). Four light/dark desktop/mobile previews inspected. No mail sent.
 - E-014/E-015 interview notices redesigned in local commit `dfdcb121`, stacked on snapshot fix `fc4e76d4` (EF-026). Four light/dark desktop/mobile previews per type inspected. Focused queue, snapshot, and content tests passed (2 tests, 14 assertions) with `Mail::fake()`. No mail sent.
 - E-016 secure-link fix, UI redesign, tests, and four desktop/mobile light/dark screenshots are included in draft PR #238; no separate template PR is needed. Focused job and finalization-listener tests passed earlier (3/13 and 4/8). Current CI fails before PHPUnit on inherited EF-027 PHPStan and EF-058 SPA dependency audit. HR/data-protection review remains required; no email sent.
-- PR #312 fixes the inherited credit-note PHPStan error (EF-027). Earlier runs exposed a dunning MailFake assertion and a title assertion belonging to E-003; commit `e057a3e4` removes that duplicate assertion. Run [39575548527](https://github.com/kwat0g/kwatog/actions/runs/39575548527) passed PHPStan but failed `SalesOrderResponsePortalTest::test_portal_accept_replay_is_idempotent_and_crm_can_acknowledge_it`: array transport lacked a From header. Shared test sender fix is local in #213 and needs to reach this branch before rerunning.
+- PR #312 fixes the inherited credit-note PHPStan error (EF-027). Earlier runs exposed a dunning MailFake assertion and a title assertion belonging to E-003; commit `e057a3e4` removes that duplicate assertion. Run [39575548527](https://github.com/kwat0g/kwatog/actions/runs/39575548527) passed PHPStan but failed `SalesOrderResponsePortalTest::test_portal_accept_replay_is_idempotent_and_crm_can_acknowledge_it`: array transport lacked a From header. Main now configures a safe `.test` sender for PHPUnit; refresh downstream PR bases before treating their historical failure as current.
 - Shared foundation local commit `6967b23a` changes a missing `FRONTEND_URL` fallback from `APP_URL` to `http://localhost` (EF-029), so email links cannot silently target the API host.
 - E-017 through E-034 already have local or open draft PR work; E-017–E-034 are not untouched. Their checks, base-chain health, per-type tests, and screenshot evidence still need a consolidated audit. E-035 is test-only harness coverage, documented in PR #280.
 - E-020 and E-021's 16 desktop/mobile light/dark screenshots were re-rendered from current branch HTML and visually inspected. Refreshed captures show visible CTA labels in dark mode; updated local commits `a60de199` (#250) and `5829b4a6` (#252). No email sent.
@@ -50,8 +51,8 @@ Updated: 2026-10-21
 
 ## Blockers
 
-- Recheck GitHub Actions before starting another test run. PR #315 has no full-suite result because its run was canceled.
-- PR #213's current remote checks are from its older head and failed: API tests hit the non-production guard without a test inbox, and SPA dependency audit found advisories. The local branch contains subsequent fixes; rerun checks after publishing them.
+- CI for the current main rollup is pending. Historical PR #315 full-suite result remains unavailable because its run was canceled.
+- Older #213 checks predate the merged main fixes and should not be used as the current foundation result.
 - Owner reported DKIM setup succeeded for `ogamiph.dev` in AWS Asia Pacific (Singapore). Verify SPF, DMARC, bounce handling, and provider suppression with domain administrators. Verify company sales contact and VAT settings before real external delivery. Keep statutory, payroll, HR, and personal-data messages flagged for accountant/HR/legal/data-protection review.
 
 ## Findings
@@ -62,8 +63,6 @@ Updated: 2026-10-21
 
 ## Next steps
 
-1. Publish the prepared date fix, supplier-shipment finding, and demo seeder test fix as separate draft PRs; run checks sequentially.
-2. Publish the local shared-foundation fixes and rerun #213 checks, then propagate its reserved test sender/sink and dependency fixes through affected branches in dependency order.
-3. Reconcile E-013–E-016 with existing draft PRs #236 and #238; verify their current diffs and inherited CI blockers instead of opening duplicate template PRs.
-4. Audit existing E-017–E-034 PRs and the E-035 harness against inventory, including current CI, dependencies, screenshots, and focused test evidence. Refresh stale findings and coverage docs.
-5. Finish the master coverage report and visual review for every remaining email. The company/deliverability checklist is in [02-foundation.md](02-foundation.md); company values, SPF/DMARC, bounce handling, and Reply-To still need external verification. Real email-client rendering remains unverified.
+1. Reconcile remaining email PRs against the inventory; keep only changes not already present on main.
+2. Finish per-type data/recipient verification and screenshots; record deliberate deferrals.
+3. Verify company values, SPF/DMARC, bounce handling, and Reply-To with the relevant company contacts. Real email-client rendering remains unverified.

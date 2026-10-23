@@ -14,8 +14,10 @@ use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Listeners\EmailCustomerOnSalesOrderConfirmed;
 use App\Modules\CRM\Mail\CustomerSalesOrderConfirmedMail;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Mail\SupplierPurchaseOrderMail;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Support\SupplierDispatchResult;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Listeners\EmailCustomerOnDeliveryConfirmed;
@@ -139,6 +141,17 @@ class FeatureEmailIntegrationTest extends TestCase
         $purchaseOrder = PurchaseOrder::factory()->create([
             'vendor_id' => $vendor->id,
             'po_number' => 'PO-EMAIL-001',
+            'total_amount' => '125.00',
+        ]);
+        $item = Item::factory()->create(['name' => 'Bracket [A]']);
+        PurchaseOrderItem::create([
+            'purchase_order_id' => $purchaseOrder->id,
+            'item_id' => $item->id,
+            'description' => 'Bracket [A]',
+            'quantity' => '2.50',
+            'unit' => 'pcs',
+            'unit_price' => '50.00',
+            'total' => '125.00',
         ]);
 
         $result = app(SupplierPortalDispatchGateway::class)
@@ -151,9 +164,12 @@ class FeatureEmailIntegrationTest extends TestCase
             return $mail->hasTo('supplier@example.test')
                 && $mail->purchaseOrder->is($purchaseOrder)
                 && str_contains($html, 'PO-EMAIL-001')
+                && str_contains($html, 'Bracket [A]')
+                && str_contains($html, '₱125.00')
                 && str_contains($html, '/portal/supplier/purchase-orders/'.$purchaseOrder->hash_id)
-                && str_contains($html, 'background-color: #f9fafb')
-                && str_contains($html, 'border-bottom: 1px solid #f2f4f7');
+                && str_contains($html, 'background-color: #f7f4ef')
+                && str_contains($html, 'border-bottom: 1px solid #f0eae0')
+                && str_contains($html, 'border-color: #332c24 !important');
         });
     }
 
