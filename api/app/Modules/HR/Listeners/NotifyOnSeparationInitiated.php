@@ -32,7 +32,7 @@ class NotifyOnSeparationInitiated implements ShouldQueue
             $this->notifications->send($audience, 'chain.separation_initiated', [
                 'title'       => 'Separation Initiated',
                 'message'     => "Separation initiated for {$clearance->employee?->full_name}.",
-                'link_to'     => "/hr/employees/{$clearance->employee?->hash_id}",
+                'link_to'     => "/hr/separations/{$clearance->hash_id}",
                 'entity_type' => 'clearance',
                 'entity_id'   => $clearance->hash_id,
             ]);
