@@ -441,6 +441,12 @@ class MrpEngineService
                         (string) ($previousContext['generated_records_fingerprint'] ?? ''),
                         $this->generatedRecordsFingerprint((int) $so->id),
                     )) {
+                    if ($lines->contains(fn ($line) => $line->fulfillment_policy === 'stock_first')) {
+                        app(\App\Modules\SupplyChain\Services\DeliveryService::class)->draftOrderSupply(
+                            $so,
+                            \App\Modules\Auth\Models\User::findOrFail($recordedBy),
+                        );
+                    }
                     if ($run !== null) {
                         $this->touchRunHeartbeatOrFail($run);
                     }
