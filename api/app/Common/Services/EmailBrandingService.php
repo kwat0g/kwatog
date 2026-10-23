@@ -7,10 +7,7 @@ namespace App\Common\Services;
 /**
  * Single source of truth for transactional email identity.
  *
- * The legal/company values come from the existing company settings. The
- * display name is intentionally separate: customer-facing mail should say
- * "Ogami Philippines" while official documents may continue to use the
- * configured legal entity name.
+ * Company identity comes from the existing company settings.
  */
 class EmailBrandingService
 {
@@ -20,16 +17,16 @@ class EmailBrandingService
     public function data(): array
     {
         return [
-            'name' => $this->value('email.brand_name', 'Ogami Philippines'),
-            'legal_name' => $this->value('company.legal_name', 'Philippine Ogami Corporation'),
-            'address' => $this->value('company.address', 'FCIE Complex, Dasmariñas, Cavite, Philippines'),
-            'phone' => $this->value('company.phone', '+63 46 000 0000'),
-            'email' => $this->value('company.email', 'info@ogami.test'),
-            'sales_email' => $this->value('company.sales_inbox_email', 'sales@ogami.com.ph'),
-            'tin' => $this->value('company.tin', '000-000-000-000'),
-            'vat_status' => $this->value('company.vat_status', 'VAT Registered'),
-            'certification' => $this->value('company.certification', 'IATF 16949:2016 Certified'),
-            'public_url' => rtrim($this->value('company.public_url', config('app.frontend_url', config('app.url'))), '/'),
+            'name' => $this->value('email.brand_name') ?? $this->value('company.legal_name'),
+            'legal_name' => $this->value('company.legal_name'),
+            'address' => $this->value('company.address'),
+            'phone' => $this->value('company.phone'),
+            'email' => $this->value('company.email'),
+            'sales_email' => $this->value('company.sales_inbox_email'),
+            'tin' => $this->value('company.tin'),
+            'vat_status' => $this->value('company.vat_status'),
+            'certification' => $this->value('company.certification'),
+            'public_url' => rtrim($this->value('company.public_url') ?? config('app.frontend_url', config('app.url')), '/'),
             'logo_path' => $this->logoPath(),
             'logo_data_uri' => $this->logoDataUri(),
         ];
@@ -69,7 +66,7 @@ class EmailBrandingService
     }
 
     /**
-     * Settings row, then hardcoded default. There is deliberately no env()
+     * Settings row only. There is deliberately no env()
      * tier: production runs `php artisan config:cache`
      * (docker/php/prod-entrypoint.sh:15), after which env() returns null, so
      * an env tier fires only in development and silently diverges from
@@ -78,13 +75,13 @@ class EmailBrandingService
      * SettingsSeeder for email.brand_name and company.sales_inbox_email —
      * which is where environment values legitimately enter the system.
      */
-    private function value(string $key, string $fallback): string
+    private function value(string $key): ?string
     {
         $configured = $this->settings->get($key);
         if (is_string($configured) && trim($configured) !== '') {
             return trim($configured);
         }
 
-        return $fallback;
+        return null;
     }
 }

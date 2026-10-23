@@ -38,7 +38,7 @@ class SettingsSeeder extends Seeder
             'longitude' => $envFloat('COMPANY_LONGITUDE'),
         ];
         $configuredEmailBrandName = $envString('COMPANY_EMAIL_BRAND_NAME');
-        $emailBrandName = $configuredEmailBrandName ?: 'Ogami Philippines';
+        $emailBrandName = $configuredEmailBrandName;
 
         $rows = [
             // ── Company ──────────────────────────────────────
