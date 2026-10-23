@@ -363,6 +363,7 @@ class UpdateSettingRequest extends FormRequest
             'quality.ppap_gate_enabled' => ['value' => ['required', 'boolean']],
             'company.employee_email_domain' => ['value' => ['required', 'string', 'max:255']],
             'company.sales_inbox_email' => ['value' => ['required', 'email', 'max:255']],
+            'email.footer_disclaimer' => ['value' => ['present', 'string', 'max:2000']],
             'hr.default_user_role_slug' => ['value' => ['required', 'string', 'max:100']],
             'hr.self_service.certificate_catalog' => ['value' => ['required', 'array', 'min:1']],
             'accounting.functional_currency_code' => ['value' => ['required', 'string', 'size:3']],
@@ -396,6 +397,10 @@ class UpdateSettingRequest extends FormRequest
             'leave.request.past_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'leave.request.future_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'inventory.safety_stock.issue_movement_types' => ['value' => ['required', 'array', 'min:1']],
+            // DSS W0-5 (F-02) — DemandBasis tunables, one per consumer.
+            'inventory.demand.replenishment_movement_types' => ['value' => ['required', 'array', 'min:1']],
+            'inventory.demand.safety_stock_movement_types' => ['value' => ['required', 'array', 'min:1']],
+            'inventory.demand.projection_movement_types' => ['value' => ['required', 'array', 'min:1']],
             'quality.aql.sample_plan' => ['value' => ['required', 'array']],
             'quality.incoming.default_checklist' => ['value' => ['required', 'array', 'min:1']],
             'quality.incoming.measured_pieces' => ['value' => ['required', 'integer', 'min:1', 'max:1000']],

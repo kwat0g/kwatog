@@ -13,7 +13,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatInt } from '@/lib/formatNumber';
-import { scheduleDate } from '@/components/production/scheduleDates';
+import { productionDateTime, scheduleDate } from '@/components/production/scheduleDates';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
@@ -23,6 +23,8 @@ const DEFAULT_FILTERS: WorkOrderListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  sort: 'created_at',
+  direction: 'desc',
 };
 
 /** Local midnight — "late" means the calendar day the plant is working. */
@@ -160,6 +162,12 @@ export default function WorkOrdersListPage() {
       },
     },
     {
+      key: 'created_at',
+      header: 'Created',
+      sortable: true,
+      cell: (r) => <NumCell>{productionDateTime(r.created_at)}</NumCell>,
+    },
+    {
       key: 'product',
       header: 'Product',
       cell: (r) =>
@@ -221,8 +229,9 @@ export default function WorkOrdersListPage() {
       ),
     },
     {
-      key: 'planned',
+      key: 'planned_end',
       header: 'Production due',
+      sortable: true,
       align: 'right',
       cell: (r) => (
         <NumCell>{r.planned_end ? scheduleDate(r.planned_end, 'Asia/Manila') : '—'}</NumCell>
@@ -340,6 +349,9 @@ export default function WorkOrdersListPage() {
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+            onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
+            currentSort={filters.sort}
+            currentDirection={filters.direction}
           />
         </div>
       )}

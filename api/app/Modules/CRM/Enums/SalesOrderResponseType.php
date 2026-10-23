@@ -15,6 +15,7 @@ enum SalesOrderResponseType: string
     case Propose = 'propose';
     case Decline = 'decline';
     case DeliveryDate = 'delivery_date';
+    case CancellationRequest = 'cancellation_request';
 
     public static function values(): array
     {
@@ -28,6 +29,7 @@ enum SalesOrderResponseType: string
             self::Propose => 'Proposed changes',
             self::Decline => 'Declined',
             self::DeliveryDate => 'Delivery date proposal',
+            self::CancellationRequest => 'Cancellation requested',
         };
     }
 }

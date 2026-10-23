@@ -3,7 +3,7 @@
 
 Hello {{ $party?->contact_person ?: $party?->name ?: 'there' }},
 
-Ogami Philippines has finalized the following credit note.
+{{ config('mail.from.name') }} has finalized the following credit note.
 
 | Detail | Value |
 |---|---|
@@ -20,5 +20,5 @@ The credit is now posted and available for the applicable invoice or bill proces
 <x-mail::button :url="$portalUrl">Open portal</x-mail::button>
 
 Regards,<br>
-Ogami Philippines Finance
+{{ config('mail.from.name') }} Finance
 </x-mail::message>

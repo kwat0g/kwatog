@@ -72,11 +72,11 @@ class MaintenanceWorkOrderResource extends JsonResource
                 $this->machineDowntimes->whereNull('end_time')->sortBy('start_time')->first()?->start_time?->toISOString()),
             'server_time' => $this->when($this->relationLoaded('logs'), fn () => now()->toISOString()),
             'response_minutes' => $this->started_at && $this->created_at && $this->started_at->gte($this->created_at)
-                ? (int) $this->created_at->diffInMinutes($this->started_at) : null,
+                ? (int) $this->created_at->diffInMinutes($this->started_at, true) : null,
             'technician_repair_minutes' => $this->repair_submitted_at && $this->started_at && $this->repair_submitted_at->gte($this->started_at)
-                ? (int) $this->started_at->diffInMinutes($this->repair_submitted_at) : null,
+                ? (int) $this->started_at->diffInMinutes($this->repair_submitted_at, true) : null,
             'maintenance_elapsed_minutes' => $this->started_at && $elapsedEnd->gte($this->started_at)
-                ? (int) $this->started_at->diffInMinutes($elapsedEnd) : null,
+                ? (int) $this->started_at->diffInMinutes($elapsedEnd, true) : null,
             'maintenance_elapsed_provisional' => $this->started_at !== null && $this->completed_at === null && $this->repair_submitted_at === null,
             'can_record_work' => MaintenanceWorkAccess::canRecord($this->resource, $request->user()),
             'available_actions' => $this->availableActions($status, $request),

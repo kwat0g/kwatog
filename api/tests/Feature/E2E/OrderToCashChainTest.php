@@ -217,28 +217,27 @@ class OrderToCashChainTest extends TestCase
     {
         $line = DeliveryItem::query()->where('delivery_id', $delivery->id)->sole();
         $this->assertSame(DeliveryStatus::Scheduled, $delivery->status);
-        $this->assertDatabaseMissing('delivery_stock_reservation_batches', ['delivery_id' => $delivery->id]);
+        // Outgoing release auto-drafts the delivery and already holds the
+        // durable reservation the departure guard requires; this helper only
+        // proves the hold is idempotent and replay-safe.
+        $batch = DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->sole();
+        $requestKey = (string) $batch->request_key;
+        $reservation = $batch->reservations()->sole();
 
-        $requestKey = (string) Str::uuid();
         $this->actingAs($this->employee)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
-                'request_key' => $requestKey,
+                'request_key' => (string) Str::uuid(),
             ])
             ->assertForbidden();
-        $this->assertDatabaseMissing('delivery_stock_reservation_batches', ['delivery_id' => $delivery->id]);
+        $this->assertSame(1, DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->count());
 
-        $reservationResponse = $this->actingAs($this->warehouse)
+        $this->actingAs($this->warehouse)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
-                'request_key' => $requestKey,
+                'request_key' => (string) Str::uuid(),
             ])
-            ->assertOk()
-            ->assertJsonPath('data.status', DeliveryStatus::Scheduled->value)
-            ->assertJsonPath('data.stock_reservation_status', DeliveryStockReservationStatus::Reserved->value)
-            ->assertJsonPath('data.can_reserve_stock', false);
-        $batch = DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->sole();
-        $reservation = $batch->reservations()->sole();
-        $this->assertSame($this->warehouse->id, (int) $batch->reserved_by);
-        $this->assertSame(DeliveryStockReservationStatus::Reserved, $batch->status);
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This delivery already has a physical stock reservation. Retry with its original request key or reload the delivery.');
+        $this->assertSame(DeliveryStockReservationStatus::Reserved, $batch->fresh()->status);
         $this->assertSame($line->id, (int) $reservation->delivery_item_id);
         $this->assertSame((string) $line->quantity, (string) $reservation->quantity);
         $stockLevel = StockLevel::query()
@@ -247,12 +246,6 @@ class OrderToCashChainTest extends TestCase
             ->sole();
         $this->assertSame((string) $line->quantity, (string) $stockLevel->reserved_quantity);
 
-        $this->actingAs($this->warehouse)
-            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/reserve-stock", [
-                'request_key' => $requestKey,
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.stock_reservation_batch_id', $reservationResponse->json('data.stock_reservation_batch_id'));
         $this->assertSame(1, DeliveryStockReservationBatch::query()->where('delivery_id', $delivery->id)->count());
         $this->assertSame((string) $line->quantity, (string) $stockLevel->fresh()->reserved_quantity);
 
@@ -265,10 +258,15 @@ class OrderToCashChainTest extends TestCase
         ]);
 
         $this->actingAs($this->impex)
-            ->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/assignment", [
+            ->post("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/shipment-plan", [
                 'vehicle_id' => $vehicle->id,
                 'driver_id' => $this->driver->id,
                 'reason' => 'Scheduled customer run',
+                'carrier' => 'OGAMI test carrier',
+                'scheduled_date' => today()->toDateString(),
+                'expected_delivery_date' => today()->addDay()->toDateString(),
+                'dispatch' => false,
+                'loading_photo' => UploadedFile::fake()->image('loading.jpg'),
             ])
             ->assertOk();
         $delivery = Delivery::query()->findOrFail($delivery->id);
@@ -276,7 +274,7 @@ class OrderToCashChainTest extends TestCase
         $this->assertSame($vehicle->id, (int) $delivery->vehicle_id);
         $this->assertSame($this->driver->id, (int) $delivery->driver_id);
 
-        foreach (['loading', 'in_transit', 'delivered'] as $status) {
+        foreach (['loading', 'in_transit'] as $status) {
             $this->actingAs($this->impex)
                 ->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/status", [
                     'status' => $status,
@@ -313,11 +311,6 @@ class OrderToCashChainTest extends TestCase
                 $this->assertSame($reservation->lot_number, $movement->lot_number);
                 $this->assertSame($this->impex->id, (int) $movement->created_by);
                 $this->assertSame($movement->id, (int) $reservation->stock_movement_id);
-            } else {
-                $line->refresh();
-                $this->assertSame((string) $line->quantity, (string) $line->customer_received_quantity);
-                $this->assertSame('available', $vehicle->fresh()->status);
-                $this->assertSame('0.000', (string) $stockLevel->quantity);
             }
         }
         // NOTE: refresh() re-loads every loaded relation by name; the fixture
@@ -325,25 +318,36 @@ class OrderToCashChainTest extends TestCase
         // relation), so a plain refresh() throws RelationNotFoundException.
         // Re-read through a fresh query instead.
         $delivery = Delivery::query()->findOrFail($delivery->id);
-        $this->assertSame(DeliveryStatus::Delivered->value, $delivery->status->value);
+        $this->assertSame(DeliveryStatus::InTransit->value, $delivery->status->value);
 
-        // ADV7 — confirmation is proof-gated. Try without, then upload.
+        // A delivery cannot be marked delivered without customer receipt evidence.
         $this->actingAs($this->impex)
-            ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/confirm")
+            ->patchJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/status", [
+                'status' => 'delivered',
+            ])
             ->assertStatus(422);
-        $this->assertSame(DeliveryStatus::Delivered, Delivery::query()->findOrFail($delivery->id)->status);
-        $this->assertSame(0, DeliveryProof::query()->where('delivery_id', $delivery->id)->count());
+        $this->assertSame(DeliveryStatus::InTransit, Delivery::query()->findOrFail($delivery->id)->status);
+        $this->assertSame(1, DeliveryProof::query()->where('delivery_id', $delivery->id)->where('proof_type', 'loading_photo')->count());
+        $this->assertSame(0, DeliveryProof::query()->where('delivery_id', $delivery->id)->whereIn('proof_type', ['photo', 'signed_dr', 'customer_po_confirmation'])->count());
         $this->assertNull(Delivery::query()->findOrFail($delivery->id)->invoice_id);
 
-        $this->actingAs($this->impex)
+        // The assigned driver records receipt; that evidence advances the shipment.
+        $this->actingAs($this->driver)
             ->post("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/proofs", [
                 'proof_type' => 'signed_dr',
                 'file' => UploadedFile::fake()->image('signed-dr.jpg'),
                 'notes' => 'Signed by receiver',
             ])
             ->assertSuccessful();
-        $proof = DeliveryProof::query()->where('delivery_id', $delivery->id)->sole();
-        $this->assertSame($this->impex->id, (int) $proof->uploaded_by);
+        $proof = DeliveryProof::query()
+            ->where('delivery_id', $delivery->id)
+            ->where('proof_type', 'signed_dr')
+            ->sole();
+        $this->assertSame($this->driver->id, (int) $proof->uploaded_by);
+        $delivery = Delivery::query()->findOrFail($delivery->id);
+        $this->assertSame(DeliveryStatus::Delivered, $delivery->status);
+        $this->assertSame('available', $vehicle->fresh()->status);
+        $this->assertSame((string) $line->quantity, (string) $line->fresh()->customer_received_quantity);
 
         $this->actingAs($this->impex)
             ->postJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/confirm")

@@ -13,6 +13,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { isStaleTimestamp } from '@/api/dashboard-layout';
 import { WidgetBreakdown } from './WidgetBreakdown';
 import { WidgetTable } from './WidgetTable';
+import { WidgetExportButton } from './WidgetExportButton';
 import type {
  DashboardLayoutItem,
  DashboardWidgetSummary,
@@ -292,11 +293,22 @@ export function LiveDashboardWidget({
     <Panel
       title={widget.name}
       actions={
-        href ? (
-          <Link to={href} className="text-xs text-link hover:underline">
-            Open →
-          </Link>
-        ) : undefined
+        <div className="flex items-center gap-1.5">
+          {href && (
+            <Link to={href} className="text-xs text-link hover:underline">
+              Open →
+            </Link>
+          )}
+          {/* Every tile can take its own numbers with it (F-017). The button
+              hides itself when the payload is unavailable — see the component. */}
+          <WidgetExportButton
+            name={widget.name}
+            renderKind={widget.render_kind}
+            data={widget.data}
+            summary={summary}
+            updatedAt={summary?.updated_at}
+          />
+        </div>
       }
     >
       {loading ? (

@@ -50,7 +50,7 @@ test.describe('Error pages', () => {
     // The SPA may surface the error as a toast, an error-text, a retry button, or
     // an empty-list state (the sidebar is visible, so the page booted fine).
     // The key: the page doesn't crash (white screen / full redirect).
-    const bodyText = await page.textContent('body');
+    const bodyText = (await page.textContent('body')) ?? '';
     // At minimum we should see SOMETHING in the body that isn't a blank page
     expect(bodyText.length).toBeGreaterThan(20);
     // No JS crash in console

@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Common\Services\SettingsService;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class SettingsSeeder extends Seeder
 {
@@ -36,7 +37,8 @@ class SettingsSeeder extends Seeder
             'latitude' => $envFloat('COMPANY_LATITUDE'),
             'longitude' => $envFloat('COMPANY_LONGITUDE'),
         ];
-        $emailBrandName = $envString('COMPANY_EMAIL_BRAND_NAME') ?: 'Ogami Philippines';
+        $configuredEmailBrandName = $envString('COMPANY_EMAIL_BRAND_NAME');
+        $emailBrandName = $configuredEmailBrandName;
 
         $rows = [
             // ── Company ──────────────────────────────────────
@@ -218,23 +220,23 @@ class SettingsSeeder extends Seeder
             // ── Maintenance ──────────────────────────────────
             ['key' => 'maintenance.closed_loop.enabled', 'value' => false, 'group' => 'maintenance', 'label' => 'Verified Maintenance Recovery', 'description' => 'Require independent recovery verification for newly created maintenance orders.'],
             ['key' => 'maintenance.automation.actor_roles', 'value' => ['maintenance_supervisor'], 'group' => 'maintenance', 'label' => 'Automation Actor Roles', 'description' => 'Active roles allowed to own generated maintenance work orders, in priority order.'],
-            ['key' => 'maintenance.predictive.temperature.max', 'value' => 85.0, 'group' => 'maintenance', 'label' => 'Temperature Maximum', 'description' => 'Maximum safe machine temperature in °C.'],
+            ['key' => 'maintenance.predictive.temperature.max', 'value' => 85, 'group' => 'maintenance', 'label' => 'Temperature Maximum', 'description' => 'Maximum safe machine temperature in °C.'],
             ['key' => 'maintenance.predictive.vibration.max', 'value' => 7.1, 'group' => 'maintenance', 'label' => 'Vibration Maximum', 'description' => 'Maximum safe vibration velocity in mm/s.'],
-            ['key' => 'maintenance.predictive.pressure.min', 'value' => 2.0, 'group' => 'maintenance', 'label' => 'Pressure Minimum', 'description' => 'Minimum safe hydraulic pressure in bar.'],
-            ['key' => 'maintenance.predictive.pressure.max', 'value' => 12.0, 'group' => 'maintenance', 'label' => 'Pressure Maximum', 'description' => 'Maximum safe hydraulic pressure in bar.'],
-            ['key' => 'maintenance.predictive.current.max', 'value' => 150.0, 'group' => 'maintenance', 'label' => 'Current Maximum', 'description' => 'Maximum safe current reading in amperes.'],
-            ['key' => 'maintenance.predictive.oil_quality.min', 'value' => 70.0, 'group' => 'maintenance', 'label' => 'Oil Quality Minimum', 'description' => 'Minimum acceptable oil quality percentage.'],
+            ['key' => 'maintenance.predictive.pressure.min', 'value' => 2, 'group' => 'maintenance', 'label' => 'Pressure Minimum', 'description' => 'Minimum safe hydraulic pressure in bar.'],
+            ['key' => 'maintenance.predictive.pressure.max', 'value' => 12, 'group' => 'maintenance', 'label' => 'Pressure Maximum', 'description' => 'Maximum safe hydraulic pressure in bar.'],
+            ['key' => 'maintenance.predictive.current.max', 'value' => 150, 'group' => 'maintenance', 'label' => 'Current Maximum', 'description' => 'Maximum safe current reading in amperes.'],
+            ['key' => 'maintenance.predictive.oil_quality.min', 'value' => 70, 'group' => 'maintenance', 'label' => 'Oil Quality Minimum', 'description' => 'Minimum acceptable oil quality percentage.'],
             ['key' => 'maintenance.predictive.breach_window', 'value' => 3, 'group' => 'maintenance', 'label' => 'Consecutive Breaches', 'description' => 'Consecutive unsafe readings required before a corrective work order is generated.'],
 
             // ── Loan policies ────────────────────────────────
-            ['key' => 'loans.company_loan.annual_interest_rate', 'value' => 0.0, 'group' => 'loans', 'label' => 'Company Loan Annual Interest Rate', 'description' => 'Decimal annual rate, where 0.10 means 10%.'],
-            ['key' => 'loans.company_loan.max_salary_multiplier', 'value' => 1.0, 'group' => 'loans', 'label' => 'Company Loan Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
-            ['key' => 'loans.cash_advance.annual_interest_rate', 'value' => 0.0, 'group' => 'loans', 'label' => 'Cash Advance Annual Interest Rate', 'description' => 'Decimal annual rate, where 0.10 means 10%.'],
-            ['key' => 'loans.cash_advance.max_salary_multiplier', 'value' => 1.0, 'group' => 'loans', 'label' => 'Cash Advance Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
+            ['key' => 'loans.company_loan.annual_interest_rate', 'value' => 0, 'group' => 'loans', 'label' => 'Company Loan Annual Interest Rate', 'description' => 'Decimal annual rate, where 0.10 means 10%.'],
+            ['key' => 'loans.company_loan.max_salary_multiplier', 'value' => 1, 'group' => 'loans', 'label' => 'Company Loan Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
+            ['key' => 'loans.cash_advance.annual_interest_rate', 'value' => 0, 'group' => 'loans', 'label' => 'Cash Advance Annual Interest Rate', 'description' => 'Decimal annual rate, where 0.10 means 10%.'],
+            ['key' => 'loans.cash_advance.max_salary_multiplier', 'value' => 1, 'group' => 'loans', 'label' => 'Cash Advance Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
             ['key' => 'loans.sss_loan.annual_interest_rate', 'value' => 0.10, 'group' => 'loans', 'label' => 'SSS Salary Loan Annual Interest Rate', 'description' => 'Decimal annual rate, where 0.10 means 10%.'],
-            ['key' => 'loans.sss_loan.max_salary_multiplier', 'value' => 1.0, 'group' => 'loans', 'label' => 'SSS Salary Loan Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
+            ['key' => 'loans.sss_loan.max_salary_multiplier', 'value' => 1, 'group' => 'loans', 'label' => 'SSS Salary Loan Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
             ['key' => 'loans.pagibig_loan.annual_interest_rate', 'value' => 0.105, 'group' => 'loans', 'label' => 'Pag-IBIG Loan Annual Interest Rate', 'description' => 'Decimal annual rate, where 0.10 means 10%.'],
-             ['key' => 'loans.pagibig_loan.max_salary_multiplier', 'value' => 1.0, 'group' => 'loans', 'label' => 'Pag-IBIG Loan Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
+             ['key' => 'loans.pagibig_loan.max_salary_multiplier', 'value' => 1, 'group' => 'loans', 'label' => 'Pag-IBIG Loan Salary Limit', 'description' => 'Maximum principal as a multiple of monthly salary.'],
             ['key' => 'accounting.accounts.loan_disbursement_receivable_code', 'value' => '1110', 'group' => 'accounting', 'label' => 'Employee Loan Disbursement Receivable Account Code', 'description' => 'Asset account debited when an approved employee loan is disbursed.'],
             ['key' => 'accounting.accounts.loan_disbursement_cash_code', 'value' => '1020', 'group' => 'accounting', 'label' => 'Employee Loan Disbursement Cash Account Code', 'description' => 'Cash account credited when an approved employee loan is disbursed.'],
             ['key' => 'accounting.accounts.loan_disbursement_interest_income_code', 'value' => '4020', 'group' => 'accounting', 'label' => 'Employee Loan Interest Income Account Code', 'description' => 'Revenue account credited for interest included in an employee loan balance.'],
@@ -245,7 +247,7 @@ class SettingsSeeder extends Seeder
 
             // ── Payroll anomaly policies ─────────────────────
             ['key' => 'payroll.anomaly.net_change_ratio', 'value' => 0.30, 'group' => 'payroll', 'label' => 'Payroll Net-Change Alert Ratio', 'description' => 'Flag net pay changes above this ratio versus the comparable prior payroll.'],
-            ['key' => 'payroll.anomaly.overtime_hours', 'value' => 80.0, 'group' => 'payroll', 'label' => 'Payroll Overtime Alert Hours', 'description' => 'Flag payrolls whose attendance overtime exceeds this many hours in one period.'],
+            ['key' => 'payroll.anomaly.overtime_hours', 'value' => 80, 'group' => 'payroll', 'label' => 'Payroll Overtime Alert Hours', 'description' => 'Flag payrolls whose attendance overtime exceeds this many hours in one period.'],
             ['key' => 'payroll.anomaly.deduction_ratio', 'value' => 0.50, 'group' => 'payroll', 'label' => 'Payroll Deduction Alert Ratio', 'description' => 'Flag total deductions above this share of gross pay.'],
             ['key' => 'payroll.work_days_per_month', 'value' => 22, 'group' => 'payroll', 'label' => 'Payroll Work Days per Month', 'description' => 'Divisor used to derive daily rates from monthly salary.'],
             ['key' => 'payroll.hours_per_day', 'value' => 8, 'group' => 'payroll', 'label' => 'Payroll Hours per Day', 'description' => 'Divisor used to derive hourly rates and day equivalents.'],
@@ -279,14 +281,14 @@ class SettingsSeeder extends Seeder
             // ── Purchasing ───────────────────────────────────
             [
                 'key'         => 'purchasing.three_way_tolerance_qty_pct',
-                'value'       => 5.0,
+                'value'       => 5,
                 'group'       => 'purchasing',
                 'label'       => '3-Way Match Qty Tolerance (%)',
                 'description' => 'Percentage tolerance for quantity mismatch in PO/GRN/Invoice 3-way matching.',
             ],
             [
                 'key'         => 'purchasing.three_way_tolerance_price_pct',
-                'value'       => 5.0,
+                'value'       => 5,
                 'group'       => 'purchasing',
                 'label'       => '3-Way Match Price Tolerance (%)',
                 'description' => 'Percentage tolerance for price mismatch in PO/GRN/Invoice 3-way matching.',
@@ -455,12 +457,14 @@ class SettingsSeeder extends Seeder
         ];
 
         foreach ($rows as $row) {
-            // A blank environment value means "leave deployment data alone" on
-            // repeat seeds. Operators can clear a setting explicitly through
-            // the admin settings endpoint.
-            if (in_array($row['key'], $deploymentKeys, true)
-                && ($row['value'] === null || $row['value'] === '')
-                && $settings->get($row['key'], null) !== null) {
+            $exists = DB::table('settings')->where('key', $row['key'])->exists();
+            $hasDeploymentValue = in_array($row['key'], $deploymentKeys, true)
+                && $row['value'] !== null
+                && $row['value'] !== ''
+                && ($row['key'] !== 'email.brand_name' || $configuredEmailBrandName !== '');
+
+            // Defaults fill gaps; explicit deployment values remain authoritative.
+            if ($exists && ! $hasDeploymentValue) {
                 continue;
             }
             $settings->set(
@@ -496,9 +500,14 @@ class SettingsSeeder extends Seeder
             'b2b_portals'       => ['B2B Portals',          'Supplier and customer self-service portals.'],
             'forecasting'       => ['Forecasting',          'Demand forecasts, stock-out projections, and forecast accuracy.'],
             'budgeting'         => ['Budgeting',            'Budgets, budget line items, and fiscal years.'],
+            'dss'               => ['Decision Support',     'Unified recommendations, detectors, and Decision Center.'],
         ];
 
         foreach ($modules as $slug => [$label, $description]) {
+            if (DB::table('settings')->where('key', "modules.{$slug}")->exists()) {
+                continue;
+            }
+
             $settings->set(
                 "modules.{$slug}",
                 true,

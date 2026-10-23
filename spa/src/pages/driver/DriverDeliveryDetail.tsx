@@ -12,6 +12,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonPanel } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DeliveryAttemptPanel } from '@/pages/supply-chain/deliveries/DeliveryAttemptPanel';
+import { ShipToAddress } from '@/components/supply-chain/ShipToAddress';
 import { deliveryStatusVariant } from '@/lib/statusVariants';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
@@ -179,9 +180,22 @@ export default function DriverDeliveryDetail() {
  {/* Details first on a phone — a driver reads where the stop is before
  what went wrong with it. Right-hand column on a desk. */}
  <div className="space-y-4 lg:order-2 lg:col-span-1">
+ {/* The stop, before anything about the paperwork. Tapping the address
+ starts Google Maps turn-by-turn from wherever the truck is. */}
+ <Panel title="Deliver to">
+ <ShipToAddress
+ heading={data.sales_order?.customer?.name ?? undefined}
+ address={data.delivery_address}
+ contactPerson={data.delivery_contact_person}
+ contactPhone={data.delivery_contact_phone}
+ emptyHint="No delivery address on file for this customer."
+ />
+ </Panel>
+
  <Panel title="Delivery details">
  <dl className="space-y-2.5 text-sm">
- <DetailRow label="Customer">{data.sales_order?.customer?.name ?? '—'}</DetailRow>
+ {/* The customer now leads the "Deliver to" panel above, so it is
+ not repeated here — the subtitle carries it as well. */}
  <DetailRow label="Sales order">
  {data.sales_order?.so_number ? <span className="font-mono tabular-nums">{data.sales_order.so_number}</span> : '—'}
  </DetailRow>

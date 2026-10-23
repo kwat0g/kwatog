@@ -1,0 +1,249 @@
+{
+  "role": "depthead",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/approvals",
+    "/hr/leaves"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2696,
+      "horizontalPageScroll": false,
+      "heading": "DepartmentUpdated just now",
+      "title": "Department · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 29,
+        "inputs": 0,
+        "tables": 2,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2361,
+      "horizontalPageScroll": false,
+      "heading": "DepartmentUpdated just now",
+      "title": "Department · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 29,
+        "inputs": 0,
+        "tables": 2,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2282,
+      "horizontalPageScroll": false,
+      "heading": "DepartmentUpdated just now",
+      "title": "Department · Dashboard · ERP",
+      "counts": {
+        "buttons": 12,
+        "links": 29,
+        "inputs": 0,
+        "tables": 2,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/dashboard-1440.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2000,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 47,
+        "links": 17,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/approvals-375.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1845,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 47,
+        "links": 17,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/approvals-768.png"
+    },
+    {
+      "route": "/approvals",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1901,
+      "horizontalPageScroll": false,
+      "heading": "ApprovalsUpdated just now",
+      "title": "Approvals · ERP",
+      "counts": {
+        "buttons": 50,
+        "links": 17,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/approvals-1440.png"
+    },
+    {
+      "route": "/hr/leaves",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1993,
+      "horizontalPageScroll": false,
+      "heading": "Leave requests",
+      "title": "Leave requests · Human Resources · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 22,
+        "inputs": 28,
+        "tables": 1,
+        "rows": 22,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/hr-leaves-375.png"
+    },
+    {
+      "route": "/hr/leaves",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1997,
+      "horizontalPageScroll": false,
+      "heading": "Leave requests",
+      "title": "Leave requests · Human Resources · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 22,
+        "inputs": 28,
+        "tables": 1,
+        "rows": 22,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/hr-leaves-768.png"
+    },
+    {
+      "route": "/hr/leaves",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2114,
+      "horizontalPageScroll": false,
+      "heading": "Leave requests",
+      "title": "Leave requests · Human Resources · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 22,
+        "inputs": 28,
+        "tables": 1,
+        "rows": 22,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/depthead/hr-leaves-1440.png"
+    }
+  ]
+}

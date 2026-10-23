@@ -1,0 +1,249 @@
+{
+  "role": "customer_service",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/crm/complaints",
+    "/return-management"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2647,
+      "horizontalPageScroll": false,
+      "heading": "Customer ServiceUpdated just now",
+      "title": "Customer Service · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 25,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2260,
+      "horizontalPageScroll": false,
+      "heading": "Customer ServiceUpdated just now",
+      "title": "Customer Service · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 25,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2310,
+      "horizontalPageScroll": false,
+      "heading": "Customer ServiceUpdated just now",
+      "title": "Customer Service · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 25,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 1,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/dashboard-1440.png"
+    },
+    {
+      "route": "/crm/complaints",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2068,
+      "horizontalPageScroll": false,
+      "heading": "Customer complaints",
+      "title": "Customer complaints · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 16,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/crm-complaints-375.png"
+    },
+    {
+      "route": "/crm/complaints",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1987,
+      "horizontalPageScroll": false,
+      "heading": "Customer complaints",
+      "title": "Customer complaints · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 16,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/crm-complaints-768.png"
+    },
+    {
+      "route": "/crm/complaints",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1852,
+      "horizontalPageScroll": false,
+      "heading": "Customer complaints",
+      "title": "Customer complaints · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 16,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/crm-complaints-1440.png"
+    },
+    {
+      "route": "/return-management",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1977,
+      "horizontalPageScroll": false,
+      "heading": "Return Management (RMA)",
+      "title": "Return Management (RMA) · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 15,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/return-management-375.png"
+    },
+    {
+      "route": "/return-management",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1978,
+      "horizontalPageScroll": false,
+      "heading": "Return Management (RMA)",
+      "title": "Return Management (RMA) · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 15,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/return-management-768.png"
+    },
+    {
+      "route": "/return-management",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1924,
+      "horizontalPageScroll": false,
+      "heading": "Return Management (RMA)",
+      "title": "Return Management (RMA) · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 15,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/customer_service/return-management-1440.png"
+    }
+  ]
+}

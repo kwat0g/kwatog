@@ -738,6 +738,11 @@ it('shows one date warning and hides cached assignment messages until the date i
 });
 
 it('chooses production day before confirmation and regenerates on day changes', async () => {
+  /* Derived from the Manila clock: the review accepts today or later only, so a
+     hardcoded day goes red the day after it is written. */
+  const today = scheduleDateKey(new Date().toISOString(), 'Asia/Manila');
+  const day = offsetScheduleDate(today, 1);
+  const nextDay = offsetScheduleDate(today, 2);
   const proposal = {
     schedule: {
       id: 'slot-day',
@@ -763,7 +768,7 @@ it('chooses production day before confirmation and regenerates on day changes', 
     >
       <AssignmentReview
         woId="wo-day"
-        context={{ ...context, current: null, preferred_production_date: '2026-10-10' }}
+        context={{ ...context, current: null, preferred_production_date: day }}
         generate
         confirm
         onClose={vi.fn()}
@@ -771,11 +776,11 @@ it('chooses production day before confirmation and regenerates on day changes', 
     </QueryClientProvider>,
   );
   fireEvent.change(screen.getByLabelText('Number of workers'), { target: { value: '1' } });
-  fireEvent.change(screen.getByLabelText('Production day'), { target: { value: '2026-10-12' } });
+  fireEvent.change(screen.getByLabelText('Production day'), { target: { value: nextDay } });
   await waitFor(() =>
     expect(workOrdersApi.generateAssignmentSuggestion).toHaveBeenCalledWith(
       'wo-day',
-      expect.objectContaining({ preferred_production_date: '2026-10-12', minimum_workers: 1 }),
+      expect.objectContaining({ preferred_production_date: nextDay, minimum_workers: 1 }),
     ),
   );
   const count = vi.mocked(workOrdersApi.generateAssignmentSuggestion).mock.calls.length;
@@ -784,6 +789,9 @@ it('chooses production day before confirmation and regenerates on day changes', 
 });
 
 it('keeps manual recorder across day changes and blocks unavailable selected workers', async () => {
+  const today = scheduleDateKey(new Date().toISOString(), 'Asia/Manila');
+  const day = offsetScheduleDate(today, 1);
+  const nextDay = offsetScheduleDate(today, 2);
   const proposal = {
     schedule: {
       id: 'manual-day',
@@ -816,7 +824,7 @@ it('keeps manual recorder across day changes and blocks unavailable selected wor
     >
       <AssignmentReview
         woId="manual-day"
-        context={{ ...context, current: null, preferred_production_date: '2026-10-10' }}
+        context={{ ...context, current: null, preferred_production_date: day }}
         generate
         confirm
         onClose={vi.fn()}
@@ -826,7 +834,7 @@ it('keeps manual recorder across day changes and blocks unavailable selected wor
   fireEvent.change(screen.getByLabelText('Number of workers'), { target: { value: '1' } });
   await screen.findByText('machine');
   fireEvent.click(screen.getByRole('button', { name: 'Manual assign' }));
-  fireEvent.change(screen.getByLabelText('Production day'), { target: { value: '2026-10-12' } });
+  fireEvent.change(screen.getByLabelText('Production day'), { target: { value: nextDay } });
   await screen.findByText('Selected workers are unavailable for this time. Replace them.');
   expect(screen.getByLabelText('Output recorder')).toHaveValue('a');
   expect(screen.getByRole('button', { name: 'Remove Worker' })).toBeDefined();
@@ -834,6 +842,8 @@ it('keeps manual recorder across day changes and blocks unavailable selected wor
 });
 
 it('ignores an older day response and waits for the current proposal', async () => {
+  const today = scheduleDateKey(new Date().toISOString(), 'Asia/Manila');
+  const nextDay = offsetScheduleDate(today, 2);
   let resolveOld!: (value: import('@/types/production-crew').AssignmentSuggestion) => void;
   let resolveNew!: (value: import('@/types/production-crew').AssignmentSuggestion) => void;
   vi.mocked(workOrdersApi.generateAssignmentSuggestion)
@@ -852,8 +862,10 @@ it('ignores an older day response and waits for the current proposal', async () 
   const proposal = (machine: string) => ({
     schedule: {
       id: machine,
-      scheduled_start: '2026-10-12T08:00:00+08:00',
-      scheduled_end: '2026-10-12T10:00:00+08:00',
+      /* The editor marks a proposal whose end has passed as expired and disables
+         Confirm, so the fixture's window must stay ahead of the real clock. */
+      scheduled_start: `${nextDay}T08:00:00+08:00`,
+      scheduled_end: `${nextDay}T10:00:00+08:00`,
       updated_at: '2026-10-08T08:00:00Z',
       machine_id: machine,
       mold_id: 'mold',
@@ -883,7 +895,7 @@ it('ignores an older day response and waits for the current proposal', async () 
   fireEvent.change(screen.getByLabelText('Number of workers'), { target: { value: '1' } });
   await waitFor(() => expect(resolveOld).toBeDefined());
   fireEvent.click(screen.getByRole('button', { name: 'Choose day' }));
-  fireEvent.change(screen.getByLabelText('Production day'), { target: { value: '2026-10-12' } });
+  fireEvent.change(screen.getByLabelText('Production day'), { target: { value: nextDay } });
   await waitFor(() => expect(resolveNew).toBeDefined());
   expect(screen.getByRole('button', { name: 'Confirm work order' })).toBeDisabled();
   resolveNew(proposal('current-machine'));

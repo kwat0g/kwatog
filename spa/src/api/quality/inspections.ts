@@ -7,15 +7,12 @@ import type {
   ChecklistSubmission,
   CountedInspectionSubmission,
   Inspection,
-  CreateInspectionData,
   RecordInspectionItemResultsData,
   RecordInspectionMeasurementsData,
   RecordInspectionBatchResultData,
-  AqlPlan,
   InspectionStage,
   InspectionStatus,
   InspectionEntityType,
-  WorkOrderOutputOption,
 } from '@/types/quality';
 
 export interface InspectionListParams extends ListParams {
@@ -53,12 +50,6 @@ export const inspectionsApi = {
         };
       }>('/quality/inspections/options')
       .then((r) => r.data.data),
-  workOrderOutputs: (productId: string) =>
-    client
-      .get<{
-        data: WorkOrderOutputOption[];
-      }>('/quality/inspections/work-order-outputs', { params: { product_id: productId } })
-      .then((r) => r.data.data),
   list: (params?: InspectionListParams) =>
     client
       .get<PaginatedResponse<Inspection> & { meta: { status_counts?: { to_inspect: number; awaiting_review: number; failed: number; all: number } } }>('/quality/inspections', { params })
@@ -67,8 +58,6 @@ export const inspectionsApi = {
     client.get<ApiSuccess<Inspection>>(`/quality/inspections/${id}`).then((r) => r.data.data),
   chain: (id: string) =>
     client.get<{ data: ChainStep[] }>(`/quality/inspections/${id}/chain`).then((r) => r.data.data),
-  create: (data: CreateInspectionData) =>
-    client.post<ApiSuccess<Inspection>>('/quality/inspections', data).then((r) => r.data.data),
   recordBatchResult: (id: string, data: RecordInspectionBatchResultData | ChecklistSubmission | CountedInspectionSubmission) =>
     client
       .post<ApiSuccess<Inspection>>(`/quality/inspections/${id}/batch-result`, data)
@@ -98,13 +87,6 @@ export const inspectionsApi = {
     client
       .post<ApiSuccess<Inspection>>(`/quality/inspections/${id}/cancel`, { reason, expected_result_version: expectedVersion })
       .then((r) => r.data.data),
-  aqlPreview: (batchQuantity: number) =>
-    client
-      .get<{
-        data: AqlPlan;
-      }>('/quality/inspections/aql-preview', { params: { batch_quantity: batchQuantity } })
-      .then((r) => r.data.data),
-
   generateCoC: async (id: string): Promise<void> => {
     await downloadAuthenticatedFile(`/quality/inspections/${id}/coc`, {
       filename: `coc-${id}.pdf`,

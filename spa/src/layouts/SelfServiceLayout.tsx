@@ -1,5 +1,12 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LuCalendar, LuFileText, LuLayoutDashboard, LuReceipt, LuUser } from '@/lib/icons';
+import {
+  LuCalendar,
+  LuFileText,
+  LuFolderOpen,
+  LuLayoutDashboard,
+  LuReceipt,
+  LuUser,
+} from '@/lib/icons';
 import { useFeature } from '@/hooks/useFeature';
 import { usePermission } from '@/hooks/usePermission';
 import { focusRingInset } from '@/lib/focus';
@@ -14,10 +21,17 @@ export default function SelfServiceLayout() {
  const attendance = useFeature('attendance');
  const leave = useFeature('leave');
  const payroll = useFeature('payroll');
+ const production = useFeature('production');
  const { can } = usePermission();
 
  const items = [
  { to: '/self-service', label: 'Home', icon: LuLayoutDashboard, end: true },
+ production && {
+ to: '/self-service/work-orders',
+ label: 'Work',
+ ariaLabel: 'Work orders',
+ icon: LuFolderOpen,
+ },
  attendance && { to: '/self-service/dtr', label: 'DTR', icon: LuCalendar },
  leave && { to: '/self-service/leave', label: 'Leave', icon: LuFileText },
  payroll && can('payroll.view') && { to: '/self-service/payslips', label: 'Payslip', icon: LuReceipt },
@@ -25,6 +39,7 @@ export default function SelfServiceLayout() {
  ].filter(Boolean) as Array<{
  to: string;
  label: string;
+ ariaLabel?: string;
  icon: typeof LuLayoutDashboard;
  end?: boolean;
  }>;
@@ -39,12 +54,12 @@ export default function SelfServiceLayout() {
  className="fixed inset-x-0 bottom-0 z-30 border-t border-default bg-canvas safe-area-pb md:hidden"
  >
  <div className="mx-auto flex max-w-xl items-stretch">
- {items.map(({ to, label, icon: Icon, end }) => (
+ {items.map(({ to, label, ariaLabel, icon: Icon, end }) => (
  <NavLink
  key={to}
  to={to}
  end={end}
- aria-label={label}
+ aria-label={ariaLabel ?? label}
  className={({ isActive }) => cn(
  'flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-2xs font-medium transition-colors duration-fast',
  focusRingInset,

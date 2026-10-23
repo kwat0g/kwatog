@@ -19,9 +19,16 @@
     "audit:role-permissions": "cross-env NODE_PATH=./node_modules node ../scripts/role-permission-audit.js",
     "audit:api-routes": "node scripts/audit-api-routes.mjs",
     "audit:dashboard-routes": "node ../scripts/check-dashboard-route-parity.mjs",
+    "audit:dss-routes": "node ../scripts/check-dss-route-parity.mjs",
     "audit:tokens": "node scripts/check-token-discipline.mjs",
+    "ui:capture": "node scripts/ui-ux-baseline-capture.mjs",
     "audit:panel-gates": "cross-env NODE_PATH=./node_modules node ../scripts/panel-gate-browser-check.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
+    "test:a11y": "playwright test e2e/a11y.spec.ts",
+    "test:gallery": "playwright test e2e/gallery.spec.ts",
+    "test:gallery:update": "playwright test e2e/gallery.spec.ts --grep \"@1280|@390\" --update-snapshots",
+    "audit:bundle": "node scripts/check-bundle-budget.mjs"
   },
   "dependencies": {
     "@fontsource-variable/public-sans": "^5.3.0",
@@ -53,6 +60,7 @@
     "zustand": "^5.0.0-rc.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",

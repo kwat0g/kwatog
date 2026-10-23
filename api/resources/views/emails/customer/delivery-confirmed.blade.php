@@ -20,5 +20,5 @@ Delivery **{{ $delivery->delivery_number }}** for sales order **{{ $salesOrder?-
 <x-mail::button :url="$portalUrl">View Delivery in Customer Portal</x-mail::button>
 
 Thank you,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Supply Chain Team
+{{ config('mail.from.name') }} Supply Chain Team
 </x-mail::message>

@@ -23,8 +23,8 @@ class CreateBackupJob implements ShouldQueue
 
     public function __construct(public readonly string $operationId)
     {
-        // Lane: low — hour-scale runtime must never block high/default.
-        $this->onQueue('low');
+        // Lane: bulk — hour-scale runtime; the only lane allowed to be slow.
+        $this->onQueue('bulk');
     }
 
     /** @return array<int, object> */

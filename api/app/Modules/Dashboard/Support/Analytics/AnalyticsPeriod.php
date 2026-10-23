@@ -89,7 +89,7 @@ final readonly class AnalyticsPeriod
 
     public function days(): int
     {
-        return (int) $this->from->diffInDays($this->to) + 1;
+        return (int) $this->from->diffInDays($this->to, true) + 1;
     }
 
     /** @return array<string, mixed> */

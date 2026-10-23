@@ -7,10 +7,15 @@ namespace Tests\Feature\Assets;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\EmployeeShiftAssignment;
+use App\Modules\Attendance\Models\Shift;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Dashboard\Services\Analytics\AssetWidgetAnalytics;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
@@ -298,10 +303,14 @@ class AssetAssociationTest extends TestCase
             'created_by' => $this->finance->id,
         ]);
 
+        $this->assignPresentTechnician($wo);
         app(MaintenanceWorkOrderService::class)->start($wo, $this->finance);
         $this->assertSame(AssetStatus::UnderMaintenance, $asset->fresh()->status);
         $this->assertSame(1, app(AssetWidgetAnalytics::class)->payload('assets.under_maintenance', $this->finance)['total']);
 
+        app(MaintenanceWorkOrderService::class)->recordWork($wo, [
+            'finding' => 'Asset linkage check', 'action_taken' => 'Confirmed linked machine condition', 'result' => 'passed',
+        ], $this->finance);
         app(MaintenanceWorkOrderService::class)->complete($wo, [], $this->finance);
         $this->assertSame(AssetStatus::Active, $asset->fresh()->status);
         $this->assertSame(0, app(AssetWidgetAnalytics::class)->payload('assets.under_maintenance', $this->finance)['total']);
@@ -317,6 +326,7 @@ class AssetAssociationTest extends TestCase
             'type' => 'corrective', 'priority' => 'medium',
             'description' => 'Active repair', 'status' => 'open', 'created_by' => $this->finance->id,
         ]);
+        $this->assignPresentTechnician($order);
         app(MaintenanceWorkOrderService::class)->start($order, $this->finance);
         MaintenanceWorkOrder::create([
             'mwo_number' => 'MWO-'.substr(uniqid(), -8),
@@ -325,6 +335,9 @@ class AssetAssociationTest extends TestCase
             'description' => 'Future inspection', 'status' => 'open', 'created_by' => $this->finance->id,
         ]);
 
+        app(MaintenanceWorkOrderService::class)->recordWork($order, [
+            'finding' => 'Repair follow-up check', 'action_taken' => 'Verified machine restored', 'result' => 'passed',
+        ], $this->finance);
         app(MaintenanceWorkOrderService::class)->complete($order, [], $this->finance);
         $this->assertSame(AssetStatus::Active, $asset->fresh()->status);
     }
@@ -340,11 +353,32 @@ class AssetAssociationTest extends TestCase
             'description' => 'Breakdown repair', 'status' => 'open', 'created_by' => $this->finance->id,
         ]);
 
+        $this->assignPresentTechnician($order);
         app(MaintenanceWorkOrderService::class)->start($order, $this->finance);
         $this->assertSame(AssetStatus::UnderMaintenance, $asset->fresh()->status);
         app(MaintenanceWorkOrderService::class)->cancel($order, 'Repair handed to vendor', $this->finance);
         $this->assertSame('breakdown', $machine->fresh()->status->value);
         $this->assertSame(AssetStatus::Active, $asset->fresh()->status);
+    }
+
+    private function assignPresentTechnician(MaintenanceWorkOrder $wo): void
+    {
+        $department = Department::firstOrCreate(['code' => 'MAINT'], ['name' => 'Maintenance', 'is_active' => true]);
+        $employee = Employee::factory()->create(['department_id' => $department->id, 'status' => 'active']);
+        $role = Role::firstOrCreate(['slug' => 'maintenance_tech'], ['name' => 'Maintenance Technician']);
+        User::factory()->create(['role_id' => $role->id, 'employee_id' => $employee->id, 'is_active' => true]);
+        $shift = Shift::create([
+            'name' => 'Asset association shift', 'start_time' => '00:00', 'end_time' => '23:59', 'is_active' => true,
+        ]);
+        EmployeeShiftAssignment::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'effective_date' => now()->toDateString(), 'working_days' => [now()->dayOfWeekIso],
+        ]);
+        Attendance::create([
+            'employee_id' => $employee->id, 'shift_id' => $shift->id,
+            'date' => now()->toDateString(), 'status' => 'present', 'time_in' => now()->subHour(),
+        ]);
+        $wo->update(['assigned_to' => $employee->id]);
     }
 
     private function asset(AssetCategory $category, string $code): Asset

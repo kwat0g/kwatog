@@ -459,7 +459,7 @@ class AlertEngineService
 
         // Reuse the operational sweep for invalidated reservations and execution overruns.
         ProductionSchedule::query()->where('reserves_capacity', true)
-            ->with('workOrder', 'machine', 'mold')->chunkById(self::CHECK_CHUNK_SIZE, function ($slots): void {
+            ->with(['workOrder.salesOrder:id', 'machine', 'mold'])->chunkById(self::CHECK_CHUNK_SIZE, function ($slots): void {
                 $audience = User::where('is_active', true)->whereHas('role', fn ($q) => $q->whereIn('slug', ['ppc_head', 'production_manager']))->get();
                 foreach ($slots as $slot) {
                     if (! $slot->workOrder) {

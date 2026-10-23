@@ -3,7 +3,7 @@
 
 Hello {{ $receipt->customer?->contact_person ?: $receipt->customer?->name ?: 'Customer' }},
 
-Ogami Philippines has issued an official receipt for your payment.
+{{ config('mail.from.name') }} has issued an official receipt for your payment.
 
 | Detail | Value |
 |---|---|
@@ -19,5 +19,5 @@ Please retain this message for your records.
 <x-mail::button :url="$portalUrl">View account documents</x-mail::button>
 
 Regards,<br>
-Ogami Philippines Finance
+{{ config('mail.from.name') }} Finance
 </x-mail::message>

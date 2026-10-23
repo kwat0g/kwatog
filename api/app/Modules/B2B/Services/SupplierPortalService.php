@@ -101,9 +101,8 @@ class SupplierPortalService
             ->whereHas('items', fn ($query) => $query->whereColumn('quantity', '>', 'quantity_received'))
             ->count();
 
-        $unpaidInvoiceCount = SupplierInvoice::where('vendor_id', $vendorId)
-            ->whereNull('voided_at')
-            ->whereHas('bills', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value]))
+        $unpaidInvoiceCount = Bill::where('vendor_id', $vendorId)
+            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
             ->count();
 
         $totalUnpaid = Money::add(...Bill::where('vendor_id', $vendorId)

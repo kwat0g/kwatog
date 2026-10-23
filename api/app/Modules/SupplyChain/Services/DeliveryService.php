@@ -109,6 +109,10 @@ class DeliveryService
     {
         $q = Delivery::query()->with([
             'salesOrder:id,so_number,customer_id',
+            // DeliveryResource resolves the ship-to from the customer when the
+            // delivery carries no snapshot; eager-load it so the list stays two
+            // queries instead of one per row.
+            'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
             'vehicle:id,plate_number,name',
             'driver:id,name,role_id',
         ]);
@@ -247,7 +251,10 @@ class DeliveryService
     {
         $d = $d->load([
             'salesOrder:id,so_number,customer_id',
-            'salesOrder.customer:id,name',
+            // Chain 1 — the driver's destination is resolved from these columns
+            // (Delivery::resolvedDeliveryAddress), so they must be here rather
+            // than lazy-loaded once per row.
+            'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
             'vehicle:id,plate_number,name,vehicle_type',
             'driver:id,name,role_id',
             'confirmer:id,name,role_id',
@@ -371,6 +378,8 @@ class DeliveryService
                     'idempotency_key' => $idempotencyKey,
                     'idempotency_fingerprint' => $fingerprint,
                 ]);
+
+                $delivery = $this->snapshotShipTo($delivery, $so);
 
                 foreach ($data['items'] as $row) {
                     $soItem = SalesOrderItem::query()
@@ -660,6 +669,9 @@ class DeliveryService
                     'scheduled_date' => $newDate, 'expected_delivery_date' => $data['expected_delivery_date'],
                     'carrier' => trim((string) $data['carrier']),
                 ])->save();
+                // Still pre-dispatch, so a corrected ship-to in the customer master
+                // must reach the run sheet before the truck leaves.
+                $locked = $this->snapshotShipTo($locked);
                 if ($locked->status === DeliveryStatus::Scheduled) {
                     $locked = $this->assign($locked, $data, $by);
                 }
@@ -683,6 +695,55 @@ class DeliveryService
             }
             throw $e;
         }
+    }
+
+    /**
+     * Pin the customer's ship-to onto this run sheet.
+     *
+     * A run sheet is an instruction that was issued, not a live view of master
+     * data, so the address is copied onto the delivery instead of being read
+     * through the customer at print time. Two rules keep that honest:
+     *
+     *  - only fields the customer actually carries are copied, so an empty
+     *    master value never blanks a snapshot dispatch already relied on;
+     *  - it is refreshed while the shipment plan is still editable (draft,
+     *    assignment, plan save) and never afterwards, so editing a customer's
+     *    address next month cannot rewrite where last month's truck was sent.
+     */
+    private function snapshotShipTo(Delivery $delivery, ?SalesOrder $salesOrder = null): Delivery
+    {
+        // Load explicitly rather than relying on an implicit lazy load: the
+        // assignment paths arrive here with a freshly locked row that carries no
+        // relations, and `Model::preventLazyLoading()` is on outside production.
+        $salesOrder ??= $delivery->relationLoaded('salesOrder')
+            ? $delivery->salesOrder
+            : SalesOrder::query()->find($delivery->sales_order_id);
+        $salesOrder?->loadMissing('customer');
+
+        $customer = $salesOrder?->customer;
+        if (! $customer) {
+            return $delivery;
+        }
+
+        $patch = [];
+        $candidates = [
+            'delivery_address' => $customer->delivery_address,
+            'delivery_contact_person' => $customer->delivery_contact_person,
+            'delivery_contact_phone' => $customer->delivery_contact_phone,
+        ];
+
+        foreach ($candidates as $column => $value) {
+            $value = trim((string) ($value ?? ''));
+            if ($value !== '' && trim((string) ($delivery->{$column} ?? '')) !== $value) {
+                $patch[$column] = $value;
+            }
+        }
+
+        if ($patch) {
+            $delivery->forceFill($patch)->save();
+        }
+
+        return $delivery;
     }
 
     private function assertShipmentReady(Delivery $delivery): void
@@ -756,6 +817,10 @@ class DeliveryService
                 'driver_id' => (int) $data['driver_id'],
                 'notes' => trim(($locked->notes ? $locked->notes."\n" : '').$assignmentNote),
             ])->save();
+
+            // Assignment is an act of arranging the run, so the ship-to is pinned
+            // here too (this route is reachable without the shipment-plan form).
+            $locked = $this->snapshotShipTo($locked);
 
             $this->stockReservations->ensureForDelivery($locked, $by);
 

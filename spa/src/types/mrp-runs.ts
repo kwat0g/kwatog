@@ -20,11 +20,13 @@ export interface MrpRunSummary extends Record<string, unknown> {
   per_sales_order?: Array<{
     so_id?: string;
     so_number?: string;
+    outcome?: 'updated' | 'unchanged';
     error?: string;
     error_code?: string;
     recovery_action?: string;
   }>;
   trigger_reason?: string;
+  orders_unchanged?: number;
   scheduling?: MrpRunSchedulingSummary;
 }
 

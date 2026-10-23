@@ -54,7 +54,7 @@ class AssignedWorkOrderController
         }
 
         return ['started_at' => $start->toIso8601String(), 'finished_at' => $finish->toIso8601String(),
-            'blocker' => $finish->lte($start) || $start->diffInSeconds($finish) > 86400
+            'blocker' => $finish->lte($start) || $start->diffInSeconds($finish, true) > 86400
                 ? 'Schedule does not cover this crew’s production run. Ask Production management to review it.'
                 : ($finish->gt(now()) ? 'Scheduled finish has not passed. Use Record production for current output.' : null)];
     }

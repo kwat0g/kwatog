@@ -23,12 +23,15 @@ class PortalPasswordResetMail extends Mailable implements ShouldQueue
         public readonly string $recipientName,
         public readonly array $fallbackUserIds = [],
     ) {
+        // Lane: mail — see config/horizon.php. Kept off `default` so an
+        // email burst cannot sit in front of an approval or a GRN notice.
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Reset your Ogami Philippines portal password');
+        return new Envelope(subject: 'Reset your '.config('mail.from.name').' portal password');
     }
 
     public function content(): Content

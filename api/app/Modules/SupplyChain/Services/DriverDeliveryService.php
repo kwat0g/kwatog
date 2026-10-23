@@ -38,7 +38,7 @@ class DriverDeliveryService
             ->where('driver_id', $driver->id)
             ->with([
                 'salesOrder:id,so_number,customer_id',
-                'salesOrder.customer:id,name',
+                'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
                 'vehicle:id,plate_number',
                 'proofs' => static fn ($query) => $query->select([
                     'id', 'delivery_id', 'proof_type', 'file_name', 'created_at',
@@ -72,7 +72,9 @@ class DriverDeliveryService
 
         return $delivery->load([
             'salesOrder:id,so_number,customer_id',
-            'salesOrder.customer:id,name',
+            // The run sheet's destination. Delivery::resolvedDeliveryAddress()
+            // resolves snapshot → ship-to → billing address from these columns.
+            'salesOrder.customer:id,name,address,contact_person,phone,delivery_address,delivery_contact_person,delivery_contact_phone',
             'vehicle:id,plate_number,name',
             'proofs' => static fn ($query) => $query->select([
                 'id', 'delivery_id', 'proof_type', 'file_name', 'created_at',

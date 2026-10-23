@@ -27,5 +27,5 @@ Your response was returned for revision. Please review the sales order and submi
 <x-mail::button :url="$portalUrl">Review Sales Order</x-mail::button>
 
 Regards,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }} Sales Team
+{{ config('mail.from.name') }} Sales Team
 </x-mail::message>

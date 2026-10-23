@@ -1,0 +1,232 @@
+{
+  "role": "purchasing",
+  "label": "final-f010",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2736,
+      "horizontalPageScroll": false,
+      "heading": "Purchasing DashboardUpdated just now",
+      "title": "Purchasing Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 47,
+        "inputs": 0,
+        "tables": 3,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "PR Action Queue",
+          "h": 42,
+          "y": 660
+        },
+        {
+          "t": "PO Pipeline",
+          "h": 42,
+          "y": 866
+        },
+        {
+          "t": "Top Suppliers",
+          "h": 42,
+          "y": 1130
+        },
+        {
+          "t": "Upcoming Deliveries (7 days)",
+          "h": 42,
+          "y": 1391
+        },
+        {
+          "t": "PO Status Distribution",
+          "h": 42,
+          "y": 1597
+        },
+        {
+          "t": "PR Pipeline by Urgency",
+          "h": 42,
+          "y": 1916
+        },
+        {
+          "t": "Supplier Risk",
+          "h": 59,
+          "y": 2184
+        },
+        {
+          "t": "Stock-out Risk",
+          "h": 53,
+          "y": 2429
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 59,
+          "y": 2818
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/final-f010/purchasing/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2659,
+      "horizontalPageScroll": false,
+      "heading": "Purchasing DashboardUpdated just now",
+      "title": "Purchasing Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 47,
+        "inputs": 0,
+        "tables": 3,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "PR Action Queue",
+          "h": 42,
+          "y": 415
+        },
+        {
+          "t": "PO Pipeline",
+          "h": 42,
+          "y": 575
+        },
+        {
+          "t": "Top Suppliers",
+          "h": 42,
+          "y": 839
+        },
+        {
+          "t": "Upcoming Deliveries (7 days)",
+          "h": 42,
+          "y": 1099
+        },
+        {
+          "t": "PO Status Distribution",
+          "h": 42,
+          "y": 1259
+        },
+        {
+          "t": "PR Pipeline by Urgency",
+          "h": 42,
+          "y": 1551
+        },
+        {
+          "t": "Supplier Risk",
+          "h": 42,
+          "y": 1818
+        },
+        {
+          "t": "Stock-out Risk",
+          "h": 53,
+          "y": 2023
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 53,
+          "y": 2259
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/final-f010/purchasing/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2544,
+      "horizontalPageScroll": false,
+      "heading": "Purchasing DashboardUpdated just now",
+      "title": "Purchasing Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 47,
+        "inputs": 0,
+        "tables": 3,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "panels": [
+        {
+          "t": "PR Action Queue",
+          "h": 42,
+          "y": 320
+        },
+        {
+          "t": "PO Pipeline",
+          "h": 42,
+          "y": 320
+        },
+        {
+          "t": "Top Suppliers",
+          "h": 42,
+          "y": 584
+        },
+        {
+          "t": "Upcoming Deliveries (7 days)",
+          "h": 42,
+          "y": 584
+        },
+        {
+          "t": "PO Status Distribution",
+          "h": 42,
+          "y": 844
+        },
+        {
+          "t": "PR Pipeline by Urgency",
+          "h": 42,
+          "y": 844
+        },
+        {
+          "t": "Supplier Risk",
+          "h": 42,
+          "y": 1136
+        },
+        {
+          "t": "Stock-out Risk",
+          "h": 53,
+          "y": 1340
+        },
+        {
+          "t": "Demand Forecast",
+          "h": 53,
+          "y": 1340
+        }
+      ],
+      "file": "docs/ui-ux/screenshots/final-f010/purchasing/dashboard-1440.png"
+    }
+  ]
+}

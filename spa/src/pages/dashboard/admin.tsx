@@ -503,7 +503,7 @@ function AuditTrailPanel({ events }: { events: AdminAuditEvent[] }) {
  key={i}
  className="flex items-start gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
  >
- <span className={`font-mono text-2xs uppercase shrink-0 mt-0.5 w-12 ${ACTION_COLOR[e.action] ?? 'text-muted'}`}>
+ <span className={`font-mono text-2xs uppercase shrink-0 mt-0.5 min-w-20 ${ACTION_COLOR[e.action] ?? 'text-muted'}`}>
  {e.action}
  </span>
  <div className="min-w-0 flex-1">

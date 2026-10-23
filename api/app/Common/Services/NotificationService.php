@@ -379,6 +379,15 @@ class NotificationService
      */
     private function queueEmail(string $address, int $userId, ?string $name, string $type, array $data): void
     {
+        if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
+            Log::warning('Notification email skipped: invalid recipient address', [
+                'user_id' => $userId,
+                'type' => $type,
+            ]);
+
+            return;
+        }
+
         try {
             Mail::to($address)->queue(new UserNotificationMail($type, $data, $name, $userId));
         } catch (\Throwable $e) {

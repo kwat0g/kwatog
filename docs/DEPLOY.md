@@ -173,7 +173,7 @@ done
 docker compose -f docker-compose.prod.yml up migrate
 # Start the API, realtime server, queue worker, scheduler, and Nginx only after
 # the schema is ready.
-docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
+docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler
 # Seed once on a new installation, after migration and before opening traffic.
 docker compose -f docker-compose.prod.yml exec api php artisan db:seed --force
 docker compose -f docker-compose.prod.yml exec api php artisan storage:link
@@ -184,8 +184,7 @@ docker compose -f docker-compose.prod.yml exec api php artisan storage:link
 # of delivery.
 docker compose -f docker-compose.prod.yml exec -T api php artisan tinker \
     --execute='Mail::to(env("ADMIN_EMAIL"))->queue(new \App\Common\Mail\EmailIntegrationTestMail);'
-docker compose -f docker-compose.prod.yml exec -T api php artisan queue:restart
-docker compose -f docker-compose.prod.yml logs --since=2m queue
+docker compose -f docker-compose.prod.yml logs --since=2m horizon
 
 # Confirm the administrator exists. AdminUserSeeder SKIPS silently when any of
 # ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD is blank, and db:seed still exits 0,
@@ -396,11 +395,13 @@ restore center after VPS loss.
 
 ### Independent production health check
 
-The repository ships `scripts/ogami-healthcheck.sh`, which checks the public
-Cloudflare path, all production containers, the durable scheduler ledger, the
-freshness and integrity of the latest Postgres backup, and root-disk usage. It
-is designed to run outside the application so it can detect a dead API or
-container.
+The repository ships `scripts/ogami-healthcheck.sh`, which checks the local
+HTTPS origin, all production containers, the durable scheduler ledger, the
+freshness and integrity of the latest Postgres backup, and root-disk usage. Its
+health request resolves the app domain to loopback, bypassing Cloudflare while
+still validating the origin certificate. Use an external uptime monitor for
+the public Cloudflare path. The host check runs outside the application so it
+can detect a dead API or container.
 
 Install the systemd timer once on the VPS:
 
@@ -448,7 +449,7 @@ done
 # Migrate before starting the new code's consumers. Laravel skips already-run
 # files, so this remains safe for additive/backwards-compatible migrations.
 docker compose -f docker-compose.prod.yml up migrate
-docker compose -f docker-compose.prod.yml up -d api nginx reverb queue scheduler
+docker compose -f docker-compose.prod.yml up -d api nginx reverb horizon scheduler
 docker compose -f docker-compose.prod.yml exec api php artisan config:cache
 docker compose -f docker-compose.prod.yml exec api php artisan route:cache
 docker compose -f docker-compose.prod.yml exec api php artisan view:cache
@@ -511,12 +512,18 @@ docker compose -f docker-compose.prod.yml logs -f nginx
 # Tinker shell
 docker compose -f docker-compose.prod.yml exec api php artisan tinker
 
-# Queue status / restart
-docker compose -f docker-compose.prod.yml exec api php artisan queue:restart
+# Queue status / restart — Horizon supervises every lane (high, default,
+# mail, automation, bulk). Terminate workers gracefully, then restart the
+# container; `horizon:terminate` alone leaves the container without a master.
+docker compose -f docker-compose.prod.yml exec horizon php artisan horizon:status
+docker compose -f docker-compose.prod.yml exec horizon php artisan horizon:terminate
+docker compose -f docker-compose.prod.yml restart horizon
 
-# Queue lease invariant: REDIS_QUEUE_RETRY_AFTER must stay above the longest
-# queued job timeout (1800s in the shipped production compose; default 2400s).
-# Restart workers after changing it.
+# Lease invariant, asserted by QueueLaneAssignmentTest: each supervisor's
+# retry_after must exceed its OWN timeout (a job reserved for less time than it
+# may run gets handed to a second worker mid-flight), and the connection-wide
+# floor must exceed the longest timeout — bulk runs up to 3600s, so 3900s.
+docker compose -f docker-compose.prod.yml exec api php artisan config:show horizon.defaults
 docker compose -f docker-compose.prod.yml exec api php artisan config:show queue.connections.redis.retry_after
 
 # Cross-module automation recovery
@@ -529,7 +536,7 @@ docker compose -f docker-compose.prod.yml exec api \
   php artisan outbox:dispatch --retry-failed
 
 # Inspect the worker and scheduler that drive the recovery paths
-docker compose -f docker-compose.prod.yml logs --tail=200 queue scheduler
+docker compose -f docker-compose.prod.yml logs --tail=200 horizon scheduler
 
 # Run one operator-visible scheduler tick. The fail-fast wrapper returns
 # non-zero if any due task fails, which is the same signal Compose uses to

@@ -10,7 +10,8 @@ class RejectSalesOrderResponseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('crm.sales_orders.confirm') ?? false;
+        return ($this->user()?->hasPermission('crm.sales_orders.confirm') ?? false)
+            || ($this->user()?->hasPermission('crm.sales_orders.cancel') ?? false);
     }
 
     public function rules(): array

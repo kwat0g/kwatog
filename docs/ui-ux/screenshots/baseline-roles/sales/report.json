@@ -1,0 +1,251 @@
+{
+  "role": "sales",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/crm/sales-orders",
+    "/crm/customers"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2649,
+      "horizontalPageScroll": false,
+      "heading": "SalesUpdated just now",
+      "title": "Sales · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2320,
+      "horizontalPageScroll": false,
+      "heading": "SalesUpdated just now",
+      "title": "Sales · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2274,
+      "horizontalPageScroll": false,
+      "heading": "SalesUpdated just now",
+      "title": "Sales · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 20,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/dashboard-1440.png"
+    },
+    {
+      "route": "/crm/sales-orders",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2246,
+      "horizontalPageScroll": true,
+      "heading": "Sales orders",
+      "title": "Sales orders · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 15,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 20,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [
+        "div.text-2xl font-medium font-mono tabular-nums text-p (175>132, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/crm-sales-orders-375.png"
+    },
+    {
+      "route": "/crm/sales-orders",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2229,
+      "horizontalPageScroll": false,
+      "heading": "Sales orders",
+      "title": "Sales orders · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 15,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 20,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/crm-sales-orders-768.png"
+    },
+    {
+      "route": "/crm/sales-orders",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2260,
+      "horizontalPageScroll": false,
+      "heading": "Sales orders",
+      "title": "Sales orders · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 15,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 20,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/crm-sales-orders-1440.png"
+    },
+    {
+      "route": "/crm/customers",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1900,
+      "horizontalPageScroll": false,
+      "heading": "Customers",
+      "title": "Customers · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 15,
+        "links": 12,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/crm-customers-375.png"
+    },
+    {
+      "route": "/crm/customers",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2025,
+      "horizontalPageScroll": false,
+      "heading": "Customers",
+      "title": "Customers · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 15,
+        "links": 12,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/crm-customers-768.png"
+    },
+    {
+      "route": "/crm/customers",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1945,
+      "horizontalPageScroll": false,
+      "heading": "Customers",
+      "title": "Customers · Sales & CRM · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 12,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/sales/crm-customers-1440.png"
+    }
+  ]
+}

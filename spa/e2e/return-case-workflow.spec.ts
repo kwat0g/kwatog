@@ -134,7 +134,14 @@ test('internal supplier GRN submits the changed expected quantity', async ({ pag
   await page.getByLabel('Explain the problem').fill('Short GRN');
   await page.getByRole('button', { name: 'Submit report' }).click();
   await expect(page).toHaveURL(/\/return-management\/cases\/grn_case$/);
-  expect((submitted?.lines as Array<Record<string, string>>)[0]).toMatchObject({ expected_quantity: '100.000', received_quantity: '90.000', defective_quantity: '2.000' });
+  /* `submitted` is assigned inside the route callback, which TypeScript's flow
+   * analysis cannot see — it still has the variable narrowed to its `null`
+   * initialiser here, so `submitted?.lines` was a type error. Guarding the
+   * value also replaces a confusing "cannot read properties of undefined" with
+   * a message that says what went wrong. */
+  const submittedLines = (submitted as { lines?: unknown } | null)?.lines;
+  if (!Array.isArray(submittedLines)) throw new Error('the return-case report never POSTed any lines');
+  expect(submittedLines[0]).toMatchObject({ expected_quantity: '100.000', received_quantity: '90.000', defective_quantity: '2.000' });
 });
 
 function detailFixture(id: string, status: 'action_agreed' | 'in_progress', resolution: 'redelivery' | 'credit') {

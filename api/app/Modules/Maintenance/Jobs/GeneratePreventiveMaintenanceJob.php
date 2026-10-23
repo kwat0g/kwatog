@@ -52,8 +52,8 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
 
     public function __construct()
     {
-        // Lane: low — daily bulk sweep.
-        $this->onQueue('low');
+        // Lane: automation — daily bulk sweep.
+        $this->onQueue('automation');
     }
 
     public function handle(

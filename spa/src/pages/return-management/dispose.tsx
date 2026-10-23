@@ -9,6 +9,7 @@ import { returnManagementApi } from '@/api/returnManagement';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import type { ReturnRequest, ReturnRequestItem, DispositionType, DispositionPayload } from '@/types/returnManagement';
 import { formatQuantity } from '@/lib/formatNumber';
+import { manilaIsoDate } from '@/lib/formatDate';
 import toast from 'react-hot-toast';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -202,7 +203,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
     label="Required delivery date"
     type="date"
     required
-    min={new Date().toISOString().slice(0, 10)}
+    min={manilaIsoDate()}
     value={requiredDeliveryDate}
     onChange={(e) => setRequiredDeliveryDate(e.target.value)}
    />
@@ -227,7 +228,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
      variant="primary"
      loading={mutation.isPending}
      onClick={() => mutation.mutate()}
-     disabled={items.length === 0 || hasMissingDisposition || optionsLoading || optionsError || dispositionOptions.length === 0 || (needsLocation && (!locationId || warehousesLoading || warehousesError)) || (needsDeliveryDate && (!requiredDeliveryDate || requiredDeliveryDate < new Date().toISOString().slice(0, 10)))}
+     disabled={items.length === 0 || hasMissingDisposition || optionsLoading || optionsError || dispositionOptions.length === 0 || (needsLocation && (!locationId || warehousesLoading || warehousesError)) || (needsDeliveryDate && (!requiredDeliveryDate || requiredDeliveryDate < manilaIsoDate()))}
     >
      {mutation.isPending ? 'Recording...' : qcSupplierReturn ? 'Finish earlier return' : 'Record Disposition'}
     </Button>

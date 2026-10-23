@@ -20,5 +20,5 @@ View All Notifications
 </x-mail::button>
 
 Thanks,<br>
-{{ config('mail.from.name', 'Ogami Philippines') }}
+{{ config('mail.from.name') }}
 </x-mail::message>
