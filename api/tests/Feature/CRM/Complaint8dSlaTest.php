@@ -88,6 +88,39 @@ class Complaint8dSlaTest extends TestCase
         ]);
     }
 
+    public function test_sla_notice_excludes_assignees_without_complaint_read_access(): void
+    {
+        $revoked = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $actor = $this->admin();
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'crm.complaints.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'Complaint SLA visibility regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $complaint = $this->makeComplaint($revoked->id);
+        DB::table('customer_complaints')->where('id', $complaint->id)->update([
+            'created_at' => now()->subHours(49),
+            'd3_due_at' => now()->subHour(),
+            'd4_due_at' => now()->addDays(5),
+            'finalize_due_at' => now()->addDays(28),
+        ]);
+
+        $counts = app(Complaint8dEscalationService::class)->run();
+
+        $this->assertSame(1, $counts['d3']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revoked->id,
+            'type' => '8d.sla',
+        ]);
+        $this->assertGreaterThan(0, DB::table('notifications')->where('type', '8d.sla')->count());
+    }
+
     public function test_d3_idempotent_re_run_does_not_double_fire(): void
     {
         $c = $this->makeComplaint();
