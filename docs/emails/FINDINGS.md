@@ -49,3 +49,5 @@ No code-level fix was applied as part of Phase 0/1.
 - **EF-026 — Candidate email values are captured at scheduling/receipt time.** Recruitment notices now retain the relevant candidate and interview details for queued delivery.
 
 - **EF-026 — Candidate email values are captured at scheduling/receipt time.** Recruitment notices now retain relevant candidate and interview details for queued delivery.
+
+- **EF-027 — Payslip email avoids sensitive attachments.** PR #238 removes the PDF attachment and links to the authenticated employee portal.

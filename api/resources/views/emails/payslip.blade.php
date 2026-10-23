@@ -1,18 +1,18 @@
-<x-mail::message>
-# Your Payslip is Ready
+<x-mail::message :preheader="$preheader" :title="$title">
+# Your payslip is ready
 
-Hi {{ $employee->first_name ?? 'there' }},
+Hello,
 
-Your payslip for the period
-**{{ optional($period->period_start)->format('M d, Y') }} – {{ optional($period->period_end)->format('M d, Y') }}**
-is attached to this email as a PDF.
+Your payslip for **{{ $periodLabel }}** is ready in the {{ $companyName }} employee portal.
 
-You can also view it any time from the Self-Service portal.
+For your privacy, the payslip PDF is not attached to this email. Sign in to the employee account that owns the record before downloading it.
 
-<x-mail::button :url="config('app.url') . '/self-service/payslips'">
-View Payslips
-</x-mail::button>
+<x-mail::button :url="$payslipUrl">Open your payslip</x-mail::button>
 
-Thanks,
-{{ config('mail.from.name') }}
+If the button does not work, use the link above and sign in to the employee portal.
+
+Regards,<br>
+{{ $companyName }} Payroll Team
+
+You received this automated message because payroll finalized a payslip for your employee account. This email does not contain payroll amounts.
 </x-mail::message>
