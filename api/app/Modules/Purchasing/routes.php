@@ -61,7 +61,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/rfqs/{rfq}/close', [RequestForQuoteController::class, 'close'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/award', [RequestForQuoteController::class, 'award'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/cancel', [RequestForQuoteController::class, 'cancel'])->middleware('permission:purchasing.rfq.manage');
-    Route::get('/rfqs/{rfq}', [RequestForQuoteController::class, 'show'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage,purchasing.view');
+    Route::get('/rfqs/{rfq}', [RequestForQuoteController::class, 'show']);
     Route::put('/rfqs/{rfq}', [RequestForQuoteController::class, 'update'])->middleware('permission:purchasing.rfq.manage');
 
     /*

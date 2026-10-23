@@ -59,7 +59,9 @@ class RequestForQuoteController
     public function show(Request $request, RequestForQuote $rfq): RequestForQuoteResource
     {
         try {
-            return new RequestForQuoteResource($this->rfqs->show($this->rfqs->closeDue($rfq), $request->user()));
+            $visible = $this->rfqs->show($rfq, $request->user());
+
+            return new RequestForQuoteResource($this->rfqs->show($this->rfqs->closeDue($visible), $request->user()));
         } catch (BusinessRuleException $e) {
             abort(403, $e->getMessage());
         }
