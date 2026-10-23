@@ -20,11 +20,16 @@ class ReturnCaseUpdateMail extends QueuedMailable
         public readonly string $realm,
         public readonly string $caseHash,
         public readonly array $fallbackUserIds,
+        public readonly ?string $deliveryId = null,
     ) {
-        // Lane: mail — see config/horizon.php. Kept off `default` so an
-        // email burst cannot sit in front of an approval or a GRN notice.
         $this->onQueue('mail');
+        $this->deliveryKey = $deliveryId;
         $this->afterCommit();
+    }
+
+    public static function deliveryIdFor(int $eventId, string $email): string
+    {
+        return hash('sha256', 'return-case-update|'.$eventId.'|'.mb_strtolower(trim($email)));
     }
 
     public function envelope(): Envelope
