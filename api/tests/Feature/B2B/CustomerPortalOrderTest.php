@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
-use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemUserResolver;
@@ -254,7 +253,8 @@ class CustomerPortalOrderTest extends TestCase
         $sales = User::factory()->create(['role_id' => Role::query()->where('slug', 'sales_officer')->value('id'), 'is_active' => true]);
         $this->actingAs($sales, 'sanctum');
         $this->getJson('/api/v1/crm/sales-orders/'.$id)->assertOk()
-            ->assertJsonPath('data.is_editable', false)->assertJsonPath('data.is_cancellable', false);
+            ->assertJsonPath('data.is_editable', false)->assertJsonPath('data.is_cancellable', true)
+            ->assertJsonPath('data.capabilities.can_cancel', false);
         $this->putJson('/api/v1/crm/sales-orders/'.$id, ['date' => $date, 'items' => $change['items']])->assertStatus(422);
         $this->postJson('/api/v1/crm/sales-orders/'.$id.'/cancel')->assertStatus(422);
         $this->deleteJson('/api/v1/crm/sales-orders/'.$id)->assertStatus(422);
@@ -320,13 +320,12 @@ class CustomerPortalOrderTest extends TestCase
         $this->putJson('/api/v1/b2b/customer/orders/'.$id, ['items' => [[
             'product_id' => $product->hash_id, 'quantity' => 5, 'delivery_date' => now()->addDays(4)->toDateString(),
         ]]])->assertStatus(422);
-        $this->postJson('/api/v1/b2b/customer/orders/'.$id.'/cancel')->assertStatus(422);
-        try {
-            app(CustomerPortalService::class)->cancelOrder($stale, $portalUser, null);
-            $this->fail('A stale customer cancellation must not cancel a confirmed order.');
-        } catch (BusinessRuleException) {
-            $this->assertSame('confirmed', $so->fresh()->status->value);
-        }
+        $this->postJson('/api/v1/b2b/customer/orders/'.$id.'/cancel')
+            ->assertOk()->assertJsonPath('outcome', 'requested')->assertJsonPath('data.status', 'confirmed');
+        $staleResult = app(CustomerPortalService::class)->cancelOrder($stale, $portalUser, null);
+        $this->assertSame('requested', $staleResult->getAttribute('cancellation_outcome'));
+        $this->assertSame('confirmed', $so->fresh()->status->value);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'customer.order.cancellation_requested', 'model_id' => $so->id]);
         $this->assertDatabaseMissing('audit_logs', ['action' => 'customer.order.cancelled', 'model_id' => $so->id]);
 
         $so->forceFill(['status' => 'draft', 'submission_source' => 'internal'])->save();
