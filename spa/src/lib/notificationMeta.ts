@@ -76,6 +76,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
     label: 'Inventory costing',
   },
   // ── Chain 1 · Order to Cash ──────────────────────────────────────────
+  'sales_order.cancellation_requested': { icon: LuFileText, group: 'approvals', label: 'Order cancellation' },
   'chain.so_confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Sales' },
   'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
@@ -202,7 +203,6 @@ const PORTAL_BY_TYPE: Record<string, NotificationMeta> = {
   'sales_order.submitted': { icon: LuFileText, group: 'system', label: 'Orders' },
   'sales_order.confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Orders' },
   'sales_order.cancelled': { icon: LuTriangleAlert, group: 'alerts', label: 'Orders' },
-  'sales_order.cancellation_requested': { icon: LuFileText, group: 'approvals', label: 'Order cancellation' },
   'sales_order.review_requested': { icon: LuFileText, group: 'approvals', label: 'Order review' },
   'sales_order.delivery_proposed': { icon: LuCalendar, group: 'approvals', label: 'Delivery date' },
   'sales_order.delivery_decided': { icon: LuCalendar, group: 'system', label: 'Delivery date' },
@@ -296,7 +296,7 @@ export function notificationMeta(type: string | undefined): NotificationMeta {
 }
 
 /** Type keys with explicit metadata — used by tests to detect catalog drift. */
-export const KNOWN_NOTIFICATION_TYPES = Object.keys({ ...BY_TYPE, ...PORTAL_BY_TYPE });
+export const KNOWN_NOTIFICATION_TYPES = Object.keys(BY_TYPE);
 
 /**
  * Returns a YYYY-MM-DD bucket key for a notification's `created_at` so
