@@ -6,16 +6,13 @@ namespace App\Common\Mail;
 
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class EmailIntegrationTestMail extends Mailable implements ShouldQueue
+class EmailIntegrationTestMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(public readonly ?int $fallbackUserId = null)
     {

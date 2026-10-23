@@ -6,17 +6,25 @@ namespace App\Modules\Production\Notifications;
 
 use App\Common\Services\EmailBrandingService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
  * Task A10 — Weekly Friday 18:00 trend email.
  */
-class WeeklyProductionSummary extends Notification
+class WeeklyProductionSummary extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public readonly array $summary) {}
+    public $tries = 3;
+
+    public $backoff = [60, 300, 900];
+
+    public function __construct(public readonly array $summary)
+    {
+        $this->onQueue('mail')->afterCommit();
+    }
 
     public function via(mixed $notifiable): array
     {

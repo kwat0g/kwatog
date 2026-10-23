@@ -5,12 +5,23 @@ declare(strict_types=1);
 namespace App\Modules\Landing\Notifications;
 
 use App\Modules\Landing\Models\ContactInquiry;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ContactInquiryReceivedNotification extends Notification
+class ContactInquiryReceivedNotification extends Notification implements ShouldQueue
 {
-    public function __construct(private readonly ContactInquiry $inquiry) {}
+    use Queueable;
+
+    public $tries = 3;
+
+    public $backoff = [60, 300, 900];
+
+    public function __construct(private readonly ContactInquiry $inquiry)
+    {
+        $this->onQueue('mail')->afterCommit();
+    }
 
     /** @return array<int, string> */
     public function via(mixed $notifiable): array

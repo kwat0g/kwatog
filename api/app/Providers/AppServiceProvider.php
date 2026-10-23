@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalRecord;
 use App\Common\Models\AuditLog;
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryLogService;
 use App\Common\Services\NonProductionEmailGuard;
 use App\Common\Services\SchedulerExecutionLedger;
 use App\Common\Services\ScheduleTickFailureTracker;
@@ -182,6 +183,7 @@ use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -198,6 +200,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SettingsService::class, fn ($app) => new SettingsService);
+        $this->app->singleton(EmailDeliveryLogService::class);
         $this->app->singleton(ScheduleTickFailureTracker::class);
         $this->app->singleton(SchedulerExecutionLedger::class);
         $this->app->bind(SupplierDispatchGateway::class, SupplierPortalDispatchGateway::class);
@@ -231,6 +234,12 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(JobProcessed::class, [ChainListenerRunService::class, 'markProcessed']);
         Event::listen(JobExceptionOccurred::class, [ChainListenerRunService::class, 'markRetrying']);
         Event::listen(JobFailed::class, [ChainListenerRunService::class, 'markFailed']);
+        Event::listen(JobProcessing::class, [EmailDeliveryLogService::class, 'beginJob']);
+        Event::listen(JobProcessed::class, [EmailDeliveryLogService::class, 'endJob']);
+        Event::listen(JobExceptionOccurred::class, [EmailDeliveryLogService::class, 'markFailed']);
+        Event::listen(JobExceptionOccurred::class, [EmailDeliveryLogService::class, 'endJob']);
+        Event::listen(MessageSending::class, [EmailDeliveryLogService::class, 'beginMessage']);
+        Event::listen(MessageSent::class, [EmailDeliveryLogService::class, 'markSent']);
         Event::listen(MessageSending::class, static function (MessageSending $event): void {
             app(NonProductionEmailGuard::class)->protect($event->message);
 

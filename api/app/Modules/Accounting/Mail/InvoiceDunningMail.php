@@ -6,16 +6,14 @@ namespace App\Modules\Accounting\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Accounting\Models\Invoice;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
+use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class InvoiceDunningMail extends Mailable implements ShouldQueue
+class InvoiceDunningMail extends QueuedMailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly Invoice $invoice,

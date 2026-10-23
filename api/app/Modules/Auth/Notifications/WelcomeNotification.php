@@ -6,6 +6,7 @@ namespace App\Modules\Auth\Notifications;
 
 use App\Common\Services\EmailBrandingService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -13,9 +14,13 @@ use Illuminate\Notifications\Notification;
  * Welcome email sent when an employee's system account is provisioned.
  * Carries the temporary password (one-time, will be force-changed on login).
  */
-class WelcomeNotification extends Notification
+class WelcomeNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    public $tries = 3;
+
+    public $backoff = [60, 300, 900];
 
     /**
      * PROTECTED and NOT readonly, on purpose — both modifiers break the queue.
@@ -33,7 +38,10 @@ class WelcomeNotification extends Notification
      * @see \Illuminate\Queue\SerializesModels::__serialize()
      * @see \Illuminate\Queue\SerializesModels::__unserialize()
      */
-    public function __construct(protected string $tempPassword) {}
+    public function __construct(protected string $tempPassword)
+    {
+        $this->onQueue('mail')->afterCommit();
+    }
 
     /**
      * @return array<int, string>
