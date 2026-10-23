@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
@@ -113,6 +116,43 @@ class SupplierDispatchTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $purchasingUser->id,
             'type' => 'supplier.dispatch_action_required',
+        ]);
+    }
+
+    public function test_invalid_vendor_email_failure_alert_uses_po_row_visibility(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $owner = User::factory()->withRole('employee')->create();
+        $outsider = User::factory()->withRole('employee')->create();
+        $grantor = User::factory()->withRole('system_admin')->create();
+        $permissionId = Permission::query()->where('slug', 'purchasing.view')->value('id');
+        foreach ([$owner, $outsider] as $user) {
+            UserPermissionOverride::create([
+                'user_id' => $user->id,
+                'permission_id' => $permissionId,
+                'type' => 'grant',
+                'reason' => 'Review supplier transmission failures',
+                'granted_by' => $grantor->id,
+            ]);
+        }
+        $vendor = Vendor::factory()->create(['email' => 'invalid-address']);
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id' => $vendor->id,
+            'created_by' => $owner->id,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Approved])->save();
+
+        app(SupplierPortalDispatchGateway::class)->publish($po->fresh(), 'scope-test');
+
+        $this->assertDatabaseHas('notifications', [
+            'type' => 'email.delivery_failed',
+            'notifiable_type' => User::class,
+            'notifiable_id' => $owner->id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'email.delivery_failed',
+            'notifiable_type' => User::class,
+            'notifiable_id' => $outsider->id,
         ]);
     }
 

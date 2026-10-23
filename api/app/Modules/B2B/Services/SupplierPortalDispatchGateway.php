@@ -7,9 +7,11 @@ namespace App\Modules\B2B\Services;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Contracts\SupplierDispatchGateway;
 use App\Modules\Purchasing\Mail\SupplierPurchaseOrderMail;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Support\SupplierDispatchResult;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -42,17 +44,18 @@ class SupplierPortalDispatchGateway implements SupplierDispatchGateway
         $emailQueued = false;
         $emailFailure = null;
         $vendorEmail = $purchaseOrder->vendor?->email;
+        $fallbackUserIds = $this->fallbackUserIds($purchaseOrder);
 
         if (filter_var($vendorEmail, FILTER_VALIDATE_EMAIL)) {
             try {
                 Mail::to($vendorEmail)->queue(new SupplierPurchaseOrderMail(
                     $purchaseOrder,
-                    $this->fallbackUserIds(),
+                    $fallbackUserIds,
                 ));
                 $emailQueued = true;
             } catch (\Throwable $e) {
                 $emailFailure = 'Automatic supplier email could not be queued; use the portal or an approved alternate channel.';
-                $this->notifyEmailFailure($purchaseOrder, $emailFailure);
+                $this->notifyEmailFailure($purchaseOrder, $emailFailure, $fallbackUserIds);
                 Log::warning('Supplier purchase order email enqueue failed', [
                     'purchase_order_id' => $purchaseOrder->id,
                     'error' => $e->getMessage(),
@@ -60,7 +63,7 @@ class SupplierPortalDispatchGateway implements SupplierDispatchGateway
             }
         } else {
             $emailFailure = 'The supplier has no usable email address; use the portal or an approved alternate channel.';
-            $this->notifyEmailFailure($purchaseOrder, $emailFailure);
+            $this->notifyEmailFailure($purchaseOrder, $emailFailure, $fallbackUserIds);
         }
 
         $metadata = [
@@ -86,16 +89,24 @@ class SupplierPortalDispatchGateway implements SupplierDispatchGateway
     }
 
     /** @return list<int> */
-    private function fallbackUserIds(): array
+    private function fallbackUserIds(PurchaseOrder $purchaseOrder): array
     {
-        return app(EmailDeliveryFailureNotifier::class)
-            ->userIdsWithPermission('purchasing.view');
+        return User::query()
+            ->where('is_active', true)
+            ->with('role')
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission('purchasing.view')
+                && app(PurchaseOrderAccessPolicy::class)->canView($user, $purchaseOrder))
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
     }
 
-    private function notifyEmailFailure(PurchaseOrder $purchaseOrder, string $message): void
+    /** @param list<int> $fallbackUserIds */
+    private function notifyEmailFailure(PurchaseOrder $purchaseOrder, string $message, array $fallbackUserIds): void
     {
-        app(EmailDeliveryFailureNotifier::class)->notifyPermission(
-            'purchasing.view',
+        app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
+            $fallbackUserIds,
             'Supplier purchase order',
             "PO {$purchaseOrder->po_number}: {$message}",
             [
