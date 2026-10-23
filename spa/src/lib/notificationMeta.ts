@@ -296,7 +296,7 @@ export function notificationMeta(type: string | undefined): NotificationMeta {
 }
 
 /** Type keys with explicit metadata — used by tests to detect catalog drift. */
-export const KNOWN_NOTIFICATION_TYPES = Object.keys(BY_TYPE);
+export const KNOWN_NOTIFICATION_TYPES = Object.keys({ ...BY_TYPE, ...PORTAL_BY_TYPE });
 
 /**
  * Returns a YYYY-MM-DD bucket key for a notification's `created_at` so

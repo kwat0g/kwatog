@@ -115,9 +115,24 @@ class ApprovalBoardTest extends TestCase
             ->assertOk()
             ->json('data.kinds');
 
-        $this->assertSame(ApprovalTypeRegistry::kindOptions(), $kinds);
+        $this->assertSame(ApprovalTypeRegistry::kindOptions($approver), $kinds);
         foreach ($kinds as $kind) {
             $this->getJson('/api/v1/approvals/board?type='.urlencode($kind['value']))->assertOk();
         }
+    }
+
+    public function test_filter_options_and_requests_follow_the_users_permissions(): void
+    {
+        $employee = $this->user('employee');
+        $kinds = $this->actingAs($employee)
+            ->getJson('/api/v1/approvals/options')
+            ->assertOk()
+            ->json('data.kinds');
+        $values = array_column($kinds, 'value');
+
+        $this->assertContains('leave', $values);
+        $this->assertContains('overtime', $values);
+        $this->assertNotContains('pr', $values);
+        $this->getJson('/api/v1/approvals/board?type=pr')->assertUnprocessable();
     }
 }
