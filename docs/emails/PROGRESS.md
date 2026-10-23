@@ -12,6 +12,7 @@ Updated: 2026-10-23
 - E-001–E-003 customer invoice, receipt, and dunning notices now include record references, balance/due details, and portal actions; four light/dark desktop/mobile previews per type are included in the rollup. Real email-client rendering remains unverified.
 - Finalized invoice delivery now uses issue-time recipient and display-value snapshots so queued mail cannot switch to a changed address or invoice values.
 - Official receipt delivery now snapshots the recipient, customer name, amount, receipt date, and linked invoice at issue time.
+- E-002 official-receipt template and light/dark desktop/mobile previews are integrated; accountant review remains required before external production delivery.
 - E-027/E-028 production-summary templates and previews are included. Empty recipient sets now raise an in-app admin notice instead of silently skipping the scheduled summary.
 - E-029/E-031–E-033 account messages use expiring one-time setup/reset links; no password is included in the email. Existing serialized legacy jobs generate a fresh link at send time. HR/data-protection review remains required.
 - E-001's four browser screenshots were refreshed in the local #216 worktree at `6913c986`; prior captures still showed the retired O mark. Current company logo variants now appear in light and dark previews. See [E-001 review](E-001-invoice-finalized.md).
