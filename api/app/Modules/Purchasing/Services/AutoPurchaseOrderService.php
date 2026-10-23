@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -198,11 +199,14 @@ class AutoPurchaseOrderService
                 (array) $this->settings->get('purchasing.auto_po.approval_roles', []),
                 static fn ($role): bool => is_string($role) && $role !== '',
             ));
-            $vps = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
-                ->where('is_active', true)
-                ->get();
-            app(NotificationService::class)->send($vps, 'auto_po_pending', [
+            $notifications = app(NotificationService::class);
+            $access = app(PurchaseOrderAccessPolicy::class);
+            $vps = $notifications->usersWithPermission('purchasing.po.approve')
+                ->filter(fn (User $user): bool => in_array($user->role?->slug, $roles, true)
+                    && $user->hasPermission('purchasing.view')
+                    && $access->canView($user, $po))
+                ->values();
+            $notifications->send($vps, 'auto_po_pending', [
                 'title'       => 'Auto-PO awaiting approval',
                 'message'     => "Critical stock alert. Auto-PO {$po->po_number} for {$item->code} is awaiting approval.",
                 'link_to'     => "/purchasing/purchase-orders/{$po->hash_id}",
