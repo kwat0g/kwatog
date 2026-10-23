@@ -258,6 +258,19 @@ class HireToRetireChainTest extends TestCase
             ])
             ->assertStatus(403);
 
+        // The filer's department must already have an eligible approver on
+        // file, or leave submission auto-routes to HR (skipping the department
+        // step under test; LeaveRequestService::hasEligibleDepartmentApprover).
+        // Kept as a separate user so the wrong-department probe below still
+        // fails: $this->deptHead only gains an employee in $dept at ACT 3.
+        $deptApprover = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'is_active' => true,
+        ]);
+        $deptApprover->forceFill([
+            'employee_id' => Employee::factory()->create(['department_id' => $dept->id])->id,
+        ])->save();
+
         $leaveResponse = $this->actingAs($selfUser)
             ->postJson('/api/v1/leaves/requests', [
                 'employee_id' => $employee->hash_id,
@@ -332,7 +345,7 @@ class HireToRetireChainTest extends TestCase
         $this->assertSame('approved', $leave->status->value);
         $balance->refresh();
         $this->assertEquals(2.0, (float) $balance->used);
-        $this->assertEquals($creditsBefore - 2.0, (float) $balance->remaining);
+        $this->assertEqualsWithDelta($creditsBefore - 2.0, (float) $balance->remaining, 0.000001);
 
         $this->assertDatabaseHas('attendances', [
             'employee_id' => $employee->id,

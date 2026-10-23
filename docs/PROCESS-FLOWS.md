@@ -308,8 +308,7 @@ accept 3; larger lots follow the same table. The plan lives in the
 **Where in the app:** `/quality/inspections` (filtered by stage = "Outgoing")
 
 **API endpoints:**
-- `GET /api/v1/quality/inspections/aql-preview` — preview sample size for a batch
-- `POST /api/v1/quality/inspections` — create (or auto-created)
+- `POST /api/v1/quality/inspections` — create from its source record (GRN, work order, output batch, or return)
 - `PATCH .../measurements` — record measurements
 - `POST .../complete` — complete inspection
 - `GET .../coc` — generate Certificate of Conformance PDF

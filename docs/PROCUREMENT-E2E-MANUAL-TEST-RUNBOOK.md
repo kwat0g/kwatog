@@ -177,7 +177,7 @@ The queue must be running for:
 Monitor the worker during testing:
 
 ```bash
-docker compose logs -f queue
+docker compose logs -f horizon
 ```
 
 The procurement chain overview is:

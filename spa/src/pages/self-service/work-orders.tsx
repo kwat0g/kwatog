@@ -10,10 +10,12 @@ import { workOrdersApi } from '@/api/production/workOrders';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { StickyActionBar } from '@/components/ui/StickyActionBar';
 import { Textarea } from '@/components/ui/Textarea';
+import { LuTrash2 } from '@/lib/icons';
 import { useAuthStore } from '@/stores/authStore';
 import { workerCountError } from '@/lib/productionCrewValidation';
 import type { WorkerOutputData } from '@/types/production-crew';
@@ -62,18 +64,23 @@ export default function MyWorkOrdersPage() {
                 key={`${order.id}-${order.repair?.ncr_id ?? 'production'}`}
                 className="relative py-3 pl-2 hover:bg-elevated"
               >
-                <Link
-                  className="text-accent font-medium after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-accent"
-                  to={`/self-service/work-orders/${order.id}${order.repair ? `?rework_ncr_id=${order.repair.ncr_id}` : ''}`}
-                >
-                  {order.wo_number}
-                  {order.repair && ' · Repair'}
-                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    className="font-mono text-accent font-medium after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-accent"
+                    to={`/self-service/work-orders/${order.id}${order.repair ? `?rework_ncr_id=${order.repair.ncr_id}` : ''}`}
+                  >
+                    {order.wo_number}
+                  </Link>
+                  {order.repair && <Chip variant="purple">Repair</Chip>}
+                  <Chip variant={chipVariantForStatus(order.status)}>
+                    {order.status.replaceAll('_', ' ')}
+                  </Chip>
+                </div>
                 <p className="mt-1 text-sm">
-                  {order.product.part_number} · {order.product.name}
+                  <span className="font-mono">{order.product.part_number}</span> ·{' '}
+                  {order.product.name}
                 </p>
                 <p className="text-sm text-muted">
-                  {order.status.replaceAll('_', ' ')} ·{' '}
                   {order.crew.recorder_employee_id === employeeId ||
                   order.can_record ||
                   order.can_record_trial ||
@@ -136,16 +143,18 @@ export default function MyWorkOrdersPage() {
           <ul className="max-h-[28rem] overflow-y-auto divide-y divide-default">
             {history.data?.data.map((entry) => (
               <li key={`${entry.work_order.id}-${entry.crew.id}`} className="py-3">
-                <Link
-                  className="font-medium text-accent hover:underline"
-                  to={`/self-service/work-orders/${entry.work_order.id}?crew_id=${entry.crew.id}`}
-                >
-                  {entry.work_order.wo_number}
-                </Link>
-                <p className="text-sm text-muted">
-                  {entry.work_order.status.replaceAll('_', ' ')} · {entry.crew.members.length} crew
-                  members
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    className="font-mono font-medium text-accent hover:underline"
+                    to={`/self-service/work-orders/${entry.work_order.id}?crew_id=${entry.crew.id}`}
+                  >
+                    {entry.work_order.wo_number}
+                  </Link>
+                  <Chip variant={chipVariantForStatus(entry.work_order.status)}>
+                    {entry.work_order.status.replaceAll('_', ' ')}
+                  </Chip>
+                </div>
+                <p className="mt-1 text-sm text-muted">{entry.crew.members.length} crew members</p>
                 <p className="text-sm">
                   {entry.late_production_report_count ?? entry.late_production_reports.length}{' '}
                   earlier production reports ·{' '}
@@ -416,7 +425,11 @@ function MyWorkOrderDetail() {
           <>
             <Panel
               title={data.repair ? 'Repair assignment' : 'Production assignment'}
-              meta={<Badge variant="neutral">{data.status.replaceAll('_', ' ')}</Badge>}
+              meta={
+                <Chip variant={chipVariantForStatus(data.status)}>
+                  {data.status.replaceAll('_', ' ')}
+                </Chip>
+              }
               actions={
                 <Button
                   className="min-h-11"
@@ -429,7 +442,7 @@ function MyWorkOrderDetail() {
               }
             >
               <p className="font-medium">
-                {data.product.part_number} · {data.product.name}
+                <span className="font-mono">{data.product.part_number}</span> · {data.product.name}
               </p>
               <div className="mt-3 grid grid-cols-3 gap-3 border-y border-default py-3 text-sm">
                 <div>
@@ -454,7 +467,7 @@ function MyWorkOrderDetail() {
                 </div>
               </div>
               {data.report_interval?.started_at && data.report_interval.finished_at && (
-                <p className="mt-3 text-xs text-muted">
+                <p className="mt-3 text-xs text-muted tabular-nums">
                   WO schedule: {productionDateTime(data.report_interval.started_at)} –{' '}
                   {productionDateTime(data.report_interval.finished_at)} · Asia/Manila
                 </p>
@@ -464,8 +477,22 @@ function MyWorkOrderDetail() {
                   Crew and equipment
                 </summary>
                 <p className="text-sm">
-                  Machine: {data.machine ? `${data.machine.code} · ${data.machine.name}` : 'None'} ·
-                  Mold: {data.mold ? `${data.mold.code} · ${data.mold.name}` : 'None'}
+                  Machine:{' '}
+                  {data.machine ? (
+                    <>
+                      <span className="font-mono">{data.machine.code}</span> · {data.machine.name}
+                    </>
+                  ) : (
+                    'None'
+                  )}{' '}
+                  · Mold:{' '}
+                  {data.mold ? (
+                    <>
+                      <span className="font-mono">{data.mold.code}</span> · {data.mold.name}
+                    </>
+                  ) : (
+                    'None'
+                  )}
                 </p>
                 <ul className="mt-3 space-y-1 text-sm">
                   {data.crew.members.map((member) => (
@@ -524,47 +551,52 @@ function MyWorkOrderDetail() {
                 (finishFirst ||
                   !data.startup_trial ||
                   data.startup_trial.state === 'released'))) && (
-              <Panel
-                title={finishFirst ? 'Record production' : 'Record output'}
-                meta={`${remaining} ${finishFirst ? 'pieces' : 'good pieces'} remaining`}
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (blocked || invalid || pending || order.isFetching) return;
+                  const outputData: WorkerOutputData =
+                    finishFirst && !data.repair
+                      ? {
+                          crew_id: data.crew.id,
+                          produced_count: Number(good),
+                          remarks: remarks || undefined,
+                        }
+                      : {
+                          crew_id: data.crew.id,
+                          good_count: Number(good),
+                          reject_count: Number(reject),
+                          defects: defectRows.map((row) => ({
+                            defect_type_id: row.defect_type_id,
+                            count: Number(row.count),
+                          })),
+                          remarks: remarks || undefined,
+                        };
+                  const submission = { key: createRequestKey(), data: outputData };
+                  if (recovery.remember(submission)) submit.mutate(submission);
+                }}
               >
-                <p className="mb-3 text-sm text-muted">
-                  Enter only this batch’s new pieces. Previously saved output stays in receipts
-                  below.
-                </p>
-                {draft.hasDraft && !pending && (
-                  <DraftRestoreBanner
-                    ageMs={draft.draftAge}
-                    onRestore={draft.restore}
-                    onDiscard={draft.discard}
-                  />
-                )}
-                <form
-                  className="space-y-3"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (blocked || invalid || pending || order.isFetching) return;
-                    const outputData: WorkerOutputData =
-                      finishFirst && !data.repair
-                        ? {
-                            crew_id: data.crew.id,
-                            produced_count: Number(good),
-                            remarks: remarks || undefined,
-                          }
-                        : {
-                            crew_id: data.crew.id,
-                            good_count: Number(good),
-                            reject_count: Number(reject),
-                            defects: defectRows.map((row) => ({
-                              defect_type_id: row.defect_type_id,
-                              count: Number(row.count),
-                            })),
-                            remarks: remarks || undefined,
-                          };
-                    const submission = { key: createRequestKey(), data: outputData };
-                    if (recovery.remember(submission)) submit.mutate(submission);
-                  }}
+                <Panel
+                  title={finishFirst ? 'Record production' : 'Record output'}
+                  meta={
+                    <>
+                      <span className="font-mono tabular-nums">{remaining}</span>
+                      {` ${finishFirst ? 'pieces' : 'good pieces'} remaining`}
+                    </>
+                  }
                 >
+                  <p className="mb-3 text-sm text-muted">
+                    Enter only this batch’s new pieces. Previously saved output stays in receipts
+                    below.
+                  </p>
+                  {draft.hasDraft && !pending && (
+                    <DraftRestoreBanner
+                      ageMs={draft.draftAge}
+                      onRestore={draft.restore}
+                      onDiscard={draft.discard}
+                    />
+                  )}
                   <fieldset disabled={!!pending || blocked} className="space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Input
@@ -587,6 +619,7 @@ function MyWorkOrderDetail() {
                         max={data.repair ? remaining : undefined}
                         step={1}
                         required
+                        containerClassName="[&>div]:h-11 sm:[&>div]:h-8"
                         value={good}
                         onChange={(event) => {
                           setGood(event.target.value);
@@ -603,6 +636,7 @@ function MyWorkOrderDetail() {
                           step={1}
                           required
                           readOnly={!!data.repair}
+                          containerClassName="[&>div]:h-11 sm:[&>div]:h-8"
                           helper={
                             data.repair
                               ? 'Remaining repair pieces minus repaired pieces.'
@@ -618,6 +652,7 @@ function MyWorkOrderDetail() {
                         <Button
                           type="button"
                           variant="secondary"
+                          className="min-h-11 sm:min-h-8"
                           onClick={() =>
                             setDefectRows([...defectRows, { defect_type_id: '', count: '' }])
                           }
@@ -625,8 +660,12 @@ function MyWorkOrderDetail() {
                           Add defect
                         </Button>
                         {defectRows.map((row, index) => (
-                          <div key={index} className="grid gap-2 sm:grid-cols-[1fr_6rem_auto]">
+                          <div
+                            key={index}
+                            className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_6rem_auto]"
+                          >
                             <Select
+                              containerClassName="col-span-2 sm:col-span-1 [&>div]:h-11 sm:[&>div]:h-8"
                               label={`Defect type ${index + 1}`}
                               value={row.defect_type_id}
                               onChange={(event) =>
@@ -654,6 +693,7 @@ function MyWorkOrderDetail() {
                               ))}
                             </Select>
                             <Input
+                              containerClassName="[&>div]:h-11 sm:[&>div]:h-8"
                               label={`Defect count ${index + 1}`}
                               type="number"
                               min={1}
@@ -670,12 +710,14 @@ function MyWorkOrderDetail() {
                             <Button
                               type="button"
                               variant="ghost"
+                              iconOnly
+                              icon={<LuTrash2 size={16} aria-hidden />}
+                              aria-label={`Remove defect ${index + 1}`}
+                              className="min-h-11 min-w-11 self-end sm:min-h-8 sm:min-w-8"
                               onClick={() =>
                                 setDefectRows(defectRows.filter((_, i) => i !== index))
                               }
-                            >
-                              Remove defect {index + 1}
-                            </Button>
+                            />
                           </div>
                         ))}
                       </div>
@@ -691,11 +733,14 @@ function MyWorkOrderDetail() {
                         onChange={(event) => setRemarks(event.target.value)}
                       />
                     </details>
-                    {(!finishFirst || data.repair) && Number(reject) > 0 && (
-                      <p className="text-sm text-muted">
-                        Defect count: {reject}. Classify every rejected piece.
-                      </p>
-                    )}
+                    {(!finishFirst || data.repair) &&
+                      Number(reject) > 0 &&
+                      defectRows.length === 0 && (
+                        <p className="text-sm text-muted">
+                          Defect count: <span className="font-mono tabular-nums">{reject}</span>.
+                          Classify every rejected piece.
+                        </p>
+                      )}
                   </fieldset>
                   {options.isLoading && <p role="status">Loading output options…</p>}
                   {options.isError && (
@@ -716,16 +761,19 @@ function MyWorkOrderDetail() {
                       Checking assignment…
                     </p>
                   )}
+                </Panel>
+                <StickyActionBar offset="tabs" className="md:border-t md:border-default md:pt-4">
                   <Button
                     type="submit"
-                    className="min-h-11"
+                    variant="primary"
+                    className="min-h-11 w-full md:ml-auto md:w-auto"
                     disabled={blocked || !!invalid || !!pending || order.isFetching}
                     loading={submit.isPending}
                   >
                     {finishFirst ? 'Record production' : 'Record output'}
                   </Button>
-                </form>
-              </Panel>
+                </StickyActionBar>
+              </form>
             )}
           </>
         )}
@@ -752,11 +800,11 @@ function MyWorkOrderDetail() {
             )}
             <ul className="max-h-80 overflow-y-auto divide-y divide-default">
               {receipts.data?.map((receipt) => (
-                <li key={receipt.id} className="py-2 text-sm">
+                <li key={receipt.id} className="py-2 text-sm tabular-nums">
                   <MaterialHandoverExceptionDetails
                     exception={receipt.material_handover_exception}
                   />
-                  {receipt.batch_code} ·{' '}
+                  <span className="font-mono">{receipt.batch_code}</span> ·{' '}
                   {!!receipt.trial_quantity && (
                     <>
                       {receipt.trial_quantity} trial pieces ·{' '}

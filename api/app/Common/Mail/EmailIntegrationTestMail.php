@@ -17,7 +17,10 @@ class EmailIntegrationTestMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public readonly ?int $fallbackUserId = null) {}
+    public function __construct(public readonly ?int $fallbackUserId = null)
+    {
+        $this->onQueue('mail');
+    }
 
     public function envelope(): Envelope
     {

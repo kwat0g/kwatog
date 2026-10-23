@@ -36,8 +36,9 @@ use Illuminate\Support\Facades\DB;
  *    and machine-downtime row lifecycle.
  *
  * On from IN (breakdown, maintenance) → to IN (idle, running):
- *  - Close any open machine_downtimes row for the machine (sets end_time
- *    + duration_minutes).
+ *  - Close open machine_downtimes rows for the machine (sets end_time
+ *    + duration_minutes). A row belonging to a still-paused work order is
+ *    left open — WorkOrderService closes it on resume or cancel.
  *
  * Implements ShouldQueue so the broadcast event publish doesn't block the
  * status-transition request — but uses the sync queue in tests.
@@ -268,17 +269,18 @@ class HandleMachineBreakdown implements ShouldQueue
                 return;
             }
 
-            // Close any open downtime rows for this machine.
+            // Close open machine-level downtime rows, and rows of work orders
+            // that are no longer paused. A still-paused work order keeps its
+            // row open until resume or cancel (WorkOrderService) closes it.
             MachineDowntime::where('machine_id', $machine->id)
                 ->whereNull('end_time')
+                ->with('workOrder:id,status')
                 ->lockForUpdate()
                 ->get()
+                ->filter(fn (MachineDowntime $row): bool => $row->work_order_id === null
+                    || $row->workOrder?->status !== WorkOrderStatus::Paused)
                 ->each(function ($row) use (&$closed): void {
-                    $end = now();
-                    $row->update([
-                        'end_time' => $end,
-                        'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($end, true)),
-                    ]);
+                    $row->closeAt();
                     $closed++;
                 });
 

@@ -1,0 +1,249 @@
+{
+  "role": "employee",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/self-service/profile",
+    "/self-service/payslips"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2461,
+      "horizontalPageScroll": false,
+      "heading": "Welcome, Manuel CruzUpdated just now",
+      "title": "Welcome, Manuel Cruz · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 11,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2258,
+      "horizontalPageScroll": false,
+      "heading": "Welcome, Manuel CruzUpdated just now",
+      "title": "Welcome, Manuel Cruz · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 11,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2340,
+      "horizontalPageScroll": false,
+      "heading": "Welcome, Manuel CruzUpdated just now",
+      "title": "Welcome, Manuel Cruz · Dashboard · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 11,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/dashboard-1440.png"
+    },
+    {
+      "route": "/self-service/profile",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2115,
+      "horizontalPageScroll": false,
+      "heading": "Manuel Cruz",
+      "title": "Manuel Cruz · Self-service · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 14,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/self-service-profile-375.png"
+    },
+    {
+      "route": "/self-service/profile",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2027,
+      "horizontalPageScroll": false,
+      "heading": "Manuel Cruz",
+      "title": "Manuel Cruz · Self-service · ERP",
+      "counts": {
+        "buttons": 17,
+        "links": 14,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/self-service-profile-768.png"
+    },
+    {
+      "route": "/self-service/profile",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1939,
+      "horizontalPageScroll": false,
+      "heading": "Manuel Cruz",
+      "title": "Manuel Cruz · Self-service · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 14,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/self-service-profile-1440.png"
+    },
+    {
+      "route": "/self-service/payslips",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1865,
+      "horizontalPageScroll": false,
+      "heading": "My Payslips",
+      "title": "My Payslips · Self-service · ERP",
+      "counts": {
+        "buttons": 15,
+        "links": 12,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/self-service-payslips-375.png"
+    },
+    {
+      "route": "/self-service/payslips",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1811,
+      "horizontalPageScroll": false,
+      "heading": "My Payslips",
+      "title": "My Payslips · Self-service · ERP",
+      "counts": {
+        "buttons": 15,
+        "links": 12,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/self-service-payslips-768.png"
+    },
+    {
+      "route": "/self-service/payslips",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1905,
+      "horizontalPageScroll": false,
+      "heading": "My Payslips",
+      "title": "My Payslips · Self-service · ERP",
+      "counts": {
+        "buttons": 14,
+        "links": 12,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 2,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/employee/self-service-payslips-1440.png"
+    }
+  ]
+}

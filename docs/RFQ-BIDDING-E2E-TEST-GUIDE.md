@@ -554,7 +554,7 @@ PR: Sourcing pending (remains approved, ready for Direct PO or new RFQ)
 Check the queue for closure jobs:
 
 ```bash
-docker compose logs -f queue
+docker compose logs -f horizon
 ```
 
 ## 7. Compare and Award

@@ -87,6 +87,7 @@ class MrpPlanResource extends JsonResource
                 })
             ),
             'generated_at' => optional($this->generated_at)->toIso8601String(),
+            'rerun_outcome' => $this->resource->getAttribute('rerun_outcome'),
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),
         ];

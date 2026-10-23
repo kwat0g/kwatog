@@ -1,59 +1,39 @@
-import { useEffect, type ReactNode } from 'react';
-import { cn } from '@/lib/cn';
-import { focusRingInset } from '@/lib/focus';
+import { type ReactNode } from 'react';
+import { Modal } from './Modal';
 
 interface BottomSheetProps {
- isOpen: boolean;
- onClose: () => void;
- title?: ReactNode;
- children: ReactNode;
- className?: string;
+  isOpen: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  children: ReactNode;
+  className?: string;
 }
 
 /**
- * Mobile bottom sheet. Slides up from the bottom edge, covers up to ~90vh.
- * Used by the self-service Apply-for-Leave and profile-update flows.
+ * Mobile bottom sheet — now a *forced* presentation of the one dialog
+ * implementation rather than a second one.
+ *
+ * It used to be its own component: its own Esc listener, its own scroll lock,
+ * its own backdrop, and **no focus trap** — so a keyboard or switch-control user
+ * who opened the self-service leave sheet could tab straight into the page
+ * behind it. There is no second dialog implementation worth maintaining: the
+ * sheet is `Modal` with `presentation="sheet"`, which already owns the focus
+ * trap, the topmost-only Esc stack, the scroll lock and the labelled dialog
+ * role. The call sites do not change.
+ *
+ * Use this when a surface is phone-only by design (the self-service and
+ * shop-floor flows); use `Modal` elsewhere and let it choose.
  */
 export function BottomSheet({ isOpen, onClose, title, children, className }: BottomSheetProps) {
- useEffect(() => {
- if (!isOpen) return;
- const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
- document.addEventListener('keydown', onKey);
- const original = document.body.style.overflow;
- document.body.style.overflow = 'hidden';
- return () => {
- document.removeEventListener('keydown', onKey);
- document.body.style.overflow = original;
- };
- }, [isOpen, onClose]);
-
- if (!isOpen) return null;
-
- return (
- <div
- className="fixed inset-0 z-50 flex items-end justify-center"
- role="dialog"
- aria-modal="true"
- >
- <button
- type="button"
- aria-label="Close"
- onClick={onClose}
- className={cn('absolute inset-0 bg-black/40 cursor-pointer', focusRingInset)}
- />
- <div
- className={cn(
- 'relative w-full max-h-[90vh] bg-canvas rounded-t-lg border-t border-default flex flex-col',
- className,
- )}
- >
- {title && (
- <div className="px-4 py-3 border-b border-default">
- <h2 className="text-md font-medium">{title}</h2>
- </div>
- )}
- <div className="overflow-auto p-4">{children}</div>
- </div>
- </div>
- );
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      presentation="sheet"
+      className={className}
+    >
+      {children}
+    </Modal>
+  );
 }

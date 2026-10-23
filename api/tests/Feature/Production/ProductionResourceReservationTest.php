@@ -74,7 +74,7 @@ class ProductionResourceReservationTest extends TestCase
         $this->assertNotContains($futureAssignmentBlocker, $readiness['execution_blockers']);
         $service->acquire($wo, $machine, $mold);
         $this->assertSame($wo->id, (int) $mold->fresh()->current_work_order_id);
-        $wo->update(['status' => 'paused']);
+        $wo->update(['status' => 'paused', 'pause_reason' => 'Awaiting material delivery.']);
         try {
             $service->acquire($future, $machine->fresh(), $mold->fresh());
             $this->fail('Installed mold cannot be taken.');
@@ -83,7 +83,12 @@ class ProductionResourceReservationTest extends TestCase
         }
         $released = app(WorkOrderService::class)->releaseResources($wo->fresh(), 'Explicitly release equipment for the scheduled future work order.');
         $this->assertNotNull($released->production_released_at);
-        $this->assertSame('Explicitly release equipment for the scheduled future work order.', $released->pause_reason);
+        $this->assertSame('Awaiting material delivery.', $released->pause_reason, 'Releasing resources must not overwrite the pause cause.');
+        $this->assertDatabaseHas('activity_events', [
+            'subject_id' => $wo->id,
+            'type' => 'production.work_order',
+            'action' => 'resources_released',
+        ]);
         $this->slot($future, $machine, $mold);
         $service->acquire($future, $machine->fresh(), $mold->fresh());
         $this->assertSame($future->id, (int) $mold->fresh()->current_work_order_id);

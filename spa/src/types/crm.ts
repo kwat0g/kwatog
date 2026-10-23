@@ -212,6 +212,7 @@ export interface SalesOrder {
     status: string;
     proposed_delivery_date: string | null;
     notes: string | null;
+    resolution_notes?: string | null;
   } | null;
   delivery_terms: string | null;
   incoterm: Incoterm | null;

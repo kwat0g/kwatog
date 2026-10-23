@@ -48,6 +48,10 @@ class CustomerResource extends JsonResource
             'email'              => $this->email,
             'phone'              => $this->phone,
             'address'            => $this->address,
+            // Chain 1 — the ship-to a driver is sent to, and who signs at the gate.
+            'delivery_address'   => $this->delivery_address,
+            'delivery_contact_person' => $this->delivery_contact_person,
+            'delivery_contact_phone'  => $this->delivery_contact_phone,
             'tin'                => $canSeeTin ? $this->tin : $this->maskTin($this->tin),
             'credit_limit'       => $this->credit_limit ? (string) $this->credit_limit : null,
             'credit_used'        => $creditUsedRaw !== null ? Money::round2($creditUsed) : null,

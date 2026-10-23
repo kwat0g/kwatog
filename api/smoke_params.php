@@ -99,7 +99,6 @@ $cases = [
     ['api/v1/loans/limits/{employee}', ['loan_type' => 'company_loan'], \App\Modules\HR\Models\Employee::class],
     ['api/v1/budgets/check-availability', ['department_id' => $deptH, 'amount' => '100.00', 'fiscal_year_id' => $fyH]],
     ['api/v1/production/operations/schedule', ['from' => $from, 'to' => $to]],
-    ['api/v1/quality/inspections/aql-preview', ['batch_quantity' => 500]],
     ['api/v1/quality/analytics/defect-pareto/drill', ['parameter_name' => 'Outer Diameter', 'from' => $from, 'to' => $to]],
     ['api/v1/maintenance/condition-readings', ['machine_id' => $machineH]],
     ['api/v1/maintenance/condition-readings/trend', ['machine_id' => $machineH, 'metric' => 'vibration', 'from' => $from, 'to' => $to]],

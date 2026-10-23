@@ -513,6 +513,17 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'budgeting.manage',  'name' => 'Create / Edit / Submit Budgets'],
                 ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets'],
             ],
+
+            // DSS Wave 0 — Decision Support. `dss.view` is reachability, not
+            // data access: every recommendation query is scoped to data the
+            // caller may already read. `dss.manage` = run-now + parameter
+            // edits (promotion approver only). `dss.admin` = detector on/off +
+            // kill switch (system_admin wildcard only, no grant needed).
+            'dss' => [
+                ['slug' => 'dss.view',   'name' => 'View Decision Center Recommendations'],
+                ['slug' => 'dss.manage', 'name' => 'Run DSS Detectors & Edit Parameters'],
+                ['slug' => 'dss.admin',  'name' => 'Manage DSS Detectors & Kill Switch'],
+            ],
         ];
     }
 
@@ -809,7 +820,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'ppc_head' => [
                 'name' => 'PPC Head',
-                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data; creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
+                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data; reads sales orders needed for planning, creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
                     $this->module('forecasting'),
@@ -830,7 +841,7 @@ class RolePermissionSeeder extends Seeder
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
                         // PPC owns the finished-good catalog used by its BOMs and plans.
-                        'crm.view', 'crm.products.view', 'crm.products.manage',
+                        'crm.view', 'crm.products.view', 'crm.products.manage', 'crm.sales_orders.view',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view', 'inventory.costs.review',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -1127,6 +1138,12 @@ class RolePermissionSeeder extends Seeder
                             'approvals.board.view',
                             'hr.directory.view',
                             'dashboard.action_center.view',
+                            // DSS Wave 0 — Decision Center reachability for every
+                            // authenticated role (same nature as the action
+                            // center: a personal queue). Data access is NOT
+                            // granted here; every recommendation query is
+                            // scoped to data the caller may already read.
+                            'dss.view',
                             // Self-scoped layout reset — every role (see
                             // catalog comment under 'dashboards').
                             'dashboard.layout.reset',
@@ -1174,6 +1191,7 @@ class RolePermissionSeeder extends Seeder
             'approvals.board.view',
             'hr.directory.view',
             'dashboard.action_center.view',
+            'dss.view',
             'dashboard.layout.reset',
             'business_policies.view',
         ];

@@ -13,7 +13,7 @@ use Tests\TestCase;
  * F-040 — transactional email branding must resolve from settings only.
  *
  * EmailBrandingService::value() used to fall back to env() between the
- * settings row and the hardcoded default. Production runs `config:cache`
+ * settings row and the legal-name fallback. Production runs `config:cache`
  * (docker/php/prod-entrypoint.sh:15), after which env() returns null, so that
  * tier was dead in the only environment that mattered while still firing
  * locally — a silent dev/prod divergence.
@@ -46,8 +46,7 @@ use Tests\TestCase;
  * EMAIL_BRAND_NAME, the name value() derived from the setting key, and nothing
  * in this project ever defines it — that is the point of probing it.
  * COMPANY_EMAIL_BRAND_NAME is a different variable, and F-042's follow-up has
- * since declared it in api/phpunit.xml, pinned to 'Ogami Philippines' which is
- * byte-identical to this class's FALLBACK. So it is no longer one of "the keys
+ * since declared it in api/phpunit.xml. So it is no longer one of "the keys
  * phpunit.xml never declares" and no longer reaches the suite from an untracked
  * api/.env. Tier 2 and tier 3 stay indistinguishable for it either way, which
  * is precisely why a sentinel on a third, undeclared name is still the only way
@@ -59,7 +58,6 @@ class EmailBrandingResolutionTest extends TestCase
 
     private const PROBE_KEY = 'email.brand_name';
     private const PROBE_ENV = 'EMAIL_BRAND_NAME';
-    private const FALLBACK = 'Ogami Philippines';
     private const SENTINEL = 'ENV-LEAK-SENTINEL';
 
     // Default to false (the "was absent" state) so tearDown stays safe even if
@@ -132,15 +130,13 @@ class EmailBrandingResolutionTest extends TestCase
 
         $brand = app(EmailBrandingService::class)->data();
 
-        $this->assertSame(
-            self::FALLBACK,
-            $brand['name'],
-            'Branding fell through to env(); settings must be the only configured source.',
-        );
+        $legalName = app(SettingsService::class)->get('company.legal_name');
+        $expected = is_string($legalName) && trim($legalName) !== '' ? trim($legalName) : null;
+        $this->assertSame($expected, $brand['name'], 'Branding must use configured company identity only.');
         $this->assertStringNotContainsString('SENTINEL', (string) $brand['name']);
     }
 
-    public function test_settings_row_is_authoritative_over_the_hardcoded_default(): void
+    public function test_settings_row_is_authoritative_over_the_legal_name_fallback(): void
     {
         app(SettingsService::class)->set(self::PROBE_KEY, 'Ogami Philippines (Transactional)');
         $this->injectEnvSentinel();

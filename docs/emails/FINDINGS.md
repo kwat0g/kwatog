@@ -1,0 +1,13 @@
+# Email audit findings
+
+Date: 2026-10-20. Static findings only; reachability and runtime impact remain unverified. Fixes belong in separate functional/security changes, not the email-template work.
+
+| ID | Finding | Evidence / impact | Follow-up |
+|---|---|---|---|
+| EF-001 | Local development mail initially could reach external SMTP | `.env` and `api/.env` used SMTP with AWS Mail Manager credentials. Both now use `MAIL_MAILER=log`, credentials are blank, and Horizon was restarted. The shared-foundation branch adds redirect-or-block enforcement. | Keep local mail on log or a verified sink; verify the deployed guard before any non-production send. |
+| EF-002 | Company settings need owner verification | Shared foundation now requires `company.legal_name` and `company.address` instead of using fallback literals, and makes the other optional identity values settings-only. The local settings rows exist; sales inbox and VAT status match the old fallback strings. | Owner verifies settings before external send. Accountant reviews statutory fields. |
+| EF-003 | Welcome/reset messages include temporary passwords | Auth and HR notification constructors accept temporary password strings and their mail bodies include them. Exact active call paths need confirmation. | Trace reachability; replace with secure activation/reset flow. Security review. |
+| EF-004 | Several send paths are synchronous | Payslip job uses `Mail::send`; customer sales-order decision and supplier PO decision services use `Mail::send`. SMTP failure/latency can hold a job/request and retry may duplicate. | Review caller transaction/retry semantics and queue/after-commit behavior in functional reliability changes. |
+| EF-005 | Generic emails vary in sensitivity but share one body path | `NotificationService` can queue `UserNotificationMail` with arbitrary caller title/message/link for opted-in notification types. | Classify runtime type keys and remove sensitive body details or restrict eligibility as a separate privacy/RBAC change. |
+
+No code-level fix was applied as part of Phase 0/1.

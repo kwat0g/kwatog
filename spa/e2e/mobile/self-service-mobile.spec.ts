@@ -5,7 +5,8 @@
  * by testMatch: '**\/mobile/**').
  *
  * Covers: /self-service/me, /self-service/leave, /self-service/payslips,
- * /self-service/dtr, /self-service/loans, /self-service/profile.
+ * /self-service/dtr, /self-service/loans, /self-service/profile,
+ * /self-service/work-orders/:id.
  */
 import { test, expect } from '../fixtures';
 import { loginAs } from '../helpers-extended';
@@ -44,6 +45,30 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await expect(nav.getByRole('link', { name: 'Me', exact: true })).toBeVisible();
     // Some self-service tile/content
     await expect(page.getByText(/leave|payslip|dtr|profile/i).first()).toBeVisible();
+  });
+
+  test('self-service /work-orders/:id — output recorder form is thumb-reachable', async ({ page }) => {
+    await mockRecorderWorkOrder(page);
+    await loginAs(page, 'production', '/self-service/work-orders/w1');
+
+    // The bottom nav gains a production-gated Work orders tab on phones.
+    const nav = page.getByRole('navigation', { name: 'Self-service navigation' });
+    await expect(nav.getByRole('link', { name: 'Work orders' })).toBeVisible();
+    await expect(page.getByText('Production assignment')).toBeVisible();
+
+    // Primary action is pinned just above the bottom nav, reachable without scrolling.
+    const submit = page.getByRole('button', { name: 'Record output' });
+    await expect(submit).toBeInViewport();
+    const submitBox = await submit.boundingBox();
+    expect(submitBox!.height).toBeGreaterThanOrEqual(44);
+
+    // Quantity entry is a 44px touch target on phones (32px stays on desktop).
+    const good = page.getByRole('spinbutton', { name: 'Good count', exact: true });
+    const shellBox = await good.locator('..').boundingBox();
+    expect(shellBox!.height).toBeGreaterThanOrEqual(44);
+
+    await good.fill('100');
+    await expect(submit).toBeEnabled();
   });
 
   test('self-service home does not present a partial summary after a home-query failure', async ({ page }) => {
@@ -201,6 +226,67 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
   });
 });
+
+async function mockRecorderWorkOrder(page: import('@playwright/test').Page): Promise<void> {
+  await page.route('**/api/v1/**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+  });
+  const json = (route: import('@playwright/test').Route, body: unknown) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  await page.route(/\/production\/my-work-orders\/w1\/output-options/, (route) =>
+    json(route, { data: { defect_types: [] } }),
+  );
+  await page.route(/\/production\/my-work-orders\/w1\/outputs/, (route) => json(route, { data: [] }));
+  await page.route(/\/production\/my-work-orders\/w1(\?.*)?$/, (route) =>
+    json(route, {
+      data: {
+        id: 'w1',
+        wo_number: 'WO-202606-0012',
+        status: 'in_progress',
+        batch_number: 'BATCH-WO-202606-0012',
+        qc_workflow: null,
+        report_interval: {
+          started_at: '2026-06-18T06:00:00+08:00',
+          finished_at: '2026-06-18T14:00:00+08:00',
+          blocker: null,
+        },
+        startup_trial: null,
+        can_record_trial: false,
+        warehouse_handover: { total: 3, handed_over: 3, pending: 0 },
+        warehouse_handover_pending: 0,
+        product: { part_number: 'TP-8842-01', name: 'Wiper Bushing', unit_of_measure: 'pcs' },
+        machine: { code: 'IMM-07', name: '180T Toshiba EC180SX' },
+        mold: { code: 'MD-WB42', name: 'Wiper Bushing 4-cavity' },
+        quantity_target: 12000,
+        quantity_good: 8468,
+        quantity_rejected: 132,
+        remaining_produced: 3400,
+        remaining_good: 3532,
+        crew: {
+          id: 'crew1',
+          recorder_employee_id: 'emp_prd',
+          assigned_at: '2026-06-18T05:45:00+08:00',
+          ended_at: null,
+          reason: 'Regular run',
+          rework_ncr_id: null,
+          members: [
+            {
+              id: 'emp_prd',
+              employee_number: 'OGM-2021-0142',
+              name: 'Ricardo Tanaka',
+              has_active_account: true,
+              shift: { id: 's1', name: 'Shift A (6AM-2PM)' },
+            },
+          ],
+        },
+        can_record: true,
+        blocker: null,
+        can_report_late_production: false,
+        repair: null,
+      },
+    }),
+  );
+}
 
 async function mockSelfServiceProfile(page: import('@playwright/test').Page, updateRequestsStatus = 200): Promise<void> {
   await page.route('**/api/v1/hr/self-service/profile', async (route) => {

@@ -19,6 +19,8 @@ class EmployeeWelcomeNotification extends WelcomeNotification implements ShouldQ
     public function __construct(string $tempPassword)
     {
         parent::__construct($tempPassword);
+        // Lane: mail — see config/horizon.php. Same reason as the reset email.
+        $this->onQueue('mail');
         $this->afterCommit();
     }
 

@@ -1,0 +1,170 @@
+{
+  "role": "admin",
+  "label": "after",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/chains"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2769,
+      "horizontalPageScroll": false,
+      "heading": "System AdministratorUpdated just now",
+      "title": "System Administrator · Dashboard · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 82,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/after/admin/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2834,
+      "horizontalPageScroll": false,
+      "heading": "System AdministratorUpdated just now",
+      "title": "System Administrator · Dashboard · ERP",
+      "counts": {
+        "buttons": 10,
+        "links": 82,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/after/admin/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2644,
+      "horizontalPageScroll": false,
+      "heading": "System AdministratorUpdated just now",
+      "title": "System Administrator · Dashboard · ERP",
+      "counts": {
+        "buttons": 23,
+        "links": 82,
+        "inputs": 2,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/after/admin/dashboard-1440.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2552,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 76,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/after/admin/chains-375.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2286,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 16,
+        "links": 76,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/after/admin/chains-768.png"
+    },
+    {
+      "route": "/chains",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2518,
+      "horizontalPageScroll": false,
+      "heading": "Chain Tracker",
+      "title": "Chain Tracker · ERP",
+      "counts": {
+        "buttons": 29,
+        "links": 76,
+        "inputs": 1,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/after/admin/chains-1440.png"
+    }
+  ]
+}

@@ -41,9 +41,9 @@ use Illuminate\Support\Facades\DB;
 class ApprovalBoardService
 {
     /** @return array<int, array{value:string,label:string}> */
-    public function kindOptions(): array
+    public function kindOptions(?User $user = null): array
     {
-        return ApprovalTypeRegistry::kindOptions();
+        return ApprovalTypeRegistry::kindOptions($user);
     }
 
     /**

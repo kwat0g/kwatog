@@ -165,6 +165,11 @@ class DeliveryResource extends JsonResource
                     'name' => $this->salesOrder->customer->name,
                 ] : null,
             ] : null),
+            // Chain 1 — where the run sheet sends the truck, resolved once in
+            // Delivery::resolvedDeliveryAddress() rather than re-derived here.
+            'delivery_address'        => $this->resolvedDeliveryAddress(),
+            'delivery_contact_person' => $this->resolvedDeliveryContactPerson(),
+            'delivery_contact_phone'  => $this->resolvedDeliveryContactPhone(),
             'vehicle'             => $this->whenLoaded('vehicle', fn () => $this->vehicle ? [
                 'id'           => $this->vehicle->hash_id,
                 'plate_number' => $this->vehicle->plate_number,

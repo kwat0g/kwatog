@@ -1,0 +1,328 @@
+{
+  "role": "hr",
+  "label": "baseline-roles",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/hr/employees",
+    "/hr/leaves",
+    "/payroll/periods"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2832,
+      "horizontalPageScroll": false,
+      "heading": "HR Officer DashboardUpdated just now",
+      "title": "HR Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 54,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2507,
+      "horizontalPageScroll": false,
+      "heading": "HR Officer DashboardUpdated just now",
+      "title": "HR Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 54,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2506,
+      "horizontalPageScroll": false,
+      "heading": "HR Officer DashboardUpdated just now",
+      "title": "HR Officer Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 11,
+        "links": 54,
+        "inputs": 0,
+        "tables": 0,
+        "rows": 0,
+        "dialogs": 0,
+        "charts": 3
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/dashboard-1440.png"
+    },
+    {
+      "route": "/hr/employees",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2301,
+      "horizontalPageScroll": false,
+      "heading": "Employees",
+      "title": "Employees · Human Resources · ERP",
+      "counts": {
+        "buttons": 24,
+        "links": 27,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/hr-employees-375.png"
+    },
+    {
+      "route": "/hr/employees",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2183,
+      "horizontalPageScroll": false,
+      "heading": "Employees",
+      "title": "Employees · Human Resources · ERP",
+      "counts": {
+        "buttons": 24,
+        "links": 27,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/hr-employees-768.png"
+    },
+    {
+      "route": "/hr/employees",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2204,
+      "horizontalPageScroll": false,
+      "heading": "Employees",
+      "title": "Employees · Human Resources · ERP",
+      "counts": {
+        "buttons": 26,
+        "links": 27,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/hr-employees-1440.png"
+    },
+    {
+      "route": "/hr/leaves",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2128,
+      "horizontalPageScroll": false,
+      "heading": "Leave requests",
+      "title": "Leave requests · Human Resources · ERP",
+      "counts": {
+        "buttons": 24,
+        "links": 25,
+        "inputs": 43,
+        "tables": 1,
+        "rows": 37,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/hr-leaves-375.png"
+    },
+    {
+      "route": "/hr/leaves",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2103,
+      "horizontalPageScroll": false,
+      "heading": "Leave requests",
+      "title": "Leave requests · Human Resources · ERP",
+      "counts": {
+        "buttons": 24,
+        "links": 25,
+        "inputs": 43,
+        "tables": 1,
+        "rows": 37,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/hr-leaves-768.png"
+    },
+    {
+      "route": "/hr/leaves",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2225,
+      "horizontalPageScroll": false,
+      "heading": "Leave requests",
+      "title": "Leave requests · Human Resources · ERP",
+      "counts": {
+        "buttons": 26,
+        "links": 25,
+        "inputs": 43,
+        "tables": 1,
+        "rows": 37,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/hr-leaves-1440.png"
+    },
+    {
+      "route": "/payroll/periods",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2021,
+      "horizontalPageScroll": false,
+      "heading": "Payroll Periods",
+      "title": "Payroll Periods · Payroll & Benefits · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 21,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/payroll-periods-375.png"
+    },
+    {
+      "route": "/payroll/periods",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1806,
+      "horizontalPageScroll": false,
+      "heading": "Payroll Periods",
+      "title": "Payroll Periods · Payroll & Benefits · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 21,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/payroll-periods-768.png"
+    },
+    {
+      "route": "/payroll/periods",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 1876,
+      "horizontalPageScroll": false,
+      "heading": "Payroll Periods",
+      "title": "Payroll Periods · Payroll & Benefits · ERP",
+      "counts": {
+        "buttons": 20,
+        "links": 21,
+        "inputs": 4,
+        "tables": 1,
+        "rows": 7,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0,
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": []
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline-roles/hr/payroll-periods-1440.png"
+    }
+  ]
+}

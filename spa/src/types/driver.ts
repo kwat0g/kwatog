@@ -17,6 +17,10 @@ export interface DriverDelivery extends DeliveryAttemptFields {
  departed_at: string | null;
  delivered_at: string | null;
  confirmed_at: string | null;
+ /** Chain 1 — resolved ship-to for this stop (snapshot → customer → billing). */
+ delivery_address: string | null;
+ delivery_contact_person: string | null;
+ delivery_contact_phone: string | null;
  sales_order: {
  id: string;
  so_number: string;

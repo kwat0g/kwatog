@@ -79,16 +79,28 @@ export function Topbar({ user, canViewNotifications = false, onLogout, onOpenSho
 
       <Link to="/dashboard" className="flex min-w-0 items-center gap-2">
         <BrandLogo invertOnDark alt="Ogami ERP" className="h-7 max-w-[7rem] sm:max-w-none" />
+        {/*
+         * From `lg`, not `sm`. At 768 the header's first grid column is 260px,
+         * and the name's 160px cap plus the logo left the breadcrumb slot 16px
+         * wide — narrower than one crumb — so the trail painted over the search
+         * control instead of truncating (F-019). The logo still carries the
+         * brand below `lg`.
+         */}
         <span
           title={contact?.legal_name ?? '—'}
-          className="hidden min-w-0 max-w-40 truncate text-sm font-medium text-primary sm:inline"
+          className="hidden min-w-0 max-w-40 truncate text-sm font-medium text-primary lg:inline"
         >
           {contact?.legal_name ?? '—'}
         </span>
       </Link>
 
-      {/* Breadcrumbs stay in the left group; their last segment truncates when space is tight. */}
-      <div className="ml-1 flex h-full min-w-0 flex-1 items-center border-l border-default pl-3">
+      {/*
+       * Breadcrumbs stay in the left group. `overflow-hidden` is what makes the
+       * trail's truncation real: every crumb is `whitespace-nowrap`, so without
+       * containment a long trail paints past the slot and over the search
+       * control beside it (F-019).
+       */}
+      <div className="ml-1 flex h-full min-w-0 flex-1 items-center overflow-hidden border-l border-default pl-3">
         <Breadcrumbs />
       </div>
     </div>

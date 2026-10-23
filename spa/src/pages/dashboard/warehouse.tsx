@@ -7,6 +7,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { clampPercent } from '@/lib/progress';
 import { dashboardsApi, DASHBOARD_REFRESH_MS } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
 import { StatCard } from '@/components/ui/StatCard';
@@ -208,7 +209,7 @@ function ZoneUtilizationPanel({ items, warningPct, criticalPct }: { items: ZoneI
  </div>
  <div
  role="progressbar"
- aria-valuenow={z.percent}
+ aria-valuenow={clampPercent(z.percent)}
  aria-valuemin={0}
  aria-valuemax={100}
  aria-label={`${z.warehouse_name} (${z.warehouse_code}), ${z.name} (${z.zone}): ${z.percent}% occupied`}
@@ -216,7 +217,7 @@ function ZoneUtilizationPanel({ items, warningPct, criticalPct }: { items: ZoneI
  >
  <div
  className={zonePctClass(z.percent, warningPct, criticalPct)}
- style={{ width: `${z.percent}%` }}
+ style={{ width: `${clampPercent(z.percent)}%` }}
  />
  </div>
  </li>

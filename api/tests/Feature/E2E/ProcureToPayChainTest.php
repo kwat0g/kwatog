@@ -30,6 +30,7 @@ use Database\Seeders\UomSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 /**
@@ -56,6 +57,7 @@ use Tests\TestCase;
  */
 class ProcureToPayChainTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     private User $buyer;
@@ -305,28 +307,8 @@ class ProcureToPayChainTest extends TestCase
         // relation before reading the pinned sample size and result version.
         $inspection = $grn->qcInspection()->firstOrFail();
         $this->assertGreaterThan(0, (int) $inspection->sample_size, 'Incoming inspection must have a positive planned sample.');
-        $inspectionId = $inspection->hash_id;
 
-        $result = $this->actingAs($this->qc)
-            ->postJson("/api/v1/quality/inspections/{$inspectionId}/batch-result", [
-                'expected_result_version' => (int) $inspection->result_version,
-                'measurements' => [],
-                'coverage_confirmed' => true,
-                'inspected_quantity' => (int) $inspection->sample_size,
-                'physical_defects_confirmed' => false,
-            ]);
-        $result->assertOk();
-
-        $lotStatus = $result->json('data.status');
-        if ($lotStatus === 'awaiting_review') {
-            $inspection->refresh();
-            $revRes = $this->actingAs($this->qcChecker)
-                ->patchJson("/api/v1/quality/inspections/{$inspectionId}/review", [
-                    'decision' => 'passed',
-                    'expected_result_version' => (int) $inspection->result_version,
-                ]);
-            $revRes->assertOk();
-        }
+        $this->submitInspectionPassThroughApi($inspection, $this->qc, $this->qcChecker);
     }
 
     private function postBillAndPay(Bill $bill): BillPayment

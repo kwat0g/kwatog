@@ -50,6 +50,26 @@ const loadingPhoto = {
   mime_type: 'image/jpeg', is_image: true, notes: null, view_url: '/loading.jpg', deleted_at: null,
   uploader: null, uploaded_at: '2026-10-08T10:00:00Z',
 };
+it('shows the customer ship-to as a Maps link and offers the printable receipt', async () => {
+  show({
+    ...delivery,
+    sales_order: { id: 'so-1', so_number: 'SO-202610-0025', customer: { id: 'customer-1', name: 'Toyota Motor Philippines' } },
+    delivery_address: 'Toyota Plant, Santa Rosa, Laguna',
+    delivery_contact_person: 'Ana Reyes',
+    delivery_contact_phone: '049-500-1234',
+  });
+
+  const mapLink = await screen.findByRole('link', {
+    name: /open driving directions to toyota plant, santa rosa, laguna/i,
+  });
+  expect(mapLink).toHaveAttribute(
+    'href',
+    'https://www.google.com/maps/dir/?api=1&destination=Toyota%20Plant%2C%20Santa%20Rosa%2C%20Laguna',
+  );
+  expect(screen.getByText('Toyota Motor Philippines')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Delivery receipt' })).toBeVisible();
+});
+
 it('shows released quantities with one shipment action and no premature receipt upload', async () => {
   show(delivery);
   expect(await screen.findByRole('button', { name: 'Arrange shipment' })).toBeVisible();

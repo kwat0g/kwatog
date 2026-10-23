@@ -7,7 +7,6 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { LuPlus } from '@/lib/icons';
 import { inspectionsApi, type InspectionListParams } from '@/api/quality/inspections';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -16,7 +15,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Inspection, InspectionStatus } from '@/types/quality';
 import { formatDateIso } from '@/lib/formatDate';
@@ -40,7 +38,6 @@ const DEFAULT_FILTERS: InspectionListParams = {
 
 export default function InspectionsListPage() {
   const navigate = useNavigate();
-  const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<InspectionListParams>(DEFAULT_FILTERS);
 
   // Dashboard KPI links to ?date=today — expand to a from/to range at mount
@@ -185,18 +182,6 @@ export default function InspectionsListPage() {
           data
             ? `${data.meta.total} ${data.meta.total === 1 ? 'inspection' : 'inspections'}`
             : undefined
-        }
-        actions={
-          can('quality.inspections.manage') ? (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<LuPlus size={14} />}
-              onClick={() => navigate('/quality/inspections/new')}
-            >
-              New inspection
-            </Button>
-          ) : undefined
         }
       />
       <nav

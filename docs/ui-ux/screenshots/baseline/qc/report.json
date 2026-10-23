@@ -1,0 +1,368 @@
+{
+  "role": "qc",
+  "label": "baseline",
+  "base": "https://47.129.228.44",
+  "routes": [
+    "/dashboard",
+    "/quality/inspections",
+    "/quality/ncrs",
+    "/quality/inspection-specs"
+  ],
+  "consoleErrors": [
+    "https://47.129.228.44/sign-in :: Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "report": [
+    {
+      "route": "/dashboard",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2411,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 32,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.bg-canvas border border-default rounded-md overflo (357>333, overflow-x:hidden)",
+        "div.px-1.5 pb-2 (357>333, overflow-x:visible)",
+        "div.h-2.5 bg-subtle rounded-full overflow-hidden (602>301, overflow-x:hidden)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/qc/dashboard-375.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2456,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 9,
+        "links": 32,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.h-2.5 bg-subtle rounded-full overflow-hidden (1276>638, overflow-x:hidden)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/qc/dashboard-768.png"
+    },
+    {
+      "route": "/dashboard",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2341,
+      "horizontalPageScroll": false,
+      "heading": "QC DashboardUpdated just now",
+      "title": "QC Dashboard · Dashboard · ERP",
+      "counts": {
+        "buttons": 13,
+        "links": 32,
+        "inputs": 0,
+        "tables": 1,
+        "rows": 5,
+        "dialogs": 0,
+        "charts": 1
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.h-2.5 bg-subtle rounded-full overflow-hidden (1080>540, overflow-x:hidden)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)",
+        "div.relative flex items-center justify-center mb-3 (56>40, overflow-x:visible)"
+      ],
+      "file": "docs/ui-ux/screenshots/baseline/qc/dashboard-1440.png"
+    },
+    {
+      "route": "/quality/inspections",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2166,
+      "horizontalPageScroll": false,
+      "heading": "Inspections",
+      "title": "Inspections · Quality Control · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 18,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 23,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-inspections-375.png"
+    },
+    {
+      "route": "/quality/inspections",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2098,
+      "horizontalPageScroll": false,
+      "heading": "Inspections",
+      "title": "Inspections · Quality Control · ERP",
+      "counts": {
+        "buttons": 21,
+        "links": 18,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 23,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-inspections-768.png"
+    },
+    {
+      "route": "/quality/inspections",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2072,
+      "horizontalPageScroll": false,
+      "heading": "Inspections",
+      "title": "Inspections · Quality Control · ERP",
+      "counts": {
+        "buttons": 25,
+        "links": 18,
+        "inputs": 6,
+        "tables": 1,
+        "rows": 23,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-inspections-1440.png"
+    },
+    {
+      "route": "/quality/ncrs",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 2046,
+      "horizontalPageScroll": false,
+      "heading": "Non-conformance reports",
+      "title": "Non-conformance reports · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 18,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-ncrs-375.png"
+    },
+    {
+      "route": "/quality/ncrs",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 2096,
+      "horizontalPageScroll": false,
+      "heading": "Non-conformance reports",
+      "title": "Non-conformance reports · Quality Control · ERP",
+      "counts": {
+        "buttons": 18,
+        "links": 18,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-ncrs-768.png"
+    },
+    {
+      "route": "/quality/ncrs",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2130,
+      "horizontalPageScroll": false,
+      "heading": "Non-conformance reports",
+      "title": "Non-conformance reports · Quality Control · ERP",
+      "counts": {
+        "buttons": 22,
+        "links": 18,
+        "inputs": 32,
+        "tables": 1,
+        "rows": 25,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-ncrs-1440.png"
+    },
+    {
+      "route": "/quality/inspection-specs",
+      "viewport": "mobile",
+      "status": 200,
+      "ms": 1972,
+      "horizontalPageScroll": false,
+      "heading": "Inspection specs",
+      "title": "Inspection specs · Quality Control · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 18,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 1,
+        "unnamedInteractiveDetail": [
+          "<a class=\"flex min-w-0 items-center gap-2\">"
+        ],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-inspection-specs-375.png"
+    },
+    {
+      "route": "/quality/inspection-specs",
+      "viewport": "tablet",
+      "status": 200,
+      "ms": 1984,
+      "horizontalPageScroll": false,
+      "heading": "Inspection specs",
+      "title": "Inspection specs · Quality Control · ERP",
+      "counts": {
+        "buttons": 19,
+        "links": 18,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-inspection-specs-768.png"
+    },
+    {
+      "route": "/quality/inspection-specs",
+      "viewport": "desktop",
+      "status": 200,
+      "ms": 2067,
+      "horizontalPageScroll": false,
+      "heading": "Inspection specs",
+      "title": "Inspection specs · Quality Control · ERP",
+      "counts": {
+        "buttons": 23,
+        "links": 18,
+        "inputs": 3,
+        "tables": 1,
+        "rows": 3,
+        "dialogs": 0,
+        "charts": 0
+      },
+      "a11y": {
+        "unnamedInteractive": 0,
+        "unnamedInteractiveDetail": [],
+        "unlabelledInputs": 0,
+        "imagesWithoutAlt": 0,
+        "positiveTabIndex": 0
+      },
+      "overflowing": [],
+      "file": "docs/ui-ux/screenshots/baseline/qc/quality-inspection-specs-1440.png"
+    }
+  ]
+}

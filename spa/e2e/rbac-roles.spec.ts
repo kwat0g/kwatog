@@ -186,14 +186,10 @@ test.describe('Permission guards — Payroll boundaries', () => {
 });
 
 test.describe('Permission guards — Quality vs Production boundary', () => {
-  test('production_manager can VIEW quality inspections but cannot CREATE', async ({ page }) => {
+  test('production_manager can view quality inspections', async ({ page }) => {
     const bp = new BasePage(page);
-    // View allowed
     await loginAs(page, 'production', '/quality/inspections');
     await expect(bp.deniedPageText).not.toBeVisible();
-    // Create page is gated by quality.inspections.manage (which prod lacks)
-    await loginAs(page, 'production', '/quality/inspections/new');
-    await bp.expectDeniedAsNotFound();
   });
 
   test('qc_inspector cannot view production work orders', async ({ page }) => {

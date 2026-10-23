@@ -307,6 +307,27 @@ class RecruitmentApplicationTest extends TestCase
         );
     }
 
+    public function test_interview_email_renders_when_company_address_is_missing(): void
+    {
+        app(\App\Common\Services\SettingsService::class)->set('company.address', '');
+
+        $this->application->stage = ApplicationStage::Interview;
+        $this->application->save();
+
+        $this->actingAs($this->hrUser)
+            ->postJson("/api/v1/hr/recruitment/applications/{$this->application->hash_id}/interviews", [
+                'scheduled_at'     => now()->addDays(3)->toIso8601String(),
+                'location'         => 'HR Office',
+                'interviewer_name' => 'Maria Santos',
+            ])
+            ->assertStatus(201);
+
+        Mail::assertQueued(InterviewScheduledMail::class, fn (InterviewScheduledMail $mail): bool =>
+            $mail->hasTo('juan@test.com')
+            && str_contains((string) $mail->render(), 'FCIE Complex')
+        );
+    }
+
     public function test_hr_can_reschedule_interview_and_candidate_update_email_is_queued(): void
     {
         $this->application->stage = ApplicationStage::Interview;

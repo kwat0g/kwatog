@@ -71,7 +71,11 @@ export function AuthLayout() {
     queryFn: landingApi.contact,
     staleTime: 300_000,
   });
-  const legalName = contact?.legal_name ?? '';
+  /* `||`, not `??`: an empty string is falsy but not nullish, and this value
+   * is BOTH the brand image's alt text and the visible wordmark inside the
+   * link to "/". With an empty string the link has no accessible name at all —
+   * axe (and a screen reader) sees a nameless control. Found by e2e/a11y.spec.ts. */
+  const legalName = contact?.legal_name || 'Ogami ERP';
   const locationCountry = contact?.address?.split(',').at(-1)?.trim() ?? '';
   const address = contact?.address ?? '';
 

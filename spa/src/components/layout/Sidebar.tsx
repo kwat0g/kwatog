@@ -38,6 +38,7 @@ import {
   LuKeyRound,
   LuDatabase,
   LuListChecks,
+  LuTarget,
   LuRuler,
   LuStore,
   LuChevronDown,
@@ -166,6 +167,13 @@ export const SECTIONS: NavSection[] = [
         work: true,
         permission: 'dashboard.action_center.view',
         badgeKey: 'action_center',
+      },
+      {
+        to: '/decision-center',
+        label: 'Decision Center',
+        icon: LuTarget,
+        work: true,
+        permission: 'dss.view',
       },
       {
         to: '/chains',
@@ -740,6 +748,14 @@ export const SECTIONS: NavSection[] = [
         to: '/admin/sessions',
         label: 'Active Sessions',
         icon: LuMonitor,
+        permission: 'admin.settings.manage',
+      },
+      // W1.2 — the shared-component catalogue. Not a business destination, but a
+      // reviewer's page nobody would find if it were URL-only.
+      {
+        to: '/admin/component-gallery',
+        label: 'Component Gallery',
+        icon: LuLayers,
         permission: 'admin.settings.manage',
       },
       {
