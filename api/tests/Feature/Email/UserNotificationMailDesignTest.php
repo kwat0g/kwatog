@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Email;
 
 use App\Common\Mail\UserNotificationMail;
+use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Markdown;
+use RuntimeException;
 use Tests\TestCase;
 
 final class UserNotificationMailDesignTest extends TestCase
@@ -17,7 +22,7 @@ final class UserNotificationMailDesignTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(SettingsSeeder::class);
+        $this->seed([SettingsSeeder::class, RolePermissionSeeder::class]);
         config(['app.frontend_url' => 'https://erp.example.test']);
     }
 
@@ -104,5 +109,51 @@ final class UserNotificationMailDesignTest extends TestCase
         $this->assertStringNotContainsString('Array', $html);
         $this->assertStringNotContainsString('>null<', $html);
         $this->assertStringNotContainsString('href="123"', $html);
+    }
+
+    public function test_delivery_failure_notifies_internal_fallback_users(): void
+    {
+        $salesUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+        $grantUser = User::factory()->create();
+        $revokedUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+        $permissionId = Permission::query()->where('slug', 'crm.sales_orders.confirm')->value('id');
+        foreach ([[$grantUser, 'grant'], [$revokedUser, 'revoke']] as [$user, $type]) {
+            \Illuminate\Support\Facades\DB::table('user_permission_overrides')->insert([
+                'user_id' => $user->id,
+                'permission_id' => $permissionId,
+                'type' => $type,
+                'granted_by' => $salesUser->id,
+                'reason' => 'Email delivery fallback test',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $mail = new UserNotificationMail(
+            'sales_order.delivery_proposed',
+            ['title' => 'Delivery date proposal', 'message' => 'Review in the portal.', 'link_to' => '/crm/sales-orders/so123'],
+            fallbackPermission: 'crm.sales_orders.confirm',
+        );
+
+        $mail->failed(new RuntimeException('mail provider failure'));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $salesUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $grantUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $revokedUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 }

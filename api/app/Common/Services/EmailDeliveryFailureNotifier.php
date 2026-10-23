@@ -106,10 +106,7 @@ class EmailDeliveryFailureNotifier
         array $context = [],
     ): void {
         $this->notify(
-            User::query()
-                ->whereHas('role.permissions', fn ($query) => $query->where('slug', $permission))
-                ->where('is_active', true)
-                ->get(),
+            $this->notifications->usersWithPermission($permission),
             $feature,
             $message,
             $context,

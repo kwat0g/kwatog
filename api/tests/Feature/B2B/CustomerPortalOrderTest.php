@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\B2B;
 
 use App\Common\Models\AuditLog;
+use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemUserResolver;
 use App\Modules\Accounting\Models\Customer;
@@ -22,6 +23,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -645,6 +647,81 @@ class CustomerPortalOrderTest extends TestCase
         $this->assertSame('confirmed', $so->fresh()->status->value);
         $this->assertDatabaseHas('notifications', ['notifiable_type' => CustomerPortalUser::class, 'notifiable_id' => $user->id, 'type' => 'sales_order.confirmed']);
 
+    }
+
+    public function test_delivery_proposal_email_is_sent_once_per_valid_portal_mailbox(): void
+    {
+        $customer = Customer::factory()->create();
+        $portalUser = $this->makePortalUser($customer);
+        CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Duplicate address',
+            'email' => strtoupper($portalUser->email),
+            'password' => 'test-password',
+            'is_active' => true,
+        ]);
+        foreach ([['invalid-address', true], ['inactive@example.test', false]] as [$email, $active]) {
+            CustomerPortalUser::create([
+                'customer_id' => $customer->id,
+                'name' => 'Excluded portal user',
+                'email' => $email,
+                'password' => 'test-password',
+                'is_active' => $active,
+            ]);
+        }
+        $product = Product::factory()->create();
+        $this->agreement($customer, $product);
+        $this->actAs($portalUser)->postOrder(['items' => [[
+            'product_id' => $product->hash_id,
+            'quantity' => '10',
+            'delivery_date' => now()->addDays(4)->toDateString(),
+        ]]])->assertCreated();
+        $so = SalesOrder::where('customer_id', $customer->id)->firstOrFail();
+        $sales = User::factory()->create(['role_id' => Role::where('slug', 'sales_officer')->firstOrFail()->id]);
+        Mail::fake();
+
+        $this->actingAs($sales, 'sanctum')->postJson("/api/v1/crm/sales-orders/{$so->hash_id}/propose-delivery-date", [
+            'proposed_delivery_date' => now()->addDays(7)->toDateString(),
+            'notes' => 'Production capacity requires four more days.',
+        ])->assertCreated();
+
+        Mail::assertQueued(UserNotificationMail::class, 1);
+        Mail::assertQueued(UserNotificationMail::class, function (UserNotificationMail $mail) use ($portalUser): bool {
+            self::assertCount(1, $mail->to);
+            self::assertSame($portalUser->email, $mail->to[0]['address']);
+            self::assertSame([(int) $portalUser->id], $mail->recipientUserIds);
+
+            return true;
+        });
+    }
+
+    public function test_delivery_proposal_without_valid_customer_email_notifies_sales(): void
+    {
+        $customer = Customer::factory()->create();
+        $portalUser = $this->makePortalUser($customer);
+        $portalUser->update(['email' => 'invalid-address']);
+        $product = Product::factory()->create();
+        $this->agreement($customer, $product);
+        $this->actAs($portalUser)->postOrder(['items' => [[
+            'product_id' => $product->hash_id,
+            'quantity' => '10',
+            'delivery_date' => now()->addDays(4)->toDateString(),
+        ]]])->assertCreated();
+        $so = SalesOrder::where('customer_id', $customer->id)->firstOrFail();
+        $sales = User::factory()->create(['role_id' => Role::where('slug', 'sales_officer')->firstOrFail()->id]);
+        Mail::fake();
+
+        $this->actingAs($sales, 'sanctum')->postJson("/api/v1/crm/sales-orders/{$so->hash_id}/propose-delivery-date", [
+            'proposed_delivery_date' => now()->addDays(7)->toDateString(),
+            'notes' => 'Production capacity requires four more days.',
+        ])->assertCreated();
+
+        Mail::assertNothingQueued();
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $sales->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 
     public function test_delivery_negotiation_can_repeat_until_customer_accepts(): void

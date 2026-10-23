@@ -57,7 +57,7 @@ The following trigger families use the same generic email composition. They do *
 | Production and maintenance: work-order completed/paused, machine breakdown, assignment needed/escalated, shift handover, missing timeout, repeat breakdown, part handover, MRP completion | Department supervisors, assigned technician, permission audience, or user | Included E-023; some similar notices are in-app only. Check duplicate channels. |
 | HR/leave/attendance/training: leave submitted/pending HR/approved/rejected, separation initiated, recruitment new application, training expiry, missing time-out, loan submitted/decided | HR audience, employee/requester, or permission audience | Included E-023; employee-specific data requires privacy check. |
 | Returns, customer service, and supplier chain: RMA created, return/case updated, customer response, supplier schedule cancellation, supplier shipment late, 8D SLA | Case contacts, customer/vendor portal users, dispatch team, or permission audience | Included E-023 where `send()` is used; `sendInApp` and portal-only events are not emails. Verify public/internal filtering. |
-| Customer portal delivery negotiation: proposed delivery date | Active portal-user emails on the customer account, passed together to `Mail::to()` | Included E-023; current grouped To list reveals recipient addresses (EF-041). |
+| Customer portal delivery negotiation: proposed delivery date | Each valid active customer portal email, normalized and deduplicated; one recipient per message | Included E-023; recipient privacy and Sales failure fallback fixed in draft PR #256. |
 | Chain alerts and system exceptions: delivery confirmation for finance, outgoing-QC missing, critical operational/chain outcome, email delivery failure | Relevant finance/ops audience, owner, or configured admin permission | Included E-023 or E-026. Some failure paths intentionally use in-app fallback only. |
 
 These are type families, not a claim that every similarly named event is mailed. Calls using `sendInApp()` and `sendPortalInApp()` deliberately do not email. Some types are built dynamically in services, so runtime preference rows and event instances are needed to finish a unique type-by-type count.
@@ -133,7 +133,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 ## Likely unnecessary/noisy or sensitive email
 
 - E-030–E-033 temporary-password messages are inappropriate if live; confirm reachability and move to secure activation/reset flow in a separate security fix.
-- E-023 generic notification mail spans internal event families and one customer portal delivery-date proposal. The central service trusts caller activity/email validation; the direct customer path groups recipients into one To list. See EF-041 and EF-042.
+- E-023 generic notification mail spans internal event families and one customer portal delivery-date proposal. PR #256 adds central active-user/address validation and fixes customer address disclosure; the exhaustive caller-by-caller visibility audit remains pending (EF-042).
 - E-024 digest summarizes unread notifications without marking them read; it may repeat the same backlog every run. Check schedule, volume, and whether sensitive records enter the digest.
 - E-003 dunning runs and E-019 RFQ invitation loops can create bursts; confirm suppression, recipient dedupe, idempotency, and stop conditions.
 - E-016 local security change removes the PDF attachment and links to authenticated self-service. HR and data-protection review remains required before production.
