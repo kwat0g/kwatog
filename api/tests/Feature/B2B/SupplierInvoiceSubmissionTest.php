@@ -264,7 +264,7 @@ class SupplierInvoiceSubmissionTest extends TestCase
     {
         $vendor = Vendor::factory()->create([
             'name' => 'Snapshot Supplier',
-            'contact_person' => 'Original Contact',
+            'contact_person' => 'Original <img src=x onerror=alert(1)> [Billing](https://evil.example) Contact',
             'email' => 'snapshot-supplier@example.test',
         ]);
         $bill = Bill::factory()->create([
@@ -290,12 +290,22 @@ class SupplierInvoiceSubmissionTest extends TestCase
 
         self::assertSame('SUP-INV-42', $mail->snapshot['invoice_number']);
         self::assertSame('125.50', $mail->snapshot['gross_total']);
+        self::assertSame('Original <img src=x onerror=alert(1)> [Billing](https://evil.example) Contact', $mail->snapshot['supplier_name']);
         self::assertSame(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.50'), $mail->snapshot['display_total']);
-        self::assertSame('Original Contact', $mail->snapshot['supplier_name']);
         self::assertSame('snapshot-supplier@example.test', $mail->snapshot['recipient_email']);
-        self::assertSame('Supplier invoice SUP-INV-42 received', $mail->envelope()->subject);
-        self::assertStringContainsString('SUP-INV-42', $mail->render());
-        self::assertStringNotContainsString('SUP-INV-99', $mail->render());
+        self::assertSame('[Ogami Philippines] Supplier invoice received: SUP-INV-42', $mail->envelope()->subject);
+        $html = $mail->render();
+        self::assertStringContainsString('SUP-INV-42', $html);
+        self::assertStringContainsString('<title>Supplier invoice received</title>', $html);
+        self::assertStringContainsString('We received supplier invoice SUP-INV-42 for review.', $html);
+        self::assertStringContainsString($event->snapshot['display_total'], $html);
+        self::assertStringNotContainsString('SUP-INV-99', $html);
+        self::assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
+        self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
+        self::assertStringNotContainsString('href="https://evil.example"', $html);
+        self::assertStringContainsString('/portal/supplier/invoices/', $html);
+        self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
+        $mail->assertSeeInText('receipt only');
     }
 
     public function test_pre_cutover_posted_unpaid_bill_can_be_reconciled_once(): void

@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Mail;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Mail\QueuedMailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
 class SupplierInvoiceStatusMail extends QueuedMailable
 {
-    /** @param list<int> $fallbackUserIds */
+    /**
+     * @param array<string, mixed> $snapshot
+     * @param list<int> $fallbackUserIds
+     */
     public function __construct(
         public readonly array $snapshot,
         public readonly array $fallbackUserIds = [],
@@ -24,20 +28,30 @@ class SupplierInvoiceStatusMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Supplier invoice '.$this->snapshot['invoice_number'].' received');
+        $brand = app(EmailBrandingService::class)->data()['name'];
+
+        return new Envelope(subject: $this->safeHeaderText('['.$brand.'] Supplier invoice received: '.$this->snapshot['invoice_number']));
     }
 
     public function content(): Content
     {
+        $brand = app(EmailBrandingService::class)->data();
+        $brand['name'] = $this->safeMarkdownText((string) $brand['name']);
+        $invoiceNumber = $this->safeMarkdownText((string) $this->snapshot['invoice_number']);
+
         return new Content(
             markdown: 'emails/supplier/invoice-status',
             with: [
-                'invoiceNumber' => $this->snapshot['invoice_number'],
+                'brand' => $brand,
+                'preheader' => 'We received supplier invoice '.$invoiceNumber.' for review.',
+                'invoiceNumber' => $invoiceNumber,
                 'invoiceDate' => $this->snapshot['invoice_date'],
                 'matchCount' => $this->snapshot['match_count'],
-                'grossTotal' => $this->snapshot['gross_total'],
-                'purchaseOrderNumber' => $this->snapshot['purchase_order_number'],
-                'supplierName' => $this->snapshot['supplier_name'],
+                'grossTotal' => $this->snapshot['display_total'],
+                'purchaseOrderNumber' => $this->snapshot['purchase_order_number'] === null
+                    ? null
+                    : $this->safeMarkdownText((string) $this->snapshot['purchase_order_number']),
+                'supplierName' => $this->safeMarkdownText((string) $this->snapshot['supplier_name']),
                 'portalUrl' => $this->snapshot['portal_url'],
             ],
         );
@@ -56,5 +70,20 @@ class SupplierInvoiceStatusMail extends QueuedMailable
                 'reason' => 'The supplier email was unreachable or the email provider rejected the message.',
             ],
         );
+    }
+
+    private function safeMarkdownText(string $value): string
+    {
+        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
+        if ($text === '') {
+            return '—';
+        }
+
+        return preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? '—';
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? '');
     }
 }
