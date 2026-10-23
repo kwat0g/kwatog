@@ -18,7 +18,7 @@ class RecommendationActionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action' => ['required', Rule::in(['accept', 'dismiss', 'snooze', 'execute'])],
+            'action' => ['required', Rule::in(['accept', 'dismiss', 'snooze', 'execute', 'start_follow_up'])],
             'reason' => ['required_if:action,dismiss', 'nullable', 'string', 'max:1000'],
             'snoozed_until' => ['required_if:action,snooze', 'nullable', 'date', 'after:now'],
         ];

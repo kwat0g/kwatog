@@ -24,6 +24,7 @@ export interface Product {
   part_number: string;
   name: string;
   description: string | null;
+  image_url?: string | null;
   unit_of_measure: string;
   standard_cost: string;
   base_selling_price?: string | null;
@@ -69,7 +70,6 @@ export interface PriceTier {
 }
 
 export interface CreateProductData {
-  portal_customer_ids?: string[];
   part_number: string;
   name: string;
   description?: string | null;
@@ -77,7 +77,6 @@ export interface CreateProductData {
   standard_cost: string;
   base_selling_price?: string | null;
   minimum_selling_price?: string | null;
-  portal_visibility?: 'standard' | 'restricted';
   revenue_account_id?: string | null;
   is_active?: boolean;
 }

@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Controllers;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Requests\StoreProductRequest;
+use App\Modules\CRM\Requests\UpdateProductCustomerAccessRequest;
 use App\Modules\CRM\Requests\UpdateProductRequest;
 use App\Modules\CRM\Resources\ProductOptionResource;
 use App\Modules\CRM\Resources\ProductResource;
@@ -30,6 +31,13 @@ class ProductController
         return ProductOptionResource::collection($this->service->list($request->query()));
     }
 
+    public function customerOptions(Request $request): JsonResponse
+    {
+        $params = $request->validate(['search' => ['sometimes', 'nullable', 'string', 'max:100']]);
+
+        return response()->json(['data' => $this->service->portalCustomerOptions($params['search'] ?? null)]);
+    }
+
     public function show(Product $product): ProductResource
     {
         return new ProductResource($this->service->show($product));
@@ -45,6 +53,11 @@ class ProductController
     public function update(UpdateProductRequest $request, Product $product): ProductResource
     {
         return new ProductResource($this->service->update($product, $request->validated()));
+    }
+
+    public function updateCustomerAccess(UpdateProductCustomerAccessRequest $request, Product $product): ProductResource
+    {
+        return new ProductResource($this->service->updateCustomerAccess($product, $request->validated()));
     }
 
     public function destroy(Product $product): JsonResponse

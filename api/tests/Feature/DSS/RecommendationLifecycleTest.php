@@ -9,10 +9,13 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\DSS\Models\DssRecommendation;
 use App\Modules\DSS\Models\DssRecommendationEvent;
+use App\Modules\DSS\Models\DssRunLog;
 use App\Modules\DSS\Services\DetectorRegistry;
 use App\Modules\DSS\Services\DssParameterService;
+use App\Modules\DSS\Services\RecommendationService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -44,9 +47,9 @@ class LifecycleFakeDetector implements DetectorInterface
         return [];
     }
 
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
-        return [];
+        return new DetectorScanResult([]);
     }
 }
 
@@ -106,6 +109,13 @@ class RecommendationLifecycleTest extends TestCase
 
     private function makeRecommendation(string $detector = 'test.advisory', array $overrides = []): DssRecommendation
     {
+        $run = DssRunLog::query()->create([
+            'detector_id' => $detector,
+            'status' => 'completed',
+            'started_at' => now(),
+            'finished_at' => now(),
+        ]);
+
         return DssRecommendation::create([
             'detector_id' => $detector,
             'domain' => 'test',
@@ -114,6 +124,8 @@ class RecommendationLifecycleTest extends TestCase
             'priority_score' => 0.5,
             'rationale' => ['rule' => 'x'],
             'dedupe_key' => 'k-'.uniqid(),
+            'last_evaluated_at' => $run->finished_at,
+            'last_evaluated_run_id' => $run->id,
             ...$overrides,
         ]);
     }
@@ -122,11 +134,23 @@ class RecommendationLifecycleTest extends TestCase
     {
         $user = $this->userWithPermissions(['dss.view']);
         $rec = $this->makeRecommendation();
+        $evaluationRunId = $rec->last_evaluated_run_id;
 
         $this->actingAs($user, 'sanctum')
             ->getJson("/api/v1/dss/recommendations/{$rec->id}")
             ->assertOk()
             ->assertJsonPath('data.id', $rec->hash_id);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'start_follow_up'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress');
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'start_follow_up'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress');
+        $this->assertSame(1, DssRecommendationEvent::query()
+            ->where('recommendation_id', $rec->id)->where('event', 'started')->count());
 
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'accept'])
@@ -139,15 +163,16 @@ class RecommendationLifecycleTest extends TestCase
             ->assertJsonPath('data.status', 'executed');
 
         $this->actingAs($user, 'sanctum')
-            ->postJson("/api/v1/dss/recommendations/{$rec->id}/outcome", ['outcome' => ['stockout_avoided' => true]])
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/outcome", ['outcome' => ['note' => 'Stock-out avoided']])
             ->assertOk();
+        $this->assertSame($evaluationRunId, $rec->fresh()->last_evaluated_run_id);
 
         $events = DssRecommendationEvent::query()
             ->where('recommendation_id', $rec->id)
             ->pluck('event')
             ->all();
 
-        foreach (['viewed', 'accepted', 'executed', 'outcome'] as $expected) {
+        foreach (['viewed', 'started', 'accepted', 'executed', 'outcome'] as $expected) {
             $this->assertContains($expected, $events);
         }
     }
@@ -215,7 +240,7 @@ class RecommendationLifecycleTest extends TestCase
         // Outcome on an undecided row.
         $open = $this->makeRecommendation();
         $this->actingAs($user, 'sanctum')
-            ->postJson("/api/v1/dss/recommendations/{$open->id}/outcome", ['outcome' => ['x' => 1]])
+            ->postJson("/api/v1/dss/recommendations/{$open->id}/outcome", ['outcome' => ['note' => 'Not decided']])
             ->assertStatus(422);
     }
 
@@ -231,6 +256,49 @@ class RecommendationLifecycleTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['id' => $live->hash_id])
             ->assertJsonMissing(['id' => $stale->hash_id]);
+    }
+
+    public function test_expired_recommendation_cannot_be_accepted_and_gets_audit_event(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation(overrides: ['expires_at' => now()->subMinute()]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'accept'])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('dss_recommendations', ['id' => $rec->id, 'status' => 'expired']);
+        $this->assertDatabaseHas('dss_recommendation_events', [
+            'recommendation_id' => $rec->id,
+            'event' => 'expired',
+            'to_status' => 'expired',
+        ]);
+    }
+
+    public function test_scheduled_expiry_expires_rows_and_records_events(): void
+    {
+        $rec = $this->makeRecommendation(overrides: ['expires_at' => now()->subMinute()]);
+
+        $this->assertSame(1, app(RecommendationService::class)->expirePastValidity());
+        $this->assertSame('expired', $rec->fresh()->status);
+        $this->assertDatabaseHas('dss_recommendation_events', [
+            'recommendation_id' => $rec->id,
+            'event' => 'expired',
+            'reason' => 'Recommendation validity window ended.',
+        ]);
+    }
+
+    public function test_configuration_pause_expires_active_rows_with_audit_event(): void
+    {
+        $rec = $this->makeRecommendation();
+
+        $this->assertSame(1, app(RecommendationService::class)->expireForPause('test.advisory'));
+        $this->assertSame('expired', $rec->fresh()->status);
+        $this->assertDatabaseHas('dss_recommendation_events', [
+            'recommendation_id' => $rec->id,
+            'event' => 'expired',
+            'reason' => 'DSS configuration changed; previous recommendation invalidated.',
+        ]);
     }
 
     public function test_viewed_records_once_per_user_per_day(): void

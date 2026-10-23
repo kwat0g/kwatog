@@ -20,11 +20,11 @@ Support today: N=none, P=partial, E=existing (ref).
 | D09 | Whom to collect from first? (collection priority) | Acct/O2C | finance | daily | P (dunning tiers+AR bands) | O → recommend | 5 | 4 | 2 | 3 | **10.0** |
 | D10 | Which bills to pay now under cash C? | Acct/P2P | finance, VP | weekly | N | O → optimize | 5 | 3 | 3 | 4 | **5.0** |
 | D11 | Is this price/discount safe? (margin guard) | CRM/O2C | sales, finance | per-SO | N | O → detect | 4 | 3 | 2 | 4 | **6.0** |
-| D12 | Customer credit exposure OK before accepting order? | CRM/O2C | sales, finance | per-SO | P (`credit_limit` exists, no check found) | O → detect | 4 | 4 | 2 | 4 | **8.0** |
+| D12 | Customer credit exposure OK before accepting order? | CRM/O2C | sales, finance | per-SO | P (confirmation credit gate exists; null/zero limit bypasses) | O → detect | 4 | 4 | 2 | 4 | **8.0** |
 | D13 | Which NCR/CAPA/8D needs action now? | Qual/all | qc, owners | daily | E (SLA escalations+aging) | O → detect | 5 | 5 | 1 | 2 | **25.0** |
 | D14 | Where is the defect source? (Pareto→machine/mold/material/shift) | Qual | qc, prod-mgr | weekly | P (Pareto+SPC, no auto-drill) | T → predict | 4 | 4 | 3 | 3 | **5.3** |
 | D15 | Is the process drifting? (SPC early warning) | Qual | qc | per-lot | P (SpcService, no auto-alert loop) | O → predict | 5 | 3* | 3 | 4 | **5.0** |
-| D16 | Traceability: which FG/customers hit by suspect lot? | Qual | qc, sales, VP | on-event | N (lot data partial) | O → detect | 5 | 2 | 4 | 5 | **2.5** |
+| D16 | Traceability: which FG/customers hit by suspect lot? | Qual | qc, sales, VP | on-event | P (explicit linked trace only; QC) | O → detect | 5 | 2 | 4 | 5 | **2.5** |
 | D17 | Which maintenance job first? (criticality×impact) | Maint | maint-sup, prod-mgr | daily | P (suggest+SLA+repeat flags) | O → recommend | 4 | 4 | 2 | 3 | **8.0** |
 | D18 | PM due now vs deferrable? (overdue risk) | Maint | maint-sup | daily | P (auto-gen, no defer optimizer) | O → recommend | 4 | 4 | 2 | 3 | **8.0** |
 | D19 | Repair vs replace this asset? | Assets | finance, VP | quarterly | N | T → recommend | 3 | 2 | 3 | 4 | **2.0** |
@@ -57,7 +57,7 @@ D16 (2.5) > D19 (2) > D32 (1.3).
 | Production | D07(P) | — |
 | CRM/O2C | D03(P) D04(P) D11(N) D12(P) | D11: no cost/margin service found; verify std-cost availability |
 | SupplyChain | D08(P) | — |
-| Quality | D13(E) D14(P) D15(P) D16(N) | D16: lot genealogy partial (`lot_number` on movements, no FG→RM linkage table) |
+| Quality | D13(E) D14(P) D15(P) D16(P) | D16 remains partial: warning requires explicit lot→work-order→shipment links; genealogy completeness and exhaustive FG/customer impact are unproven |
 | Maintenance | D17(P) D18(P) | — |
 | Assets | D19(N) | no failure-cost history, no replacement model |
 | HR/Attendance/Leave | D20(P) D22(P) | — |
@@ -84,7 +84,8 @@ B2B/Landing (no recurring internal decision identified — explicitly out of sco
 | warehouse_staff | D01, D08, D24 |
 | production_manager | D05, D07, D14, D17 |
 | qc_inspector | D13, D14, D15, D16, D23(inspect) |
-| maintenance_supervisor/tech | D17, D18 |
+| maintenance_supervisor | D17, D18 |
+| maintenance_tech | none (work-order execution only; no DSS decision authority) |
 | finance_officer | D09, D10, D12, D21, D28, D29, D33 |
 | hr_officer | D20, D21, D22, D32(restricted) |
 | department_head | D20, D22, D25 |
@@ -97,7 +98,7 @@ B2B/Landing (no recurring internal decision identified — explicitly out of sco
 
 | # | Gap | Blocks | Fix hint |
 |---|---|---|---|
-| G-01 | No `stock_level_snapshots` — levels overwritten live | D01 trends, D24 aging, D28 stock value | Wave 0 table + daily job |
+| G-01 | No pre-2026-10-12 stock snapshots; daily history now writes, with no safe backfill | D01 trends, D24 aging, D28 stock value until enough history accrues and reconciles | Keep daily writer; validate balances before using historical signals |
 | G-02 | Single `last_price` on ASL, no price history | D02 price-aware selection (see F-01) | `supplier_price_history` + receipt hook |
 | G-03 | No FG→RM lot genealogy linkage | D16 traceability/recall | lot-lineage on issue/output (M) |
 | G-04 | No returns auto-rules / scheduled scan | D23 | disposition matrix + `returns:scan` (S) |
@@ -108,4 +109,6 @@ B2B/Landing (no recurring internal decision identified — explicitly out of sco
 | G-09 | Machine-hour series overwritten (`running_hours_total`) | D05/D18 accuracy, OEE trend | append-only hour ledger |
 | G-10 | RESERVED workflows (NCR/8D/maintenance/WO) non-blocking | D13/D17 enforcement assumptions | decide: enforce or keep advisory (owner call) |
 | G-11 | MWO polymorphic owner (no direct `machine_id`) | D17/D18 query cost + correctness | nullable `machine_id` denormalised column (S) |
-| G-12 | Credit-limit check on SO accept not found (column exists) | D12 | confirm-or-build pre-accept gate (S) |
+| G-12 | Historical finding: SO credit-limit check not found (column existed) | D12 | Confirmed gate exists at `SalesOrderService::checkCreditLimit`; verify null/zero-limit semantics, authority, holds, and overrides before claiming full D12 readiness. |
+
+2026-10-23 source recheck: `api/app/Modules/CRM/Services/SalesOrderService.php:128-178` enforces a credit limit at confirmation using open invoice balances, other confirmed/in-production SO totals, and the current SO. A null or zero limit bypasses enforcement (`:137-143`). This closes the historical “check not found” claim, not full D12 validation. See `READINESS-2026-10-23.md`.

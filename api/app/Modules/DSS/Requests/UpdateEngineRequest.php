@@ -19,7 +19,7 @@ class UpdateEngineRequest extends FormRequest
     {
         return [
             'enabled' => ['sometimes', 'boolean'],
-            'default_mode' => ['sometimes', Rule::in(['shadow', 'advisory', 'assisted'])],
+            'default_mode' => ['sometimes', Rule::in(['shadow', 'advisory'])],
         ];
     }
 }

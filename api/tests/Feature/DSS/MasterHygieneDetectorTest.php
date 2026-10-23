@@ -23,7 +23,7 @@ class MasterHygieneDetectorTest extends TestCase
 
     public function test_clean_slate_emits_nothing(): void
     {
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_flags_gaps_with_evidence_and_fix_routes(): void
@@ -33,7 +33,8 @@ class MasterHygieneDetectorTest extends TestCase
         Customer::factory()->create(); // credit_limit null
         $product = Product::factory()->create(); // no BOM
 
-        $emissions = $this->detector()->detect();
+        $scan = $this->detector()->detect();
+        $emissions = $scan->emissions;
         $byKey = [];
         foreach ($emissions as $emission) {
             $byKey[$emission->rationale['gap']] = $emission;
@@ -54,6 +55,7 @@ class MasterHygieneDetectorTest extends TestCase
 
         $bom = $byKey['products_without_active_bom'];
         $this->assertContains($product->part_number, $bom->rationale['evidence']);
+        $this->assertGreaterThan(0, $scan->rowsScanned);
     }
 
     public function test_complete_master_data_clears_its_gap(): void
@@ -65,7 +67,7 @@ class MasterHygieneDetectorTest extends TestCase
 
         $keys = array_map(
             static fn ($emission) => $emission->rationale['gap'],
-            $this->detector()->detect()
+            $this->detector()->detect()->emissions
         );
 
         $this->assertNotContains('items_missing_reorder_point', $keys);
@@ -81,7 +83,7 @@ class MasterHygieneDetectorTest extends TestCase
 
         $this->assertSame('dss.master_hygiene', $detector->id());
         $this->assertSame('platform', $detector->domain());
-        $this->assertSame(['dss.view'], $detector->ownerPermissions());
+        $this->assertSame(['admin.settings.manage'], $detector->ownerPermissions());
         $this->assertSame('v1', $detector->version());
     }
 

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuCheck, LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
+import { LuCheck, LuPackage, LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
 import { useDebounce } from '@/hooks/useDebounce';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
@@ -220,12 +220,15 @@ export default function CustomerPlaceOrderPage() {
                     className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-default bg-canvas">
                     {catalog.map((product) => {
                       const added = lines.some((line) => line.product.id === product.id);
-                      return <li key={product.id} className={`grid grid-cols-[minmax(0,1fr)_80px] items-center gap-x-3 px-4 py-2 sm:grid-cols-[minmax(0,1fr)_100px_80px] sm:px-5 ${added ? 'bg-surface' : 'hover:bg-surface'}`}>
-                        <div className="min-w-0"><p className="font-medium leading-snug break-words">{product.name}</p>
+                      return <li key={product.id} className={`grid grid-cols-[44px_minmax(0,1fr)_80px] items-center gap-x-3 px-4 py-2 sm:grid-cols-[44px_minmax(0,1fr)_100px_80px] sm:px-5 ${added ? 'bg-surface' : 'hover:bg-surface'}`}>
+                        <div aria-hidden="true" className="col-start-1 row-span-2 row-start-1 flex h-11 w-11 items-center justify-center overflow-hidden rounded border border-default bg-canvas text-muted">
+                          {product.image_url ? <img src={product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" /> : <LuPackage size={18} />}
+                        </div>
+                        <div className="col-start-2 row-start-1 min-w-0"><p className="font-medium leading-snug break-words">{product.name}</p>
                           <p className="mt-0.5 font-mono text-xs text-muted">{product.part_number}</p></div>
-                        <p className="col-start-1 row-start-2 text-xs text-muted sm:col-start-2 sm:row-start-1 sm:text-right">
+                        <p className="col-start-2 row-start-2 text-xs text-muted sm:col-start-3 sm:row-start-1 sm:text-right">
                           <span className="font-mono tabular-nums">{formatPeso(product.unit_price)}</span> / {product.unit_of_measure || 'unit'}</p>
-                        <Button type="button" size="sm" className="col-start-2 row-span-2 row-start-1 min-h-11 disabled:opacity-100 disabled:text-muted sm:col-start-3 sm:row-span-1"
+                        <Button type="button" size="sm" className="col-start-3 row-span-2 row-start-1 min-h-11 disabled:opacity-100 disabled:text-muted sm:col-start-4 sm:row-span-1"
                           icon={added ? <LuCheck size={14} /> : <LuPlus size={14} />}
                           aria-label={added ? `${product.name} added to order` : `Add ${product.name} to order`}
                           disabled={added} onClick={() => addLine(product)}>{added ? 'Added' : 'Add'}</Button>
@@ -252,8 +255,15 @@ export default function CustomerPlaceOrderPage() {
                     <tbody>
                       {lines.map((line, idx) => <tr key={line.product.id} className={trCls}>
                         <Td>
-                          <p className="font-medium leading-snug break-words">{line.product.name}</p>
-                          <p className="mt-0.5 font-mono text-xs text-muted">{line.product.part_number} <span className="font-sans">· {line.product.unit_of_measure || 'unit'}</span></p>
+                          <div className="flex items-center gap-3">
+                            <div aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-default bg-surface text-muted">
+                              {line.product.image_url ? <img src={line.product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" /> : <LuPackage size={16} />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium leading-snug break-words">{line.product.name}</p>
+                              <p className="mt-0.5 font-mono text-xs text-muted">{line.product.part_number} <span className="font-sans">· {line.product.unit_of_measure || 'unit'}</span></p>
+                            </div>
+                          </div>
                         </Td>
                         <Td>
                           <Input fieldSize="lg" aria-label={`Quantity for ${line.product.part_number}`} type="number" min={1} step={1} inputMode="numeric" required

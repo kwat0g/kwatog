@@ -6,6 +6,7 @@ namespace Tests\Feature\DSS;
 
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\DSS\Services\DetectorRegistry;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -37,11 +38,11 @@ class FakeDetector implements DetectorInterface
         return [];
     }
 
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
-        return [
+        return new DetectorScanResult([
             new DetectorEmission(type: 'fake', severity: 'info', dedupeKey: 'k', rationale: ['rule' => 'fake']),
-        ];
+        ]);
     }
 }
 

@@ -38,7 +38,7 @@ class RunDssDetectors extends Command
         }
 
         foreach ($outcome['detectors'] as $id => $result) {
-            $this->line("{$id}: {$result['status']} emitted={$result['emitted']} updated={$result['updated']}");
+            $this->line("{$id}: {$result['status']} scanned={$result['rows_scanned']} emitted={$result['emitted']} updated={$result['updated']}");
         }
 
         if ($outcome['failed'] !== []) {

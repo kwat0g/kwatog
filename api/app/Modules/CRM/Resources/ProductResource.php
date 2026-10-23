@@ -16,6 +16,7 @@ class ProductResource extends JsonResource
             'part_number' => $this->part_number,
             'name' => $this->name,
             'description' => $this->description,
+            'image_url' => $this->image_path ? "/api/v1/crm/products/{$this->hash_id}/image" : null,
             'unit_of_measure' => $this->unit_of_measure,
             'standard_cost' => (string) $this->standard_cost,
             'base_selling_price' => $this->base_selling_price,

@@ -30,13 +30,9 @@ return new class extends Migration
     /**
      * slug => [display name, role slugs that hold it, grant-to-all flag].
      *
-     * `dss.view` is auto-granted to every role by RolePermissionSeeder (same
-     * nature as `dashboard.action_center.view`: a personal queue), so the
-     * migration grants it to every role row too — a deployment that migrates
-     * without re-seeding must not leave the catalogued slug unheld (the
-     * 2026_10_10_000500 lesson). It is NOT a dashboard key, so the
-     * rarity-ranked dispatch is unaffected, and data access is NOT granted
-     * here: W0-3 scopes every recommendation query to readable data.
+     * At initial rollout `dss.view` was granted to every role and this migration
+     * mirrored that grant. Migration 2026_10_23_090000 later removes it from
+     * employee and driver, who have no decisions in the DSS role matrix.
      * `dss.manage` (run-now, parameter edits) goes to the promotion approver
      * only; `dss.admin` (kill switch, detector on/off) stays system_admin-only
      * via the `*` wildcard — no explicit grant, nothing to revoke.

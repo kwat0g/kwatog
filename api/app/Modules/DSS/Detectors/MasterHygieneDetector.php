@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\Product;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Support\Facades\DB;
 
@@ -35,7 +36,7 @@ class MasterHygieneDetector implements DetectorInterface
 
     public function ownerPermissions(): array
     {
-        return ['dss.view'];
+        return ['admin.settings.manage'];
     }
 
     public function version(): string
@@ -48,11 +49,10 @@ class MasterHygieneDetector implements DetectorInterface
         return ['max_evidence_per_gap' => 10, 'critical_count' => 50];
     }
 
-    /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
-        $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_gap']));
-        $criticalAt = max(1, (int) ($context['critical_count'] ?? $this->defaultParams()['critical_count']));
+        $maxEvidence = max(1, min(50, (int) ($context['max_evidence_per_gap'] ?? $this->defaultParams()['max_evidence_per_gap'])));
+        $criticalAt = max(1, min(100000, (int) ($context['critical_count'] ?? $this->defaultParams()['critical_count'])));
 
         $emissions = [];
 
@@ -90,7 +90,9 @@ class MasterHygieneDetector implements DetectorInterface
             'products_without_active_bom' => $this->productGap(),
         ];
 
+        $rowsScanned = 0;
         foreach ($gaps as $key => $gap) {
+            $rowsScanned += $gap['count'];
             if ($gap['count'] === 0) {
                 continue;
             }
@@ -111,7 +113,7 @@ class MasterHygieneDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $rowsScanned);
     }
 
     /** @return array{count: int, evidence: list<string>, why: string, fix_route: string} */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
+use App\Modules\CRM\Controllers\ProductImageController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\InternalSupplierActivityController;
 use App\Modules\B2B\Controllers\PortalAccessController;
@@ -184,6 +185,7 @@ Route::prefix('b2b/customer')->group(function () {
             Route::delete('notifications/{id}', [PortalNotificationController::class, 'destroy'])->whereUuid('id');
             Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
             Route::get('catalog', [CustomerPortalController::class, 'catalog']);
+            Route::get('catalog/{product}/image', [ProductImageController::class, 'showForCustomer']);
             Route::get('price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'portalIndex']);
             Route::post('price-requests', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'portalStore'])->middleware('throttle:sensitive');
             Route::post('price-requests/{priceRequest}/respond', [\App\Modules\CRM\Controllers\PriceNegotiationController::class, 'respond'])->middleware('throttle:sensitive');

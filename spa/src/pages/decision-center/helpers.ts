@@ -17,16 +17,3 @@ export function formatImpact(
   const amount = unit ? `${estimate} ${unit}` : estimate;
   return isEstimate ? `~${amount}` : amount;
 }
-
-export function formatConfidence(confidence: string | null): string {
-  if (confidence === null) return 'n/a';
-  return `${Math.round(Number(confidence) * 100)}%`;
-}
-
-/** Flatten the rationale JSON into label/value rows for the "Why this?" panel. */
-export function rationaleEntries(rationale: Record<string, unknown>): Array<[string, string]> {
-  return Object.entries(rationale).map(([key, value]) => [
-    key.replace(/_/g, ' '),
-    typeof value === 'object' ? JSON.stringify(value) : String(value ?? '—'),
-  ]);
-}

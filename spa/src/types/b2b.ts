@@ -223,6 +223,7 @@ export interface PortalCatalogItem {
   id: string;
   part_number: string;
   name: string;
+  image_url?: string | null;
   unit_of_measure: string;
   unit_price: string;
   pricing_method: string;

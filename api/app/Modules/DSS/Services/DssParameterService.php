@@ -77,25 +77,25 @@ class DssParameterService
     /** Engine kill switch + default mode live here, seeded by the W0-1 migration. */
     public function engineEnabled(): bool
     {
-        return (bool) $this->get(self::GLOBAL, 'dss.engine.enabled', true);
+        return $this->get(self::GLOBAL, 'dss.engine.enabled', true) === true;
     }
 
     public function defaultMode(): string
     {
         $mode = $this->get(self::GLOBAL, 'dss.engine.default_mode', 'shadow');
 
-        return in_array($mode, ['shadow', 'advisory', 'assisted'], true) ? $mode : 'shadow';
+        return in_array($mode, ['shadow', 'advisory'], true) ? $mode : 'shadow';
     }
 
     public function detectorEnabled(string $detectorId): bool
     {
-        return (bool) $this->get($detectorId, 'enabled', true);
+        return $this->get($detectorId, 'enabled', true) === true;
     }
 
     public function detectorMode(string $detectorId): string
     {
         $mode = $this->get($detectorId, 'mode', $this->defaultMode());
 
-        return in_array($mode, ['shadow', 'advisory', 'assisted'], true) ? $mode : 'shadow';
+        return in_array($mode, ['shadow', 'advisory'], true) ? $mode : 'shadow';
     }
 }

@@ -132,7 +132,7 @@ class CustomerPortalService
      * Self-service order catalog — every product this customer may order,
      * resolved from eligible products and applicable selling prices.
      *
-     * @return list<array{id: string, part_number: ?string, name: ?string, unit_of_measure: ?string, unit_price: string, pricing_method: string}>
+     * @return list<array{id: string, part_number: ?string, name: ?string, unit_of_measure: ?string, unit_price: ?string, pricing_issue: ?string, pricing_method: ?string}>
      */
     public function catalog(int $customerId, ?string $asOf = null, ?string $search = null): array
     {
@@ -150,12 +150,27 @@ class CustomerPortalService
         }
         $catalog = [];
         foreach ($query->orderBy('part_number')->get() as $product) {
-            try { $quote = $this->prices->quote($customerId, $product->id, Carbon::parse($date), '1'); }
-            catch (\Illuminate\Validation\ValidationException) { continue; }
+            try {
+                $quote = $this->prices->quote($customerId, $product->id, Carbon::parse($date), '1');
+                $pricingIssue = null;
+            } catch (\Illuminate\Validation\ValidationException $exception) {
+                $message = implode(' ', $exception->errors()['product_id'] ?? []);
+                $pricingIssue = match (true) {
+                    str_contains($message, 'No base selling price or applicable customer agreement') => 'No price is available for this delivery date. Contact Sales.',
+                    str_contains($message, 'selling price requires review by sales') => 'This price needs Sales review before you can order it.',
+                    default => null,
+                };
+                if ($pricingIssue === null) {
+                    continue;
+                }
+                $quote = null;
+            }
             $catalog[] = [
                 'id' => $product->hash_id, 'part_number' => $product->part_number, 'name' => $product->name,
-                'unit_of_measure' => $product->unit_of_measure, 'unit_price' => $quote['unit_price'],
-                'price_source' => $quote['price_source'], 'pricing_method' => $quote['price_tier_min_qty'] !== null ? 'tiered' : 'flat',
+                'unit_of_measure' => $product->unit_of_measure, 'unit_price' => $quote['unit_price'] ?? null,
+                'image_url' => $product->image_path ? "/api/v1/b2b/customer/catalog/{$product->hash_id}/image" : null,
+                'price_source' => $quote['price_source'] ?? null, 'pricing_method' => isset($quote['price_tier_min_qty']) ? 'tiered' : ($quote ? 'flat' : null),
+                'pricing_issue' => $pricingIssue,
             ];
         }
 

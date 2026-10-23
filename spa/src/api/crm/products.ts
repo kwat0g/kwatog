@@ -7,13 +7,19 @@ export interface ProductListParams extends ListParams {
   has_bom?: boolean | string;
 }
 
-export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure' | 'include_forecast_in_mrp'>;
+export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure' | 'include_forecast_in_mrp' | 'image_url'>;
+export interface ProductCustomerOption {
+  id: string;
+  name: string;
+}
 
 export const productsApi = {
   options: (params?: ProductListParams, signal?: AbortSignal) =>
     client
       .get<PaginatedResponse<ProductOption>>('/crm/products/options', { params, signal })
       .then((r) => r.data),
+  customerOptions: (params?: { search?: string }, signal?: AbortSignal) =>
+    client.get<{ data: ProductCustomerOption[] }>('/crm/products/customer-options', { params, signal }).then((r) => r.data.data),
   list: (params?: ProductListParams, signal?: AbortSignal) =>
     client.get<PaginatedResponse<Product>>('/crm/products', { params, signal }).then((r) => r.data),
   show: (id: string) =>
@@ -22,6 +28,15 @@ export const productsApi = {
     client.post<ApiSuccess<Product>>('/crm/products', data).then((r) => r.data.data),
   update: (id: string, data: UpdateProductData) =>
     client.put<ApiSuccess<Product>>(`/crm/products/${id}`, data).then((r) => r.data.data),
+  updateCustomerAccess: (id: string, data: { portal_visibility: 'standard' | 'restricted'; portal_customer_ids: string[] }) =>
+    client.put<ApiSuccess<Product>>(`/crm/products/${id}/customer-access`, data).then((r) => r.data.data),
+  uploadImage: (id: string, file: File) => {
+    const data = new FormData();
+    data.append('image', file);
+    return client.post(`/crm/products/${id}/image`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   proposeFinancial: (
     id: string,
     data: {

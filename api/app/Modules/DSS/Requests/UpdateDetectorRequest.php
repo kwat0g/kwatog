@@ -19,7 +19,7 @@ class UpdateDetectorRequest extends FormRequest
     {
         return [
             'enabled' => ['sometimes', 'boolean'],
-            'mode' => ['sometimes', Rule::in(['shadow', 'advisory', 'assisted'])],
+            'mode' => ['sometimes', Rule::in(['shadow', 'advisory'])],
         ];
     }
 }

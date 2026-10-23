@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { LuArchiveRestore, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
+import { LuArchiveRestore, LuCamera, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { productsApi, type ProductListParams } from '@/api/crm/products';
@@ -56,7 +56,46 @@ export default function ProductsListPage() {
   toast.error(e.response?.data?.message ?? 'Failed to restore product.');
   } });
 
+ const uploadImage = useMutation({
+  mutationFn: ({ id, file }: { id: string; file: File }) => productsApi.uploadImage(id, file),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['crm', 'products'] });
+   toast.success('Product photo updated.');
+  },
+  onError: (e: AxiosError<{ message?: string }>) => {
+   toast.error(e.response?.data?.message ?? 'Failed to upload product photo.');
+  },
+ });
+
  const columns: Column<Product>[] = [
+ {
+ key: 'photo', header: 'Photo',
+ cell: (r) => (
+ <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+ {r.image_url ? (
+ <img src={r.image_url} alt="" loading="lazy" className="h-10 w-10 rounded border border-default object-cover" />
+ ) : (
+ <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded border border-default bg-surface text-muted">
+ <LuCamera size={16} />
+ </div>
+ )}
+ {canManage && <label className="cursor-pointer text-xs text-accent hover:underline">
+ {uploadImage.isPending ? 'Uploading…' : r.image_url ? 'Change' : 'Add photo'}
+ <input
+ type="file"
+ accept="image/jpeg,image/png,image/webp"
+ className="sr-only"
+ disabled={uploadImage.isPending}
+ onClick={(event) => event.stopPropagation()}
+ onChange={(event) => {
+ const file = event.currentTarget.files?.[0];
+ if (file) uploadImage.mutate({ id: r.id, file });
+ event.currentTarget.value = '';
+ }}
+ />
+ </label>}
+ </div>
+ ) },
  {
  key: 'part_number', header: 'Part #',
  cell: (r) => (
@@ -138,7 +177,7 @@ export default function ProductsListPage() {
  searchPlaceholder="Search part number or name…"
  actions={<ArchiveFilter value={scope} onChange={setScope} />}
  />
- {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={8} />}
+ {isLoading && !data && <SkeletonTable columns={canManage ? 8 : 7} rows={8} />}
  {isError && (
  <EmptyState
  icon="alert-circle"

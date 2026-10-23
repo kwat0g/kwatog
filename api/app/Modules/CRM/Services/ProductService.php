@@ -10,6 +10,7 @@ use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\PriceRequest;
 use App\Modules\CRM\Models\Product;
@@ -26,6 +27,20 @@ use Illuminate\Validation\ValidationException;
 
 class ProductService
 {
+    /** @return list<array{id: string, name: string}> */
+    public function portalCustomerOptions(?string $search = null): array
+    {
+        // shortcut: returns first 100 active customers, add paging if a search can match more than 100.
+        $query = Customer::query()->active();
+        if ($search !== null && trim($search) !== '') {
+            $query->where('name', SearchOperator::like(), SearchOperator::contains(trim($search)));
+        }
+
+        return $query->orderBy('name')->limit(100)->get(['id', 'name'])
+            ->map(fn (Customer $customer) => ['id' => $customer->hash_id, 'name' => $customer->name])
+            ->all();
+    }
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Product::query();
@@ -92,11 +107,8 @@ class ProductService
             $data = $this->normalisePartNumber($data);
             $this->assertUniquePartNumber((string) $data['part_number']);
 
-            $customers = $data['portal_customer_ids'] ?? [];
-            unset($data['portal_customer_ids']);
             $this->assertSellingPrices($data);
             $product = Product::create($data)->fresh();
-            $product->portalCustomers()->sync($customers);
             if ($product->is_active) {
                 app(FinishedGoodInventoryService::class)->ensureItem($product);
             }
@@ -130,8 +142,6 @@ class ProductService
             ) {
                 $this->assertCanArchive($locked);
             }
-            $customers = $data['portal_customer_ids'] ?? null;
-            unset($data['portal_customer_ids']);
             $financialChange = collect(['standard_cost', 'minimum_selling_price', 'base_selling_price'])->contains(fn ($field) => array_key_exists($field, $data)
                 && (($data[$field] === null) !== ($locked->{$field} === null) || ($data[$field] !== null && Money::cmp((string) $data[$field], (string) ($locked->{$field} ?? '0')) !== 0)));
             if ($financialChange && auth()->user() instanceof User && ! auth()->user()->hasPermission('inventory.costs.approve')) {
@@ -146,9 +156,16 @@ class ProductService
             if ($locked->wasChanged(['base_selling_price', 'minimum_selling_price', 'standard_cost'])) {
                 app(PricingReviewService::class)->request([(int) $locked->id], 'product_prices_changed');
             }
-            if ($customers !== null) {
-                $locked->portalCustomers()->sync($customers);
-            }
+            return $locked->fresh()->load('portalCustomers:id,name');
+        });
+    }
+
+    public function updateCustomerAccess(Product $product, array $data): Product
+    {
+        return DB::transaction(function () use ($product, $data): Product {
+            $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
+            $locked->update(['portal_visibility' => $data['portal_visibility']]);
+            $locked->portalCustomers()->sync($data['portal_customer_ids']);
 
             return $locked->fresh()->load('portalCustomers:id,name');
         });

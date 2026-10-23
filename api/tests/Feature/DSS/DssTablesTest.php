@@ -85,6 +85,23 @@ class DssTablesTest extends TestCase
         $this->assertStringContainsString('unique', $definition);
         $this->assertStringContainsString('where', $definition);
         $this->assertStringContainsString('dedupe_key', $definition);
+        $this->assertStringContainsString('in_progress', $definition);
+    }
+
+    public function test_lifecycle_evidence_columns_are_additive_and_nullable(): void
+    {
+        foreach ([
+            'decision_code', 'policy_version', 'source_references', 'verification_context',
+            'first_detected_at', 'last_evaluated_at', 'last_evaluated_run_id',
+            'source_observed_at', 'business_due_at', 'resolution_evidence', 'verification_status',
+            'predecessor_id', 'impact_currency', 'impact_metric',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('dss_recommendations', $column), "Missing {$column}.");
+        }
+
+        foreach (['impact_estimate', 'impact_unit', 'status', 'dismiss_reason', 'expires_at'] as $legacyColumn) {
+            $this->assertTrue(Schema::hasColumn('dss_recommendations', $legacyColumn));
+        }
     }
 
     public function test_status_is_not_mass_assignable(): void

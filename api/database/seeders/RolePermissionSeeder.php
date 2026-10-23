@@ -13,6 +13,18 @@ use Illuminate\Support\Facades\DB;
 class RolePermissionSeeder extends Seeder
 {
     /**
+     * Role matrix in docs/dss/01-decision-inventory.md. Employee and driver
+     * have self-service access only.
+     *
+     * @var list<string>
+     */
+    private const DSS_VIEW_ROLES = [
+        'vice_president', 'ppc_head', 'sales_officer', 'purchasing_officer', 'warehouse_staff',
+        'production_manager', 'qc_inspector', 'maintenance_supervisor',
+        'finance_officer', 'hr_officer', 'department_head', 'customer_service_officer', 'impex_officer',
+    ];
+
+    /**
      * Permission catalog: { module => [ {slug, name, description}, ... ] }.
      *
      * @return array<string, array<int, array{slug: string, name: string, description?: string}>>
@@ -325,6 +337,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.customers.manage',           'name' => 'Manage Customers'],
                 ['slug' => 'crm.products.view',              'name' => 'View Products'],
                 ['slug' => 'crm.products.manage',            'name' => 'Manage Products'],
+                ['slug' => 'crm.products.customer_access.manage', 'name' => 'Manage Customer Product Access'],
                 ['slug' => 'crm.price_agreements.view',      'name' => 'View Price Agreements'],
                 ['slug' => 'crm.price_agreements.manage',    'name' => 'Manage Price Agreements'],
                 ['slug' => 'crm.price_agreements.propose', 'name' => 'Propose Price Agreements'],
@@ -751,6 +764,7 @@ class RolePermissionSeeder extends Seeder
                         'crm.view',
                         'accounting.customers.view',
                         'crm.products.view',
+                        'crm.products.customer_access.manage',
                         'crm.price_agreements.view',
                         'crm.price_agreements.propose',
                         'crm.sales_orders.view',
@@ -1123,6 +1137,7 @@ class RolePermissionSeeder extends Seeder
                     ? '*'
                     : array_values(array_unique(array_merge(
                         (array) $def['permissions'],
+                        in_array($slug, self::DSS_VIEW_ROLES, true) ? ['dss.view'] : [],
                         in_array('purchasing.supplier_listings.review', (array) $def['permissions'], true)
                             ? ['purchasing.supplier_listings.view']
                             : [],
@@ -1138,12 +1153,6 @@ class RolePermissionSeeder extends Seeder
                             'approvals.board.view',
                             'hr.directory.view',
                             'dashboard.action_center.view',
-                            // DSS Wave 0 — Decision Center reachability for every
-                            // authenticated role (same nature as the action
-                            // center: a personal queue). Data access is NOT
-                            // granted here; every recommendation query is
-                            // scoped to data the caller may already read.
-                            'dss.view',
                             // Self-scoped layout reset — every role (see
                             // catalog comment under 'dashboards').
                             'dashboard.layout.reset',
@@ -1191,7 +1200,6 @@ class RolePermissionSeeder extends Seeder
             'approvals.board.view',
             'hr.directory.view',
             'dashboard.action_center.view',
-            'dss.view',
             'dashboard.layout.reset',
             'business_policies.view',
         ];
@@ -1203,6 +1211,7 @@ class RolePermissionSeeder extends Seeder
 
             $required = array_values(array_unique(array_merge(
                 (array) ($definition['permissions'] ?? []),
+                in_array($slug, self::DSS_VIEW_ROLES, true) ? ['dss.view'] : [],
                 $crossCutting,
             )));
             $missing = array_values(array_diff($required, array_keys($catalogSlugs)));

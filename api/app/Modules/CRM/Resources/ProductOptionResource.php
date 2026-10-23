@@ -15,6 +15,7 @@ class ProductOptionResource extends JsonResource
             'id' => $this->hash_id,
             'part_number' => $this->part_number,
             'name' => $this->name,
+            'image_url' => $this->image_path ? "/api/v1/crm/products/{$this->hash_id}/image" : null,
             'unit_of_measure' => $this->unit_of_measure,
             // Demand-page MRP toggle reads the flag from the dropdown payload
             // so forecast viewers need no full-product (cost-bearing) read.

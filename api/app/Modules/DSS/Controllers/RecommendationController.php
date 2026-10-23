@@ -10,6 +10,7 @@ use App\Modules\DSS\Requests\RecommendationActionRequest;
 use App\Modules\DSS\Requests\RecordOutcomeRequest;
 use App\Modules\DSS\Resources\RecommendationResource;
 use App\Modules\DSS\Services\RecommendationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class RecommendationController
@@ -23,6 +24,16 @@ class RecommendationController
         $page = $this->service->list($request->user(), $request->validated());
 
         return RecommendationResource::collection($page);
+    }
+
+    public function summary(ListRecommendationsRequest $request): JsonResponse
+    {
+        return response()->json(['data' => $this->service->summary($request->user(), $request->validated())]);
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => $this->service->options(request()->user())]);
     }
 
     public function show(DssRecommendation $recommendation): RecommendationResource

@@ -43,6 +43,22 @@ class DssRecommendation extends Model
         'dedupe_key',
         'expires_at',
         'snoozed_until',
+        'owner_permissions',
+        'owner_role_slugs',
+        'decision_code',
+        'policy_version',
+        'source_references',
+        'verification_context',
+        'first_detected_at',
+        'last_evaluated_at',
+        'last_evaluated_run_id',
+        'source_observed_at',
+        'business_due_at',
+        'resolution_evidence',
+        'verification_status',
+        'predecessor_id',
+        'impact_currency',
+        'impact_metric',
     ];
 
     protected $casts = [
@@ -52,9 +68,18 @@ class DssRecommendation extends Model
         'confidence' => 'decimal:4',
         'rationale' => 'array',
         'action' => 'array',
+        'owner_permissions' => 'array',
+        'owner_role_slugs' => 'array',
+        'source_references' => 'array',
+        'verification_context' => 'array',
+        'resolution_evidence' => 'array',
         'expires_at' => 'datetime',
         'decided_at' => 'datetime',
         'snoozed_until' => 'datetime',
+        'first_detected_at' => 'datetime',
+        'last_evaluated_at' => 'datetime',
+        'source_observed_at' => 'datetime',
+        'business_due_at' => 'datetime',
     ];
 
     public function subject(): MorphTo

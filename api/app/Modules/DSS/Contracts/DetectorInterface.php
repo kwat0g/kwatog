@@ -11,8 +11,8 @@ namespace App\Modules\DSS\Contracts;
  *
  * Detectors are independently enable/disable-able, isolated (one failure never
  * stops others), idempotent (dedupe key per emission), queue-friendly, and
- * time/memory-budgeted. Execution modes: shadow (compute + log, don't display),
- * advisory (display), assisted-action (prefilled existing workflows only).
+ * time/memory-budgeted. Execution modes: shadow (compute + log, don't display)
+ * and advisory (display). Business actions remain in existing workflows.
  */
 interface DetectorInterface
 {
@@ -37,7 +37,6 @@ interface DetectorInterface
      * and respect $context['limit'] / $context['time_budget_ms'].
      *
      * @param  array{limit?: int, time_budget_ms?: int}  $context
-     * @return list<DetectorEmission>
      */
-    public function detect(array $context = []): array;
+    public function detect(array $context = []): DetectorScanResult;
 }

@@ -23,6 +23,7 @@ interface FilterBarProps {
  onFilter?: (key: string, value: unknown) => void;
  onSearch?: (search: string) => void;
  searchPlaceholder?: string;
+ searchMaxLength?: number;
  /**
  * Optional From/To date pickers bound to two filter keys (e.g. from/to).
  * Emits `undefined` when a date is cleared so lists can drop the filter.
@@ -49,6 +50,7 @@ export function FilterBar({
  onFilter,
  onSearch,
  searchPlaceholder = 'Search…',
+ searchMaxLength,
  dateRange,
  actions,
  className,
@@ -126,6 +128,7 @@ export function FilterBar({
  value={searchValue}
  onChange={(e) => setSearchValue(e.target.value)}
  placeholder={searchPlaceholder}
+ maxLength={searchMaxLength}
  aria-label={searchPlaceholder}
  className="flex-1 min-w-0 h-full px-2 text-sm bg-transparent outline-none placeholder:text-subtle"
  />
