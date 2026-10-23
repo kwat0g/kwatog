@@ -12,4 +12,5 @@ Old queued events with no snapshot are handled by generating a current-value sna
 
 ## Verification status
 
-Focused tests verify allowed fields, excluded complaint details, and event-time recipient/status after source-record edits. Template visual review follows in its own PR; no email was sent.
+Focused tests verify allowed fields, excluded complaint details, event-time recipient/status after source-record edits, title, preheader, frontend portal route, plain-text version, escaping, and HTML size. `CustomerComplaintUpdateMail::render()` produced 24,202 bytes from the test snapshot; no email was sent. Browser previews were inspected at 1440px desktop and 390px mobile, light/dark; document width matched viewport. The preview uses the configured test SPA URL and seeded branding values. Screenshots: `screenshots/e009-customer-complaint-{desktop,mobile}-{light,dark}.png`. Real email-client rendering remains unverified.
+- Re-inspected all four captures: hostile greeting is escaped as text; status, reference, and CTA remain readable with no overflow.
