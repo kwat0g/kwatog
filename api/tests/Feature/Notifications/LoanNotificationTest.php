@@ -130,7 +130,6 @@ class LoanNotificationTest extends TestCase
         $employee = Employee::factory()->create([
             'department_id' => Department::factory()->create()->id,
         ]);
-        $employee = Employee::factory()->create();
         $approver = $this->departmentHeadFor($employee);
         $loan     = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal'   => '5000.00',
@@ -154,7 +153,6 @@ class LoanNotificationTest extends TestCase
         $employee = Employee::factory()->create([
             'department_id' => Department::factory()->create()->id,
         ]);
-        $employee = Employee::factory()->create();
         $approver = $this->departmentHeadFor($employee);
         $loan     = app(LoanService::class)->request($employee->id, LoanType::CashAdvance, [
             'principal'   => '5000.00',
