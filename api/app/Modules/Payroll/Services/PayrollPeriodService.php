@@ -1000,8 +1000,7 @@ class PayrollPeriodService
             static fn ($id): int => (int) $id,
             array_filter([$period->created_by, $period->computed_by], static fn ($id): bool => $id !== null),
         );
-        $candidates = app(\App\Common\Services\NotificationService::class)
-            ->usersWithPermission('payroll.periods.approve')
+        $candidates = ApprovalDelegation::approvalAudience('payroll.periods.approve')
             ->filter(fn (User $user): bool => $user->hasPermission('payroll.periods.view'));
         $audience = $candidates->filter(fn (User $user): bool => $user->role?->slug !== 'system_admin'
             && (! in_array((int) $user->id, $makers, true) || $user->hasPermission('payroll.periods.self_approve_override')));

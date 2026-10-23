@@ -6,13 +6,16 @@ namespace Tests\Feature\Notifications;
 
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
+use App\Modules\Attendance\Listeners\NotifyOnOvertimeSubmitted;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -81,6 +84,37 @@ class OvertimeNotificationTest extends TestCase
         ]);
 
         Event::assertDispatched(OvertimeRequestSubmitted::class);
+    }
+
+    public function test_submitted_notice_excludes_department_heads_with_revoked_approval_access(): void
+    {
+        $ot = OvertimeRequest::factory()->pending()->create();
+        $eligible = $this->departmentHeadFor($ot);
+        $revoked = $this->departmentHeadFor($ot);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => Permission::query()->where('slug', 'attendance.ot.approve')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $eligible->id,
+            'reason' => 'Overtime notification audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $revoked->flushPermissionsCache();
+
+        app(NotifyOnOvertimeSubmitted::class)
+            ->handle(new OvertimeRequestSubmitted($ot->fresh(['employee'])));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $eligible->id,
+            'type' => 'attendance.ot_submitted',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $revoked->id,
+            'type' => 'attendance.ot_submitted',
+        ]);
     }
 
     /**

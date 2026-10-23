@@ -350,7 +350,13 @@ class ApprovalService
         if ($submitterId !== null) {
             $recipients->where('id', '<>', $submitterId);
         }
-        $recipients = $recipients->get();
+        $recipients = $recipients->get()
+            ->filter(fn (User $user): bool => ApprovalTypeRegistry::userCanViewRecord(
+                $user,
+                $approvable->getMorphClass(),
+                (int) $approvable->getKey(),
+            ))
+            ->values();
         if ($recipients->isEmpty()) {
             return;
         }

@@ -393,16 +393,19 @@ class ApprovalEscalationService
     {
         if ($rec->approver_id) {
             $u = User::find($rec->approver_id);
-            if ($u && $u->is_active) {
+            if ($u && $u->is_active && $this->canOpenApproval($u, $rec)) {
                 return $u;
             }
         }
 
-        return User::query()
+        $roleUser = User::query()
             ->whereHas('role', fn ($q) => $q->where('slug', $rec->role_slug))
             ->where('is_active', true)
             ->orderBy('id')
-            ->first();
+            ->get()
+            ->first(fn (User $user): bool => $this->canOpenApproval($user, $rec));
+
+        return $roleUser;
     }
 
     private function resolveSuperior(ApprovalRecord $rec): ?User
@@ -419,6 +422,17 @@ class ApprovalEscalationService
             ->whereHas('role', fn ($q) => $q->where('slug', $superiorRole))
             ->where('is_active', true)
             ->orderBy('id')
-            ->first();
+            ->get()
+            ->first(fn (User $user): bool => $this->canOpenApproval($user, $rec));
+    }
+
+    private function canOpenApproval(User $user, ApprovalRecord $rec): bool
+    {
+        $class = (string) $rec->approvable_type;
+        if (ApprovalTypeRegistry::forClass($class) === null) {
+            return true;
+        }
+
+        return ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $rec->approvable_id);
     }
 }

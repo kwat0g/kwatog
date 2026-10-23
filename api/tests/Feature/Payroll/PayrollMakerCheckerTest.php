@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Models\AuditLog;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Services\PayrollPeriodService;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,6 +106,30 @@ class PayrollMakerCheckerTest extends TestCase
             'model_type' => PayrollPeriod::class,
             'model_id'   => $period->id,
             'user_id'    => $checker->id,
+        ]);
+    }
+
+    public function test_pending_approval_notice_includes_authorized_delegate(): void
+    {
+        $finance = $this->userWithRole('finance_officer');
+        $delegate = $this->userWithRole('hr_officer');
+        $period = PayrollPeriod::factory()->create(['created_by' => null]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
+        ApprovalDelegation::create([
+            'delegator_user_id' => $finance->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        app(PayrollPeriodService::class)->notifyPendingApproval($period);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $delegate->id,
+            'type' => 'approval.action_required',
         ]);
     }
 
