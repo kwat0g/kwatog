@@ -130,7 +130,7 @@ export default function BudgetDetailPage() {
 
   const canSubmit = budget.status === 'draft' && canManage;
   const canApproveAction = budget.status === 'submitted' && canApproveBudget && budget.can_approve === true;
-  const canReject = budget.status === 'submitted' && canApproveBudget;
+  const canReject = budget.status === 'submitted' && canApproveBudget && budget.can_approve === true;
   const canDelete = budget.status === 'draft' && canManage;
   const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
 

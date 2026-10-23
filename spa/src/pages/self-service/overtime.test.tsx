@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { selfServiceApi } from '@/api/self-service';
+import type { SelfServiceOvertimeRequest } from '@/types/self-service';
 import SelfServiceOvertimePage from './overtime';
 
 vi.mock('@/api/self-service', () => ({ selfServiceApi: { overtime: vi.fn(), applyOvertime: vi.fn() } }));
@@ -37,4 +38,29 @@ it.each(['2026-10-10', '2026-10-11'])('blocks past overtime dates and accepts %s
   await waitFor(() => expect(selfServiceApi.applyOvertime).toHaveBeenCalledWith({
     date: allowedDate, hours_requested: 0.5, reason: 'Manual overtime test',
   }));
+});
+
+it('opens only the overtime request named by its deep link', async () => {
+  const request = (id: string, reason: string): SelfServiceOvertimeRequest => ({
+    id, date: '2026-10-10', hours_requested: '2.0', reason, status: 'approved',
+    status_label: 'Approved', rejection_reason: null, cancelled_at: null,
+    can_restore: false, approver: 'Approver', created_at: '2026-10-09T00:00:00Z',
+  });
+  vi.mocked(selfServiceApi.overtime).mockResolvedValue({
+    pending: [], history: [request('ot-selected', 'selected request'), request('ot-other', 'other request')],
+    todays_shift: null, hourly_rate: null, minimum_hours: 0.5, maximum_hours: 4, premium_multiplier: 1.25,
+  });
+
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={['/self-service/overtime/ot-selected']}>
+        <Routes><Route path="/self-service/overtime/:id" element={<SelfServiceOvertimePage />} /></Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+
+  expect(await screen.findByText('selected request')).toBeInTheDocument();
+  expect(screen.queryByText('other request')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Apply for OT' })).not.toBeInTheDocument();
+  expect(selfServiceApi.overtime).toHaveBeenCalledWith('ot-selected');
 });

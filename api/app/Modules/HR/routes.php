@@ -234,6 +234,7 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/payslips', [SelfServiceController::class, 'payslips']);
         Route::get('/payslips/{id}/download', [SelfServiceController::class, 'payslip']);
         Route::get('/loans', [SelfServiceController::class, 'loans']);
+        Route::get('/loans/{id}', [SelfServiceController::class, 'loans']);
         Route::post('/loans', [SelfServiceController::class, 'applyLoan']);
         Route::delete('/loans/{id}/cancel', [SelfServiceController::class, 'cancelLoan']);
         Route::get('/profile', [SelfServiceController::class, 'profile']);
@@ -242,6 +243,7 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
 
         // Task SS1 — overtime requests (scoped to the session employee).
         Route::get('/overtime', [SelfServiceController::class, 'overtime']);
+        Route::get('/overtime/{id}', [SelfServiceController::class, 'overtime']);
         Route::post('/overtime', [SelfServiceController::class, 'applyOvertime']);
         Route::delete('/overtime/{id}', [SelfServiceController::class, 'cancelOvertime']);
         Route::patch('/overtime/{id}/restore', [SelfServiceController::class, 'restoreOvertime'])->middleware('throttle:10,1');

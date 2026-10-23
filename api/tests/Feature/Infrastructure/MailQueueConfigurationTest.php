@@ -108,6 +108,8 @@ class MailQueueConfigurationTest extends TestCase
     {
         config([
             'mail.default' => 'array',
+            'mail.from.address' => 'erp@example.test',
+            'mail.from.name' => 'OGAMI ERP Test',
             'mail.safety_recipient' => 'mailpit@example.test',
             'app.env' => 'testing',
         ]);

@@ -26,5 +26,7 @@ The same `UserNotificationMail` renders most email-enabled `NotificationService:
 
 - EF-041 and EF-043: fixed in draft PR #256. Recipient lists are private; failed delivery alerts authorized active Sales users.
 - EF-042: central active-user and address validation fixed in draft PR #256. Caller-specific record visibility and RBAC still require exhaustive E-023 review; the mail template does not infer permissions from a notification type.
+- EF-044: employee maintenance repair rejection previously pointed to a supervisor-only route, and the assigned employee's submit-repair request was blocked by route/FormRequest permission checks. Fixed in draft PR #257 with the existing order-scoped maintenance access rule and an employee self-service link.
+- EF-045: customer sales-order response notifications previously omitted effective permission grants and failed to honor revocations. Fixed in draft PR #258 through `usersWithPermission()`; caller audit continues for remaining call sites.
 - Callers can include confidential or highly sensitive context in generic message text. HR/accounting/data-protection review remains required.
 - Company settings used by the test seeder are fixtures, not approval of production company contact values.

@@ -2,6 +2,7 @@ import { reportMutationError } from '@/lib/formErrors';
 /** U3 — Self-service > Loans. Lists active + history; lets employee apply. */
 import { useEffect, useState } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -104,13 +105,14 @@ function loanColumns(
 }
 
 export default function SelfServiceLoansPage() {
+ const { id } = useParams<{ id: string }>();
  const queryClient = useQueryClient();
  const [showApply, setShowApply] = useState(false);
  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery<SelfServiceLoansResponse>({
- queryKey: ['self-service', 'loans'],
- queryFn: () => selfServiceApi.loans(),
+ queryKey: ['self-service', 'loans', id],
+ queryFn: () => selfServiceApi.loans(id),
  });
 
  const apply = useMutation({
@@ -140,22 +142,27 @@ export default function SelfServiceLoansPage() {
   });
 
  const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);
+ const activeLoans = data?.active.filter((loan) => !id || loan.id === id) ?? [];
+ const historyLoans = data?.history.filter((loan) => !id || loan.id === id) ?? [];
+ const selectedLoanMissing = Boolean(id && data && activeLoans.length + historyLoans.length === 0);
  const hasActiveLoan = (data?.active.length ?? 0) > 0;
  const loanTypeLabels = new Map((data?.loan_types ?? []).map((type) => [type.value, type.label]));
 
  return (
  <div>
  <PageHeader
- title="Loans & Cash Advances"
- subtitle={data ? `${data.active.length} active · ${data.history.length} past` : undefined}
- actions={
+ title={id ? 'Loan request' : 'Loans & Cash Advances'}
+ subtitle={id ? undefined : data ? `${data.active.length} active · ${data.history.length} past` : undefined}
+ backTo={id ? '/self-service/loans' : undefined}
+ backLabel={id ? 'Loans & Cash Advances' : undefined}
+ actions={!id && (
  <Button variant="primary" size="sm" icon={<LuPlus size={14} />} disabled={!data || isError || hasActiveLoan} onClick={() => setShowApply(true)}>
  Apply for a loan
  </Button>
- }
+ )}
  />
  <div className="px-5 py-4 space-y-4">
- {hasActiveLoan && <p role="status" className="text-sm text-muted">You already have a pending or active loan or cash advance. No new request is allowed until it is closed.</p>}
+ {!id && hasActiveLoan && <p role="status" className="text-sm text-muted">You already have a pending or active loan or cash advance. No new request is allowed until it is closed.</p>}
  {isLoading && <SkeletonTable columns={7} rows={4} />}
 
  {isError && (
@@ -171,7 +178,8 @@ export default function SelfServiceLoansPage() {
  />
  )}
 
- {data && totalCount === 0 && (
+ {selectedLoanMissing && <EmptyState icon="alert-circle" title="Loan request not found" description="This request is unavailable in your account." />}
+ {data && !id && totalCount === 0 && (
  <EmptyState
  icon="inbox"
  title="No loans yet"
@@ -184,32 +192,32 @@ export default function SelfServiceLoansPage() {
  />
  )}
 
- {data && data.active.length > 0 && (
+ {data && activeLoans.length > 0 && (
  <section aria-label="Active loans">
  <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
- Active · {data.active.length}
+ Active · {activeLoans.length}
  </h2>
- <DataTable columns={loanColumns(loanTypeLabels, (id) => setConfirmCancel(id))} data={data.active} stickyHeader={false} />
+ <DataTable columns={loanColumns(loanTypeLabels, (id) => setConfirmCancel(id))} data={activeLoans} stickyHeader={false} />
  </section>
  )}
 
- {data && data.history.length > 0 && (
+ {data && historyLoans.length > 0 && (
  <section aria-label="Loan history">
  <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
- History · {data.history.length}
+ History · {historyLoans.length}
  </h2>
- <DataTable columns={loanColumns(loanTypeLabels)} data={data.history} stickyHeader={false} />
+ <DataTable columns={loanColumns(loanTypeLabels)} data={historyLoans} stickyHeader={false} />
  </section>
  )}
 
- <ApplyLoanModal
+ {!id && <ApplyLoanModal
  isOpen={showApply && !hasActiveLoan}
  onClose={() => setShowApply(false)}
  onSubmit={(v) => { if (data && !isError && !hasActiveLoan) apply.mutate(v); }}
  pending={apply.isPending}
  loanTypes={data?.loan_types ?? []}
  maxPayPeriods={data?.max_pay_periods}
- />
+ />}
 
   <ConfirmDialog
   isOpen={confirmCancel !== null}

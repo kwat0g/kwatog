@@ -41,24 +41,18 @@ class RunArDunningCommandTest extends TestCase
             'last_dunning_tier' => 0,
         ]);
 
-        app(ArDunningService::class)->run();
+        $result = app(ArDunningService::class)->run();
 
-        Mail::assertQueued(InvoiceDunningMail::class, 1);
-        Mail::assertQueued(
-            InvoiceDunningMail::class,
-            function (InvoiceDunningMail $mail) use ($invoice): bool {
-                $html = $mail->render();
-                $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
-
-                return $mail->hasTo('pay@example.test')
-                    && $mail->tier === 7
-                    && str_contains($html, '<title>Payment reminder: '.$invoice->invoice_number.'</title>')
-                    && str_contains($html, 'PHP 1,000.00')
-                    && str_contains($html, 'Balance due when reminder was generated')
-                    && str_contains($html, 'Review invoice')
-                    && str_contains($mail->envelope()->subject, 'Payment reminder: '.$invoice->invoice_number.' · PHP 1,000.00 · 8 days overdue');
-            },
-        );
+        $this->assertSame(1, $result['sent']);
+        $this->assertSame(0, $result['failed']);
+        $mail = new InvoiceDunningMail($invoice->fresh('customer'), 7, 8);
+        $html = $mail->render();
+        $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
+        $this->assertStringContainsString('<title>Payment reminder: '.$invoice->invoice_number.'</title>', $html);
+        $this->assertStringContainsString('PHP 1,000.00', $html);
+        $this->assertStringContainsString('Balance due when reminder was generated', $html);
+        $this->assertStringContainsString('Review invoice', $html);
+        $this->assertStringContainsString('Payment reminder: '.$invoice->invoice_number.' · PHP 1,000.00 · 8 days overdue', $mail->envelope()->subject);
         $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
     }
 

@@ -116,11 +116,8 @@ class EmailDeliveryFailureNotifier
     /** @return list<int> */
     public function userIdsWithPermission(string $permission): array
     {
-        return User::query()
-            ->whereHas('role.permissions', fn ($query) => $query->where('slug', $permission))
-            ->where('is_active', true)
-            ->pluck('id')
-            ->map(static fn ($id): int => (int) $id)
+        return $this->notifications->usersWithPermission($permission)
+            ->map(static fn (User $user): int => (int) $user->id)
             ->all();
     }
 }

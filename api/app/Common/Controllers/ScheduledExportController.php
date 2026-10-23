@@ -11,6 +11,7 @@ use App\Common\Resources\ScheduledExportResource;
 use App\Common\Services\Export\ExportColumnRegistry;
 use App\Common\Services\Export\ExportRunner;
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,7 +31,7 @@ class ScheduledExportController
         $user = $request->user();
         abort_unless($user, 401);
 
-        $query = ScheduledExport::query()->with('owner:id,name');
+        $query = ScheduledExport::query()->with('owner:id,name,email');
         $trashed = (string) $request->query('trashed', '');
         if ($trashed === 'with') {
             $query->withTrashed();
@@ -51,7 +52,7 @@ class ScheduledExportController
     public function show(ScheduledExport $scheduledExport, Request $request): ScheduledExportResource
     {
         $this->authorizeRow($scheduledExport, $request);
-        return new ScheduledExportResource($scheduledExport->load('owner:id,name'));
+        return new ScheduledExportResource($scheduledExport->load('owner:id,name,email'));
     }
 
     public function store(Request $request): \Illuminate\Http\JsonResponse
@@ -60,6 +61,7 @@ class ScheduledExportController
         abort_unless($user, 401);
 
         $data = $this->validatePayload($request);
+        $data['recipients'] = [$this->validOwnerEmail($user)];
         $defaultTime = $this->settings->requiredString('exports.default_time_of_day');
         $frequency = ExportFrequency::from($data['frequency']);
         $next = $frequency->nextRunFrom(
@@ -85,7 +87,7 @@ class ScheduledExportController
             'is_active'    => true,
         ]);
 
-        return (new ScheduledExportResource($row->load('owner:id,name')))
+        return (new ScheduledExportResource($row->load('owner:id,name,email')))
             ->response()
             ->setStatusCode(201);
     }
@@ -95,6 +97,9 @@ class ScheduledExportController
         $this->authorizeRow($scheduledExport, $request);
 
         $data = $this->validatePayload($request, partial: true, existing: $scheduledExport);
+        $owner = User::query()->find($scheduledExport->owner_id);
+        abort_unless($owner instanceof User, 404);
+        $data['recipients'] = [$this->validOwnerEmail($owner)];
         $scheduledExport->fill($data);
         $defaultTime = $this->settings->requiredString('exports.default_time_of_day');
 
@@ -111,7 +116,7 @@ class ScheduledExportController
         }
 
         $scheduledExport->save();
-        return new ScheduledExportResource($scheduledExport->fresh()->load('owner:id,name'));
+        return new ScheduledExportResource($scheduledExport->fresh()->load('owner:id,name,email'));
     }
 
     public function destroy(ScheduledExport $scheduledExport, Request $request): JsonResponse
@@ -183,17 +188,32 @@ class ScheduledExportController
             : (array) ($existing?->filters ?? []);
         $data['filters'] = ExportColumnRegistry::validateFilters($module, $filters);
 
-        // Export recipients are deliberately limited to validated email
-        // addresses here. An approved-domain policy is a deployment/business
-        // decision and must not be guessed from the sender address; the
-        // unresolved policy remains recorded in the module fix log.
+        // Reject additional addresses: the generated rows are authorized for
+        // the schedule owner, not every address a user can type.
         if (array_key_exists('recipients', $data)) {
-            $data['recipients'] = array_values(array_unique($data['recipients']));
-        } elseif ($existing !== null) {
-            $data['recipients'] = array_values(array_unique((array) $existing->recipients));
+            $owner = $existing === null ? $user : User::query()->find($existing->owner_id);
+            $ownerEmail = $owner instanceof User ? trim((string) $owner->email) : '';
+            if (count($data['recipients']) !== 1 || ! is_string($data['recipients'][0] ?? null)
+                || strtolower(trim($data['recipients'][0])) !== strtolower($ownerEmail)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'recipients' => 'Scheduled exports can only be sent to the schedule owner.',
+                ]);
+            }
         }
 
         return $data;
+    }
+
+    private function validOwnerEmail(User $owner): string
+    {
+        $email = trim((string) $owner->email);
+        if (! $owner->is_active || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'recipients' => 'The schedule owner needs an active account with a valid email address.',
+            ]);
+        }
+
+        return $email;
     }
 
     private function authorizeRow(ScheduledExport $row, Request $request): void

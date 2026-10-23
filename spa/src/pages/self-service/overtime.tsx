@@ -8,6 +8,7 @@ import { reportMutationError } from '@/lib/formErrors';
  */
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
@@ -129,14 +130,18 @@ function requestColumns(
 }
 
 export default function SelfServiceOvertimePage() {
+  const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['self-service', 'overtime'],
-    queryFn: () => selfServiceApi.overtime(),
+    queryKey: ['self-service', 'overtime', id],
+    queryFn: () => selfServiceApi.overtime(id),
   });
+  const pendingRequests = data?.pending.filter((request) => !id || request.id === id) ?? [];
+  const historyRequests = data?.history.filter((request) => !id || request.id === id) ?? [];
+  const selectedRequestMissing = Boolean(id && data && pendingRequests.length + historyRequests.length === 0);
 
   const cancel = useMutation({
     mutationFn: (id: string) => selfServiceApi.cancelOvertime(id),
@@ -159,9 +164,11 @@ export default function SelfServiceOvertimePage() {
   return (
     <div>
       <PageHeader
-        title="Overtime Requests"
-        subtitle={data ? `${data.pending.length} pending · ${data.history.length} past` : undefined}
-        actions={
+        title={id ? 'Overtime request' : 'Overtime Requests'}
+        subtitle={id ? undefined : data ? `${data.pending.length} pending · ${data.history.length} past` : undefined}
+        backTo={id ? '/self-service/overtime' : undefined}
+        backLabel={id ? 'Overtime requests' : undefined}
+        actions={!id && (
           <Button
             variant="primary"
             size="sm"
@@ -170,7 +177,7 @@ export default function SelfServiceOvertimePage() {
           >
             Apply for OT
           </Button>
-        }
+        )}
       />
       <div className="px-5 py-4 space-y-4">
         {/* LOADING */}
@@ -191,7 +198,10 @@ export default function SelfServiceOvertimePage() {
         )}
 
         {/* DATA */}
-        {data && data.pending.length === 0 && data.history.length === 0 && (
+        {selectedRequestMissing && (
+          <EmptyState icon="alert-circle" title="Request not found" description="This request is unavailable in your account." />
+        )}
+        {data && !id && data.pending.length === 0 && data.history.length === 0 && (
           <EmptyState
             icon="clipboard-list"
             title="No overtime requests yet"
@@ -208,33 +218,33 @@ export default function SelfServiceOvertimePage() {
           />
         )}
 
-        {data && data.pending.length > 0 && (
+        {data && pendingRequests.length > 0 && (
           <section aria-label="Pending overtime requests">
             <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
-              Pending · {data.pending.length}
+              Pending · {pendingRequests.length}
             </h2>
             <DataTable
               columns={requestColumns((id) => setConfirmCancel(id))}
-              data={data.pending}
+              data={pendingRequests}
               stickyHeader={false}
             />
           </section>
         )}
 
-        {data && data.history.length > 0 && (
+        {data && historyRequests.length > 0 && (
           <section aria-label="Overtime history">
             <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
-              History · {data.history.length}
+              History · {historyRequests.length}
             </h2>
             <DataTable
               columns={requestColumns(undefined, (id) => restore.mutate(id))}
-              data={data.history}
+              data={historyRequests}
               stickyHeader={false}
             />
           </section>
         )}
 
-        {data && (
+        {data && !id && (
           <ApplyOvertimeModal
             isOpen={modalOpen}
             onClose={() => setModalOpen(false)}

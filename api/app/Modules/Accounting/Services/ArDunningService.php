@@ -184,10 +184,7 @@ class ArDunningService
 
     private function notifyArOfficers(Invoice $invoice, int $daysOverdue): void
     {
-        $officers = User::query()
-            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.view'))
-            ->where('is_active', true)
-            ->get();
+        $officers = $this->notifications->usersWithPermission('accounting.invoices.view');
         if ($officers->isEmpty()) {
             return;
         }
@@ -204,11 +201,8 @@ class ArDunningService
     /** @return list<int> */
     private function arOfficerIds(): array
     {
-        return User::query()
-            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.view'))
-            ->where('is_active', true)
-            ->pluck('id')
-            ->map(static fn ($id): int => (int) $id)
+        return $this->notifications->usersWithPermission('accounting.invoices.view')
+            ->map(static fn (User $user): int => (int) $user->id)
             ->all();
     }
 

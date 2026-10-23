@@ -14,11 +14,10 @@ use Illuminate\Support\Facades\Mail;
 /**
  * OGAMI-016 — unread-notification digest.
  *
- * Batches each user's UNREAD in-app notifications into a single summary email.
- * Read state is left untouched (the digest is a reminder, not a "mark read"
- * action). Only users who opted into the `digest` channel and have at least
- * one unread notification receive mail. Idempotent: re-runs simply
- * re-summarise whatever is still unread.
+ * Counts each user's unread in-app notifications for a summary email. It never
+ * reads notification payloads. Read state is left untouched; only active users
+ * who opted into the `digest` channel and have at least one unread item receive
+ * mail. Re-runs report whatever remains unread.
  *
  * **Opt-in is resolved first, and that ordering is the whole design.** The
  * original implementation selected every unread row for every user in the
@@ -39,8 +38,6 @@ class NotificationDigestService
     /** Users processed per batch, bounding peak memory regardless of subscriber count. */
     private const USER_CHUNK = 100;
 
-    public function __construct(private readonly int $maxItemsPerUser = 20) {}
-
     /**
      * @return array{users_evaluated:int, emails_sent:int, notifications_summarised:int, failures:int}
      */
@@ -52,21 +49,16 @@ class NotificationDigestService
         $failures = 0;
 
         foreach (array_chunk($this->subscriberIds(), self::USER_CHUNK) as $userIds) {
-            // Keep the exact unread total separate from the display window.
-            // The item query must never load an unbounded backlog merely to
-            // calculate the count shown in the digest.
+            // Count without loading titles or message bodies into the mail job.
             $unreadCounts = $this->unreadCountsFor($userIds);
 
             if ($unreadCounts->isEmpty()) {
                 continue;
             }
 
-            $unreadByUser = $this->unreadFor($unreadCounts->keys()->map(
-                static fn ($id): int => (int) $id,
-            )->all());
-
             $users = User::query()
                 ->whereIn('id', $unreadCounts->keys()->all())
+                ->where('is_active', true)
                 ->get()
                 ->keyBy('id');
 
@@ -74,18 +66,15 @@ class NotificationDigestService
                 $evaluated++;
 
                 $user = $users->get((int) $userId);
-                if (! $user || ! is_string($user->email)
-                    || filter_var($user->email, FILTER_VALIDATE_EMAIL) === false) {
+                if (! $user || ! is_string($user->email) || filter_var(trim($user->email), FILTER_VALIDATE_EMAIL) === false) {
                     continue;
                 }
 
-                $rows = $unreadByUser->get((int) $userId, collect());
                 $total = (int) $unreadCount;
 
                 try {
-                    Mail::to($user->email)->queue(new NotificationDigestMail(
+                    Mail::to(trim($user->email))->queue(new NotificationDigestMail(
                         $user->name ?? null,
-                        $this->summarise($rows),
                         $total,
                         (int) $user->id,
                     ));
@@ -116,13 +105,27 @@ class NotificationDigestService
      */
     private function subscriberIds(): array
     {
-        return DB::table('notification_preferences')
+        $ids = DB::table('notification_preferences')
             ->where('channel', 'digest')
             ->where('enabled', true)
             ->whereIn('notification_type', self::GLOBAL_OPT_IN_TYPES)
             ->distinct()
             ->orderBy('user_id')
             ->pluck('user_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return User::query()
+            ->whereIn('id', $ids)
+            ->where('is_active', true)
+            ->get(['id', 'email'])
+            ->filter(static fn (User $user): bool => is_string($user->email)
+                && filter_var(trim($user->email), FILTER_VALIDATE_EMAIL) !== false)
+            ->pluck('id')
             ->map(static fn ($id): int => (int) $id)
             ->all();
     }
@@ -150,63 +153,4 @@ class NotificationDigestService
             ->map(static fn ($count): int => (int) $count);
     }
 
-    /**
-     * Newest notifications for a bounded set of users, limited per user.
-     *
-     * A window function keeps this to one item query per subscriber batch,
-     * while the outer filter prevents the PHP process from materialising an
-     * entire unread backlog for every opted-in user.
-     *
-     * @param  array<int, int>  $userIds
-     * @return Collection<int, Collection<int, object>>
-     */
-    private function unreadFor(array $userIds): Collection
-    {
-        if ($userIds === [] || $this->maxItemsPerUser === 0) {
-            return collect();
-        }
-
-        $ranked = DB::table('notifications')
-            ->select([
-                'id',
-                'notifiable_id',
-                'type',
-                'data',
-                'created_at',
-            ])
-            ->selectRaw(
-                'ROW_NUMBER() OVER (PARTITION BY notifiable_id ORDER BY created_at DESC, id DESC) as notification_rank',
-            )
-            ->whereNull('read_at')
-            ->where('notifiable_type', User::class)
-            ->whereIn('notifiable_id', $userIds);
-
-        return DB::query()
-            ->fromSub($ranked, 'ranked_notifications')
-            ->where('notification_rank', '<=', $this->maxItemsPerUser)
-            ->orderBy('notifiable_id')
-            ->orderBy('notification_rank')
-            ->get(['notifiable_id', 'type', 'data', 'created_at'])
-            ->groupBy('notifiable_id');
-    }
-
-    /**
-     * @param  Collection<int, object>  $rows
-     * @return array<int, array{title:string,message:string,link_to:string|null,type:string,created_at:string}>
-     */
-    private function summarise($rows): array
-    {
-        return $rows->take($this->maxItemsPerUser)->map(function ($r): array {
-            $data = json_decode((string) $r->data, true);
-            $data = is_array($data) ? $data : [];
-
-            return [
-                'title' => is_string($data['title'] ?? null) ? $data['title'] : 'Notification',
-                'message' => is_string($data['message'] ?? null) ? $data['message'] : '',
-                'link_to' => is_string($data['link_to'] ?? null) ? $data['link_to'] : null,
-                'type' => (string) $r->type,
-                'created_at' => (string) $r->created_at,
-            ];
-        })->values()->all();
-    }
 }

@@ -231,10 +231,7 @@ class SupplierDeliveryScheduleService
     private function notifyPurchasingOfCancellation(DeliverySchedule $schedule): void
     {
         // Same audience as a supplier PO response (SupplierResponseService).
-        $audience = User::query()
-            ->where('is_active', true)
-            ->whereHas('role.permissions', static fn ($q) => $q->where('slug', 'purchasing.po.approve'))
-            ->get();
+        $audience = $this->notifications->usersWithPermission('purchasing.po.approve');
         $poNumber = $schedule->purchaseOrder?->po_number ?? '—';
 
         $this->notifications->send($audience, 'supplier.schedule_cancelled', [

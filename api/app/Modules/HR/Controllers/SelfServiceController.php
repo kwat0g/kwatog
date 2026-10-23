@@ -213,9 +213,12 @@ class SelfServiceController
         return $this->payslipPdf->stream($payroll, $request->user());
     }
 
-    public function loans(Request $request): JsonResponse
+    public function loans(Request $request, ?string $id = null): JsonResponse
     {
         $employee = $this->currentEmployee($request);
+        $loanId = $id === null ? null : EmployeeLoan::tryDecodeHash($id);
+        abort_if($id !== null && $loanId === null, 404);
+        abort_unless($loanId === null || (Schema::hasTable('employee_loans') && EmployeeLoan::query()->whereKey($loanId)->where('employee_id', $employee->id)->exists()), 404);
 
         if (! Schema::hasTable('employee_loans')) {
             return response()->json(['data' => ['active' => [], 'history' => [], 'loan_types' => $this->loans->types(), 'max_pay_periods' => $this->settings->requiredInt('loans.max_pay_periods', 1, 120)]]);
@@ -224,16 +227,18 @@ class SelfServiceController
         $historyLimit = $this->settings->requiredInt('self_service.history_limit', 1, 500);
         $activeRows = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
+            ->when($loanId !== null, fn ($query) => $query->whereKey($loanId))
             ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value, LoanStatus::WriteOffPending->value])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
         $historyRows = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
+            ->when($loanId !== null, fn ($query) => $query->whereKey($loanId))
             ->whereNotIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value, LoanStatus::WriteOffPending->value])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->limit($historyLimit)
+            ->when($loanId === null, fn ($query) => $query->limit($historyLimit))
             ->get();
 
         $map = fn (EmployeeLoan $loan) => [
@@ -302,9 +307,12 @@ class SelfServiceController
      * The current employee's overtime requests (pending + history).
      * Always scoped to the session employee — never accepts an employee_id.
      */
-    public function overtime(Request $request): JsonResponse
+    public function overtime(Request $request, ?string $id = null): JsonResponse
     {
         $employee = $this->currentEmployee($request);
+        $overtimeId = $id === null ? null : OvertimeRequest::tryDecodeHash($id);
+        abort_if($id !== null && $overtimeId === null, 404);
+        abort_unless($overtimeId === null || (Schema::hasTable('overtime_requests') && OvertimeRequest::query()->whereKey($overtimeId)->where('employee_id', $employee->id)->exists()), 404);
 
         if (! Schema::hasTable('overtime_requests')) {
             return response()->json(['data' => [
@@ -319,9 +327,10 @@ class SelfServiceController
 
         $rows = OvertimeRequest::query()
             ->where('employee_id', $employee->id)
+            ->when($overtimeId !== null, fn ($query) => $query->whereKey($overtimeId))
             ->with('approver:id,name')
             ->orderByDesc('date')
-            ->limit($this->settings->requiredInt('self_service.history_limit', 1, 500))
+            ->when($overtimeId === null, fn ($query) => $query->limit($this->settings->requiredInt('self_service.history_limit', 1, 500)))
             ->get();
 
         $map = fn (OvertimeRequest $r) => [

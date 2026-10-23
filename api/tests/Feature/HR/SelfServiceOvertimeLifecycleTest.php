@@ -10,6 +10,7 @@ use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Common\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Tests\TestCase;
@@ -125,5 +126,32 @@ class SelfServiceOvertimeLifecycleTest extends TestCase
             ->assertNotFound();
 
         $this->assertSame(OvertimeStatus::Rejected, $ot->fresh()->status);
+    }
+
+    public function test_overtime_deep_link_returns_only_the_owners_selected_request_beyond_history_limit(): void
+    {
+        $employee = Employee::factory()->create();
+        $owner = User::factory()->create(['employee_id' => $employee->id]);
+        $otherEmployee = Employee::factory()->create();
+        $other = User::factory()->create(['employee_id' => $otherEmployee->id]);
+        app(SettingsService::class)->set('self_service.history_limit', 1);
+        $linked = OvertimeRequest::factory()->create([
+            'employee_id' => $employee->id,
+            'date' => now()->subDays(4)->toDateString(),
+        ]);
+        $linked->forceFill(['status' => OvertimeStatus::Approved->value])->save();
+        OvertimeRequest::factory()->create([
+            'employee_id' => $employee->id,
+            'date' => now()->subDay()->toDateString(),
+        ])->forceFill(['status' => OvertimeStatus::Approved->value])->save();
+
+        $this->actingAs($owner)->getJson('/api/v1/hr/self-service/overtime')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.history');
+        $this->actingAs($owner)->getJson("/api/v1/hr/self-service/overtime/{$linked->hash_id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.history')
+            ->assertJsonPath('data.history.0.id', $linked->hash_id);
+        $this->actingAs($other)->getJson("/api/v1/hr/self-service/overtime/{$linked->hash_id}")->assertNotFound();
     }
 }

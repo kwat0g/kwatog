@@ -2186,11 +2186,7 @@ class DeliveryService
      */
     private function notifyAutoInvoiceFailure(Delivery $d): void
     {
-        $recipients = User::query()
-            ->whereNull('deleted_at')
-            ->where('is_active', true)
-            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.create'))
-            ->get();
+        $recipients = $this->notifications->usersWithPermission('accounting.invoices.create');
 
         if ($recipients->isEmpty()) {
             return;

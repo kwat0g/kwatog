@@ -53,9 +53,9 @@ export const selfServiceApi = {
 
  payslipUrl: (id: string) => `/api/v1/hr/self-service/payslips/${id}/download`,
 
- loans: () =>
+ loans: (id?: string) =>
  client
- .get<{ data: SelfServiceLoansResponse }>('/hr/self-service/loans')
+ .get<{ data: SelfServiceLoansResponse }>(`/hr/self-service/loans${id ? `/${id}` : ''}`)
  .then((r) => r.data.data),
 
  applyLoan: (data: { loan_type: string; amount: string | number; periods: number; reason?: string }) =>
@@ -85,9 +85,9 @@ export const selfServiceApi = {
  .then((r) => r.data.data),
 
  // ─── Overtime (SS1) ─────────────────────────────────────────────
- overtime: () =>
+ overtime: (id?: string) =>
  client
- .get<{ data: SelfServiceOvertimeResponse }>('/hr/self-service/overtime')
+ .get<{ data: SelfServiceOvertimeResponse }>(`/hr/self-service/overtime${id ? `/${id}` : ''}`)
  .then((r) => r.data.data),
 
  applyOvertime: (payload: ApplyOvertimePayload) =>

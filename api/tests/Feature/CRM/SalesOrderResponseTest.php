@@ -11,6 +11,7 @@ use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderResponseStatus;
@@ -24,6 +25,8 @@ use App\Modules\CRM\Services\SalesOrderResponseService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -87,6 +90,49 @@ class SalesOrderResponseTest extends TestCase
             'role_id' => Role::query()->where('slug', $slug)->value('id'),
             'is_active' => true,
         ]);
+    }
+
+    public function test_customer_response_notification_uses_effective_sales_permission_audience(): void
+    {
+        $salesUser = $this->userWithRole('sales_officer');
+        $grantUser = User::factory()->create();
+        $revokedUser = $this->userWithRole('sales_officer');
+        $inactiveUser = $this->userWithRole('sales_officer');
+        $inactiveUser->update(['is_active' => false]);
+        $permissionId = Permission::query()->where('slug', 'crm.sales_orders.confirm')->value('id');
+        foreach ([[$grantUser, 'grant'], [$revokedUser, 'revoke']] as [$user, $type]) {
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $user->id,
+                'permission_id' => $permissionId,
+                'type' => $type,
+                'granted_by' => $salesUser->id,
+                'reason' => 'Sales notification audience test',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        Event::fake();
+        Mail::fake();
+        $customer = Customer::factory()->create();
+        $so = $this->makeSo($customer);
+
+        $this->svc->respond($so, (int) $customer->id, null, ['type' => 'decline']);
+
+        foreach ([$salesUser, $grantUser] as $expected) {
+            $this->assertDatabaseHas('notifications', [
+                'notifiable_type' => User::class,
+                'notifiable_id' => $expected->id,
+                'type' => 'customer.so_responded',
+            ]);
+        }
+        foreach ([$revokedUser, $inactiveUser] as $excluded) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_type' => User::class,
+                'notifiable_id' => $excluded->id,
+                'type' => 'customer.so_responded',
+            ]);
+        }
+        Mail::assertNothingQueued();
     }
 
     /* ─── respond(): customer side ───────────────────────────────── */
@@ -262,6 +308,7 @@ class SalesOrderResponseTest extends TestCase
 
     public function test_decision_email_freezes_record_values_and_sends_separately_to_valid_portal_users(): void
     {
+        config(['app.frontend_url' => 'https://erp.ogamiph.dev']);
         $customer = Customer::factory()->create([
             'email' => 'fallback@example.test',
             'contact_person' => 'Original <img src=x onerror=alert(1)> Contact',
@@ -303,7 +350,7 @@ class SalesOrderResponseTest extends TestCase
             self::assertStringContainsString('Decision: Accepted.', $html);
             self::assertStringContainsString('your response', $html);
             self::assertStringContainsString(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $html);
-            self::assertStringContainsString('https://ogamiph.dev/portal/customer/orders/'.$mail->snapshot['sales_order_hash_id'], $html);
+            self::assertStringContainsString(config('app.frontend_url').'/portal/customer/orders/'.$mail->snapshot['sales_order_hash_id'], $html);
             self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
             self::assertLessThan(102400, strlen($html));
             self::assertSame('['.app(\App\Common\Services\EmailBrandingService::class)->data()['name'].'] Sales order response accepted: '.$mail->snapshot['so_number'].' · '.app(\App\Common\Services\CurrencyDisplayService::class)->format('125.00'), $mail->envelope()->subject);

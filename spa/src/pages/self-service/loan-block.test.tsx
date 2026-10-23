@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { loansApi } from '@/api/loans';
 import { employeesApi } from '@/api/hr/employees';
@@ -47,6 +47,16 @@ function show(page: 'employee' | 'HR') {
   );
 }
 
+function showSelectedLoan() {
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={['/self-service/loans/loan-1']}>
+        <Routes><Route path="/self-service/loans/:id" element={<SelfServiceLoansPage />} /></Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 it.each(['pending', 'active', 'write_off_pending'])('blocks employee application for %s loans', async (status) => {
   vi.mocked(selfServiceApi.loans).mockResolvedValue({ active: [{ ...existingLoan, status }], history: [], loan_types: types, max_pay_periods: 12 });
   show('employee');
@@ -65,6 +75,19 @@ it('allows employee application with only cancelled history', async () => {
   await waitFor(() => expect(apply).toBeEnabled());
   fireEvent.click(apply);
   expect(await screen.findByRole('dialog')).toBeInTheDocument();
+});
+
+it('opens only the loan named by its deep link', async () => {
+  vi.mocked(selfServiceApi.loans).mockResolvedValue({
+    active: [{ ...existingLoan }, { ...existingLoan, id: 'loan-other', loan_type_label: 'Other loan' }],
+    history: [], loan_types: types, max_pay_periods: 12,
+  });
+  showSelectedLoan();
+
+  expect(await screen.findByText('Company Loan')).toBeInTheDocument();
+  expect(screen.queryByText('Other loan')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Apply for a loan' })).not.toBeInTheDocument();
+  expect(selfServiceApi.loans).toHaveBeenCalledWith('loan-1');
 });
 
 it('blocks HR submission for either type and permits another eligible employee', async () => {

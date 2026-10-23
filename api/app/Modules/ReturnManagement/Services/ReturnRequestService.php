@@ -649,10 +649,7 @@ class ReturnRequestService
     private function notifyCustomerReturnCreated(ReturnRequest $rma): void
     {
         try {
-            $audience = User::query()
-                ->where('is_active', true)
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'return_management.manage'))
-                ->get();
+            $audience = $this->notifications->usersWithPermission('return_management.manage');
             if ($audience->isEmpty()) {
                 return;
             }

@@ -45,10 +45,10 @@ class ExportAuthorizationTest extends TestCase
             'format' => 'xlsx',
             'frequency' => 'daily',
             'time_of_day' => '06:00',
-            'recipients' => ['hr@ogami.test'],
         ];
 
         $exporter = $this->userWith('hr.employees.export');
+        $payload['recipients'] = [$exporter->email];
         $this->actingAs($exporter, 'sanctum')
             ->postJson('/api/v1/scheduled-exports', $payload)
             ->assertCreated()
@@ -59,6 +59,21 @@ class ExportAuthorizationTest extends TestCase
             ->postJson('/api/v1/scheduled-exports', $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['module']);
+    }
+
+    public function test_schedule_cannot_send_an_owner_scoped_export_to_another_address(): void
+    {
+        $owner = $this->userWith('hr.employees.export');
+        $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/v1/scheduled-exports', [
+                'name' => 'Active employees',
+                'module' => 'hr.employees',
+                'columns' => ['employee_no'],
+                'frequency' => 'daily',
+                'recipients' => ['external@example.test'],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['recipients']);
     }
 
     public function test_background_execution_rejects_columns_changed_after_schedule_creation(): void

@@ -501,10 +501,7 @@ class SalesOrderResponseService
         try {
             $audience = $response->response_type === SalesOrderResponseType::CancellationRequest
                 ? $this->notifications->usersWithPermission('crm.sales_orders.cancel')
-                : User::query()
-                    ->where('is_active', true)
-                    ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.sales_orders.confirm'))
-                    ->get();
+                : $this->notifications->usersWithPermission('crm.sales_orders.confirm');
 
             $this->notifications->send($audience, 'customer.so_responded', [
                 'title'       => "Sales order {$so->so_number} — customer {$response->response_type->label()}",

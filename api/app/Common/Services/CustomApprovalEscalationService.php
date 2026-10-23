@@ -175,7 +175,7 @@ class CustomApprovalEscalationService
             'item_cost_review' => ['Supplier cost review', 'inventory.costs.approve', '/crm/price-agreements/cost-reviews'],
             'stock_count_variance' => ['Stock-count variance', 'inventory.stock_count.manage', '/inventory/stock-count?session_id='.app('hashids')->encode((int) ($row->session_id ?? 0)).'&count_item_id='.$hashId],
             'payroll_adjustment' => ['Payroll adjustment', ['payroll.adjustments.approve', 'payroll.adjustments.reject'], '/payroll/adjustments'],
-            'budget' => ['Budget', 'budgeting.approve', "/budgeting/budgets/{$hashId}"],
+            'budget' => ['Budget', 'budgeting.approve', "/budgeting/{$hashId}"],
             'budget_transfer' => ['Budget transfer', 'budgeting.approve', '/budgeting/transfers'],
             'invoice_prebill' => ['Prebill invoice', 'accounting.invoices.prebill_approve', "/accounting/invoices/{$hashId}"],
             'supplier_listing' => ['Supplier listing', 'purchasing.supplier_listings.review', '/purchasing/supplier-listings'],

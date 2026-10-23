@@ -2380,11 +2380,9 @@ class InspectionService
     private function notifyReviewers(Inspection $inspection, User $by): void
     {
         $makers = array_values(array_unique(array_filter([(int) $by->id, (int) $inspection->inspector_id])));
-        $reviewers = User::query()
-            ->where('is_active', true)
+        $reviewers = app(NotificationService::class)->usersWithPermission('quality.inspections.review')
             ->whereNotIn('id', $makers)
-            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'quality.inspections.review'))
-            ->get();
+            ->values();
 
         $stage = $inspection->stage instanceof \BackedEnum ? $inspection->stage->value : (string) $inspection->stage;
         $proposed = $inspection->proposed_result instanceof \BackedEnum

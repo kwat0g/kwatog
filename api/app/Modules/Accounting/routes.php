@@ -165,7 +165,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::post('/sync-actuals', [BudgetController::class, 'syncActuals'])->middleware('permission:budgeting.manage');
             Route::get('/sync-actuals/status', [BudgetController::class, 'syncStatus'])->middleware('permission:budgeting.view');
             Route::get('/check-availability', [BudgetController::class, 'checkAvailability'])->middleware('permission:budgeting.view');
-            Route::get('/{budget}', [BudgetController::class, 'show'])->middleware('permission:budgeting.view');
+            Route::get('/{budget}', [BudgetController::class, 'show']);
             Route::post('/', [BudgetController::class, 'store'])->middleware('permission:budgeting.manage');
             Route::put('/{budget}', [BudgetController::class, 'update'])->middleware('permission:budgeting.manage');
             Route::post('/{budget}/submit', [BudgetController::class, 'submit'])->middleware('permission:budgeting.manage');
@@ -177,7 +177,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
 
         Route::prefix('budget-transfers')->group(function () {
             Route::get('/', [BudgetTransferController::class, 'index'])->middleware('permission:budgeting.view');
-            Route::get('/{budgetTransfer}', [BudgetTransferController::class, 'show'])->middleware('permission:budgeting.view');
+            Route::get('/{budgetTransfer}', [BudgetTransferController::class, 'show']);
             Route::post('/', [BudgetTransferController::class, 'store'])->middleware('permission:budgeting.manage');
             Route::post('/{budgetTransfer}/approve', [BudgetTransferController::class, 'approve'])->middleware('approval_permission:budgeting.approve');
             Route::post('/{budgetTransfer}/reject', [BudgetTransferController::class, 'reject'])->middleware('approval_permission:budgeting.approve');
