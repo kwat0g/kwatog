@@ -8,6 +8,7 @@ use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
@@ -24,7 +25,10 @@ class NotifyOnPurchaseRequestApproved implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('purchasing.view')
+                    && app(PurchaseRequestAccessPolicy::class)->canView($user, $pr))
+                ->values();
 
             $this->notifications->send($audience, 'chain.pr_approved', [
                 'title'       => "PR {$pr->pr_number} Approved",
