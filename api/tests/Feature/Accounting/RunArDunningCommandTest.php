@@ -44,10 +44,15 @@ class RunArDunningCommandTest extends TestCase
         app(ArDunningService::class)->run();
 
         Mail::assertQueued(InvoiceDunningMail::class, 1);
-        Mail::assertQueued(
-            InvoiceDunningMail::class,
-            fn (InvoiceDunningMail $m) => $m->hasTo('pay@example.test') && $m->tier === 7,
-        );
+        Mail::assertQueued(InvoiceDunningMail::class, function (InvoiceDunningMail $mail) use ($invoice): bool {
+            $html = $mail->render();
+            $invoiceUrl = rtrim((string) config('app.frontend_url'), '/').'/portal/customer/invoices/'.$invoice->hash_id;
+
+            return $mail->hasTo('pay@example.test')
+                && $mail->tier === 7
+                && str_contains($html, 'View invoice in customer portal')
+                && str_contains($html, $invoiceUrl);
+        });
         $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
     }
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
-use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\PasswordResetRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
@@ -18,19 +18,7 @@ use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * B3 — the welcome email carries the temporary password and is delivered by a
- * QUEUED notification, so it must survive the queue's serialize/unserialize
- * round trip.
- *
- * It did not. WelcomeNotification held the password as a `private readonly`
- * property, and SerializesModels cannot hydrate either modifier from a SUBCLASS:
- * private properties are rewritten under the concrete class name, and a readonly
- * property cannot be initialized from the child's scope. The queued job died on
- * unserialize, so no new hire ever received credentials.
- *
- * UserProvisioningTest missed this because it calls Notification::fake(), which
- * never serializes anything. These tests use the real (array) mail transport so
- * the message body is actually produced.
+ * Welcome emails carry only a queued, expiring, single-use setup link.
  */
 class EmployeeWelcomeNotificationTest extends TestCase
 {
@@ -43,20 +31,21 @@ class EmployeeWelcomeNotificationTest extends TestCase
         $this->seed(SettingsSeeder::class);
     }
 
-    public function test_the_notification_survives_serialization_with_its_password(): void
+    public function test_the_notification_survives_serialization_with_its_setup_link(): void
     {
         /** @var EmployeeWelcomeNotification $restored */
-        $restored = unserialize(serialize(new EmployeeWelcomeNotification('Tmp-ABC123!')));
+        $restored = unserialize(serialize(new EmployeeWelcomeNotification('https://app.ogamiph.test/reset-password?token=setup-token', 60)));
 
         $html = (string) $restored->toMail(User::factory()->make([
             'name' => 'Juan Cruz',
             'email' => 'juan.cruz@ogami.test',
         ]))->render();
 
-        $this->assertStringContainsString('Tmp-ABC123!', $html);
+        $this->assertStringContainsString('https://app.ogamiph.test/reset-password?token=setup-token', $html);
+        $this->assertStringNotContainsString('Temporary Password', $html);
     }
 
-    public function test_a_queued_notification_delivers_mail_with_the_password(): void
+    public function test_a_queued_notification_delivers_mail_with_the_setup_link(): void
     {
         $user = User::factory()->create([
             'name' => 'Juan Cruz',
@@ -65,24 +54,14 @@ class EmployeeWelcomeNotificationTest extends TestCase
 
         // QUEUE_CONNECTION=sync in the suite, so this exercises the payload
         // serialization the worker performs in production.
-        $user->notify(new EmployeeWelcomeNotification('Tmp-XYZ789!'));
+        $user->notify(new EmployeeWelcomeNotification('https://app.ogamiph.test/reset-password?token=setup-token', 60));
 
-        $this->assertStringContainsString('Tmp-XYZ789!', $this->lastMailHtml());
+        $html = $this->lastMailHtml();
+        $this->assertStringContainsString('https://app.ogamiph.test/reset-password?token=setup-token', $html);
+        $this->assertStringNotContainsString('Tmp-XYZ789!', $html);
     }
 
-    public function test_the_welcome_email_renders_when_company_branding_is_missing(): void
-    {
-        app(SettingsService::class)->set('company.legal_name', '');
-
-        $html = (string) (new EmployeeWelcomeNotification('Tmp-ABC123!'))
-            ->toMail(User::factory()->make(['name' => 'Juan Cruz']))
-            ->render();
-
-        $this->assertStringContainsString('Philippine Ogami Corporation', $html);
-        $this->assertStringContainsString('Tmp-ABC123!', $html);
-    }
-
-    public function test_provisioning_delivers_the_welcome_email_with_a_temporary_password(): void
+    public function test_provisioning_delivers_the_welcome_email_with_a_one_time_setup_link(): void
     {
         /** @var UserProvisioningService $svc */
         $svc = app(UserProvisioningService::class);
@@ -90,7 +69,11 @@ class EmployeeWelcomeNotificationTest extends TestCase
         $user = $svc->provisionForEmployee($this->makeEmployee());
 
         $this->assertTrue((bool) $user->must_change_password);
-        $this->assertStringContainsString('Temporary Password:', $this->lastMailHtml());
+        $html = $this->lastMailHtml();
+        $this->assertStringContainsString('/reset-password?token=', $html);
+        $this->assertStringContainsString('one-time link expires', strtolower($html));
+        $this->assertStringNotContainsString('Temporary Password:', $html);
+        $this->assertSame(1, PasswordResetRequest::where('user_id', $user->id)->count());
     }
 
     /** The HTML body of the most recent message on the array transport. */

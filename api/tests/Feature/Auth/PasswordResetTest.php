@@ -89,6 +89,40 @@ class PasswordResetTest extends TestCase
         ]);
     }
 
+    public function test_secure_setup_link_stores_only_the_single_use_token_hash(): void
+    {
+        config(['app.frontend_url' => 'https://app.ogamiph.test']);
+        $user = $this->makeUser();
+
+        $reset = app(PasswordResetService::class)->createResetLink($user, '192.0.2.10');
+        parse_str((string) parse_url($reset['url'], PHP_URL_QUERY), $query);
+        $rawToken = (string) ($query['token'] ?? '');
+        $row = PasswordResetRequest::where('user_id', $user->id)->sole();
+
+        $this->assertStringStartsWith('https://app.ogamiph.test/reset-password?token=', $reset['url']);
+        $this->assertSame(64, strlen($rawToken));
+        $this->assertSame(hash('sha256', $rawToken), $row->token_hash);
+        $this->assertStringNotContainsString($rawToken, json_encode($row->getAttributes()));
+        $this->assertSame('192.0.2.10', $row->ip_address);
+        $this->assertTrue($row->expires_at->isFuture());
+        $this->assertGreaterThan(0, $reset['expiry_minutes']);
+    }
+
+    public function test_replacing_a_reset_link_invalidates_the_previous_token(): void
+    {
+        $user = $this->makeUser();
+        $service = app(PasswordResetService::class);
+        $first = $service->createResetLink($user);
+        $second = $service->createResetLink($user);
+
+        parse_str((string) parse_url($first['url'], PHP_URL_QUERY), $firstQuery);
+        parse_str((string) parse_url($second['url'], PHP_URL_QUERY), $secondQuery);
+
+        $this->assertNotSame($firstQuery['token'], $secondQuery['token']);
+        $this->assertSame(1, PasswordResetRequest::where('user_id', $user->id)->count());
+        $this->assertSame(hash('sha256', $secondQuery['token']), PasswordResetRequest::where('user_id', $user->id)->sole()->token_hash);
+    }
+
     public function test_forgot_password_finds_legacy_mixed_case_email(): void
     {
         Notification::fake();

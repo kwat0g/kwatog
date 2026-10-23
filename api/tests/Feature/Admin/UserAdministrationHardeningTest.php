@@ -9,8 +9,11 @@ use App\Modules\Admin\Services\UserAdminService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Tests\TestCase;
@@ -23,6 +26,35 @@ class UserAdministrationHardeningTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(SettingsSeeder::class);
+    }
+
+    public function test_user_creation_emails_a_setup_link_without_removing_the_admin_one_time_password_response(): void
+    {
+        NotificationFacade::fake();
+        config(['app.frontend_url' => 'https://app.ogamiph.test']);
+        $admin = $this->systemAdmin();
+        $employee = Employee::factory()->create(['email' => 'new.staff@ogami.test']);
+        $role = Role::where('slug', 'employee')->firstOrFail();
+
+        $response = $this->actingAs($admin)
+            ->postJson('/api/v1/admin/users', [
+                'employee_id' => $employee->hash_id,
+                'email' => $employee->email,
+                'role_id' => $role->hash_id,
+                'send_welcome' => true,
+            ])
+            ->assertCreated();
+
+        $user = User::where('email', $employee->email)->sole();
+        $this->assertNotEmpty($response->json('data.temp_password'));
+        $this->assertDatabaseHas('password_reset_requests', ['user_id' => $user->id]);
+        NotificationFacade::assertSentTo($user, WelcomeNotification::class, function (WelcomeNotification $notification) use ($user): bool {
+            $html = (string) $notification->toMail($user)->render();
+
+            return str_contains($html, 'https://app.ogamiph.test/reset-password?token=')
+                && ! str_contains($html, 'Temporary Password');
+        });
     }
 
     public function test_delegated_user_manager_cannot_assign_system_admin(): void
@@ -111,6 +143,13 @@ class UserAdministrationHardeningTest extends TestCase
             'model_id' => $target->id,
             'action' => 'password_reset',
         ]);
+        NotificationFacade::assertSentTo($target, EmployeePasswordResetNotification::class, function ($notification) use ($target): bool {
+            $html = (string) $notification->toMail($target)->render();
+
+            return str_contains($html, 'reset-password?token=')
+                && ! str_contains($html, 'Temporary Password');
+        });
+        $this->assertDatabaseHas('password_reset_requests', ['user_id' => $target->id]);
     }
 
     public function test_bulk_role_change_reports_decodable_but_missing_users(): void

@@ -11,12 +11,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 /** Queued, post-commit HR password-reset notification. */
 class EmployeePasswordResetNotification extends PasswordResetNotification implements ShouldQueue
 {
-    public function __construct(string $tempPassword)
+    public function __construct(string $resetUrl, int $expiryMinutes)
     {
-        parent::__construct($tempPassword);
-        // Lane: mail — see config/horizon.php. Notifications are mail too, and
-        // must not queue behind a listener an approver is waiting on.
-        $this->onQueue('mail');
+        parent::__construct($resetUrl, $expiryMinutes);
         $this->afterCommit();
     }
 
@@ -25,7 +22,7 @@ class EmployeePasswordResetNotification extends PasswordResetNotification implem
         app(EmailDeliveryFailureNotifier::class)->notifyPermission(
             'hr.employees.view',
             'Employee password reset email',
-            'The password reset email could not be delivered. Provide the temporary credentials through an approved channel.',
+            'The password reset link could not be delivered. Ask the employee to request a new link or use an approved support process.',
             ['reason' => 'The queued password reset notification failed.'],
         );
     }

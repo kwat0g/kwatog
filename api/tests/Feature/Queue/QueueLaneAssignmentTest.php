@@ -167,8 +167,8 @@ final class QueueLaneAssignmentTest extends TestCase
 
     public function test_common_queued_mailables_and_notifications_land_on_the_mail_lane(): void
     {
-        $this->assertSame('mail', (new EmployeeWelcomeNotification('Temp-Passw0rd!'))->queue);
-        $this->assertSame('mail', (new EmployeePasswordResetNotification('Temp-Passw0rd!'))->queue);
+        $this->assertSame('mail', (new EmployeeWelcomeNotification('https://app.ogamiph.test/reset-password?token=setup-token', 60))->queue);
+        $this->assertSame('mail', (new EmployeePasswordResetNotification('https://app.ogamiph.test/reset-password?token=reset-token', 60))->queue);
         $this->assertSame('mail', (new EmailIntegrationTestMail)->queue);
         $this->assertSame('mail', (new NotificationDigestMail(null, [], 0))->queue);
         $this->assertSame('mail', (new UserNotificationMail('test.type', ['title' => 'Test', 'message' => 'Test']))->queue);

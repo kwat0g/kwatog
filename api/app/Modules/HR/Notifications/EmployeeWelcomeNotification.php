@@ -11,16 +11,14 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 /**
  * HR account-provisioning welcome message.
  *
- * The Auth notification owns the mail wording; this module-owned wrapper adds
- * the queue and post-commit delivery boundary needed by HR provisioning.
+ * The Auth notification owns the mail wording; this wrapper applies the
+ * post-commit delivery boundary needed by HR provisioning.
  */
 class EmployeeWelcomeNotification extends WelcomeNotification implements ShouldQueue
 {
-    public function __construct(string $tempPassword)
+    public function __construct(string $resetUrl, int $expiryMinutes)
     {
-        parent::__construct($tempPassword);
-        // Lane: mail — see config/horizon.php. Same reason as the reset email.
-        $this->onQueue('mail');
+        parent::__construct($resetUrl, $expiryMinutes);
         $this->afterCommit();
     }
 
@@ -29,7 +27,7 @@ class EmployeeWelcomeNotification extends WelcomeNotification implements ShouldQ
         app(EmailDeliveryFailureNotifier::class)->notifyPermission(
             'hr.employees.view',
             'Employee welcome email',
-            'The welcome email could not be delivered. Provide the temporary credentials through an approved channel.',
+            'The account setup link could not be delivered. Ask the employee to request a password reset or use an approved support process.',
             ['reason' => 'The queued welcome notification failed.'],
         );
     }

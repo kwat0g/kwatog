@@ -1,17 +1,19 @@
-<x-mail::message>
-# Payment Reminder
+<x-mail::message :preheader="'Payment reminder for invoice '.$invoice->invoice_number.'. Balance due: ₱'.number_format((float) $invoice->balance, 2).'.'" :title="'Payment reminder: invoice '.$invoice->invoice_number">
+# Payment reminder
 
 Hi {{ $customer->contact_person ?? $customer->name ?? 'there' }},
 
-Our records show that invoice **{{ $invoice->invoice_number }}** is currently
-**{{ $daysOverdue }} days past due**.
+Our records show that invoice **{{ $invoice->invoice_number }}** is **{{ $daysOverdue }} days past due**. Please review the balance and due date below.
 
-| Field        | Value                                                |
-|--------------|------------------------------------------------------|
-| Invoice No.  | {{ $invoice->invoice_number }}                       |
-| Issue Date   | {{ optional($invoice->date)->format('M d, Y') }}     |
-| Due Date     | {{ optional($invoice->due_date)->format('M d, Y') }} |
-| Balance Due  | ₱{{ number_format((float) $invoice->balance, 2) }}   |
+| Invoice summary | Details |
+|---|---|
+| Invoice number | **{{ $invoice->invoice_number }}** |
+| Invoice date | {{ optional($invoice->date)->format('M d, Y') }} |
+| Due date | **{{ optional($invoice->due_date)->format('M d, Y') }}** |
+| Days overdue | **{{ $daysOverdue }}** |
+| Balance due | **₱{{ number_format((float) $invoice->balance, 2) }}** |
+
+<x-mail::button :url="$portalUrl">View invoice in customer portal</x-mail::button>
 
 @if ($tier >= 30)
 This invoice is **30+ days overdue**. Please remit payment immediately to
@@ -27,5 +29,5 @@ If payment has already been made, please disregard this notice and reply
 with proof of payment so we can update our records.
 
 Thanks,
-{{ config('mail.from.name') }} Accounts Receivable
+{{ config('mail.from.name', config('app.name')) }} Accounts Receivable
 </x-mail::message>

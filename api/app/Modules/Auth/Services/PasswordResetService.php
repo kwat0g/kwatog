@@ -34,28 +34,10 @@ class PasswordResetService
             return;
         }
 
-        $raw = Str::random(64);
-        $hash = hash('sha256', $raw);
-
-        // Atomic so a crash can never leave the user with their old token
-        // deleted but no replacement created (silent self-service lockout).
-        $expiryMinutes = $this->settings->requiredInt('security.password_reset_expiry_minutes', 5, 10080);
-        DB::transaction(function () use ($user, $hash, $request, $expiryMinutes): void {
-            PasswordResetRequest::where('user_id', $user->id)->delete();
-
-            PasswordResetRequest::create([
-                'user_id' => $user->id,
-                'token_hash' => $hash,
-                'expires_at' => now()->addMinutes($expiryMinutes),
-                'ip_address' => $request->ip(),
-            ]);
-        });
-
-        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
-        $url = $base.'/reset-password?token='.$raw;
+        $reset = $this->createResetLink($user, $request->ip());
 
         try {
-            $user->notify(new PasswordResetLinkNotification($url, $expiryMinutes));
+            $user->notify(new PasswordResetLinkNotification($reset['url'], $reset['expiry_minutes']));
         } catch (\Throwable $e) {
             app(EmailDeliveryFailureNotifier::class)->notifyUserId(
                 $user->id,
@@ -76,6 +58,28 @@ class PasswordResetService
         }
 
         $this->audit->internal('password.reset_requested', $user, $request);
+    }
+
+    /** @return array{url: string, expiry_minutes: int} */
+    public function createResetLink(User $user, ?string $ipAddress = null): array
+    {
+        $raw = Str::random(64);
+        $expiryMinutes = $this->settings->requiredInt('security.password_reset_expiry_minutes', 5, 10080);
+
+        // Atomic so a crash cannot delete the prior token without creating its replacement.
+        DB::transaction(function () use ($user, $raw, $ipAddress, $expiryMinutes): void {
+            PasswordResetRequest::where('user_id', $user->id)->delete();
+            PasswordResetRequest::create([
+                'user_id' => $user->id,
+                'token_hash' => hash('sha256', $raw),
+                'expires_at' => now()->addMinutes($expiryMinutes),
+                'ip_address' => $ipAddress,
+            ]);
+        });
+
+        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+
+        return ['url' => $base.'/reset-password?token='.$raw, 'expiry_minutes' => $expiryMinutes];
     }
 
     public function reset(string $token, string $newPassword, Request $request): void

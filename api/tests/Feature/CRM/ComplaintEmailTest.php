@@ -48,6 +48,10 @@ class ComplaintEmailTest extends TestCase
 
         $this->assertStringContainsString('Open', $rendered);
         $this->assertStringContainsString('Critical', $rendered);
+        $this->assertStringContainsString(
+            rtrim((string) config('app.frontend_url'), '/').'/portal/customer/complaints',
+            $rendered,
+        );
     }
 
     public function test_missing_customer_email_creates_an_internal_fallback(): void

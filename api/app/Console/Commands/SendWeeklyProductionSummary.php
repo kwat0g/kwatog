@@ -37,7 +37,13 @@ class SendWeeklyProductionSummary extends Command
             ->get();
 
         if ($users->isEmpty()) {
-            $this->warn('No production_manager/system_admin recipients found.');
+            app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+                'admin.settings.manage',
+                'Weekly production summary',
+                'No active user matches the configured production-summary roles. Review the role setting and recipient access.',
+                ['link_to' => '/admin/settings', 'entity_type' => 'production_summary'],
+            );
+            $this->warn('No active recipients match the configured production-summary roles.');
 
             return self::SUCCESS;
         }

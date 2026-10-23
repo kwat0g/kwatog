@@ -12,15 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * The password-reset twin of the welcome-email bug.
- *
- * EmployeePasswordResetNotification is a QUEUED subclass of
- * PasswordResetNotification, whose parent held the temp password as
- * `private readonly`. SerializesModels cannot hydrate either modifier from a
- * SUBCLASS, so the queued job died on unserialize and no HR-reset employee
- * ever received their new password. UserProvisioningService's reset path uses
- * Notification::fake() in its own test, which never serializes anything — so
- * this has to go through a REAL round trip.
+ * Verify that queued HR password-reset mail survives serialization without a password.
  */
 class EmployeePasswordResetNotificationTest extends TestCase
 {
@@ -36,13 +28,14 @@ class EmployeePasswordResetNotificationTest extends TestCase
     public function test_the_hr_password_reset_notification_survives_serialization(): void
     {
         /** @var EmployeePasswordResetNotification $restored */
-        $restored = unserialize(serialize(new EmployeePasswordResetNotification('Tmp-RST456!')));
+        $restored = unserialize(serialize(new EmployeePasswordResetNotification('https://app.ogamiph.test/reset-password?token=reset-token', 60)));
 
         $html = (string) $restored->toMail(User::factory()->make([
             'name' => 'Juan Cruz',
             'email' => 'juan.cruz@ogami.test',
         ]))->render();
 
-        $this->assertStringContainsString('Tmp-RST456!', $html);
+        $this->assertStringContainsString('https://app.ogamiph.test/reset-password?token=reset-token', $html);
+        $this->assertStringNotContainsString('Temporary Password', $html);
     }
 }

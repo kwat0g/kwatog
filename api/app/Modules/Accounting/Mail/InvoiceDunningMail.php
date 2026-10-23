@@ -40,6 +40,8 @@ class InvoiceDunningMail extends QueuedMailable
 
     public function content(): Content
     {
+        $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
+
         return new Content(
             markdown: 'emails.invoice-dunning',
             with: [
@@ -47,6 +49,7 @@ class InvoiceDunningMail extends QueuedMailable
                 'customer' => $this->invoice->customer,
                 'daysOverdue' => $this->daysOverdue,
                 'tier' => $this->tier,
+                'portalUrl' => $base.'/portal/customer/invoices/'.$this->invoice->hash_id,
             ],
         );
     }
