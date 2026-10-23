@@ -11,6 +11,7 @@ use App\Common\Notifications\CriticalAlertEmail;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Factories\ItemFactory;
@@ -101,17 +102,32 @@ class AlertsHardeningTest extends TestCase
         $catalog = json_decode((string) DB::table('settings')
             ->where('key', 'alerts.critical.notification_roles')
             ->value('value'), true) ?: [];
-        $catalog['scheduler_stale'] = ['system_admin'];
+        $catalog['scheduler_stale'] = ['sales_officer'];
         DB::table('settings')->where('key', 'alerts.critical.notification_roles')->update([
             'value' => json_encode($catalog),
             'updated_at' => now(),
         ]);
-        $role = Role::firstOrCreate(['slug' => 'system_admin'], ['name' => 'System Administrator']);
+        $role = Role::query()->where('slug', 'sales_officer')->firstOrFail();
         $user = User::factory()->create([
             'role_id' => $role->getKey(),
             'email' => 'alerts@ogami.test',
             'last_activity' => now(),
             'password_changed_at' => now(),
+        ]);
+        $withoutView = User::factory()->create([
+            'role_id' => $role->getKey(),
+            'email' => 'hidden-alerts@ogami.test',
+            'last_activity' => now(),
+            'password_changed_at' => now(),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $withoutView->id,
+            'permission_id' => Permission::query()->where('slug', 'alerts.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $user->id,
+            'reason' => 'Critical alert visibility test',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $alert = app(AlertEngineService::class)->raise(
@@ -126,6 +142,7 @@ class AlertsHardeningTest extends TestCase
         $this->assertSame(1, $fresh->email_attempts);
         $this->assertNotNull($fresh->notified_email_at);
         Notification::assertSentTo($user, CriticalAlertEmail::class);
+        Notification::assertNotSentTo($withoutView, CriticalAlertEmail::class);
     }
 
     public function test_critical_delivery_failure_remains_retryable_without_duplicate_attempts(): void

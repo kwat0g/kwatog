@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Common\Notifications;
 
 use App\Common\Models\Alert;
+use App\Common\Services\EmailBrandingService;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Str;
 
 /**
  * Task A2 — Email-only notification handed to the configured mail transport
@@ -24,17 +26,21 @@ class CriticalAlertEmail extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
-        $msg = (new MailMessage)
-            ->subject('[CRITICAL] '.$this->alert->title)
-            ->greeting('Critical alert')
-            ->line($this->alert->message);
+        $brandName = app(EmailBrandingService::class)->data()['name'];
+        $safeTitle = Str::limit(Str::squish(str_replace(["\r", "\n"], ' ', $this->alert->title)), 120, '…');
 
-        if ($this->alert->entity_type) {
-            $msg->line('Entity: '.class_basename($this->alert->entity_type).' #'.$this->alert->entity_id);
-        }
-
-        return $msg
-            ->action('View alerts', config('app.frontend_url', config('app.url')).'/alerts')
-            ->line('Time: '.$this->alert->created_at?->toDateTimeString());
+        return (new MailMessage)
+            ->subject('['.$brandName.'] Critical alert: '.$safeTitle)
+            ->markdown('emails.critical-alert', [
+                'preheader' => 'A critical system alert needs review.',
+                'title' => 'Critical alert needs review',
+                'alertTitle' => $this->alert->title,
+                'alertType' => $this->alert->type->label(),
+                'severity' => $this->alert->severity->label(),
+                'message' => $this->alert->message,
+                'entityType' => $this->alert->entity_type ? class_basename($this->alert->entity_type) : null,
+                'createdAt' => $this->alert->created_at?->copy()->timezone('Asia/Manila')->format('j M Y, g:i A T'),
+                'alertsUrl' => rtrim(config('app.frontend_url', config('app.url')), '/').'/alerts',
+            ]);
     }
 }

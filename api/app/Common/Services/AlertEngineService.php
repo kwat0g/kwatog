@@ -815,7 +815,10 @@ class AlertEngineService
             $users = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roleSlugs))
                 ->where('is_active', true)
-                ->get();
+                ->with('role')
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('alerts.view'))
+                ->values();
 
             if ($users->isEmpty()) {
                 throw new \RuntimeException('No active critical-alert recipients were found.');
