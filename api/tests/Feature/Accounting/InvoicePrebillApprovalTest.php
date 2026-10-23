@@ -90,6 +90,17 @@ class InvoicePrebillApprovalTest extends TestCase
     {
         $maker = $this->user('finance_officer');
         $approver = $this->user('finance_officer');
+        $withoutInvoiceRead = $this->user('finance_officer');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $withoutInvoiceRead->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'accounting.invoices.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $maker->id,
+            'reason' => 'Prebill notification access test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $withoutInvoiceRead->flushPermissionsCache();
         $invoice = $this->createPrebill($maker);
 
         $this->assertSame($maker->id, $invoice->created_by);
@@ -98,6 +109,10 @@ class InvoicePrebillApprovalTest extends TestCase
         $this->assertNull($invoice->journal_entry_id);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $approver->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $withoutInvoiceRead->id,
             'type' => 'approval.action_required',
         ]);
     }
