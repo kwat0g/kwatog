@@ -56,7 +56,7 @@ Initial inspection found local `.env` and `api/.env` configured with `APP_ENV=lo
 | E-032 | `HR/Notifications/EmployeePasswordResetNotification` | Employee account reset; employee user's address | Laravel `MailMessage`; includes temporary password. Security defect candidate: plaintext credential delivery. |
 | E-033 | `HR/Notifications/EmployeeWelcomeNotification` | Employee onboarding/user provisioning; new employee user's address | Laravel `MailMessage`; includes temporary password. Security defect candidate: plaintext credential delivery. |
 | E-034 | `Landing/Mail/ContactInquiryReceivedMail` (replaces `ContactInquiryReceivedNotification`) | Public contact inquiry accepted; configured sales inbox | Queued `QueuedMailable`; baseline email rendered user-controlled inquiry fields and linked through `APP_URL`. Redesigned in draft PR #278 with scalar snapshot, minimal body, configured SPA link, and authorized failure fallback. |
-| E-035 | `Common/Mail/EmailIntegrationTestMail` | Explicit integration-test path only | Not a production email type. `Mail::fake()` appears in email feature tests; tests were not run. |
+| E-035 | `Common/Mail/EmailIntegrationTestMail`; `emails/email-test` | Explicit feature-test construction only; no production caller found by repository search | Queued mailable on the shared `mail` lane with after-commit and bounded retries. Fixed test subject and shared settings-backed brand values; no record data or links. Shared Markdown shell generates HTML and plain text. `failed()` creates an in-app fallback for its optional user ID. PHPUnit forces `MAIL_MAILER=array`; no live send path found. See [E-035-test-harness.md](E-035-test-harness.md). |
 
 ### Other mail dispatch paths and control points
 
