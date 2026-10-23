@@ -57,3 +57,5 @@ No code-level fix was applied as part of Phase 0/1.
 - **EF-029 — Supplier decision emails are sent individually.** This avoids exposing other supplier portal users' email addresses to each recipient.
 
 - **EF-030 — Return case notices use per-address delivery keys.** The notice flow filters invalid addresses, deduplicates portal contacts, logs delivery failures, and gives staff an in-app follow-up when delivery cannot be queued.
+
+- **EF-031 — RMA update content is snapshotted before queueing.** Snapshot preserves event-time status and party data; delivery uses a stable key. Company name comes from email branding settings.
