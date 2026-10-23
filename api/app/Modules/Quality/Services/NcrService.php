@@ -45,6 +45,7 @@ use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NcrRecurrenceScan;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Support\LotDefectCounter;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -986,8 +987,8 @@ class NcrService
             // Without GRN/PO lineage there is no safe stock or credit action, so
             // the close must roll back and remain operator-actionable.
             if ($locked->disposition === NcrDisposition::ReturnToSupplier && ! $lateIncoming) {
-                $this->openSupplierReturnRmaForNcr($locked, $by);
-                $this->notifyPurchasing($locked);
+                $rma = $this->openSupplierReturnRmaForNcr($locked, $by);
+                $this->notifyPurchasing($locked, $rma);
             }
 
             if ($locked->rework_work_order_id) {
@@ -1153,7 +1154,7 @@ class NcrService
      * (`grn-rejection:<id>`): if the queue already rejected the GRN and opened
      * the RMA, this returns it rather than crediting the same goods twice.
      */
-    private function openSupplierReturnRmaForNcr(NonConformanceReport $ncr, User $by): void
+    private function openSupplierReturnRmaForNcr(NonConformanceReport $ncr, User $by): ReturnRequest
     {
         $inspection = $ncr->inspection_id ? Inspection::find($ncr->inspection_id) : null;
         if (! $inspection) {
@@ -1180,7 +1181,7 @@ class NcrService
         $poItem = $grnItem->purchaseOrderItem;
 
         try {
-            app(ReturnRequestService::class)
+            return app(ReturnRequestService::class)
                 ->openSupplierReturnForReversedGoods(
                     vendorId: (int) $grn->vendor_id,
                     purchaseOrderId: $grn->purchase_order_id ? (int) $grn->purchase_order_id : null,
@@ -1257,7 +1258,7 @@ class NcrService
         return $received;
     }
 
-    private function notifyPurchasing(NonConformanceReport $ncr): void
+    private function notifyPurchasing(NonConformanceReport $ncr, ReturnRequest $rma): void
     {
         $roles = array_values(array_filter((array) $this->settings->get('quality.ncr.return_to_supplier.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
         if ($roles === []) {
@@ -1266,7 +1267,8 @@ class NcrService
         $recipients = User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission('return_management.view'));
         if ($recipients->isEmpty()) {
             return;
         }
@@ -1276,12 +1278,11 @@ class NcrService
             : (string) $ncr->severity;
         $this->notifications->send($recipients, 'ncr.return_to_supplier', [
             'title' => "Return-to-supplier required: NCR {$ncr->ncr_number}",
-            'message' => "NCR {$ncr->ncr_number} closed with disposition return_to_supplier. Quantity: {$ncr->affected_quantity}.",
-            'link_to' => "/quality/ncrs/{$ncr->hash_id}",
+            'message' => "NCR {$ncr->ncr_number} closed with a supplier return. Review RMA {$rma->rma_number}.",
+            'link_to' => "/return-management/{$rma->hash_id}",
             'entity_type' => 'ncr',
             'entity_id' => $ncr->hash_id,
             'ncr_number' => $ncr->ncr_number,
-            'affected_qty' => (int) $ncr->affected_quantity,
             'severity' => $severity,
         ]);
     }
