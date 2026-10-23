@@ -43,7 +43,10 @@ class NotifyMissingTimeOut extends Command
         $hr = User::query()
             ->whereHas('role', fn ($q) => $q->where('slug', 'hr_officer'))
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission('attendance.view')
+                && ($user->hasPermission('attendance.edit') || $user->hasPermission('attendance.import')))
+            ->values();
 
         if ($hr->isEmpty()) {
             $this->error("No active hr_officer to notify about {$count} open attendance row(s).");
@@ -78,7 +81,10 @@ class NotifyMissingTimeOut extends Command
                 ->whereHas('role', fn ($q) => $q->where('slug', 'department_head'))
                 ->where('is_active', true)
                 ->whereHas('employee', fn ($q) => $q->where('department_id', $departmentId))
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('attendance.view')
+                    && $user->hasPermission('attendance.ot.approve'))
+                ->values();
             $department = $rows->first()->employee?->department?->name ?? "department {$departmentId}";
 
             if ($heads->isEmpty()) {
