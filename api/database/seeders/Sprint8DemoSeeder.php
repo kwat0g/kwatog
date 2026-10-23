@@ -56,7 +56,11 @@ class Sprint8DemoSeeder extends Seeder
 
     private function seedAssets(): void
     {
-        if (Asset::count() > 0) return;
+        if (Asset::count() > 0) {
+            $this->linkExistingAssets();
+
+            return;
+        }
 
         // Create one asset row per machine + mold + vehicle
         $today = Carbon::today();
@@ -108,6 +112,39 @@ class Sprint8DemoSeeder extends Seeder
                 'location'          => 'Vehicle Yard',
             ]);
             DB::table('vehicles')->where('id', $v->id)->update(['asset_id' => $asset->id]);
+        }
+    }
+
+    private function linkExistingAssets(): void
+    {
+        foreach (Machine::query()->whereNull('asset_id')->get() as $machine) {
+            $asset = Asset::query()
+                ->where('asset_code', 'AST-MCH-'.str_pad((string) $machine->id, 4, '0', STR_PAD_LEFT))
+                ->where('category', AssetCategory::Machine->value)
+                ->first();
+            if ($asset) {
+                DB::table('machines')->where('id', $machine->id)->whereNull('asset_id')->update(['asset_id' => $asset->id]);
+            }
+        }
+
+        foreach (Mold::query()->whereNull('asset_id')->get() as $mold) {
+            $asset = Asset::query()
+                ->where('asset_code', 'AST-MLD-'.str_pad((string) $mold->id, 4, '0', STR_PAD_LEFT))
+                ->where('category', AssetCategory::Mold->value)
+                ->first();
+            if ($asset) {
+                DB::table('molds')->where('id', $mold->id)->whereNull('asset_id')->update(['asset_id' => $asset->id]);
+            }
+        }
+
+        foreach (DB::table('vehicles')->whereNull('asset_id')->get() as $vehicle) {
+            $asset = Asset::query()
+                ->where('asset_code', 'AST-VEH-'.str_pad((string) $vehicle->id, 4, '0', STR_PAD_LEFT))
+                ->where('category', AssetCategory::Vehicle->value)
+                ->first();
+            if ($asset) {
+                DB::table('vehicles')->where('id', $vehicle->id)->whereNull('asset_id')->update(['asset_id' => $asset->id]);
+            }
         }
     }
 

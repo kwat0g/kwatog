@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Attendance;
 
 use App\Common\Services\SettingsService;
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -19,8 +18,8 @@ class PunchSettingsTest extends TestCase
         $s = app(SettingsService::class);
         $this->assertSame(200.0, $s->requiredFloat('company.punch_radius_m'));
         $this->assertSame(100.0, $s->requiredFloat('company.punch_max_accuracy_m'));
-        $this->assertSame(15, $s->requiredInt('attendance.punch_early_minutes'));
-        $this->assertSame(120, $s->requiredInt('attendance.punch_late_minutes'));
+        $this->assertSame(120, $s->requiredInt('attendance.punch_early_minutes'));
+        $this->assertSame(240, $s->requiredInt('attendance.punch_late_minutes'));
         $this->assertDatabaseHas('permissions', ['slug' => 'attendance.punch.audit']);
     }
 

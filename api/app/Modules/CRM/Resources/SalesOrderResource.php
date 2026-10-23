@@ -82,12 +82,14 @@ class SalesOrderResource extends JsonResource
                 'can_respond_delivery' => $this->canCustomerChange($request) && $awaitingDelivery,
                 'awaiting_delivery_response' => $awaitingDelivery,
                 'can_edit' => $this->canCustomerChange($request),
-                'can_cancel' => $this->canCustomerChange($request),
+                'can_cancel' => $this->canCustomerCancel($request),
                 'can_respond' => $this->isOpenToCustomerResponse(),
                 'can_confirm' => $this->isOpenToCustomerResponse(),
             ],
             'is_editable'        => (bool) $this->is_editable && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal,
-            'is_cancellable'     => (bool) $this->is_cancellable && $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal,
+            'is_cancellable'     => $this->resource->relationLoaded('workOrders')
+                ? app(SalesOrderService::class)->canCancel($this->resource)
+                : (bool) $this->is_cancellable,
             'item_count'         => (int) ($this->items_count ?? $this->items?->count() ?? 0),
             'customer'           => $this->whenLoaded('customer', fn () => [
                 'id'   => $this->customer?->hash_id,
@@ -211,6 +213,21 @@ class SalesOrderResource extends JsonResource
         return $user !== null && $user->customer_id === $this->customer_id
             && $this->submission_source === SalesOrderSubmissionSource::CustomerPortal
             && $this->status->isBeforeConfirmation();
+    }
+
+    private function canCustomerCancel(Request $request): bool
+    {
+        $user = $request->user('customer_portal');
+        if ($user === null || $user->customer_id !== $this->customer_id
+            || $this->submission_source !== SalesOrderSubmissionSource::CustomerPortal
+            || (! $this->status->isBeforeConfirmation()
+                && ! in_array($this->status, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction], true))) {
+            return false;
+        }
+
+        return ! ($this->relationLoaded('latestResponse')
+            && $this->latestResponse?->response_type === SalesOrderResponseType::CancellationRequest
+            && $this->latestResponse?->status === SalesOrderResponseStatus::Pending);
     }
 
     private function isOpenToCustomerResponse(): bool

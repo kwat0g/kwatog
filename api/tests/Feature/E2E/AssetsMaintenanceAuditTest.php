@@ -257,11 +257,12 @@ class AssetsMaintenanceAuditTest extends TestCase
             ->count(), 'start must open an open-ended downtime row');
 
         // ── Work log + spare-part issue decrements stock ──
-        $this->actingAs($this->maintenanceTech)
+        $workRecordId = $this->actingAs($this->maintenanceTech)
             ->postJson("/api/v1/maintenance/work-orders/{$wo['id']}/logs", [
                 'description' => 'Replaced hydraulic hose.',
             ])
-            ->assertCreated();
+            ->assertCreated()
+            ->json('data.id');
 
         $item = Item::factory()->create(['is_active' => true, 'item_type' => 'spare_part']);
         $location = WarehouseLocation::factory()->create();
@@ -277,6 +278,7 @@ class AssetsMaintenanceAuditTest extends TestCase
                 'operation_key' => Str::uuid()->toString(),
                 'item_id' => $item->hash_id,
                 'location_id' => $location->hash_id,
+                'work_record_id' => $workRecordId,
                 'quantity' => 2,
             ])
             ->assertCreated();

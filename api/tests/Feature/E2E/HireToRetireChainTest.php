@@ -345,7 +345,7 @@ class HireToRetireChainTest extends TestCase
         $this->assertSame('approved', $leave->status->value);
         $balance->refresh();
         $this->assertEquals(2.0, (float) $balance->used);
-        $this->assertEquals($creditsBefore - 2.0, (float) $balance->remaining);
+        $this->assertEqualsWithDelta($creditsBefore - 2.0, (float) $balance->remaining, 0.000001);
 
         $this->assertDatabaseHas('attendances', [
             'employee_id' => $employee->id,

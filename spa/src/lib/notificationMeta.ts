@@ -202,6 +202,7 @@ const PORTAL_BY_TYPE: Record<string, NotificationMeta> = {
   'sales_order.submitted': { icon: LuFileText, group: 'system', label: 'Orders' },
   'sales_order.confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Orders' },
   'sales_order.cancelled': { icon: LuTriangleAlert, group: 'alerts', label: 'Orders' },
+  'sales_order.cancellation_requested': { icon: LuFileText, group: 'approvals', label: 'Order cancellation' },
   'sales_order.review_requested': { icon: LuFileText, group: 'approvals', label: 'Order review' },
   'sales_order.delivery_proposed': { icon: LuCalendar, group: 'approvals', label: 'Delivery date' },
   'sales_order.delivery_decided': { icon: LuCalendar, group: 'system', label: 'Delivery date' },

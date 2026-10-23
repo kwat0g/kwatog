@@ -438,11 +438,37 @@ class CustomerPortalService
     public function cancelOrder(SalesOrder $salesOrder, CustomerPortalUser $user, ?string $reason): SalesOrder
     {
         return DB::transaction(function () use ($salesOrder, $user, $reason): SalesOrder {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             $row = SalesOrder::query()->lockForUpdate()->findOrFail($salesOrder->id);
             abort_if($row->customer_id !== $user->customer_id, 403);
-            $cancelled = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->cancel($row, $reason, $user));
-            $this->recordCustomerAudit('customer.order.cancelled', $cancelled, $user->id, $user->customer_id, ['reason' => $reason]);
-            return $cancelled;
+            if ($row->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+                throw new BusinessRuleException('Only orders submitted through your customer portal can be cancelled here.');
+            }
+
+            $blocker = $this->salesOrderService->cancellationBlocker($row, true);
+            if ($blocker === null) {
+                $cancelled = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->cancel($row, $reason, $user));
+                $this->recordCustomerAudit('customer.order.cancelled', $cancelled, $user->id, $user->customer_id, ['reason' => $reason]);
+                $cancelled->setAttribute('cancellation_outcome', 'cancelled');
+
+                return $cancelled;
+            }
+
+            if (! in_array($row->status, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction], true)) {
+                throw new BusinessRuleException($blocker);
+            }
+
+            $response = $this->salesOrderResponses->requestCancellation($row, $user, $reason);
+            if ($response->wasRecentlyCreated) {
+                $this->recordCustomerAudit('customer.order.cancellation_requested', $response, $user->id, $user->customer_id, [
+                    'sales_order_id' => $row->hash_id,
+                    'reason' => $reason,
+                ]);
+            }
+            $requested = $this->salesOrderService->show($row->fresh());
+            $requested->setAttribute('cancellation_outcome', 'requested');
+
+            return $requested;
         });
     }
 

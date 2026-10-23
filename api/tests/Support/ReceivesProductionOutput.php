@@ -409,7 +409,10 @@ trait ReceivesProductionOutput
                 ])
                 ->assertSuccessful()
                 ->assertJsonPath('data.status', InspectionStatus::Passed->value)
-                ->assertJsonPath('data.accepted_quantity', $inspection->batch_quantity);
+                ->assertJsonPath(
+                    'data.accepted_quantity',
+                    $inspection->stage === InspectionStage::Outgoing ? $inspection->batch_quantity : 0,
+                );
             $inspection->refresh();
         }
 

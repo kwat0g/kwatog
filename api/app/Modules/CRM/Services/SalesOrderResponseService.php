@@ -108,6 +108,56 @@ class SalesOrderResponseService
         });
     }
 
+    public function requestCancellation(
+        SalesOrder $so,
+        CustomerPortalUser $by,
+        ?string $reason,
+    ): SalesOrderResponse {
+        return DB::transaction(function () use ($so, $by, $reason): SalesOrderResponse {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
+            $row = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+            abort_unless((int) $row->customer_id === (int) $by->customer_id, 404);
+            if ($row->submission_source !== SalesOrderSubmissionSource::CustomerPortal
+                || ! in_array($row->status, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction], true)) {
+                throw new BusinessRuleException('Cancellation review is available only for your confirmed orders that are still active.');
+            }
+
+            $reason = trim((string) $reason);
+            if (mb_strlen($reason) > 1000) {
+                throw new BusinessRuleException('Use 1000 characters or fewer for the cancellation reason.');
+            }
+
+            $pending = $row->responses()
+                ->where('response_type', SalesOrderResponseType::CancellationRequest->value)
+                ->where('status', SalesOrderResponseStatus::Pending->value)
+                ->latest('id')
+                ->first();
+            if ($pending) {
+                return $pending->load('items');
+            }
+
+            $response = $row->responses()->create([
+                'customer_id' => $row->customer_id,
+                'portal_user_id' => $by->id,
+                'response_type' => SalesOrderResponseType::CancellationRequest,
+                'status' => SalesOrderResponseStatus::Pending,
+                'notes' => $reason !== '' ? $reason : null,
+                'responded_at' => now(),
+            ]);
+
+            $this->notifySalesAudience($row, $response);
+            $this->notifications->sendPortalInApp(CustomerPortalUser::where('customer_id', $row->customer_id)->where('is_active', true)->get(), 'sales_order.cancellation_requested', [
+                'title' => "Cancellation request received for {$row->so_number}",
+                'message' => 'Sales will review downstream production and purchasing commitments before deciding.',
+                'link_to' => '/portal/customer/orders/'.$row->hash_id,
+                'entity_type' => 'sales_order',
+                'entity_id' => $row->hash_id,
+            ], 'so:cancellation-request:'.$response->id);
+
+            return $response->load('items');
+        });
+    }
+
     public function respondToDeliveryProposal(SalesOrder $so, SalesOrderResponse $response, CustomerPortalUser $by, string $decision): SalesOrderResponse
     {
         return DB::transaction(function () use ($so, $response, $by, $decision): SalesOrderResponse {
@@ -182,7 +232,10 @@ class SalesOrderResponseService
             }
 
             $type = SalesOrderResponseType::tryFrom((string) $data['type']);
-            if ($type === null || $type === SalesOrderResponseType::DeliveryDate) {
+            if ($type === null || in_array($type, [
+                SalesOrderResponseType::DeliveryDate,
+                SalesOrderResponseType::CancellationRequest,
+            ], true)) {
                 throw new BusinessRuleException('Invalid customer response type.');
             }
 
@@ -246,10 +299,17 @@ class SalesOrderResponseService
         ?string $notes = null,
     ): SalesOrderResponse {
         return DB::transaction(function () use ($response, $by, $decision, $notes): SalesOrderResponse {
+            DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             $locked = SalesOrderResponse::query()
                 ->lockForUpdate()
                 ->with('items')
                 ->findOrFail($response->id);
+            $permission = $locked->response_type === SalesOrderResponseType::CancellationRequest
+                ? 'crm.sales_orders.cancel'
+                : 'crm.sales_orders.confirm';
+            if (! $by->hasPermission($permission)) {
+                throw new ForbiddenActionException('You do not have permission to resolve this customer response.');
+            }
             if ($locked->response_type === SalesOrderResponseType::DeliveryDate) {
                 throw new BusinessRuleException('Only the customer can accept or decline a sales delivery-date proposal.');
             }
@@ -272,6 +332,9 @@ class SalesOrderResponseService
             $so = SalesOrder::query()->lockForUpdate()->findOrFail($locked->sales_order_id);
 
             if ($decision === 'accept') {
+                if ($locked->response_type === SalesOrderResponseType::CancellationRequest) {
+                    $this->salesOrders->cancel($so, $locked->notes ?? $notes, null, $by);
+                }
                 if ($locked->response_type === SalesOrderResponseType::Propose) {
                     // Apply the counter-offer under the row locks, then re-run
                     // the same credit gate confirm() enforces before the order
@@ -297,7 +360,9 @@ class SalesOrderResponseService
                 $so->save();
             }
 
-            $this->emailCustomerDecision($locked->load('items', 'salesOrder'), $decision);
+            if ($locked->response_type !== SalesOrderResponseType::CancellationRequest || $decision !== 'accept') {
+                $this->emailCustomerDecision($locked->load('items', 'salesOrder'), $decision);
+            }
 
             return $locked->fresh()->load('items');
         });
@@ -398,10 +463,12 @@ class SalesOrderResponseService
     private function notifySalesAudience(SalesOrder $so, SalesOrderResponse $response): void
     {
         try {
-            $audience = User::query()
-                ->where('is_active', true)
-                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.sales_orders.confirm'))
-                ->get();
+            $audience = $response->response_type === SalesOrderResponseType::CancellationRequest
+                ? $this->notifications->usersWithPermission('crm.sales_orders.cancel')
+                : User::query()
+                    ->where('is_active', true)
+                    ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'crm.sales_orders.confirm'))
+                    ->get();
 
             $this->notifications->send($audience, 'customer.so_responded', [
                 'title'       => "Sales order {$so->so_number} — customer {$response->response_type->label()}",
@@ -423,6 +490,7 @@ class SalesOrderResponseService
             SalesOrderResponseType::Propose => 'The customer proposed changes to the order — review and accept or reject.',
             SalesOrderResponseType::Decline => 'The customer declined the sales order — decide whether to cancel or renegotiate.',
             SalesOrderResponseType::DeliveryDate => 'The customer '.($response->status === SalesOrderResponseStatus::Accepted ? 'accepted' : 'declined').' the proposed delivery date '.optional($response->proposed_delivery_date)->toDateString().'.',
+            SalesOrderResponseType::CancellationRequest => 'The customer requested cancellation. Review production and purchasing commitments before deciding.',
         };
     }
 

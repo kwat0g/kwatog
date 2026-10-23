@@ -15,6 +15,7 @@ use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
@@ -161,8 +162,23 @@ class WorkOrderService
             });
         }
 
-        return $q->orderByDesc('priority')
-            ->orderByDesc('planned_start')
+        $sort = in_array($filters['sort'] ?? null, ['created_at', 'planned_end'], true)
+            ? $filters['sort']
+            : 'created_at';
+        $direction = strtolower((string) ($filters['direction'] ?? 'desc'));
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'desc';
+        }
+
+        if ($sort === 'planned_end') {
+            $q->orderByRaw('planned_end IS NULL ASC')
+                ->orderBy('planned_end', $direction)
+                ->orderByDesc('created_at');
+        } else {
+            $q->orderBy('created_at', $direction);
+        }
+
+        return $q->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
@@ -1075,6 +1091,18 @@ class WorkOrderService
                 throw new BusinessRuleException('Work order not found.');
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::Cancelled);
+            if ($lockedWo->sales_order_id !== null) {
+                $salesOrder = SalesOrder::query()->lockForUpdate()->find($lockedWo->sales_order_id);
+                if ($salesOrder?->status !== SalesOrderStatus::Cancelled) {
+                    throw new BusinessRuleException('Cancel the sales order to cancel its linked work orders.');
+                }
+                if ($lockedWo->actual_start !== null
+                    || $lockedWo->materials()->where('actual_quantity_issued', '>', 0)->exists()) {
+                    throw new BusinessRuleException('Started work and issued materials must be reconciled before cancelling this work order.');
+                }
+            } elseif ($lockedWo->production_purpose !== 'stock') {
+                throw new BusinessRuleException('Only stock production work orders can be cancelled directly.');
+            }
             if ($lockedWo->rework_source_output_id) {
                 throw new BusinessRuleException('A confirmed NCR repair cannot be cancelled. Finish and account for its good or rejected pieces so the linked NCR can resolve.');
             }
