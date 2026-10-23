@@ -41,3 +41,5 @@ Date: 2026-10-20. Static findings only; reachability and runtime impact remain u
 No code-level fix was applied as part of Phase 0/1.
 
 - **EF-024 — Sales order confirmation must use event-time values.** PR #231 snapshots recipient and order details when confirmation is raised so later edits do not change queued email content.
+
+- **EF-024 — Sales order confirmation uses event-time values.** PR #231 captures recipient and order details when confirmation is raised so later edits do not alter queued content.

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Mail;
 
 use App\Common\Mail\QueuedMailable;
+use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Models\SalesOrder;
@@ -37,34 +39,47 @@ class CustomerSalesOrderConfirmedMail extends QueuedMailable
     public function envelope(): Envelope
     {
         $snapshot = $this->snapshotData();
+        $brand = app(EmailBrandingService::class)->data();
+        $total = app(CurrencyDisplayService::class)->format($snapshot['total_amount']);
 
         return new Envelope(
-            subject: "Sales Order {$snapshot['so_number']} confirmed",
+            subject: $this->safeHeaderText("[{$brand['name']}] Sales order confirmed: {$snapshot['so_number']} · {$total}"),
         );
     }
 
     public function content(): Content
     {
         $snapshot = $this->snapshotData();
-        $items = array_map(static fn (array $item): object => (object) [
+        $currency = app(CurrencyDisplayService::class);
+        $visibleItems = array_slice($snapshot['items'], 0, 10);
+        $items = array_map(fn (array $item): array => [
             ...$item,
+            'name' => $this->safeMarkdownText($item['name'], 'Item'),
+            'part_number' => $this->safeMarkdownText($item['part_number'] ?? null, ''),
             'quantity' => number_format((float) $item['quantity'], 2),
-            'product' => (object) ['name' => $item['name']],
-        ], $snapshot['items']);
+            'unit_price' => $currency->format($item['unit_price']),
+            'total' => $currency->format($item['total']),
+        ], $visibleItems);
+        $brand = app(EmailBrandingService::class)->data();
 
         return new Content(
             markdown: 'emails/customer/sales-order-confirmed',
             with: [
-                'customer' => (object) ['contact_person' => $snapshot['customer_name'], 'name' => $snapshot['customer_name']],
-                'salesOrder' => (object) [
-                    'so_number' => $snapshot['so_number'],
+                'brand' => $brand,
+                'title' => 'Sales order confirmed',
+                'preheader' => 'Sales order '.$snapshot['so_number'].' was confirmed. Review its recorded terms in the customer portal.',
+                'order' => [
+                    ...$snapshot,
+                    'customer_name' => $this->safeMarkdownText($snapshot['customer_name'], 'Customer'),
+                    'so_number' => $this->safeMarkdownText($snapshot['so_number'], 'Sales order'),
+                    'delivery_terms' => $this->safeMarkdownText($snapshot['delivery_terms'] ?? null, ''),
                     'date' => $snapshot['date'] ? \Illuminate\Support\Carbon::parse($snapshot['date'])->format('M d, Y') : null,
-                    'total_amount' => $snapshot['total_amount'],
-                    'payment_terms_days' => $snapshot['payment_terms_days'],
-                    'delivery_terms' => $snapshot['delivery_terms'],
+                    'subtotal' => isset($snapshot['subtotal']) ? $currency->format($snapshot['subtotal']) : null,
+                    'vat_amount' => isset($snapshot['vat_amount']) ? $currency->format($snapshot['vat_amount']) : null,
+                    'total_amount' => $currency->format($snapshot['total_amount']),
                 ],
                 'items' => $items,
-                'portalUrl' => $snapshot['portal_url'],
+                'remainingItemCount' => max(0, count($snapshot['items']) - count($visibleItems)),
             ],
         );
     }
@@ -89,5 +104,20 @@ class CustomerSalesOrderConfirmedMail extends QueuedMailable
     private function snapshotData(): array
     {
         return $this->snapshot ?: SalesOrderConfirmed::snapshotForEmail($this->salesOrder);
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? 'Sales order confirmed');
+    }
+
+    private function safeMarkdownText(?string $value, string $fallback): string
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $value)) ?? '');
+        if ($text === '') {
+            return $fallback;
+        }
+
+        return preg_replace('/([\\\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? $fallback;
     }
 }
