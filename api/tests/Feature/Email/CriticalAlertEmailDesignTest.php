@@ -59,4 +59,35 @@ class CriticalAlertEmailDesignTest extends TestCase
         $this->assertStringContainsString('Review alerts', $text);
         $this->assertLessThan(102_400, strlen($html));
     }
+
+    public function test_alert_text_cannot_inject_html_or_clickable_markdown_links(): void
+    {
+        $this->seed(SettingsSeeder::class);
+        config([
+            'app.env' => 'testing',
+            'app.frontend_url' => 'https://app.ogamiph.test',
+            'mail.default' => 'array',
+            'mail.from.address' => 'alerts@example.test',
+            'mail.from.name' => 'OGAMI test',
+        ]);
+        $alert = Alert::query()->create([
+            'type' => AlertType::SchedulerStale,
+            'severity' => AlertSeverity::Critical,
+            'title' => '<img src=x onerror=alert(1)> [open](https://evil.test)',
+            'message' => "<script>alert(1)</script> [sign in](https://evil.test)\nwww.evil.test/account",
+        ]);
+
+        Notification::route('mail', 'alerts@example.test')->notify(new CriticalAlertEmail($alert));
+
+        $message = Mail::mailer('array')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $html = (string) $message->getHtmlBody();
+        $text = (string) $message->getTextBody();
+
+        $this->assertStringNotContainsString('onerror=', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertStringNotContainsString('https://evil.test', $html);
+        $this->assertStringNotContainsString('www.evil.test', $html);
+        $this->assertStringContainsString('[link removed]', $html);
+        $this->assertStringContainsString('link removed', $text);
+    }
 }

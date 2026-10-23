@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
