@@ -34,7 +34,9 @@ class ApplicationStatusUpdatedMail extends QueuedMailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Application update — {$this->positionTitle}");
+        $brand = app(EmailBrandingService::class)->data();
+
+        return new Envelope(subject: $this->safeHeaderText("[{$brand['name']}] Application update: {$this->positionTitle}"));
     }
 
     public function content(): Content
@@ -45,13 +47,15 @@ class ApplicationStatusUpdatedMail extends QueuedMailable
         return new Content(
             markdown: 'emails.recruitment.application-status-updated',
             with: [
-                'applicantName' => $this->applicantName,
-                'positionTitle' => $this->positionTitle,
-                'previousStage' => $this->label($this->previousStage),
-                'currentStage' => $this->label($this->currentStage),
-                'trackingCode' => $this->trackingCode,
-                'trackingUrl' => $base.'/careers/track',
-                'companyName' => $brand['name'],
+                'title' => 'Application status update',
+                'preheader' => 'Your application status for '.$this->positionTitle.' has changed.',
+                'applicantNameForEmail' => $this->safeMarkdownText($this->applicantName, 'Applicant'),
+                'positionTitleForEmail' => $this->safeMarkdownText($this->positionTitle, 'the position'),
+                'previousStageLabel' => $this->label($this->previousStage),
+                'currentStageLabel' => $this->label($this->currentStage),
+                'trackingCodeForEmail' => $this->safeMarkdownText($this->trackingCode, 'Not available'),
+                'trackingUrlForEmail' => $base.'/careers/track',
+                'companyNameForEmail' => $this->safeMarkdownText($brand['name'], 'the company'),
             ],
         );
     }
@@ -72,6 +76,18 @@ class ApplicationStatusUpdatedMail extends QueuedMailable
 
     private function label(string $stage): string
     {
-        return ApplicationStage::tryFrom($stage)?->publicLabel() ?? ucfirst($stage);
+        return ApplicationStage::tryFrom($stage)?->publicLabel() ?? 'Application updated';
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? 'Application update');
+    }
+
+    private function safeMarkdownText(?string $value, string $fallback): string
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $value)) ?? '');
+
+        return $text === '' ? $fallback : (preg_replace('/([\\\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? $fallback);
     }
 }

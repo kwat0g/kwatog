@@ -47,3 +47,5 @@ No code-level fix was applied as part of Phase 0/1.
 - **EF-025 — Sales order decision email snapshot.** PR #233 adds event-time data for customer decisions. Recipient filtering and deduplication remain in place.
 
 - **EF-026 — Candidate email values are captured at scheduling/receipt time.** Recruitment notices now retain the relevant candidate and interview details for queued delivery.
+
+- **EF-026 — Candidate email values are captured at scheduling/receipt time.** Recruitment notices now retain relevant candidate and interview details for queued delivery.

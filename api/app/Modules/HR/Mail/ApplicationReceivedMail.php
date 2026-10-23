@@ -36,9 +36,10 @@ class ApplicationReceivedMail extends QueuedMailable
     public function envelope(): Envelope
     {
         $snapshot = $this->snapshotData();
+        $brand = app(EmailBrandingService::class)->data();
 
         return new Envelope(
-            subject: "Application Received — {$snapshot['position_title']}",
+            subject: $this->safeHeaderText("[{$brand['name']}] Application received: {$snapshot['position_title']}"),
         );
     }
 
@@ -50,11 +51,13 @@ class ApplicationReceivedMail extends QueuedMailable
         return new Content(
             markdown: 'emails.recruitment.application-received',
             with: [
-                'applicantName' => $snapshot['applicant_name'],
-                'positionTitle' => $snapshot['position_title'],
-                'trackingCode'  => $snapshot['tracking_code'],
+                'title' => 'Application received',
+                'preheader' => 'We received your application for '.$snapshot['position_title'].'.',
+                'applicantName' => $this->safeMarkdownText($snapshot['applicant_name'], 'Applicant'),
+                'positionTitle' => $this->safeMarkdownText($snapshot['position_title'], 'the position'),
+                'trackingCode'  => $this->safeMarkdownText($snapshot['tracking_code'], 'Not available'),
                 'trackingUrl'   => $snapshot['tracking_url'],
-                'companyName' => $brand['name'],
+                'companyName' => $this->safeMarkdownText($brand['name'], 'the company'),
             ],
         );
     }
@@ -90,5 +93,17 @@ class ApplicationReceivedMail extends QueuedMailable
     private function snapshotData(): array
     {
         return $this->snapshot ?: self::snapshotForEmail($this->application, $this->posting);
+    }
+
+    private function safeHeaderText(string $value): string
+    {
+        return trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', strip_tags($value)) ?? 'Application received');
+    }
+
+    private function safeMarkdownText(?string $value, string $fallback): string
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $value)) ?? '');
+
+        return $text === '' ? $fallback : (preg_replace('/([\\\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? $fallback);
     }
 }

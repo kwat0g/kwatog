@@ -1,21 +1,20 @@
-<x-mail::message>
-# Application Received
+<x-mail::message :preheader="$preheader" :title="$title">
+# Application received
 
-Dear {{ $applicantName }},
+Hello {{ $applicantName }},
 
-Thank you for your interest in {{ $companyName }}. We have received your application for the **{{ $positionTitle }}** position.
+We received your application for **{{ $positionTitle }}**. Our recruitment team will review it and contact you if there is an update.
 
-Your tracking code is: **{{ $trackingCode }}**
+<x-mail::panel>
+Your tracking code: **{{ $trackingCode }}**
+</x-mail::panel>
 
-You can check your application status at any time using this code:
+Use the tracking code on the careers page to check your application status.
 
-<x-mail::button :url="$trackingUrl">
-Track Your Application
-</x-mail::button>
-
-We will review your application and get back to you.
+<x-mail::button :url="$trackingUrl">Track your application</x-mail::button>
 
 Regards,<br>
-HR Department<br>
-{{ $companyName }}
+{{ $companyName }} Recruitment Team
+
+You received this email because an application was submitted with this email address. Keep the tracking code private.
 </x-mail::message>

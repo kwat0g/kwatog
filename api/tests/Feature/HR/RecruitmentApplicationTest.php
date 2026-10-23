@@ -21,6 +21,7 @@ use App\Modules\HR\Mail\InterviewScheduledMail;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -318,6 +319,45 @@ class RecruitmentApplicationTest extends TestCase
                 && ! str_contains($html, 'Changed Interviewer')
                 && ! str_contains($html, 'Changed Position');
         });
+    }
+
+    public function test_candidate_mail_templates_escape_untrusted_text_and_render_plain_text(): void
+    {
+        $this->application->forceFill(['first_name' => 'Juan **spoof** <img src=x>', 'last_name' => 'Test'])->save();
+        $this->posting->update(['title' => 'Engineer **spoof** <img src=x>']);
+        $interview = ApplicationInterview::create([
+            'job_application_id' => $this->application->id,
+            'scheduled_at' => '2026-11-02 09:30:00',
+            'location' => 'Room **spoof** <img src=x>',
+            'interviewer_name' => 'Ana Reyes',
+            'created_by' => $this->hrUser->id,
+        ]);
+        $this->application->load('jobPosting');
+
+        $mails = [
+            new ApplicationReceivedMail($this->application, $this->posting),
+            new ApplicationStatusUpdatedMail('Juan **spoof** <img src=x>', 'Engineer **spoof** <img src=x>', 'new', 'screening', 'RCT-TEST01', $this->application->hash_id),
+            new InterviewScheduledMail($this->application, $interview),
+            new InterviewDetailsUpdatedMail($this->application, $interview),
+        ];
+
+        foreach ($mails as $mail) {
+            $content = $mail->content();
+            $html = $mail->render();
+            $text = (string) app(Markdown::class)->renderText($content->markdown, $content->with);
+
+            $this->assertNotSame('', trim(strip_tags($text)));
+            $this->assertStringContainsString('/careers/track', $html);
+            $this->assertStringContainsString('/careers/track', $text);
+            $this->assertStringNotContainsString('<img src=x>', $html);
+            $this->assertStringNotContainsString('<strong>spoof</strong>', $html);
+        }
+
+        $statusMail = $mails[1];
+        $statusHtml = $statusMail->render();
+        $this->assertStringContainsString('Application Received', $statusHtml);
+        $this->assertStringContainsString('Under Review', $statusHtml);
+        $this->assertStringNotContainsString('>screening<', $statusHtml);
     }
 
     public function test_hr_can_reject_application(): void
