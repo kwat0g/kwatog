@@ -17,7 +17,7 @@ return new class extends Migration
         // Upgrade only the legacy default; preserve any operator-selected code.
         DB::table('settings')
             ->where('key', 'accounting.accounts.discount_code')
-            ->where('value', json_encode('4010'))
+            ->whereRaw('value::text = ?', [json_encode('4010', JSON_THROW_ON_ERROR)])
             ->update(['value' => json_encode('4040'), 'updated_at' => now()]);
     }
 
