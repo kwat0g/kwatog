@@ -6,6 +6,7 @@ namespace Tests\Feature\Notifications;
 
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
@@ -13,12 +14,15 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Modules\Leave\Listeners\NotifyOnLeavePendingHR;
+use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Services\LeaveRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -137,6 +141,84 @@ class LeaveNotificationTest extends TestCase
         LeaveRequestSubmitted::dispatch($req);
 
         Event::assertDispatched(LeaveRequestSubmitted::class, fn ($e) => $e->leaveRequest->is($req));
+    }
+
+    public function test_leave_submission_notifies_only_department_heads_with_matching_department(): void
+    {
+        $req = LeaveRequest::factory()->pendingDept()->create();
+        $departmentId = Employee::query()->whereKey($req->employee_id)->value('department_id');
+        $roleId = Role::query()->where('slug', 'department_head')->value('id');
+        $sameDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'employee_id' => Employee::factory()->create(['department_id' => $departmentId])->id,
+            'is_active' => true,
+        ]);
+        $otherDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'employee_id' => Employee::factory()->create()->id,
+            'is_active' => true,
+        ]);
+        $revokedDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'employee_id' => Employee::factory()->create(['department_id' => $departmentId])->id,
+            'is_active' => true,
+        ]);
+        $this->revokePermission($revokedDepartmentHead, 'leave.approve_dept');
+        $unlinkedDepartmentHead = User::factory()->create([
+            'role_id' => $roleId,
+            'is_active' => true,
+        ]);
+
+        app(NotifyOnLeaveSubmitted::class)->handle(new LeaveRequestSubmitted($req->fresh(['employee', 'leaveType'])));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $sameDepartmentHead->id,
+            'type' => 'leave.submitted',
+        ]);
+        foreach ([$otherDepartmentHead, $revokedDepartmentHead, $unlinkedDepartmentHead] as $recipient) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_type' => User::class,
+                'notifiable_id' => $recipient->id,
+                'type' => 'leave.submitted',
+            ]);
+        }
+    }
+
+    public function test_pending_hr_notification_excludes_users_with_revoked_hr_approval_permission(): void
+    {
+        $req = LeaveRequest::factory()->pendingHR()->create();
+        $roleId = Role::query()->where('slug', 'hr_officer')->value('id');
+        $eligibleHr = User::factory()->create(['role_id' => $roleId, 'is_active' => true]);
+        $revokedHr = User::factory()->create(['role_id' => $roleId, 'is_active' => true]);
+        $this->revokePermission($revokedHr, 'leave.approve_hr');
+
+        app(NotifyOnLeavePendingHR::class)->handle(new LeaveRequestPendingHR($req->fresh(['employee', 'leaveType'])));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $eligibleHr->id,
+            'type' => 'leave.pending_hr',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $revokedHr->id,
+            'type' => 'leave.pending_hr',
+        ]);
+    }
+
+    private function revokePermission(User $user, string $permissionSlug): void
+    {
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => Permission::query()->where('slug', $permissionSlug)->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $user->id,
+            'reason' => 'Notification audience regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user->flushPermissionsCache();
     }
 
     /**

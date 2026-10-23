@@ -33,7 +33,9 @@ class NotifyOnLeaveSubmitted implements ShouldQueue
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->when($deptId, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId)))
-                ->get();
+                ->get()
+                ->filter(fn (User $user): bool => $user->hasPermission('leave.approve_dept'))
+                ->values();
 
             $this->notifications->send($audience, 'leave.submitted', [
                 'title'       => "Leave Request from {$emp->full_name}",

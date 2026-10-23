@@ -124,6 +124,11 @@ These changes fix the route families found by static search. They do not complet
 
 Both calls happen inside their state-changing database transaction. Generic notification mail remains opt-in per notification type and is dispatched after commit by the shared notification service. This batch is source-reviewed; it adds no new runtime test.
 
+## Caller checks completed
+
+- `NotifyOnLeaveSubmitted`: the configured `department_head` role audience is filtered to the requester's department. This matches `/hr/leaves/{id}` route permission and `LeaveRequestController::authorizeView()` row scope. The employees schema requires `department_id`; an attempted null-department case was rejected by PostgreSQL, so it is not a valid runtime state. Regression coverage verifies matching-department heads receive the notice while other-department and unlinked heads do not. Remaining leave approval/completion callers still require their own audit.
+- `NotifyOnLeaveSubmitted` and `NotifyOnLeavePendingHR`: configured role membership alone did not honor individual permission revocations. Draft PR #281 now checks effective `leave.approve_dept` / `leave.approve_hr` permission before dispatch; tests ensure revoked users receive neither inbox notification nor email-eligible audience membership.
+
 ## Remaining audit work
 
 - Resolve each audience expression to role, permission, owner, approver, or external-contact rules; compare each recipient to route and record visibility.
