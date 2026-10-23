@@ -74,6 +74,7 @@ class BomSeeder extends Seeder
             $product = Product::where('part_number', $partNumber)->first();
             if (! $product) {
                 $this->command?->warn("Product '{$partNumber}' not found — run ProductSeeder first.");
+
                 continue;
             }
 
@@ -85,22 +86,25 @@ class BomSeeder extends Seeder
 
             $bom = Bom::create([
                 'product_id' => $product->id,
-                'version'    => 1,
-                'is_active'  => true,
+                // Seeded production orders run in 500-piece lots; amortize setup cost over that demo basis.
+                'cost_batch_size' => config('app.seed_demo_data') ? 500 : 1,
+                'version' => 1,
+                'is_active' => true,
             ]);
 
             foreach ($rows as $idx => [$code, $qty, $unit, $waste]) {
                 $item = Item::where('code', $code)->first();
                 if (! $item) {
                     $this->command?->warn("Item '{$code}' not found — run InventoryItemSeeder first.");
+
                     continue;
                 }
                 $bom->items()->create([
-                    'item_id'           => $item->id,
+                    'item_id' => $item->id,
                     'quantity_per_unit' => $qty,
-                    'unit'              => $unit,
-                    'waste_factor'      => $waste,
-                    'sort_order'        => $idx,
+                    'unit' => $unit,
+                    'waste_factor' => $waste,
+                    'sort_order' => $idx,
                 ]);
             }
             $created++;

@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Controllers;
 
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Resources\MrpRunResource;
 use App\Modules\MRP\Services\MrpAutomationService;
@@ -43,6 +44,22 @@ class MrpRunController
     {
         $userId = $request->user()?->id;
         $run = $this->automation->run(null, MrpRunTrigger::Manual, $userId, 'manual_recovery');
+
+        return response()
+            ->json(['data' => (new MrpRunResource($run))->toArray($request)])
+            ->setStatusCode(202);
+    }
+
+    /** Permission `mrp.plans.run` is enforced via route middleware. */
+    public function storeForSalesOrder(Request $request, SalesOrder $salesOrder): JsonResponse
+    {
+        abort_unless(
+            SalesOrder::query()->planningRelevant()->whereKey($salesOrder->id)->exists(),
+            422,
+            'Sales order is no longer eligible for MRP planning.',
+        );
+
+        $run = $this->automation->run([$salesOrder->id], MrpRunTrigger::Manual, $request->user()?->id, 'manual_recovery');
 
         return response()
             ->json(['data' => (new MrpRunResource($run))->toArray($request)])

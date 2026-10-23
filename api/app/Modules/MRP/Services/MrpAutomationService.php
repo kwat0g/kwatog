@@ -36,7 +36,9 @@ class MrpAutomationService
     ): MrpRun {
         $run = $this->engine->runForActiveSalesOrders($trigger, $userId, $salesOrderIds, $reason);
         $evaluatedIds = collect((array) ($run->summary['per_sales_order'] ?? []))
-            ->filter(static fn ($row): bool => is_array($row) && ! isset($row['error']))
+            ->filter(static fn ($row): bool => is_array($row)
+                && ! isset($row['error'])
+                && ($row['outcome'] ?? null) !== 'unchanged')
             ->pluck('so_id')
             ->map(fn ($id): int => (int) $id)
             ->filter()
@@ -68,7 +70,7 @@ class MrpAutomationService
             ->whereHas('role', fn ($role) => $role->whereIn('slug', ['ppc_head', 'sales_officer']))->with('role')->get();
         $notice = [
             'title' => $run->status === MrpRunStatus::Completed ? 'MRP planning completed' : 'MRP planning needs attention',
-            'message' => "{$run->plans_generated} plan(s) generated; {$run->failed_sales_orders} order(s) failed. "
+            'message' => "{$run->plans_generated} plan(s) updated; ".(int) ($run->summary['orders_unchanged'] ?? 0)." order(s) already up to date; {$run->failed_sales_orders} order(s) failed. "
                 .'PPC: open MRP Plans to review material shortages, planning errors, and scheduling conflicts.',
             'link_to' => '/mrp/plans', 'entity_type' => 'mrp_run', 'entity_id' => $run->hash_id,
         ];

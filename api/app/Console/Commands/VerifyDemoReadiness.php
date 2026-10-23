@@ -212,6 +212,7 @@ class VerifyDemoReadiness extends Command
                     ->selectRaw('count(*) filter (where is_pass is null) as unresolved')
                     ->selectRaw('count(*) filter (where is_pass = false) as failing')
                     ->selectRaw('count(distinct sample_index) as sampled_units')
+                    ->selectRaw("count(*) filter (where item_result is distinct from 'passed' or nullif(btrim(acceptance_criterion), '') is null) as incomplete_checklist_rows")
                     ->groupBy('inspection_id'),
                 'm',
                 'm.inspection_id',
@@ -224,7 +225,18 @@ class VerifyDemoReadiness extends Command
                 $q->whereNull('m.total')
                     ->orWhere('m.unresolved', '>', 0)
                     ->orWhere('m.failing', '>', 0)
-                    ->orWhereRaw('i.sample_size > 0 AND m.sampled_units < i.sample_size');
+                    ->orWhereRaw('i.sample_size > 0 AND m.sampled_units < i.sample_size')
+                    ->orWhere(function ($query): void {
+                        $query->where('i.inspection_mode', 'lot_checklist')
+                            ->where(function ($checklist): void {
+                                $checklist->whereNull('i.inspected_quantity')
+                                    ->orWhereColumn('i.inspected_quantity', '<', 'i.sample_size')
+                                    ->orWhereNull('i.sample_defect_count')
+                                    ->orWhere('i.sample_defect_count', '!=', 0)
+                                    ->orWhere('i.critical_defect', true)
+                                    ->orWhere('m.incomplete_checklist_rows', '>', 0);
+                            });
+                    });
             })
             ->limit(3)
             ->pluck('i.inspection_number');

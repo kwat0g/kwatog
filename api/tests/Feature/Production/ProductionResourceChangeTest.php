@@ -7,6 +7,7 @@ namespace Tests\Feature\Production;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\Alert;
 use App\Common\Services\AlertEngineService;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
@@ -66,5 +67,19 @@ class ProductionResourceChangeTest extends TestCase
             json_encode(['first_run' => $firstRun, 'second_run' => $secondRun, 'schedule' => $slot->fresh()->getAttributes()], JSON_THROW_ON_ERROR));
         $this->assertTrue($slot->fresh()->reserves_capacity);
         $this->assertSame('confirmed', $slot->fresh()->status->value);
+    }
+
+    public function test_alert_sweep_eager_loads_sales_order_for_production_delivery_risk(): void
+    {
+        [$wo, $machine, $mold] = $this->equipment();
+        $salesOrder = SalesOrder::factory()->create();
+        $wo->update(['sales_order_id' => $salesOrder->id]);
+        ProductionSchedule::create(['work_order_id' => $wo->id, 'machine_id' => $machine->id, 'mold_id' => $mold->id,
+            'scheduled_start' => now()->subHours(2), 'scheduled_end' => now()->subHour(), 'priority_order' => 0,
+            'status' => 'confirmed', 'is_confirmed' => true, 'reserves_capacity' => true]);
+
+        $stats = app(AlertEngineService::class)->runAllChecks();
+
+        $this->assertNotContains('production', $stats['failed']);
     }
 }

@@ -272,32 +272,68 @@ class SalesOrderService
     }
 
     /**
-     * Cancellation is intentionally narrower than a status transition. Once
-     * deliveries, invoices, or active production work exist, their own
-     * reconciliation flows must decide how those records are closed.
+     * Cancellation is intentionally narrower than a status transition. Active
+     * delivery, billing, production, or purchasing commitments need review.
      */
     private function assertCancellableDownstreamState(SalesOrder $so): void
     {
-        if (Delivery::query()
-            ->where('sales_order_id', $so->id)
-            ->where('status', '!=', 'cancelled')
-            ->exists()) {
-            throw new BusinessRuleException('This sales order cannot be cancelled while a delivery is active.');
+        $blocker = $this->cancellationBlocker($so, true);
+        if ($blocker !== null) {
+            throw new BusinessRuleException($blocker);
+        }
+    }
+
+    public function canCancel(SalesOrder $so): bool
+    {
+        return $this->cancellationBlocker($so) === null;
+    }
+
+    public function cancellationBlocker(SalesOrder $so, bool $lockPurchasing = false): ?string
+    {
+        if (! $so->status->isBeforeConfirmation() && $so->status !== SalesOrderStatus::Confirmed) {
+            return 'This sales order cannot be cancelled at its current status.';
         }
 
-        if (Invoice::query()
-            ->where('sales_order_id', $so->id)
-            ->where('status', '!=', 'cancelled')
-            ->exists()) {
-            throw new BusinessRuleException('This sales order cannot be cancelled while an invoice is active.');
+        $deliveryService = app(\App\Modules\SupplyChain\Services\DeliveryService::class);
+        foreach (Delivery::query()->where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->get() as $delivery) {
+            if (! $deliveryService->isUntouchedAutomaticSupply($delivery)) {
+                return 'This sales order cannot be cancelled while a delivery is active.';
+            }
+        }
+
+        if (Invoice::query()->where('sales_order_id', $so->id)->where('status', '!=', 'cancelled')->exists()) {
+            return 'This sales order cannot be cancelled while an invoice is active.';
         }
 
         if (WorkOrder::query()
             ->where('sales_order_id', $so->id)
-            ->whereIn('status', ['in_progress', 'completed', 'closed'])
+            ->where(function ($query): void {
+                $query->whereIn('status', ['in_progress', 'paused', 'completed', 'closed'])
+                    ->orWhereNotNull('actual_start')
+                    ->orWhere('quantity_produced', '>', 0)
+                    ->orWhereHas('outputs')
+                    ->orWhereHas('materials', fn ($materials) => $materials->where('actual_quantity_issued', '>', 0));
+            })
             ->exists()) {
-            throw new BusinessRuleException('This sales order cannot be cancelled while production work is in progress or complete.');
+            return 'This sales order cannot be cancelled after production has started or material has been issued.';
         }
+
+        $purchaseRequests = PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->whereHas('mrpPlan', fn ($query) => $query->where('sales_order_id', $so->id))
+            ->whereNotIn('status', ['cancelled', 'rejected']);
+        if ($lockPurchasing) {
+            $purchaseRequests->lockForUpdate();
+        }
+        foreach ($purchaseRequests->get() as $purchaseRequest) {
+            if (! in_array($purchaseRequest->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)
+                || $purchaseRequest->purchaseOrders()->where('status', '!=', 'cancelled')->exists()
+                || $purchaseRequest->rfqs()->whereNotIn('status', ['cancelled', 'rejected'])->exists()) {
+                return 'This sales order cannot be cancelled while purchasing has committed to its materials.';
+            }
+        }
+
+        return null;
     }
 
     private function transitionTimestamp(SalesOrderStatus $target): array
@@ -888,19 +924,22 @@ class SalesOrderService
         ];
     }
 
-    public function cancel(SalesOrder $so, ?string $reason = null, ?CustomerPortalUser $customerActor = null): SalesOrder
+    public function cancel(
+        SalesOrder $so,
+        ?string $reason = null,
+        ?CustomerPortalUser $customerActor = null,
+        ?User $internalActor = null,
+    ): SalesOrder
     {
-        return DB::transaction(function () use ($so, $reason, $customerActor) {
+        return DB::transaction(function () use ($so, $reason, $customerActor, $internalActor) {
             DB::statement('SELECT pg_advisory_xact_lock(20261009, 1)');
             // A stale route-bound SO must not overwrite a delivered/invoiced
             // or already-cancelled order. Re-read and lock before the guard.
             $lockedSo = SalesOrder::query()
                 ->lockForUpdate()
                 ->findOrFail($so->id);
-            if (! $lockedSo->is_cancellable) {
-                throw new BusinessRuleException('This sales order cannot be cancelled at its current status.');
-            }
-            $this->assertCustomerOrderMutation($lockedSo, $customerActor);
+            $this->assertCancellationActor($lockedSo, $customerActor, $internalActor);
+            $this->assertCancellableDownstreamState($lockedSo);
             foreach (Delivery::where('sales_order_id', $lockedSo->id)->where('status', '!=', 'cancelled')->lockForUpdate()->get() as $delivery) {
                 if (app(\App\Modules\SupplyChain\Services\DeliveryService::class)->isUntouchedAutomaticSupply($delivery)) {
                     app(\App\Modules\SupplyChain\Services\DeliveryService::class)->updateStatus($delivery, \App\Modules\SupplyChain\Enums\DeliveryStatus::Cancelled);
@@ -917,9 +956,7 @@ class SalesOrderService
 
             // Sprint 6 audit §1.2: cascade through the chain.
             //  1. Supersede the active MRP plan (status='cancelled').
-            //  2. Cancel any planned/confirmed/paused WO linked to this SO via
-            //     the MRP plan; in_progress/completed/closed WOs are left
-            //     alone — the operator must finish or cancel them manually.
+            //  2. Cancel unstarted planned/confirmed WOs linked to this SO.
             //     WorkOrderService::cancel() releases each WO's reservations.
             $plan = MrpPlan::where('sales_order_id', $lockedSo->id)
                 ->where('status', MrpPlanStatus::Active->value)
@@ -934,7 +971,6 @@ class SalesOrderService
                 $cancellableStatuses = [
                     WorkOrderStatus::Planned->value,
                     WorkOrderStatus::Confirmed->value,
-                    WorkOrderStatus::Paused->value,
                 ];
                 $linkedWos = WorkOrder::query()
                     ->where('sales_order_id', $lockedSo->id)
@@ -945,6 +981,16 @@ class SalesOrderService
                     $woService->cancel($wo, $reason ?? "Sales order {$lockedSo->so_number} cancelled");
                 }
             }
+
+            $lockedSo->responses()
+                ->where('response_type', 'cancellation_request')
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'accepted',
+                    'resolved_by' => $internalActor?->id ?? auth()->id(),
+                    'resolved_at' => now(),
+                    'resolution_notes' => $reason,
+                ]);
 
             $lockedSo->supersedeDeliveryProposals();
             $this->notifyCustomer($lockedSo, 'cancelled', 'This order was cancelled. Production and purchasing demand have been retired where cancellation is allowed.');
@@ -1037,6 +1083,30 @@ class SalesOrderService
         abort_if($so->customer_id !== $customerActor->customer_id, 403);
         if (! $so->status->isBeforeConfirmation()) {
             throw new BusinessRuleException('Only unconfirmed customer orders can be changed or cancelled.');
+        }
+    }
+
+    private function assertCancellationActor(
+        SalesOrder $so,
+        ?CustomerPortalUser $customerActor,
+        ?User $internalActor,
+    ): void {
+        if ($so->submission_source !== SalesOrderSubmissionSource::CustomerPortal) {
+            if ($customerActor !== null) {
+                throw new BusinessRuleException('Only orders submitted through your customer portal can be changed here.');
+            }
+
+            return;
+        }
+
+        if ($customerActor !== null) {
+            abort_if($so->customer_id !== $customerActor->customer_id, 403);
+
+            return;
+        }
+
+        if (! $internalActor?->hasPermission('crm.sales_orders.cancel')) {
+            throw new BusinessRuleException('Customer-submitted orders can only be cancelled by their customer or an authorized sales user.');
         }
     }
 

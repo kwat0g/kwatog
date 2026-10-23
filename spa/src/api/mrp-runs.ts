@@ -20,4 +20,7 @@ export const mrpRunsApi = {
 
  trigger: () =>
  client.post<{ data: MrpRun }>('/mrp/runs').then((r) => r.data.data),
+
+ retrySalesOrder: (salesOrderId: string) =>
+  client.post<{ data: MrpRun }>(`/mrp/sales-orders/${salesOrderId}/run`).then((r) => r.data.data),
 };

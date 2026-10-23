@@ -259,7 +259,7 @@ export interface PortalSoDetail extends PortalSoSummary {
   delivery_negotiations?: DeliveryNegotiation[];
   latest_response?: {
     id: string;
-    type: 'accept' | 'propose' | 'decline' | string;
+    type: 'accept' | 'propose' | 'decline' | 'delivery_date' | 'cancellation_request' | string;
     status: string;
     proposed_delivery_date: string | null;
     notes: string | null;

@@ -190,6 +190,7 @@ final class NotificationCatalog
                 ['key' => 'return.restocked', 'label' => 'Returned goods restocked', 'description' => 'Customer-returned goods were moved back into sellable stock. Warehouse should shelf and verify them.'],
                 ['key' => 'return.truck_return_received', 'label' => 'Truck return received', 'description' => 'Goods from an unsuccessful delivery were counted into quarantine and need Quality inspection.'],
                 ['key' => 'customer.so_responded', 'label' => 'Customer sales order response', 'description' => 'A customer responded to a sales order confirmation request.'],
+                ['key' => 'sales_order.cancellation_requested', 'label' => 'Customer cancellation request', 'description' => 'A customer requested cancellation of a confirmed sales order.'],
                 ['key' => 'return.case_updated', 'label' => 'Problem report updated', 'description' => 'A customer or supplier report needs review or follow-up.'],
                 ['key' => 'customer.rma_created', 'label' => 'Customer return requested', 'description' => 'A customer submitted a return request that needs review.'],
             ]],
