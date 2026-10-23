@@ -99,3 +99,5 @@ Updated: 2026-10-23
 | E016 | Payslip availability | Secure authenticated SPA link, no payroll amounts or attachment, template and mobile/desktop screenshots integrated | HR/privacy review and real-client rendering remain unverified |
 
 | E017 | Supplier purchase order decision | Shared email layout, decision snapshot, supplier portal link, and desktop/mobile light/dark screenshots integrated | Real-client rendering remains unverified |
+
+| E018 | Supplier purchase order publication | Snapshot and supplier portal link; shared layout; desktop/mobile light/dark screenshots integrated | Real-client rendering remains unverified |
