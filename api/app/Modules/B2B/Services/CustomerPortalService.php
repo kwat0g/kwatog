@@ -445,6 +445,20 @@ class CustomerPortalService
                 throw new BusinessRuleException('Only orders submitted through your customer portal can be cancelled here.');
             }
 
+            if (in_array($row->status, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction], true)) {
+                $response = $this->salesOrderResponses->requestCancellation($row, $user, $reason);
+                if ($response->wasRecentlyCreated) {
+                    $this->recordCustomerAudit('customer.order.cancellation_requested', $response, $user->id, $user->customer_id, [
+                        'sales_order_id' => $row->hash_id,
+                        'reason' => $reason,
+                    ]);
+                }
+                $requested = $this->salesOrderService->show($row->fresh());
+                $requested->setAttribute('cancellation_outcome', 'requested');
+
+                return $requested;
+            }
+
             $blocker = $this->salesOrderService->cancellationBlocker($row, true);
             if ($blocker === null) {
                 $cancelled = $this->systemUser->impersonate(fn (): SalesOrder => $this->salesOrderService->cancel($row, $reason, $user));
@@ -454,21 +468,7 @@ class CustomerPortalService
                 return $cancelled;
             }
 
-            if (! in_array($row->status, [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction], true)) {
-                throw new BusinessRuleException($blocker);
-            }
-
-            $response = $this->salesOrderResponses->requestCancellation($row, $user, $reason);
-            if ($response->wasRecentlyCreated) {
-                $this->recordCustomerAudit('customer.order.cancellation_requested', $response, $user->id, $user->customer_id, [
-                    'sales_order_id' => $row->hash_id,
-                    'reason' => $reason,
-                ]);
-            }
-            $requested = $this->salesOrderService->show($row->fresh());
-            $requested->setAttribute('cancellation_outcome', 'requested');
-
-            return $requested;
+            throw new BusinessRuleException($blocker);
         });
     }
 

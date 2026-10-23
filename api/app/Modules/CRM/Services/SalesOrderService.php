@@ -1101,6 +1101,9 @@ class SalesOrderService
 
         if ($customerActor !== null) {
             abort_if($so->customer_id !== $customerActor->customer_id, 403);
+            if (! $so->status->isBeforeConfirmation()) {
+                throw new BusinessRuleException('Confirmed orders require a cancellation review request.');
+            }
 
             return;
         }
