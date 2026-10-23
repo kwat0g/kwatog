@@ -341,4 +341,44 @@ class MrpAutomationTest extends TestCase
             $lock->release();
         }
     }
+
+    public function test_daily_mrp_notice_requires_access_to_its_plan_link(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $eligible = User::factory()->withRole('ppc_head')->create();
+        $revoked = User::factory()->withRole('ppc_head')->create();
+        $actor = User::factory()->withRole('system_admin')->create();
+        app(\App\Common\Services\SettingsService::class)
+            ->set('mrp.daily_run.notification_roles', ['ppc_head']);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'mrp.plans.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'MRP notice visibility regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $run = MrpRun::create([
+            'run_at' => now(),
+            'triggered_by' => 'scheduled',
+            'status' => 'completed',
+            'sales_orders_evaluated' => 1,
+            'plans_generated' => 1,
+        ]);
+        $automation = Mockery::mock(MrpAutomationService::class);
+        $automation->shouldReceive('run')->once()->andReturn($run);
+        $this->app->instance(MrpAutomationService::class, $automation);
+
+        $this->artisan('mrp:run-daily')->assertSuccessful();
+
+        $notice = DB::table('notifications')->where('notifiable_id', $eligible->id)
+            ->where('type', 'mrp_run_completed')->first();
+        $this->assertNotNull($notice);
+        $this->assertSame('/mrp/plans', json_decode($notice->data, true)['link_to']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revoked->id,
+            'type' => 'mrp_run_completed',
+        ]);
+    }
 }
