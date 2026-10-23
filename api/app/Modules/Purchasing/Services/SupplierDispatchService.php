@@ -40,17 +40,18 @@ class SupplierDispatchService
         }
 
         try {
-            $result = $this->gateway->publish($purchaseOrder->fresh() ?? $purchaseOrder, $claimed->idempotency_key);
+            return DB::transaction(function () use ($purchaseOrder, $claimed): SupplierOrderDispatch {
+                $result = $this->gateway->publish($purchaseOrder->fresh() ?? $purchaseOrder, $claimed->idempotency_key);
+                $dispatch = $this->complete($claimed->id, $result, $purchaseOrder);
+
+                return $dispatch->status === SupplierDispatchStatus::PortalAvailable
+                    ? $this->confirmPortalDelivery($purchaseOrder, $dispatch)
+                    : $dispatch;
+            });
         } catch (Throwable $e) {
             $this->recordFailure($claimed->id, $e);
             throw $e;
         }
-
-        $dispatch = $this->complete($claimed->id, $result, $purchaseOrder);
-
-        return $dispatch->status === SupplierDispatchStatus::PortalAvailable
-            ? $this->confirmPortalDelivery($purchaseOrder, $dispatch)
-            : $dispatch;
     }
 
     private function confirmPortalDelivery(PurchaseOrder $purchaseOrder, SupplierOrderDispatch $dispatch): SupplierOrderDispatch

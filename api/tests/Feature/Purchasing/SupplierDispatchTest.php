@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Listeners\CloseSupplierDispatchOnPurchaseOrderCancelled;
 use App\Modules\Purchasing\Listeners\PrepareSupplierDispatch;
+use App\Modules\Purchasing\Mail\SupplierPurchaseOrderMail;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierOrderDispatch;
 use App\Modules\Purchasing\Services\SupplierDispatchService;
@@ -22,6 +23,9 @@ use App\Modules\Purchasing\Support\SupplierDispatchResult;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -55,6 +59,32 @@ class SupplierDispatchTest extends TestCase
         $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
         $this->assertNotNull($po->fresh()->sent_to_supplier_at);
         $this->assertSame($po->id, app(SupplierPortalService::class)->purchaseOrders($vendor->id, [])->first()?->id);
+    }
+
+    public function test_supplier_email_queue_waits_for_the_po_sent_transition_to_commit(): void
+    {
+        $po = $this->approvedPo();
+        Queue::fake();
+        $transactionLevel = 0;
+        app()->instance(SupplierDispatchGateway::class, new class($transactionLevel) implements SupplierDispatchGateway
+        {
+            public function __construct(private int &$transactionLevel) {}
+
+            public function publish(PurchaseOrder $purchaseOrder, string $idempotencyKey): SupplierDispatchResult
+            {
+                $this->transactionLevel = DB::transactionLevel();
+                Mail::to('supplier@example.test')->queue(new SupplierPurchaseOrderMail($purchaseOrder));
+
+                return SupplierDispatchResult::portalAvailable(1, ['idempotency_key' => $idempotencyKey]);
+            }
+        });
+
+        $dispatch = app(SupplierDispatchService::class)->prepareForApproved($po);
+
+        $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
+        $this->assertSame(SupplierDispatchStatus::Confirmed, $dispatch?->status);
+        $this->assertGreaterThan(1, $transactionLevel);
+        Queue::assertPushed(\Illuminate\Mail\SendQueuedMailable::class, 1);
     }
 
     public function test_missing_portal_user_creates_an_actionable_manual_dispatch(): void
