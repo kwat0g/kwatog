@@ -83,3 +83,5 @@ Updated: 2026-10-23
 1. Reconcile remaining email PRs against the inventory; keep only changes not already present on main.
 2. Finish per-type data/recipient verification and screenshots; record deliberate deferrals.
 3. Verify company values, SPF/DMARC, bounce handling, and Reply-To with the relevant company contacts. Real email-client rendering remains unverified.
+
+| E010 | Customer sales order confirmation | Snapshot captured at confirmation; SPA order link; email design integrated | Visual/client review remains limited to recorded screenshots and code inspection |

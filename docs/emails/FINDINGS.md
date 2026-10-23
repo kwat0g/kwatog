@@ -39,3 +39,5 @@ Date: 2026-10-20. Static findings only; reachability and runtime impact remain u
 | EF-065 | Email copy hardcoded the company display name | Multiple mail views and portal mail subjects used `Ogami Philippines` directly, so owner-configured identity could not update all messages consistently. | Shared foundation now uses configured sender-name values in email copy and checks views for the old literal; PHPUnit verification pending. |
 
 No code-level fix was applied as part of Phase 0/1.
+
+- **EF-024 — Sales order confirmation must use event-time values.** PR #231 snapshots recipient and order details when confirmation is raised so later edits do not change queued email content.
