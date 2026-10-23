@@ -56,6 +56,55 @@ class RunArDunningCommandTest extends TestCase
         $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
     }
 
+    public function test_queued_reminder_keeps_scan_time_recipient_and_invoice_values(): void
+    {
+        Mail::fake();
+        $customer = Customer::factory()->create([
+            'email' => 'pay-at-scan@example.test',
+            'name' => 'Customer at scan',
+            'contact_person' => null,
+        ]);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-DUNNING-SNAPSHOT',
+            'status' => 'finalized',
+            'date' => '2026-09-01',
+            'due_date' => Carbon::now()->subDays(8)->toDateString(),
+            'balance' => '1234.56',
+            'last_dunning_tier' => 0,
+        ]);
+
+        app(ArDunningService::class)->run();
+
+        $customer->update([
+            'email' => 'pay-after-scan@example.test',
+            'name' => 'Changed customer',
+        ]);
+        $invoice->update([
+            'invoice_number' => 'INV-CHANGED',
+            'balance' => '9999.00',
+            'date' => '2026-12-31',
+        ]);
+
+        Mail::assertQueued(InvoiceDunningMail::class, function (InvoiceDunningMail $mail): bool {
+            $mail->invoice->refresh();
+            $mail->invoice->load('customer');
+            $html = $mail->render();
+
+            $this->assertTrue($mail->hasTo('pay-at-scan@example.test'));
+            $this->assertFalse($mail->hasTo('pay-after-scan@example.test'));
+            $this->assertStringContainsString('Customer at scan', $html);
+            $this->assertStringNotContainsString('Changed customer', $html);
+            $this->assertStringContainsString('INV-DUNNING-SNAPSHOT', $html);
+            $this->assertStringNotContainsString('INV-CHANGED', $html);
+            $this->assertStringContainsString('PHP 1,234.56', $html);
+            $this->assertStringNotContainsString('9,999.00', $html);
+            $this->assertStringContainsString('Sep 1, 2026', $html);
+
+            return true;
+        });
+    }
+
     public function test_does_not_resend_lower_tier_when_higher_already_sent(): void
     {
         Mail::fake();

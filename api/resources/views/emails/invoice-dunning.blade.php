@@ -1,33 +1,29 @@
-<x-mail::message :preheader="'Payment reminder for invoice '.$invoice->invoice_number.'. Balance due: ₱'.number_format((float) $invoice->balance, 2).'.'" :title="'Payment reminder: invoice '.$invoice->invoice_number">
-# Payment reminder
+<x-mail::message :preheader="$preheader" :title="'Payment reminder for invoice '.$snapshot['invoice_number']">
+# Payment Reminder
 
-Hi {{ $customer->contact_person ?? $customer->name ?? 'there' }},
+Hi {{ $snapshot['customer_name'] }},
 
-Our records show that invoice **{{ $invoice->invoice_number }}** is **{{ $daysOverdue }} days past due**. Please review the balance and due date below.
+Our records show that invoice **{{ $snapshot['invoice_number'] }}** is currently
+**{{ $daysOverdue }} days past due**.
 
-| Invoice summary | Details |
-|---|---|
-| Invoice number | **{{ $invoice->invoice_number }}** |
-| Invoice date | {{ optional($invoice->date)->format('M d, Y') }} |
-| Due date | **{{ optional($invoice->due_date)->format('M d, Y') }}** |
-| Days overdue | **{{ $daysOverdue }}** |
-| Balance due | **₱{{ number_format((float) $invoice->balance, 2) }}** |
-
-<x-mail::button :url="$portalUrl">View invoice in customer portal</x-mail::button>
+| Field        | Value |
+|--------------|------:|
+| Invoice No.  | {{ $snapshot['invoice_number'] }} |
+| Issue Date   | {{ $snapshot['invoice_date'] }} |
+| Due Date     | {{ $snapshot['due_date'] }} |
+| Balance Due  | {{ $snapshot['balance'] }} |
 
 @if ($tier >= 30)
-This invoice is **30+ days overdue**. Please remit payment immediately to
-avoid further escalation.
+This invoice is more than 30 days overdue. Please review the balance and contact Accounts Receivable if you need help reconciling payment.
 @elseif ($tier >= 15)
-This invoice is **{{ $daysOverdue }} days overdue**. Kindly settle the
-balance at your earliest convenience.
+This invoice is {{ $daysOverdue }} days overdue. Please review the balance and contact Accounts Receivable if you need help reconciling payment.
 @else
-A friendly reminder to settle this balance soon.
+A reminder to review the balance shown above.
 @endif
 
 If payment has already been made, please disregard this notice and reply
 with proof of payment so we can update our records.
 
-Thanks,
+Regards,<br>
 {{ config('mail.from.name', config('app.name')) }} Accounts Receivable
 </x-mail::message>
