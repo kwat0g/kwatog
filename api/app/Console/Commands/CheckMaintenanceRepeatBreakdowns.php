@@ -20,7 +20,10 @@ class CheckMaintenanceRepeatBreakdowns extends Command
     {
         $repeats = $analytics->repeatBreakdowns();
         $supervisors = User::query()->where('is_active', true)
-            ->whereHas('role', fn ($query) => $query->where('slug', 'maintenance_supervisor'))->get();
+            ->whereHas('role', fn ($query) => $query->where('slug', 'maintenance_supervisor'))
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission('maintenance.view'))
+            ->values();
         if ($repeats !== [] && $supervisors->isEmpty()) {
             Log::error('Maintenance repeat-breakdown setup failure: no active maintenance supervisor.');
 
