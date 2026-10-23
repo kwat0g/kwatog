@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
+import { manilaIsoDate } from '@/lib/formatDate';
 import { returnManagementApi } from '@/api/returnManagement';
 import ReturnRequestDetailPage from './detail';
 
@@ -33,6 +34,7 @@ it('requires the delivery date when Purchasing sends the QC return', async () =>
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter><ReturnRequestDetailPage /></MemoryRouter></QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Send to supplier' }));
+  expect(screen.getByLabelText(/Required delivery date/)).toHaveAttribute('min', manilaIsoDate());
   const send = screen.getAllByRole('button', { name: 'Send to supplier' }).at(-1)!;
   expect(send).toBeDisabled();
   fireEvent.change(screen.getByLabelText(/Photo of defective items/), { target: { files: [new File(['photo'], 'defect.png', { type: 'image/png' })] } });

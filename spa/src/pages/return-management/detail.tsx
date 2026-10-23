@@ -12,7 +12,6 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
-import { manilaIsoDate } from '@/lib/formatDate';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { FileInput } from '@/components/ui/FileInput';
@@ -26,7 +25,7 @@ import { LuTriangleAlert, LuFileText, LuPackageCheck, LuRefreshCw, LuCheck } fro
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
-import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { formatDate, formatDateTime, manilaIsoDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
