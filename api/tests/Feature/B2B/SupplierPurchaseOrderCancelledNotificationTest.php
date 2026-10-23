@@ -189,7 +189,10 @@ class SupplierPurchaseOrderCancelledNotificationTest extends TestCase
         self::assertStringNotContainsString('<img src=x onerror=alert(1)>', $html);
         self::assertStringNotContainsString('Changed Contact', $html);
         self::assertStringContainsString($event->snapshot['display_total'], $html);
-        self::assertStringContainsString('https://ogamiph.dev/portal/supplier/purchase-orders/', $html);
+        self::assertStringContainsString(
+            rtrim((string) config('app.frontend_url', config('app.url')), '/').'/portal/supplier/purchase-orders/',
+            $html,
+        );
         self::assertStringContainsString('Block 2, Lots 1 &amp; 2', $html);
         self::assertLessThan(102400, strlen($html));
         self::assertDoesNotMatchRegularExpression('/\{\{|undefined|>null</i', $html);
