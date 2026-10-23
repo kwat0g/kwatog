@@ -1,8 +1,9 @@
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { LuPencil, LuChevronRight, LuPackage, LuLayers, LuShieldCheck } from '@/lib/icons';
 import { productsApi } from '@/api/crm/products';
@@ -14,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { usePermission } from '@/hooks/usePermission';
+import { useDebounce } from '@/hooks/useDebounce';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDateTime } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
@@ -22,13 +24,53 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = usePermission();
+  const queryClient = useQueryClient();
   const canManage = can('crm.products.manage');
+  const canManageCustomerAccess = can('crm.products.customer_access.manage');
   const backTo = can('crm.products.view') ? '/crm/products' : '/dashboard';
   const backLabel = can('crm.products.view') ? 'Products' : 'Dashboard';
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'products', 'detail', id],
     queryFn: () => productsApi.show(id!),
     enabled: !!id,
+  });
+  const [editingAccess, setEditingAccess] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const debouncedCustomerSearch = useDebounce(customerSearch, 300);
+  const [accessVisibility, setAccessVisibility] = useState<'standard' | 'restricted'>('restricted');
+  const [accessCustomerIds, setAccessCustomerIds] = useState<string[]>([]);
+  const { data: customerOptions = [], isError: customerOptionsError, refetch: retryCustomerOptions } = useQuery({
+    queryKey: ['crm', 'products', 'customer-options', debouncedCustomerSearch],
+    queryFn: () => productsApi.customerOptions({ search: debouncedCustomerSearch || undefined }),
+    enabled: editingAccess && canManageCustomerAccess,
+  });
+  const [knownCustomers, setKnownCustomers] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    setKnownCustomers((current) => {
+      const byId = new Map(current.map((customer) => [customer.id, customer]));
+      [...(data?.portal_customers ?? []), ...customerOptions].forEach((customer) => byId.set(customer.id, customer));
+      return [...byId.values()];
+    });
+  }, [data?.portal_customers, customerOptions]);
+  const visibleCustomers = knownCustomers.filter((customer) =>
+    customer.name.toLowerCase().includes(debouncedCustomerSearch.trim().toLowerCase()),
+  );
+  const accessMutation = useMutation({
+    mutationFn: () => productsApi.updateCustomerAccess(id!, {
+      portal_visibility: accessVisibility,
+      portal_customer_ids: accessCustomerIds,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
+      void refetch();
+      setEditingAccess(false);
+      toast.success('Customer access updated.');
+    },
+    onError: (error: unknown) => {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message
+        ?? 'Could not update customer access.';
+      toast.error(message);
+    },
   });
   const [editingPrices, setEditingPrices] = useState(false);
   const [prices, setPrices] = useState({
@@ -150,6 +192,16 @@ export default function ProductDetailPage() {
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-5">
             <Panel title="Product details">
+              <div className="mb-4 flex items-start gap-4 border-b border-subtle pb-4">
+                {data.image_url ? (
+                  <img src={data.image_url} alt={`${data.name} product`} className="h-24 w-24 rounded-md border border-default object-cover" />
+                ) : (
+                  <p role="status" className="rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                    No product photo uploaded. Customers see a placeholder in the order catalog.
+                    {canManage && <> Add one from the Products list.</>}
+                  </p>
+                )}
+              </div>
               <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
                 <div className="min-w-0">
                   <dt className="text-xs text-muted">Part number</dt>
@@ -211,6 +263,17 @@ export default function ProductDetailPage() {
                   blocks lower selling prices.
                 </p>
               </div>
+              {data.base_selling_price == null && (
+                <div role="status" className="mt-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                  No base selling price. Customers need an active price agreement covering their
+                  requested delivery date before they can order this product.
+                  {can('crm.price_agreements.view') && (
+                    <Link to={`/crm/price-agreements?product_id=${data.id}`} className="ml-1 underline">
+                      Review pricing
+                    </Link>
+                  )}
+                </div>
+              )}
               {!data.is_active && canManage && !proposal && (
                 <p className="mt-3 text-xs text-muted">
                   Financial changes require an active product.
@@ -376,7 +439,50 @@ export default function ProductDetailPage() {
                 </section>
               )}
             </Panel>
-            <Panel title="Customer portal access">
+            <Panel
+              title="Customer portal access"
+              actions={canManageCustomerAccess && !editingAccess && (
+                <Button size="sm" icon={<LuPencil size={14} />} onClick={() => {
+                  setAccessVisibility(data.portal_visibility ?? 'restricted');
+                  setAccessCustomerIds(customers.map((customer) => customer.id));
+                  setCustomerSearch('');
+                  setEditingAccess(true);
+                }}>
+                  Manage access
+                </Button>
+              )}
+            >
+              {editingAccess ? (
+                <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); accessMutation.mutate(); }}>
+                  <Select label="Customer visibility" value={accessVisibility} onChange={(event) => setAccessVisibility(event.target.value as 'standard' | 'restricted')}>
+                    <option value="restricted">Private — assigned customers only</option>
+                    <option value="standard">Standard — all active customers</option>
+                  </Select>
+                  <p className="text-xs text-muted">Sales owns customer access. Product creation and production data stay with PPC.</p>
+                  <Input aria-label="Find customers to assign" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers" />
+                  {customerOptionsError && (
+                    <p role="alert" className="text-sm text-danger-fg">Cannot load customers. <Button type="button" size="sm" onClick={() => retryCustomerOptions()}>Retry</Button></p>
+                  )}
+                  <div className="max-h-52 overflow-y-auto rounded-md border border-default divide-y divide-default">
+                    {visibleCustomers.map((customer) => (
+                      <label key={customer.id} className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-surface">
+                        <input type="checkbox" checked={accessCustomerIds.includes(customer.id)} onChange={(event) => setAccessCustomerIds((current) => event.target.checked ? [...current, customer.id] : current.filter((customerId) => customerId !== customer.id))} />
+                        {customer.name}
+                      </label>
+                    ))}
+                    {!visibleCustomers.length && <p className="p-3 text-sm text-muted">No customers found.</p>}
+                  </div>
+                  {accessVisibility === 'restricted' && accessCustomerIds.length === 0 && (
+                    <p role="status" className="rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                      No customers assigned. This private product will not appear in any customer portal.
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button type="submit" variant="primary" disabled={accessMutation.isPending} loading={accessMutation.isPending}>Save access</Button>
+                    <Button type="button" disabled={accessMutation.isPending} onClick={() => setEditingAccess(false)}>Cancel</Button>
+                  </div>
+                </form>
+              ) : <>
               <div className="flex flex-wrap items-center gap-2">
                 <Chip variant={data.portal_visibility === 'standard' ? 'info' : 'neutral'}>
                   {data.portal_visibility === 'standard' ? 'Standard' : 'Private'}
@@ -406,6 +512,12 @@ export default function ProductDetailPage() {
                   <p className="text-sm text-muted">None</p>
                 )}
               </div>
+              {data.portal_visibility !== 'standard' && customers.length === 0 && (
+                <p role="status" className="mt-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                  No customers assigned. This private product will not appear in any customer portal.
+                </p>
+              )}
+              </>}
             </Panel>
           </div>
           <aside className="min-w-0 space-y-5" aria-label="Product setup and related records">
