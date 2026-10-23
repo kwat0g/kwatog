@@ -33,7 +33,9 @@ class SendDailyProductionSummary extends Command
         $users = User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->filter(static fn (User $user): bool => $user->hasPermission('production.work_orders.view'))
+            ->values();
 
         if ($users->isEmpty()) {
             app(EmailDeliveryFailureNotifier::class)->notifyPermission(
