@@ -181,7 +181,7 @@ class EffectivenessService
     {
         $today = now()->startOfDay();
         $due = NcrAction::query()
-            ->with(['owner:id,name,is_active', 'ncr:id,ncr_number,status'])
+            ->with(['owner:id,name,is_active,role_id', 'ncr:id,ncr_number,status'])
             ->whereIn('action_type', [NcrActionType::Corrective->value, NcrActionType::Preventive->value])
             ->whereHas('ncr', fn ($q) => $q->where('status', NcrStatus::Closed->value))
             ->whereIn('effectiveness_status', [
@@ -248,6 +248,10 @@ class EffectivenessService
         string $message,
         string $dueDate,
     ): void {
+        if (! $recipient->hasPermission('quality.ncr.view')) {
+            return;
+        }
+
         DB::transaction(function () use ($action, $recipient, $type, $title, $message, $dueDate): void {
             $lockedAction = NcrAction::query()->lockForUpdate()->find($action->getKey());
             if (! $lockedAction) {

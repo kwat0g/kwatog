@@ -189,7 +189,8 @@ class NcrRecurrenceDetector
         $recipients = User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => $user->hasPermission('quality.ncr.view'));
         if ($recipients->isEmpty()) {
             throw new BusinessRuleException(
                 'No active recipients are available for NCR recurrence notifications.'

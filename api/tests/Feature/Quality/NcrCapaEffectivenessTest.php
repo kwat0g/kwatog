@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Enums\EffectivenessStatus;
@@ -176,5 +178,39 @@ final class NcrCapaEffectivenessTest extends TestCase
             2,
             DB::table('ncr_effectiveness_notifications')->count(),
         );
+    }
+
+    public function test_overdue_ncr_notice_skips_manager_after_view_permission_is_revoked(): void
+    {
+        [$closed, $owner] = $this->closedNcr();
+        $manager = $this->user('production_manager');
+        $ineligibleOwner = $this->user('warehouse_staff');
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $manager->id,
+            'permission_id' => Permission::query()->where('slug', 'quality.ncr.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $owner->id,
+            'reason' => 'NCR visibility removed for overdue-notice test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(SettingsService::class)->set('quality.effectiveness.overdue_notification_roles', ['production_manager']);
+        app(SettingsService::class)->set('quality.effectiveness.overdue_escalation_days', 1);
+        NcrAction::query()
+            ->where('ncr_id', $closed->id)
+            ->where('action_type', NcrActionType::Corrective->value)
+            ->update(['owner_id' => $ineligibleOwner->id]);
+        NcrAction::query()
+            ->where('ncr_id', $closed->id)
+            ->whereIn('action_type', [NcrActionType::Corrective->value, NcrActionType::Preventive->value])
+            ->update(['next_effectiveness_check_at' => now()->subDays(2)->toDateString()]);
+
+        app(EffectivenessService::class)->notifyOverdueChecks();
+
+        $this->assertSame(1, $owner->notifications()->where('type', 'effectiveness_due')->count());
+        $this->assertSame(0, $ineligibleOwner->notifications()->where('type', 'effectiveness_due')->count());
+        $this->assertSame(0, $manager->notifications()->whereIn('type', [
+            'effectiveness_due', 'effectiveness_overdue',
+        ])->count());
     }
 }

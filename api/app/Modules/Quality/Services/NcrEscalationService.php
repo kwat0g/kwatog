@@ -154,7 +154,8 @@ class NcrEscalationService
                 $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->where('slug', $role))
                     ->where('is_active', true)
-                    ->get();
+                    ->get()
+                    ->filter(fn (User $user): bool => $user->hasPermission('quality.ncr.view'));
 
                 $delivery->forceFill([
                     'attempts'          => (int) $delivery->attempts + 1,

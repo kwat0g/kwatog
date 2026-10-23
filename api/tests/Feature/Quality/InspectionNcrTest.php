@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -334,6 +336,33 @@ class InspectionNcrTest extends TestCase
             $ncr->defect_description,
             'NCR description must reference the source inspection number',
         );
+    }
+
+    public function test_auto_created_ncr_notice_excludes_qc_user_without_view_permission(): void
+    {
+        $role = Role::query()->where('slug', 'qc_inspector')->firstOrFail();
+        $permission = Permission::query()->firstOrCreate(
+            ['slug' => 'quality.ncr.view'],
+            ['name' => 'View NCRs', 'module' => 'quality'],
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $revoked = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => $permission->id,
+            'type' => 'revoke',
+            'granted_by' => $this->user->id,
+            'reason' => 'NCR visibility removed for notification audience test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        app(SettingsService::class)->set('quality.ncr.auto_created_notification_roles', ['qc_inspector']);
+
+        $ncr = $this->ncrSvc->openFromInspectionFailure($this->makeFailedInspection(), $this->user);
+
+        $notice = $this->user->notifications()->where('type', 'auto_ncr_created')->firstOrFail();
+        $this->assertSame("/quality/ncrs/{$ncr->hash_id}", $notice->data['link_to']);
+        $this->assertSame(0, $revoked->notifications()->where('type', 'auto_ncr_created')->count());
     }
 
     // ──────────────────────────────────────────────────────────────────────────
