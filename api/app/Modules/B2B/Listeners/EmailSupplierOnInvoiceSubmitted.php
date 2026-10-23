@@ -17,8 +17,9 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
 
     public function handle(SupplierInvoiceSubmitted $event): void
     {
-        $bill = $event->bill->loadMissing(['vendor', 'purchaseOrder', 'supplierInvoice']);
-        $invoiceNumber = $bill->supplierInvoice?->number ?? $bill->supplier_invoice_number ?? $bill->bill_number;
+        $bill = $event->bill;
+        $snapshot = $event->snapshot;
+        $invoiceNumber = $snapshot['invoice_number'];
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
             'link_to' => '/accounting/bills/'.$bill->hash_id,
@@ -27,7 +28,7 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
             'reason' => 'The supplier email was missing, invalid, unreachable, or rejected by the email provider.',
         ];
 
-        if (! filter_var($bill->vendor?->email, FILTER_VALIDATE_EMAIL)) {
+        if (! filter_var($snapshot['recipient_email'], FILTER_VALIDATE_EMAIL)) {
             $fallback->notifyPermission(
                 'accounting.vendors.view',
                 'Supplier invoice email',
@@ -38,8 +39,8 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
         }
 
         try {
-            Mail::to($bill->vendor->email)->queue(new SupplierInvoiceStatusMail(
-                $bill,
+            Mail::to($snapshot['recipient_email'])->queue(new SupplierInvoiceStatusMail(
+                $snapshot,
                 $fallback->userIdsWithPermission('accounting.vendors.view'),
             ));
         } catch (\Throwable $e) {

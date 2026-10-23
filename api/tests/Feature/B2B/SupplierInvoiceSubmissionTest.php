@@ -7,11 +7,12 @@ namespace Tests\Feature\B2B;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\SupplierInvoice;
+use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
+use App\Modules\B2B\Mail\SupplierInvoiceStatusMail;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Policies\SupplierPoCapabilities;
 use App\Modules\B2B\Services\SupplierInvoiceService;
@@ -257,6 +258,44 @@ class SupplierInvoiceSubmissionTest extends TestCase
         }
         $this->assertSame(2, SupplierInvoice::query()->where('vendor_id', $vendor->id)->count());
         $this->assertNotSame($first->fresh()->supplier_invoice_id, $second->fresh()->supplier_invoice_id);
+    }
+
+    public function test_supplier_invoice_confirmation_keeps_submission_values_when_records_change(): void
+    {
+        $vendor = Vendor::factory()->create([
+            'name' => 'Snapshot Supplier',
+            'contact_person' => 'Original Contact',
+            'email' => 'snapshot-supplier@example.test',
+        ]);
+        $bill = Bill::factory()->create([
+            'vendor_id' => $vendor->id,
+            'bill_number' => 'BILL-SNAPSHOT-1',
+            'date' => '2026-10-19',
+            'total_amount' => '125.50',
+        ]);
+        $invoice = SupplierInvoice::create([
+            'vendor_id' => $vendor->id,
+            'number' => 'SUP-INV-42',
+            'date' => '2026-10-18',
+            'gross_total' => '125.50',
+            'submitted_at' => now(),
+        ]);
+        $bill->forceFill(['supplier_invoice_id' => $invoice->id])->save();
+        $event = new SupplierInvoiceSubmitted($bill->refresh());
+        $mail = new SupplierInvoiceStatusMail($event->snapshot);
+
+        $vendor->update(['contact_person' => 'Changed Contact']);
+        $invoice->update(['number' => 'SUP-INV-99', 'gross_total' => '999.00']);
+        $bill->update(['total_amount' => '999.00']);
+
+        self::assertSame('SUP-INV-42', $mail->snapshot['invoice_number']);
+        self::assertSame('125.50', $mail->snapshot['gross_total']);
+        self::assertSame(app(\App\Common\Services\CurrencyDisplayService::class)->format('125.50'), $mail->snapshot['display_total']);
+        self::assertSame('Original Contact', $mail->snapshot['supplier_name']);
+        self::assertSame('snapshot-supplier@example.test', $mail->snapshot['recipient_email']);
+        self::assertSame('Supplier invoice SUP-INV-42 received', $mail->envelope()->subject);
+        self::assertStringContainsString('SUP-INV-42', $mail->render());
+        self::assertStringNotContainsString('SUP-INV-99', $mail->render());
     }
 
     public function test_pre_cutover_posted_unpaid_bill_can_be_reconciled_once(): void
