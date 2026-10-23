@@ -7,11 +7,9 @@ namespace App\Modules\CRM\Listeners;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
 use App\Modules\CRM\Mail\CustomerComplaintUpdateMail;
-use App\Modules\CRM\Models\CustomerComplaint;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 
 class EmailCustomerOnComplaintUpdated implements ShouldQueue
 {
@@ -19,7 +17,8 @@ class EmailCustomerOnComplaintUpdated implements ShouldQueue
 
     public function handle(CustomerComplaintUpdated $event): void
     {
-        $complaint = $event->complaint->loadMissing(['customer', 'product', 'salesOrder', 'eightDReport']);
+        $complaint = $event->complaint;
+        $snapshot = $event->snapshotValues();
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
             'link_to' => '/crm/complaints/'.$complaint->hash_id,
@@ -28,11 +27,11 @@ class EmailCustomerOnComplaintUpdated implements ShouldQueue
             'reason' => 'The customer email was missing, invalid, unreachable, or rejected by the email provider.',
         ];
 
-        if (! filter_var($complaint->customer?->email, FILTER_VALIDATE_EMAIL)) {
+        if (! filter_var($snapshot['recipient_email'], FILTER_VALIDATE_EMAIL)) {
             $fallback->notifyPermission(
                 'crm.complaints.manage',
                 'Customer complaint email',
-                "Complaint {$complaint->complaint_number} changed to {$this->statusLabel($complaint)} but the customer has no usable email address. Contact the customer through an approved channel.",
+                "Complaint {$snapshot['complaint_number']} changed to {$snapshot['status_label']} but the customer has no usable email address. Contact the customer through an approved channel.",
                 $context,
             );
 
@@ -40,9 +39,8 @@ class EmailCustomerOnComplaintUpdated implements ShouldQueue
         }
 
         try {
-            Mail::to($complaint->customer->email)->queue(new CustomerComplaintUpdateMail(
-                $complaint,
-                $event->action,
+            Mail::to($snapshot['recipient_email'])->queue(new CustomerComplaintUpdateMail(
+                $snapshot,
                 $fallback->userIdsWithPermission('crm.complaints.manage'),
             ));
         } catch (\Throwable $e) {
@@ -59,11 +57,4 @@ class EmailCustomerOnComplaintUpdated implements ShouldQueue
         }
     }
 
-    private function statusLabel(CustomerComplaint $complaint): string
-    {
-        $status = $complaint->status;
-        $value = $status instanceof \BackedEnum ? $status->value : (string) $status;
-
-        return Str::headline($value);
-    }
 }
