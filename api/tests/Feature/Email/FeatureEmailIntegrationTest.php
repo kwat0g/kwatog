@@ -37,6 +37,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Auth\Models\User;
 use App\Common\Mail\EmailIntegrationTestMail;
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\OutboxEventCodec;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -197,6 +198,69 @@ class FeatureEmailIntegrationTest extends TestCase
                 && $mail->delivery->is($delivery)
                 && str_contains($mail->render(), 'Receiving Clerk')
                 && str_contains($mail->render(), $delivery->delivery_number);
+        });
+    }
+
+    public function test_customer_delivery_email_uses_confirmation_time_values_after_outbox_replay(): void
+    {
+        $creator = User::factory()->create();
+        $customer = Customer::factory()->create([
+            'email' => 'original-delivery@example.test',
+            'contact_person' => 'Original Receiver',
+        ]);
+        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id]);
+        $salesOrderNumber = $salesOrder->so_number;
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-DELIVERY-OLD',
+        ]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DR-SNAPSHOT-001',
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'confirmed',
+            'scheduled_date' => now()->toDateString(),
+            'delivered_at' => '2026-04-03 08:15:00',
+            'confirmed_at' => now(),
+            'created_by' => $creator->id,
+            'receiver_name' => 'Original Receiver',
+            'receiver_position' => 'Store Manager',
+            'delivery_remarks' => 'Original delivery note',
+        ]);
+
+        $event = new DeliveryConfirmed($delivery->fresh(), $invoice->id);
+        $encoded = app(OutboxEventCodec::class)->encode($event);
+        $customer->update(['email' => 'changed-delivery@example.test', 'contact_person' => 'Changed Contact']);
+        $salesOrder->update(['so_number' => 'SO-CHANGED']);
+        $invoice->update(['invoice_number' => 'INV-DELIVERY-NEW']);
+        $delivery->update([
+            'delivery_number' => 'DR-CHANGED',
+            'delivered_at' => '2026-04-04 09:30:00',
+            'receiver_name' => 'Changed Receiver',
+            'receiver_position' => 'Changed Position',
+            'delivery_remarks' => 'Changed delivery note',
+        ]);
+
+        $replayed = app(OutboxEventCodec::class)->decode($encoded['event_type'], $encoded['payload']);
+        app(EmailCustomerOnDeliveryConfirmed::class)->handle($replayed);
+
+        Mail::assertQueued(CustomerDeliveryConfirmedMail::class, function (CustomerDeliveryConfirmedMail $mail) use ($salesOrderNumber): bool {
+            $html = $mail->render();
+            $deliveryKey = (new \ReflectionProperty(\App\Common\Mail\QueuedMailable::class, 'deliveryKey'))->getValue($mail);
+
+            return $mail->hasTo('original-delivery@example.test')
+                && $mail->envelope()->subject === 'Delivery DR-SNAPSHOT-001 confirmed'
+                && str_contains($html, 'Original Receiver')
+                && str_contains($html, $salesOrderNumber)
+                && ! str_contains($html, 'SO-CHANGED')
+                && str_contains($html, 'Apr 03, 2026')
+                && str_contains($html, 'INV-DELIVERY-OLD')
+                && str_contains($html, 'Original delivery note')
+                && ! str_contains($html, 'Changed Contact')
+                && ! str_contains($html, 'DR-CHANGED')
+                && ! str_contains($html, 'INV-DELIVERY-NEW')
+                && ! str_contains($html, 'Changed delivery note')
+                && is_string($deliveryKey)
+                && $deliveryKey === hash('sha256', 'customer-delivery-confirmed|'.$mail->snapshot['delivery_id'].'|original-delivery@example.test');
         });
     }
 

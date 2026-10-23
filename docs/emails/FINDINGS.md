@@ -61,3 +61,5 @@ No code-level fix was applied as part of Phase 0/1.
 - **EF-031 — RMA update content is snapshotted before queueing.** Snapshot preserves event-time status and party data; delivery uses a stable key. Company name comes from email branding settings.
 
 - **EF-031 — Return request update content is snapshotted and minimized.** Email now shows only reference/status with portal link, while retaining the event-specific update message and per-recipient delivery key.
+
+- **EF-032 — Delivery confirmation uses event-time values and delivery idempotency key.** The customer notice carries a deep link to the customer portal delivery record.
