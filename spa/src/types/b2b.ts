@@ -220,13 +220,14 @@ export interface PortalOrderQuote {
 
 export interface PortalCatalogItem {
   price_source?: 'base' | 'agreement' | null;
+  pricing_issue?: string | null;
   id: string;
   part_number: string;
   name: string;
   image_url?: string | null;
   unit_of_measure: string;
-  unit_price: string;
-  pricing_method: string;
+  unit_price: string | null;
+  pricing_method: string | null;
 }
 
 export interface PortalSoDetail extends PortalSoSummary {

@@ -17,7 +17,7 @@ import { fromCentavos, toCentavos } from '@/lib/money';
 import type { PortalCatalogItem } from '@/types/b2b';
 
 interface OrderLine {
-  product: PortalCatalogItem;
+  product: PortalCatalogItem & { unit_price: string };
   quantity: string;
 }
 
@@ -107,6 +107,7 @@ export default function CustomerPlaceOrderPage() {
     ? Object.values(quoteError?.response?.data?.errors ?? {}).flat().join(' ') || quoteError?.response?.data?.message || 'Unable to check prices. Try again.' : null;
 
   const addLine = (product: PortalCatalogItem) => {
+    if (product.unit_price === null) return;
     if (lines.some((line) => line.product.id === product.id)) return;
     setLines([...lines, { product, quantity: '1' }]);
   };
@@ -227,11 +228,13 @@ export default function CustomerPlaceOrderPage() {
                         <div className="col-start-2 row-start-1 min-w-0"><p className="font-medium leading-snug break-words">{product.name}</p>
                           <p className="mt-0.5 font-mono text-xs text-muted">{product.part_number}</p></div>
                         <p className="col-start-2 row-start-2 text-xs text-muted sm:col-start-3 sm:row-start-1 sm:text-right">
-                          <span className="font-mono tabular-nums">{formatPeso(product.unit_price)}</span> / {product.unit_of_measure || 'unit'}</p>
+                          <span className="font-mono tabular-nums">{product.unit_price === null ? 'Price unavailable' : formatPeso(product.unit_price)}</span>{product.unit_price !== null && <> / {product.unit_of_measure || 'unit'}</>}
+                          {product.pricing_issue && <span className="mt-1 block text-warning-fg">{product.pricing_issue}</span>}
+                        </p>
                         <Button type="button" size="sm" className="col-start-3 row-span-2 row-start-1 min-h-11 disabled:opacity-100 disabled:text-muted sm:col-start-4 sm:row-span-1"
                           icon={added ? <LuCheck size={14} /> : <LuPlus size={14} />}
-                          aria-label={added ? `${product.name} added to order` : `Add ${product.name} to order`}
-                          disabled={added} onClick={() => addLine(product)}>{added ? 'Added' : 'Add'}</Button>
+                          aria-label={added ? `${product.name} added to order` : product.unit_price === null ? `${product.name} cannot be ordered: ${product.pricing_issue ?? 'price unavailable'}` : `Add ${product.name} to order`}
+                          disabled={added || product.unit_price === null} onClick={() => addLine(product)}>{added ? 'Added' : product.unit_price === null ? 'Unavailable' : 'Add'}</Button>
                       </li>;
                     })}
                   </ul>
