@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace Tests\Feature\Email;
 
 use App\Modules\Accounting\Events\InvoiceFinalized;
+use App\Modules\Accounting\Events\CreditNoteFinalized;
 use App\Modules\Accounting\Events\OfficialReceiptIssued;
 use App\Modules\Accounting\Mail\CustomerInvoiceFinalizedMail;
 use App\Modules\Accounting\Mail\CustomerOfficialReceiptMail;
+use App\Modules\Accounting\Mail\PartyCreditNoteMail;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Accounting\Models\OfficialReceipt;
+use App\Modules\Accounting\Models\CreditNote;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
@@ -295,6 +299,80 @@ class FeatureEmailIntegrationTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_customer_credit_note_event_keeps_issue_time_recipient_and_values(): void
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'credit-at-issue@example.test',
+            'name' => 'Customer at issue',
+            'contact_person' => null,
+        ]);
+        $creditNote = CreditNote::create([
+            'credit_note_number' => 'CN-2026-001',
+            'type' => 'customer',
+            'customer_id' => $customer->id,
+            'date' => '2026-10-20',
+            'subtotal' => '1000.00',
+            'vat_amount' => '120.00',
+            'total_amount' => '1120.00',
+            'balance' => '1120.00',
+            'reason' => 'Returned item',
+        ]);
+        $event = new CreditNoteFinalized($creditNote);
+
+        $customer->update([
+            'email' => 'credit-after@example.test',
+            'name' => 'Changed customer',
+        ]);
+        $creditNote->update([
+            'credit_note_number' => 'CN-CHANGED',
+            'total_amount' => '9999.00',
+            'reason' => 'Changed reason',
+        ]);
+
+        app(\App\Modules\Accounting\Listeners\EmailPartyOnCreditNoteFinalized::class)->handle($event);
+
+        Mail::assertQueued(PartyCreditNoteMail::class, function (PartyCreditNoteMail $mail): bool {
+            $html = $mail->render();
+
+            $this->assertTrue($mail->hasTo('credit-at-issue@example.test'));
+            $this->assertFalse($mail->hasTo('credit-after@example.test'));
+            $this->assertStringContainsString('Customer at issue', $html);
+            $this->assertStringNotContainsString('Changed customer', $html);
+            $this->assertStringContainsString('CN-2026-001', $html);
+            $this->assertStringNotContainsString('CN-CHANGED', $html);
+            $this->assertStringContainsString('PHP 1,120.00', $html);
+            $this->assertStringNotContainsString('9,999.00', $html);
+            $this->assertStringContainsString('Returned item', $html);
+            $this->assertStringNotContainsString('Changed reason', $html);
+
+            return true;
+        });
+    }
+
+    public function test_supplier_credit_note_email_goes_to_vendor_address(): void
+    {
+        $vendor = Vendor::factory()->create(['email' => 'ap@example.test']);
+        $creditNote = CreditNote::create([
+            'credit_note_number' => 'SCN-2026-001',
+            'type' => 'supplier',
+            'vendor_id' => $vendor->id,
+            'date' => '2026-10-20',
+            'subtotal' => '1000.00',
+            'vat_amount' => '120.00',
+            'total_amount' => '1120.00',
+            'balance' => '1120.00',
+        ]);
+
+        app(\App\Modules\Accounting\Listeners\EmailPartyOnCreditNoteFinalized::class)
+            ->handle(new CreditNoteFinalized($creditNote));
+
+        Mail::assertQueued(PartyCreditNoteMail::class, fn (PartyCreditNoteMail $mail): bool =>
+            $mail->hasTo('ap@example.test')
+            && ! $mail->hasTo('unknown@example.test')
+            && str_contains($mail->render(), 'Supplier Credit')
+        );
     }
 
     public function test_supplier_purchase_order_email_is_queued_with_supplier_data(): void
