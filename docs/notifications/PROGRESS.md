@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #340, stacked after PR #339.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #341, stacked after PR #340.
 
 ## Phase status
 
@@ -29,6 +29,7 @@
 | F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | `8512116d` |
 | F-04. Badge destination permissions | `notifications/fix-badge-route-permissions` | [#339](https://github.com/kwat0g/kwatog/pull/339) | `7089562c` |
 | F-01. Profile-request badge route and query parity | `notifications/fix-profile-request-badge-route` | [#340](https://github.com/kwat0g/kwatog/pull/340) | `93c0f12c` |
+| F-18. Pricing notification role allow-list | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | `9e9243a0` |
 
 ## Coverage ledger
 
@@ -107,6 +108,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include missing met
 - Targeted parity test: `BadgeControllerTest::test_profile_request_badge_matches_the_hr_and_finance_review_queues` **1 passed / 8 assertions**. Department-head list and badge both count **2**; finance-officer list and badge both count **3** in seeded test fixtures, including excluded statuses, non-finance rows, and an out-of-department HR row. Existing Finance bank-request workflow test: **1 passed / 34 assertions**. Sidebar permission suite: **21 passed**.
 - The first `artisan test --filter` invocation could not load the test suite because an unrelated existing `AudienceFakeDetector::detect()` return type conflicts with `DetectorInterface`. Running the target test file directly with PHPUnit succeeded. Full role parity remains open under F-09.
 - PHP syntax and `git diff --check` pass. `pint --test` still reports existing formatting violations in these legacy files; no file-wide formatting was applied.
+
+## Separate finding fix: F-18 pricing notification role allow-list
+
+- `PricingReviewService::notify()` now intersects its caller-supplied role allow-list with the destination permission. BOM notifications now use `mrp.boms.view`, which gates the linked list/detail route. No product/account owner or assignment field was found, so record-specific ownership remains unresolved; no new role was added.
+- Targeted API tests: expiry reminder **1 passed / 7 assertions**; BOM cost-refresh negative recipient case **1 passed / 11 assertions**; audience batching **1 passed / 4 assertions**. The expiry test confirms Finance can open the shared agreement list but receives no expiry notice when absent from that event's allowed roles; the BOM test confirms an unlisted role with BOM view/manage permissions receives no notice while PPC does.
+- PHP syntax and `git diff --check` pass. Full pricing-event role coverage and product/account assignment policy remain open.
 
 ## Outstanding proof / risks
 
