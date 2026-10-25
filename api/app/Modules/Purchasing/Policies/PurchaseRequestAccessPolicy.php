@@ -12,7 +12,6 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -74,6 +73,35 @@ final class PurchaseRequestAccessPolicy
                 });
             }
         });
+    }
+
+    /**
+     * Apply the exact list scope for purchase requests awaiting this user's
+     * approval. Used by the sidebar count, count endpoint, and drill-down list.
+     *
+     * @param  Builder<PurchaseRequest>  $query
+     * @return Builder<PurchaseRequest>
+     */
+    public function awaitingMyApproval(Builder $query, User $user): Builder
+    {
+        $roles = $this->approvalRoleSlugs($user);
+        $this->visibleTo($query, $user);
+
+        if (! $user->hasPermission('purchasing.pr.approve') || $roles === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query
+            ->where('status', PurchaseRequestStatus::Pending->value)
+            ->where('requested_by', '<>', $user->id)
+            ->whereHas('approvalRecords', fn ($records) => $records
+                ->where('action', 'pending')
+                ->whereIn('role_slug', $roles));
+    }
+
+    public function awaitingMyApprovalQuery(User $user): Builder
+    {
+        return $this->awaitingMyApproval(PurchaseRequest::query(), $user);
     }
 
     public function canView(User $user, PurchaseRequest $pr): bool

@@ -6,7 +6,21 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { PageActionsProvider } from '@/contexts/PageActionsContext';
 import { useSidebarStore } from '@/stores/sidebarStore';
 
-vi.mock('@/hooks/useBadges', () => ({ useBadges: () => ({ getBadge: () => undefined }) }));
+const badgeMock = vi.hoisted(() => ({
+  getBadge: vi.fn(
+    (
+      _key?: string,
+    ):
+      | {
+          count: number;
+          severity: 'warning' | 'danger' | 'neutral';
+          label: string;
+          description: string;
+        }
+      | undefined => undefined,
+  ),
+}));
+vi.mock('@/hooks/useBadges', () => ({ useBadges: () => ({ getBadge: badgeMock.getBadge }) }));
 vi.mock('@/api/auth', () => ({ authApi: { updatePreferences: vi.fn().mockResolvedValue({}) } }));
 
 function Harness() {
@@ -16,10 +30,33 @@ function Harness() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  badgeMock.getBadge.mockReturnValue(undefined);
   useSidebarStore.getState().init(false);
   useSidebarStore.getState().setCollapsed(false);
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+it('opens the awaiting-approval filter when purchase requests has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'purchase_requests'
+      ? {
+          count: 3,
+          severity: 'warning',
+          label: 'Purchase Requests',
+          description: 'Purchase requests awaiting approval',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/purchasing/purchase-requests']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Purchase Requests/ })).toHaveAttribute(
+    'href',
+    '/purchasing/purchase-requests?signal=awaiting_my_approval',
+  );
+});
 
 it('expands the active module, expires unvisited peeks, and keeps visited modules open', () => {
   render(<MemoryRouter initialEntries={['/mrp/plans']}><Harness /></MemoryRouter>);

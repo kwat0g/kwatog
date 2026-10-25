@@ -77,7 +77,11 @@ class PurchaseRequestService
             $q->where('pr_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
-        $this->access->visibleTo($q, $user);
+        if (($filters['signal'] ?? null) === 'awaiting_my_approval' && $user !== null) {
+            $this->access->awaitingMyApproval($q, $user);
+        } else {
+            $this->access->visibleTo($q, $user);
+        }
 
         return $q->orderByDesc('date')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
