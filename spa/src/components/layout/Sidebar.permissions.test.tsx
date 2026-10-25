@@ -412,6 +412,11 @@ describe('approval navigation boundaries', () => {
     expect(navItemForPermissions(item('/hr/profile-update-requests'), new Set(['hr.profile_updates.finance_review'])).label).toBe('Bank Account Changes');
   });
 
+  it('attaches the profile-request badge to its review queue', () => {
+    expect(item('/hr/profile-update-requests').badgeKey).toBe('profile_requests');
+    expect(item('/hr/employees').badgeKey).toBeUndefined();
+  });
+
   it('keeps default labels while permission data is unavailable', () => {
     expect(navItemForPermissions(item('/hr/employees'), undefined).label).toBe('Employees');
     expect(navItemForPermissions(item('/hr/profile-update-requests'), undefined).label).toBe('Bank Account Changes');

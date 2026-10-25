@@ -19,8 +19,10 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\ProfileUpdateRequest;
 use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
@@ -168,6 +170,63 @@ class BadgeControllerTest extends TestCase
             ->assertOk()
             ->json('data');
         $this->assertArrayHasKey('deliveries', $deliveryBadges);
+    }
+
+    public function test_profile_request_badge_matches_the_hr_and_finance_review_queues(): void
+    {
+        $reviewerEmployee = Employee::factory()->create();
+        $hrReviewer = User::factory()->create([
+            'role_id' => Role::where('slug', 'department_head')->value('id'),
+            'employee_id' => $reviewerEmployee->id,
+        ]);
+        $requester = User::factory()->create();
+        $sameDepartment = Employee::factory()->create(['department_id' => $reviewerEmployee->department_id]);
+        $otherDepartment = Employee::factory()->create();
+
+        $createRequest = static fn (Employee $employee, ProfileUpdateStatus $status, bool $requiresFinance) => ProfileUpdateRequest::query()->create([
+            'employee_id' => $employee->id,
+            'requested_by' => $requester->id,
+            'status' => $status->value,
+            'requires_finance' => $requiresFinance,
+            'changes' => $requiresFinance
+                ? ['bank_name' => 'Test Bank']
+                : ['mobile_number' => '09170000000'],
+        ]);
+
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, false);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Approved, true);
+        $createRequest($otherDepartment, ProfileUpdateStatus::Pending, false);
+
+        $hrList = $this->actingAs($hrReviewer, 'sanctum')
+            ->getJson('/api/v1/hr/profile-update-requests')
+            ->assertOk();
+        $hrBadge = $this->actingAs($hrReviewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.profile_requests.count');
+        $this->assertSame(2, $hrList->json('meta.total'));
+        $this->assertSame($hrList->json('meta.total'), $hrBadge);
+
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($otherDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, false);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Approved, true);
+
+        $financeList = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/hr/profile-update-requests')
+            ->assertOk();
+        $financeBadge = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.profile_requests.count');
+        $this->assertSame(3, $financeList->json('meta.total'));
+        $this->assertSame($financeList->json('meta.total'), $financeBadge);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void
