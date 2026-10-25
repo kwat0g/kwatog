@@ -168,6 +168,8 @@ class FinalPayTest extends TestCase
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '22000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-20']);
         $this->seedOpenPayrollPeriod();
+        // DTR rows exist but must not drive the figure — the shared proration
+        // is calendar-day based, like payroll's flat basic pay (HR-02).
         $this->seedAttendanceHours($employee, [
             '2026-05-16' => 8.0,
             '2026-05-17' => 8.0,
@@ -187,7 +189,7 @@ class FinalPayTest extends TestCase
             'semi_monthly_rate'    => '7150.00',
             'basic_monthly_salary' => null,
         ]);
-        $clearance = $this->makeClearance($employee);
+        $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-20']);
         $this->seedOpenPayrollPeriod();
         $this->seedAttendanceHours($employee, [
             '2026-05-16' => 8.0,

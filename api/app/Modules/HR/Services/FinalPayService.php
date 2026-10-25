@@ -49,6 +49,7 @@ class FinalPayService
         private readonly JournalEntryService $journals,
         private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly SettingsService $settings,
+        private readonly EmploymentProrationService $proration,
     ) {}
 
     public function compute(Clearance $clearance, ?User $by = null): Clearance
@@ -547,16 +548,18 @@ class FinalPayService
         // Monthly equivalent reconciles both pay types (see Employee model), so
         // a semi-monthly employee's separation pay is not computed off half a
         // month's figure.
-        $monthly = $employee->monthlyEquivalentSalary();
-        $rate = $monthly !== null
-            ? Money::div((string) $monthly, $this->workDaysPerMonth(), Money::INNER)
-            : '0.0000';
+        return Money::div($this->authoritativeMonthlySalary($employee), $this->workDaysPerMonth(), Money::INNER);
+    }
 
-        if (bccomp($rate, '0', Money::INNER) <= 0) {
+    private function authoritativeMonthlySalary(Employee $employee): string
+    {
+        $monthly = $employee->monthlyEquivalentSalary();
+
+        if ($monthly === null || Money::lte((string) $monthly, '0')) {
             throw new BusinessRuleException("Employee {$employee->employee_no} has no authoritative pay rate for final-pay calculation.");
         }
 
-        return $rate;
+        return (string) $monthly;
     }
 
     private function workDaysPerMonth(): string

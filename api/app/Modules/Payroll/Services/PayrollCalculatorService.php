@@ -72,6 +72,7 @@ class PayrollCalculatorService
         private readonly ThirteenthMonthService $thirteenthMonth,
         private readonly SettingsService $settings,
         private readonly PayrollPeriodService $periods,
+        private readonly EmploymentProrationService $proration,
     ) {}
 
     /**
