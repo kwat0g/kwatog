@@ -122,7 +122,8 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Production and maintenance dashboard listeners only invalidate/refetch their lists or dashboard queries. Events on those shared channels now carry only `{ refresh: true }`; identifiers, quantities, reasons, candidate lists, and descriptions stay off broad dashboard channels.
 - The production output page now refetches the authorized work-order detail after an output event instead of consuming cumulative output values from the event payload.
 - `DashboardBroadcastPayloadTest`: **1 passed / 8 assertions**. The plan event's focused outbox test: **1 passed / 3 assertions**, retaining the active/cancelled delivery guard. The SPA `record-output.test.tsx`: **5 passed**. Pint, ESLint, and `git diff --check` passed.
-- Payroll progress channel uses `payroll.periods.view`, matching the period detail endpoint's current gate. No additional payroll scope restriction is proposed without the still-open HR/Finance audience decision.
+- Payroll progress channel uses `payroll.periods.view`, matching the period detail endpoint's current gate. Its progress counts/status payload is unchanged; the sensitive HR/Finance audience question remains open.
+- PR [#358](https://github.com/kwat0g/kwatog/pull/358): `finding-lifecycle`, accessibility, and visual baselines pass. API CI stops before PHPStan/PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration). SPA CI stops at dependency audit (2 moderate, 2 high vulnerabilities), skipping lint/typecheck/Vitest/build. Locally, the targeted API tests, SPA test, Pint, ESLint, and diff check pass; full SPA typecheck reports existing errors outside the changed page.
 
 ## Separate finding fix: F-02 approval badge scope
 
