@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes copy and safe no-link behavior for permission-change notices. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, and PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -131,8 +131,9 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Audience stays unchanged: the affected user receives each notice; the system administrator who made the change does not.
 - `PermissionOverrideNotificationCopyTest`: **1 passed / 29 assertions**, covering add, update, remove, restore, no-link copy, raw slug/enum exclusion, and actor exclusion. Pint and `git diff --check` pass.
 - Queue long-wait link remains in separate PR [#346](https://github.com/kwat0g/kwatog/pull/346); verify it before marking F-15 fully closed.
+- PR #359 `finding-lifecycle` passes; API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration).
 
-## Separate finding fix: F-24 invoice payment review audience
+## Separate finding fix: F-24 invoice payment review audience (PR [#362](https://github.com/kwat0g/kwatog/pull/362))
 
 - The payment-submission flow is a shared Finance review queue, not an assigned queue: `InvoicePaymentSubmission` has no reviewer assignment, and verify/reject routes use `accounting.invoices.collect`. Invoice detail requires `accounting.invoices.view`; the list/detail service adds no record-specific row scope.
 - Recipients now need active `accounting.invoices.collect` and `accounting.invoices.view` access. Exclude `system_admin`, whose permission bypass made it appear to be a Finance reviewer. Event timing, dedupe key, message, link, and review workflow stay unchanged.
