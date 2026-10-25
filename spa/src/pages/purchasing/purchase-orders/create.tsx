@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { LuPlus as Plus, LuTrash2 as Trash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
@@ -111,14 +111,14 @@ export default function CreatePurchaseOrderPage() {
                   <td><input className="h-7 w-full px-2 rounded-sm border border-default text-xs" value={l.description}
                     onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, description: e.target.value } : it))} /></td>
                   <td className="text-right">
-                    <input className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums" type="text"
+                    <input className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
                            {...numberInputProps()} value={l.quantity}
                            onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, quantity: e.target.value } : it))} />
                   </td>
                   <td><input className="h-7 w-16 px-2 rounded-sm border border-default text-xs" value={l.unit}
                     onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, unit: e.target.value } : it))} /></td>
                   <td className="text-right">
-                    <input className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums" type="text"
+                    <input className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
                            {...numberInputProps()} value={l.unit_price}
                            onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, unit_price: e.target.value } : it))} />
                   </td>
