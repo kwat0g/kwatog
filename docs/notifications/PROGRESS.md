@@ -10,7 +10,7 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes at capture, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; later targeted badge/list comparisons are recorded below. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
+| 3. Backend foundation | In progress | Units 1–4 have PRs (#332–#334, #370); F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
 | 4. Frontend | In progress, partial | Sidebar now links the transfer badge to its filtered list; notification bell/center and multi-signal rendering remain open. |
 | 5. Migration | In progress, partial | Budget-transfer badge/list scope fixed in this branch; remaining notification dispatches and badge definitions are unmigrated. |
 | 6. Extras | Not started | No extra features started. |
@@ -23,6 +23,7 @@
 | 1. Versioned payload contract | `notifications/phase3-central-contract` | [#332](https://github.com/kwat0g/kwatog/pull/332) | `a8a479e0` |
 | 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | `e85cc70f` |
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | `cee47e18` |
+| 4. Laravel notification dispatch centralization | `notifications/centralize-laravel-notifications` | [#370](https://github.com/kwat0g/kwatog/pull/370) | `f6519ec1`, `7b7d5953` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -185,6 +186,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Targeted API results: `PayrollMakerCheckerTest` **12 passed / 67 assertions**; `PayrollAdjustmentStaleRejectRaceTest` **4 passed / 12 assertions**; `NotifyEmployeesOnPayrollFinalizedTest` **2 passed / 9 assertions**; `PayslipNotificationDedupeTest` **1 passed / 1 assertion**.
 - `SendPayslipEmailJobTest`: the new access/link case passed; full file has **4 passed / 2 pre-existing failures**. Existing failures are a case-mismatched email-copy assertion and an old test passing `PayslipPdfService` where `PayrollPublicationPolicy` is expected. These are separate test cleanup work.
 - PHP syntax passed for all changed PHP files. Targeted ESLint passed for the new route and test. `npm run typecheck` reports errors in other SPA files, none in this payroll route; the dynamic-route audit could not run without an isolated test `BASE_URL`. Pint reported six style violations across the legacy PHP files; its broad formatting was reverted to avoid unrelated churn. The detail route test passed; visual QA remains outstanding.
+
+## Separate finding fix: F-27 password-reset failure callback signature
+
+- Draft PR pending. `PasswordResetNotification::failed()` now fully qualifies `\Throwable`, matching the HR subclass override on PHP 8.3. This prevents class-loading failure before queued HR password-reset tests can run.
+- Baseline reproduction: `EmployeePasswordResetNotificationTest.php` failed before the patch with a fatal method compatibility error because PHP resolved the parent's type as `App\Modules\Auth\Notifications\Throwable`.
+- `EmployeePasswordResetNotificationTest.php`: **1 passed / 2 assertions**; `UserProvisioningTest.php`: **8 passed / 25 assertions**; `UserAdministrationHardeningTest.php`: **8 passed / 27 assertions**. PHP syntax and `git diff --check` pass. Targeted Pint reports one existing style issue in the unrelated fully qualified test-class `@see` reference; left it unchanged.
 
 ## Separate finding fix: F-07 training-expiry deep links (draft PR [#365](https://github.com/kwat0g/kwatog/pull/365))
 
