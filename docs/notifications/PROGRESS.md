@@ -76,6 +76,7 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 - `ApprovalService::notifySubmitter()` now returns before dispatch when the submitter fails `ApprovalTypeRegistry::userCanViewRecord()`. Accessible submitters retain the existing message and record link; event timing and content are unchanged.
 - `ApprovalSubmitterOutcomeVisibilityTest`: **1 test / 5 assertions**; inaccessible employee receives no notice and visible system administrator receives the existing deep link.
 - Asset disposal full-chain and rejection workflow: **2 tests / 26 assertions**. `ApprovalServiceTest`: **18 tests / 44 assertions**.
+- PR #336 CI backend job fails before PHPUnit on the existing duplicate `PdfRenderService::ensureDompdfDirs()` declaration in `origin/main`; tracked separately as F-22. Local targeted tests pass.
 - This is a partial fix. `BudgetService`, `BudgetTransferService`, `BillService`, `InvoiceService`, and `StockAdjustmentService` still need the same subject-access review.
 
 ## Outstanding proof / risks
