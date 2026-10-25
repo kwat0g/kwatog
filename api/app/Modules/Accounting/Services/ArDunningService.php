@@ -14,6 +14,7 @@ use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -184,7 +185,7 @@ class ArDunningService
 
     private function notifyArOfficers(Invoice $invoice, int $daysOverdue): void
     {
-        $officers = $this->notifications->usersWithPermission('accounting.invoices.view');
+        $officers = $this->arOfficers();
         if ($officers->isEmpty()) {
             return;
         }
@@ -194,16 +195,26 @@ class ArDunningService
             'message' => "Invoice {$invoice->invoice_number} for ".
                 ($invoice->customer?->name ?? 'unknown customer').
                 " is {$daysOverdue} days overdue (".app(CurrencyDisplayService::class)->format($invoice->balance).').',
-            'link_to' => '/accounting/invoices',
+            'link_to' => '/accounting/invoices/'.$invoice->hash_id,
         ]);
     }
 
-    /** @return list<int> */
-    private function arOfficerIds(): array
+    /** @return list<int> Active AR reviewers who still have invoice visibility. */
+    public function arOfficerIds(): array
     {
-        return $this->notifications->usersWithPermission('accounting.invoices.view')
+        return $this->arOfficers()
             ->map(static fn (User $user): int => (int) $user->id)
+            ->values()
             ->all();
+    }
+
+    /** @return Collection<int, User> */
+    private function arOfficers(): Collection
+    {
+        return $this->notifications->usersWithPermission('accounting.invoices.collect')
+            // System administrators bypass permissions; they are not AR reviewers.
+            ->reject(static fn (User $user): bool => $user->role?->slug === 'system_admin')
+            ->filter(static fn (User $user): bool => $user->hasPermission('accounting.invoices.view'));
     }
 
     private function notifyArEmailFailure(Invoice $invoice, int $daysOverdue, string $message): void
@@ -213,7 +224,7 @@ class ArDunningService
             'Customer AR reminder',
             "Invoice {$invoice->invoice_number} for ".($invoice->customer?->name ?? 'unknown customer')." is {$daysOverdue} days overdue. {$message}",
             [
-                'link_to' => '/accounting/invoices',
+                'link_to' => '/accounting/invoices/'.$invoice->hash_id,
                 'entity_type' => 'invoice',
                 'entity_id' => $invoice->hash_id,
                 'reason' => 'The customer email was missing, unreachable, or rejected by the email provider.',

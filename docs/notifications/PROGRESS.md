@@ -140,6 +140,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `InvoicePaymentSubmissionServiceTest`: **13 passed / 80 assertions**. Negative checks exclude system administrators, inactive Finance users, a user granted collection permission without invoice visibility, and a view-only executive; the Finance Officer receives the exact invoice link.
 - Empty-recipient fallback/audit remains open in the central notification service. Do not use a generic system-admin fallback for customer payment data without an explicit business rule.
 
+## Separate finding fix: F-25 AR dunning audience and links
+
+- Final-tier escalation, missing-email fallback, and queued-mail failure now share active AR reviewers who hold both `accounting.invoices.collect` and `accounting.invoices.view`; exclude `system_admin` permission bypass. Queued mail failure re-resolves current access rather than trusting its queue-time ID snapshot.
+- Internal dunning escalation and email-failure notices link to the exact invoice. Customer reminder recipients and portal links stay unchanged; dunning schedule, tier timing, and email preference behavior stay unchanged.
+- `RunArDunningCommandTest`: **12 passed / 58 assertions**. Positive and negative cases cover Finance Officer, system administrator, view-only executive, and collection access revoked before a queued email failure.
+- Updated three stale test expectations from `PHP` text to the configured `₱` display. Pint, PHP syntax, and `git diff --check` pass.
+- No eligible AR reviewer still produces no notice or audit. Central empty-recipient fallback remains open; no generic administrator fallback is used for finance data.
+
 ## Separate finding fix: F-02 approval badge scope
 
 - `BadgeService.approvals` now reads the approval board's `summary.my_action`, so it inherits the board's supported type, permission, delegation, and source-row filtering. The test verifies badge/board count parity and excludes an out-of-department leave row plus an unsupported approval type.

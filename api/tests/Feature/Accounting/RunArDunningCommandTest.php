@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Enums\PermissionOverrideType;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\ArDunningService;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -48,10 +52,10 @@ class RunArDunningCommandTest extends TestCase
         $mail = new InvoiceDunningMail($invoice->fresh('customer'), 7, 8);
         $html = $mail->render();
         $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
-        $this->assertStringContainsString('PHP 1,000.00', $html);
+        $this->assertStringContainsString('₱1,000.00', $html);
         $this->assertStringContainsString('Balance due when reminder was generated', $html);
         $this->assertStringContainsString('Review invoice', $html);
-        $this->assertStringContainsString('Payment reminder: '.$invoice->invoice_number.' · PHP 1,000.00 · 8 days overdue', $mail->envelope()->subject);
+        $this->assertStringContainsString('Payment reminder: '.$invoice->invoice_number.' · ₱1,000.00 · 8 days overdue', $mail->envelope()->subject);
         $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
     }
 
@@ -78,6 +82,83 @@ class RunArDunningCommandTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_final_tier_escalation_and_email_failure_only_reach_ar_reviewers(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        Mail::fake();
+
+        $finance = User::factory()->withRole('finance_officer')->create();
+        $systemAdmin = User::factory()->withRole('system_admin')->create();
+        $viewOnlyExecutive = User::factory()->withRole('vice_president')->create();
+        $customer = Customer::factory()->create(['email' => 'pay@example.test']);
+        $invoice = Invoice::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'due_date' => Carbon::now()->subDays(31)->toDateString(),
+            'balance' => 1000,
+            'last_dunning_tier' => 15,
+        ]);
+
+        $this->assertTrue($viewOnlyExecutive->hasPermission('accounting.invoices.view'));
+        $this->assertFalse($viewOnlyExecutive->hasPermission('accounting.invoices.collect'));
+
+        $result = app(ArDunningService::class)->run();
+
+        $this->assertSame(1, $result['sent']);
+        $escalations = DB::table('notifications')
+            ->where('type', 'ar.dunning.escalation')
+            ->where('notifiable_type', User::class)
+            ->get();
+        $this->assertCount(1, $escalations);
+        $this->assertSame($finance->id, (int) $escalations->first()->notifiable_id);
+        $this->assertNotSame($systemAdmin->id, (int) $escalations->first()->notifiable_id);
+        $this->assertNotSame($viewOnlyExecutive->id, (int) $escalations->first()->notifiable_id);
+        $escalationData = json_decode((string) $escalations->first()->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/invoices/'.$invoice->hash_id, $escalationData['link_to']);
+
+        Mail::assertQueued(InvoiceDunningMail::class, function (InvoiceDunningMail $mail) use ($finance, $invoice): bool {
+            $this->assertSame([$finance->id], array_values($mail->fallbackUserIds));
+            $mail->failed(new \RuntimeException('Provider failure'));
+
+            return $mail->invoice->hash_id === $invoice->hash_id;
+        });
+
+        $failures = DB::table('notifications')
+            ->where('type', 'email.delivery_failed')
+            ->where('notifiable_type', User::class)
+            ->get();
+        $this->assertCount(1, $failures);
+        $this->assertSame($finance->id, (int) $failures->first()->notifiable_id);
+        $failureData = json_decode((string) $failures->first()->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/invoices/'.$invoice->hash_id, $failureData['link_to']);
+    }
+
+    public function test_queued_email_failure_rechecks_current_reviewer_permission(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $finance = User::factory()->withRole('finance_officer')->create();
+        $admin = User::factory()->withRole('system_admin')->create();
+        $customer = Customer::factory()->create(['email' => 'pay@example.test']);
+        $invoice = Invoice::factory()->create(['customer_id' => $customer->id]);
+        $mail = new InvoiceDunningMail($invoice, 7, 8, [$finance->id]);
+
+        UserPermissionOverride::create([
+            'user_id' => $finance->id,
+            'permission_id' => Permission::where('slug', 'accounting.invoices.collect')->value('id'),
+            'type' => PermissionOverrideType::Revoke,
+            'granted_by' => $admin->id,
+            'reason' => 'Test reviewer access revoked before queued email failure',
+        ]);
+        $finance->flushPermissionsCache();
+
+        $this->assertTrue($finance->hasPermission('accounting.invoices.view'));
+        $this->assertFalse($finance->hasPermission('accounting.invoices.collect'));
+
+        $mail->failed(new \RuntimeException('Provider failure'));
+
+        $this->assertDatabaseMissing('notifications', ['type' => 'email.delivery_failed']);
     }
 
     public function test_queued_reminder_keeps_scan_time_recipient_and_invoice_values(): void
@@ -121,7 +202,7 @@ class RunArDunningCommandTest extends TestCase
             $this->assertStringNotContainsString('Changed customer', $html);
             $this->assertStringContainsString('INV-DUNNING-SNAPSHOT', $html);
             $this->assertStringNotContainsString('INV-CHANGED', $html);
-            $this->assertStringContainsString('PHP 1,234.56', $html);
+            $this->assertStringContainsString('₱1,234.56', $html);
             $this->assertStringNotContainsString('9,999.00', $html);
             $this->assertStringContainsString('Sep 1, 2026', $html);
 
@@ -213,6 +294,8 @@ class RunArDunningCommandTest extends TestCase
         Mail::fake();
 
         $officer = User::factory()->withRole('finance_officer')->create();
+        $systemAdmin = User::factory()->withRole('system_admin')->create();
+        $viewOnlyExecutive = User::factory()->withRole('vice_president')->create();
         $customer = Customer::factory()->create(['email' => null]);
         $invoice = Invoice::factory()->create([
             'customer_id' => $customer->id,
@@ -226,10 +309,13 @@ class RunArDunningCommandTest extends TestCase
 
         $this->assertSame(1, $result['blocked']);
         Mail::assertNothingQueued();
-        $this->assertDatabaseHas('notifications', [
-            'notifiable_id' => $officer->id,
-            'type' => 'email.delivery_failed',
-        ]);
+        $notices = DB::table('notifications')->where('type', 'email.delivery_failed')->get();
+        $this->assertCount(1, $notices);
+        $this->assertSame($officer->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotSame($systemAdmin->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotSame($viewOnlyExecutive->id, (int) $notices->first()->notifiable_id);
+        $data = json_decode((string) $notices->first()->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/invoices/'.$invoice->hash_id, $data['link_to']);
         $this->assertSame(0, (int) $invoice->fresh()->last_dunning_tier);
     }
 
