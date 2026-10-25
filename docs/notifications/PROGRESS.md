@@ -86,6 +86,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge sc
 - Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions**. The board still caps its summary at the requested page size (default 100); this undercount is separately tracked as F-23. F-03 purchase-request badge scope remains open.
 - Full BadgeControllerTest and all-role badge/list parity were not run. No frontend changes.
 
+## Separate finding fix: F-23 approval-board total
+
+- `ApprovalBoardService` now pages distinct pending documents and returns the full `summary.my_action` count by traversing bounded pages with the same approval visibility, delegation, maker-checker, and custom-source rules. Both the board and approval badge use this summary; the board's visible card response remains bounded and reports truncation.
+- `ApprovalBoardTest.php`: **5 passed / 27 assertions**. `BadgeControllerTest.php`: **11 passed / 118 assertions**, including 101 actionable leave requests, 100 visible cards, full summary 101, and badge 101.
+- PHP syntax and `git diff --check` passed. Pint passed on `ApprovalBoardService.php` and `ApprovalBoardTest.php`; `BadgeControllerTest.php` has existing file-wide formatting differences, so it was not reformatted.
+- SPA still caps one response at 500 cards; its load-more flow can expose further pages. The summary and badge are not capped. Full SPA pagination behavior was not browser-tested.
+
 ## Outstanding proof / risks
 
 1. Review sensitive policy: payroll, HR/discipline, finance, executive escalation, system-admin fanout, portal contacts.
