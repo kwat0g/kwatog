@@ -397,10 +397,10 @@ class ApprovalService
             return;
         }
 
-        [$hashId, $link] = $this->approvalLink($approvable, $meta);
         if (! ApprovalTypeRegistry::userCanViewRecord($submitter, $approvable->getMorphClass(), (int) $approvable->getKey())) {
-            $link = null;
+            return;
         }
+        [$hashId, $link] = $this->approvalLink($approvable, $meta);
         $number = $meta['number'] ? $approvable->getAttribute($meta['number']) : null;
         $reference = is_string($number) && $number !== '' ? " {$number}" : '';
         $message = "{$meta['label']}{$reference} was ".($type === 'approval.rejected' ? 'rejected.' : 'approved.');
