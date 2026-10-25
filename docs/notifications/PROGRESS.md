@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, and PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, and payroll audience/access/link fixes are in progress on `notifications/fix-payroll-notice-audience`. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -177,14 +177,23 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - The badge and filtered list require both complaint visibility and manage permission. `BadgeControllerTest::test_widened_scope_badge_counts_track_recent_rows`: **1 passed / 33 assertions**, including assigned admin/CSO users, an unassigned CSO, and a view-only VP. `Sidebar.behavior.test.tsx`: **27 passed**.
 - Targeted ESLint and `git diff --check` passed. SPA typecheck still fails on existing errors in exports, Action Center, invites, stock transfers, purchase-order creation, and profile; none names a changed file. No complaint team relation exists. Unassigned complaints do not appear in this personal signal; a triage signal remains unapproved.
 
+## Separate finding fix: F-26 payroll audience, access, and links
+
+- Payroll-period approval excludes `system_admin` permission bypass, the creator/computer actor, and no longer falls back to all system administrators when no eligible checker remains. Finance and explicit active delegates still receive notices when they have period-view access.
+- Payroll-adjustment action notices exclude permission-bypass administrators and require adjustment-view access. Outcomes are suppressed if the active requester no longer has that route permission. Seeded roles grant `payroll.adjustments.approve/reject` to no operational role; only `system_admin` has them by wildcard, so no default adjustment approver receives a notice. HR/Finance must name the checker before a role grant is added.
+- Payslip-ready notices now identify and link to each employee's own payroll row; email-failure notices require an active account with `payroll.view` and link to that owner-only detail route. The route checks the authenticated employee against the payroll row. Payroll adjustments now have an SPA detail route backed by the existing view-protected API endpoint. Existing legacy period-level payslip notices still dedupe on redelivery.
+- Targeted API results: `PayrollMakerCheckerTest` **12 passed / 67 assertions**; `PayrollAdjustmentStaleRejectRaceTest` **4 passed / 12 assertions**; `NotifyEmployeesOnPayrollFinalizedTest` **2 passed / 9 assertions**; `PayslipNotificationDedupeTest` **1 passed / 1 assertion**.
+- `SendPayslipEmailJobTest`: the new access/link case passed; full file has **4 passed / 2 pre-existing failures**. Existing failures are a case-mismatched email-copy assertion and an old test passing `PayslipPdfService` where `PayrollPublicationPolicy` is expected. These are separate test cleanup work.
+- PHP syntax passed for all changed PHP files. Targeted ESLint passed for the new route and test. `npm run typecheck` reports errors in other SPA files, none in this payroll route; the dynamic-route audit could not run without an isolated test `BASE_URL`. Pint reported six style violations across the legacy PHP files; its broad formatting was reverted to avoid unrelated churn. The detail route test passed; visual QA remains outstanding.
+
 ## Outstanding proof / risks
 
-1. Review sensitive policy: payroll, HR/discipline, finance, executive escalation, system-admin fanout, portal contacts.
+1. Payroll defaults are approved; exact payroll adjustment checker and HR/Finance sensitive audiences remain open business decisions. Review remaining HR/discipline, executive escalation, system-admin fanout, and portal contacts.
 2. Seed one user per local role and department/site scope; run positive and negative recipient scenarios after approval.
 3. Compare each badge to the destination list's total under same filter and authorization for every eligible role.
 4. Verify channel authorization for unauthenticated, cross-user, and cross-scope cases.
 5. Validate route links, legacy renderer, responsive/keyboard UI, and performance after implementation.
-6. No test suite, browser/e2e session, or seeded-user scenario ran in discovery.
+6. Discovery had no runtime scenarios. Later targeted payroll, finance, approval, and badge tests are recorded above; browser/e2e, cross-role complete matrices, and full-suite runs remain outstanding.
 
 ## Resume instruction
 

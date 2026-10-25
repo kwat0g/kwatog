@@ -1001,12 +1001,9 @@ class PayrollPeriodService
             array_filter([$period->created_by, $period->computed_by], static fn ($id): bool => $id !== null),
         );
         $candidates = ApprovalDelegation::approvalAudience('payroll.periods.approve')
-            ->filter(fn (User $user): bool => $user->hasPermission('payroll.periods.view'));
-        $audience = $candidates->filter(fn (User $user): bool => $user->role?->slug !== 'system_admin'
-            && (! in_array((int) $user->id, $makers, true) || $user->hasPermission('payroll.periods.self_approve_override')));
-        if ($audience->isEmpty()) {
-            $audience = $candidates->filter(fn (User $user): bool => $user->role?->slug === 'system_admin');
-        }
+            ->filter(fn (User $user): bool => $user->role?->slug !== 'system_admin'
+                && $user->hasPermission('payroll.periods.view'));
+        $audience = $candidates->reject(fn (User $user): bool => in_array((int) $user->id, $makers, true));
 
         app(\App\Common\Services\NotificationService::class)->send($audience, 'approval.action_required', [
             'title' => 'Payroll period needs approval',

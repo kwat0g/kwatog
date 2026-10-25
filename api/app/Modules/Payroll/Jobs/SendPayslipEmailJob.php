@@ -104,14 +104,15 @@ class SendPayslipEmailJob implements ShouldQueue
         });
 
         if ($missingEmail) {
+            $payroll = Payroll::query()->with('employee.user')->find($this->payrollId);
             app(EmailDeliveryFailureNotifier::class)->notifyUserId(
-                $this->employeeUserId(),
+                $this->employeeUserId($payroll),
                 'Employee payslip',
                 'Your payslip email could not be delivered. Open the payroll section in the application to view it.',
                 [
-                    'link_to' => '/self-service/payslips',
+                    'link_to' => $payroll?->hash_id ? "/self-service/payslips/{$payroll->hash_id}" : null,
                     'entity_type' => 'payroll',
-                    'entity_id' => Payroll::find($this->payrollId)?->hash_id,
+                    'entity_id' => $payroll?->hash_id,
                     'reason' => 'The employee has no usable email address for payslip delivery.',
                 ],
             );
@@ -145,11 +146,11 @@ class SendPayslipEmailJob implements ShouldQueue
 
         $payroll = Payroll::query()->with('employee.user')->find($this->payrollId);
         app(EmailDeliveryFailureNotifier::class)->notifyUserId(
-            $payroll?->employee?->user?->id,
+            $this->employeeUserId($payroll),
             'Employee payslip',
             'Your payslip email could not be delivered. Open the payroll section in the application to view it.',
             [
-                'link_to' => '/self-service/payslips',
+                'link_to' => $payroll?->hash_id ? "/self-service/payslips/{$payroll->hash_id}" : null,
                 'entity_type' => 'payroll',
                 'entity_id' => $payroll?->hash_id,
                 'reason' => 'The email provider rejected or could not deliver the payslip.',
@@ -157,10 +158,12 @@ class SendPayslipEmailJob implements ShouldQueue
         );
     }
 
-    private function employeeUserId(): ?int
+    private function employeeUserId(?Payroll $payroll = null): ?int
     {
-        return Payroll::query()
-            ->with('employee.user')
-            ->find($this->payrollId)?->employee?->user?->id;
+        $user = ($payroll ?? Payroll::query()->with('employee.user')->find($this->payrollId))?->employee?->user;
+
+        return $user !== null && $user->is_active && $user->hasPermission('payroll.view')
+            ? (int) $user->id
+            : null;
     }
 }

@@ -74,11 +74,12 @@ class PayrollAdjustmentService
 
             $audience = ApprovalDelegation::approvalAudience('payroll.adjustments.approve')
                 ->filter(fn (User $approver): bool => $approver->hasPermission('payroll.adjustments.view'))
+                ->reject(fn (User $approver): bool => $approver->role?->slug === 'system_admin')
                 ->reject(fn (User $approver): bool => (int) $approver->id === (int) $user->id);
             app(NotificationService::class)->send($audience, 'approval.action_required', [
                 'title' => 'Payroll adjustment needs approval',
                 'message' => 'A payroll adjustment is waiting for review.',
-                'link_to' => '/payroll/adjustments',
+                'link_to' => "/payroll/adjustments/{$adj->hash_id}",
                 'entity_type' => 'payroll_adjustment',
                 'entity_id' => $adj->hash_id,
             ], "payroll-adjustment:approval-required:{$adj->id}");
@@ -169,14 +170,14 @@ class PayrollAdjustmentService
     private function notifyRequester(PayrollAdjustment $adjustment, string $type, string $title): void
     {
         $requester = User::query()->whereKey($adjustment->created_by)->where('is_active', true)->first();
-        if (! $requester) {
+        if (! $requester || ! $requester->hasPermission('payroll.adjustments.view')) {
             return;
         }
 
         app(NotificationService::class)->send($requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your payroll adjustment was rejected.' : 'Your payroll adjustment was approved.',
-            'link_to' => $requester->hasPermission('payroll.adjustments.view') ? '/payroll/adjustments' : null,
+            'link_to' => "/payroll/adjustments/{$adjustment->hash_id}",
             'entity_type' => 'payroll_adjustment',
             'entity_id' => $adjustment->hash_id,
         ], "payroll-adjustment:decision:{$adjustment->id}:{$type}");
