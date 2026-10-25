@@ -123,6 +123,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions**. The board summary previously capped at the requested page size (default 100); F-23 fixes the summary/badge total independently.
 - Full BadgeControllerTest and all-role badge/list parity were not run. No frontend changes.
 
+## Separate finding fix: F-09 pending-QC GRN badge parity
+
+- `GoodsReceiptNote::pendingQc()` now defines the shared count/list condition. The `pending_grn` badge and GRN list's `status=pending_qc` filter use that scope; warehouse staff badge permission matches the list route's `inventory.view` gate.
+- A positive GRN badge opens `/inventory/grn?status=pending_qc`. Phase 2's route entry now matches the SPA's real query parameter; `signal=pending_qc` was not a supported filter.
+- `BadgeControllerTest::test_pending_grn_badge_matches_the_filtered_receipt_list`: **1 passed / 6 assertions**, comparing the warehouse user's badge count with the filtered list total and returned statuses. `Sidebar.behavior.test.tsx`: **25 passed**.
+- Scope covers only pending-QC GRNs. Other sidebar signals and cross-role/scope parity remain F-09 work; no full suite or visual QA ran.
+
 ## Outstanding proof / risks
 
 1. Review sensitive policy: payroll, HR/discipline, finance, executive escalation, system-admin fanout, portal contacts.

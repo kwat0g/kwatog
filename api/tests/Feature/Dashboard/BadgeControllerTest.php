@@ -357,6 +357,28 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(2, $resp['training_upcoming']['count']);
     }
 
+    public function test_pending_grn_badge_matches_the_filtered_receipt_list(): void
+    {
+        $warehouseRole = Role::query()->where('slug', 'warehouse_staff')->firstOrFail();
+        $warehouseUser = User::factory()->create(['role_id' => $warehouseRole->id]);
+        $this->assertTrue($warehouseUser->hasPermission('inventory.view'));
+
+        \App\Modules\Inventory\Models\GoodsReceiptNote::factory()->count(2)->create();
+        \App\Modules\Inventory\Models\GoodsReceiptNote::factory()->create(['status' => 'accepted']);
+
+        $list = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/inventory/grn?status=pending_qc')
+            ->assertOk();
+        $badge = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.pending_grn.count');
+
+        $this->assertSame(2, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
+        $this->assertSame(['pending_qc', 'pending_qc'], $list->json('data.*.status'));
+    }
+
     public function test_per_badge_severity_override_beats_global_threshold(): void
     {
         $admin = Role::where('slug', 'system_admin')->firstOrFail();

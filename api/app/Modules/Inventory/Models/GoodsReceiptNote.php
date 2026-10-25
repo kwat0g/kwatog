@@ -16,6 +16,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Models\Shipment;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -51,6 +52,11 @@ class GoodsReceiptNote extends Model
         'remainder_rejected_at' => 'datetime',
         'idempotency_response' => 'array',
     ];
+
+    public function scopePendingQc(Builder $query): Builder
+    {
+        return $query->where('status', GrnStatus::PendingQc->value);
+    }
 
     public function purchaseOrder(): BelongsTo
     {

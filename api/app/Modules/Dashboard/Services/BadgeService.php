@@ -24,7 +24,6 @@ use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Models\ProfileUpdateRequest;
-use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
@@ -475,7 +474,7 @@ class BadgeService
                 'label'       => 'Receiving (GRN)',
                 'description' => 'Goods receipts awaiting QC',
                 'counter'     => fn (): int => GoodsReceiptNote::query()
-                    ->where('status', GrnStatus::PendingQc->value)
+                    ->pendingQc()
                     ->count(),
             ],
 
