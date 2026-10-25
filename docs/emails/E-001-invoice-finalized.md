@@ -16,9 +16,9 @@ Status: implemented in draft PR; accountant review required before external prod
 ## Verification
 
 - `FeatureEmailIntegrationTest`: 8 tests passed; recipient, issue-time snapshot, amounts, portal path, hostile text, line-item limit, subject, HTML title, and plain-text assertions included.
-- A temporary render-only fixture produced captured HTML; no message transport was contacted. Browser preview was inspected at desktop/mobile widths in light/dark schemes. Four screenshots are in [screenshots](screenshots/).
-- Browser widths measured 1440px desktop and 390px mobile; document width stayed within the viewport. HTML was 24,955 bytes, under Gmail's 102KB clipping threshold. Browser inspection does not prove behavior in Gmail, Outlook, Apple Mail, Yahoo, or mobile mail apps.
-- Preview footer used test database branding values. Replace/verify company settings before any production email. No real email was sent.
+- Re-rendered the existing render-only HTML fixture with the current landing-page logo's light/dark PNG variants; no mail transport was contacted. Inspected desktop/mobile at both color schemes. Four screenshots are in [screenshots](screenshots/).
+- Browser widths measured 1440px desktop and 390px mobile; document width matched viewport in both. The email source HTML was 24,955 bytes, under Gmail's 102KB clipping threshold. Browser inspection does not prove behavior in Gmail, Outlook, Apple Mail, Yahoo, or mobile mail apps.
+- Preview footer used test database branding values. Company settings still need owner verification before production email. No real email was sent.
 
 ## Review still required
 
