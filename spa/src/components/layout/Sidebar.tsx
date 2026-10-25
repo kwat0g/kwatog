@@ -1115,12 +1115,12 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     const hoverExpanded = !mobile && collapsed && peek && hovered;
     const renderNavItem = (item: NavItem) => {
       const entry = getBadge(item.badgeKey);
-      const target =
-        item.badgeKey === 'purchase_requests' && (entry?.count ?? 0) > 0
-          ? `${item.to}?signal=awaiting_my_approval`
-          : item.badgeKey === 'pending_grn' && (entry?.count ?? 0) > 0
-            ? `${item.to}?status=pending_qc`
-          : item.to;
+      let target = item.to;
+      if ((entry?.count ?? 0) > 0) {
+        if (item.badgeKey === 'purchase_requests') target = `${item.to}?signal=awaiting_my_approval`;
+        else if (item.badgeKey === 'pending_grn') target = `${item.to}?status=pending_qc`;
+        else if (item.badgeKey === 'pending_inspections') target = `${item.to}?work_queue=to_inspect`;
+      }
       return (
         <li key={item.to}>
           <NavLink

@@ -96,7 +96,7 @@ class InspectionService
             $q->where('stage', $filters['stage']);
         }
         if (($filters['work_queue'] ?? null) === 'to_inspect') {
-            $q->whereIn('status', ['draft', 'in_progress']);
+            $q->toInspect();
         }
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);

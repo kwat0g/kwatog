@@ -130,6 +130,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - A positive GRN badge opens `/inventory/grn?status=pending_qc`. Phase 2's route entry now matches the SPA's real query parameter; `signal=pending_qc` was not a supported filter.
 - `BadgeControllerTest::test_pending_grn_badge_matches_the_filtered_receipt_list`: **1 passed / 6 assertions**, comparing the warehouse user's badge count with the filtered list total and returned statuses. `Sidebar.behavior.test.tsx`: **25 passed**.
 - Scope covers only pending-QC GRNs. Other sidebar signals and cross-role/scope parity remain F-09 work; no full suite or visual QA ran.
+- PR #353 CI: `finding-lifecycle`, accessibility, and visual baselines pass. API job fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate); SPA job stops at the existing dependency audit (4 vulnerabilities). Targeted API and SPA tests pass locally.
+
+## Separate finding fix: F-09 inspection badge parity
+
+- `Inspection::toInspect()` now defines the shared draft/in-progress predicate for both the `pending_inspections` badge and `work_queue=to_inspect` list queue. A positive badge opens that queue.
+- `BadgeControllerTest::test_widened_scope_badge_counts_track_recent_rows`: **1 passed / 18 assertions**, including parity under the `qc_inspector` role. `Sidebar.behavior.test.tsx`: **26 passed**.
+- This remains an area-wide queue matching the current list. The proposed per-user inspection action signal needs separate assignment/authorization verification.
 
 ## Outstanding proof / risks
 

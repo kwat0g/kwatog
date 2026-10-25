@@ -80,6 +80,28 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
   );
 });
 
+it('opens the to-inspect queue when inspections has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_inspections'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Inspections',
+          description: 'Inspections awaiting completion',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/quality/inspections']}>
+      <Sidebar roleSlug="qc_inspector" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Quality Inspections/ })).toHaveAttribute(
+    'href',
+    '/quality/inspections?work_queue=to_inspect',
+  );
+});
+
 it('expands the active module, expires unvisited peeks, and keeps visited modules open', () => {
   render(<MemoryRouter initialEntries={['/mrp/plans']}><Harness /></MemoryRouter>);
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'true');
