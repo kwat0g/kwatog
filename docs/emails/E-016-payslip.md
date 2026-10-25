@@ -16,6 +16,7 @@
 - Playwright screenshots inspected at 1440px desktop and 390px mobile in light/dark schemes; document width matched viewport.
 - Screenshots: [desktop light](screenshots/e016-payslip-desktop-light.png), [desktop dark](screenshots/e016-payslip-desktop-dark.png), [mobile light](screenshots/e016-payslip-mobile-light.png), [mobile dark](screenshots/e016-payslip-mobile-dark.png).
 - Browser checks do not prove Gmail, Outlook, Apple Mail, Yahoo, or mobile mail-client rendering.
+- Follow-up review: dark desktop CTA label is present in the screenshot; a cropped browser view confirmed it. Full-page image scaling made the label hard to see. Footer values are preview data and remain unverified.
 
 ## Review
 
