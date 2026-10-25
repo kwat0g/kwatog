@@ -16,7 +16,8 @@ class UserNotificationCreated implements ShouldBroadcast
 
     public function __construct(
         public readonly int $userId,
-        public readonly array $notification,
+        public readonly string $notificationId,
+        public readonly string $type,
     ) {}
 
     public function broadcastOn(): array
@@ -32,6 +33,6 @@ class UserNotificationCreated implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        return $this->notification;
+        return ['id' => $this->notificationId, 'type' => $this->type];
     }
 }

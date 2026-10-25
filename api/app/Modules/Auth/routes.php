@@ -61,6 +61,8 @@ Route::prefix('auth')->group(function (): void {
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])->prefix('notifications')->group(function () {
     Route::get('/',                  [NotificationController::class, 'index'])
         ->middleware('permission:notifications.view');
+    Route::get('/{id}',              [NotificationController::class, 'show'])
+        ->middleware('permission:notifications.view');
     Route::patch('/{id}/read',       [NotificationController::class, 'markRead'])
         ->middleware('permission:notifications.view');
     Route::patch('/read-all',        [NotificationController::class, 'markAllRead'])

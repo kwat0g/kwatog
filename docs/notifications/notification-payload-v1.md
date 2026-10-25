@@ -23,3 +23,12 @@ Version 1 does not invent route keys, severity, category, resolution state,
 actor display names, or a message template key. Those require the approved
 registries and recipient/event migration. `subject_type` and `subject_id` are
 metadata only and must not be displayed as user-facing text.
+
+## Realtime event
+
+`UserNotificationCreated` broadcasts only `{ "id": "…", "type": "…" }` to
+the recipient's private `user.{hash_id}` channel. The SPA loads the full row
+through `GET /notifications/{id}`; the query is scoped to the authenticated
+user, and returns 404 for another user's row. The channel must not carry the
+stored `data` object. Existing database rows continue to render through the
+paginated list endpoint.

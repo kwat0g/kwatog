@@ -45,6 +45,15 @@ class UserNotificationService
             ->count();
     }
 
+    public function find(User $user, string $id): object
+    {
+        return DB::table('notifications')
+            ->where('id', $id)
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $user->id)
+            ->firstOrFail();
+    }
+
     public function markRead(User $user, string $id): string
     {
         return DB::transaction(function () use ($user, $id): string {

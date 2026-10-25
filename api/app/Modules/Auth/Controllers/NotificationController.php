@@ -66,6 +66,19 @@ class NotificationController
         ]);
     }
 
+    public function show(Request $request, string $id): JsonResponse
+    {
+        $notification = $this->service->find($request->user(), $id);
+
+        return response()->json(['data' => [
+            'id'         => $notification->id,
+            'type'       => $notification->type,
+            'data'       => is_string($notification->data) ? json_decode($notification->data, true) : $notification->data,
+            'read_at'    => $notification->read_at,
+            'created_at' => $notification->created_at,
+        ]]);
+    }
+
     public function markRead(Request $request, string $id): JsonResponse
     {
         return response()->json([

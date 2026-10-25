@@ -4,13 +4,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { getEcho } from '@/lib/echo';
 import { useAuthStore } from '@/stores/authStore';
+import { getNotificationById } from '@/api/notifications';
+import { notificationMeta } from '@/lib/notificationMeta';
 
 interface NotificationPayload {
   id: string;
   type: string;
-  data: { title?: string; message?: string; link_to?: string };
-  read_at: null;
-  created_at: string;
 }
 
 export function useNotificationRealtime(enabled = true): void {
@@ -33,9 +32,10 @@ export function useNotificationRealtime(enabled = true): void {
 
         channel.listen('.notification.created', (payload: NotificationPayload) => {
           qc.invalidateQueries({ queryKey: ['notifications'] });
-
-          const title = payload.data?.title ?? 'New notification';
-          toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
+          void getNotificationById(payload.id).then((notification) => {
+            const title = notification.data?.title ?? notificationMeta(notification.type).label;
+            toast(title, { icon: <LuBell size={16} className="text-muted" />, duration: 4000 });
+          }).catch(() => undefined);
         });
 
         teardown = () => {
