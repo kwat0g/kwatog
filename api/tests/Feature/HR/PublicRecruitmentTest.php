@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Enums\JobPostingStatus;
+use App\Modules\HR\Mail\ApplicationReceivedMail;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
@@ -92,6 +93,18 @@ class PublicRecruitmentTest extends TestCase
             'email' => 'juan@example.com',
             'stage' => 'new',
         ]);
+
+        $trackingCode = $response->json('tracking_code');
+        Mail::assertQueued(ApplicationReceivedMail::class, function (ApplicationReceivedMail $mail) use ($trackingCode): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText($trackingCode);
+
+            return $mail->hasTo('juan@example.com')
+                && str_contains($html, '<title>Application received</title>')
+                && str_contains($html, 'Molding Operator')
+                && str_contains($html, $trackingCode)
+                && str_contains($html, 'Check application status');
+        });
     }
 
     public function test_public_cannot_submit_duplicate_email_for_same_position(): void
