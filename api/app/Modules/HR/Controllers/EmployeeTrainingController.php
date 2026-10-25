@@ -39,6 +39,14 @@ class EmployeeTrainingController
         return EmployeeTrainingResource::collection($rows);
     }
 
+    public function show(Request $request, EmployeeTraining $record): EmployeeTrainingResource
+    {
+        $record = EmployeeCompetenceScope::training($record, $request->user());
+        $record->loadMissing(['employee', 'training']);
+
+        return new EmployeeTrainingResource($record);
+    }
+
     public function store(AssignEmployeeTrainingRequest $request, Employee $employee): JsonResponse
     {
         $employee = EmployeeCompetenceScope::employee($employee, $request->user());

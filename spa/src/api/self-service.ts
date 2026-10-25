@@ -2,6 +2,7 @@ import { client } from './client';
 import type { PaginatedResponse } from '@/types';
 import type { LeaveRequest } from '@/types/leave';
 import type { Payroll } from '@/types/payroll';
+import type { EmployeeTraining } from '@/types/hr';
 import type {
  SelfServiceHome,
  SelfServiceLoansResponse,
@@ -50,6 +51,9 @@ export const selfServiceApi = {
  client
  .get<PaginatedResponse<Payroll>>('/hr/self-service/payslips', { params })
  .then((r) => r.data),
+
+ training: (id: string) =>
+ client.get<{ data: EmployeeTraining }>(`/hr/self-service/trainings/${id}`).then((r) => r.data.data),
 
  payslipUrl: (id: string) => `/api/v1/hr/self-service/payslips/${id}/download`,
 

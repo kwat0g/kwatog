@@ -726,6 +726,21 @@ class SelfServiceController
         ]);
     }
 
+    public function training(Request $request, string $id): EmployeeTrainingResource
+    {
+        $employee = $this->currentEmployee($request);
+        $recordId = EmployeeTraining::tryDecodeHash($id);
+        abort_if($recordId === null, 404);
+
+        $record = EmployeeTraining::query()
+            ->with('training')
+            ->whereKey($recordId)
+            ->where('employee_id', $employee->id)
+            ->firstOrFail();
+
+        return new EmployeeTrainingResource($record);
+    }
+
     private function emptyPage(int $perPage): JsonResponse
     {
         return response()->json([
