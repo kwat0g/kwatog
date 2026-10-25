@@ -1,4 +1,4 @@
-# Notification policy and implementation plan — review required
+# Notification policy and implementation plan — approved baseline
 
 **Status:** approved by the user on 2026-10-25. The proposed defaults below are the Phase 3 policy baseline; any unverified scope or status remains an explicit implementation gate.
 
@@ -429,7 +429,7 @@ Portal audience always means active contact bound to that route's customer/vendo
 - Runtime behavior risk remains high until record policies, list filters, route pages, and all 17 local role slugs are exercised. Local role inventory differs from existing role audit by one slug.
 - Sidebar scope performance risk: current per-key closures can issue one query per badge. Aggregate endpoint needs grouped queries and representative seed volume before the <200 ms goal is credible.
 - Existing broad alerts may be intentionally area-wide; converting them to personal notices without owner decision could suppress needed warnings or expose alert details.
-- No deadline supplied; no ship-date promise. Phase 3+ cannot start until proposal review.
+- No deadline supplied; no ship-date promise. Phase 3 began after the user approved the policy defaults; remaining business questions keep their documented defaults until confirmed.
 
 ## Open business questions for review
 

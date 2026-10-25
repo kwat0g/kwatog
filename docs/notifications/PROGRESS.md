@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress on `notifications/phase3-realtime-payload`.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress on `notifications/fix-custom-approval-escalation-audience`.
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 committed. Core approval notices now resolve scoped recipients; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
+| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335. Core approval notices resolve scoped recipients; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
 | 4. Frontend | Not started | Blocked by approved registry/link contracts. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
@@ -23,6 +23,7 @@
 | 1. Versioned payload contract | `notifications/phase3-central-contract` | [#332](https://github.com/kwat0g/kwatog/pull/332) | `a8a479e0` |
 | 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | `e85cc70f` |
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | `cee47e18` |
+| F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 
 ## Coverage ledger
 
@@ -63,6 +64,11 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 - PHP syntax checks passed. Broadcast payload test verifies only `id` and `type`; API tests verify own-user fetch and cross-user 404; channel tests verify self access, cross-user denial, unauthenticated denial, and denied permission.
 - SPA typecheck still fails only in unrelated export, invite, stock-transfer, and purchase-order files. No changed notification file reports an error. Browser/toast behavior was not exercised.
 - This unit does not change notification recipient selection, event timing, stored rows, or portal notification APIs. Global payload/access authorization remains open.
+
+## Separate finding fix: F-17
+
+- Custom approval escalation no longer adds every active `system_admin` after record-specific recipient checks. `CustomApprovalDelegationAndEscalationTest` passed **5 tests / 29 assertions**, including a prebill editor exclusion case. Existing broken assertions in that test were repaired so the suite runs.
+- Escalation timing is unchanged. No supervisor recipient resolver was found in this service; `approval_escalation` still goes to eligible approvers. See F-21 for this remaining policy gap.
 
 ## Outstanding proof / risks
 
