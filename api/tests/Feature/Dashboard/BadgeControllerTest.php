@@ -64,6 +64,8 @@ class BadgeControllerTest extends TestCase
     {
         $employee = Role::where('slug', 'employee')->firstOrFail();
         $user = User::factory()->create(['role_id' => $employee->id]);
+        $this->assertTrue($user->hasPermission('payroll.view'));
+        $this->assertFalse($user->hasPermission('payroll.periods.view'));
 
         $resp = $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/dashboards/badges')
@@ -75,12 +77,57 @@ class BadgeControllerTest extends TestCase
         // is granted to every seeded role, so `approvals` may be present
         // (with a count of 0).
         $this->assertArrayNotHasKey('purchase_requests', $resp);
+        $this->assertArrayNotHasKey('payroll', $resp);
         $this->assertArrayNotHasKey('leaves',            $resp);
         $this->assertArrayNotHasKey('overtime',          $resp);
         $this->assertArrayNotHasKey('maintenance_wo',    $resp);
         $this->assertArrayNotHasKey('low_stock',         $resp);
         $this->assertArrayNotHasKey('ncrs',              $resp);
         $this->assertArrayNotHasKey('profile_requests',  $resp);
+    }
+
+    public function test_read_badges_match_the_permissions_that_open_their_destination_lists(): void
+    {
+        $vicePresident = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'vice_president')->value('id'),
+        ]);
+        $this->assertTrue($vicePresident->hasPermission('crm.complaints.view'));
+        $this->assertFalse($vicePresident->hasPermission('crm.complaints.manage'));
+        $this->actingAs($vicePresident, 'sanctum')
+            ->getJson('/api/v1/crm/complaints')
+            ->assertOk();
+        $vicePresidentBadges = $this->actingAs($vicePresident, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('open_complaints', $vicePresidentBadges);
+
+        $warehouse = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $this->assertTrue($warehouse->hasPermission('supply_chain.deliveries.view'));
+        $this->assertFalse($warehouse->hasPermission('supply_chain.view'));
+        $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/supply-chain/deliveries')
+            ->assertOk();
+        $warehouseBadges = $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('deliveries', $warehouseBadges);
+
+        $hrOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'hr_officer')->value('id'),
+        ]);
+        $this->assertTrue($hrOfficer->hasPermission('payroll.periods.view'));
+        $this->actingAs($hrOfficer, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertOk();
+        $hrBadges = $this->actingAs($hrOfficer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('payroll', $hrBadges);
     }
 
     public function test_widened_scope_badges_are_permission_gated(): void
