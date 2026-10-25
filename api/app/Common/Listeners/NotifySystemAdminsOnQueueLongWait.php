@@ -34,6 +34,7 @@ final class NotifySystemAdminsOnQueueLongWait
                 'queue.long_wait',
                 [
                     'title' => 'Queue backlog: '.$event->queue,
+                    'link_to' => '/dashboard/admin',
                     'message' => sprintf(
                         'Queue [%s] on [%s] has waited %d seconds.',
                         $event->queue,

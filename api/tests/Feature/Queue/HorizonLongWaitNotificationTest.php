@@ -61,6 +61,7 @@ final class HorizonLongWaitNotificationTest extends TestCase
 
             $this->assertSame('Queue backlog: default', $data['title']);
             $this->assertSame('Queue [default] on [redis] has waited 75 seconds.', $data['message']);
+            $this->assertSame('/dashboard/admin', $data['link_to']);
 
             Carbon::setTestNow('2026-10-20 12:04:59 UTC');
             event($event);
