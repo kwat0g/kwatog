@@ -187,9 +187,9 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `SendPayslipEmailJobTest`: the new access/link case passed; full file has **4 passed / 2 pre-existing failures**. Existing failures are a case-mismatched email-copy assertion and an old test passing `PayslipPdfService` where `PayrollPublicationPolicy` is expected. These are separate test cleanup work.
 - PHP syntax passed for all changed PHP files. Targeted ESLint passed for the new route and test. `npm run typecheck` reports errors in other SPA files, none in this payroll route; the dynamic-route audit could not run without an isolated test `BASE_URL`. Pint reported six style violations across the legacy PHP files; its broad formatting was reverted to avoid unrelated churn. The detail route test passed; visual QA remains outstanding.
 
-## Separate finding fix: F-27 password-reset failure callback signature
+## Separate finding fix: F-27 password-reset failure callback signature (draft PR [#372](https://github.com/kwat0g/kwatog/pull/372))
 
-- Draft PR pending. `PasswordResetNotification::failed()` now fully qualifies `\Throwable`, matching the HR subclass override on PHP 8.3. This prevents class-loading failure before queued HR password-reset tests can run.
+- `PasswordResetNotification::failed()` now fully qualifies `\Throwable`, matching the HR subclass override on PHP 8.3. This prevents class-loading failure before queued HR password-reset tests can run.
 - Baseline reproduction: `EmployeePasswordResetNotificationTest.php` failed before the patch with a fatal method compatibility error because PHP resolved the parent's type as `App\Modules\Auth\Notifications\Throwable`.
 - `EmployeePasswordResetNotificationTest.php`: **1 passed / 2 assertions**; `UserProvisioningTest.php`: **8 passed / 25 assertions**; `UserAdministrationHardeningTest.php`: **8 passed / 27 assertions**. PHP syntax and `git diff --check` pass. Targeted Pint reports one existing style issue in the unrelated fully qualified test-class `@see` reference; left it unchanged.
 
