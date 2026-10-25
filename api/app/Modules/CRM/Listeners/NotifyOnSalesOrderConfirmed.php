@@ -35,13 +35,16 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('production.schedule.view'));
+                ->filter(fn (User $user): bool => $user->hasPermission('production.schedule.view')
+                    && $user->hasPermission('crm.sales_orders.view'));
 
             $this->notifications->send($audience, 'chain.so_confirmed', [
-                'title'       => 'Production planning: sales order confirmed',
-                'message'     => 'MRP planning has been queued. Check the production schedule after it completes.',
-                'link_to'     => '/production/schedule',
-            ]);
+                'title' => "Sales order {$so->so_number} confirmed",
+                'message' => 'MRP planning has been queued. Review the order and schedule after it completes.',
+                'link_to' => '/crm/sales-orders/'.$so->hash_id,
+                'entity_type' => 'sales_order',
+                'entity_id' => $so->hash_id,
+            ], 'chain:so_confirmed:'.$so->id.':'.($so->confirmed_at ?? $so->updated_at)->toISOString());
         } catch (\Throwable $e) {
             Log::warning('NotifyOnSalesOrderConfirmed failed', ['error' => $e->getMessage()]);
             throw $e;

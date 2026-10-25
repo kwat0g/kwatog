@@ -12,6 +12,7 @@ use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
@@ -90,9 +91,15 @@ class OutboxFactEventToleranceTest extends TestCase
         $notification = DB::table('notifications')->where('notifiable_id', $this->ppc->id)
             ->where('type', 'chain.so_confirmed')->first();
         $data = json_decode($notification->data, true);
-        $this->assertSame('/production/schedule', $data['link_to']);
-        $this->assertStringNotContainsString($so->so_number, $notification->data);
-        $this->assertArrayNotHasKey('entity_id', $data);
+        $this->assertSame('/crm/sales-orders/'.$so->hash_id, $data['link_to']);
+        $this->assertSame('sales_order', $data['entity_type']);
+        $this->assertSame($so->hash_id, $data['entity_id']);
+        $this->assertStringContainsString($so->so_number, $data['title']);
+
+        app(NotifyOnSalesOrderConfirmed::class)
+            ->handle(new SalesOrderConfirmed($so));
+        $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $this->ppc->id)
+            ->where('type', 'chain.so_confirmed')->count());
     }
 
     public function test_sales_order_notice_excludes_configured_users_without_schedule_access(): void
@@ -110,6 +117,35 @@ class OutboxFactEventToleranceTest extends TestCase
             'type' => 'revoke',
             'granted_by' => $actor->id,
             'reason' => 'Sales-order notice access regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $so = $this->confirmedOrder();
+        $message = app(OutboxService::class)->record(new SalesOrderConfirmed($so));
+
+        $this->assertSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
+        $this->assertTrue($this->soNoticeSent());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $revoked->id,
+            'type' => 'chain.so_confirmed',
+        ]);
+    }
+
+    public function test_sales_order_notice_excludes_configured_planners_without_order_access(): void
+    {
+        $revoked = User::factory()->create([
+            'is_active' => true,
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+        ]);
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $revoked->id,
+            'permission_id' => DB::table('permissions')->where('slug', 'crm.sales_orders.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $actor->id,
+            'reason' => 'Sales-order notification record-access regression test',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

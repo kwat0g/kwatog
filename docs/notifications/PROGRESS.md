@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #350 tightens pricing recipient roles. Assignment targeting remains open.
+**Current gate:** Phase 2 approved; PR #351 tightens sales-order notice access and deep links. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -101,8 +101,15 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `PricingReviewService::notify()` now intersects its existing destination permission check with the role allowlist supplied by each sender. Empty role lists retain the current permission-only cost-review queue behavior.
 - `PricingReviewNotificationAudienceTest.php`: **2 passed / 6 assertions** through the direct PHPUnit file target. A seeded HR role granted `crm.price_agreements.view` receives no pricing-risk notice; a seeded Finance user does.
 - Pint and PHP syntax checks passed. `php artisan test --filter=PricingReviewNotificationAudienceTest` could not bootstrap because unrelated `AudienceFakeDetector::detect()` return type conflicts with `DetectorInterface`; direct PHPUnit execution of the target file passed.
-- PR [#350](https://github.com/kwat0g/kwatog/pull/350) is stacked on #349. CI was pending when recorded. Parent PR gates still include F-22 duplicate `PdfRenderService::ensureDompdfDirs()` and SPA dependency audit failures.
+- PR [#350](https://github.com/kwat0g/kwatog/pull/350) is stacked on #349. `finding-lifecycle` passes; API CI fails before PHPUnit on F-22 duplicate `PdfRenderService::ensureDompdfDirs()`.
 - The policy's assigned reviewer/account owner is not represented on Product, PriceAgreement, Customer, or ItemCostReview. Product/account ownership targeting remains open. Confirm whether `inventory.costs.review` holders are the correct shared queue for cost-review notices; the current list endpoint is permission-wide.
+
+## Separate finding fix: F-20 sales-order confirmation notice
+
+- Configured planning recipients must now hold both `production.schedule.view` and `crm.sales_orders.view`; the link targets `/crm/sales-orders/{hash_id}` and includes the sales-order subject fields. The title includes the order number; a per-confirmation dedupe key prevents repeat rows.
+- `OutboxFactEventToleranceTest.php`: **9 passed / 26 assertions**, including the exact route/payload, duplicate delivery, positive PPC delivery, and negative schedule/order permission cases. Pint and PHP syntax checks passed.
+- PR #351 is stacked on #350. Owner/actor targeting remains unresolved: `SalesOrder` has creator and sales-representative fields, but the event does not carry the confirmer and policy has not identified which field is the order owner. The broader `production.dashboard` event channel remains F-12.
+- CI for #351 was not yet available when recorded. F-22 remains a backend CI blocker on earlier PRs.
 
 ## Separate finding fix: F-02 approval badge scope
 
