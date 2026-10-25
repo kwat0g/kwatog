@@ -11,8 +11,8 @@ use Illuminate\Validation\Rule;
  * Series R — Task R1.
  *
  * Validates the body of POST /admin/roles/{role}/clone.
- * The source role is bound from the route; this request only validates the
- * new role's name + slug (must be unique against existing roles).
+ * The source role is bound from the route. Optional name and slug overrides
+ * allow the service to generate a copy name when omitted.
  */
 class CloneRoleRequest extends FormRequest
 {
@@ -24,9 +24,9 @@ class CloneRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'        => ['required', 'string', 'max:50'],
-            'slug'        => ['required', 'string', 'max:50', 'alpha_dash', Rule::unique('roles', 'slug')],
-            'description' => ['nullable', 'string', 'max:500'],
+            'name'        => ['sometimes', 'required', 'string', 'max:50'],
+            'slug'        => ['sometimes', 'required', 'string', 'max:50', 'alpha_dash', Rule::unique('roles', 'slug')],
+            'description' => ['sometimes', 'nullable', 'string', 'max:500'],
         ];
     }
 

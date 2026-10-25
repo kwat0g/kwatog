@@ -263,12 +263,13 @@ class RoleService
     }
 
     /**
-     * Clone an existing role into a brand-new custom role with all
-     * permissions copied. The new role is always `is_system = false`.
+     * Clone an existing role into a new custom role with its permissions.
+     *
+     * @param  array{name?:string, slug?:string, description?:string|null}  $overrides
      */
-    public function clone(Role $source, array $data): Role
+    public function clone(Role $source, array $overrides = []): Role
     {
-        return DB::transaction(function () use ($source, $data) {
+        return DB::transaction(function () use ($source, $overrides) {
             $permissionSlugs = $source->permissions()
                 ->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS)
                 ->pluck('permissions.slug')
@@ -276,9 +277,11 @@ class RoleService
             $this->assertPermissionAuthority($permissionSlugs);
 
             $clone = Role::create([
-                'name' => $data['name'],
-                'slug' => $data['slug'],
-                'description' => $data['description'] ?? "Cloned from {$source->name}",
+                'name' => $overrides['name'] ?? ($source->name.' (Copy)'),
+                'slug' => $overrides['slug'] ?? $this->uniqueSlug($source->slug.'_copy'),
+                'description' => array_key_exists('description', $overrides)
+                    ? $overrides['description']
+                    : $source->description,
                 'is_system' => false,
             ]);
 
@@ -290,49 +293,12 @@ class RoleService
             // Audit the clone explicitly so reviewers can trace lineage.
             $this->audit->record($clone, 'cloned', null, [
                 ...$this->roleSnapshot($clone),
-                ...[
-                    'cloned_from_role_id' => $source->id,
-                    'cloned_from_slug' => $source->slug,
-                    'permissions_copied' => count($permissionIds),
-                ],
+                'cloned_from_role_id' => $source->id,
+                'cloned_from_slug' => $source->slug,
+                'permissions_copied' => count($permissionIds),
             ]);
 
             return $clone->load('permissions');
-        });
-    }
-
-    /**
-     * WS-B.1 — Clone an existing role into a new one with the same
-     * permission set. The new role's name and slug are derived from the
-     * source unless explicit overrides are passed.
-     *
-     * @param  array{name?:string, slug?:string, description?:string|null}  $overrides
-     */
-    public function clone(Role $source, array $overrides = []): Role
-    {
-        return DB::transaction(function () use ($source, $overrides) {
-            $baseName = $overrides['name'] ?? ($source->name.' (Copy)');
-            $baseSlug = $overrides['slug'] ?? $this->uniqueSlug($source->slug.'_copy');
-
-            $clone = Role::create([
-                'name'        => $baseName,
-                'slug'        => $baseSlug,
-                'description' => array_key_exists('description', $overrides)
-                    ? $overrides['description']
-                    : $source->description,
-            ]);
-
-            // Copy the permission set verbatim.
-            $permissionIds = $source->permissions()->pluck('permissions.id')->all();
-            if (! empty($permissionIds)) {
-                $clone->permissions()->sync($permissionIds);
-            }
-
-            // Bust permission slug cache for any user that picks up the new
-            // role later — coarse, matches the existing pattern.
-            Cache::flush();
-
-            return $clone->fresh('permissions');
         });
     }
 
