@@ -672,19 +672,31 @@ class PayrollCalculatorService
 
         // Build day-by-day cursor, switching rates as effective dates pass.
         $insideChanges = $history
-            ->filter(function ($h) use ($period) {
-                $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
-                return $eff->gt($period->period_start) && $eff->lte($period->period_end);
+            ->filter(function ($h) use ($periodStart, $periodEnd) {
+                $eff = \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay();
+                return $eff->gt($periodStart) && $eff->lte($periodEnd);
             })
             ->values();
 
+        // Salary in force at period_start = latest history row effective on or
+        // before period_start. When the FIRST row on record is still ahead of
+        // period_start (hire-into-history, or an adjustment effective after
+        // this period), the pre-change rate lives on the adjustment's
+        // from-values — the live row may already carry the new salary, which
+        // would silently pay the raise early (HR-05).
+        $startRow = $history->last(function ($h) use ($periodStart) {
+            return \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay()->lte($periodStart);
+        });
+        $curMonthly = $this->historyMonthly($startRow, $payType)
+            ?? ($startRow === null ? $this->preHistoryMonthly($employee, $history->first(), $payType) : null)
+            ?? $monthlySalary;
+
+        // Build day-by-day cursor, switching rates as effective dates pass.
         $segments = [];
-        $cursor   = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
-        $end      = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
         $changeIdx = 0;
         $spanDays  = 0;
 
-        for ($day = $cursor->copy(); $day->lte($end); $day->addDay()) {
+        for ($day = $periodStart->copy(); $day->lte($periodEnd); $day->addDay()) {
             // Apply any change effective on this day before counting it.
             while ($changeIdx < $insideChanges->count()
                 && \Illuminate\Support\Carbon::parse($insideChanges[$changeIdx]->effective_date)->startOfDay()->eq($day)) {

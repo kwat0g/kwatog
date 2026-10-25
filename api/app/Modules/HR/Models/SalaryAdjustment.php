@@ -34,6 +34,7 @@ class SalaryAdjustment extends Model
         'reason',
         'requested_by',
         'applied_at',
+        'live_applied_at',
     ];
 
     protected $casts = [
@@ -43,6 +44,7 @@ class SalaryAdjustment extends Model
         'to_semi_monthly_rate'             => 'decimal:2',
         'effective_date'            => 'date',
         'applied_at'                => 'datetime',
+        'live_applied_at'           => 'datetime',
         'status'                    => SalaryAdjustmentStatus::class,
     ];
 
