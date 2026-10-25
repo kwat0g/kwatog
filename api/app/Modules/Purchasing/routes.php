@@ -48,9 +48,6 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Supplier RFQs (docs/SUPPLIER-RFQ-BIDDING-PLAN.md) ─── */
     Route::get('/rfqs', [RequestForQuoteController::class, 'index'])->middleware('permission:purchasing.rfq.view');
-    // The PR requester (e.g. a department head) follows RFQ notices here
-    // without RFQ permissions; RequestForQuoteAccessPolicy::canSee() scopes
-    // those users to their own requests and prices stay sealed for them.
     Route::get('/rfq-documents/{document}/download', [RequestForQuoteController::class, 'downloadDocument'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage,purchasing.view');
     Route::get('/rfqs/{rfq}/purchase-orders', [RequestForQuoteController::class, 'purchaseOrders'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage,purchasing.view');
     Route::get('/rfqs/{rfq}/comparison', [RequestForQuoteController::class, 'comparison'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage');

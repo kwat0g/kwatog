@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Resources;
 
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,8 +12,12 @@ class RequestForQuoteItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $canCompare = ! ($user instanceof User)
+            || $user->hasPermission('purchasing.rfq.view')
+            || $user->hasPermission('purchasing.rfq.manage');
         $awarded = null;
-        if ($this->relationLoaded('awards')) {
+        if ($canCompare && $this->relationLoaded('awards')) {
             $awarded = '0';
             foreach ($this->awards as $award) {
                 $awarded = bcadd($awarded, (string) $award->awarded_quantity, 4);

@@ -16,6 +16,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const errMsg = (e: unknown, fallback: string) =>
@@ -38,6 +39,7 @@ export default function RfqDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { can } = usePermission();
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [extensionDeadline, setExtensionDeadline] = useState('');
@@ -136,6 +138,7 @@ export default function RfqDetailPage() {
   }
 
   const canCompare = rfq.actions.can_compare;
+  const canViewSupplierActivity = rfq.actions.can_view_supplier_activity;
 
   return (
     <div>
@@ -167,7 +170,7 @@ export default function RfqDetailPage() {
                 Close now
               </Button>
             )}
-            {rfq.status === 'open' && !rfq.actions.can_close_now && (
+            {canViewSupplierActivity && rfq.status === 'open' && !rfq.actions.can_close_now && (
               <div className="text-sm text-muted">
                 Closes {formatDateTime(rfq.closes_at)} ·{' '}
                 <span className="font-mono tabular-nums">
@@ -255,8 +258,8 @@ export default function RfqDetailPage() {
                     <Th>Item</Th>
                     <Th>Quantity</Th>
                     <Th>Required date</Th>
-                    {rfq.status === 'awarded' && <Th>Awarded</Th>}
-                    {rfq.status === 'awarded' && <Th>Remaining</Th>}
+                    {canCompare && rfq.status === 'awarded' && <Th>Awarded</Th>}
+                    {canCompare && rfq.status === 'awarded' && <Th>Remaining</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -275,12 +278,12 @@ export default function RfqDetailPage() {
                           ? formatDate(item.required_delivery_date)
                           : '—'}
                       </Td>
-                      {rfq.status === 'awarded' && (
+                      {canCompare && rfq.status === 'awarded' && (
                         <Td className="font-mono tabular-nums">
                           {formatQuantity(item.awarded_quantity)} {item.unit || ''}
                         </Td>
                       )}
-                      {rfq.status === 'awarded' && (
+                      {canCompare && rfq.status === 'awarded' && (
                         <Td className="font-mono tabular-nums">{formatQuantity(item.remaining_quantity)}</Td>
                       )}
                     </tr>
@@ -289,7 +292,7 @@ export default function RfqDetailPage() {
               </table>
             </div>
 
-            {rfq.status === 'awarded' &&
+            {canCompare && rfq.status === 'awarded' &&
               rfq.items.some((item) => Number(item.remaining_quantity) > 0) && (
                 <div className="mt-3 rounded bg-info-bg/10 border border-info/20 p-3 text-sm text-info-fg">
                   {rfq.items
@@ -313,48 +316,50 @@ export default function RfqDetailPage() {
               )}
           </Panel>
 
-          <Panel title="Supplier invitations">
-            <div className="space-y-2">
-              {rfq.invitations.map((invitation) => (
-                <div
-                  key={invitation.id}
-                  className="flex justify-between items-center gap-3 border-b border-subtle py-2 last:border-0"
-                >
-                  <div>
-                    <div className="font-medium">{invitation.vendor?.name || 'Supplier'}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted">
-                      {invitation.reach === 'portal' && <Chip variant="info">Portal</Chip>}
-                      {invitation.reach === 'email' && <Chip variant="neutral">Email only</Chip>}
-                      {invitation.reach === 'none' && (
-                        <Chip variant="danger">No contact — enter quote manually</Chip>
-                      )}
+          {canViewSupplierActivity && (
+            <Panel title="Supplier invitations">
+              <div className="space-y-2">
+                {rfq.invitations.map((invitation) => (
+                  <div
+                    key={invitation.id}
+                    className="flex justify-between items-center gap-3 border-b border-subtle py-2 last:border-0"
+                  >
+                    <div>
+                      <div className="font-medium">{invitation.vendor?.name || 'Supplier'}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted">
+                        {invitation.reach === 'portal' && <Chip variant="info">Portal</Chip>}
+                        {invitation.reach === 'email' && <Chip variant="neutral">Email only</Chip>}
+                        {invitation.reach === 'none' && (
+                          <Chip variant="danger">No contact — enter quote manually</Chip>
+                        )}
+                        {invitation.last_notification_error && (
+                          <Chip variant="warning">Email not delivered</Chip>
+                        )}
+                        {invitation.portal_notified_at && !invitation.last_notification_error && (
+                          <span className="inline-block text-2xs text-muted">
+                            Notified {formatDateTime(invitation.portal_notified_at)}
+                          </span>
+                        )}
+                      </div>
                       {invitation.last_notification_error && (
-                        <Chip variant="warning">Email not delivered</Chip>
+                        <div className="text-2xs text-danger-fg mt-1">
+                          {invitation.last_notification_error}
+                        </div>
                       )}
-                      {invitation.portal_notified_at && !invitation.last_notification_error && (
-                        <span className="inline-block text-2xs text-muted">
-                          Notified {formatDateTime(invitation.portal_notified_at)}
-                        </span>
+                      {invitation.exception_reason && (
+                        <div className="text-sm text-muted mt-1">
+                          Exception: {invitation.exception_reason}
+                        </div>
                       )}
                     </div>
-                    {invitation.last_notification_error && (
-                      <div className="text-2xs text-danger-fg mt-1">
-                        {invitation.last_notification_error}
-                      </div>
-                    )}
-                    {invitation.exception_reason && (
-                      <div className="text-sm text-muted mt-1">
-                        Exception: {invitation.exception_reason}
-                      </div>
-                    )}
+                    <Chip variant={invitationStatus(invitation.status).variant}>
+                      {invitationStatus(invitation.status).label}
+                    </Chip>
                   </div>
-                  <Chip variant={invitationStatus(invitation.status).variant}>
-                    {invitationStatus(invitation.status).label}
-                  </Chip>
-                </div>
-              ))}
-            </div>
-          </Panel>
+                ))}
+              </div>
+            </Panel>
+          )}
 
           {rfq.awards.length > 0 && (
             <Panel title="Award outcome">
@@ -432,12 +437,16 @@ export default function RfqDetailPage() {
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Source PR</dt>
                 <dd>
-                  <Link
-                    to={`/purchasing/purchase-requests/${rfq.purchase_request?.id}`}
-                    className="text-link hover:underline"
-                  >
-                    {rfq.purchase_request?.pr_number || '—'}
-                  </Link>
+                  {can('purchasing.view') ? (
+                    <Link
+                      to={`/purchasing/purchase-requests/${rfq.purchase_request?.id}`}
+                      className="text-link hover:underline"
+                    >
+                      {rfq.purchase_request?.pr_number || '—'}
+                    </Link>
+                  ) : (
+                    rfq.purchase_request?.pr_number || '—'
+                  )}
                 </dd>
               </div>
               <div>
@@ -454,14 +463,18 @@ export default function RfqDetailPage() {
                   <dd className="font-mono">{formatDateTime(rfq.closed_at)}</dd>
                 </div>
               )}
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Invited</dt>
-                <dd className="font-mono tabular-nums">{rfq.invited_count}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Responded</dt>
-                <dd className="font-mono tabular-nums">{rfq.responded_count}</dd>
-              </div>
+              {canViewSupplierActivity && (
+                <>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Invited</dt>
+                    <dd className="font-mono tabular-nums">{rfq.invited_count}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Responded</dt>
+                    <dd className="font-mono tabular-nums">{rfq.responded_count}</dd>
+                  </div>
+                </>
+              )}
             </dl>
           </Panel>
 

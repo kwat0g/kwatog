@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\Purchasing\Policies\RequestForQuoteAccessPolicy;
 use App\Modules\Purchasing\Requests\AwardRfqRequest;
 use App\Modules\Purchasing\Requests\CancelRequestForQuoteRequest;
 use App\Modules\Purchasing\Requests\ExtendRequestForQuoteRequest;
@@ -56,8 +57,10 @@ class RequestForQuoteController
         return $this->respond(fn () => $this->rfqs->createFromPurchaseRequest($purchaseRequest, $request->validated(), $request->user()), 201);
     }
 
-    public function show(Request $request, RequestForQuote $rfq): RequestForQuoteResource
+    public function show(Request $request, RequestForQuote $rfq, RequestForQuoteAccessPolicy $access): RequestForQuoteResource
     {
+        abort_unless($access->canSee($request->user(), $rfq), 403, 'You do not have access to this RFQ.');
+
         try {
             $visible = $this->rfqs->show($rfq, $request->user());
 
