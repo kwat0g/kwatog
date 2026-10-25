@@ -7,6 +7,7 @@ Keep Laravel's existing Markdown Mailable and `MailMessage` stack. The applicati
 ## Shared shell
 
 - Table-based, 600px email container; fluid width and reduced padding below 640px.
+- Markdown-rendered tables and mail table components share consistent header, row, dark-mode, and mobile wrapping styles.
 - System font stack; no remote CSS or JavaScript.
 - `lang` from application locale and `dir="ltr"`.
 - Light/dark color-scheme metadata and a dark-mode media rule; critical information remains text.
