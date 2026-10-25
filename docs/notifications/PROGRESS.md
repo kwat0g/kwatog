@@ -192,6 +192,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `PasswordResetNotification::failed()` now fully qualifies `\Throwable`, matching the HR subclass override on PHP 8.3. This prevents class-loading failure before queued HR password-reset tests can run.
 - Baseline reproduction: `EmployeePasswordResetNotificationTest.php` failed before the patch with a fatal method compatibility error because PHP resolved the parent's type as `App\Modules\Auth\Notifications\Throwable`.
 - `EmployeePasswordResetNotificationTest.php`: **1 passed / 2 assertions**; `UserProvisioningTest.php`: **8 passed / 25 assertions**; `UserAdministrationHardeningTest.php`: **8 passed / 27 assertions**. PHP syntax and `git diff --check` pass. Targeted Pint reports one existing style issue in the unrelated fully qualified test-class `@see` reference; left it unchanged.
+- PR #372's API CI stops before PHPUnit on inherited F-22: duplicate `PdfRenderService::ensureDompdfDirs()` in the base. The notification-specific test files pass locally.
 
 ## Separate finding fix: F-07 training-expiry deep links (draft PR [#365](https://github.com/kwat0g/kwatog/pull/365))
 
