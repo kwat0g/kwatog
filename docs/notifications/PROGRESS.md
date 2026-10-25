@@ -27,6 +27,7 @@
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | `af68eb60` |
 | F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | `8512116d` |
+| F-04. Badge destination permissions | `notifications/fix-badge-route-permissions` | [#339](https://github.com/kwat0g/kwatog/pull/339) | pending |
 
 ## Coverage ledger
 
@@ -45,7 +46,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 now reuses the approval board filter; F-03 now shares the purchase-request pending-approval scope with its count endpoint; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attached to wrong route, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 now reuses the approval board filter; F-03 now shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -92,6 +93,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include profile bad
 - `PurchaseRequestAccessPolicy::pendingApprovalsFor()` is now the shared query for the sidebar badge and existing `pending-count` endpoint. It applies the current pending step, active direct/delegated role slugs, submitter exclusion, and the same row scope as the PR list. Badge visibility now requires `purchasing.view`; counting also requires `purchasing.pr.approve`.
 - Targeted API test: `PurchaseRequestHardeningTest::test_pending_count_excludes_self_submissions_and_other_roles_steps` **1 passed / 18 assertions**, covering direct approver, active delegate, role with no workflow step, and a user whose approval-permission override still cannot open the list.
 - The sidebar still navigates to the unfiltered PR list; badge drill-down parity remains open under F-09. No frontend changes.
+
+## Separate finding fix: F-04 badge destination permissions
+
+- Payroll badge now requires `payroll.periods.view`, Complaints requires `crm.complaints.view`, and Deliveries accepts `supply_chain.view` or `supply_chain.deliveries.view`, matching the sidebar and list routes.
+- Targeted API test: `BadgeControllerTest::test_badge_permissions_match_destination_list_permissions` **1 passed / 18 assertions**. An employee with only `payroll.view` cannot open Payroll Periods and receives no periods badge; period-view, complaints-view-only, and warehouse-delivery users can open their destination and receive its badge.
+- No frontend changes. Full role matrix and feature-flag combinations remain untested.
 
 ## Outstanding proof / risks
 
