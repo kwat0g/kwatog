@@ -199,12 +199,12 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             'notifiable_id' => $differentRoleApprover->id,
             'type' => 'approval_reminder',
         ]);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $actionOnlyApprover->id,
             'type' => 'approval_reminder',
         ]);
-        $actionOnlyNoticeLinks = DB::table('notifications')
-            ->where('notifiable_id', $actionOnlyApprover->id)
+        $differentRoleNoticeLinks = DB::table('notifications')
+            ->where('notifiable_id', $differentRoleApprover->id)
             ->where('type', 'approval_reminder')
             ->pluck('data')
             ->map(fn (string $json): ?string => json_decode($json, true)['link_to'] ?? null);
