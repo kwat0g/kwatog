@@ -192,7 +192,8 @@ class PricingReviewService
     {
         $permission = $link === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($link, '/mrp') ? 'mrp.boms.manage' : (str_starts_with($link, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
         $users = $this->activeUsers ??= User::query()->where('is_active', true)->get();
-        $audience = $users->filter(fn (User $user): bool => $user->hasPermission($permission));
+        $audience = $users->filter(fn (User $user): bool => ($roles === [] || in_array($user->role?->slug, $roles, true))
+            && $user->hasPermission($permission));
         app(NotificationService::class)->sendInApp($audience, $type, ['title' => $title, 'message' => $message, 'link_to' => $link], $key);
     }
 
