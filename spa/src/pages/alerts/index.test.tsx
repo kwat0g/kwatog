@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { alertsApi } from '@/api/alerts';
@@ -10,6 +10,7 @@ vi.mock('@/api/alerts', () => ({
   alertsApi: {
     options: vi.fn(),
     list: vi.fn(),
+    unreadCount: vi.fn(),
     dismiss: vi.fn(),
     markRead: vi.fn(),
   },
@@ -57,6 +58,7 @@ describe('critical alert email state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(alertsApi.options).mockResolvedValue({ types: [], severities: [] });
+    vi.mocked(alertsApi.unreadCount).mockResolvedValue({ count: 1 });
     vi.mocked(alertsApi.list).mockResolvedValue({
       data: [alert()],
       meta: { current_page: 1, last_page: 1, per_page: 50, total: 1, from: 1, to: 1 },
@@ -84,5 +86,19 @@ describe('critical alert email state', () => {
 
     expect(status).toHaveTextContent('Critical alert email stopped after 5 attempts');
     expect(status).toHaveTextContent('Contact an administrator');
+  });
+
+  it('opens the shared unread filter using the unread count definition', async () => {
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show shared unread alerts (1)' }));
+
+    await waitFor(() => expect(alertsApi.list).toHaveBeenLastCalledWith({
+      page: 1,
+      per_page: 50,
+      is_dismissed: false,
+      is_read: false,
+    }));
+    expect(screen.getByText('Showing unread alerts')).toBeInTheDocument();
   });
 });
