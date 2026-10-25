@@ -17,6 +17,7 @@ Status: template implemented in draft PR; accountant review required before exte
 - `RunArDunningCommandTest`: 9 tests passed, 29 assertions; includes configured tier behavior, fixed-tier wording removal, recipient/data snapshot, and portal link.
 - Temporary render fixture: 1 test passed, 2 assertions. No transport contacted and no real email sent.
 - Re-rendered the existing HTML fixture with the current landing-page logo's light/dark PNG variants; no mail transport was contacted. Browser preview inspected at 1440px desktop and 390px mobile in light/dark schemes. Document width matched viewport in both. Rendered HTML: 23,759 bytes. Screenshots: [desktop light](screenshots/invoice-dunning-desktop-light.png), [desktop dark](screenshots/invoice-dunning-desktop-dark.png), [mobile light](screenshots/invoice-dunning-mobile-light.png), [mobile dark](screenshots/invoice-dunning-mobile-dark.png).
+- Re-inspected all four captures: no overflow, readable layout, and logo visible. Balance is shown as `PHP 125,000.00`; EF-120 / PR #319 corrects shared PHP currency formatting.
 - Real Gmail, Outlook, Apple Mail, Yahoo, and mobile mail-client rendering remains unverified.
 - Preview footer uses test database branding values; verify company identity settings before production delivery.
 
