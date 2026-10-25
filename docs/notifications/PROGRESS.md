@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #341, stacked after PR #340.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #342, stacked after PR #341.
 
 ## Phase status
 
@@ -30,6 +30,7 @@
 | F-04. Badge destination permissions | `notifications/fix-badge-route-permissions` | [#339](https://github.com/kwat0g/kwatog/pull/339) | `7089562c` |
 | F-01. Profile-request badge route and query parity | `notifications/fix-profile-request-badge-route` | [#340](https://github.com/kwat0g/kwatog/pull/340) | `93c0f12c` |
 | F-18. Pricing notification role allow-list | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | `9e9243a0` |
+| F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | `9fc19063` |
 
 ## Coverage ledger
 
@@ -38,7 +39,7 @@
 - Direct Laravel `->notify()` / `Notification::send()` and central preference email paths inventoried in discovery; mail-only account/security and summary paths remain separate.
 - Internal sidebar routes inventoried: **73 / 73**; portal routes: **19 / 19**; compact-shell links: **9 / 9**.
 - Phase 2 defines **87** signal IDs; static cross-reference found no undefined IDs in the 73 internal, 19 portal, or 9 compact route rows. Disabled/deferred signals stay labeled in the policy table.
-- Badge definitions inventoried: **29**; currently wired to internal nav: **22**; unwired: **7**.
+- Badge definitions inventoried: **29**; currently wired to internal nav: **23**; unwired: **6**.
 - Local role slugs: **17**; existing role-access audit says **16**. Reconcile before role-complete claim.
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
@@ -114,6 +115,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include missing met
 - `PricingReviewService::notify()` now intersects its caller-supplied role allow-list with the destination permission. BOM notifications now use `mrp.boms.view`, which gates the linked list/detail route. No product/account owner or assignment field was found, so record-specific ownership remains unresolved; no new role was added.
 - Targeted API tests: expiry reminder **1 passed / 7 assertions**; BOM cost-refresh negative recipient case **1 passed / 11 assertions**; audience batching **1 passed / 4 assertions**. The expiry test confirms Finance can open the shared agreement list but receives no expiry notice when absent from that event's allowed roles; the BOM test confirms an unlisted role with BOM view/manage permissions receives no notice while PPC does.
 - PHP syntax and `git diff --check` pass. Full pricing-event role coverage and product/account assignment policy remain open.
+
+## Separate finding fix: F-05 CRM inquiry badge
+
+- The inquiry badge now counts only `ContactInquiryStatus::New`, the state that has not entered the triage workflow. `ContactInquiryInboxService::listQuery()` powers both the badge and list; the sidebar opens `/crm/inquiries?status=new`. Query-aware active-link and recent-page matching preserve navigation behavior with the filter.
+- Targeted parity test: `BadgeControllerTest::test_inquiries_badge_matches_the_new_inquiry_list_filter` **1 passed / 4 assertions** for `customer_service_officer`; it excludes `in_progress` and `closed`. Sidebar permission and behavior tests: **46 passed** across two files. PHP syntax and `git diff --check` pass.
+- Six orphan definitions remain and are still deferred until each has a verified destination filter; training's two signals also need multi-signal UI.
 
 ## Outstanding proof / risks
 
