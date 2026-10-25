@@ -405,10 +405,32 @@ class RecruitmentApplicationTest extends TestCase
         $response->assertStatus(201);
         $response->assertJsonPath('data.interviewer_name', 'Maria Santos');
         $this->assertDatabaseCount('application_interviews', 1);
-        Mail::assertQueued(InterviewScheduledMail::class, fn (InterviewScheduledMail $mail): bool =>
-            $mail->hasTo('juan@test.com')
-            && $mail->interview->interviewer_name === 'Maria Santos'
-        );
+        $this->application->forceFill(['first_name' => 'Changed'])->save();
+        $this->posting->update(['title' => 'Changed title']);
+        $interview = ApplicationInterview::query()->firstOrFail();
+        $expectedScheduledAt = $interview->scheduled_at->copy()
+            ->setTimezone((string) config('app.timezone'))
+            ->format('F j, Y g:i A');
+        $interview->forceFill([
+            'location' => 'Changed after queue',
+            'interviewer_name' => 'Changed interviewer',
+            'scheduled_at' => now()->addDays(6),
+        ])->save();
+        Mail::assertQueued(InterviewScheduledMail::class, function (InterviewScheduledMail $mail) use ($expectedScheduledAt): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText('HR Office, 2nd Floor');
+            $mail->assertSeeInText('Maria Santos');
+            $mail->assertSeeInText('RCT-TEST01');
+
+            return $mail->hasTo('juan@test.com')
+                && $mail->applicantName === 'Juan Test'
+                && $mail->positionTitle === 'Test Position'
+                && $mail->interviewerName === 'Maria Santos'
+                && $mail->location === 'HR Office, 2nd Floor'
+                && $mail->scheduledAt === $expectedScheduledAt
+                && str_contains($html, '<title>Interview scheduled</title>')
+                && str_contains($html, 'Check application status');
+        });
     }
 
     public function test_interview_email_renders_when_company_address_is_missing(): void

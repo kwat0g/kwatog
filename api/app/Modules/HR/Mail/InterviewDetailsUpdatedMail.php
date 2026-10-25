@@ -16,15 +16,22 @@ use Illuminate\Queue\SerializesModels;
 
 class InterviewDetailsUpdatedMail extends QueuedMailable
 {
-    use SerializesModels;
+    public readonly string $applicantName;
+    public readonly string $positionTitle;
+    public readonly string $scheduledAt;
+    public readonly string $location;
+    public readonly string $interviewerName;
+    public readonly ?string $outcome;
+    public readonly string $trackingCode;
+    private readonly string $applicationHashId;
 
     /** @var array<string, mixed> */
     public array $snapshot = [];
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(
-        public readonly JobApplication $application,
-        public readonly ApplicationInterview $interview,
+        JobApplication $application,
+        ApplicationInterview $interview,
         public readonly array $fallbackUserIds = [],
     ) {
         // Lane: mail — see config/horizon.php. Kept off `default` so an
@@ -73,11 +80,11 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment interview update',
-            "The interview update email for {$this->application->full_name} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+            "The interview update email for {$this->applicantName} could not be delivered. Review the interview and contact the candidate through an approved channel.",
             [
-                'link_to' => '/hr/recruitment/applications/'.$this->application->hash_id,
+                'link_to' => '/hr/recruitment/applications/'.$this->applicationHashId,
                 'entity_type' => 'job_application',
-                'entity_id' => $this->application->hash_id,
+                'entity_id' => $this->applicationHashId,
                 'reason' => 'The candidate interview update email job failed in the queue.',
             ],
         );

@@ -16,14 +16,21 @@ use Illuminate\Queue\SerializesModels;
 
 class InterviewScheduledMail extends QueuedMailable
 {
-    use SerializesModels;
+    public readonly string $applicantName;
+    public readonly string $positionTitle;
+    public readonly string $scheduledAt;
+    public readonly string $location;
+    public readonly string $interviewerName;
+    public readonly string $companyAddress;
+    public readonly string $trackingCode;
+    private readonly string $applicationHashId;
 
     /** @var array<string, mixed> */
     public array $snapshot = [];
 
     public function __construct(
-        public readonly JobApplication $application,
-        public readonly ApplicationInterview $interview,
+        JobApplication $application,
+        ApplicationInterview $interview,
         /** @var list<int> */
         public readonly array $fallbackUserIds = [],
     ) {
@@ -72,11 +79,11 @@ class InterviewScheduledMail extends QueuedMailable
         app(EmailDeliveryFailureNotifier::class)->notifyUserIds(
             $this->fallbackUserIds,
             'Recruitment interview notification',
-            "The interview email for {$this->application->full_name} could not be delivered. Review the interview and contact the candidate through an approved channel.",
+            "The interview email for {$this->applicantName} could not be delivered. Review the interview and contact the candidate through an approved channel.",
             [
-                'link_to' => '/hr/recruitment/applications/'.$this->application->hash_id,
+                'link_to' => '/hr/recruitment/applications/'.$this->applicationHashId,
                 'entity_type' => 'job_application',
-                'entity_id' => $this->application->hash_id,
+                'entity_id' => $this->applicationHashId,
                 'reason' => 'The candidate interview email job failed in the queue.',
             ],
         );
