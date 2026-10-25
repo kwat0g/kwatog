@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import { LuPlus as Plus, LuTrash2 as Trash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
@@ -12,6 +13,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { numberInputProps } from '@/lib/numberInput';
+import { localIsoDate } from '@/lib/formatDate';
 
 interface Line {
   item_id: string; description: string; quantity: string; unit: string; unit_price: string;
@@ -23,7 +25,7 @@ export default function CreatePurchaseOrderPage() {
   const prId = search.get('pr_id');
 
   const [meta, setMeta] = useState({
-    vendor_id: '', date: new Date().toISOString().slice(0, 10),
+    vendor_id: '', date: localIsoDate(),
     expected_delivery_date: '', is_vatable: true, remarks: '',
   });
   const [lines, setLines] = useState<Line[]>([{ item_id: '', description: '', quantity: '1', unit: 'pcs', unit_price: '0' }]);
@@ -64,7 +66,7 @@ export default function CreatePurchaseOrderPage() {
       })),
     }),
     onSuccess: (po) => { toast.success(`PO ${po.po_number} created.`); nav(`/purchasing/purchase-orders/${po.id}`); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed.'),
   });
 
   return (

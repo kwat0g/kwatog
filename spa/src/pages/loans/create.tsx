@@ -29,7 +29,7 @@ const schema = z.object({
  principal: z.string()
  .regex(/^\d+(?:\.\d{1,2})?$/, 'Enter a valid amount (up to 2 decimals)')
  .refine((value) => Number(value) > 0, 'Must be positive'),
- pay_periods: z.coerce.number({ invalid_type_error: 'Enter a number' })
+ pay_periods: z.coerce.number({ error: 'Enter a number' })
  .int('Whole number').min(1, 'At least 1 period'),
  purpose: z.string().max(1000, 'Max 1000 characters').optional().or(z.literal('')),
 });
@@ -50,7 +50,7 @@ export default function CreateLoanPage() {
  });
  const employees = employeesQuery.data?.data ?? [];
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  // Period count is policy-driven; leave it blank until the selected
  // employee/type limits are loaded instead of inventing a default.

@@ -25,7 +25,7 @@ interface TablePrefsState {
 
 /** Validates the raw JSON pulled from localStorage. Corrupted / tampered state is discarded. */
 const persistedSchema = z.object({
- byTable: z.record(
+ byTable: z.record(z.string(),
  z.object({
  density: z.enum(['compact', 'default', 'spacious']).optional(),
  hiddenColumns: z.array(z.string()).optional(),

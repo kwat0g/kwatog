@@ -50,7 +50,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
     queryFn: businessPoliciesApi.get,
   });
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: existing
       ? {

@@ -70,7 +70,7 @@ export default function OvertimeCreatePage() {
     const base = z.object({
       employee_id: z.string().min(1, 'Employee is required'),
       date: z.string().min(1, 'Date is required').refine((date) => date >= manilaIsoDate(), 'Choose today or a later date.'),
-      hours_requested: z.coerce.number({ invalid_type_error: 'Enter a number' }),
+      hours_requested: z.coerce.number({ error: 'Enter a number' }),
       reason: z.string().trim().min(5, 'Provide at least 5 characters').max(2000),
     });
     if (!options) return base;
@@ -86,7 +86,7 @@ export default function OvertimeCreatePage() {
     });
   }, [options]);
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       employee_id: user?.employee?.id ?? '',

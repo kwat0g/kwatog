@@ -267,7 +267,7 @@ export default function InspectionSpecEditorPage() {
     setValue,
     setError,
     formState: { errors, isSubmitting, isDirty },
-  } = useForm<FormValues>({
+  } = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       product_id: productId,
