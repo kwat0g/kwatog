@@ -155,7 +155,7 @@ describe('decisionView', () => {
     expect(payroll.facts.map(({ label }) => label)).toEqual([
       'Period start',
       'Period end',
-      'Unresolved checks',
+      'Unresolved anomaly flags',
     ]);
   });
 
@@ -263,7 +263,9 @@ describe('decisionView', () => {
           rationale: { role, waiting_count: 1, oldest_wait_hours: 2, reminder_threshold_hours: 1 },
         }),
       );
-      expect(view.facts[0]?.value).toBe(label);
+      expect(view.facts.find(({ label: factLabel }) => factLabel === 'Approver role')?.value).toBe(
+        label,
+      );
     }
     for (const [severity, label] of [
       ['critical', 'Critical'],

@@ -133,7 +133,7 @@ Exit: users can explain why one customer commitment takes priority, inspect its 
 Delivered partial slices (not full decision coverage):
 
 - [x] D21 language now describes payroll anomaly review and unresolved flags; it does not claim payroll readiness.
-- [x] D33 shadow slice reports draft PO-linked bills with saved blocked three-way snapshots, counts fixed blocking-line categories, links to the permission-scoped bill page, and verifies saved bill review state only. It is not duplicate-invoice detection; expiry is not clearance proof.
+- [x] D33 shadow slice reports draft PO-linked bills with saved blocked three-way snapshots, counts fixed blocking-line categories, links to the permission-scoped bill page, and rechecks current matching through the PO/bill/GRN service. Legacy bill lines without `item_id` remain unavailable. It is not duplicate-invoice detection; expiry is not clearance proof.
 
 Each row below is part of the full program. “Existing” means a limited detector exists; it does not mean the complete catalogued decision is delivered. A source prerequisite is a concrete release dependency, not an instruction to invent missing evidence.
 
@@ -171,22 +171,34 @@ Each row below is part of the full program. “Existing” means a limited detec
 | D30 | Executive business briefing | `Dashboard/Services/KpiSnapshotService.php` and existing analytics | Resolve weekly/daily grain G-07; scope executive aggregates and explain changes using verified underlying decisions |
 | D31 | Order, supplier, or machine scenarios | `Models/DssScenario.php`, existing MRP/capacity/forecast services | Read-only baseline snapshot, isolated scenario inputs, explicit constraints, comparison, and proof of zero production writes |
 | D32 | Workforce attendance patterns | `Dashboard/Services/AttendanceForecastService.php` and attendance sources | Approved restricted purpose, sufficient history and validation, aggregate-first presentation; individual attrition prediction remains unavailable without those conditions |
-| D33 | Duplicate/conflicting transactions | Shadow `dss.three_way_match_review` covers only PO-linked draft bills with persisted blocked three-way snapshots; its verifier checks saved bill review state only. Later PO/GRN changes are not recalculated or verified. It is not duplicate-invoice detection; 26-hour expiry is not clearance proof. | Verify duplicate definitions, narrow investigation scope, explanations, correction workflow, external-source-aware verifier, and sampled false-positive evidence before expanding or promoting |
+| D33 | Duplicate/conflicting transactions | Shadow `dss.three_way_match_review` covers PO-linked draft bills with persisted blocked three-way snapshots; verifier re-runs current PO/bill/GRN match, but legacy bill lines without `item_id` and invalid/missing source data remain unavailable. It is not duplicate-invoice detection; 26-hour expiry is not clearance proof. | Verify duplicate definitions, narrow investigation scope, explanations, correction workflow, broader source-data completeness, and sampled false-positive evidence before expanding or promoting |
 
 All module service paths in this table are prefixed with `api/app/Modules/`; `Common/Services/ChainBottleneckService.php` is under `api/app/`.
 
 Split R5 into business-domain plans: planning/purchasing/inventory; finance/commercial; quality/returns; maintenance/assets; people/payroll. Each plan must include exact source-policy changes, contract changes, meaningful tests, a source-derived demo, and its specific promotion gate. Prerequisite data fixes remain separately reviewable changes with compatibility and reconciliation evidence.
+
+Domain plans, with current authorization evidence, source clear conditions, demos, tests, and per-decision gates:
+
+- [Planning, purchasing, and inventory](2026-10-23-dss-planning-purchasing-inventory.md) — D01–D08, D24–D27.
+- [Finance and commercial](2026-10-23-dss-finance-commercial.md) — D09–D12, D28–D31, D33.
+- [Quality and returns](2026-10-23-dss-quality-returns.md) — D13–D16, D23.
+- [Maintenance and assets](2026-10-23-dss-maintenance-assets.md) — D17–D19.
+- [People and payroll](2026-10-23-dss-people-payroll.md) — D20–D22, D32.
+
+Coverage status remains the per-decision state in [readiness](../../dss/READINESS-2026-10-23.md); the [decision inventory](../../dss/01-decision-inventory.md) links these plans. Domain plan existence does not change any D01–D33 status.
 
 ## R6: Scheduling, runtime isolation, and notification publishing
 
 See `2026-10-23-dss-updates-notifications.md`; lifecycle identity is now in the working tree.
 
 - [ ] Reuse the hourly runner as recovery. Add bounded, coalesced after-commit jobs for existing reliable source events.
-- [ ] Add a cumulative query/worker execution boundary. PostgreSQL detection now sets a transaction-local per-statement timeout; multiple statements may still exceed the total budget, and SQLite/non-SQL runtime still use the after-return timer. Keep worker execution below lock lifetime and make interrupted runs visibly incomplete.
-- [ ] Persist a successful evaluation and its observed evidence consistently. An interrupted emission loop must not leave apparently current partial results without an incomplete run record.
+- [x] Bound one detector per Horizon `dss` job on dedicated `redis_dss`. The service keeps detector lock and run-log ownership; each job has a 260-second cooperative budget and 280-second worker timeout, the DSS lock expires at 310 seconds, and the effective connection lease is 330 seconds. Timeout failure marks its active run failed; `dss:maintain` reaps leftovers every five minutes. Admin and scheduled runs enqueue; direct runner calls stay inline for tests and diagnostics.
+- [x] Persist a successful evaluation and its observed evidence consistently. Recommendation writes and run completion are atomic; persistence interruption rolls back emissions and records a failed run with zero emissions. Queue timeout and stale-run recovery also mark interrupted runs failed.
 - [ ] Publish only new urgent issues, material worsening, or eligible follow-up reminders. Use occurrence/change identity rather than mutable `updated_at` as the notification key.
-- [ ] Reuse existing recipient preferences. No configured daily cap exists in the current notification service or schema; define and implement one before publishing. Recheck source permissions at delivery; revoked access suppresses the message.
+- [x] Reuse existing in-app recipient preferences. Configure and enforce the three-notice application-local daily cap before publishing; stable DSS event identities use the existing recipient-scoped notification dedupe index.
+- [ ] Recheck source/user permissions at delivery and suppress notices when access was revoked.
 - [ ] Keep email disabled until delivery handoff is idempotent; `NotificationService` can queue email for a deduplicated send even when its in-app notification row was ignored as a duplicate.
+- [x] Define and enforce the three-notice per-recipient daily cap and inbox duplicate protection before publishing. A durable notification-intent/outbox worker and permission recheck at delivery remain release gates; publishing stays disabled.
 - [ ] Test duplicate triggers, concurrent schedule/manual runs, failed delivery retry, midnight/date-zone limits, permission revocation, and shadow/disabled checks.
 
 Exit: timely advice reaches the responsible user without repeated messages or unbounded scans, and failures remain visible.
@@ -201,6 +213,7 @@ Create separate evaluation and forecast/scenario implementation plans after the 
 - [ ] Assess sampled relevance/false positives per rule. Calculate precision or recall only with a labelled reference set and stated denominators.
 - [ ] Tailor executive/manager/operator views through permitted data and meaningful ordering; administrative access alone does not define a business audience.
 - [ ] Validate D04/D05/D14/D15/D20/D28/D29 forecasting components and D30/D31 summaries/scenarios against their row-specific prerequisites. Record model/policy version, history window, error metrics, assumptions, and insufficiency.
+- [ ] Keep outcomes, forecasts, and scenarios gated until their source data validates and the row-specific evaluation passes. A model or scenario database row is not user-facing capability.
 - [ ] Reuse the existing forecast/scenario models where their schema fits. Simulate with immutable baseline inputs; prove no workflow, inventory, payroll, payment, or planning state is modified.
 
 Exit: the system reports what was actually observed and measured, with predictive features limited to validated data and explicit assumptions.

@@ -83,6 +83,20 @@ export interface RecommendationSummary {
   by_severity: Record<RecommendationSeverity, number>;
 }
 
+export interface MasterHygieneAffectedRecord {
+  reference: string;
+  name: string;
+  requirement: string;
+  destination: string;
+}
+
+export interface MasterHygieneAffectedRecordPage {
+  data: MasterHygieneAffectedRecord[];
+  total: number;
+  next_cursor: string | null;
+  historical: boolean;
+}
+
 export interface RecommendationOption {
   value: string;
   label: string;
@@ -100,4 +114,18 @@ export type RecommendationAction = 'accept' | 'dismiss' | 'snooze' | 'execute' |
 export interface PaginatedRecommendations {
   data: Recommendation[];
   meta: PaginationMeta;
+}
+
+export interface RecommendationEvent {
+  id: string;
+  label: string;
+  at: string | null;
+  actor: string | null;
+  reason: string | null;
+  outcome_summary: string | null;
+}
+
+export interface RecommendationEventPage {
+  data: RecommendationEvent[];
+  next_cursor: string | null;
 }

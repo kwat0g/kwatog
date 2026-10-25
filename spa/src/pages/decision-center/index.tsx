@@ -16,12 +16,9 @@ import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
-import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatImpact, severityVariant } from './helpers';
-import RecommendationDetails from './RecommendationDetails';
 import {
   decisionView,
   detectorLabel,
@@ -178,7 +175,15 @@ function DetectorHealth({ checks }: { checks: DssCoverage['checks'] }) {
   );
 }
 
-function SummaryCard({ label, value, severity }: { label: string; value?: number; severity?: RecommendationSeverity }) {
+function SummaryCard({
+  label,
+  value,
+  severity,
+}: {
+  label: string;
+  value?: number;
+  severity?: RecommendationSeverity;
+}) {
   const Icon = severity ? severityIcons[severity] : null;
   return (
     <div className="min-w-0 rounded-md border border-default bg-canvas px-4 py-3">
@@ -215,24 +220,27 @@ function statusVariant(status: Recommendation['status']) {
 export default function DecisionCenterPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const isNarrow = useMediaQuery('(max-width: 1279px)');
   const [notice, setNotice] = useState('');
   const latestSearch = useRef(searchParams.toString());
-  const rowLinks = useRef(new Map<string, HTMLAnchorElement>());
-  const restoreFocusId = useRef<string | null>(null);
 
   useEffect(() => {
     latestSearch.current = searchParams.toString();
   }, [searchParams]);
 
   const filters = useMemo(() => readFilters(new URLSearchParams(searchParams)), [searchParams]);
-  const selectedId = searchParams.get('id') || undefined;
+  const legacySelectedId = searchParams.get('id');
+  const listSearch = filtersToSearch(filters);
+
+  useEffect(() => {
+    if (legacySelectedId) {
+      navigate(`/decision-center/${encodeURIComponent(legacySelectedId)}${listSearch}`, {
+        replace: true,
+      });
+    }
+  }, [legacySelectedId, listSearch, navigate]);
 
   const updateUrl = useCallback(
-    (
-      patch: Partial<RecommendationListParams>,
-      options: { replace?: boolean; selectedId?: string | null } = {},
-    ) => {
+    (patch: Partial<RecommendationListParams>, options: { replace?: boolean } = {}) => {
       const current = new URLSearchParams(latestSearch.current);
       const next = new URLSearchParams();
       for (const key of FILTER_KEYS) {
@@ -246,8 +254,6 @@ export default function DecisionCenterPage() {
         if (key === 'direction' && value === 'desc') continue;
         next.set(key, String(value));
       }
-      const id = options.selectedId === undefined ? current.get('id') : options.selectedId;
-      if (id) next.set('id', id);
       latestSearch.current = next.toString();
       setSearchParams(next, { replace: options.replace });
     },
@@ -271,14 +277,16 @@ export default function DecisionCenterPage() {
     (!filters.domain && !filters.owner_role) ||
     (!!options &&
       (!filters.domain || options.domains.some((option) => option.value === filters.domain)) &&
-      (!filters.owner_role || options.owner_roles.some((option) => option.value === filters.owner_role)));
+      (!filters.owner_role ||
+        options.owner_roles.some((option) => option.value === filters.owner_role)));
 
   useEffect(() => {
     if (options) {
       const missingDomain =
         filters.domain && !options.domains.some((option) => option.value === filters.domain);
       const missingOwner =
-        filters.owner_role && !options.owner_roles.some((option) => option.value === filters.owner_role);
+        filters.owner_role &&
+        !options.owner_roles.some((option) => option.value === filters.owner_role);
       if (missingDomain || missingOwner) {
         updateUrl(
           {
@@ -288,7 +296,9 @@ export default function DecisionCenterPage() {
           },
           { replace: true },
         );
-        setNotice('An area or team filter was cleared because it is no longer available to your role.');
+        setNotice(
+          'An area or team filter was cleared because it is no longer available to your role.',
+        );
       }
       return;
     }
@@ -321,7 +331,10 @@ export default function DecisionCenterPage() {
     queryFn: dssApi.coverage,
   });
   const isRefreshing =
-    listQuery.isFetching || summaryQuery.isFetching || optionsQuery.isFetching || coverageQuery.isFetching;
+    listQuery.isFetching ||
+    summaryQuery.isFetching ||
+    optionsQuery.isFetching ||
+    coverageQuery.isFetching;
   const coverage = coverageQuery.data;
   const checksNeedingAttention =
     coverage?.checks.filter(
@@ -329,51 +342,30 @@ export default function DecisionCenterPage() {
     ) ?? [];
 
   const filterConfig: FilterConfig[] = [
-    { key: 'status', label: 'Status', type: 'select', options: options?.statuses ?? statusFallback },
-    { key: 'severity', label: 'Severity', type: 'select', options: options?.severities ?? severityOptions },
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: options?.statuses ?? statusFallback,
+    },
+    {
+      key: 'severity',
+      label: 'Severity',
+      type: 'select',
+      options: options?.severities ?? severityOptions,
+    },
     { key: 'domain', label: 'Area', type: 'select', options: options?.domains ?? [] },
-    { key: 'owner_role', label: 'Responsible team', type: 'select', options: options?.owner_roles ?? [] },
+    {
+      key: 'owner_role',
+      label: 'Responsible team',
+      type: 'select',
+      options: options?.owner_roles ?? [],
+    },
   ];
 
   const summary = summaryQuery.data;
-  const recommendations = listQuery.data?.data ?? [];
-  const selectedFromList = !listQuery.isError
-    ? recommendations.find((recommendation) => recommendation.id === selectedId)
-    : undefined;
-  const selectedQuery = useQuery({
-    queryKey: ['dss', 'recommendations', selectedId],
-    queryFn: () => dssApi.show(selectedId!),
-    enabled: !!selectedId && !selectedFromList,
-  });
-  const selected = selectedFromList ?? selectedQuery.data;
-
-  const listSearch = filtersToSearch(filters);
-  const selectRecommendation = (recommendation: Recommendation) => {
-    if (isNarrow) {
-      navigate(`/decision-center/${recommendation.id}${listSearch}`);
-      return;
-    }
-    updateUrl({}, { selectedId: recommendation.id });
-  };
-
-  const closePanel = () => {
-    restoreFocusId.current = selectedId ?? null;
-    updateUrl({}, { selectedId: null });
-  };
-
-  useEffect(() => {
-    if (!selectedId && restoreFocusId.current) {
-      const id = restoreFocusId.current;
-      restoreFocusId.current = null;
-      requestAnimationFrame(() => rowLinks.current.get(id)?.focus());
-    }
-  }, [selectedId]);
-
-  useEffect(() => {
-    if (isNarrow && selectedId) {
-      navigate(`/decision-center/${selectedId}${listSearch}`, { replace: true });
-    }
-  }, [isNarrow, listSearch, navigate, selectedId]);
+  const selectRecommendation = (recommendation: Recommendation) =>
+    navigate(`/decision-center/${recommendation.id}${listSearch}`);
 
   const columns: Column<Recommendation>[] = [
     {
@@ -403,28 +395,18 @@ export default function DecisionCenterPage() {
       className: 'min-w-[230px]',
       cell: (recommendation) => {
         const view = decisionView(recommendation);
-        const params = new URLSearchParams(listSearch);
-        if (!isNarrow) params.set('id', recommendation.id);
-        const query = params.toString();
-        const href = isNarrow
-          ? `/decision-center/${recommendation.id}${listSearch}`
-          : `/decision-center${query ? `?${query}` : ''}`;
+        const href = `/decision-center/${recommendation.id}${listSearch}`;
         return (
           <div className="min-w-0 py-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Link
-                ref={(node) => {
-                  if (node) rowLinks.current.set(recommendation.id, node);
-                  else rowLinks.current.delete(recommendation.id);
-                }}
-                to={href}
-                className="break-words text-sm font-medium text-link"
-              >
+              <Link to={href} className="break-words text-sm font-medium text-link">
                 {view.title}
               </Link>
               <Chip variant="neutral">{view.area}</Chip>
             </div>
-            <p className="mt-1 max-w-2xl whitespace-normal text-xs text-secondary">{view.summary}</p>
+            <p className="mt-1 max-w-2xl whitespace-normal text-xs text-secondary">
+              {view.summary}
+            </p>
           </div>
         );
       },
@@ -461,35 +443,11 @@ export default function DecisionCenterPage() {
       key: 'evidence',
       header: 'Evidence',
       className: 'min-w-[125px]',
-      cell: (recommendation) => <span className="text-secondary">{decisionView(recommendation).evidenceLabel}</span>,
+      cell: (recommendation) => (
+        <span className="text-secondary">{decisionView(recommendation).evidenceLabel}</span>
+      ),
     },
   ];
-
-  const panelLayout =
-    'grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2.25fr)_minmax(360px,1fr)]';
-  const hasSelectedPanel = !!selectedId && !isNarrow;
-  const selectedPanel = hasSelectedPanel ? (
-    <Panel noPadding className="min-w-0" bodyClassName="max-h-[calc(100vh-300px)] overflow-y-auto">
-      {selected && <RecommendationDetails recommendation={selected} onClose={closePanel} />}
-      {!selected && selectedQuery.isLoading && <SkeletonTable columns={1} rows={5} />}
-      {!selected && selectedQuery.isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Could not load this decision"
-          action={
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={() => void selectedQuery.refetch()}>
-                Retry
-              </Button>
-              <Button variant="ghost" onClick={closePanel}>
-                Close
-              </Button>
-            </div>
-          }
-        />
-      )}
-    </Panel>
-  ) : null;
 
   const refresh = () =>
     void Promise.all([
@@ -503,7 +461,11 @@ export default function DecisionCenterPage() {
     <div>
       <PageHeader
         title="Decision Center"
-        subtitle={summary ? `${summary.total} recommendation${summary.total === 1 ? '' : 's'} in this view` : undefined}
+        subtitle={
+          summary
+            ? `${summary.total} recommendation${summary.total === 1 ? '' : 's'} in this view`
+            : undefined
+        }
         refreshingQueryKey={['dss']}
         actions={
           <Button
@@ -521,9 +483,11 @@ export default function DecisionCenterPage() {
       <FilterBar
         filters={filterConfig}
         values={filters as Record<string, unknown>}
-        onSearch={(search) => updateUrl({ search: search || undefined, page: 1 }, { replace: true })}
+        onSearch={(search) =>
+          updateUrl({ search: search || undefined, page: 1 }, { replace: true })
+        }
         onFilter={updateFilter}
-        searchPlaceholder="Search decisions, customers, work orders, NCRs, or documents…"
+        searchPlaceholder="Search decisions, customers, work orders, bills, POs, NCRs, inspections, lots, or documents…"
         searchMaxLength={120}
       />
 
@@ -545,7 +509,9 @@ export default function DecisionCenterPage() {
       {optionsQuery.isError && (
         <div className="px-5 pt-3" role="status">
           <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
-            <span>Area and responsible team filters are unavailable. Other filters remain usable.</span>
+            <span>
+              Area and responsible team filters are unavailable. Other filters remain usable.
+            </span>
             <div className="flex items-center gap-2">
               {(filters.domain || filters.owner_role) && (
                 <Button
@@ -567,7 +533,9 @@ export default function DecisionCenterPage() {
       {coverageQuery.isError && (
         <div className="px-5 pt-3" role="status">
           <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
-            <span>Decision check health is unavailable. Recommendation visibility is unchanged.</span>
+            <span>
+              Decision check health is unavailable. Recommendation visibility is unchanged.
+            </span>
             <Button variant="ghost" size="sm" onClick={() => void coverageQuery.refetch()}>
               Retry health
             </Button>
@@ -575,7 +543,10 @@ export default function DecisionCenterPage() {
         </div>
       )}
 
-      <section aria-label="Recommendation overview" className="mx-auto grid max-w-[1600px] grid-cols-2 gap-3 px-5 py-4 lg:grid-cols-4">
+      <section
+        aria-label="Recommendation overview"
+        className="mx-auto grid max-w-[1600px] grid-cols-2 gap-3 px-5 py-4 lg:grid-cols-4"
+      >
         <SummaryCard label="Current view" value={summary?.total} />
         <SummaryCard label="Critical" value={summary?.by_severity.critical} severity="critical" />
         <SummaryCard label="Warning" value={summary?.by_severity.warning} severity="warning" />
@@ -609,63 +580,56 @@ export default function DecisionCenterPage() {
         )}
 
         {listQuery.data && !listQuery.isError && listQuery.data.data.length === 0 && (
-          <div className={hasSelectedPanel ? panelLayout : 'min-w-0'}>
-            <section className="rounded-md border border-default bg-surface">
-              <EmptyState
-                icon={checksNeedingAttention.length > 0 ? 'alert-circle' : 'check-circle'}
-                title={
-                  listQuery.data.meta.total > 0
-                    ? 'No recommendations on this page'
-                    : filters.severity
-                      ? `No ${severityLabel(filters.severity)} recommendations`
-                      : 'No recommendations match this view'
-                }
-                description={
-                  listQuery.data.meta.total > 0
-                    ? `${listQuery.data.meta.total} recommendations match these filters, but none appear on this page.`
-                    : filters.severity
-                      ? `No recommendations match ${severityLabel(filters.severity)} priority. Clear the severity filter to see all recommendations.`
-                      : emptyCoverageDescription(coverage)
-                }
-                action={
-                  listQuery.data.meta.total > 0 && (filters.page ?? 1) > 1 ? (
-                    <Button variant="secondary" onClick={() => updateUrl({ page: 1 })}>
-                      Go to first page
-                    </Button>
-                  ) : undefined
-                }
-              />
-              {checksNeedingAttention.length > 0 && (
-                <div className="border-t border-default px-4 py-3 sm:px-6">
-                  <DetectorHealth checks={checksNeedingAttention} />
-                </div>
-              )}
-            </section>
-            {selectedPanel}
-          </div>
+          <section className="rounded-md border border-default bg-surface">
+            <EmptyState
+              icon={checksNeedingAttention.length > 0 ? 'alert-circle' : 'check-circle'}
+              title={
+                listQuery.data.meta.total > 0
+                  ? 'No recommendations on this page'
+                  : filters.severity
+                    ? `No ${severityLabel(filters.severity)} recommendations`
+                    : 'No recommendations match this view'
+              }
+              description={
+                listQuery.data.meta.total > 0
+                  ? `${listQuery.data.meta.total} recommendations match these filters, but none appear on this page.`
+                  : filters.severity
+                    ? `No recommendations match ${severityLabel(filters.severity)} priority. Clear the severity filter to see all recommendations.`
+                    : emptyCoverageDescription(coverage)
+              }
+              action={
+                listQuery.data.meta.total > 0 && (filters.page ?? 1) > 1 ? (
+                  <Button variant="secondary" onClick={() => updateUrl({ page: 1 })}>
+                    Go to first page
+                  </Button>
+                ) : undefined
+              }
+            />
+            {checksNeedingAttention.length > 0 && (
+              <div className="border-t border-default px-4 py-3 sm:px-6">
+                <DetectorHealth checks={checksNeedingAttention} />
+              </div>
+            )}
+          </section>
         )}
 
         {listQuery.data && !listQuery.isError && listQuery.data.data.length > 0 && (
-          <div className={hasSelectedPanel ? panelLayout : 'min-w-0'}>
-            <div className="min-w-0 rounded-md border border-default bg-canvas p-2 sm:p-3">
-              <DataTable
-                columns={columns}
-                data={listQuery.data.data}
-                meta={listQuery.data.meta}
-                onPageChange={(page) => updateUrl({ page })}
-                onPageSizeChange={(per_page) => updateUrl({ per_page, page: 1 })}
-                onSort={(sort, direction) =>
-                  updateUrl({ sort: sort as RecommendationListParams['sort'], direction, page: 1 })
-                }
-                currentSort={filters.sort ?? 'priority_score'}
-                currentDirection={filters.direction ?? 'desc'}
-                onRowClick={selectRecommendation}
-                highlightedRowId={selectedId}
-                tableKey="decision-center"
-                emptyState={<EmptyState size="compact" title="No matching decisions" />}
-              />
-            </div>
-            {selectedPanel}
+          <div className="min-w-0 rounded-md border border-default bg-canvas p-2 sm:p-3">
+            <DataTable
+              columns={columns}
+              data={listQuery.data.data}
+              meta={listQuery.data.meta}
+              onPageChange={(page) => updateUrl({ page })}
+              onPageSizeChange={(per_page) => updateUrl({ per_page, page: 1 })}
+              onSort={(sort, direction) =>
+                updateUrl({ sort: sort as RecommendationListParams['sort'], direction, page: 1 })
+              }
+              currentSort={filters.sort ?? 'priority_score'}
+              currentDirection={filters.direction ?? 'desc'}
+              onRowClick={selectRecommendation}
+              tableKey="decision-center"
+              emptyState={<EmptyState size="compact" title="No matching decisions" />}
+            />
           </div>
         )}
       </main>

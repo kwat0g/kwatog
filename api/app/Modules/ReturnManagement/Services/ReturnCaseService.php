@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\ReturnManagement\Enums\ReturnCaseStatus;
 use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnCaseAttachment;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -606,6 +607,9 @@ class ReturnCaseService
         try {
             $recipients = $case->assigned_to ? User::query()->where('is_active', true)->whereKey($case->assigned_to)->get()
                 : User::query()->where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->where('slug', 'return_management.manage'))->get();
+            if ($case->type->value === 'supplier') {
+                $recipients = $recipients->reject(fn (User $user): bool => ReturnManagementAccess::customerReturnsOnly($user))->values();
+            }
             if ($recipients->isNotEmpty()) {
                 $this->notifications->send($recipients, 'return.case_updated', [
                     'title' => $title.' — '.$case->case_number, 'message' => 'Open the case to review the latest quantities and next action.',

@@ -9,8 +9,6 @@ export interface Product {
     proposed_by: string;
     values: {
       standard_cost: string;
-      minimum_selling_price: string | null;
-      base_selling_price: string | null;
     };
   } | null;
   finished_good_readiness?: {
@@ -26,7 +24,7 @@ export interface Product {
   description: string | null;
   image_url?: string | null;
   unit_of_measure: string;
-  standard_cost: string;
+  standard_cost: string | null;
   base_selling_price?: string | null;
   minimum_selling_price?: string | null;
   portal_visibility?: 'standard' | 'restricted';
@@ -75,13 +73,16 @@ export interface CreateProductData {
   description?: string | null;
   unit_of_measure: string;
   standard_cost: string;
-  base_selling_price?: string | null;
-  minimum_selling_price?: string | null;
   revenue_account_id?: string | null;
   is_active?: boolean;
 }
 
 export type UpdateProductData = Partial<CreateProductData>;
+
+export interface UpdateProductSellingPricesData {
+  base_selling_price: string | null;
+  minimum_selling_price: string | null;
+}
 
 export interface CreatePriceAgreementData {
   product_id: string;

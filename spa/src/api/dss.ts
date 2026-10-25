@@ -7,9 +7,11 @@ import type {
   PaginatedRecommendations,
   Recommendation,
   RecommendationAction,
+  RecommendationEventPage,
   RecommendationListParams,
   RecommendationOptions,
   RecommendationSummary,
+  MasterHygieneAffectedRecordPage,
 } from '@/types/dss';
 
 export interface DssDetectorState {
@@ -19,19 +21,39 @@ export interface DssDetectorState {
   owner_permissions: string[];
   enabled: boolean;
   mode: 'shadow' | 'advisory';
+  active_count: number;
+  /** @deprecated Remove after one compatibility release. */
   open_count: number;
   last_run: {
     status: string;
+    started_at: string;
     finished_at: string | null;
     duration_ms: number | null;
     rows_scanned: number;
     emitted: number;
+    error_summary: string | null;
+    run_reference: string;
+    stale: boolean;
   } | null;
+}
+
+export interface DssRunResult {
+  engine: string;
+  detectors: Record<string, {
+    status: 'queued' | 'completed' | 'partial' | 'failed' | 'skipped';
+    emitted: number;
+    updated: number;
+    rows_scanned: number;
+    complete: boolean;
+    error_summary: string | null;
+  }>;
+  failed: string[];
 }
 
 export interface DssEngineState {
   enabled: boolean;
-  default_mode: 'shadow' | 'advisory';
+  default_mode: 'shadow';
+  legacy_global_advisory_ignored: boolean;
 }
 
 export interface DssActivitySummary {
@@ -78,6 +100,16 @@ export const dssApi = {
   show: (id: string) =>
     client.get<{ data: Recommendation }>(`/dss/recommendations/${id}`).then((r) => r.data.data),
 
+  affectedRecords: (id: string, params: { cursor?: string; search?: string }) =>
+    client
+      .get<MasterHygieneAffectedRecordPage>(`/dss/recommendations/${id}/affected-records`, { params })
+      .then((r) => r.data),
+
+  events: (id: string, cursor?: string) =>
+    client
+      .get<RecommendationEventPage>(`/dss/recommendations/${id}/events`, { params: cursor ? { cursor } : undefined })
+      .then((r) => r.data),
+
   act: (
     id: string,
     action: RecommendationAction,
@@ -106,10 +138,10 @@ export const dssApi = {
       .then((r) => r.data.data),
 
   runDetector: (id: string) =>
-    client.post<{ data: unknown }>(`/dss/admin/detectors/${id}/run`).then((r) => r.data.data),
+    client.post<{ data: DssRunResult }>(`/dss/admin/detectors/${id}/run`).then((r) => r.data.data),
 
   engine: () => client.get<{ data: DssEngineState }>('/dss/admin/engine').then((r) => r.data.data),
 
-  updateEngine: (data: { enabled?: boolean; default_mode?: DssEngineState['default_mode'] }) =>
+  updateEngine: (data: { enabled?: boolean; default_mode?: 'shadow' }) =>
     client.patch<{ data: DssEngineState }>('/dss/admin/engine', data).then((r) => r.data.data),
 };

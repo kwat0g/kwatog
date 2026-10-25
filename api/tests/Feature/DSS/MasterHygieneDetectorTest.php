@@ -18,7 +18,7 @@ class MasterHygieneDetectorTest extends TestCase
 
     private function detector(): MasterHygieneDetector
     {
-        return new MasterHygieneDetector;
+        return app(MasterHygieneDetector::class);
     }
 
     public function test_clean_slate_emits_nothing(): void
@@ -51,10 +51,17 @@ class MasterHygieneDetectorTest extends TestCase
         $this->assertSame(1, $reorder->rationale['affected_count']);
         $this->assertContains($item->code, $reorder->rationale['evidence']);
         $this->assertSame('/inventory/items', $reorder->action['route']);
+        $this->assertSame(['inventory.items.manage'], $reorder->ownerPermissions);
+        $this->assertSame('master_data_gap.items_missing_reorder_point', $reorder->decisionCode);
+        $this->assertSame(['gap' => 'items_missing_reorder_point'], $reorder->verificationContext);
         $this->assertSame(1.0, $reorder->confidence);
 
         $bom = $byKey['products_without_active_bom'];
         $this->assertContains($product->part_number, $bom->rationale['evidence']);
+        $this->assertSame(['mrp.boms.manage'], $bom->ownerPermissions);
+        $this->assertSame('/purchasing/approved-suppliers', $byKey['items_without_approved_supplier']->action['route']);
+        $this->assertSame(['purchasing.po.create'], $byKey['items_without_approved_supplier']->ownerPermissions);
+        $this->assertSame(['accounting.customers.manage'], $byKey['customers_missing_credit_limit']->ownerPermissions);
         $this->assertGreaterThan(0, $scan->rowsScanned);
     }
 
@@ -84,7 +91,7 @@ class MasterHygieneDetectorTest extends TestCase
         $this->assertSame('dss.master_hygiene', $detector->id());
         $this->assertSame('platform', $detector->domain());
         $this->assertSame(['admin.settings.manage'], $detector->ownerPermissions());
-        $this->assertSame('v1', $detector->version());
+        $this->assertSame('v3', $detector->version());
     }
 
     public function test_registered_in_production_registry(): void

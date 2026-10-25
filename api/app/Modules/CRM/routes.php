@@ -32,7 +32,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::get('/products/options', [ProductController::class, 'options'])
         ->middleware('permission_any:crm.products.view,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view');
     Route::get('/products/customer-options', [ProductController::class, 'customerOptions'])
-        ->middleware('permission_any:crm.products.manage,crm.products.customer_access.manage');
+        ->middleware('permission:crm.products.customer_access.manage');
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');
     Route::get('/products/{product}/image', [ProductImageController::class, 'show'])
         ->middleware('permission_any:crm.products.view,inventory.costs.approve,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view,forecasting.view')
@@ -44,6 +44,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/products',          [ProductController::class, 'store']) ->middleware('permission:crm.products.manage');
     Route::put('/products/{product}/customer-access', [ProductController::class, 'updateCustomerAccess'])
         ->middleware('permission:crm.products.customer_access.manage');
+    Route::put('/products/{product}/selling-prices', [ProductController::class, 'updateSellingPrices'])
+        ->middleware('permission:crm.products.prices.manage');
     Route::put('/products/{product}', [ProductController::class, 'update'])->middleware('permission:crm.products.manage');
     Route::post('/products/{product}/financial-proposal', [ProductController::class, 'proposeFinancialChange'])->middleware('permission:crm.products.manage');
     Route::post('/products/{product}/financial-decision', [ProductController::class, 'decideFinancialChange'])->middleware('permission:inventory.costs.approve');

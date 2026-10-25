@@ -154,7 +154,7 @@ class CustomerPortalService
                 $quote = $this->prices->quote($customerId, $product->id, Carbon::parse($date), '1');
                 $pricingIssue = null;
             } catch (\Illuminate\Validation\ValidationException $exception) {
-                $message = implode(' ', $exception->errors()['product_id'] ?? []);
+                $message = collect($exception->errors())->flatten()->implode(' ');
                 $pricingIssue = match (true) {
                     str_contains($message, 'No base selling price or applicable customer agreement') => 'No price is available for this delivery date. Contact Sales.',
                     str_contains($message, 'selling price requires review by sales') => 'This price needs Sales review before you can order it.',

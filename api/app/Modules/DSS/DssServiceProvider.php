@@ -32,7 +32,7 @@ class DssServiceProvider extends ServiceProvider
             $registry = new DetectorRegistry;
 
             // Core detectors register here, one line each, as they ship.
-            $registry->register((new MasterHygieneDetector)->id(), MasterHygieneDetector::class);
+            $registry->register('dss.master_hygiene', MasterHygieneDetector::class);
             $registry->register('dss.chain_bottlenecks', ChainBottleneckDetector::class);
             $registry->register('dss.approval_bottlenecks', ApprovalBottleneckDetector::class);
             $registry->register('dss.quality_ncr_sla', NcrSlaDetector::class);

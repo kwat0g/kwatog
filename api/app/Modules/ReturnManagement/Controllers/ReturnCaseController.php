@@ -14,6 +14,7 @@ use App\Modules\ReturnManagement\Resources\ReturnCaseResource;
 use App\Modules\ReturnManagement\Services\ReturnCaseService;
 use App\Modules\ReturnManagement\Services\ReturnCaseSettlementService;
 use App\Modules\ReturnManagement\Services\ReturnCaseSourceService;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,9 @@ class ReturnCaseController extends Controller
             'type' => ['nullable', Rule::in(['customer', 'supplier'])],
             'search' => ['nullable', 'string', 'max:100'], 'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
+        if (! $customer && ! $supplier && ReturnManagementAccess::customerReturnsOnly($request->user())) {
+            $filters['type'] = 'customer';
+        }
         return ReturnCaseResource::collection($this->cases->list($filters, $customer?->customer_id, $supplier?->vendor_id));
     }
 
@@ -42,6 +46,8 @@ class ReturnCaseController extends Controller
     {
         [$customer] = $this->parties($request);
         $data = $request->validate(['type' => ['nullable', Rule::in(['customer', 'supplier'])], 'search' => ['nullable', 'string', 'max:100']]);
+        abort_if(! $customer && ReturnManagementAccess::customerReturnsOnly($request->user())
+            && ($data['type'] ?? 'customer') !== 'customer', 404);
         return response()->json(['data' => $this->sources->sources($customer?->customer_id, $data['type'] ?? 'customer', $data['search'] ?? '')]);
     }
 
@@ -49,6 +55,8 @@ class ReturnCaseController extends Controller
     {
         [$customer] = $this->parties($request);
         $data = $request->validate(['source_kind' => ['required', 'string'], 'source_id' => ['required', 'string', 'max:100']]);
+        abort_if(! $customer && ReturnManagementAccess::customerReturnsOnly($request->user())
+            && $data['source_kind'] !== 'delivery', 404);
         return response()->json(['data' => $this->sources->options($this->sources->resolve($data['source_kind'], $data['source_id'], $customer?->customer_id))]);
     }
 
@@ -85,6 +93,7 @@ class ReturnCaseController extends Controller
 
     public function resolutionOptions(Request $request, ReturnCase $returnCase)
     {
+        $this->assertAccess($request, $returnCase);
         return response()->json(['data' => $this->settlements->options($returnCase)]);
     }
 
@@ -122,6 +131,8 @@ class ReturnCaseController extends Controller
     private function assertAccess(Request $request, ReturnCase $case): void
     {
         [$customer, $supplier] = $this->parties($request);
+        abort_if(! $customer && ! $supplier && ReturnManagementAccess::customerReturnsOnly($request->user())
+            && $case->type->value !== 'customer', 404);
         abort_if($customer && ($case->type->value !== 'customer' || (int) $case->customer_id !== (int) $customer->customer_id), 403);
         abort_if($supplier && ($case->type->value !== 'supplier' || (int) $case->vendor_id !== (int) $supplier->vendor_id), 403);
         abort_if($supplier && ! $case->events()->where('is_public', true)->exists(), 403);

@@ -120,7 +120,7 @@ Schedule::command('dss:run')
     ->onOneServer();
 
 Schedule::command('dss:maintain')
-    ->dailyAt('00:30')
+    ->everyFiveMinutes()
     ->withoutOverlapping(10)
     ->onOneServer();
 

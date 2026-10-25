@@ -15,6 +15,7 @@ use App\Modules\DSS\Models\DssRecommendationEvent;
 use App\Modules\DSS\Models\DssRunLog;
 use Closure;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -70,7 +71,7 @@ class RecommendationService
     public function list(User $user, array $filters): LengthAwarePaginator
     {
         $base = $this->queryFor($user, $filters);
-        $this->validateAvailableFilters($base, $filters);
+        $this->validateAvailableFilters($this->visibleQuery($user), $filters);
         $query = $this->filterQuery(clone $base, $filters);
         $sort = $filters['sort'] ?? 'priority_score';
         $direction = $filters['direction'] ?? 'desc';
@@ -87,7 +88,7 @@ class RecommendationService
     public function summary(User $user, array $filters = []): array
     {
         $base = $this->queryFor($user, $filters);
-        $this->validateAvailableFilters($base, $filters);
+        $this->validateAvailableFilters($this->visibleQuery($user), $filters);
         $counts = $this->filterQuery(clone $base, $filters)->select('severity', DB::raw('count(*) as aggregate'))
             ->groupBy('severity')->pluck('aggregate', 'severity');
 
@@ -103,7 +104,7 @@ class RecommendationService
 
     public function options(User $user): array
     {
-        $query = $this->activeQuery($user);
+        $query = $this->visibleQuery($user);
         $domains = (clone $query)->whereNotNull('domain')->distinct()->orderBy('domain')->pluck('domain')->all();
         $roles = $this->roleOptionsQuery($query)->distinct()->orderBy('slug')->pluck('slug')->filter(fn ($slug) => $slug !== '')->values()->all();
         $labels = Role::query()->whereIn('slug', $roles)->pluck('name', 'slug');
@@ -130,37 +131,28 @@ class RecommendationService
         ];
     }
 
-    private function activeQuery(User $user): Builder
-    {
-        return $this->queryFor($user, []);
-    }
-
     private function queryFor(User $user, array $filters): Builder
     {
         $query = $this->visibleQuery($user);
         $status = $filters['status'] ?? null;
         $historyStatuses = ['accepted', 'executed', 'dismissed', 'resolved', 'expired'];
 
-        if (in_array($status, $historyStatuses, true)) {
+        if ($status !== null && in_array($status, $historyStatuses, true)) {
             return $query->where('status', $status);
         }
 
-        $query->whereIn('status', ['open', 'in_progress', 'snoozed'])
-            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-            ->whereNotNull('last_evaluated_at')
-            ->whereExists(fn ($runs) => $runs->selectRaw('1')->from('dss_run_logs')
-                ->whereColumn('dss_run_logs.id', 'dss_recommendations.last_evaluated_run_id')
-                ->whereColumn('dss_run_logs.detector_id', 'dss_recommendations.detector_id')
-                ->whereIn('dss_run_logs.status', ['completed', 'partial']));
-
         if ($status !== null) {
             $query->where('status', $status);
-        } else {
-            $query->where(fn ($q) => $q->whereIn('status', ['open', 'in_progress'])
-                ->orWhere(fn ($snoozed) => $snoozed->where('status', 'snoozed')->where('snoozed_until', '<=', now())));
         }
 
-        return $query;
+        return $query->where(fn ($q) => $q->whereIn('status', $historyStatuses)
+            ->orWhere(fn ($active) => $active->whereIn('status', ['open', 'in_progress', 'snoozed'])
+                ->where(fn ($valid) => $valid->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->whereNotNull('last_evaluated_at')
+                ->whereExists(fn ($runs) => $runs->selectRaw('1')->from('dss_run_logs')
+                    ->whereColumn('dss_run_logs.id', 'dss_recommendations.last_evaluated_run_id')
+                    ->whereColumn('dss_run_logs.detector_id', 'dss_recommendations.detector_id')
+                    ->whereIn('dss_run_logs.status', ['completed', 'partial']))));
     }
 
     private function visibleQuery(User $user): Builder
@@ -240,7 +232,7 @@ class RecommendationService
     {
         $pattern = SearchOperator::contains($search);
         $query->where(function ($q) use ($pattern): void {
-            foreach (['customer', 'work_order', 'ncr_number', 'training', 'rule'] as $key) {
+            foreach (['customer', 'work_order', 'ncr_number', 'training', 'rule', 'bill_number', 'po_number', 'inspection_number', 'material_lot_number'] as $key) {
                 $q->orWhereRaw("CASE WHEN jsonb_typeof(rationale->'{$key}') = 'string' THEN rationale->>'{$key}' END ".SearchOperator::like().' ?', [$pattern]);
             }
             $q->orWhereRaw("EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(rationale->'sample_documents') = 'array' THEN rationale->'sample_documents' ELSE '[]'::jsonb END) AS sample_document(value) WHERE jsonb_typeof(value) = 'object' AND jsonb_typeof(value->'document') = 'string' AND value->>'document' ".SearchOperator::like().' ?)', [$pattern]);
@@ -318,21 +310,25 @@ class RecommendationService
         }
 
         DB::transaction(function () use ($user, $recommendation): void {
-            $viewedToday = DssRecommendationEvent::query()
-                ->where('recommendation_id', $recommendation->id)
-                ->where('event', RecommendationEventType::Viewed->value)
-                ->where('actor_id', $user->id)
-                ->where('created_at', '>=', now()->startOfDay())
-                ->exists();
-
-            // One viewed row per user per day — the trail stays readable when
-            // a recommendation is opened repeatedly.
-            if (! $viewedToday) {
-                $this->recordEvent($recommendation, RecommendationEventType::Viewed, null, null, $user->id, null, null);
-            }
+            $now = now();
+            DB::table('dss_recommendation_events')->insertOrIgnore([
+                'recommendation_id' => $recommendation->id,
+                'event' => RecommendationEventType::Viewed->value,
+                'actor_id' => $user->id,
+                'viewed_on' => $now->toDateString(),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
         });
 
         return $recommendation;
+    }
+
+    public function events(User $user, DssRecommendation $recommendation): CursorPaginator
+    {
+        $this->assertVisible($user, $recommendation);
+
+        return $recommendation->events()->with('actor:id,name')->orderByDesc('id')->cursorPaginate(50);
     }
 
     /**
@@ -490,6 +486,7 @@ class RecommendationService
         if ($reason === '') {
             throw new BusinessRuleException('A dismissal reason is required.');
         }
+        $reason = mb_substr($reason, 0, 1000);
 
         $recommendation->status = 'dismissed';
         $recommendation->decided_by = $user->id;
@@ -511,6 +508,9 @@ class RecommendationService
         $until = isset($data['snoozed_until']) ? strtotime((string) $data['snoozed_until']) : false;
         if ($until === false || $until <= time()) {
             throw new BusinessRuleException('Snooze requires a future return date.');
+        }
+        if ($recommendation->expires_at !== null && $until >= $recommendation->expires_at->getTimestamp()) {
+            throw new BusinessRuleException('Snooze date must be before this recommendation expires.');
         }
 
         $recommendation->status = 'snoozed';
@@ -539,11 +539,12 @@ class RecommendationService
         if ($from === 'in_progress') {
             return $recommendation;
         }
-        if ($from !== 'open') {
+        if (! in_array($from, ['open', 'snoozed'], true)) {
             throw new BusinessRuleException('Only new recommendations can start follow-up.');
         }
 
         $recommendation->status = 'in_progress';
+        $recommendation->snoozed_until = null;
         $recommendation->save();
         $this->recordEvent($recommendation, RecommendationEventType::Started, $from, 'in_progress', $user->id, null, null);
 
@@ -559,6 +560,11 @@ class RecommendationService
         ?string $reason,
         ?array $metadata,
     ): void {
+        $reason = $reason === null ? null : mb_substr($reason, 0, 1000);
+        if (isset($metadata['outcome']['note']) && is_string($metadata['outcome']['note'])) {
+            $metadata['outcome']['note'] = mb_substr($metadata['outcome']['note'], 0, 1000);
+        }
+
         $row = new DssRecommendationEvent;
         $row->fill([
             'recommendation_id' => $recommendation->id,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Requests;
 
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -11,10 +12,16 @@ class StoreReturnCaseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->is('api/v1/b2b/customer/*')
-            ? $this->user('customer_portal') !== null
-            : ($this->user()?->hasPermission('return_management.manage')
-                || $this->user()?->hasPermission('inventory.grn.create'));
+        if ($this->is('api/v1/b2b/customer/*')) {
+            return $this->user('customer_portal') !== null;
+        }
+
+        $user = $this->user();
+        $authorized = $user?->hasPermission('return_management.manage')
+            || $user?->hasPermission('inventory.grn.create');
+
+        return $authorized && ! (ReturnManagementAccess::customerReturnsOnly($user)
+            && $this->input('source_kind') !== 'delivery');
     }
 
     public function rules(): array

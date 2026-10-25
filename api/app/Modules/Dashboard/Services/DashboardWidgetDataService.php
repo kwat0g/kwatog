@@ -33,6 +33,8 @@ use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
@@ -258,12 +260,21 @@ class DashboardWidgetDataService
                 ->whereNull('deleted_at')
                 ->count(), 'assets currently out of service'),
 
-            'rma.open_returns' => $this->number(DB::table('return_requests')->whereNotIn('status', [
-                ReturnRequestStatus::Completed->value,
-                ReturnRequestStatus::Rejected->value,
-                ReturnRequestStatus::Cancelled->value,
-            ])->count(), 'return requests still in progress'),
+            'rma.open_returns' => $this->number(DB::table('return_requests')
+                ->when(
+                    ReturnManagementAccess::customerReturnsOnly($user),
+                    fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+                )
+                ->whereNotIn('status', [
+                    ReturnRequestStatus::Completed->value,
+                    ReturnRequestStatus::Rejected->value,
+                    ReturnRequestStatus::Cancelled->value,
+                ])->count(), 'return requests still in progress'),
             'rma.pending_approval' => $this->number(DB::table('return_requests')
+                ->when(
+                    ReturnManagementAccess::customerReturnsOnly($user),
+                    fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+                )
                 ->where('status', ReturnRequestStatus::PendingApproval->value)
                 ->count(), 'returns awaiting an approval decision'),
 

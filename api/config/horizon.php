@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Common\Jobs\DispatchOutboxMessage;
 use Illuminate\Support\Str;
 
 /*
@@ -9,7 +10,7 @@ use Illuminate\Support\Str;
 | Horizon — one supervisor per LANE, not one big pool
 |--------------------------------------------------------------------------
 |
-| The ERP's queued work falls into five classes that must not share a
+| The ERP's queued work falls into six classes that must not share a
 | process (2026-10 queue review). The lane is the contract; a job picks its
 | lane in code and this file decides how many processes serve it.
 |
@@ -17,7 +18,8 @@ use Illuminate\Support\Str;
 |   default     interactive listeners (approvals, escalations, GL posting)
 |   mail        every outbound mail and mail notification
 |   automation  MRP, payroll, depreciation, year-end, budget sync, PM
-|   bulk        backup, restore, exports — the only lane allowed to run long
+|   bulk        backup, restore, exports — up to an hour
+|   dss         detector runs, each with its own lock and hard worker timeout
 |
 | Why lanes rather than one pool with priorities (the pre-Horizon setup):
 |
@@ -29,11 +31,11 @@ use Illuminate\Support\Str;
 |   3. Backup (timeout 3600) shared `low` with MRP and payroll — a restore
 |      head-of-line blocked automation for up to an hour.
 |
-| `retry_after` is a LEASE, per connection, and Horizon defaults it to 60s
-| when a supervisor omits it (RedisConnector). It MUST exceed that
-| supervisor's `timeout`, or the job is re-reserved while the first copy is
-| still running — two payrolls, two restores. Every lane below states both,
-| and QueueLaneAssignmentTest asserts the invariant so it cannot drift.
+| Redis reservation leases live in config/queue.php per queue connection;
+| Horizon 5 does not apply supervisor-level retry_after overrides. The `redis`
+| lease is 3900s; isolated DSS uses `redis_dss` with a 330s lease above its
+| 280s timeout and 310s detector lock. QueueLaneAssignmentTest checks the
+| effective connection leases so config cannot drift silently.
 |
 */
 
@@ -66,6 +68,7 @@ return [
         'redis:mail' => 120,
         'redis:automation' => 180,
         'redis:bulk' => 900,
+        'redis_dss:dss' => 60,
     ],
 
     'trim' => [
@@ -80,7 +83,7 @@ return [
     'silenced' => [
         // DispatchOutboxMessage is the bus itself: every domain event produces
         // one, so it drowns the useful entries in the completed list.
-        App\Common\Jobs\DispatchOutboxMessage::class,
+        DispatchOutboxMessage::class,
     ],
 
     'silenced_tags' => [],
@@ -178,6 +181,21 @@ return [
             'nice' => 0,
         ],
 
+        // Detector runs are isolated from interactive work and killed before
+        // the DSS detector lock lease expires.
+        'supervisor-dss' => [
+            'connection' => 'redis_dss',
+            'queue' => ['dss'],
+            'balance' => false,
+            'processes' => 2,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 512,
+            'tries' => 1,
+            'timeout' => 280,
+            'nice' => 0,
+        ],
+
         // Backup / restore / exports. Single process, no autoscale: these are
         // the only jobs that may run for an hour, and nothing should queue
         // behind them. tries=1 — a failed restore must never be silently
@@ -204,6 +222,7 @@ return [
             'supervisor-default' => ['minProcesses' => 2, 'maxProcesses' => 12],
             'supervisor-mail' => ['minProcesses' => 2, 'maxProcesses' => 10],
             'supervisor-automation' => ['maxProcesses' => 3],
+            'supervisor-dss' => ['processes' => 2],
         ],
 
         'local' => [
@@ -211,6 +230,7 @@ return [
             'supervisor-default' => ['minProcesses' => 2, 'maxProcesses' => 4],
             'supervisor-mail' => ['minProcesses' => 2, 'maxProcesses' => 4],
             'supervisor-automation' => ['maxProcesses' => 2],
+            'supervisor-dss' => ['processes' => 1],
         ],
     ],
 

@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { fromCentavos, toCentavos } from '@/lib/money';
 import type { PortalCatalogItem } from '@/types/b2b';
+import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
 
 interface OrderLine {
   product: PortalCatalogItem & { unit_price: string };
@@ -44,6 +45,7 @@ export default function CustomerPlaceOrderPage() {
   }, []);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
   const addProductsRef = useRef<HTMLButtonElement>(null);
@@ -107,9 +109,10 @@ export default function CustomerPlaceOrderPage() {
     ? Object.values(quoteError?.response?.data?.errors ?? {}).flat().join(' ') || quoteError?.response?.data?.message || 'Unable to check prices. Try again.' : null;
 
   const addLine = (product: PortalCatalogItem) => {
-    if (product.unit_price === null) return;
+    const unitPrice = product.unit_price;
+    if (unitPrice === null) return;
     if (lines.some((line) => line.product.id === product.id)) return;
-    setLines([...lines, { product, quantity: '1' }]);
+    setLines([...lines, { product: { ...product, unit_price: unitPrice }, quantity: '1' }]);
   };
 
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
@@ -166,6 +169,7 @@ export default function CustomerPlaceOrderPage() {
 
   return (
     <div className="[color-scheme:light] dark:[color-scheme:dark]">
+      <ProductPhotoViewer photo={photoPreview} onClose={() => setPhotoPreview(null)} />
       <PageHeader title={id ? `Edit ${existingOrder?.so_number ?? 'order'}` : 'Place an Order'} subtitle={id ? 'Changes are allowed until sales confirms this order.' : 'Select products and quantities. Prices reflect your delivery date and any customer agreement.'}
         backTo={id ? `/portal/customer/orders/${id}` : '/portal/customer/orders'} backLabel={id ? 'Order' : 'My orders'} />
       <form onSubmit={(event) => {
@@ -222,9 +226,13 @@ export default function CustomerPlaceOrderPage() {
                     {catalog.map((product) => {
                       const added = lines.some((line) => line.product.id === product.id);
                       return <li key={product.id} className={`grid grid-cols-[44px_minmax(0,1fr)_80px] items-center gap-x-3 px-4 py-2 sm:grid-cols-[44px_minmax(0,1fr)_100px_80px] sm:px-5 ${added ? 'bg-surface' : 'hover:bg-surface'}`}>
-                        <div aria-hidden="true" className="col-start-1 row-span-2 row-start-1 flex h-11 w-11 items-center justify-center overflow-hidden rounded border border-default bg-canvas text-muted">
-                          {product.image_url ? <img src={product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" /> : <LuPackage size={18} />}
-                        </div>
+                        {product.image_url ? (
+                          <ProductPhotoButton photo={{ url: product.image_url, name: product.name, partNumber: product.part_number }} className="col-start-1 row-span-2 row-start-1 h-11 w-11" onView={setPhotoPreview} />
+                        ) : (
+                          <div aria-hidden="true" className="col-start-1 row-span-2 row-start-1 flex h-11 w-11 items-center justify-center rounded border border-default bg-canvas text-muted">
+                            <LuPackage size={18} />
+                          </div>
+                        )}
                         <div className="col-start-2 row-start-1 min-w-0"><p className="font-medium leading-snug break-words">{product.name}</p>
                           <p className="mt-0.5 font-mono text-xs text-muted">{product.part_number}</p></div>
                         <p className="col-start-2 row-start-2 text-xs text-muted sm:col-start-3 sm:row-start-1 sm:text-right">
@@ -259,9 +267,13 @@ export default function CustomerPlaceOrderPage() {
                       {lines.map((line, idx) => <tr key={line.product.id} className={trCls}>
                         <Td>
                           <div className="flex items-center gap-3">
-                            <div aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-default bg-surface text-muted">
-                              {line.product.image_url ? <img src={line.product.image_url} alt="" loading="lazy" className="h-full w-full object-cover" /> : <LuPackage size={16} />}
-                            </div>
+                            {line.product.image_url ? (
+                              <ProductPhotoButton photo={{ url: line.product.image_url, name: line.product.name, partNumber: line.product.part_number }} className="h-11 w-11" onView={setPhotoPreview} />
+                            ) : (
+                              <div aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-default bg-surface text-muted">
+                                <LuPackage size={16} />
+                              </div>
+                            )}
                             <div className="min-w-0">
                               <p className="font-medium leading-snug break-words">{line.product.name}</p>
                               <p className="mt-0.5 font-mono text-xs text-muted">{line.product.part_number} <span className="font-sans">· {line.product.unit_of_measure || 'unit'}</span></p>

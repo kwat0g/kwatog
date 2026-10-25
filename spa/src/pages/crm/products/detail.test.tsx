@@ -12,7 +12,7 @@ vi.mock('react-router-dom', async (original) => ({
   useParams: () => ({ id: 'product-1' }),
 }));
 vi.mock('@/api/crm/products', () => ({
-  productsApi: { show: vi.fn(), proposeFinancial: vi.fn(), decideFinancial: vi.fn() },
+  productsApi: { show: vi.fn(), proposeFinancial: vi.fn(), decideFinancial: vi.fn(), updateSellingPrices: vi.fn() },
 }));
 afterEach(() => {
   cleanup();
@@ -40,7 +40,7 @@ const product: Product = {
   created_at: '2026-10-01',
   updated_at: '2026-10-04',
 };
-function show(data = product, permissions = ['crm.products.manage', 'crm.products.view']) {
+function show(data = product, permissions = ['crm.products.manage', 'crm.products.view', 'inventory.costs.review']) {
   useAuthStore.setState({ permissions: new Set(permissions) });
   vi.mocked(productsApi.show).mockResolvedValue(data);
   render(
@@ -62,23 +62,21 @@ it('keeps pricing, customer access and production setup visible without unauthor
   expect(screen.queryByRole('link', { name: /View BOM/ })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Edit product' })).not.toBeInTheDocument();
 });
-it('submits existing financial proposal values and retains entries after failed submission', async () => {
+it('submits a standard cost proposal and retains entries after failure', async () => {
   show();
   vi.mocked(productsApi.proposeFinancial).mockRejectedValue(new Error('Offline'));
-  fireEvent.click(await screen.findByRole('button', { name: 'Propose financial changes' }));
-  fireEvent.change(screen.getByLabelText('Proposed base price'), { target: { value: '27.50' } });
-  fireEvent.change(screen.getByLabelText(/Financial change reason/), {
+  fireEvent.click(await screen.findByRole('button', { name: 'Propose standard cost change' }));
+  fireEvent.change(screen.getByLabelText('Proposed standard cost'), { target: { value: '20.00' } });
+  fireEvent.change(screen.getByLabelText(/Standard cost change reason/), {
     target: { value: 'Material cost review' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Submit for Finance approval' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Submit standard cost for Finance review' }));
   await waitFor(() =>
     expect(productsApi.proposeFinancial).toHaveBeenCalledWith('product-1', {
-      standard_cost: '18.50',
-      base_selling_price: '27.50',
-      minimum_selling_price: '22.00',
+      standard_cost: '20.00',
       notes: 'Material cost review',
     }),
   );
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not record financial review.');
-  expect(screen.getByLabelText('Proposed base price')).toHaveValue(27.5);
+  expect(screen.getByLabelText('Proposed standard cost')).toHaveValue(20);
 });

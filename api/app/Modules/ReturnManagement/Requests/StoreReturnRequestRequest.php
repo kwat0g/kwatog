@@ -20,6 +20,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -38,7 +39,11 @@ class StoreReturnRequestRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->can('return_management.manage') === true;
+        $user = $this->user();
+
+        return $user?->can('return_management.manage') === true
+            && ! (ReturnManagementAccess::customerReturnsOnly($user)
+                && $this->input('type') === ReturnRequestType::SupplierReturn->value);
     }
 
     protected function hashIdFields(): array

@@ -30,6 +30,7 @@ use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -63,11 +64,16 @@ class WaveOneDetectorTest extends TestCase
     public function test_approval_bottlenecks_aggregate_only_current_overdue_steps(): void
     {
         app(SettingsService::class)->set('approvals.reminder_hours', 1);
-        $payrollOldest = now()->subHours(5);
+        $payrollOldest = now()->startOfSecond()->subHours(5);
         $payrollOne = PayrollPeriod::factory()->create();
         $payrollTwo = PayrollPeriod::factory()->create();
         $payrollThree = PayrollPeriod::factory()->create();
         $payrollFour = PayrollPeriod::factory()->create();
+        $supplierReturn = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-DSS-001',
+            'type' => 'supplier_return',
+            'status' => 'pending_approval',
+        ]);
         $assetId = DB::table('assets')->insertGetId([
             'asset_code' => 'ASSET-DSS-001',
             'name' => 'DSS source row',
@@ -86,6 +92,7 @@ class WaveOneDetectorTest extends TestCase
             ['approvable_type' => PayrollPeriod::class, 'approvable_id' => 999, 'step_order' => 1, 'role_slug' => 'finance_officer', 'action' => 'pending', 'is_current' => true, 'created_at' => now()->subDays(2)],
             ['approvable_type' => PayrollPeriod::class, 'approvable_id' => $payrollThree->id, 'step_order' => 1, 'role_slug' => 'finance_officer', 'action' => 'pending', 'is_current' => false, 'created_at' => now()->subDays(2)],
             ['approvable_type' => PayrollPeriod::class, 'approvable_id' => $payrollFour->id, 'step_order' => 1, 'role_slug' => 'hr_officer', 'action' => 'pending', 'is_current' => true, 'created_at' => now()->subHours(2)],
+            ['approvable_type' => ReturnRequest::class, 'approvable_id' => $supplierReturn->id, 'step_order' => 1, 'role_slug' => 'customer_service_officer', 'action' => 'pending', 'is_current' => true, 'created_at' => now()->subHours(3)],
             ['approvable_type' => Asset::class, 'approvable_id' => $assetId, 'step_order' => 1, 'role_slug' => 'finance_officer', 'action' => 'pending', 'is_current' => true, 'created_at' => now()->subHours(4)],
             ['approvable_type' => Asset::class, 'approvable_id' => 1002, 'step_order' => 1, 'role_slug' => 'finance_officer', 'action' => 'pending', 'is_current' => true, 'created_at' => now()->subDays(2)],
             ['approvable_type' => LeaveRequest::class, 'approvable_id' => 1003, 'step_order' => 1, 'role_slug' => 'finance_officer', 'action' => 'pending', 'is_current' => true, 'created_at' => now()->subDays(2)],
@@ -114,7 +121,7 @@ class WaveOneDetectorTest extends TestCase
         $this->assertSame('approval:asset_disposal:role:finance_officer', $asset->dedupeKey);
         $this->assertSame('/assets/', $asset->action['route']);
         $this->assertSame('partial', $payroll->dataSufficiency);
-        $this->assertSame(['Leave', 'Purchase requests', 'Purchase orders', 'Loans'], $payroll->rationale['excluded_queues']);
+        $this->assertSame(['Leave', 'Purchase requests', 'Purchase orders', 'Loans', 'Return requests'], $payroll->rationale['excluded_queues']);
         $this->assertArrayNotHasKey('approvable_id', $payroll->rationale);
         $this->assertArrayNotHasKey('approver_id', $payroll->rationale);
     }

@@ -32,9 +32,9 @@ The user resumed implementation and requested GPT-6-Luna. The earlier quota paus
 
 - R5 D21 Decision Center language updated to avoid implying payroll readiness.
 - R6 spec and roadmap corrected to reflect the missing daily cap and unsafe email retry semantics; bounded implementation plan added.
-- D33 PO–bill–GRN evidence slice is implemented in shadow. Its verifier clears only when the saved bill review state no longer matches the blocked draft predicate; it does not re-evaluate PO/GRN inputs. Do not describe it as duplicate-invoice detection; external-source freshness and false-positive evidence remain incomplete.
+- D33 PO–bill–GRN evidence slice is implemented in shadow. Its verifier recalculates current PO/bill/GRN matching; legacy bill lines without `item_id` and unreadable source inputs remain unavailable. Do not describe it as duplicate-invoice detection; broader source completeness and false-positive evidence remain incomplete.
 - D16 positive-only shadow slice is implemented: failed latest incoming inspection plus explicit material lot → work order → shipment lot links. QC role only; caps are 200 candidate items and work orders per run and 200 shipment lots per candidate, with overflow marked incomplete. No impact estimate or recall claim; genealogy completeness remains unproven.
-- Detector scans now run inside a transaction with PostgreSQL transaction-local per-statement timeout. The elapsed budget is still not cumulative; SQLite/non-SQL work and aggregate detector runtime still need a hard worker/deadline boundary. The maximum 300-second setting leaves little margin under the 310-second detector lock.
+- Runtime update (2026-10-24): scheduled and admin runs enqueue one detector per Horizon `dss` job on dedicated `redis_dss`, with a 260-second runner budget, 280-second supervisor timeout, 310-second detector lock lease, and 330-second effective queue-connection lease. Timeout failure marks the active run failed; maintenance reaps leftovers every five minutes. The queue lane coalesces duplicate dispatches per detector. Direct inline runner calls retain the monotonic deadline and PostgreSQL per-statement timeout, but non-PostgreSQL drivers cannot interrupt a blocked SQL query and inline calls cannot hard-stop CPU-bound code.
 
 ## Next safe work
 

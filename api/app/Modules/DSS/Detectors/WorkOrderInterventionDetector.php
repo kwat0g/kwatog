@@ -52,7 +52,17 @@ class WorkOrderInterventionDetector implements DetectorInterface
             ->where('planned_end', '<', now())
             ->orderBy('planned_end')
             ->limit($limit + 1)
-            ->get(['id', 'wo_number', 'status', 'planned_end', 'quantity_target', 'quantity_good']);
+            ->get([
+                'id',
+                'wo_number',
+                'status',
+                'planned_end',
+                'quantity_target',
+                'quantity_good',
+                'product_id',
+                'sales_order_id',
+                'sales_order_item_id',
+            ]);
 
         $emissions = $rows->take($limit)->map(function (WorkOrder $workOrder): DetectorEmission {
             $daysLate = $workOrder->planned_end->diffInDays(now(), true);

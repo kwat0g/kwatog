@@ -7,13 +7,14 @@ import RecommendationDetailPage from './detail';
 import { recommendationFixture } from './test-fixtures';
 
 vi.mock('@/api/dss', () => ({
-  dssApi: { show: vi.fn(), act: vi.fn(), outcome: vi.fn() },
+  dssApi: { show: vi.fn(), act: vi.fn(), outcome: vi.fn(), events: vi.fn() },
 }));
 
 describe('Decision Center recommendation detail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(dssApi.show).mockResolvedValue(recommendationFixture());
+    vi.mocked(dssApi.events).mockResolvedValue({ data: [], next_cursor: null });
   });
 
   it('shows business wording, recorded evidence, and a readable workflow action', async () => {
@@ -29,9 +30,7 @@ describe('Decision Center recommendation detail', () => {
     );
 
     expect(
-      await screen.findByRole('heading', {
-        name: 'Confirmed delivery awaiting customer invoice · DR-202610-0002',
-      }),
+      await screen.findByText('Confirmed delivery awaiting customer invoice · DR-202610-0002'),
     ).toBeVisible();
     expect(screen.getByRole('region', { name: 'Sample affected documents table' })).toBeVisible();
     expect(

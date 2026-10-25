@@ -10,10 +10,8 @@ export const productFormSchema = z.object({
   standard_cost: z
     .string()
     .regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal with up to 2 places'),
-  base_selling_price: z.string().regex(/^$|^\d+(\.\d{1,2})?$/, 'Use an amount with up to 2 decimals').refine((v) => !v || Number(v) > 0, 'Price must be positive').optional(),
-  minimum_selling_price: z.string().regex(/^$|^\d+(\.\d{1,2})?$/, 'Use an amount with up to 2 decimals').refine((v) => !v || Number(v) > 0, 'Price must be positive').optional(),
   revenue_account_id: z.string().optional().or(z.literal('')),
   is_active: z.boolean().optional(),
-}).refine((v) => !v.base_selling_price || !v.minimum_selling_price || Number(v.base_selling_price) >= Number(v.minimum_selling_price), { path: ['base_selling_price'], message: 'Base price cannot be below the minimum price.' });
+});
 
 export type ProductFormValues = z.infer<typeof productFormSchema>;

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\ReturnManagement\Listeners;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Auth\Models\User;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
 use App\Modules\ReturnManagement\Mail\ReturnRequestUpdateMail;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -23,6 +25,12 @@ class EmailPartyOnReturnRequestUpdated implements ShouldQueue
         $party = $isCustomer ? $rma->customer : $rma->vendor;
         $permission = 'return_management.view';
         $fallback = app(EmailDeliveryFailureNotifier::class);
+        $fallbackUserIds = $fallback->userIdsWithPermission($permission);
+        if (! $isCustomer && $fallbackUserIds !== []) {
+            $fallbackUserIds = User::query()->with('role')->whereIn('id', $fallbackUserIds)->get()
+                ->reject(fn (User $user): bool => ReturnManagementAccess::customerReturnsOnly($user))
+                ->modelKeys();
+        }
         $context = [
             'link_to' => '/return-management/'.$rma->hash_id,
             'entity_type' => 'return_request',
@@ -32,8 +40,8 @@ class EmailPartyOnReturnRequestUpdated implements ShouldQueue
         $partyLabel = $isCustomer ? 'customer' : 'supplier';
 
         if (! filter_var($party?->email, FILTER_VALIDATE_EMAIL)) {
-            $fallback->notifyPermission(
-                $permission,
+            $fallback->notifyUserIds(
+                $fallbackUserIds,
                 'Return request email',
                 "Return request {$rma->rma_number} changed to {$this->statusLabel($rma)} but the {$partyLabel} has no usable email address. Contact the {$partyLabel} through an approved channel.",
                 $context,
@@ -45,11 +53,11 @@ class EmailPartyOnReturnRequestUpdated implements ShouldQueue
             Mail::to($party->email)->queue(new ReturnRequestUpdateMail(
                 $rma,
                 $event->action,
-                $fallback->userIdsWithPermission($permission),
+                $fallbackUserIds,
             ));
         } catch (\Throwable $e) {
-            $fallback->notifyPermission(
-                $permission,
+            $fallback->notifyUserIds(
+                $fallbackUserIds,
                 'Return request email',
                 "The update email for return request {$rma->rma_number} could not be accepted by the email provider. Contact the {$partyLabel} through an approved channel.",
                 $context,

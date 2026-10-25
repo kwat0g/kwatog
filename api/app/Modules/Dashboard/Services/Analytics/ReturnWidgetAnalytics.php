@@ -6,6 +6,8 @@ namespace App\Modules\Dashboard\Services\Analytics;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -30,17 +32,21 @@ final class ReturnWidgetAnalytics
     public function payload(string $key, User $user): array
     {
         return match ($key) {
-            'rma.open_returns' => $this->statusMix(),
-            'rma.pending_approval' => $this->approvalQueue(),
+            'rma.open_returns' => $this->statusMix($user),
+            'rma.pending_approval' => $this->approvalQueue($user),
             default => [],
         };
     }
 
     /** @return array<string, mixed> */
-    private function statusMix(): array
+    private function statusMix(User $user): array
     {
         $rows = DB::table('return_requests')
             ->selectRaw('status as label, COUNT(*) as value')
+            ->when(
+                ReturnManagementAccess::customerReturnsOnly($user),
+                fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+            )
             ->whereNotIn('status', [
                 ReturnRequestStatus::Completed->value,
                 ReturnRequestStatus::Rejected->value,
@@ -66,10 +72,14 @@ final class ReturnWidgetAnalytics
      *
      * @return array<string, mixed>
      */
-    private function approvalQueue(): array
+    private function approvalQueue(User $user): array
     {
         $base = fn () => DB::table('return_requests')
             ->where('status', ReturnRequestStatus::PendingApproval->value)
+            ->when(
+                ReturnManagementAccess::customerReturnsOnly($user),
+                fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+            )
             ->whereNull('deleted_at');
 
         $rows = $base()

@@ -17,9 +17,8 @@ return [
             //
             // The old 2400 was BELOW the 3600s bulk timeout, so a restore
             // running past 40 minutes was redelivered while still executing.
-            // Horizon now sets a per-supervisor lease (config/horizon.php) and
-            // overrides this per lane; this value is the floor for anything
-            // running a plain `queue:work`, and 3900 keeps it correct there.
+            // Horizon 5 ignores per-supervisor retry_after; this connection
+            // lease covers every lane using redis, including plain `queue:work`.
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 3900),
 
             // Block on the pop instead of polling. Workers used to sleep 3s
@@ -28,6 +27,14 @@ return [
             // before this change. With BLPOP the worker is parked ON the queue
             // and wakes on push. Must stay well below retry_after (3900).
             'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 5),
+            'after_commit' => false,
+        ],
+        'redis_dss' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'dss',
+            'retry_after' => 330,
+            'block_for' => 5,
             'after_commit' => false,
         ],
     ],

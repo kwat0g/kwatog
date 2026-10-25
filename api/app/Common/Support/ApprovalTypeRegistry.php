@@ -118,12 +118,9 @@ final class ApprovalTypeRegistry
             'link' => '/assets/',
             'permissions' => ['assets.view', 'assets.dispose.approve'],
         ],
-        // Return Management has NO row scope, same as payroll: every holder of
-        // `return_management.view` sees every RMA in the module's own
-        // list endpoint, so the permission gate below is already equivalent and
-        // ApprovalSourceScope::hasScope() reports false. Deliberate, not an
-        // oversight — if a department scope is ever added to the module, wire
-        // it into ApprovalSourceScope instead of re-deriving one here.
+        // Customer service sees customer returns only; ApprovalSourceScope
+        // applies that type scope to approval cards while other roles retain
+        // permission-based visibility.
         'App\\Modules\\ReturnManagement\\Models\\ReturnRequest' => [
             'kind' => 'return_request',
             'label' => 'Return requests',

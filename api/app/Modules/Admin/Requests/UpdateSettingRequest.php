@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Requests;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Inventory\Support\DemandBasis;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class UpdateSettingRequest extends FormRequest
 {
@@ -26,30 +28,42 @@ class UpdateSettingRequest extends FormRequest
             return ['value' => ['present', 'prohibited']];
         }
 
+        if (in_array($key, [
+            'inventory.safety_stock.issue_movement_types',
+            'inventory.demand.replenishment_movement_types',
+            'inventory.demand.safety_stock_movement_types',
+            'inventory.demand.projection_movement_types',
+        ], true)) {
+            return $this->withStoredTypeGuard([
+                'value' => ['required', 'array', 'min:1'],
+                'value.*' => ['required', 'string', Rule::in(DemandBasis::eligibleMovementTypes())],
+            ], (string) $key);
+        }
+
         $base = ['value' => ['present']];
 
         $securityRules = [
-            'security.max_login_attempts'      => ['value' => ['required', 'integer', 'min:1', 'max:20']],
-            'security.lockout_minutes'          => ['value' => ['required', 'integer', 'min:1', 'max:60']],
-            'security.password_history_depth'   => ['value' => ['required', 'integer', 'min:0', 'max:10']],
-            'security.password_min_length'      => ['value' => ['required', 'integer', 'min:6', 'max:32']],
+            'security.max_login_attempts' => ['value' => ['required', 'integer', 'min:1', 'max:20']],
+            'security.lockout_minutes' => ['value' => ['required', 'integer', 'min:1', 'max:60']],
+            'security.password_history_depth' => ['value' => ['required', 'integer', 'min:0', 'max:10']],
+            'security.password_min_length' => ['value' => ['required', 'integer', 'min:6', 'max:32']],
             'security.session_timeout_employee' => ['value' => ['required', 'integer', 'min:5', 'max:120']],
-            'security.session_timeout_default'  => ['value' => ['required', 'integer', 'min:5', 'max:120']],
-            'security.password_expiry_days'     => ['value' => ['required', 'integer', 'min:0', 'max:365']],
+            'security.session_timeout_default' => ['value' => ['required', 'integer', 'min:5', 'max:120']],
+            'security.password_expiry_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
             'security.password_reset_expiry_minutes' => ['value' => ['required', 'integer', 'min:5', 'max:10080']],
         ];
 
         $maintenanceRules = [
             'maintenance.predictive.temperature.max' => ['value' => ['required', 'numeric', 'min:0']],
-            'maintenance.predictive.vibration.max'   => ['value' => ['required', 'numeric', 'min:0']],
-            'maintenance.predictive.pressure.min'    => ['value' => ['required', 'numeric', 'min:0']],
-            'maintenance.predictive.pressure.max'    => ['value' => ['required', 'numeric', 'min:0']],
-            'maintenance.predictive.current.max'     => ['value' => ['required', 'numeric', 'min:0']],
+            'maintenance.predictive.vibration.max' => ['value' => ['required', 'numeric', 'min:0']],
+            'maintenance.predictive.pressure.min' => ['value' => ['required', 'numeric', 'min:0']],
+            'maintenance.predictive.pressure.max' => ['value' => ['required', 'numeric', 'min:0']],
+            'maintenance.predictive.current.max' => ['value' => ['required', 'numeric', 'min:0']],
             'maintenance.predictive.oil_quality.min' => ['value' => ['required', 'numeric', 'min:0', 'max:100']],
             'maintenance.predictive.metrics' => ['value' => ['required', 'array', 'min:1']],
             'maintenance.predictive.sources' => ['value' => ['required', 'array', 'min:1']],
             'maintenance.predictive.default_source' => ['value' => ['required', 'string', 'max:30']],
-            'maintenance.predictive.breach_window'   => ['value' => ['required', 'integer', 'min:1', 'max:20']],
+            'maintenance.predictive.breach_window' => ['value' => ['required', 'integer', 'min:1', 'max:20']],
             'maintenance.predictive.max_reading_age_hours' => ['value' => ['required', 'integer', 'min:1', 'max:87600']],
         ];
 
@@ -396,10 +410,6 @@ class UpdateSettingRequest extends FormRequest
             'leave.request.past_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'leave.request.future_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'inventory.safety_stock.issue_movement_types' => ['value' => ['required', 'array', 'min:1']],
-            // DSS W0-5 (F-02) — DemandBasis tunables, one per consumer.
-            'inventory.demand.replenishment_movement_types' => ['value' => ['required', 'array', 'min:1']],
-            'inventory.demand.safety_stock_movement_types' => ['value' => ['required', 'array', 'min:1']],
-            'inventory.demand.projection_movement_types' => ['value' => ['required', 'array', 'min:1']],
             'quality.aql.sample_plan' => ['value' => ['required', 'array']],
             'quality.incoming.default_checklist' => ['value' => ['required', 'array', 'min:1']],
             'quality.incoming.measured_pieces' => ['value' => ['required', 'integer', 'min:1', 'max:1000']],
@@ -445,6 +455,7 @@ class UpdateSettingRequest extends FormRequest
             $row = DB::table('settings')->where('key', $key)->first();
             if (! $row) {
                 $fail('Unknown setting key.');
+
                 return;
             }
 
@@ -452,6 +463,7 @@ class UpdateSettingRequest extends FormRequest
                 $stored = json_decode((string) $row->value, true, 512, JSON_THROW_ON_ERROR);
             } catch (\JsonException) {
                 $fail('The stored setting is invalid and cannot be edited safely.');
+
                 return;
             }
 

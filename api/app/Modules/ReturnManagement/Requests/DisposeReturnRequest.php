@@ -11,6 +11,7 @@ use App\Modules\ReturnManagement\Enums\DispositionType;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -22,13 +23,19 @@ class DisposeReturnRequest extends FormRequest
     public function authorize(): bool
     {
         $rma = $this->route('returnRequest');
+        $user = $this->user();
+        if ($rma instanceof ReturnRequest
+            && $rma->type === ReturnRequestType::SupplierReturn
+            && ReturnManagementAccess::customerReturnsOnly($user)) {
+            return false;
+        }
         if ($rma instanceof ReturnRequest && str_starts_with((string) $rma->source_key, 'grn-rejection:')
-            && ! in_array($this->user()->role?->slug, ['purchasing_officer', 'system_admin'], true)) {
+            && ! in_array($user?->role?->slug, ['purchasing_officer', 'system_admin'], true)) {
             return false;
         }
 
-        return $this->user()->can('return_management.dispose')
-            || $this->user()->can('return_management.manage');
+        return $user?->can('return_management.dispose') === true
+            || $user?->can('return_management.manage') === true;
     }
 
     protected function hashIdFields(): array

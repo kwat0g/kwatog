@@ -36,11 +36,9 @@ function EngineCard() {
   });
 
   const update = useMutation({
-    mutationFn: (data: { enabled?: boolean }) => dssApi.updateEngine(data),
+    mutationFn: (data: { enabled?: boolean; default_mode?: 'shadow' }) => dssApi.updateEngine(data),
     onSuccess: (state) => {
-      toast.success(
-        state.enabled ? 'DSS engine enabled' : 'DSS engine stopped — detectors will not run',
-      );
+      toast.success(state.enabled ? 'DSS engine updated' : 'DSS engine stopped — detectors will not run');
       queryClient.invalidateQueries({ queryKey: ['dss'] });
     },
     onError: (error) => reportMutationError(error, 'Failed to update engine state'),
@@ -52,21 +50,38 @@ function EngineCard() {
       {isLoading || !engine ? (
         <span className="text-xs text-text-subtle">Loading…</span>
       ) : (
-        <div className="flex items-center gap-2 flex-wrap">
-          <Chip variant={engine.enabled ? 'info' : 'danger'}>
-            {engine.enabled ? 'running' : 'STOPPED (kill switch)'}
-          </Chip>
-          <span className="text-2xs text-text-subtle">default mode {engine.default_mode}</span>
-          {mayKill && (
-            <Button
-              size="xs"
-              variant={engine.enabled ? 'danger' : 'primary'}
-              disabled={update.isPending}
-              onClick={() => update.mutate({ enabled: !engine.enabled })}
-            >
-              {engine.enabled ? 'Stop everything' : 'Restart engine'}
-            </Button>
+        <div>
+          {engine.legacy_global_advisory_ignored && (
+            <div role="status" className="mb-2 flex items-center gap-2 rounded border border-warning/40 bg-warning-bg/10 px-2 py-1.5 text-xs text-warning-fg">
+              <span>Legacy global advisory mode is ignored. Detector modes stay unchanged.</span>
+              {mayKill && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled={update.isPending}
+                  onClick={() => update.mutate({ default_mode: 'shadow' })}
+                >
+                  Set global default to shadow
+                </Button>
+              )}
+            </div>
           )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Chip variant={engine.enabled ? 'info' : 'danger'}>
+              {engine.enabled ? 'running' : 'STOPPED (kill switch)'}
+            </Chip>
+            <span className="text-2xs text-text-subtle">default mode {engine.default_mode}</span>
+            {mayKill && (
+              <Button
+                size="xs"
+                variant={engine.enabled ? 'danger' : 'primary'}
+                disabled={update.isPending}
+                onClick={() => update.mutate({ enabled: !engine.enabled })}
+              >
+                {engine.enabled ? 'Stop everything' : 'Restart engine'}
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </section>
@@ -90,11 +105,18 @@ function DetectorRow({ detector }: { detector: DssDetectorState }) {
 
   const run = useMutation({
     mutationFn: () => dssApi.runDetector(detector.id),
-    onSuccess: () => {
-      toast.success(`${detectorLabel(detector.id)} ran`);
-      invalidate();
+    onSuccess: (result) => {
+      const status = result.detectors[detector.id]?.status;
+      if (status === 'queued') toast.success(`${detectorLabel(detector.id)} run queued`);
+      else if (status === 'completed') toast.success(`${detectorLabel(detector.id)} ran`);
+      else if (status === 'failed') toast.error(`${detectorLabel(detector.id)} run failed`);
+      else toast(`${detectorLabel(detector.id)} run ${status ?? 'skipped'}`, { icon: '⚠️' });
     },
     onError: (error) => reportMutationError(error, 'Detector run failed'),
+    onSettled: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['dss', 'coverage'] });
+    },
   });
 
   return (
@@ -105,11 +127,11 @@ function DetectorRow({ detector }: { detector: DssDetectorState }) {
         <Chip variant={modeVariant(detector.mode)}>{detector.mode}</Chip>
         {!detector.enabled && <Chip variant="warning">disabled</Chip>}
         <span className="font-mono tabular-nums text-2xs text-text-subtle">
-          {detector.open_count} open
+          {detector.active_count} active
         </span>
         {detector.last_run && (
           <span className="text-2xs text-text-subtle">
-            last {detector.last_run.status} · {detector.last_run.rows_scanned} scanned ·{' '}
+            last {detector.last_run.status}{detector.last_run.stale ? ' (stale)' : ''} · {detector.last_run.rows_scanned} scanned ·{' '}
             {detector.last_run.emitted} emitted · {detector.last_run.duration_ms ?? '—'}ms
             {detector.last_run.finished_at
               ? ` · ${formatDateTime(detector.last_run.finished_at)}`
@@ -149,6 +171,8 @@ export default function DssAdminPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['dss', 'admin', 'detectors'],
     queryFn: () => dssApi.detectors(),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
   });
   const {
     data: activity,

@@ -90,11 +90,12 @@ const coverage = {
 };
 
 function scoped(params: URLSearchParams): Recommendation[] {
-  return recommendations.filter((rec) =>
-    (!params.has('severity') || rec.severity === params.get('severity')) &&
-    (!params.has('domain') || rec.domain === params.get('domain')) &&
-    (!params.has('owner_role') || rec.owner_role_slugs?.includes(params.get('owner_role')!)) &&
-    (!params.has('status') || rec.status === params.get('status')),
+  return recommendations.filter(
+    (rec) =>
+      (!params.has('severity') || rec.severity === params.get('severity')) &&
+      (!params.has('domain') || rec.domain === params.get('domain')) &&
+      (!params.has('owner_role') || rec.owner_role_slugs?.includes(params.get('owner_role')!)) &&
+      (!params.has('status') || rec.status === params.get('status')),
   );
 }
 
@@ -108,7 +109,14 @@ async function mockDecisionCenter(page: Page, listHandler?: (route: Route) => Pr
       contentType: 'application/json',
       body: JSON.stringify({
         data,
-        meta: { current_page: 1, last_page: 1, per_page: 20, total: data.length, from: data.length ? 1 : null, to: data.length || null },
+        meta: {
+          current_page: 1,
+          last_page: 1,
+          per_page: 20,
+          total: data.length,
+          from: data.length ? 1 : null,
+          to: data.length || null,
+        },
       }),
     });
   });
@@ -116,38 +124,68 @@ async function mockDecisionCenter(page: Page, listHandler?: (route: Route) => Pr
     const data = scoped(new URL(route.request().url()).searchParams);
     const counts = { critical: 0, warning: 0, info: 0 };
     data.forEach((rec) => counts[rec.severity]++);
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { total: data.length, by_severity: counts } }) });
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { total: data.length, by_severity: counts } }),
+    });
   });
   await page.route('**/api/v1/dss/recommendations/options', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: options }) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: options }),
+    }),
   );
   await page.route('**/api/v1/dss/recommendations/rec-*', (route) => {
-    const recommendation = recommendations.find((rec) => new URL(route.request().url()).pathname.endsWith(rec.id));
+    const recommendation = recommendations.find((rec) =>
+      new URL(route.request().url()).pathname.endsWith(rec.id),
+    );
     return route.fulfill({
       status: recommendation ? 200 : 404,
       contentType: 'application/json',
       body: JSON.stringify(recommendation ? { data: recommendation } : { message: 'Not found' }),
     });
   });
+  await page.route('**/api/v1/dss/recommendations/*/events**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [], next_cursor: null }),
+    }),
+  );
   await page.route('**/api/v1/dss/coverage', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: coverage }) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: coverage }),
+    }),
   );
 }
 
-test('shows business-safe decisions, filters server results, and preserves phone list state', async ({ page }) => {
+test('shows business-safe decisions, filters server results, and preserves phone list state', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockDecisionCenter(page);
   await page.goto('/decision-center');
 
   await expect(page.getByRole('heading', { name: 'Decision Center' })).toBeVisible();
   await expect(page.getByText('Confirmed delivery awaiting customer invoice')).toBeVisible();
-  const firstDecision = page.getByRole('row', { name: /Confirmed delivery awaiting customer invoice/ });
-  await expect(page.getByRole('columnheader', { name: 'Priority' })).toHaveAttribute('aria-sort', 'descending');
+  const firstDecision = page.getByRole('row', {
+    name: /Confirmed delivery awaiting customer invoice/,
+  });
+  await expect(page.getByRole('columnheader', { name: 'Priority' })).toHaveAttribute(
+    'aria-sort',
+    'descending',
+  );
   await firstDecision.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Close recommendation details' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close recommendation details' }).click();
-  await expect(page.getByRole('link', { name: 'Confirmed delivery awaiting customer invoice' })).toBeFocused();
+  await expect(page).toHaveURL(/\/decision-center\/rec-1$/);
+  await expect(page.getByRole('region', { name: 'Recorded evidence' })).toBeVisible();
+  await expect(page.getByText('No activity recorded yet.')).toBeVisible();
+  await page.locator('main a[href="/decision-center"]').click();
+  await expect(page).toHaveURL('/decision-center');
 
   const initialText = await page.locator('body').innerText();
   expect(initialText).not.toContain('dss.chain_bottlenecks');
@@ -157,14 +195,15 @@ test('shows business-safe decisions, filters server results, and preserves phone
   expect(initialText).not.toContain('"rationale"');
 
   await page.getByRole('link', { name: 'Confirmed delivery awaiting customer invoice' }).click();
-  const panel = page.getByRole('region', { name: 'Recorded evidence' });
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText('DR-202610-0002')).toBeVisible();
-  await expect(panel.getByText('Confirmed')).toBeVisible();
-  await expect(panel.getByRole('cell', { name: '336.5' })).toBeVisible();
+  await expect(page).toHaveURL(/\/decision-center\/rec-1$/);
+  const evidence = page.getByRole('region', { name: 'Recorded evidence' });
+  await expect(evidence).toBeVisible();
+  await expect(evidence.getByText('DR-202610-0002')).toBeVisible();
+  await expect(evidence.getByText('Confirmed')).toBeVisible();
+  await expect(evidence.getByRole('cell', { name: '336.5' })).toBeVisible();
   await page.screenshot({ path: 'test-results/decision-center-desktop.png', fullPage: true });
-  await page.getByRole('button', { name: 'Close recommendation details' }).click();
-  await expect(panel).toHaveCount(0);
+  await page.locator('main a[href="/decision-center"]').click();
+  await expect(page).toHaveURL('/decision-center');
 
   await page.getByLabel('Severity').selectOption('warning');
   await expect(page.getByText('Northstar Foods')).toBeVisible();
@@ -174,7 +213,7 @@ test('shows business-safe decisions, filters server results, and preserves phone
   await page.setViewportSize({ width: 1100, height: 900 });
   await page.getByRole('link', { name: /Review delayed production/ }).click();
   await expect(page).toHaveURL(/\/decision-center\/rec-production\?severity=warning/);
-  await page.getByRole('link', { name: 'Decision Center' }).click();
+  await page.locator('main a[href="/decision-center?severity=warning"]').click();
   await expect(page).toHaveURL(/\/decision-center\?severity=warning/);
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -184,7 +223,7 @@ test('shows business-safe decisions, filters server results, and preserves phone
   await expect(page.getByRole('heading', { name: 'Recorded evidence' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: 'test-results/decision-center-mobile-detail.png', fullPage: true });
-  await page.getByRole('link', { name: 'Decision Center' }).click();
+  await page.locator('main a[href="/decision-center?severity=warning"]').click();
   await expect(page).toHaveURL(/\/decision-center\?severity=warning/);
   await expect(page.getByLabel('Severity')).toHaveValue('warning');
   await expect(page.getByText('Northstar Foods')).toBeVisible();
@@ -197,14 +236,25 @@ test('replaces stale recommendations with the load error after refresh fails', a
   await mockDecisionCenter(page, (route) => {
     listRequests += 1;
     if (listRequests > 1) {
-      return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Unavailable' }) });
+      return route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Unavailable' }),
+      });
     }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         data: recommendations,
-        meta: { current_page: 1, last_page: 1, per_page: 20, total: recommendations.length, from: 1, to: recommendations.length },
+        meta: {
+          current_page: 1,
+          last_page: 1,
+          per_page: 20,
+          total: recommendations.length,
+          from: 1,
+          to: recommendations.length,
+        },
       }),
     });
   });
@@ -213,4 +263,57 @@ test('replaces stale recommendations with the load error after refresh fails', a
   await page.getByRole('button', { name: 'Refresh Decision Center' }).click();
   await expect(page.getByText('Failed to load recommendations')).toBeVisible();
   await expect(page.getByText('Confirmed delivery awaiting customer invoice')).toHaveCount(0);
+});
+
+test('shows permission-scoped master-data records and their direct fix links', async ({ page }) => {
+  await mockDecisionCenter(page);
+  const recommendation = recommendationFixture({
+    id: 'rec-hygiene',
+    detector_id: 'dss.master_hygiene',
+    domain: 'platform',
+    type: 'master_hygiene',
+    severity: 'warning',
+    rationale: {
+      gap: 'items_missing_reorder_point',
+      affected_count: 1,
+      evidence: ['RM-01'],
+      why_it_matters: 'Items without a usable reorder point are invisible to auto-replenishment.',
+    },
+    action: { route: '/inventory/items', label: 'Open master data' },
+  });
+  await page.route('**/api/v1/dss/recommendations/rec-hygiene', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: recommendation }),
+    }),
+  );
+  await page.route('**/api/v1/dss/recommendations/rec-hygiene/affected-records**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [{
+          reference: 'RM-01',
+          name: 'Resin mix',
+          requirement: 'Usable reorder point',
+          destination: '/inventory/items/item_hash/edit',
+        }],
+        total: 1,
+        next_cursor: null,
+        historical: false,
+      }),
+    }),
+  );
+
+  await page.goto('/decision-center/rec-hygiene');
+
+  await expect(page.getByRole('table', { name: 'Affected master-data records' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'RM-01', exact: true })).toBeVisible();
+  await expect(page.getByText('Usable reorder point')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open record' })).toHaveAttribute(
+    'href',
+    '/inventory/items/item_hash/edit',
+  );
+  await expect(page.locator('body')).not.toContainText('items_missing_reorder_point');
 });

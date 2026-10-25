@@ -154,7 +154,7 @@ services:
       - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
-  # One Horizon master, five lanes (api/config/horizon.php). Replaces the two
+  # One Horizon master, six lanes (api/config/horizon.php). Replaces the two
   # `queue:work` services: those were one serial process per lane, mail shared
   # `default` with approvals, and backup shared `low` with MRP/payroll.
   horizon:

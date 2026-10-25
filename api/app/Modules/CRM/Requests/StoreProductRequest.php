@@ -43,8 +43,8 @@ class StoreProductRequest extends FormRequest
                     ->where('type', 'revenue')
                     ->where('is_active', true)),
             ],
-            'base_selling_price' => ['sometimes', 'nullable', 'decimal:0,2', 'gt:0'],
-            'minimum_selling_price' => ['sometimes', 'nullable', 'decimal:0,2', 'gt:0'],
+            'base_selling_price' => ['prohibited'],
+            'minimum_selling_price' => ['prohibited'],
             'is_active'       => ['nullable', 'boolean'],
         ];
     }

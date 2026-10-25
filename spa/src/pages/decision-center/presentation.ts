@@ -261,11 +261,12 @@ const specs: Record<string, (data: Record<string, unknown>) => DecisionView> = {
       'Asset disposals': 'Asset disposals',
       'Return requests': 'Return requests',
     };
-    const queue = dictValue(queues, d.queue, 'approval');
+    const queue = dictValue(queues, d.queue, '');
+    const approvalLabel = queue ? `${queue} approvals` : 'approvals';
     return family(
       'Approvals',
-      `Review overdue ${queue} approvals`,
-      `Review ${queue} approvals`,
+      `Review overdue ${approvalLabel}`,
+      `Review ${approvalLabel}`,
       'The current approval step is waiting beyond its reminder target. Some queues are excluded because their records require user-specific visibility checks.',
       [
         field(d, 'queue', 'Approval queue'),
@@ -494,7 +495,7 @@ const specs: Record<string, (data: Record<string, unknown>) => DecisionView> = {
       .filter((v): v is string => typeof v === 'string' && !!v.trim())
       .slice(0, 10);
     const tables: Table[] = refs.length
-      ? [{ title: 'Sample affected records', columns: ['Reference'], rows: refs.map((v) => [v]) }]
+      ? [{ title: 'Sample at last check', columns: ['Reference'], rows: refs.map((v) => [v]) }]
       : [];
     return family(
       'Master data',

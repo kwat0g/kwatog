@@ -321,9 +321,8 @@ class ApprovalBoardScopeTest extends TestCase
 
     public function test_return_request_cards_are_permission_gated(): void
     {
-        // Return Management has no row scope (same as payroll), so the board
-        // falls back to the registry permission gate: visible to holders of
-        // return_management.view/approve, invisible to everyone else.
+        // The department head and manager may see either return type; users
+        // without return permissions see neither.
         $head = $this->user('department_head', $this->deptA->id);
         $manager = $this->user('production_manager');
         $employee = $this->user('employee', $this->deptA->id);
@@ -347,6 +346,28 @@ class ApprovalBoardScopeTest extends TestCase
         $employeeBoard = $this->board($employee);
         $this->assertSame([], $employeeBoard['my_action']);
         $this->assertSame([], $employeeBoard['awaiting_others']);
+    }
+
+    public function test_customer_service_sees_customer_return_cards_but_not_supplier_returns(): void
+    {
+        $customerService = $this->user('customer_service_officer');
+        $customerReturn = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-CS-'.substr(uniqid(), -5),
+            'type' => 'customer_return',
+            'status' => 'pending_approval',
+        ]);
+        $supplierReturn = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-SUP-'.substr(uniqid(), -5),
+            'type' => 'supplier_return',
+            'status' => 'pending_approval',
+        ]);
+        $this->pendingStep(ReturnRequest::class, $customerReturn->id, 'customer_service_officer');
+        $this->pendingStep(ReturnRequest::class, $supplierReturn->id, 'customer_service_officer');
+
+        $board = $this->board($customerService);
+
+        $this->assertSame([$customerReturn->rma_number], $this->numbers($board['my_action']));
+        $this->assertSame([], $board['awaiting_others']);
     }
 
     public function test_out_of_scope_step_participant_still_gets_a_masked_card(): void

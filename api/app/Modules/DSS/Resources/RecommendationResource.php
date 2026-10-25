@@ -93,17 +93,32 @@ class RecommendationResource extends JsonResource
         $conditions = [
             'work_order_overdue' => 'Production deadline',
             'ncr_sla_breach' => 'Quality response target',
-            'three_way_match_blocked' => 'Blocked bill review state',
+            'three_way_match_blocked' => 'Blocked three-way match',
+            'master_data_gap.items_missing_reorder_point' => 'Usable item reorder point',
+            'master_data_gap.items_missing_safety_stock' => 'Item safety stock',
+            'master_data_gap.items_missing_lead_time' => 'Item lead time',
+            'master_data_gap.items_missing_standard_cost' => 'Item standard cost',
+            'master_data_gap.items_without_approved_supplier' => 'Approved item supplier',
+            'master_data_gap.customers_missing_credit_limit' => 'Customer credit limit',
+            'master_data_gap.products_without_active_bom' => 'Active product bill of materials',
         ];
         $conditionVerifiers = [
             'work_order_overdue' => 'work_order_status',
             'ncr_sla_breach' => 'ncr_response_sla',
-            'three_way_match_blocked' => 'three_way_match_saved_state',
+            'three_way_match_blocked' => 'three_way_match_current',
+            'master_data_gap.items_missing_reorder_point' => 'master_hygiene_source',
+            'master_data_gap.items_missing_safety_stock' => 'master_hygiene_source',
+            'master_data_gap.items_missing_lead_time' => 'master_hygiene_source',
+            'master_data_gap.items_missing_standard_cost' => 'master_hygiene_source',
+            'master_data_gap.items_without_approved_supplier' => 'master_hygiene_source',
+            'master_data_gap.customers_missing_credit_limit' => 'master_hygiene_source',
+            'master_data_gap.products_without_active_bom' => 'master_hygiene_source',
         ];
         $methods = [
             'work_order_status' => 'Work order status',
             'ncr_response_sla' => 'Quality response status',
-            'three_way_match_saved_state' => 'Saved bill review state',
+            'three_way_match_current' => 'Current three-way match',
+            'master_hygiene_source' => 'Current master-data records',
         ];
         $evidence = $this->resolution_evidence;
         $condition = $conditions[$evidence['source_condition'] ?? ''] ?? null;
@@ -111,7 +126,15 @@ class RecommendationResource extends JsonResource
         $permission = match ($evidence['verifier'] ?? null) {
             'work_order_status' => 'production.work_orders.view',
             'ncr_response_sla' => 'quality.ncr.view',
-            'three_way_match_saved_state' => 'accounting.bills.view',
+            'three_way_match_current' => 'accounting.bills.view',
+            'master_hygiene_source' => match ($evidence['source_condition'] ?? null) {
+                'master_data_gap.items_missing_reorder_point', 'master_data_gap.items_missing_safety_stock',
+                'master_data_gap.items_missing_lead_time', 'master_data_gap.items_missing_standard_cost' => 'inventory.items.manage',
+                'master_data_gap.items_without_approved_supplier' => 'purchasing.po.create',
+                'master_data_gap.customers_missing_credit_limit' => 'accounting.customers.manage',
+                'master_data_gap.products_without_active_bom' => 'mrp.boms.manage',
+                default => null,
+            },
             default => null,
         };
         $proof = $evidence['proof'] ?? null;

@@ -22,6 +22,10 @@ Route::middleware(['auth:sanctum', 'feature:dss'])->prefix('dss')->group(functio
         ->middleware('permission:dss.view');
     Route::get('/recommendations/options', [RecommendationController::class, 'options'])
         ->middleware('permission:dss.view');
+    Route::get('/recommendations/{recommendation}/affected-records', [RecommendationController::class, 'affectedRecords'])
+        ->middleware('permission:dss.view');
+    Route::get('/recommendations/{recommendation}/events', [RecommendationController::class, 'events'])
+        ->middleware('permission:dss.view');
     Route::get('/recommendations/{recommendation}', [RecommendationController::class, 'show'])
         ->middleware('permission:dss.view');
     Route::post('/recommendations/{recommendation}/actions', [RecommendationController::class, 'act'])

@@ -13,11 +13,14 @@ use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\DSS\Models\DssRecommendation;
 use App\Modules\DSS\Models\DssRecommendationEvent;
 use App\Modules\DSS\Models\DssRunLog;
+use Illuminate\Support\Facades\DB;
 use App\Modules\DSS\Services\DetectorRegistry;
 use App\Modules\DSS\Services\DssParameterService;
 use App\Modules\DSS\Services\RecommendationService;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Tests\TestCase;
 
 class LifecycleFakeDetector implements DetectorInterface
@@ -77,6 +80,12 @@ class LifecycleShadowDetector extends LifecycleFakeDetector
 class RecommendationLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+
+    public static function tearDownAfterClass(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+        parent::tearDownAfterClass();
+    }
 
     protected function setUp(): void
     {
@@ -208,7 +217,33 @@ class RecommendationLifecycleTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/dss/recommendations')
             ->assertOk()
+            ->assertJsonFragment(['id' => $rec->hash_id]);
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dss/recommendations?status=open')
+            ->assertOk()
             ->assertJsonMissing(['id' => $rec->hash_id]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'accept'])
+            ->assertStatus(422);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'start_follow_up'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.snoozed_until', null);
+        $this->assertDatabaseHas('dss_recommendation_events', [
+            'recommendation_id' => $rec->id,
+            'event' => 'started',
+            'from_status' => 'snoozed',
+            'to_status' => 'in_progress',
+        ]);
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'start_follow_up'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress');
+        $this->assertSame(1, DssRecommendationEvent::query()
+            ->where('recommendation_id', $rec->id)->where('event', 'started')->count());
 
         // Time passes: the snooze lapses and the row resurfaces with no cron.
         $rec->forceFill(['snoozed_until' => now()->subHour()])->save();
@@ -217,6 +252,48 @@ class RecommendationLifecycleTest extends TestCase
             ->getJson('/api/v1/dss/recommendations')
             ->assertOk()
             ->assertJsonFragment(['id' => $rec->hash_id]);
+    }
+
+    public function test_due_snooze_can_be_accepted(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation();
+        $rec->forceFill(['status' => 'snoozed', 'snoozed_until' => now()->subMinute()])->save();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'accept'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'accepted');
+    }
+
+    public function test_legacy_overlong_snooze_expires_and_stays_in_history(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation(overrides: ['expires_at' => now()->subMinute()]);
+        $rec->forceFill(['status' => 'snoozed', 'snoozed_until' => now()->addDay()])->save();
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", ['action' => 'start_follow_up'])
+            ->assertStatus(422);
+        $this->assertSame('expired', $rec->fresh()->status);
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dss/recommendations?status=expired')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $rec->hash_id]);
+    }
+
+    public function test_snooze_at_or_after_expiry_is_rejected(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $expiry = now()->addDays(3);
+        $rec = $this->makeRecommendation(overrides: ['expires_at' => $expiry]);
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/dss/recommendations/{$rec->id}/actions", [
+                'action' => 'snooze',
+                'snoozed_until' => $expiry->toISOString(),
+            ])
+            ->assertStatus(422);
     }
 
     public function test_invalid_transitions_are_rejected(): void
@@ -313,5 +390,186 @@ class RecommendationLifecycleTest extends TestCase
             ->where('recommendation_id', $rec->id)
             ->where('event', 'viewed')
             ->count());
+    }
+
+    public function test_concurrent_daily_view_conflict_is_ignored_by_database(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation();
+        $now = now();
+        $view = [
+            'recommendation_id' => $rec->id,
+            'event' => 'viewed',
+            'actor_id' => $user->id,
+            'viewed_on' => $now->toDateString(),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+
+        DB::table('dss_recommendation_events')->insertOrIgnore($view);
+        $this->actingAs($user, 'sanctum')->getJson("/api/v1/dss/recommendations/{$rec->id}")->assertOk();
+
+        $this->assertSame(1, DssRecommendationEvent::query()->where('recommendation_id', $rec->id)
+            ->where('event', 'viewed')->where('actor_id', $user->id)->whereDate('viewed_on', $now->toDateString())->count());
+    }
+
+    public function test_simultaneous_service_opens_create_one_daily_view_event(): void
+    {
+        if (DB::getDriverName() !== 'pgsql' || ! function_exists('pcntl_fork')) {
+            $this->markTestSkipped('Requires PostgreSQL and pcntl for concurrent service calls.');
+        }
+
+        $user = $this->userWithPermissions(['dss.view']);
+        $recommendation = $this->makeRecommendation();
+        $userId = $user->id;
+        $recommendationId = $recommendation->id;
+        $runId = $recommendation->last_evaluated_run_id;
+        $roleId = $user->role_id;
+        while (DB::transactionLevel() > 0) {
+            DB::commit();
+        }
+
+        $workers = [];
+        foreach ([1, 2] as $_) {
+            [$parentSocket, $childSocket] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                throw new \RuntimeException('Could not start a DSS view race worker.');
+            }
+            if ($pid === 0) {
+                fclose($parentSocket);
+                try {
+                    $base = config('database.connections.'.config('database.default'));
+                    config(['database.connections.dss_view_race' => $base, 'database.default' => 'dss_view_race']);
+                    DB::purge('dss_view_race');
+                    DB::connection('dss_view_race')->getPdo();
+                    DB::listen(static function (QueryExecuted $query) use ($childSocket): void {
+                        if (str_contains(strtolower($query->sql), 'dss_run_logs')) {
+                            fwrite($childSocket, "ready\n");
+                            fflush($childSocket);
+                            if (trim((string) fgets($childSocket)) !== 'go') {
+                                throw new \RuntimeException('DSS view worker did not receive its start signal.');
+                            }
+                        }
+                    });
+
+                    DB::beginTransaction();
+                    app(RecommendationService::class)->show(
+                        User::query()->findOrFail($userId),
+                        DssRecommendation::query()->findOrFail($recommendationId),
+                    );
+                    fwrite($childSocket, "inserted\n");
+                    fflush($childSocket);
+                    if (trim((string) fgets($childSocket)) !== 'commit') {
+                        throw new \RuntimeException('DSS view worker did not receive its commit signal.');
+                    }
+                    DB::commit();
+                    fwrite($childSocket, "done\n");
+                    fflush($childSocket);
+                } catch (\Throwable $exception) {
+                    fwrite($childSocket, 'error:'.$exception->getMessage()."\n");
+                    fflush($childSocket);
+                    while (DB::transactionLevel() > 0) {
+                        DB::rollBack();
+                    }
+                }
+                fclose($childSocket);
+                exit(0);
+            }
+
+            fclose($childSocket);
+            stream_set_timeout($parentSocket, 20);
+            $workers[] = ['pid' => $pid, 'socket' => $parentSocket];
+        }
+
+        try {
+            foreach ($workers as $index => $worker) {
+                $this->assertSame("ready\n", fgets($worker['socket']), "Worker {$index} must reach the pre-insert authorization barrier.");
+            }
+            foreach ($workers as $worker) {
+                fwrite($worker['socket'], "go\n");
+                fflush($worker['socket']);
+            }
+
+            $pending = array_keys($workers);
+            while ($pending !== []) {
+                $read = [];
+                foreach ($pending as $index) {
+                    $read[$index] = $workers[$index]['socket'];
+                }
+                $write = $except = [];
+                $this->assertGreaterThan(0, stream_select($read, $write, $except, 20), 'Workers must reach the database uniqueness conflict.');
+                foreach ($read as $index => $socket) {
+                    $line = trim((string) fgets($socket));
+                    $this->assertSame('inserted', $line, 'Worker error: '.$line);
+                    fwrite($socket, "commit\n");
+                    fflush($socket);
+                    $this->assertSame("done\n", fgets($socket));
+                    $pending = array_values(array_diff($pending, [$index]));
+                }
+            }
+
+            $this->assertSame(1, DB::table('dss_recommendation_events')->where('recommendation_id', $recommendationId)
+                ->where('event', 'viewed')->where('actor_id', $userId)->whereDate('viewed_on', now()->toDateString())->count());
+        } finally {
+            foreach ($workers as $worker) {
+                fclose($worker['socket']);
+                pcntl_waitpid($worker['pid'], $status);
+            }
+            DB::table('dss_recommendations')->where('id', $recommendationId)->delete();
+            DB::table('dss_run_logs')->where('id', $runId)->delete();
+            DB::table('users')->where('id', $userId)->delete();
+            DB::table('roles')->where('id', $roleId)->delete();
+        }
+    }
+
+    public function test_next_app_local_date_allows_another_view_event(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation();
+        $this->travelTo(now()->startOfDay()->addHours(23)->addMinutes(59));
+        $this->actingAs($user, 'sanctum')->getJson("/api/v1/dss/recommendations/{$rec->id}")->assertOk();
+        $firstDay = now()->toDateString();
+
+        $this->travelTo(now()->addMinutes(2));
+        $this->actingAs($user, 'sanctum')->getJson("/api/v1/dss/recommendations/{$rec->id}")->assertOk();
+
+        $views = DssRecommendationEvent::query()->where('recommendation_id', $rec->id)
+            ->where('event', 'viewed')->where('actor_id', $user->id)->orderBy('id')->get();
+        $this->assertCount(2, $views);
+        $this->assertSame($firstDay, $views[0]->viewed_on->toDateString());
+        $this->assertSame(now()->toDateString(), $views[1]->viewed_on->toDateString());
+    }
+
+    public function test_event_timeline_is_newest_first_with_stable_cursor_and_bounded_payload(): void
+    {
+        $user = $this->userWithPermissions(['dss.view']);
+        $rec = $this->makeRecommendation();
+        foreach (range(1, 55) as $i) {
+            DssRecommendationEvent::query()->create([
+                'recommendation_id' => $rec->id,
+                'event' => $i === 55 ? 'outcome' : 'started',
+                'actor_id' => $user->id,
+                'reason' => $i === 55 ? str_repeat('private reason ', 30) : null,
+                'metadata' => $i === 55 ? ['outcome' => ['note' => 'private outcome note', 'value' => 5, 'unit' => 'days'], 'source_payload' => 'secret-source', 'detector' => 'internal.detector'] : null,
+            ]);
+        }
+
+        $url = "/api/v1/dss/recommendations/{$rec->id}/events";
+        $first = $this->actingAs($user, 'sanctum')->getJson($url)->assertOk();
+        $first->assertJsonCount(50, 'data')->assertJsonPath('data.0.label', 'Outcome recorded')
+            ->assertJsonPath('data.0.outcome_summary', '5 days');
+        $this->assertNotNull($first->json('next_cursor'));
+        $this->assertLessThanOrEqual(200, mb_strlen($first->json('data.0.reason')));
+        $this->assertStringNotContainsString('private outcome note', $first->getContent());
+        $this->assertStringNotContainsString('secret-source', $first->getContent());
+        $this->assertStringNotContainsString('internal.detector', $first->getContent());
+        $this->assertArrayNotHasKey('metadata', $first->json('data.0'));
+
+        $second = $this->getJson($url.'?cursor='.urlencode($first->json('next_cursor')))->assertOk();
+        $second->assertJsonCount(5, 'data')->assertJsonPath('data.0.label', 'Follow-up started');
+        $ids = array_column([...$first->json('data'), ...$second->json('data')], 'id');
+        $this->assertCount(55, array_unique($ids));
+        $this->assertNull($second->json('next_cursor'));
     }
 }

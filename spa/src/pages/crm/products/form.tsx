@@ -60,8 +60,6 @@ export function ProductForm({ initial, mode }: Props) {
       description: initial?.description ?? '',
       unit_of_measure: initial?.unit_of_measure.toUpperCase() ?? '',
       standard_cost: initial?.standard_cost ?? '',
-      base_selling_price: initial?.base_selling_price ?? '',
-      minimum_selling_price: initial?.minimum_selling_price ?? '',
       revenue_account_id: initial?.revenue_account_id ?? '',
       is_active: initial?.is_active ?? true,
     },
@@ -88,9 +86,7 @@ export function ProductForm({ initial, mode }: Props) {
         name: initial.name,
         description: initial.description ?? '',
         unit_of_measure: initial.unit_of_measure.toUpperCase(),
-        standard_cost: initial.standard_cost,
-        base_selling_price: initial.base_selling_price ?? '',
-        minimum_selling_price: initial.minimum_selling_price ?? '',
+        standard_cost: initial.standard_cost ?? '',
         revenue_account_id: initial.revenue_account_id ?? '',
         is_active: initial.is_active,
       });
@@ -112,7 +108,6 @@ export function ProductForm({ initial, mode }: Props) {
   }, [initial, uoms, getValues, setValue]);
 
   const isActive = watch('is_active');
-  const baseSellingPrice = watch('base_selling_price');
   const { ref: isActiveRef, ...isActiveRegister } = register('is_active');
   void isActiveRef;
 
@@ -120,8 +115,6 @@ export function ProductForm({ initial, mode }: Props) {
     mutationFn: (values: FormValues) => {
       const payload: CreateProductData | UpdateProductData = {
         ...values,
-        base_selling_price: values.base_selling_price || null,
-        minimum_selling_price: values.minimum_selling_price || null,
         description: values.description?.trim() ? values.description : null,
       };
       return mode === 'create'
@@ -238,50 +231,15 @@ export function ProductForm({ initial, mode }: Props) {
         <p className="mt-2 text-xs text-muted">
           {mode === 'edit' &&
             !can('inventory.costs.approve') &&
-            'Financial fields require Finance approval. Submit changes from the product record. '}
+            'Standard cost changes require Finance review. Submit changes from the product record. '}
           Internal accounting figure. Confirm full unit cost before setting selling prices;
           customers never see this cost.
         </p>
       </fieldset>
 
-      <fieldset className="mb-8 rounded-lg border border-default bg-canvas p-4 sm:p-5">
-        <legend className="px-1 text-sm font-semibold">Selling prices</legend>
-        <p className="mb-4 text-sm text-muted">
-          Base price applies when no customer agreement covers the requested delivery date.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="Base selling price"
-            prefix="₱"
-            inputMode="decimal"
-            {...register('base_selling_price')}
-            readOnly={mode === 'edit' && !can('inventory.costs.approve')}
-            error={errors.base_selling_price?.message}
-            placeholder="Not configured"
-            helper="Per unit, before VAT. Leave unset if not ready to sell."
-          />
-          <Input
-            label="Minimum selling price"
-            prefix="₱"
-            inputMode="decimal"
-            {...register('minimum_selling_price')}
-            readOnly={mode === 'edit' && !can('inventory.costs.approve')}
-            error={errors.minimum_selling_price?.message}
-            placeholder="Not configured"
-            helper="Blocks lower base, agreed and volume prices. No floor protection when unset."
-          />
-        </div>
-        {!baseSellingPrice && (
-          <p role="status" className="mt-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
-            No base price. Customers need an active price agreement for their delivery date before
-            they can order this product.
-          </p>
-        )}
-        <p className="mt-3 text-xs text-muted">
-          Sales manages customer portal access from the saved product record. New products start
-          private, with no assigned customers.
-        </p>
-      </fieldset>
+      <div role="status" className="mb-8 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+        Sales must set selling prices and customer access after this product is saved. New products start private; customers cannot order until access and a valid price are configured.
+      </div>
 
       <fieldset className="mb-8">
         <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">

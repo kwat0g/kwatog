@@ -14,6 +14,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import type {
   CreateReturnCasePayload,
   ReturnCaseLineSubmission,
@@ -74,18 +75,27 @@ export default function ReturnCaseCreatePage() {
   const [searchParams] = useSearchParams();
   const realm = realmFromPath(location.pathname);
   const { can } = usePermission();
+  const roleSlug = useAuthStore((state) => state.user?.role.slug);
+  const canCreateSupplierReturn =
+    roleSlug !== 'customer_service_officer' || can('purchasing.po.create');
   const reportOnly =
     realm === 'internal' && !can('return_management.manage') && can('inventory.grn.create');
   const initialKind = searchParams.get('source_kind') as ReturnCaseSourceKind | null;
   const initialId = searchParams.get('source_id');
+  const initialSourceAllowed =
+    !initialKind || canCreateSupplierReturn || initialKind === 'delivery';
   const initialType =
-    realm === 'internal' ? (initialKind === 'delivery' ? 'customer' : 'supplier') : realm;
+    realm === 'internal'
+      ? initialKind === 'delivery' || !canCreateSupplierReturn
+        ? 'customer'
+        : 'supplier'
+      : realm;
 
   const [type, setType] = useState<'customer' | 'supplier'>(initialType);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [selectedSource, setSelectedSource] = useState<ReturnCaseSourceResult | null>(() =>
-    initialKind && initialId && (!reportOnly || initialKind === 'grn')
+    initialKind && initialId && initialSourceAllowed && (!reportOnly || initialKind === 'grn')
       ? { id: initialId, kind: initialKind, label: 'Loading source…', party_name: null }
       : null,
   );
@@ -377,19 +387,21 @@ export default function ReturnCaseCreatePage() {
               <Panel title="Choose the source document" meta="Start with the shipment or receipt">
                 {realm === 'internal' && (
                   <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Report type">
-                    {(['customer', 'supplier'] as const).map((value) => (
-                      <Button
-                        key={value}
-                        size="sm"
-                        variant={type === value ? 'primary' : 'secondary'}
-                        onClick={() => {
-                          setType(value);
-                          setSearch('');
-                        }}
-                      >
-                        {value === 'customer' ? 'Customer delivery' : 'Supplier receipt or order'}
-                      </Button>
-                    ))}
+                    {(['customer', 'supplier'] as const)
+                      .filter((value) => value !== 'supplier' || canCreateSupplierReturn)
+                      .map((value) => (
+                        <Button
+                          key={value}
+                          size="sm"
+                          variant={type === value ? 'primary' : 'secondary'}
+                          onClick={() => {
+                            setType(value);
+                            setSearch('');
+                          }}
+                        >
+                          {value === 'customer' ? 'Customer delivery' : 'Supplier receipt or order'}
+                        </Button>
+                      ))}
                   </div>
                 )}
                 <Input

@@ -225,7 +225,7 @@ class CustomerProductPricingTest extends TestCase
         $response->assertCreated()->assertJsonPath('data.part_number', 'CASE-PN-001');
     }
 
-    public function test_seeded_master_data_owners_can_manage_products_and_price_agreements(): void
+    public function test_ppc_owns_products_and_sales_owns_customer_price_proposals(): void
     {
         $ppc = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
@@ -243,15 +243,23 @@ class CustomerProductPricingTest extends TestCase
         $customerService = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
         ]);
+        $proposal = [
+            'customer_id' => $customer->hash_id,
+            'product_id' => $product->hash_id,
+            'price' => '99.99',
+            'effective_from' => now()->toDateString(),
+            'effective_to' => now()->addMonth()->toDateString(),
+            'pricing_method' => 'flat', 'notes' => 'Proposed customer terms',
+        ];
         $this->actingAs($customerService, 'sanctum')
-            ->postJson('/api/v1/crm/price-agreements', [
-                'customer_id' => $customer->hash_id,
-                'product_id' => $product->hash_id,
-                'price' => '99.99',
-                'effective_from' => now()->toDateString(),
-                'effective_to' => now()->addMonth()->toDateString(),
-                'pricing_method' => 'flat', 'notes' => 'Proposed customer terms',
-            ])
+            ->postJson('/api/v1/crm/price-agreements', $proposal)
+            ->assertForbidden();
+
+        $sales = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+        $this->actingAs($sales, 'sanctum')
+            ->postJson('/api/v1/crm/price-agreements', $proposal)
             ->assertCreated();
     }
 

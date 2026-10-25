@@ -9,6 +9,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Requests\StoreProductRequest;
 use App\Modules\CRM\Requests\UpdateProductCustomerAccessRequest;
 use App\Modules\CRM\Requests\UpdateProductRequest;
+use App\Modules\CRM\Requests\UpdateProductSellingPricesRequest;
 use App\Modules\CRM\Resources\ProductOptionResource;
 use App\Modules\CRM\Resources\ProductResource;
 use App\Modules\CRM\Services\ProductService;
@@ -60,6 +61,11 @@ class ProductController
         return new ProductResource($this->service->updateCustomerAccess($product, $request->validated()));
     }
 
+    public function updateSellingPrices(UpdateProductSellingPricesRequest $request, Product $product): ProductResource
+    {
+        return new ProductResource($this->service->updateSellingPrices($product, $request->user(), $request->validated()));
+    }
+
     public function destroy(Product $product): JsonResponse
     {
         try {
@@ -73,7 +79,7 @@ class ProductController
 
     public function proposeFinancialChange(Request $request, Product $product): ProductResource
     {
-        $data = $request->validate(['standard_cost' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'], 'minimum_selling_price' => ['present', 'nullable', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'], 'base_selling_price' => ['present', 'nullable', 'decimal:0,2', 'gt:0', 'max:9999999999999.99'], 'notes' => ['required', 'string', 'max:1000']]);
+        $data = $request->validate(['standard_cost' => ['required', 'decimal:0,2', 'min:0', 'max:9999999999999.99'], 'notes' => ['required', 'string', 'max:1000']]);
 
         return new ProductResource($this->service->proposeFinancialChange($product, $request->user(), $data));
     }

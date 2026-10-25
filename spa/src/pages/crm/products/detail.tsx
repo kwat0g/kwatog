@@ -19,6 +19,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDateTime } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
+import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +28,8 @@ export default function ProductDetailPage() {
   const queryClient = useQueryClient();
   const canManage = can('crm.products.manage');
   const canManageCustomerAccess = can('crm.products.customer_access.manage');
+  const canManagePrices = can('crm.products.prices.manage');
+  const canViewCosts = can('inventory.costs.review') || can('inventory.costs.approve');
   const backTo = can('crm.products.view') ? '/crm/products' : '/dashboard';
   const backLabel = can('crm.products.view') ? 'Products' : 'Dashboard';
   const { data, isLoading, isError, refetch } = useQuery({
@@ -35,6 +38,7 @@ export default function ProductDetailPage() {
     enabled: !!id,
   });
   const [editingAccess, setEditingAccess] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const debouncedCustomerSearch = useDebounce(customerSearch, 300);
   const [accessVisibility, setAccessVisibility] = useState<'standard' | 'restricted'>('restricted');
@@ -62,7 +66,6 @@ export default function ProductDetailPage() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
-      void refetch();
       setEditingAccess(false);
       toast.success('Customer access updated.');
     },
@@ -73,29 +76,24 @@ export default function ProductDetailPage() {
     },
   });
   const [editingPrices, setEditingPrices] = useState(false);
-  const [prices, setPrices] = useState({
-    standard_cost: '',
-    base_selling_price: '',
-    minimum_selling_price: '',
-  });
+  const [prices, setPrices] = useState({ base_selling_price: '', minimum_selling_price: '' });
+  const [editingCost, setEditingCost] = useState(false);
+  const [standardCost, setStandardCost] = useState('');
   const [notes, setNotes] = useState('');
   const [financialError, setFinancialError] = useState('');
+  const [priceError, setPriceError] = useState('');
   const financial = useMutation({
     mutationFn: async (decision: 'propose' | 'approve' | 'reject') => {
       setFinancialError('');
       if (decision === 'propose')
-        await productsApi.proposeFinancial(id!, {
-          ...prices,
-          base_selling_price: prices.base_selling_price || null,
-          minimum_selling_price: prices.minimum_selling_price || null,
-          notes,
-        });
+        await productsApi.proposeFinancial(id!, { standard_cost: standardCost, notes });
       else
         await productsApi.decideFinancial(id!, data!.financial_change_request!.id, decision, notes);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
       void refetch();
-      setEditingPrices(false);
+      setEditingCost(false);
       setNotes('');
       toast.success('Financial review recorded.');
     },
@@ -104,6 +102,24 @@ export default function ProductDetailPage() {
         (error as { response?: { data?: { message?: string } } }).response?.data?.message ??
         'Could not record financial review.';
       setFinancialError(message);
+      toast.error(message);
+    },
+  });
+  const sellingPrices = useMutation({
+    mutationFn: () => productsApi.updateSellingPrices(id!, {
+      base_selling_price: prices.base_selling_price || null,
+      minimum_selling_price: prices.minimum_selling_price || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm', 'products'] });
+      void refetch();
+      setEditingPrices(false);
+      toast.success('Selling prices updated.');
+    },
+    onError: (error: unknown) => {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message
+        ?? 'Could not update selling prices.';
+      setPriceError(message);
       toast.error(message);
     },
   });
@@ -129,23 +145,7 @@ export default function ProductDetailPage() {
   const proposal = data.financial_change_request;
   const readiness = data.finished_good_readiness;
   const customers = data.portal_customers ?? [];
-  const priceRows = [
-    {
-      label: 'Standard cost',
-      current: data.standard_cost,
-      proposed: proposal?.values.standard_cost,
-    },
-    {
-      label: 'Base selling price',
-      current: data.base_selling_price,
-      proposed: proposal?.values.base_selling_price,
-    },
-    {
-      label: 'Minimum selling price',
-      current: data.minimum_selling_price,
-      proposed: proposal?.values.minimum_selling_price,
-    },
-  ];
+  const costRow = { label: 'Standard cost', current: data.standard_cost, proposed: proposal?.values.standard_cost };
   const relatedLinks = [
     ...(can('crm.sales_orders.view')
       ? [{ label: 'Sales orders', to: `/crm/sales-orders?product_id=${data.id}` }]
@@ -158,6 +158,7 @@ export default function ProductDetailPage() {
 
   return (
     <div>
+      <ProductPhotoViewer photo={photoPreview} onClose={() => setPhotoPreview(null)} />
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -194,11 +195,11 @@ export default function ProductDetailPage() {
             <Panel title="Product details">
               <div className="mb-4 flex items-start gap-4 border-b border-subtle pb-4">
                 {data.image_url ? (
-                  <img src={data.image_url} alt={`${data.name} product`} className="h-24 w-24 rounded-md border border-default object-cover" />
+                  <ProductPhotoButton photo={{ url: data.image_url, name: data.name, partNumber: data.part_number }} className="h-24 w-24" onView={setPhotoPreview} />
                 ) : (
                   <p role="status" className="rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
                     No product photo uploaded. Customers see a placeholder in the order catalog.
-                    {canManage && <> Add one from the Products list.</>}
+                    {canManage && <> <Link to="/crm/products" className="underline">Open Products list to add one.</Link></>}
                   </p>
                 )}
               </div>
@@ -222,30 +223,38 @@ export default function ProductDetailPage() {
             <Panel
               title="Pricing"
               actions={
-                canManage &&
-                !proposal &&
-                !editingPrices && (
-                  <Button
-                    size="sm"
-                    disabled={!data.is_active}
-                    onClick={() => {
+                <div className="flex flex-wrap gap-2">
+                  {canManagePrices && !editingPrices && (
+                    <Button size="sm" disabled={!data.is_active || !!proposal} onClick={() => {
                       setPrices({
-                        standard_cost: data.standard_cost,
                         base_selling_price: data.base_selling_price || '',
                         minimum_selling_price: data.minimum_selling_price || '',
                       });
+                      setPriceError('');
+                      setEditingPrices(true);
+                    }}>
+                      Edit selling prices
+                    </Button>
+                  )}
+                  {canManage && canViewCosts && !proposal && !editingCost && (
+                    <Button size="sm" disabled={!data.is_active} onClick={() => {
+                      setStandardCost(data.standard_cost ?? '');
                       setNotes('');
                       setFinancialError('');
-                      setEditingPrices(true);
-                    }}
-                  >
-                    Propose financial changes
-                  </Button>
-                )
+                      setEditingCost(true);
+                    }}>
+                      Propose standard cost change
+                    </Button>
+                  )}
+                </div>
               }
             >
               <dl className="grid gap-4 text-sm sm:grid-cols-3">
-                {priceRows.map((row) => (
+                {[
+                  ...(canViewCosts ? [costRow] : []),
+                  { label: 'Base selling price', current: data.base_selling_price, proposed: undefined },
+                  { label: 'Minimum selling price', current: data.minimum_selling_price, proposed: undefined },
+                ].map((row) => (
                   <div key={row.label} className="min-w-0">
                     <dt className="text-xs text-muted">{row.label}</dt>
                     <dd
@@ -274,19 +283,58 @@ export default function ProductDetailPage() {
                   )}
                 </div>
               )}
-              {!data.is_active && canManage && !proposal && (
+              {data.minimum_selling_price == null && (
+                <div role="status" className="mt-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                  No minimum selling price. Sales offers require this floor and a complete manufacturing cost.
+                </div>
+              )}
+              {!data.is_active && (canManage || canManagePrices) && !proposal && (
                 <p className="mt-3 text-xs text-muted">
-                  Financial changes require an active product.
+                  Selling price and cost changes require an active product.
                 </p>
               )}
-              {(proposal || editingPrices) && (
+              {editingPrices && (
+                <form className="mt-4 space-y-4 border-t border-default pt-4" onSubmit={(event) => {
+                  event.preventDefault();
+                  sellingPrices.mutate();
+                }}>
+                  <h2 className="text-sm font-medium">Selling prices</h2>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Base selling price"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={prices.base_selling_price}
+                      disabled={sellingPrices.isPending}
+                      onChange={(event) => setPrices({ ...prices, base_selling_price: event.target.value })}
+                    />
+                    <Input
+                      label="Minimum selling price"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={prices.minimum_selling_price}
+                      disabled={sellingPrices.isPending}
+                      onChange={(event) => setPrices({ ...prices, minimum_selling_price: event.target.value })}
+                    />
+                  </div>
+                  <p className="text-xs text-muted">Prices must cover the current unit cost. Customer agreements still require customer acceptance.</p>
+                  {priceError && <p role="alert" className="text-sm text-danger-fg">{priceError}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" variant="primary" disabled={sellingPrices.isPending} loading={sellingPrices.isPending}>Save prices</Button>
+                    <Button type="button" disabled={sellingPrices.isPending} onClick={() => setEditingPrices(false)}>Cancel</Button>
+                  </div>
+                </form>
+              )}
+              {(proposal || editingCost) && (
                 <section
                   aria-labelledby="financial-review-heading"
                   className="mt-4 border-t border-default pt-4"
                 >
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <h2 id="financial-review-heading" className="text-sm font-medium">
-                      Financial change review
+                      Standard cost review
                     </h2>
                     {proposal && <Chip variant="warning">Awaiting Finance approval</Chip>}
                   </div>
@@ -297,8 +345,8 @@ export default function ProductDetailPage() {
                       </p>
                       <div className="overflow-x-auto">
                         <table className={`${tableCls} min-w-[400px]`}>
-                          <caption className="sr-only">
-                            Current and proposed financial values
+                            <caption className="sr-only">
+                            Current and proposed standard cost
                           </caption>
                           <thead>
                             <tr className={theadTrCls}>
@@ -308,7 +356,7 @@ export default function ProductDetailPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {priceRows.map((row) => (
+                            {[costRow].map((row) => (
                               <tr key={row.label} className={trCls}>
                                 <Td>{row.label}</Td>
                                 <Td align="right" mono={row.current != null}>
@@ -327,7 +375,7 @@ export default function ProductDetailPage() {
                       {can('inventory.costs.approve') && (
                         <div className="space-y-3">
                           <Textarea
-                            label="Financial decision reason"
+                            label="Standard cost decision reason"
                             rows={2}
                             value={notes}
                             maxLength={1000}
@@ -340,13 +388,13 @@ export default function ProductDetailPage() {
                               disabled={!notes.trim() || financial.isPending}
                               onClick={() => financial.mutate('approve')}
                             >
-                              Approve financial changes
+                              Approve standard cost change
                             </Button>
                             <Button
                               disabled={!notes.trim() || financial.isPending}
                               onClick={() => financial.mutate('reject')}
                             >
-                              Reject financial changes
+                              Reject standard cost change
                             </Button>
                           </div>
                         </div>
@@ -361,9 +409,9 @@ export default function ProductDetailPage() {
                       }}
                     >
                       <p className="text-xs text-muted">
-                        Current values remain until a different Finance reviewer approves.
+                        Current standard cost remains until a different Finance reviewer approves.
                       </p>
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-1 sm:max-w-xs">
                         <Input
                           label="Proposed standard cost"
                           type="number"
@@ -371,36 +419,12 @@ export default function ProductDetailPage() {
                           step="0.01"
                           required
                           disabled={financial.isPending}
-                          value={prices.standard_cost}
-                          onChange={(event) =>
-                            setPrices({ ...prices, standard_cost: event.target.value })
-                          }
-                        />
-                        <Input
-                          label="Proposed base price"
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          disabled={financial.isPending}
-                          value={prices.base_selling_price}
-                          onChange={(event) =>
-                            setPrices({ ...prices, base_selling_price: event.target.value })
-                          }
-                        />
-                        <Input
-                          label="Proposed minimum price"
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          disabled={financial.isPending}
-                          value={prices.minimum_selling_price}
-                          onChange={(event) =>
-                            setPrices({ ...prices, minimum_selling_price: event.target.value })
-                          }
+                          value={standardCost}
+                          onChange={(event) => setStandardCost(event.target.value)}
                         />
                       </div>
                       <Textarea
-                        label="Financial change reason"
+                        label="Standard cost change reason"
                         value={notes}
                         rows={2}
                         maxLength={1000}
@@ -415,13 +439,13 @@ export default function ProductDetailPage() {
                           disabled={!notes.trim()}
                           loading={financial.isPending}
                         >
-                          Submit for Finance approval
+                          Submit standard cost for Finance review
                         </Button>
                         <Button
                           type="button"
                           disabled={financial.isPending}
                           onClick={() => {
-                            setEditingPrices(false);
+                            setEditingCost(false);
                             setNotes('');
                             setFinancialError('');
                           }}
@@ -458,7 +482,7 @@ export default function ProductDetailPage() {
                     <option value="restricted">Private — assigned customers only</option>
                     <option value="standard">Standard — all active customers</option>
                   </Select>
-                  <p className="text-xs text-muted">Sales owns customer access. Product creation and production data stay with PPC.</p>
+                  <p className="text-xs text-muted">Private products appear only for selected customers. Standard products appear for all active customers.</p>
                   <Input aria-label="Find customers to assign" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers" />
                   {customerOptionsError && (
                     <p role="alert" className="text-sm text-danger-fg">Cannot load customers. <Button type="button" size="sm" onClick={() => retryCustomerOptions()}>Retry</Button></p>
@@ -493,6 +517,11 @@ export default function ProductDetailPage() {
                     : 'Assigned customers only'}
                 </p>
               </div>
+              {data.portal_visibility !== 'standard' && customers.length === 0 && (
+                <p role="status" className="mt-3 rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                  No customers assigned. This private product will not appear in any customer portal.
+                </p>
+              )}
               <div className="mt-4 border-t border-subtle pt-3">
                 <h2 className="mb-2 text-xs text-muted">
                   Assigned customers <span className="font-mono">({customers.length})</span>

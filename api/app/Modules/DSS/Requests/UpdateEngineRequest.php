@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\DSS\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateEngineRequest extends FormRequest
 {
@@ -19,7 +18,13 @@ class UpdateEngineRequest extends FormRequest
     {
         return [
             'enabled' => ['sometimes', 'boolean'],
-            'default_mode' => ['sometimes', Rule::in(['shadow', 'advisory'])],
+            'default_mode' => ['sometimes', 'in:shadow'],
         ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return ['default_mode.in' => 'The global default mode must remain shadow; enable advisory mode per detector.'];
     }
 }

@@ -8,10 +8,13 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\DSS\Contracts\RecommendationVerifierInterface;
 use App\Modules\DSS\Contracts\VerificationResult;
 use App\Modules\DSS\Models\DssRecommendation;
+use App\Modules\Purchasing\Services\ThreeWayMatchService;
 
-/** shortcut: checks saved bill state only; upgrade after current PO/GRN matching can be rechecked safely. */
+/** Rechecks the current PO, bill, and receipt match without writing business state. */
 final class ThreeWayMatchReviewVerifier implements RecommendationVerifierInterface
 {
+    public function __construct(private readonly ThreeWayMatchService $matcher) {}
+
     public function verify(DssRecommendation $recommendation): VerificationResult
     {
         $context = $recommendation->verification_context;
@@ -23,27 +26,45 @@ final class ThreeWayMatchReviewVerifier implements RecommendationVerifierInterfa
         }
 
         try {
-            $bill = Bill::query()->find($context['source_id']);
+            $bill = Bill::query()->with('items')->find($context['source_id']);
             if ($bill === null || ! is_array($bill->three_way_match_snapshot)
                 || ! is_string($bill->three_way_match_snapshot['overall_status'] ?? null)) {
                 return new VerificationResult(VerificationResult::UNAVAILABLE);
             }
 
-            if ($bill->status->value === 'draft'
-                && $bill->purchase_order_id !== null
-                && $bill->has_variances === true
-                && $bill->three_way_overridden === false
-                && $bill->three_way_match_snapshot['overall_status'] === 'blocked') {
-                return new VerificationResult(VerificationResult::STILL_OPEN);
+            if ($bill->items->isEmpty()) {
+                return new VerificationResult(VerificationResult::UNAVAILABLE);
+            }
+            foreach ($bill->items as $item) {
+                if (! is_numeric($item->item_id) || (int) $item->item_id < 1) {
+                    return new VerificationResult(VerificationResult::UNAVAILABLE);
+                }
             }
 
-            return new VerificationResult(
-                VerificationResult::VERIFIED_CLEAR,
-                'The saved bill review state no longer meets the blocked draft condition.',
-                now(),
-            );
+            // Posting or an authorized override deliberately removes bill from this review queue.
+            if ($bill->status->value !== 'draft' || $bill->purchase_order_id === null || $bill->three_way_overridden === true) {
+                return $this->clear('The bill is no longer eligible for blocked match review.');
+            }
+
+            $match = $this->matcher->matchForBill($bill);
+            if ($match === null) {
+                return new VerificationResult(VerificationResult::UNAVAILABLE);
+            }
+            if ($match->overallStatus === 'blocked') {
+                return new VerificationResult(VerificationResult::STILL_OPEN);
+            }
+            if (! in_array($match->overallStatus, ['matched', 'has_variances'], true)) {
+                return new VerificationResult(VerificationResult::UNAVAILABLE);
+            }
+
+            return $this->clear('Current purchase order, bill, and receipt match is no longer blocked.');
         } catch (\Throwable) {
             return new VerificationResult(VerificationResult::UNAVAILABLE);
         }
+    }
+
+    private function clear(string $proof): VerificationResult
+    {
+        return new VerificationResult(VerificationResult::VERIFIED_CLEAR, $proof, now());
     }
 }

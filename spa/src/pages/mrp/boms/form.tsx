@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,6 +87,7 @@ const emptyRow = () => ({ item_id: '', quantity_per_unit: '', unit: '', waste_fa
 
 export default function BomFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const { id = '' } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
@@ -124,7 +125,11 @@ export default function BomFormPage({ mode }: { mode: 'create' | 'edit' }) {
   });
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { product_id: '', cost_batch_size: '1', items: [emptyRow()] },
+    defaultValues: {
+      product_id: mode === 'create' ? searchParams.get('product_id') ?? '' : '',
+      cost_batch_size: '1',
+      items: [emptyRow()],
+    },
   });
   const {
     register,

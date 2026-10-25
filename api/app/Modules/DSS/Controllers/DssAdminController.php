@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DSS\Controllers;
 
+use App\Jobs\RunDssDetectorJob;
 use App\Modules\DSS\Models\DssParameter;
 use App\Modules\DSS\Models\DssRecommendation;
 use App\Modules\DSS\Models\DssRecommendationEvent;
@@ -13,7 +14,6 @@ use App\Modules\DSS\Requests\UpdateDetectorRequest;
 use App\Modules\DSS\Requests\UpdateEngineRequest;
 use App\Modules\DSS\Services\DetectorRegistry;
 use App\Modules\DSS\Services\DssParameterService;
-use App\Modules\DSS\Services\DssRunnerService;
 use App\Modules\DSS\Services\RecommendationService;
 use Illuminate\Http\JsonResponse;
 
@@ -28,16 +28,16 @@ class DssAdminController
     public function __construct(
         private readonly DetectorRegistry $registry,
         private readonly DssParameterService $params,
-        private readonly DssRunnerService $runner,
         private readonly RecommendationService $recommendations,
     ) {}
 
     /** @return array{data: list<array<string, mixed>>} */
     public function detectors(): array
     {
-        $openCounts = DssRecommendation::query()
+        $activeCounts = DssRecommendation::query()
             ->where(function ($query): void {
                 $query->where('status', 'open')
+                    ->orWhere('status', 'in_progress')
                     ->orWhere(fn ($snoozed) => $snoozed->where('status', 'snoozed')->where('snoozed_until', '<=', now()));
             })
             ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
@@ -51,7 +51,7 @@ class DssAdminController
             ->groupBy('detector_id');
         $lastRuns = DssRunLog::query()
             ->whereIn('id', $latestRunIds)
-            ->get(['detector_id', 'status', 'finished_at', 'duration_ms', 'rows_scanned', 'emitted'])
+            ->get(['id', 'detector_id', 'status', 'started_at', 'finished_at', 'duration_ms', 'rows_scanned', 'emitted', 'error'])
             ->keyBy('detector_id');
 
         $rows = [];
@@ -65,13 +65,18 @@ class DssAdminController
                 'owner_permissions' => $detector->ownerPermissions(),
                 'enabled' => $this->params->detectorEnabled($id),
                 'mode' => $this->params->detectorMode($id),
-                'open_count' => (int) ($openCounts[$id] ?? 0),
+                'active_count' => (int) ($activeCounts[$id] ?? 0),
+                'open_count' => (int) ($activeCounts[$id] ?? 0),
                 'last_run' => $last === null ? null : [
                     'status' => $last->status,
+                    'started_at' => $last->started_at?->toISOString(),
                     'finished_at' => $last->finished_at?->toISOString(),
                     'duration_ms' => $last->duration_ms,
                     'rows_scanned' => $last->rows_scanned,
                     'emitted' => $last->emitted,
+                    'error_summary' => $this->safeRunErrorSummary($last->status, $last->error),
+                    'run_reference' => $last->hash_id,
+                    'stale' => $last->status === 'running' && $last->started_at?->lt(now()->subSeconds(310)),
                 ],
             ];
         }
@@ -103,19 +108,32 @@ class DssAdminController
     }
 
     /** @return array{data: array<string, mixed>} */
-    public function runDetector(string $id): array
+    public function runDetector(string $id): JsonResponse
     {
         $this->assertKnown($id);
+        if (! $this->params->engineEnabled()) {
+            return response()->json(['data' => ['engine' => 'disabled', 'detectors' => [], 'failed' => []]]);
+        }
 
-        return ['data' => $this->runner->run($id)];
+        RunDssDetectorJob::dispatch($id);
+
+        return response()->json(['data' => [
+            'engine' => 'enabled',
+            'detectors' => [$id => [
+                'status' => 'queued', 'emitted' => 0, 'updated' => 0,
+                'rows_scanned' => 0, 'complete' => false, 'error_summary' => null,
+            ]],
+            'failed' => [],
+        ]], JsonResponse::HTTP_ACCEPTED);
     }
 
-    /** @return array{data: array{enabled: bool, default_mode: string}} */
+    /** @return array{data: array{enabled: bool, default_mode: string, legacy_global_advisory_ignored: bool}} */
     public function engine(): array
     {
         return ['data' => [
             'enabled' => $this->params->engineEnabled(),
             'default_mode' => $this->params->defaultMode(),
+            'legacy_global_advisory_ignored' => $this->params->legacyGlobalAdvisoryIgnored(),
         ]];
     }
 
@@ -140,7 +158,7 @@ class DssAdminController
         ]];
     }
 
-    /** @return array{data: array{enabled: bool, default_mode: string}} */
+    /** @return array{data: array{enabled: bool, default_mode: string, legacy_global_advisory_ignored: bool}} */
     public function updateEngine(UpdateEngineRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -162,6 +180,7 @@ class DssAdminController
         return response()->json(['data' => [
             'enabled' => $this->params->engineEnabled(),
             'default_mode' => $this->params->defaultMode(),
+            'legacy_global_advisory_ignored' => $this->params->legacyGlobalAdvisoryIgnored(),
         ]]);
     }
 
@@ -196,6 +215,16 @@ class DssAdminController
         if (! $this->registry->has($id)) {
             abort(404, "Unknown detector '{$id}'.");
         }
+    }
+
+    private function safeRunErrorSummary(string $status, ?string $error): ?string
+    {
+        return match ($status) {
+            'failed' => 'Detector run failed. See server logs.',
+            'partial' => 'Detector run was incomplete.',
+            'skipped' => 'Detector run was skipped.',
+            default => $error === null ? null : 'Detector run reported an issue. See server logs.',
+        };
     }
 
     /** @return array<string, mixed> */

@@ -35,8 +35,8 @@ department, sales, customer service) · UNVERIFIED items **19** · data-not-avai
 | 2 | `hr_officer` | `/dashboard/hr` | `dashboard.hr.view` (2) | exists | M-p1 R2 | leave (HR arm), company loan step 2, separation clearance step 5 |
 | 3 | `finance_officer` | `/dashboard/finance` | `dashboard.accounting.view` (2) | exists | M-p1 R3 | PR step 1, PO step 1, payroll checker (approve/finalize/bank/disburse), asset-disposal step 1, finance-only return, budget + transfer, loan write-off |
 | 4 | `vice_president` | `/dashboard/company` | `dashboard.company.view` (2; plant-manager also available) | shipped — executive aggregates, separate from operations | M-p1 R4 | PR/PO step 2 (≥₱50k), bill payment (≥₱50k), cash-advance step 3, company-loan step 4, salary-adjustment step 2, asset-disposal step 2 |
-| 5 | `customer_service_officer` | `/dashboard/customer-service` | `dashboard.customer_service.view` (2) | shipped | M-p1 R5 | none (RMA/manage, price propose; approval by others) |
-| 6 | `sales_officer` | `/dashboard/sales` | `dashboard.sales.view` (2) | shipped — order-intake trend, open-order stages, price-request status | M-p1 R6 | none (SO lifecycle + price propose) |
+| 5 | `customer_service_officer` | `/dashboard/customer-service` | `dashboard.customer_service.view` (2) | shipped | M-p1 R5 | none (inquiries, complaints and customer returns; customer/product lookup only) |
+| 6 | `sales_officer` | `/dashboard/sales` | `dashboard.sales.view` (2) | shipped — order-intake trend, open-order stages, price-request status | M-p1 R6 | none (customer master, customer-product access, selling prices, price proposals and SO lifecycle; Finance approves offers) |
 | 7 | `production_manager` | `/dashboard/plant-manager` | `dashboard.plant_manager.view` (3) | exists + factory PWA | M-p2 R7 | return_request step 2, salary-adjustment step 1, legacy company-loan step 2 |
 | 8 | `ppc_head` | `/dashboard/ppc` | `dashboard.ppc.view` (2) | exists | M-p2 R8 | none (MRP/schedule owner) |
 | 9 | `purchasing_officer` | `/dashboard/purchasing` | `dashboard.purchasing.view` (2) | exists | M-p2 R9 | none (sourcing actions: RFQ award, supplier-listing review) |
@@ -242,7 +242,7 @@ cannot approve (self-approval guard).
 | Invoice prebill | custom board | finance_officer (`accounting.invoices.prebill_approve`) |
 | Supplier listing | custom board | purchasing_officer (`purchasing.supplier_listings.review`) |
 | Asset transfer | outside board | unrouted; no API actor path by design |
-| Return case | outside board | customer_service_officer / purchasing_officer (`return_management.manage`) |
+| Return case | outside board | customer_service_officer (customer cases) / purchasing_officer (supplier cases) (`return_management.manage`) |
 | Loan write-off | custom board | finance_officer (`loans.write_off.approve`) |
 | PPAP / late production report | outside board | qc_inspector / production_manager (module-local; no PPAP review route) |
 

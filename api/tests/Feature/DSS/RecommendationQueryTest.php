@@ -145,7 +145,7 @@ class RecommendationQueryTest extends TestCase
         $this->assertSame(3, $paginator->currentPage());
     }
 
-    public function test_active_base_preserves_expiry_freshness_and_due_snooze_rules(): void
+    public function test_default_view_includes_valid_active_statuses_and_history(): void
     {
         $visible = $this->row();
         $expired = $this->row(['expires_at' => now()->subSecond()]);
@@ -157,14 +157,14 @@ class RecommendationQueryTest extends TestCase
         DB::table('dss_recommendations')->where('id', $stale->id)->update(['updated_at' => now()->subMinute()]);
 
         $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations')
-            ->assertOk()->assertJsonPath('meta.total', 3)
+            ->assertOk()->assertJsonPath('meta.total', 4)
             ->assertJsonFragment(['id' => $visible->hash_id])->assertJsonFragment(['id' => $dueSnooze->hash_id])
-            ->assertJsonFragment(['id' => $stale->hash_id])
-            ->assertJsonMissing(['id' => $expired->hash_id])->assertJsonMissing(['id' => $futureSnooze->hash_id]);
+            ->assertJsonFragment(['id' => $futureSnooze->hash_id])->assertJsonFragment(['id' => $stale->hash_id])
+            ->assertJsonMissing(['id' => $expired->hash_id]);
 
         $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?status=snoozed')
-            ->assertOk()->assertJsonPath('meta.total', 1)
-            ->assertJsonFragment(['id' => $futureSnooze->hash_id]);
+            ->assertOk()->assertJsonPath('meta.total', 2)
+            ->assertJsonFragment(['id' => $futureSnooze->hash_id])->assertJsonFragment(['id' => $dueSnooze->hash_id]);
     }
 
     public function test_follow_up_and_history_status_filters_match_their_labels(): void
@@ -176,10 +176,10 @@ class RecommendationQueryTest extends TestCase
         $accepted->forceFill(['status' => 'accepted'])->save();
 
         $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations')
-            ->assertOk()->assertJsonPath('meta.total', 2)
+            ->assertOk()->assertJsonPath('meta.total', 3)
             ->assertJsonFragment(['id' => $active->hash_id])
             ->assertJsonFragment(['id' => $followUp->hash_id])
-            ->assertJsonMissing(['id' => $accepted->hash_id]);
+            ->assertJsonFragment(['id' => $accepted->hash_id]);
         $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?status=in_progress')
             ->assertOk()->assertJsonPath('meta.total', 1)
             ->assertJsonFragment(['id' => $followUp->hash_id]);
@@ -189,6 +189,39 @@ class RecommendationQueryTest extends TestCase
         $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations/options')
             ->assertOk()->assertJsonFragment(['value' => 'in_progress', 'label' => 'In progress'])
             ->assertJsonFragment(['value' => 'resolved', 'label' => 'Resolved']);
+    }
+
+    public function test_individually_available_filters_can_have_an_empty_intersection(): void
+    {
+        $this->row(['domain' => 'alpha', 'owner_role_slugs' => ['hr_officer']]);
+        $accepted = $this->row(['domain' => 'beta', 'owner_role_slugs' => ['finance_officer']]);
+        $accepted->forceFill(['status' => 'accepted'])->save();
+
+        foreach ([
+            'status=accepted&domain=alpha',
+            'status=accepted&owner_role=hr_officer',
+            'domain=alpha&owner_role=finance_officer',
+        ] as $filters) {
+            $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?'.$filters)
+                ->assertOk()->assertJsonPath('meta.total', 0);
+            $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations/summary?'.$filters)
+                ->assertOk()->assertJsonPath('data.total', 0);
+        }
+    }
+
+    public function test_all_summary_includes_visible_history_and_valid_active_rows_only(): void
+    {
+        $active = $this->row();
+        $history = $this->row();
+        $history->forceFill(['status' => 'accepted'])->save();
+        $this->row(['expires_at' => now()->subSecond()]);
+        $this->row(['last_evaluated_run_id' => null, 'last_evaluated_at' => null]);
+        $this->row(['detector_id' => 'query.shadow']);
+
+        $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations/summary')
+            ->assertOk()->assertJsonPath('data.total', 2);
+        $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?per_page=1')
+            ->assertOk()->assertJsonPath('meta.total', 2);
     }
 
     public function test_service_list_uses_explicit_validated_page_without_http_request_state(): void
@@ -266,22 +299,61 @@ class RecommendationQueryTest extends TestCase
 
     public function test_search_matches_literal_patterns_and_human_scalar_and_source_fields(): void
     {
-        $percent = $this->row(['rationale' => ['customer' => 'A%_B']]);
+        $literalPatterns = $this->row(['rationale' => ['customer' => 'A%_B\\C']]);
         $customer = $this->row(['rationale' => ['customer' => 'Customer-Needle']]);
         $workOrder = $this->row(['rationale' => ['work_order' => 'WO-Needle']]);
         $ncr = $this->row(['rationale' => ['ncr_number' => 'NCR-Needle']]);
         $training = $this->row(['rationale' => ['training' => 'Training-Needle']]);
         $rule = $this->row(['rationale' => ['rule' => 'Rule-Needle']]);
         $document = $this->row(['rationale' => ['sample_documents' => [['document' => 'Doc-Needle']]]]);
+        $bill = $this->row(['rationale' => ['bill_number' => 'Bill-Needle']]);
+        $purchaseOrder = $this->row(['rationale' => ['po_number' => 'PO-Needle']]);
+        $inspection = $this->row(['rationale' => ['inspection_number' => 'Inspection-Needle']]);
+        $materialLot = $this->row(['rationale' => ['material_lot_number' => 'Lot-Needle']]);
         $object = $this->row(['rationale' => ['customer' => ['nested' => 'Customer-Needle']]]);
-        foreach ([['%_', $percent], ['Customer-Needle', $customer], ['WO-Needle', $workOrder], ['NCR-Needle', $ncr], ['Training-Needle', $training], ['Rule-Needle', $rule], ['Doc-Needle', $document]] as [$term, $expected]) {
+        $malformedReferences = $this->row(['rationale' => [
+            'bill_number' => ['nested' => 'Bill-Needle'],
+            'po_number' => ['nested' => 'PO-Needle'],
+            'inspection_number' => ['nested' => 'Inspection-Needle'],
+            'material_lot_number' => ['nested' => 'Lot-Needle'],
+            'sample_documents' => ['bad', ['document' => ['nested' => 'Doc-Needle']], null],
+        ]]);
+        foreach ([
+            ['%', $literalPatterns], ['_', $literalPatterns], ['\\', $literalPatterns],
+            ['Customer-Needle', $customer], ['WO-Needle', $workOrder], ['NCR-Needle', $ncr],
+            ['Training-Needle', $training], ['Rule-Needle', $rule], ['Doc-Needle', $document],
+            ['Bill-Needle', $bill], ['PO-Needle', $purchaseOrder],
+            ['Inspection-Needle', $inspection], ['Lot-Needle', $materialLot],
+        ] as [$term, $expected]) {
             $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search='.urlencode($term))
                 ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonFragment(['id' => $expected->hash_id]);
         }
         $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search=Customer-Needle')
             ->assertOk()->assertJsonMissing(['id' => $object->hash_id]);
-        $this->row(['rationale' => ['sample_documents' => ['bad', ['document' => ['nested' => 'Doc-Needle']], null]]]);
-        $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search=unmatched')->assertOk();
+        foreach (['Bill-Needle', 'PO-Needle', 'Inspection-Needle', 'Lot-Needle', 'Doc-Needle'] as $term) {
+            $response = $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search='.urlencode($term));
+            $response->assertOk()->assertJsonMissing(['id' => $malformedReferences->hash_id]);
+        }
+        $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search=unmatched')->assertOk()->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_search_is_scoped_before_pagination_and_excludes_hidden_display_identifiers_from_totals(): void
+    {
+        $olderMatch = $this->row(['rationale' => ['customer' => 'Page-Needle']]);
+        $this->row(['rationale' => ['customer' => 'Page-Needle']]);
+        $this->row(['rationale' => ['source_id' => 'Technical-Needle']]);
+        $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search=Technical-Needle')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+        $this->actingAs($this->viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search=Page-Needle&per_page=1&page=2')
+            ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.id', $olderMatch->hash_id);
+
+        $viewer = User::factory()->withRole('hr_officer')->create(['is_active' => true]);
+        $this->row(['owner_role_slugs' => ['hr_officer'], 'rationale' => ['customer' => 'Visible-Needle']]);
+        $hidden = $this->row(['owner_role_slugs' => ['finance_officer'], 'rationale' => ['customer' => 'Hidden-Needle']]);
+        $this->actingAs($viewer, 'sanctum')->getJson('/api/v1/dss/recommendations?search=Hidden-Needle')
+            ->assertOk()->assertJsonPath('meta.total', 0)->assertJsonMissing(['id' => $hidden->hash_id]);
+        $this->actingAs($viewer, 'sanctum')->getJson('/api/v1/dss/recommendations/summary?search=Hidden-Needle')
+            ->assertOk()->assertJsonPath('data.total', 0);
     }
 
     public function test_invalid_query_values_return_validation_errors(): void

@@ -12,6 +12,8 @@ use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
+use App\Modules\Forecasting\Models\DemandForecast;
+use App\Modules\Forecasting\Services\ForecastingService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
@@ -30,7 +32,7 @@ use Illuminate\Support\Facades\DB;
  * *visible*: 200+ employees, 12 months of biometric attendance with realistic
  * late/OT/absent/leave patterns, 6 finalized semi-monthly payroll cycles run
  * through the REAL engine, 45 NCRs across defect types for a true Pareto, and
- * 12 months of demand-forecast history.
+ * demand forecasts computed from confirmed sales-order history.
  *
  * Runs LAST (after ComprehensiveDemoSeeder, which truncates payroll/NCR/etc.
  * and would otherwise wipe this volume). Deterministic (seeded RNG) and
@@ -91,6 +93,7 @@ class RealisticDataSeeder extends Seeder
         $this->seedApprovedLeave($admin);
         $this->seedPayrollCycles($admin);
         $this->seedNcrs($admin);
+        $this->seedSalesOrderHistory();
         $this->seedForecasts($admin);
 
         $this->command?->info('[Realistic] Dataset complete.');
@@ -392,6 +395,12 @@ class RealisticDataSeeder extends Seeder
     {
         $periods   = app(PayrollPeriodService::class);
         $calculator = app(PayrollCalculatorService::class);
+        $approver = User::query()->where('email', 'finance@ogami.test')->first();
+        $finalizer = User::query()->where('email', 'finance2@ogami.test')->first();
+
+        if (! $approver || ! $finalizer || $approver->is($finalizer)) {
+            throw new \RuntimeException('Payroll demo cycles require distinct finance@ogami.test and finance2@ogami.test actors.');
+        }
 
         $finalizedCount = PayrollPeriod::where('status', PayrollPeriodStatus::Finalized->value)
             ->where('is_thirteenth_month', false)->count();
@@ -404,42 +413,41 @@ class RealisticDataSeeder extends Seeder
         $windows = $this->semiMonthlyWindows(self::PAYROLL_CYCLES);
 
         foreach ($windows as $w) {
-            // Skip if a period already covers this window.
-            $exists = PayrollPeriod::where('period_start', $w['start'])
-                ->where('period_end', $w['end'])->exists();
-            if ($exists) continue;
+            $period = PayrollPeriod::where('period_start', $w['start'])
+                ->where('period_end', $w['end'])->first();
+            if ($period instanceof PayrollPeriod && $period->status === PayrollPeriodStatus::Finalized) continue;
 
             try {
-                $period = $periods->create([
-                    'period_start'        => $w['start'],
-                    'period_end'          => $w['end'],
-                    'payroll_date'        => $w['pay'],
-                    'is_first_half'       => $w['first_half'],
-                    'is_thirteenth_month' => false,
-                ], $admin);
-
-                $employees = $periods->availableEmployees($period);
-                foreach ($employees as $emp) {
-                    try {
-                        $calculator->computeForEmployee($period, $emp);
-                    } catch (\Throwable $e) {
-                        // Skip an employee that can't be computed; keep the cycle.
-                    }
+                if (! $period) {
+                    $period = $periods->create([
+                        'period_start'        => $w['start'],
+                        'period_end'          => $w['end'],
+                        'payroll_date'        => $w['pay'],
+                        'is_first_half'       => $w['first_half'],
+                        'is_thirteenth_month' => false,
+                    ], $admin);
                 }
 
-                // Computing rows directly through the calculator bypasses
-                // ProcessPayrollJob, so the period is still Draft. approve()
-                // requires a completed run (Computed), so promote it here the
-                // same way the job's terminal step does.
-                $period->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
+                if ($period->status === PayrollPeriodStatus::Draft) {
+                    $employees = $periods->availableEmployees($period);
+                    foreach ($employees as $emp) {
+                        try {
+                            $calculator->computeForEmployee($period, $emp);
+                        } catch (\Throwable $e) {
+                            // Skip an employee that can't be computed; keep the cycle.
+                        }
+                    }
 
-                // approve() takes (period, actor) — the actor argument was
-                // missing, so every cycle threw ArgumentCountError into the
-                // catch below and silently stayed unapproved. That is why
-                // seeded periods ended up Draft-with-rows and none were ever
-                // finalized or posted to the GL.
-                $period = $periods->approve($period->fresh(), $admin);
-                $periods->finalize($period->fresh(), $admin);
+                    // Direct calculator calls bypass ProcessPayrollJob's terminal status update.
+                    $period->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
+                }
+
+                if ($period->status === PayrollPeriodStatus::Computed) {
+                    $period = $periods->approve($period->fresh(), $approver);
+                }
+                if ($period->status === PayrollPeriodStatus::Approved) {
+                    $periods->finalize($period->fresh(), $finalizer);
+                }
             } catch (\Throwable $e) {
                 $this->command?->warn('[Realistic] Cycle ' . $w['start'] . ' failed: ' . $e->getMessage());
             }
@@ -548,6 +556,45 @@ class RealisticDataSeeder extends Seeder
         $this->command?->info("[Realistic] Seeded {$created} NCRs across defect types.");
     }
 
+/** Keep ten demo orders as a dated, source-backed demand series. */
+    private function seedSalesOrderHistory(): void
+    {
+        $orders = DB::table('sales_orders')
+            ->where('notes', 'like', 'Demo seed%')
+            ->orderBy('id')
+            ->limit(10)
+            ->get(['id']);
+        if ($orders->count() < 10) {
+            $this->command?->warn('[Realistic] Fewer than ten demo sales orders; demand history will be shorter.');
+
+            return;
+        }
+
+        $firstMonth = CarbonImmutable::now()->startOfMonth()->subMonthsNoOverflow(10);
+        foreach ($orders as $index => $order) {
+            $orderDate = $firstMonth->addMonthsNoOverflow($index)->addDays(5 + $index)->toDateString();
+            $deliveryDate = CarbonImmutable::parse($orderDate)->addDays(14)->toDateString();
+
+            DB::table('sales_orders')->where('id', $order->id)->update([
+                'date' => $orderDate,
+                'confirmed_at' => CarbonImmutable::parse($orderDate)->setTime(9, 0)->toDateTimeString(),
+                'updated_at' => now(),
+            ]);
+            DB::table('sales_order_items')->where('sales_order_id', $order->id)->update([
+                'delivery_date' => $deliveryDate,
+                'requested_delivery_date' => $deliveryDate,
+            ]);
+
+            $invoiceDate = CarbonImmutable::parse($deliveryDate)->addDays(2)->toDateString();
+            DB::table('invoices')->where('sales_order_id', $order->id)->update([
+                'date' => $invoiceDate,
+                'due_date' => CarbonImmutable::parse($invoiceDate)->addDays(30)->toDateString(),
+            ]);
+        }
+
+        $this->command?->info('[Realistic] Spread ten demo orders across ten months for source-backed demand history.');
+    }
+
     private function defectNarrative(string $defect): string
     {
         return match ($defect) {
@@ -564,54 +611,77 @@ class RealisticDataSeeder extends Seeder
         };
     }
 
-    /* ─── 5. Demand forecasts — 12 months of trend history ──────────── */
+    /* ─── 5. Demand forecasts — computed from confirmed order history ─ */
 
     private function seedForecasts(User $admin): void
     {
         if (! \Illuminate\Support\Facades\Schema::hasTable('demand_forecasts')) return;
-        if (DB::table('demand_forecasts')->count() >= 36) {
-            $this->command?->info('[Realistic] Forecasts already seeded.');
-            return;
-        }
 
-        $products = Product::limit(5)->pluck('id')->all();
-        if ($products === []) return;
+        $products = Product::query()->where('is_active', true)->orderBy('id')->pluck('id');
+        if ($products->isEmpty()) return;
 
-        $now = CarbonImmutable::now();
-        $rows = [];
+        $forecasting = app(ForecastingService::class);
+        $currentMonth = CarbonImmutable::now()->startOfMonth();
+        $start = $currentMonth->subMonthsNoOverflow(12);
+        $written = 0;
 
-        foreach ($products as $pid) {
-            $base = $this->rand(800, 4000);
-            for ($m = 11; $m >= 0; $m--) {
-                // NoOverflow: subMonths() overflows on day 29-31 (Feb 29 -> Mar 1),
-                // duplicating a month vs demand_forecasts unique. Same convention
-                // as the leave/payroll seeders below.
-                $month = $now->subMonthsNoOverflow($m);
-                // Trend + seasonal wobble.
-                $trend = (int) ($base * (1 + (11 - $m) * 0.02));
-                $forecast = $trend + $this->rand(-200, 200);
-                $actual = $forecast + $this->rand(-300, 300);
-                $rows[] = [
-                    'product_id'          => $pid,
-                    'forecast_month'      => (int) $month->format('n'),
-                    'forecast_year'       => (int) $month->format('Y'),
-                    'method'              => 'weighted_avg',
-                    'forecasted_quantity' => max(0, $forecast),
-                    'confidence_level'    => $this->rand(70, 95),
-                    'actual_quantity'     => max(0, $actual),
-                    'variance'            => $actual - $forecast,
-                    'created_by'          => $admin->id,
-                    'created_at'          => $month,
-                    'updated_at'          => $month,
-                ];
+        // Past forecasts are computed before their period, then reconciled
+        // against confirmed sales orders. No synthetic actuals are inserted.
+        for ($offset = 0; $offset < 12; $offset++) {
+            $month = $start->addMonthsNoOverflow($offset);
+            foreach ($products as $productId) {
+                $written += $forecasting->compute(
+                    (int) $productId,
+                    null,
+                    $month->year,
+                    $month->month,
+                    DemandForecast::METHOD_WEIGHTED_AVG,
+                    6,
+                    $admin,
+                ) !== null ? 1 : 0;
             }
         }
 
-        foreach (array_chunk($rows, 200) as $chunk) {
-            DB::table('demand_forecasts')->insert($chunk);
+        // Future periods use the same production path; manual overrides remain intact.
+        for ($offset = 1; $offset <= 3; $offset++) {
+            $month = $currentMonth->addMonthsNoOverflow($offset);
+            foreach ($products as $productId) {
+                $written += $forecasting->compute(
+                    (int) $productId,
+                    null,
+                    $month->year,
+                    $month->month,
+                    DemandForecast::METHOD_WEIGHTED_AVG,
+                    6,
+                    $admin,
+                ) !== null ? 1 : 0;
+            }
         }
 
-        $this->command?->info('[Realistic] Seeded ' . count($rows) . ' demand-forecast rows.');
+        // Older demo runs stored random actuals; recompute generated history from confirmed orders.
+        DemandForecast::query()
+            ->whereIn('product_id', $products)
+            ->whereNull('customer_id')
+            ->where('method', DemandForecast::METHOD_WEIGHTED_AVG)
+            ->whereNotNull('actual_quantity')
+            ->where(function ($query) use ($start): void {
+                $query->where('forecast_year', '>', $start->year)
+                    ->orWhere(function ($sameYear) use ($start): void {
+                        $sameYear->where('forecast_year', $start->year)
+                            ->where('forecast_month', '>=', $start->month);
+                    });
+            })
+            ->where(function ($query) use ($currentMonth): void {
+                $query->where('forecast_year', '<', $currentMonth->year)
+                    ->orWhere(function ($sameYear) use ($currentMonth): void {
+                        $sameYear->where('forecast_year', $currentMonth->year)
+                            ->where('forecast_month', '<', $currentMonth->month);
+                    });
+            })
+            ->update(['actual_quantity' => null, 'variance' => null]);
+
+        $actuals = $forecasting->reconcileActuals();
+        $this->command?->info("[Realistic] Computed {$written} forecast periods from confirmed orders; reconciled {$actuals} completed actuals.");
     }
 
     /* ─── deterministic RNG helper ──────────────────────────────────── */

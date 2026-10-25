@@ -1,0 +1,21 @@
+# DSS R5 — People and payroll decisions
+
+## Status and boundaries
+
+**Status: partial/blocked by decision below.** Covers D20–D22 and D32. Protect employee-level information. D21 remains anomaly review wording, not payroll readiness. D32 remains blocked; no individual attrition prediction.
+
+Permission evidence is from detector declarations and source routes. Inventory roles are intended audiences, not verified grants. No live role assignments or approved restricted purpose were inspected. Reapply source permissions at every detail/read/delivery boundary.
+
+## Decision gates
+
+| ID / state | Exact source owners and authorization evidence | Source verifier and clear condition | Source-derived demo setup | Meaningful tests | Promotion gate |
+|---|---|---|---|---|---|
+| D20 Partial (inventory) | `Attendance/Services/OvertimeDecisionPolicy`, `EmployeeAvailabilityService`; attendance/OT route permission and exact row scope were not confirmed in this review. | No D20 verifier. Recompute the same team/week staffing, attendance and workload scope; an aggregate count shift is not clearance. | Existing overtime request and attendance/availability records for a real applicable period; no synthetic workload/skills authority. | Policy boundary; attendance corrections; staffing/skills link; period timezone; approver permission; row visibility and no unauthorized employee detail. | Validate workload link, labor rules, attendance evidence and approval scope with owners; source verifier and isolated demo. |
+| D21 Partial | `DSS/Detectors/PayrollAnomalySummaryDetector`, `Payroll/Models/PayrollPeriod`, payroll anomaly tables; detector requires `payroll.periods.view`, role slugs `finance_officer` and `hr_officer`; live grants unresolved. | No verifier verified. Re-evaluate exact payroll period and unresolved flags under payroll permission; flag count alone does not prove period readiness. | Existing computed/approved payroll period with unresolved anomaly flags; aggregate only. | Permission denial; employee detail never leaked; resolved flag changes count; period status changes; incomplete scan; never label “clean” or ready. | Add safe source preflight evidence before any readiness wording; preserve anomaly-review-only UI and per-detector shadow gate. |
+| D22 Partial | `DSS/Detectors/TrainingExpirySummaryDetector`, HR training/certificate source; detector requires `hr.employees.trainings.manage`, emission role slug `hr_officer`; live grant unresolved. Contract/probation sources are not established by this detector. | No general verifier. Recheck exact certificate source; superseded renewal clears only the matching expiry. Contract/probation clear rules remain unresolved. | Existing current certificate approaching/at expiry with source renewal history; contract/probation only when actual source fields exist. | Renewal supersession; multiple expiry types; owner/department row scope; permission revocation; deleted source unavailable; no employee aggregate leakage. | Cover each applicable expiry source and renewal semantics; validate owner scope and exact source resolution. |
+| D32 Blocked | `Dashboard/Services/AttendanceForecastService`, attendance sources; intended purpose is restricted HR, but route permission, role grants, purpose approval and data sufficiency unresolved. | None. No forecast clear condition until restricted-purpose approval, source history, evaluation labels and aggregate privacy controls exist. | Existing de-identified/aggregate attendance history only after purpose approval; no individual employee risk example. | Access denied absent approved purpose; minimum history; aggregate small-group suppression policy; backtest/error metrics; no individual score/output. | Explicit approved restricted purpose, sufficient history, validated evaluation and aggregate-first privacy review. Individual attrition prediction stays unavailable absent separately approved evidence. |
+
+## Release protocol
+
+Maintain [readiness](../../dss/READINESS-2026-10-23.md) and [inventory](../../dss/01-decision-inventory.md) states. Focused API/service/UI tests, source-derived demo, authorization review, and verifier proof are per-decision gates. D32 cannot be promoted by model availability or employee-level data access alone.
+

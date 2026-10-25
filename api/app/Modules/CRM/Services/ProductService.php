@@ -107,7 +107,6 @@ class ProductService
             $data = $this->normalisePartNumber($data);
             $this->assertUniquePartNumber((string) $data['part_number']);
 
-            $this->assertSellingPrices($data);
             $product = Product::create($data)->fresh();
             if ($product->is_active) {
                 app(FinishedGoodInventoryService::class)->ensureItem($product);
@@ -142,18 +141,17 @@ class ProductService
             ) {
                 $this->assertCanArchive($locked);
             }
-            $financialChange = collect(['standard_cost', 'minimum_selling_price', 'base_selling_price'])->contains(fn ($field) => array_key_exists($field, $data)
-                && (($data[$field] === null) !== ($locked->{$field} === null) || ($data[$field] !== null && Money::cmp((string) $data[$field], (string) ($locked->{$field} ?? '0')) !== 0)));
+            $financialChange = array_key_exists('standard_cost', $data)
+                && Money::cmp((string) $data['standard_cost'], (string) $locked->standard_cost) !== 0;
             if ($financialChange && auth()->user() instanceof User && ! auth()->user()->hasPermission('inventory.costs.approve')) {
-                abort(403, 'Submit financial price and cost changes for Finance review.');
+                abort(403, 'Submit standard cost changes for Finance review.');
             }
-            $this->assertSellingPrices($data, $locked);
             $activated = ! $locked->is_active && ($data['is_active'] ?? false);
             $locked->update($data);
             if ($activated) {
                 app(FinishedGoodInventoryService::class)->ensureItem($locked);
             }
-            if ($locked->wasChanged(['base_selling_price', 'minimum_selling_price', 'standard_cost'])) {
+            if ($locked->wasChanged('standard_cost')) {
                 app(PricingReviewService::class)->request([(int) $locked->id], 'product_prices_changed');
             }
             return $locked->fresh()->load('portalCustomers:id,name');
@@ -166,6 +164,39 @@ class ProductService
             $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
             $locked->update(['portal_visibility' => $data['portal_visibility']]);
             $locked->portalCustomers()->sync($data['portal_customer_ids']);
+
+            return $locked->fresh()->load('portalCustomers:id,name');
+        });
+    }
+
+    public function updateSellingPrices(Product $product, User $by, array $data): Product
+    {
+        abort_unless($by->hasPermission('crm.products.prices.manage'), 403);
+
+        return DB::transaction(function () use ($product, $data): Product {
+            $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
+            if (! $locked->is_active) {
+                throw new BusinessRuleException('Activate this product before changing selling prices.');
+            }
+            $this->assertSellingPrices($data, $locked);
+
+            if ($data['base_selling_price'] !== null || $data['minimum_selling_price'] !== null) {
+                $cost = app(PriceNegotiationService::class)->reviewCost($locked);
+                if ($cost['incomplete']) {
+                    throw new BusinessRuleException('Manufacturing cost is incomplete. PPC must configure routing, operation rates, time and component costs before Sales can set prices.');
+                }
+                if ($data['minimum_selling_price'] !== null && Money::lt($data['minimum_selling_price'], $cost['cost'])) {
+                    throw ValidationException::withMessages(['minimum_selling_price' => ['Minimum selling price cannot be below the current unit cost ('.Money::round2($cost['cost']).').']]);
+                }
+                if ($data['base_selling_price'] !== null && Money::lte($data['base_selling_price'], $cost['cost'])) {
+                    throw ValidationException::withMessages(['base_selling_price' => ['Base selling price must exceed the current unit cost ('.Money::round2($cost['cost']).').']]);
+                }
+            }
+
+            $locked->update($data);
+            if ($locked->wasChanged(['base_selling_price', 'minimum_selling_price'])) {
+                app(PricingReviewService::class)->request([(int) $locked->id], 'product_prices_changed');
+            }
 
             return $locked->fresh()->load('portalCustomers:id,name');
         });
@@ -300,11 +331,10 @@ class ProductService
             if (! $row->is_active || $row->financial_change_request !== null) {
                 throw new BusinessRuleException('Product is inactive or already has a financial change awaiting review.');
             }
-            $values = array_intersect_key($data, array_flip(['standard_cost', 'minimum_selling_price', 'base_selling_price']));
-            $this->assertSellingPrices($values, $row);
-            $row->forceFill(['financial_change_request' => ['id' => (string) Str::uuid(), 'values' => $values, 'notes' => $data['notes'], 'proposed_by' => $by->id, 'original' => $row->only(['standard_cost', 'minimum_selling_price', 'base_selling_price'])]])->save();
+            $values = ['standard_cost' => $data['standard_cost']];
+            $row->forceFill(['financial_change_request' => ['id' => (string) Str::uuid(), 'values' => $values, 'notes' => $data['notes'], 'proposed_by' => $by->id, 'original' => $row->only(['standard_cost'])]])->save();
             $users = User::where('is_active', true)->get()->filter(fn ($u) => $u->hasPermission('inventory.costs.approve'));
-            app(NotificationService::class)->sendInApp($users, 'pricing.review_required', ['title' => 'Financial price review: '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$row->financial_change_request['id']);
+            app(NotificationService::class)->sendInApp($users, 'pricing.review_required', ['title' => 'Standard cost review: '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$row->financial_change_request['id']);
 
             return $this->show($row);
         });
@@ -324,21 +354,21 @@ class ProductService
                 abort(403, 'A different Finance reviewer must decide this proposal.');
             }
             if ($data['decision'] === 'approve') {
-                $original = $proposal['original'];
-                $current = $row->only(['standard_cost', 'minimum_selling_price', 'base_selling_price']);
+                $original = array_intersect_key($proposal['original'], ['standard_cost' => true]);
+                $current = $row->only(['standard_cost']);
                 ksort($original);
                 ksort($current);
                 if ($original !== $current) {
-                    throw new BusinessRuleException('Financial values changed after proposal. Reject and submit current values.');
+                    throw new BusinessRuleException('Standard cost changed after proposal. Reject and submit the current value.');
                 }
-                $this->update($row, $proposal['values']);
+                $this->update($row, array_intersect_key($proposal['values'], ['standard_cost' => true]));
             }
             $row->forceFill(['financial_change_request' => [...$proposal, 'decision' => $data['decision'], 'decision_notes' => $data['notes'], 'reviewed_by' => $by->hash_id, 'reviewed_at' => now()->toISOString()]])->save();
             $row->forceFill(['financial_change_request' => null])->save();
             // HasAuditLog preserves the proposal, decision actor and changed values.
             $user = User::find($proposal['proposed_by']);
             if ($user && $user->is_active) {
-                app(NotificationService::class)->sendInApp($user, 'pricing.review_required', ['title' => 'Financial proposal '.$data['decision'].': '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$proposal['id'].':'.$data['decision']);
+                app(NotificationService::class)->sendInApp($user, 'pricing.review_required', ['title' => 'Standard cost proposal '.$data['decision'].': '.$row->part_number, 'message' => $data['notes'], 'link_to' => '/crm/products/'.$row->hash_id], 'pricing:financial:'.$proposal['id'].':'.$data['decision']);
             }
 
             return $this->show($row->fresh());

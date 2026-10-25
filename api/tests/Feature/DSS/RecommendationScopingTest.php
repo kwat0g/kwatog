@@ -155,6 +155,10 @@ class RecommendationScopingTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($user, 'sanctum')
+            ->getJson("/api/v1/dss/recommendations/{$hidden->id}/events")
+            ->assertForbidden();
+
+        $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/dss/recommendations/{$hidden->id}/actions", ['action' => 'accept'])
             ->assertForbidden();
     }
@@ -195,6 +199,27 @@ class RecommendationScopingTest extends TestCase
             ->assertJsonFragment(['id' => $restricted->hash_id]);
     }
 
+    public function test_master_hygiene_recommendations_follow_each_source_read_permission(): void
+    {
+        app(DssParameterService::class)->set('dss.master_hygiene', 'mode', 'advisory');
+        $inventoryGap = $this->makeRecommendation('dss.master_hygiene');
+        $inventoryGap->forceFill(['owner_permissions' => ['inventory.items.manage']])->save();
+        $bomGap = $this->makeRecommendation('dss.master_hygiene');
+        $bomGap->forceFill(['owner_permissions' => ['mrp.boms.view']])->save();
+        $inventoryUser = $this->userWithPermissions(['dss.view', 'inventory.items.manage']);
+
+        $this->actingAs($inventoryUser, 'sanctum')
+            ->getJson('/api/v1/dss/recommendations')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonFragment(['id' => $inventoryGap->hash_id])
+            ->assertJsonMissing(['id' => $bomGap->hash_id]);
+
+        $this->actingAs($inventoryUser, 'sanctum')
+            ->getJson("/api/v1/dss/recommendations/{$bomGap->id}")
+            ->assertForbidden();
+    }
+
     public function test_owner_roles_are_applied_per_recommendation(): void
     {
         $hr = User::factory()->withRole('hr_officer')->create(['is_active' => true]);
@@ -208,6 +233,9 @@ class RecommendationScopingTest extends TestCase
             ->assertJsonPath('meta.total', 0);
         $this->actingAs($finance, 'sanctum')
             ->getJson("/api/v1/dss/recommendations/{$restricted->id}")
+            ->assertForbidden();
+        $this->actingAs($finance, 'sanctum')
+            ->getJson("/api/v1/dss/recommendations/{$restricted->id}/events")
             ->assertForbidden();
 
         $this->actingAs($hr, 'sanctum')
@@ -243,12 +271,12 @@ class RecommendationScopingTest extends TestCase
         $this->actingAs($viewer, 'sanctum')
             ->getJson('/api/v1/dss/recommendations')
             ->assertOk()
-            ->assertJsonPath('data.0.source_references', [[
+            ->assertJsonFragment([
                 'source_kind' => 'work_order',
                 'public_id' => 'wo_hash',
                 'display_reference' => 'WO-42',
                 'destination' => '/production/work-orders/wo_hash',
-            ]])
+            ])
             ->assertJsonPath('data.0.decision_code', 'work_order.intervention')
             ->assertJsonPath('data.0.policy_version', '2')
             ->assertJsonPath('data.0.resolution_evidence', null)
@@ -259,7 +287,7 @@ class RecommendationScopingTest extends TestCase
         $this->actingAs($viewer, 'sanctum')
             ->getJson('/api/v1/dss/recommendations')
             ->assertOk()
-            ->assertJsonPath('data.0.resolution_evidence', [
+            ->assertJsonFragment([
                 'condition' => 'Production deadline',
                 'verification_method' => 'Work order status',
                 'proof' => 'Work order is no longer active.',
@@ -311,12 +339,12 @@ class RecommendationScopingTest extends TestCase
         $this->actingAs($salesViewer, 'sanctum')
             ->getJson('/api/v1/dss/recommendations')
             ->assertOk()
-            ->assertJsonPath('data.0.source_references', [[
+            ->assertJsonFragment([
                 'source_kind' => 'sales_order',
                 'public_id' => 'order_hash',
                 'display_reference' => 'SO-42',
                 'destination' => '/crm/sales-orders/order_hash',
-            ]]);
+            ]);
     }
 
     public function test_disabled_detector_recommendations_are_hidden(): void

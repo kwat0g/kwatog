@@ -24,8 +24,6 @@ vi.mock('@/api/dss', () => ({
   },
 }));
 
-vi.mock('@/hooks/useMediaQuery', () => ({ useMediaQuery: () => false }));
-
 const options: RecommendationOptions = {
   domains: [{ value: 'inventory', label: 'Inventory' }],
   owner_roles: [{ value: 'operations', label: 'Operations' }],
@@ -61,7 +59,12 @@ function coverage(overrides: Partial<DssCoverage> = {}): DssCoverage {
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="location">{location.pathname}{location.search}</output>;
+  return (
+    <output data-testid="location">
+      {location.pathname}
+      {location.search}
+    </output>
+  );
 }
 
 function renderPage(path = '/decision-center') {
@@ -128,16 +131,23 @@ describe('Decision Center', () => {
     renderPage();
 
     expect(await screen.findByRole('table')).toBeVisible();
+    expect(
+      screen.getByPlaceholderText(
+        'Search decisions, customers, work orders, bills, POs, NCRs, inspections, lots, or documents…',
+      ),
+    ).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Decision' })).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Business impact' })).toBeVisible();
-    expect(screen.getByRole('link', { name: /Confirmed delivery awaiting customer invoice/ })).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: /Confirmed delivery awaiting customer invoice/ }),
+    ).toBeVisible();
     expect(screen.getByText('Connected workflows')).toBeVisible();
     expect(screen.getByRole('cell', { name: 'New' })).toBeVisible();
     expect(document.body).not.toHaveTextContent(/dss\.chain_bottlenecks|\{"rule"|100%|1\.0000/);
   });
 
-  it('opens the shared desktop panel through the id query and closes back to the row with filters intact', async () => {
+  it('opens the recommendation page and keeps list filters in its return URL', async () => {
     vi.mocked(dssApi.list).mockResolvedValue(result([recommendationFixture()]));
     renderPage('/decision-center?severity=critical&page=2&per_page=50');
 
@@ -146,34 +156,42 @@ describe('Decision Center', () => {
     });
     fireEvent.click(rowLink);
 
-    expect(await screen.findByRole('button', { name: 'Close recommendation details' })).toBeVisible();
     expect(screen.getByTestId('location')).toHaveTextContent(
-      /\/decision-center\?severity=critical&page=2&per_page=50&id=rec-1/,
+      '/decision-center/rec-1?severity=critical&page=2&per_page=50',
     );
     expect(dssApi.show).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close recommendation details' }));
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/decision-center?severity=critical&page=2&per_page=50'));
-    await waitFor(() => expect(rowLink).toHaveFocus());
   });
 
-  it('keeps a selected recommendation visible when filters produce no list rows', async () => {
+  it('redirects legacy selected-id URLs to the recommendation page', async () => {
     renderPage('/decision-center?severity=critical&id=rec-1');
 
-    expect(await screen.findByRole('heading', { name: 'No Critical recommendations' })).toBeVisible();
-    expect(await screen.findByRole('heading', { name: /Confirmed delivery awaiting customer invoice/ })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Close recommendation details' })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/decision-center/rec-1?severity=critical',
+      ),
+    );
+    expect(dssApi.show).not.toHaveBeenCalled();
   });
 
   it('clears stale domain and owner filters before requesting the list', async () => {
-    renderPage('/decision-center?domain=removed-area&owner_role=removed-team&severity=warning&page=4');
+    renderPage(
+      '/decision-center?domain=removed-area&owner_role=removed-team&severity=warning&page=4',
+    );
 
     await screen.findByRole('status');
     await waitFor(() => expect(dssApi.list).toHaveBeenCalledTimes(1));
     expect(dssApi.list).toHaveBeenCalledWith(
-      expect.objectContaining({ domain: undefined, owner_role: undefined, severity: 'warning', page: 1 }),
+      expect.objectContaining({
+        domain: undefined,
+        owner_role: undefined,
+        severity: 'warning',
+        page: 1,
+      }),
     );
-    expect(vi.mocked(dssApi.list).mock.calls[0]?.[0]).not.toMatchObject({ domain: 'removed-area', owner_role: 'removed-team' });
+    expect(vi.mocked(dssApi.list).mock.calls[0]?.[0]).not.toMatchObject({
+      domain: 'removed-area',
+      owner_role: 'removed-team',
+    });
     expect(screen.getByTestId('location')).not.toHaveTextContent(/removed-area|removed-team/);
   });
 
@@ -183,12 +201,20 @@ describe('Decision Center', () => {
       .mockResolvedValueOnce(coverage({ advisory_detectors: 1, shadow_detectors: 1 }));
     renderPage();
 
-    expect(await screen.findByText('Decision check health is unavailable. Recommendation visibility is unchanged.')).toBeVisible();
+    expect(
+      await screen.findByText(
+        'Decision check health is unavailable. Recommendation visibility is unchanged.',
+      ),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Retry health' }));
 
     await waitFor(() => expect(dssApi.coverage).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/1 checks are publishing advice/)).toBeVisible();
-    expect(screen.queryByText('Decision check health is unavailable. Recommendation visibility is unchanged.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Decision check health is unavailable. Recommendation visibility is unchanged.',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('hides cached recommendations after a refresh fails', async () => {
@@ -200,7 +226,11 @@ describe('Decision Center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Decision Center' }));
 
-    expect(await screen.findByRole('heading', { name: 'Failed to load recommendations' })).toBeVisible();
-    expect(screen.queryByRole('link', { name: /Confirmed delivery awaiting customer invoice/ })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Failed to load recommendations' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: /Confirmed delivery awaiting customer invoice/ }),
+    ).not.toBeInTheDocument();
   });
 });

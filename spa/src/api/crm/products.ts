@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Product, CreateProductData, UpdateProductData } from '@/types/crm';
+import type { Product, CreateProductData, UpdateProductData, UpdateProductSellingPricesData } from '@/types/crm';
 
 export interface ProductListParams extends ListParams {
   is_active?: boolean | string;
@@ -30,6 +30,8 @@ export const productsApi = {
     client.put<ApiSuccess<Product>>(`/crm/products/${id}`, data).then((r) => r.data.data),
   updateCustomerAccess: (id: string, data: { portal_visibility: 'standard' | 'restricted'; portal_customer_ids: string[] }) =>
     client.put<ApiSuccess<Product>>(`/crm/products/${id}/customer-access`, data).then((r) => r.data.data),
+  updateSellingPrices: (id: string, data: UpdateProductSellingPricesData) =>
+    client.put<ApiSuccess<Product>>(`/crm/products/${id}/selling-prices`, data).then((r) => r.data.data),
   uploadImage: (id: string, file: File) => {
     const data = new FormData();
     data.append('image', file);
@@ -41,8 +43,6 @@ export const productsApi = {
     id: string,
     data: {
       standard_cost: string;
-      minimum_selling_price: string | null;
-      base_selling_price: string | null;
       notes: string;
     },
   ) => client.post(`/crm/products/${id}/financial-proposal`, data),

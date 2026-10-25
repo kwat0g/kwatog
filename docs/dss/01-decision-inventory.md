@@ -5,6 +5,8 @@ Scoring: V=value, D=data readiness, E=effort, R=risk-if-wrong (flags validation 
 assumption-heavy cells marked `*`. Types: O=operational, T=tactical, S=strategic.
 Support today: N=none, P=partial, E=existing (ref).
 
+Readiness for every catalogued decision is in [READINESS-2026-10-23.md](READINESS-2026-10-23.md): 25 partial, 8 blocked, 0 ready. Domain implementation gates: [planning/purchasing/inventory](../superpowers/plans/2026-10-23-dss-planning-purchasing-inventory.md), [finance/commercial](../superpowers/plans/2026-10-23-dss-finance-commercial.md), [quality/returns](../superpowers/plans/2026-10-23-dss-quality-returns.md), [maintenance/assets](../superpowers/plans/2026-10-23-dss-maintenance-assets.md), [people/payroll](../superpowers/plans/2026-10-23-dss-people-payroll.md). Inventory support labels are baseline catalog values; readiness states remain authoritative.
+
 ## Decision catalog
 
 | ID | Decision ("…?") | Module/chain | Roles | Freq | Support | Type → capability | V | D | E | R | Pri |

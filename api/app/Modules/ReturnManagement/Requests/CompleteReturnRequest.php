@@ -6,6 +6,9 @@ namespace App\Modules\ReturnManagement\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -20,8 +23,16 @@ class CompleteReturnRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->can('return_management.complete') === true
-            || $this->user()?->can('return_management.manage') === true;
+        $user = $this->user();
+        $rma = $this->route('returnRequest');
+        if ($rma instanceof ReturnRequest
+            && $rma->type === ReturnRequestType::SupplierReturn
+            && ReturnManagementAccess::customerReturnsOnly($user)) {
+            return false;
+        }
+
+        return $user?->can('return_management.complete') === true
+            || $user?->can('return_management.manage') === true;
     }
 
     protected function hashIdFields(): array
