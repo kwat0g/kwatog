@@ -125,6 +125,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 
 ## Separate finding fix: F-09 pending-QC GRN badge parity
 
+- PR [#353](https://github.com/kwat0g/kwatog/pull/353) is a draft stacked on #352.
 - `GoodsReceiptNote::pendingQc()` now defines the shared count/list condition. The `pending_grn` badge and GRN list's `status=pending_qc` filter use that scope; warehouse staff badge permission matches the list route's `inventory.view` gate.
 - A positive GRN badge opens `/inventory/grn?status=pending_qc`. Phase 2's route entry now matches the SPA's real query parameter; `signal=pending_qc` was not a supported filter.
 - `BadgeControllerTest::test_pending_grn_badge_matches_the_filtered_receipt_list`: **1 passed / 6 assertions**, comparing the warehouse user's badge count with the filtered list total and returned statuses. `Sidebar.behavior.test.tsx`: **25 passed**.
