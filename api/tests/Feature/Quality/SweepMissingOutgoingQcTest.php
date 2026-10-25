@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Quality;
 
 use App\Console\Commands\SweepMissingOutgoingQc;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -17,6 +18,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\InspectionService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -38,6 +40,7 @@ class SweepMissingOutgoingQcTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -152,6 +155,12 @@ class SweepMissingOutgoingQcTest extends TestCase
 
     public function test_escalates_a_wo_that_cannot_be_repaired_and_notifies_the_qc_roles(): void
     {
+        $this->assertDatabaseHas('settings', ['key' => 'quality.outgoing_qc.notification_roles']);
+        app(SettingsService::class)->set('quality.outgoing_qc.notification_roles', ['qc_inspector', 'production_manager'], 'quality');
+        $productionManager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            'is_active' => true,
+        ]);
         // No active spec: the stateful refusal the sweep must escalate, not swallow.
         InspectionSpec::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
         $wo = $this->completedWoWithOutput();
@@ -164,7 +173,33 @@ class SweepMissingOutgoingQcTest extends TestCase
             ->count());
 
         // NotificationService writes the database channel directly.
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $this->user->id,
+        ]);
         $this->assertDatabaseHas('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $productionManager->id,
+        ]);
+    }
+
+    public function test_escalation_falls_back_to_admin_when_no_configured_role_can_open_work_orders(): void
+    {
+        app(SettingsService::class)->set('quality.outgoing_qc.notification_roles', ['qc_inspector'], 'quality');
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'is_active' => true,
+        ]);
+        InspectionSpec::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
+        $this->completedWoWithOutput();
+
+        $this->artisan(SweepMissingOutgoingQc::class)->assertSuccessful();
+
+        $this->assertDatabaseHas('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $admin->id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
             'type' => 'chain.outgoing_qc_missing',
             'notifiable_id' => $this->user->id,
         ]);
