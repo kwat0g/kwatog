@@ -142,6 +142,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include other notif
 - Production work-order, machine, and payroll-period channels now require the matching list permission and an existing subject. Chain channels decode the subject ID, fail closed when an entity type has no broadcaster model mapping, and use `ApprovalSourceScope` for purchase request/order visibility; other chain entities have no additional row scope in their corresponding list/detail paths.
 - `BroadcastAuthorizationTest`: **7 passed / 17 assertions**, including department-head positive and cross-department negative PR/PO access, plus existing/missing work-order, machine, payroll-period, and work-order chain subjects.
 - This aligns channels with existing route scopes. Work-order, machine, and payroll visibility remains permission-wide, as in their list/detail endpoints. Tests did not exercise every role or all eight chain entity types.
+- PR #345 backend CI fails before PHPUnit on the known `PdfRenderService::ensureDompdfDirs()` duplicate (F-22); `finding-lifecycle` passes. Local channel tests pass.
 
 ## Separate finding fix: F-15 queue long-wait destination
 
