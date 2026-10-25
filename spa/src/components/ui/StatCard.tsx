@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { LuArrowDown, LuArrowUp } from '@/lib/icons';
 
 interface StatCardProps {
   label: string;
@@ -39,7 +40,7 @@ const deltaColor = {
   },
 } as const;
 
-const deltaArrow = { up: '↑', down: '↓', neutral: '·' } as const;
+const deltaText = { up: 'Increase', down: 'Decrease', neutral: 'No change' } as const;
 
 export function StatCard({
   label,
@@ -85,7 +86,17 @@ export function StatCard({
             deltaColor[polarity][delta.direction],
           )}
         >
-          {deltaArrow[delta.direction]} {delta.value}
+          <span className="sr-only">{deltaText[delta.direction]} </span>
+          <span className="inline-flex items-center gap-1">
+            {delta.direction === 'up' ? (
+              <LuArrowUp size={12} aria-hidden />
+            ) : delta.direction === 'down' ? (
+              <LuArrowDown size={12} aria-hidden />
+            ) : (
+              <span aria-hidden>·</span>
+            )}
+            {delta.value}
+          </span>
         </div>
       )}
       {!delta && helper && <div className="text-caption text-muted mt-1">{helper}</div>}
