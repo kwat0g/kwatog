@@ -272,6 +272,38 @@ class BillService
                 }
             }
 
+            // Optional PO link + three-way match.
+            $poId = null;
+            $hasVariances = false;
+            $matchSnapshot = null;
+            if (! empty($data['purchase_order_id'])) {
+                $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
+                    ?? (int) $data['purchase_order_id'];
+                if ($this->threeWayMatch && $poId) {
+                    $po = PurchaseOrder::query()->with(['items.item'])->findOrFail($poId);
+                    [$itemsForMatch] = $this->normalizeItems($data['items'] ?? []);
+                    // Reshape lines for three-way matcher.
+                    $billLines = [];
+                    foreach ($po->items as $idx => $poi) {
+                        $li = $itemsForMatch[$idx] ?? null;
+                        if (! $li) continue;
+                        $billLines[(string) $poi->item_id] = [
+                            'item_id'     => null,
+                            'description' => $li['description'],
+                            'quantity'    => $li['quantity'] ?? '0',
+                            'unit_price'  => $li['unit_price'] ?? '0',
+                        ];
+                    }
+                    $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
+                    $allowOverride = (bool) ($data['allow_override'] ?? false);
+                    if ($result->overallStatus === 'blocked' && ! $allowOverride) {
+                        throw new ThreeWayMatchException('3-way match blocked by variance.', $result->toArray());
+                    }
+                    $hasVariances = $result->overallStatus !== 'matched';
+                    $matchSnapshot = $result->toArray();
+                }
+            }
+
             $bill = Bill::create([
                 'bill_number' => $data['bill_number'],
                 'vendor_id' => $vendor->id,
