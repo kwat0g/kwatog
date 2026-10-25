@@ -3,7 +3,7 @@
  * user is authenticated but lacks the route-level permission.
  */
 import { Link } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
+import { LuShieldAlert as ShieldAlert } from '@/lib/icons';
 import { Button } from '@/components/ui/Button';
 
 interface ForbiddenPageProps {
