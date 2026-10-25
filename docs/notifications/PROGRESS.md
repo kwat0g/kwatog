@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #358 removes record data from shared production and maintenance dashboard broadcasts. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes copy and safe no-link behavior for permission-change notices. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -124,6 +124,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `DashboardBroadcastPayloadTest`: **1 passed / 8 assertions**. The plan event's focused outbox test: **1 passed / 3 assertions**, retaining the active/cancelled delivery guard. The SPA `record-output.test.tsx`: **5 passed**. Pint, ESLint, and `git diff --check` passed.
 - Payroll progress channel uses `payroll.periods.view`, matching the period detail endpoint's current gate. Its progress counts/status payload is unchanged; the sensitive HR/Finance audience question remains open.
 - PR [#358](https://github.com/kwat0g/kwatog/pull/358): `finding-lifecycle`, accessibility, and visual baselines pass. API CI stops before PHPStan/PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration). SPA CI stops at dependency audit (2 moderate, 2 high vulnerabilities), skipping lint/typecheck/Vitest/build. Locally, the targeted API tests, SPA test, Pint, ESLint, and diff check pass; full SPA typecheck reports existing errors outside the changed page.
+
+## Separate finding fix: F-15 permission-override notice copy
+
+- Permission-change notices use the permission's display name and describe the rule as allowing or blocking access. They tell the affected user to contact a system administrator if unexpected; no link is included because the only matching admin user page requires `admin.users.manage`, and no self-service override page exists.
+- Audience stays unchanged: the affected user receives each notice; the system administrator who made the change does not.
+- `PermissionOverrideNotificationCopyTest`: **1 passed / 29 assertions**, covering add, update, remove, restore, no-link copy, raw slug/enum exclusion, and actor exclusion. Pint and `git diff --check` pass.
+- Queue long-wait link remains in separate PR [#346](https://github.com/kwat0g/kwatog/pull/346); verify it before marking F-15 fully closed.
 
 ## Separate finding fix: F-02 approval badge scope
 
