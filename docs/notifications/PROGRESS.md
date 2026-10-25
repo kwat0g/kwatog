@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #351 tightens sales-order notice access and deep links. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #352 removes sales-order detail data from the shared production broadcast. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -108,8 +108,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 
 - Configured planners must hold both `production.schedule.view` and `crm.sales_orders.view`. When the confirming user is captured, the order creator also receives the notice if they can open the order; the confirmer is excluded. Legacy outbox payloads default actor to null and do not notify the creator. The record link, order number, subject fields, and per-confirmation dedupe key are included.
 - `OutboxFactEventToleranceTest.php`: **11 passed / 30 assertions**, including exact route/payload, duplicate delivery, creator and actor targeting, legacy payload compatibility, and negative permission cases. Pint passed on the event, listener, and test; PHP syntax passed on all four changed PHP files.
-- PR #351 is stacked on #350. `created_by` is the only active user ownership relation; `sales_rep_id` exists in schema but no application writer/reader was found. Confirm whether imported/nonstandard sales-representative values should also receive notices. The broader `production.dashboard` event channel remains F-12.
-- CI for #351 was not yet available when recorded. F-22 remains a backend CI blocker on earlier PRs.
+- PR #351 is stacked on #350. `created_by` is the only active user ownership relation; `sales_rep_id` exists in schema but no application writer/reader was found. Confirm whether imported/nonstandard sales-representative values should also receive notices.
+- PR #351 `finding-lifecycle` passes; API CI fails before PHPUnit on F-22, duplicate `PdfRenderService::ensureDompdfDirs()`.
+
+## Separate finding fix: F-12 sales-order broadcast payload
+
+- `SalesOrderConfirmed` still broadcasts on the shared private `production.dashboard` channel, but now sends only `{ refresh: true }`. The SPA handler ignores event payload and invalidates production dashboard queries, so no order number, customer, or amount is needed.
+- `OutboxFactEventToleranceTest.php`: **12 passed / 33 assertions**, including the private channel and exact `refresh`-only payload. Pint and PHP syntax checks passed.
+- PR #352 is stacked on #351. CI was pending at last check. Broader subject-channel authorization and payroll metadata review remain open.
 
 ## Separate finding fix: F-02 approval badge scope
 
