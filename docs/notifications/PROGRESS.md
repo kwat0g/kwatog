@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #342, stacked after PR #341.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #343, stacked after PR #342.
 
 ## Phase status
 
@@ -31,6 +31,7 @@
 | F-01. Profile-request badge route and query parity | `notifications/fix-profile-request-badge-route` | [#340](https://github.com/kwat0g/kwatog/pull/340) | `93c0f12c` |
 | F-18. Pricing notification role allow-list | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | `9e9243a0` |
 | F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | `9fc19063` |
+| F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | `673e3f5c` |
 
 ## Coverage ledger
 
@@ -49,7 +50,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include notification links/UI behavior and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -121,6 +122,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include missing met
 - The inquiry badge now counts only `ContactInquiryStatus::New`, the state that has not entered the triage workflow. `ContactInquiryInboxService::listQuery()` powers both the badge and list; the sidebar opens `/crm/inquiries?status=new`. Query-aware active-link and recent-page matching preserve navigation behavior with the filter.
 - Targeted parity test: `BadgeControllerTest::test_inquiries_badge_matches_the_new_inquiry_list_filter` **1 passed / 4 assertions** for `customer_service_officer`; it excludes `in_progress` and `closed`. Sidebar permission and behavior tests: **46 passed** across two files. PHP syntax and `git diff --check` pass.
 - Six orphan definitions remain and are still deferred until each has a verified destination filter; training's two signals also need multi-signal UI.
+
+## Separate finding fix: F-06 notification event catalog
+
+- Added preferences catalog and frontend metadata for `supplier.shipment_late`, `quality.late_incoming`, and all four emitted `production.rework` states. Rework notification titles now display human labels instead of enum-like state text. Recipient selection and event timing are unchanged.
+- API: `NotificationCatalogTest` **8 passed / 58 assertions**; `WorkOrderInlineReworkTest::test_resolved_wo_closes_automatically_once_with_notification` **1 passed / 6 assertions**. SPA `notificationMeta.test.ts`: **15 passed**.
+- PHP syntax and `git diff --check` pass. Frontend typecheck and full suites were not run.
+- Existing recipient scope questions remain open; this metadata fix does not prove role isolation.
 
 ## Outstanding proof / risks
 
