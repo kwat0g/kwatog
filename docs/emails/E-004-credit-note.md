@@ -19,6 +19,7 @@ Status: ready for draft PR; accountant review required before external productio
 - Temporary customer/supplier render fixture: 1 test passed, 2 assertions. No mail transport contacted and no real email sent.
 - Re-rendered both existing HTML fixtures with the current landing-page logo's light/dark PNG variants; no mail transport was contacted. Both audience variants inspected at 1440px desktop and 390px mobile, in light/dark schemes. Document width matched viewport in both; long currency values wrap across lines on mobile without clipping. Customer HTML: 24,835 bytes; supplier HTML: 24,825 bytes.
 - Screenshots: [customer desktop light](screenshots/credit-note-customer-desktop-light.png), [customer desktop dark](screenshots/credit-note-customer-desktop-dark.png), [customer mobile light](screenshots/credit-note-customer-mobile-light.png), [customer mobile dark](screenshots/credit-note-customer-mobile-dark.png), [supplier desktop light](screenshots/credit-note-supplier-desktop-light.png), [supplier desktop dark](screenshots/credit-note-supplier-desktop-dark.png), [supplier mobile light](screenshots/credit-note-supplier-mobile-light.png), [supplier mobile dark](screenshots/credit-note-supplier-mobile-dark.png).
+- Re-inspected all eight customer/supplier captures: no clipping; values remain readable on mobile. Amounts use `PHP`; EF-120 / PR #319 corrects the shared formatter.
 - Browser previews do not prove Gmail, Outlook, Apple Mail, Yahoo, or mobile mail-client rendering. Footer preview uses test database branding values.
 
 ## Review still required
