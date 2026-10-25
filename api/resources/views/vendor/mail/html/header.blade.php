@@ -8,7 +8,7 @@
 </tr>
 <tr>
 <td class="header" style="padding: 26px 32px 24px; background-color: #ffffff; text-align: center;">
-<a href="{{ $brandUrl }}" style="display: inline-block; color: #17202a; text-decoration: none;">
+<a href="{{ $brandUrl }}" style="display: inline-block; color: #1f1b16; text-decoration: none;">
 <table cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto;">
 <tr>
 @if ($logoCid)
@@ -22,8 +22,8 @@
 </td>
 @endif
 <td valign="middle" align="left">
-<div class="brand-name" style="color: #17202a; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15;">{{ $brand['name'] }}</div>
-<div class="brand-tagline" style="margin-top: 4px; color: #667085; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 1.3; text-transform: uppercase;">Business portal</div>
+<div class="brand-name" style="color: #1f1b16; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15;">{{ $brand['name'] }}</div>
+<div class="brand-tagline" style="margin-top: 4px; color: #6b6259; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; line-height: 1.3; text-transform: uppercase;">Business portal</div>
 </td>
 </tr>
 </table>
