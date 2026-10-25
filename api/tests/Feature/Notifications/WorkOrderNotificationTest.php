@@ -53,14 +53,17 @@ class WorkOrderNotificationTest extends TestCase
 
         $listener = app(NotifyOnWorkOrderCompleted::class);
         $listener->handle(new WorkOrderCompleted($wo));
+        $listener->handle(new WorkOrderCompleted($wo));
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $ppc->id,
             'type'          => 'production.wo_completed',
+            'dedupe_key'    => 'production.wo_completed:'.$wo->hash_id,
         ]);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $pm->id,
             'type'          => 'production.wo_completed',
+            'dedupe_key'    => 'production.wo_completed:'.$wo->hash_id,
         ]);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $revokedPpc->id,

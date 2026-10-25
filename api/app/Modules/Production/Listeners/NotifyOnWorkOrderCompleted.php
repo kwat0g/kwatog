@@ -36,7 +36,7 @@ class NotifyOnWorkOrderCompleted implements ShouldQueue
                 'link_to' => "/production/work-orders/{$wo->hash_id}",
                 'entity_type' => 'work_order',
                 'entity_id' => $wo->hash_id,
-            ]);
+            ], 'production.wo_completed:'.$wo->hash_id);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnWorkOrderCompleted failed', ['error' => $e->getMessage()]);
             throw $e;
