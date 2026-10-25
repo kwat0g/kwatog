@@ -53,7 +53,7 @@ export function PartReconciliationPanel({
         {order.part_requests.map((request) => <li key={request.id} className="rounded-md bg-surface p-3 text-sm">
           <p className="font-medium">{request.item_code} · {request.quantity} {request.unit}</p>
           <p className="text-xs text-muted">{request.location} · {request.status === 'requested' ? 'Awaiting Warehouse handover' : request.status === 'handed_over' ? 'Handed over' : 'Withdrawn'}</p>
-          {request.status === 'requested' && order.can_record_work && <Button size="sm" className="mt-2" onClick={async () => {
+          {request.status === 'requested' && order.can_record_work && <Button variant="danger" size="sm" className="mt-2" onClick={async () => {
             try {
               await workOrdersApi.withdrawPartRequest(order.id, request.id);
               await queryClient.invalidateQueries({ queryKey: ['maintenance', 'work-order', order.id] });
