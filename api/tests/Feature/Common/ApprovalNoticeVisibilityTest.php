@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Common;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalService;
 use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\Permission;
@@ -14,6 +15,8 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Mockery;
 use Tests\TestCase;
 
 class ApprovalNoticeVisibilityTest extends TestCase
@@ -39,6 +42,21 @@ class ApprovalNoticeVisibilityTest extends TestCase
         $roleId = Role::query()->where('slug', 'department_head')->value('id');
         $eligible = User::factory()->create(['role_id' => $roleId]);
         $revoked = User::factory()->create(['role_id' => $roleId]);
+        $inactive = User::factory()->create(['role_id' => $roleId, 'is_active' => false]);
+        $unrelatedRole = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'hr_officer')->value('id'),
+        ]);
+        $delegate = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $eligible->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
         DB::table('user_permission_overrides')->insert([
             'user_id' => $revoked->id,
             'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
@@ -51,9 +69,7 @@ class ApprovalNoticeVisibilityTest extends TestCase
         $revoked->flushPermissionsCache();
         $this->assertTrue($revoked->hasPermission('return_management.approve'));
 
-        $submitter = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
-        ]);
+        $submitter = User::factory()->create(['role_id' => $roleId]);
         $rma = ReturnRequest::query()->create([
             'rma_number' => 'RMA-EMAIL-ACCESS-1',
             'type' => 'customer_return',
@@ -68,10 +84,60 @@ class ApprovalNoticeVisibilityTest extends TestCase
             'notifiable_id' => $eligible->id,
             'type' => 'approval.action_required',
         ]);
+        $directNotice = DB::table('notifications')->where('notifiable_id', $eligible->id)->where('type', 'approval.action_required')->first();
+        $delegateNotice = DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->first();
+        $this->assertSame('current_approval_step', json_decode((string) $directNotice->data, true)['recipient_reason']);
+        $this->assertSame('active_approval_delegate', json_decode((string) $delegateNotice->data, true)['recipient_reason']);
+        foreach ([$revoked, $inactive, $unrelatedRole, $submitter] as $excluded) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_type' => User::class,
+                'notifiable_id' => $excluded->id,
+                'type' => 'approval.action_required',
+            ]);
+        }
+    }
+
+    public function test_empty_approval_audience_is_logged_without_admin_fallback(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $this->seed(WorkflowSeeder::class);
+
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'return_management.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $approver->id,
+            'reason' => 'Approval notification no-recipient test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $approver->flushPermissionsCache();
+        $submitter = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $rma = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-NO-ELIGIBLE-1',
+            'type' => 'customer_return',
+            'status' => 'draft',
+            'created_by' => $submitter->id,
+        ]);
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Approval notification skipped: no eligible recipient.', Mockery::type('array'));
+
+        app(ApprovalService::class)->submit($rma, 'return_request');
+
         $this->assertDatabaseMissing('notifications', [
-            'notifiable_type' => User::class,
-            'notifiable_id' => $revoked->id,
             'type' => 'approval.action_required',
+            'notifiable_id' => $approver->id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'approval.action_required',
+            'notifiable_id' => $submitter->id,
         ]);
     }
 }

@@ -197,6 +197,32 @@ class NotificationServiceHardeningTest extends TestCase
         $this->assertSame(1, DB::table('notifications')->where('type', 'test.dupe')->count());
     }
 
+    public function test_recipient_reasons_are_stored_per_user_without_changing_shared_message(): void
+    {
+        $currentApprover = User::factory()->create();
+        $delegate = User::factory()->create();
+        Event::fake([UserNotificationCreated::class]);
+
+        $this->service->send(
+            [$currentApprover, $delegate],
+            'test.recipient_reason',
+            ['title' => 'Needs approval', 'message' => 'One action.'],
+            'approval:1',
+            [
+                $currentApprover->id => 'current_approval_step',
+                $delegate->id => 'active_approval_delegate',
+            ],
+        );
+
+        $currentData = json_decode((string) DB::table('notifications')->where('notifiable_id', $currentApprover->id)->value('data'), true);
+        $delegateData = json_decode((string) DB::table('notifications')->where('notifiable_id', $delegate->id)->value('data'), true);
+
+        $this->assertSame('current_approval_step', $currentData['recipient_reason']);
+        $this->assertSame('active_approval_delegate', $delegateData['recipient_reason']);
+        $this->assertSame('Needs approval', $currentData['title']);
+        $this->assertSame('Needs approval', $delegateData['title']);
+    }
+
     public function test_disabled_recipient_is_skipped_without_blocking_the_others(): void
     {
         $muted = User::factory()->create();

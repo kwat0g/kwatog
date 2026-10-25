@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Assets;
 
-use App\Common\Models\ApprovalRecord;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Models\ApprovalRecord;
+use App\Common\Models\WorkflowDefinition;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\ApprovalService;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -118,10 +120,23 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         $this->assertSame($requester->id, $asset->fresh()->disposal_requested_by);
 
         $vp = $this->user('vice_president');
+        ApprovalDelegation::create([
+            'delegator_user_id' => $vp->id,
+            'delegate_user_id' => $checker->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
         app(AssetService::class)->approveDisposal($asset, $checker);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $vp->id,
             'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $checker->id,
+            'type' => 'approval.action_required',
+            'dedupe_key' => 'approval:action-required:'.$asset->getMorphClass().':'.$asset->id.':1:2',
         ]);
         app(AssetService::class)->approveDisposal($asset, $vp);
 
@@ -308,7 +323,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
 
         // And the service arm refuses an unapproved disposal even when called
         // directly — the JE cannot post without the chain, whatever the route.
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('requires an approved disposal request');
         app(AssetService::class)->dispose($asset->fresh(), [
             'disposal_amount' => '5000.00',
@@ -380,7 +395,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         $asset = $this->asset();
         $this->requestDisposal($asset);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('already pending approval');
         $this->requestDisposal($asset);
     }
@@ -392,7 +407,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
      */
     public function test_every_seeded_step_role_can_reach_the_approve_route_and_board(): void
     {
-        $workflow = \App\Common\Models\WorkflowDefinition::query()
+        $workflow = WorkflowDefinition::query()
             ->where('workflow_type', 'asset_disposal')
             ->where('is_active', true)
             ->firstOrFail();
@@ -428,7 +443,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         try {
             app(AssetService::class)->approveDisposal($asset, $this->user('vice_president'));
             $this->fail('The final approval must refuse a disposal with nothing to journalise.');
-        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+        } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('no cost, proceeds or accumulated depreciation', $e->getMessage());
         }
 

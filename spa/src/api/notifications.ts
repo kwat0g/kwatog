@@ -18,6 +18,7 @@ export interface NotificationRow {
  subject_type?: string;
  subject_id?: string;
  actor_id?: string;
+ recipient_reason?: string;
  title?: string;
  message?: string;
  link_to?: string;

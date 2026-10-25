@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class ApprovalService
@@ -26,7 +27,10 @@ class ApprovalService
 
     private const NOTIFY_OUTCOME = ['bill_payment', 'salary_adjustment', 'asset_disposal'];
 
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly ApprovalNotificationRecipientResolver $recipientResolver,
+    ) {}
 
     /**
      * Submit a record into a workflow. Creates one pending approval_record per step.
@@ -165,7 +169,7 @@ class ApprovalService
             $following = $this->currentRecords($approvable)->where('action', 'pending')->orderBy('step_order')->first();
             $meta = ApprovalTypeRegistry::forClass($approvable->getMorphClass());
             if ($following && $meta && in_array($meta['kind'], self::NOTIFY_HANDOFF, true)) {
-                $this->notifyActionRequired($approvable, $following);
+                $this->notifyActionRequired($approvable, $following, $user);
             } elseif ($meta && in_array($meta['kind'], self::NOTIFY_OUTCOME, true)
                 && $this->isFullyApproved($approvable)) {
                 $this->notifySubmitter($approvable, $next, 'approval.completed', 'Approval completed');
@@ -330,47 +334,58 @@ class ApprovalService
         return null; // unknown — guard cannot fire
     }
 
-    private function notifyActionRequired(Model $approvable, ApprovalRecord $record): void
+    private function notifyActionRequired(Model $approvable, ApprovalRecord $record, ?User $actor = null): void
     {
         $meta = ApprovalTypeRegistry::forClass($approvable->getMorphClass());
         if ($meta === null) {
+            Log::warning('Approval notification skipped: approvable is not registered.', [
+                'approvable_type' => $approvable->getMorphClass(),
+                'step_id' => $record->getKey(),
+            ]);
+
             return;
         }
 
-        $delegateIds = ApprovalDelegation::activeDelegatesFor($record->role_slug, now());
-        $recipients = User::query()
-            ->where('is_active', true)
-            ->where(function ($query) use ($record, $delegateIds): void {
-                $query->whereHas('role', fn ($role) => $role->where('slug', $record->role_slug));
-                if ($delegateIds !== []) {
-                    $query->orWhereIn('id', $delegateIds);
-                }
-            });
-        $submitterId = $this->resolveSubmitterUserId($approvable);
-        if ($submitterId !== null) {
-            $recipients->where('id', '<>', $submitterId);
-        }
-        $recipients = $recipients->get()
-            ->filter(fn (User $user): bool => ApprovalTypeRegistry::userCanViewRecord(
-                $user,
-                $approvable->getMorphClass(),
-                (int) $approvable->getKey(),
-            ))
-            ->values();
-        if ($recipients->isEmpty()) {
+        $excludedUserIds = array_values(array_filter([
+            $this->resolveSubmitterUserId($approvable),
+            $actor?->id,
+        ], static fn (?int $id): bool => $id !== null));
+        $recipientsByReason = $this->recipientResolver->resolveStep($approvable, $record, $excludedUserIds);
+        if ($recipientsByReason === []) {
+            Log::warning('Approval notification skipped: no eligible recipient.', [
+                'approvable_type' => $approvable->getMorphClass(),
+                'approvable_id' => $approvable->getKey(),
+                'step_id' => $record->getKey(),
+                'role_slug' => $record->role_slug,
+            ]);
+
             return;
         }
 
         [$hashId, $link] = $this->approvalLink($approvable, $meta);
         $number = $meta['number'] ? $approvable->getAttribute($meta['number']) : null;
         $reference = is_string($number) && $number !== '' ? " {$number}" : '';
-        $this->notifications->send($recipients, 'approval.action_required', [
+        $data = [
             'title' => "{$meta['label']} approval needed",
             'message' => "{$meta['label']}{$reference} is waiting for your approval.",
             'link_to' => $link,
             'entity_type' => class_basename($approvable),
             'entity_id' => $hashId,
-        ], "approval:action-required:{$approvable->getMorphClass()}:{$approvable->getKey()}:{$record->attempt}:{$record->step_order}");
+        ];
+        $recipientReasons = [];
+        foreach ($recipientsByReason as $reason => $recipients) {
+            foreach ($recipients as $recipient) {
+                $recipientReasons[(int) $recipient->id] = $reason;
+            }
+        }
+
+        $this->notifications->send(
+            collect($recipientsByReason)->flatten(1)->unique('id')->values(),
+            'approval.action_required',
+            $data,
+            "approval:action-required:{$approvable->getMorphClass()}:{$approvable->getKey()}:{$record->attempt}:{$record->step_order}",
+            $recipientReasons,
+        );
     }
 
     private function notifySubmitter(Model $approvable, ApprovalRecord $record, string $type, string $title): void
