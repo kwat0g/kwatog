@@ -4,7 +4,7 @@
  * - Pick a product (and optionally a customer)
  * - Pick a method (moving_avg / weighted_avg)
  * - Recompute → server writes 3 months of forecast rows
- * - Chart shows last 12 months of actual demand + 3 months of forecast
+ * - Chart compares historical demand with stored forecast periods
  * - Table lists all forecast rows with manual-override button
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -27,6 +27,19 @@ import type { ComputedForecastMethod, DemandForecast } from '@/types/forecasting
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { LuTriangleAlert } from '@/lib/icons';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip as RTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { chartColor } from '@/lib/chartPalette';
 
 const MONTH_NAMES = [
   'Jan',
@@ -42,6 +55,13 @@ const MONTH_NAMES = [
   'Nov',
   'Dec',
 ];
+
+type DemandChartPoint = {
+  key: string;
+  label: string;
+  actual: number | null;
+  forecast: number | null;
+};
 
 export default function DemandForecastingPage() {
   const qc = useQueryClient();
@@ -202,15 +222,15 @@ export default function DemandForecastingPage() {
     },
   });
 
-  // Combine historical + forecast for the bar chart, sorted chronologically.
+  // Align source demand and stored forecasts by month for the time series.
   const chartData = useMemo(() => {
-    const hist = (historicalQ.data ?? []).map((p) => ({
+    const hist: DemandChartPoint[] = (historicalQ.data ?? []).map((p) => ({
       key: `${p.year}-${p.month}`,
       label: `${MONTH_NAMES[p.month - 1]} ${String(p.year).slice(2)}`,
       actual: p.qty,
-      forecast: 0,
+      forecast: null as number | null,
     }));
-    const byKey = new Map(hist.map((r) => [r.key, r]));
+    const byKey = new Map<string, DemandChartPoint>(hist.map((r) => [r.key, r]));
     (forecastsQ.data ?? []).forEach((f) => {
       const key = `${f.forecast_year}-${f.forecast_month}`;
       const label = `${MONTH_NAMES[f.forecast_month - 1]} ${String(f.forecast_year).slice(2)}`;
@@ -218,16 +238,11 @@ export default function DemandForecastingPage() {
       if (existing) {
         existing.forecast = f.forecasted_quantity;
       } else {
-        byKey.set(key, { key, label, actual: 0, forecast: f.forecasted_quantity });
+        byKey.set(key, { key, label, actual: null, forecast: f.forecasted_quantity });
       }
     });
     return Array.from(byKey.values()).sort((a, b) => a.key.localeCompare(b.key));
   }, [historicalQ.data, forecastsQ.data]);
-
-  const maxBar = useMemo(() => {
-    const vals = chartData.flatMap((r) => [r.actual, r.forecast]);
-    return Math.max(1, ...vals);
-  }, [chartData]);
 
   const openManual = (row: DemandForecast) => {
     setManualRow(row);
@@ -289,49 +304,142 @@ export default function DemandForecastingPage() {
           </section>
         )}
 
-        {/* Filters + recompute */}
-        <Panel title="Forecast scope" noPadding>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
-            <div className="md:col-span-2">
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
-                Product
-              </label>
-              <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
-                <option value="">— Select a product —</option>
-                {(productsQ.data?.data ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.part_number} — {p.name}
-                  </option>
-                ))}
-              </Select>
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.9fr)]">
+          <Panel
+            title="Demand outlook"
+            meta={selectedProduct ? `${selectedProduct.part_number} · ${selectedProduct.name}` : undefined}
+            noPadding
+          >
+            <div className="p-4">
+              {!productId ? (
+                <EmptyState
+                  title="Select a product"
+                  description="Pick a product to compare confirmed demand with the forecast."
+                />
+              ) : historicalQ.isLoading || forecastsQ.isLoading ? (
+                <SkeletonBlock className="h-[320px]" />
+              ) : chartData.length === 0 ? (
+                <EmptyState
+                  title="No demand history"
+                  description="No confirmed sales orders match the selected scope."
+                />
+              ) : (
+                <div role="img" aria-label="Monthly actual demand and forecast comparison">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <CartesianGrid vertical={false} stroke="var(--border-subtle)" />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                        axisLine={{ stroke: 'var(--border-default)' }}
+                        tickLine={false}
+                        minTickGap={12}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={42}
+                      />
+                      <RTooltip
+                        cursor={{ stroke: 'var(--border-strong)', strokeDasharray: '3 3' }}
+                        contentStyle={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border-default)',
+                          borderRadius: 6,
+                          color: 'var(--text-primary)',
+                          fontSize: 12,
+                        }}
+                        formatter={(value, name) => [
+                          value == null ? '—' : Number(value).toLocaleString(),
+                          name,
+                        ]}
+                      />
+                      <Legend
+                        verticalAlign="top"
+                        align="left"
+                        height={32}
+                        wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)' }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="actual"
+                        name="Actual demand"
+                        stroke={chartColor(0)}
+                        fill={chartColor(0)}
+                        fillOpacity={0.12}
+                        strokeWidth={2.5}
+                        connectNulls={false}
+                        activeDot={{ r: 4 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="forecast"
+                        name="Forecast"
+                        stroke={chartColor(1)}
+                        strokeWidth={2.5}
+                        strokeDasharray="6 4"
+                        connectNulls={false}
+                        dot={{ r: 2, fill: chartColor(1) }}
+                        activeDot={{ r: 4 }}
+                      />
+                      <ReferenceLine
+                        x={`${MONTH_NAMES[new Date().getMonth()]} ${String(currentYear).slice(2)}`}
+                        stroke="var(--border-strong)"
+                        strokeDasharray="3 3"
+                        label={{ value: 'Current month', position: 'insideTopRight', fill: 'var(--text-muted)', fontSize: 10 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
-            <div className="md:col-span-2">
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
-                Customer (optional)
-              </label>
+          </Panel>
+
+          {/* Scope controls */}
+          <Panel title="Forecast controls" noPadding>
+            <div className="p-4 grid grid-cols-1 gap-3 items-end sm:grid-cols-2 xl:grid-cols-1">
+              <div className="sm:col-span-2 xl:col-span-1">
+                <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
+                  Product
+                </label>
+                <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
+                  <option value="">— Select a product —</option>
+                  {(productsQ.data?.data ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.part_number} — {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
+                  Customer (optional)
+                </label>
                 <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
                   <option value="">All customers (total)</option>
                   {(customersQ.data ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
-                Method
-              </label>
-              <Select value={method} onChange={(e) => setMethod(e.target.value as ComputedForecastMethod)}>
-                <option value="">— Select method —</option>
-                {(methodsQ.data?.methods ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
+                  Method
+                </label>
+                <Select value={method} onChange={(e) => setMethod(e.target.value as ComputedForecastMethod)}>
+                  <option value="">— Select method —</option>
+                  {(methodsQ.data?.methods ?? []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:col-span-2 xl:col-span-1">
               <div>
                 <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
                   Horizon (mo)
@@ -358,99 +466,43 @@ export default function DemandForecastingPage() {
                   onChange={(e) => updateWindow(e.target.value, 'lookback')}
                 />
               </div>
-            </div>
-            <div className="md:col-span-6 flex flex-wrap items-center gap-3 justify-end">
-              <Checkbox
-                className="mr-auto rounded-md border border-default px-3 py-2"
-                checked={selectedProduct?.include_forecast_in_mrp ?? false}
-                disabled={!productId || !canManage || mrpInclusionM.isPending}
-                onChange={(event) => mrpInclusionM.mutate(event.target.checked)}
-                label={
-                  <>
-                    <span className="font-medium text-primary">Include forecast in MRP</span>
-                    <span className="ml-2 text-xs text-muted">
-                      Advisory only; no PR is created.
-                    </span>
-                  </>
-                }
-              />
-              <Button
-                onClick={() => recomputeM.mutate()}
-                disabled={
-                  !productId ||
-                  !canManage ||
-                  !forecastingSettingsReady ||
-                  horizon == null ||
-                  lookback == null ||
-                  !method ||
-                  recomputeM.isPending
-                }
-              >
-                {recomputeM.isPending ? 'Recomputing…' : 'Recompute forecast'}
-              </Button>
-            </div>
-          </div>
-        </Panel>
-
-        {/* Chart */}
-        <Panel title="Demand history vs. forecast" noPadding>
-          <div className="p-4">
-            {!productId ? (
-              <EmptyState
-                title="Select a product"
-                description="Pick a product from the dropdown to view its demand history."
-              />
-            ) : historicalQ.isLoading || forecastsQ.isLoading ? (
-              <SkeletonBlock className="h-48" />
-            ) : chartData.length === 0 ? (
-              <EmptyState
-                title="No demand history"
-                description="No confirmed sales orders match the selected scope."
-              />
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-4 text-2xs text-muted">
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 rounded-sm bg-accent/70" />
-                    Actual demand
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 rounded-sm bg-warning-bg/70 border border-warning" />
-                    Forecast
-                  </span>
-                </div>
-                <div className="flex items-end gap-1 h-48">
-                  {chartData.map((d) => (
-                    <div key={d.key} className="flex-1 flex flex-col items-center gap-1 group">
-                      <div className="relative w-full h-44 flex flex-col-reverse gap-0.5">
-                        {d.actual > 0 && (
-                          <div
-                            title={`Actual: ${d.actual.toFixed(2)}`}
-                            className="w-full bg-accent/70 rounded-t-sm transition-colors group-hover:bg-accent"
-                            style={{ height: `${Math.max(2, (d.actual / maxBar) * 100)}%` }}
-                          />
-                        )}
-                        {d.forecast > 0 && (
-                          <div
-                            title={`Forecast: ${d.forecast.toFixed(2)}`}
-                            className="w-full bg-warning-bg/70 border border-warning rounded-t-sm transition-colors group-hover:bg-warning-bg"
-                            style={{ height: `${Math.max(2, (d.forecast / maxBar) * 100)}%` }}
-                          />
-                        )}
-                      </div>
-                      <span className="text-2xs text-muted -rotate-45 origin-top-left whitespace-nowrap pt-1">
-                        {d.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
-            )}
-          </div>
-        </Panel>
+              <div className="sm:col-span-2 xl:col-span-1 flex flex-wrap items-center gap-3 justify-between">
+                <Checkbox
+                  className="mr-auto rounded-md border border-default px-3 py-2"
+                  checked={selectedProduct?.include_forecast_in_mrp ?? false}
+                  disabled={!productId || !canManage || mrpInclusionM.isPending}
+                  onChange={(event) => mrpInclusionM.mutate(event.target.checked)}
+                  label={
+                    <>
+                      <span className="font-medium text-primary">Include forecast in MRP</span>
+                      <span className="ml-2 text-xs text-muted">
+                        Advisory only; no PR is created.
+                      </span>
+                    </>
+                  }
+                />
+                <Button
+                  onClick={() => recomputeM.mutate()}
+                  disabled={
+                    !productId ||
+                    !canManage ||
+                    !forecastingSettingsReady ||
+                    horizon == null ||
+                    lookback == null ||
+                    !method ||
+                    recomputeM.isPending
+                  }
+                >
+                  {recomputeM.isPending ? 'Recomputing…' : 'Recompute forecast'}
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        </div>
 
-        {/* Forecast rows */}
-        <Panel title="Forecast rows" noPadding>
+        {/* Forecast periods */}
+        <Panel title="Forecast periods" meta={`${(forecastsQ.data ?? []).length} periods`} noPadding>
           <div className="overflow-x-auto">
             <table className={tableCls}>
               <thead>
@@ -480,7 +532,7 @@ export default function DemandForecastingPage() {
                 ) : (forecastsQ.data ?? []).length === 0 ? (
                   <tr>
                     <Td align="center" className="text-muted" colSpan={7}>
-                      No forecasts yet — click <em>Recompute</em>.
+                      No forecasts yet — choose a method and recompute.
                     </Td>
                   </tr>
                 ) : (
@@ -515,7 +567,7 @@ export default function DemandForecastingPage() {
                           '—'
                         )}
                       </Td>
-                      <Td align="right" mono>
+                      <Td align="right">
                         {canManage && (
                           <Button size="sm" variant="ghost" onClick={() => openManual(f)}>
                             Override

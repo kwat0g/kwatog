@@ -20,7 +20,7 @@ class DssParameterService
 {
     public const GLOBAL = 'global';
 
-    public function get(string $detectorId, string $key, mixed $default = null): mixed
+    public function get(string $detectorId, string $key, mixed $default = null, bool $globalFallback = true): mixed
     {
         $cacheKey = "dss:params:{$detectorId}:{$key}";
         $miss = new \stdClass;
@@ -41,7 +41,7 @@ class DssParameterService
             return $row->value;
         }
 
-        if ($detectorId !== self::GLOBAL) {
+        if ($detectorId !== self::GLOBAL && $globalFallback) {
             return $this->get(self::GLOBAL, $key, $default);
         }
 
@@ -77,25 +77,28 @@ class DssParameterService
     /** Engine kill switch + default mode live here, seeded by the W0-1 migration. */
     public function engineEnabled(): bool
     {
-        return (bool) $this->get(self::GLOBAL, 'dss.engine.enabled', true);
+        return $this->get(self::GLOBAL, 'dss.engine.enabled', true) === true;
     }
 
     public function defaultMode(): string
     {
-        $mode = $this->get(self::GLOBAL, 'dss.engine.default_mode', 'shadow');
+        return 'shadow';
+    }
 
-        return in_array($mode, ['shadow', 'advisory', 'assisted'], true) ? $mode : 'shadow';
+    public function legacyGlobalAdvisoryIgnored(): bool
+    {
+        return $this->get(self::GLOBAL, 'dss.engine.default_mode') === 'advisory';
     }
 
     public function detectorEnabled(string $detectorId): bool
     {
-        return (bool) $this->get($detectorId, 'enabled', true);
+        return $this->get($detectorId, 'enabled', true) === true;
     }
 
     public function detectorMode(string $detectorId): string
     {
-        $mode = $this->get($detectorId, 'mode', $this->defaultMode());
+        $mode = $this->get($detectorId, 'mode', 'shadow', globalFallback: false);
 
-        return in_array($mode, ['shadow', 'advisory', 'assisted'], true) ? $mode : 'shadow';
+        return in_array($mode, ['shadow', 'advisory'], true) ? $mode : 'shadow';
     }
 }

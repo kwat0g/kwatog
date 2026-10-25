@@ -13,4 +13,6 @@ enum RecommendationEventType: string
     case Expired = 'expired';
     case Executed = 'executed';
     case Outcome = 'outcome';
+    case Started = 'started';
+    case Resolved = 'resolved';
 }

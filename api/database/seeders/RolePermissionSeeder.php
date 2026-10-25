@@ -13,6 +13,18 @@ use Illuminate\Support\Facades\DB;
 class RolePermissionSeeder extends Seeder
 {
     /**
+     * Role matrix in docs/dss/01-decision-inventory.md. Employee and driver
+     * have self-service access only.
+     *
+     * @var list<string>
+     */
+    private const DSS_VIEW_ROLES = [
+        'vice_president', 'ppc_head', 'sales_officer', 'purchasing_officer', 'warehouse_staff',
+        'production_manager', 'qc_inspector', 'maintenance_supervisor',
+        'finance_officer', 'hr_officer', 'department_head', 'customer_service_officer', 'impex_officer',
+    ];
+
+    /**
      * Permission catalog: { module => [ {slug, name, description}, ... ] }.
      *
      * @return array<string, array<int, array{slug: string, name: string, description?: string}>>
@@ -325,6 +337,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.customers.manage',           'name' => 'Manage Customers'],
                 ['slug' => 'crm.products.view',              'name' => 'View Products'],
                 ['slug' => 'crm.products.manage',            'name' => 'Manage Products'],
+                ['slug' => 'crm.products.customer_access.manage', 'name' => 'Manage Customer Product Access'],
+                ['slug' => 'crm.products.prices.manage',     'name' => 'Manage Product Selling Prices'],
                 ['slug' => 'crm.price_agreements.view',      'name' => 'View Price Agreements'],
                 ['slug' => 'crm.price_agreements.manage',    'name' => 'Manage Price Agreements'],
                 ['slug' => 'crm.price_agreements.propose', 'name' => 'Propose Price Agreements'],
@@ -590,7 +604,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'finance_officer' => [
                 'name' => 'Finance Officer',
-                'description' => 'Manages accounting, budgets, loans and fixed assets; reviews and disburses payroll; approves purchases, financial returns, stock adjustments, bank changes and Finance clearance; reviews supplier quotations without running sourcing.',
+                'description' => 'Manages accounting, budgets, loans and fixed assets; reviews customer price offers and disburses payroll; approves purchases, financial returns, stock adjustments, bank changes and Finance clearance; reviews supplier quotations without running sourcing.',
                 'permissions' => array_merge(
                     // HR owns the payroll work (create, compute, correction).
                     // Finance is the checker and payment owner: it can review a
@@ -713,18 +727,13 @@ class RolePermissionSeeder extends Seeder
             ],
             'customer_service_officer' => [
                 'name' => 'Customer Service Officer',
-                'description' => 'Manages customer relationships, inquiries, complaints, returns, and customer records.',
+                'description' => 'Handles customer inquiries, complaints and customer-return cases; reads customer and product records for support. Does not create or change customer master records, access company sales orders, supplier returns or customer price agreements.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
                         'crm.view',
                         'accounting.customers.view',
-                        'accounting.customers.manage',
                         'crm.products.view',
-                        'crm.price_agreements.view',
-                        'crm.price_agreements.manage',
-                        'crm.price_agreements.propose',
-                        'crm.sales_orders.view',
                         'crm.complaints.view',
                         'crm.complaints.manage',
                         'crm.inquiries.view',
@@ -736,7 +745,7 @@ class RolePermissionSeeder extends Seeder
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                         // The CSO's own surface (DSS 01-matrix §D3): complaints
-                        // and return cases are the two queues they own, and
+                        // and customer-return cases are the two queues they own, and
                         // neither had a page sized to them.
                         'dashboard.customer_service.view',
                     ],
@@ -744,13 +753,16 @@ class RolePermissionSeeder extends Seeder
             ],
             'sales_officer' => [
                 'name' => 'Sales Officer',
-                'description' => 'Creates, negotiates, and confirms sales orders; does not manage customer service records.',
+                'description' => 'Owns customer master records, customer product access, selling prices, customer-specific price proposals and sales orders. Finance approves customer price offers. Does not manage inquiries, complaints or return cases.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
                         'crm.view',
                         'accounting.customers.view',
+                        'accounting.customers.manage',
                         'crm.products.view',
+                        'crm.products.customer_access.manage',
+                        'crm.products.prices.manage',
                         'crm.price_agreements.view',
                         'crm.price_agreements.propose',
                         'crm.sales_orders.view',
@@ -820,7 +832,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'ppc_head' => [
                 'name' => 'PPC Head',
-                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data; reads sales orders needed for planning, creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
+                'description' => 'Owns production planning, BOMs, routings, machines, molds, forecasting and finished-good master data, including product photos; reads sales orders needed for planning, creates and confirms work orders, schedules production, and reads returns, maintenance and assets needed for planning.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
                     $this->module('forecasting'),
@@ -840,7 +852,7 @@ class RolePermissionSeeder extends Seeder
                         'production.wo.assign',
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
-                        // PPC owns the finished-good catalog used by its BOMs and plans.
+                        // PPC owns finished-good records and photos until Product Data exists; Sales owns customer access and selling prices.
                         'crm.view', 'crm.products.view', 'crm.products.manage', 'crm.sales_orders.view',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view', 'inventory.costs.review',
                         'search.global', 'notifications.preferences.manage',
@@ -1123,6 +1135,7 @@ class RolePermissionSeeder extends Seeder
                     ? '*'
                     : array_values(array_unique(array_merge(
                         (array) $def['permissions'],
+                        in_array($slug, self::DSS_VIEW_ROLES, true) ? ['dss.view'] : [],
                         in_array('purchasing.supplier_listings.review', (array) $def['permissions'], true)
                             ? ['purchasing.supplier_listings.view']
                             : [],
@@ -1138,12 +1151,6 @@ class RolePermissionSeeder extends Seeder
                             'approvals.board.view',
                             'hr.directory.view',
                             'dashboard.action_center.view',
-                            // DSS Wave 0 — Decision Center reachability for every
-                            // authenticated role (same nature as the action
-                            // center: a personal queue). Data access is NOT
-                            // granted here; every recommendation query is
-                            // scoped to data the caller may already read.
-                            'dss.view',
                             // Self-scoped layout reset — every role (see
                             // catalog comment under 'dashboards').
                             'dashboard.layout.reset',
@@ -1191,7 +1198,6 @@ class RolePermissionSeeder extends Seeder
             'approvals.board.view',
             'hr.directory.view',
             'dashboard.action_center.view',
-            'dss.view',
             'dashboard.layout.reset',
             'business_policies.view',
         ];
@@ -1203,6 +1209,7 @@ class RolePermissionSeeder extends Seeder
 
             $required = array_values(array_unique(array_merge(
                 (array) ($definition['permissions'] ?? []),
+                in_array($slug, self::DSS_VIEW_ROLES, true) ? ['dss.view'] : [],
                 $crossCutting,
             )));
             $missing = array_values(array_diff($required, array_keys($catalogSlugs)));

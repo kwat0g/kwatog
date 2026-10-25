@@ -7,16 +7,18 @@ namespace App\Modules\DSS\Enums;
 enum RecommendationStatus: string
 {
     case Open = 'open';
+    case InProgress = 'in_progress';
     case Accepted = 'accepted';
     case Dismissed = 'dismissed';
     case Snoozed = 'snoozed';
     case Expired = 'expired';
     case Executed = 'executed';
+    case Resolved = 'resolved';
 
     /** States that keep the dedupe key occupied (partial unique index). */
     public function blocksDedupeKey(): bool
     {
-        return $this === self::Open || $this === self::Snoozed;
+        return $this === self::Open || $this === self::InProgress || $this === self::Snoozed;
     }
 
     /** Terminal states: a later re-occurrence opens a fresh row. */
@@ -25,6 +27,7 @@ enum RecommendationStatus: string
         return $this === self::Accepted
             || $this === self::Dismissed
             || $this === self::Expired
-            || $this === self::Executed;
+            || $this === self::Executed
+            || $this === self::Resolved;
     }
 }

@@ -79,4 +79,52 @@ class RolePermissionSeederTest extends TestCase
         $this->assertSame($rolesBefore, Role::query()->count());
         $this->assertSame($pivotsBefore, (int) DB::table('role_permissions')->count());
     }
+
+    public function test_decision_center_permission_follows_the_decision_role_matrix(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $permissionId = Permission::query()->where('slug', 'dss.view')->value('id');
+
+        $decisionRoles = [
+            'system_admin', 'vice_president', 'ppc_head', 'sales_officer', 'purchasing_officer',
+            'warehouse_staff', 'production_manager', 'qc_inspector', 'maintenance_supervisor',
+            'finance_officer', 'hr_officer', 'department_head', 'customer_service_officer', 'impex_officer',
+        ];
+        foreach (Role::query()->get() as $role) {
+            $pivot = DB::table('role_permissions')
+                ->where('role_id', $role->id)
+                ->where('permission_id', $permissionId)
+                ->exists();
+
+            $this->assertSame(in_array($role->slug, $decisionRoles, true), $pivot, "Unexpected DSS access for {$role->slug}.");
+        }
+    }
+
+    public function test_dss_access_migration_revokes_legacy_grants_from_non_decision_roles(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $permissionId = Permission::query()->where('slug', 'dss.view')->value('id');
+        $decisionRoles = [
+            'system_admin', 'vice_president', 'ppc_head', 'sales_officer', 'purchasing_officer',
+            'warehouse_staff', 'production_manager', 'qc_inspector', 'maintenance_supervisor',
+            'finance_officer', 'hr_officer', 'department_head', 'customer_service_officer', 'impex_officer',
+        ];
+
+        foreach (Role::query()->whereNotIn('slug', $decisionRoles)->get() as $role) {
+            DB::table('role_permissions')->insertOrIgnore([
+                'role_id' => $role->id,
+                'permission_id' => $permissionId,
+            ]);
+        }
+
+        $migration = require database_path('migrations/2026_10_23_090000_restrict_dss_access_to_decision_roles.php');
+        $migration->up();
+
+        foreach (Role::query()->whereNotIn('slug', $decisionRoles)->get() as $role) {
+            $this->assertDatabaseMissing('role_permissions', [
+                'role_id' => $role->id,
+                'permission_id' => $permissionId,
+            ]);
+        }
+    }
 }

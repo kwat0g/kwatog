@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Chip } from '@/components/ui/Chip';
@@ -25,6 +26,14 @@ const RISK_VARIANT: Record<StockOutRisk, 'danger' | 'warning' | 'info' | 'neutra
  medium: 'warning',
  low: 'info',
  ok: 'neutral',
+};
+
+const RISK_COLOR: Record<StockOutRisk, string> = {
+ critical: 'var(--danger)',
+ high: 'var(--warning)',
+ medium: 'var(--warning)',
+ low: 'var(--info)',
+ ok: 'var(--success)',
 };
 
 export default function StockOutProjectionPage() {
@@ -53,12 +62,13 @@ export default function StockOutProjectionPage() {
  const rows = q.data?.data ?? [];
  const generatedAt = q.data?.meta.generated_at;
 
- // Counts per risk for the summary strip.
- const counts = rows.reduce<Record<string, number>>(
- (acc, r) => ({ ...acc, [r.risk]: (acc[r.risk] ?? 0) + 1 }),
- {},
- );
+ // Count each risk once for the overview and the proportional distribution.
+ const counts = rows.reduce<Record<StockOutRisk, number>>((acc, row) => {
+ acc[row.risk] += 1;
+ return acc;
+ }, { critical: 0, high: 0, medium: 0, low: 0, ok: 0 });
  const riskOptions = q.data?.meta.risk_options ?? [];
+ const urgentCount = counts.critical + counts.high;
 
  return (
  <>
@@ -68,13 +78,13 @@ export default function StockOutProjectionPage() {
  actions={
  <div className="flex items-center gap-2">
  <label className="text-2xs uppercase tracking-wide text-muted">Horizon</label>
- <input
+ <Input
  type="number"
  value={horizon ?? ''}
  min={q.data?.meta.minimum_horizon_days}
  max={q.data?.meta.maximum_horizon_days}
  onChange={(e) => setHorizon(parseInt(e.target.value, 10) || undefined)}
- className="w-32"
+ className="w-28"
  aria-label="Projection horizon in days"
  />
  </div>
@@ -82,24 +92,64 @@ export default function StockOutProjectionPage() {
  />
 
  <div className="p-5 space-y-4">
- {/* Risk summary strip */}
- <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+ <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)]">
+ <Panel title="Risk profile" meta={`${rows.length} items evaluated`} noPadding>
+ <div className="p-4">
+ <div
+ className="flex h-2 overflow-hidden rounded-full bg-subtle"
+ role="img"
+ aria-label={`${urgentCount} urgent items out of ${rows.length} evaluated`}
+ >
+ {riskOptions.map((option) => {
+ const risk = option.value as StockOutRisk;
+ const count = counts[risk];
+ if (count === 0 || rows.length === 0) return null;
+ return (
+ <div
+ key={risk}
+ title={`${riskLabels.get(risk) ?? risk}: ${count}`}
+ style={{ width: `${(count / rows.length) * 100}%`, backgroundColor: RISK_COLOR[risk] }}
+ />
+ );
+ })}
+ </div>
+ <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
  {riskOptions.map((option) => {
  const risk = option.value as StockOutRisk;
  return (
- <Panel key={risk} noPadding>
- <div className="p-3">
- <div className="flex items-center justify-between">
- <span className="text-2xs uppercase tracking-wide text-muted">{riskLabels.get(risk) ?? risk}</span>
- <Chip variant={RISK_VARIANT[risk] ?? 'neutral'}>{counts[risk] ?? 0}</Chip>
+ <div key={risk} className="min-w-0">
+ <div className="flex items-center gap-1.5 text-xs text-muted">
+ <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: RISK_COLOR[risk] }} />
+ <span className="truncate">{riskLabels.get(risk) ?? risk}</span>
  </div>
- <div className="text-xl font-medium text-primary mt-1 tabular-nums">
- {counts[risk] ?? 0}
+ <div className="mt-1 font-mono text-lg tabular-nums text-primary">{counts[risk]}</div>
+ </div>
+ );
+ })}
  </div>
  </div>
  </Panel>
- );
- })}
+
+ <Panel title="Projection context" noPadding>
+ <dl className="grid grid-cols-2 gap-x-4 gap-y-3 p-4 text-xs">
+ <div>
+ <dt className="text-muted">Urgent items</dt>
+ <dd className="mt-1 font-mono text-lg tabular-nums text-primary">{urgentCount}</dd>
+ </div>
+ <div>
+ <dt className="text-muted">Horizon</dt>
+ <dd className="mt-1 font-mono text-lg tabular-nums text-primary">{horizon ?? '—'} days</dd>
+ </div>
+ <div className="col-span-2">
+ <dt className="text-muted">Demand basis</dt>
+ <dd className="mt-1 text-primary">Next-month forecast or recent consumption</dd>
+ </div>
+ <div className="col-span-2">
+ <dt className="text-muted">Last computed</dt>
+ <dd className="mt-1 text-primary">{generatedAt ? formatDateTime(generatedAt) : 'Waiting for projection'}</dd>
+ </div>
+ </dl>
+ </Panel>
  </div>
 
  <Panel

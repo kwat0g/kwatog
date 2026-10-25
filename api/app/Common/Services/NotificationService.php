@@ -144,6 +144,53 @@ class NotificationService
     }
 
     /**
+     * Deliver one DSS recommendation notice under the per-user daily cap.
+     * The caller must pass a stable occurrence/change identity; existing
+     * notification uniqueness makes retries safe across workers.
+     */
+    public function sendDssRecommendationInApp(User $recipient, array $data, string $eventIdentity): bool
+    {
+        if ($recipient->id === null || trim($eventIdentity) === '') {
+            return false;
+        }
+
+        $cap = (int) config('dss.notification_daily_cap', 0);
+        $dedupeKey = 'dss:'.hash('sha256', $eventIdentity);
+
+        return DB::transaction(function () use ($recipient, $data, $dedupeKey, $cap): bool {
+            $lockedRecipient = User::query()->whereKey($recipient->id)->lockForUpdate()->first();
+            $notifications = DB::table('notifications')
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $recipient->id)
+                ->where('type', 'dss.recommendation');
+
+            if ((clone $notifications)->where('dedupe_key', $dedupeKey)->exists()) {
+                return true;
+            }
+            if ($lockedRecipient === null || ! $lockedRecipient->is_active || $cap < 1) {
+                return false;
+            }
+
+            $localNow = now(config('app.timezone'));
+            $todayCount = (clone $notifications)
+                ->whereBetween('created_at', [$localNow->copy()->startOfDay(), $localNow->copy()->endOfDay()])
+                ->count();
+            if ($todayCount >= $cap) {
+                return false;
+            }
+
+            $this->sendInApp($lockedRecipient, 'dss.recommendation', $data, $dedupeKey);
+
+            return DB::table('notifications')
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', $lockedRecipient->id)
+                ->where('type', 'dss.recommendation')
+                ->where('dedupe_key', $dedupeKey)
+                ->exists();
+        });
+    }
+
+    /**
      * @param  User|Collection<int, User>|array<int, User>  $recipients
      * @param  array<string, mixed>  $data
      */

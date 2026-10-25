@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\DSS\Controllers\DssAdminController;
+use App\Modules\DSS\Controllers\DssCoverageController;
 use App\Modules\DSS\Controllers\RecommendationController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,10 +11,20 @@ use Illuminate\Support\Facades\Route;
  * DSS Wave 0-3 — Decision Center API.
  * Auto-mounted under /api/v1 by App\Providers\ModuleServiceProvider.
  * Every read is scoped to detectors the caller may see (owner permissions +
- * advisory/assisted mode); dss.view is reachability, scoping is the gate.
+ * advisory mode); dss.view is reachability, scoping is the gate.
  */
 Route::middleware(['auth:sanctum', 'feature:dss'])->prefix('dss')->group(function () {
+    Route::get('/coverage', DssCoverageController::class)
+        ->middleware('permission:dss.view');
     Route::get('/recommendations', [RecommendationController::class, 'index'])
+        ->middleware('permission:dss.view');
+    Route::get('/recommendations/summary', [RecommendationController::class, 'summary'])
+        ->middleware('permission:dss.view');
+    Route::get('/recommendations/options', [RecommendationController::class, 'options'])
+        ->middleware('permission:dss.view');
+    Route::get('/recommendations/{recommendation}/affected-records', [RecommendationController::class, 'affectedRecords'])
+        ->middleware('permission:dss.view');
+    Route::get('/recommendations/{recommendation}/events', [RecommendationController::class, 'events'])
         ->middleware('permission:dss.view');
     Route::get('/recommendations/{recommendation}', [RecommendationController::class, 'show'])
         ->middleware('permission:dss.view');
@@ -26,6 +37,8 @@ Route::middleware(['auth:sanctum', 'feature:dss'])->prefix('dss')->group(functio
 /* ─── Admin console (W0-6): detector fleet + kill switch + parameters ─── */
 Route::middleware(['auth:sanctum', 'feature:dss'])->prefix('dss/admin')->group(function () {
     Route::get('/detectors', [DssAdminController::class, 'detectors'])
+        ->middleware('permission:dss.manage');
+    Route::get('/activity-summary', [DssAdminController::class, 'activitySummary'])
         ->middleware('permission:dss.manage');
     Route::patch('/detectors/{id}', [DssAdminController::class, 'updateDetector'])
         ->middleware('permission:dss.manage');

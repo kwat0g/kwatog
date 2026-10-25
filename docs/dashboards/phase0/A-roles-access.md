@@ -192,29 +192,33 @@ Permission summaries are from `RolePermissionSeeder::roleCatalog()`
 
 ### 1.5 `customer_service_officer` — Customer Service Officer
 
-- Key permissions (`api/database/seeders/RolePermissionSeeder.php:671-697`):
-  `crm.view`, `accounting.customers.view/manage`, `crm.products.view`,
-  `crm.price_agreements.view/manage/propose`, `crm.sales_orders.view`, `crm.complaints.view/manage`,
+- Key permissions (`api/database/seeders/RolePermissionSeeder.php:728-752`):
+  `crm.view`, `accounting.customers.view`, `crm.products.view`,
+  `crm.complaints.view/manage`,
   `crm.inquiries.view/manage`, `return_management.view/manage/dispose/complete`,
   `dashboard.customer_service.view`, `search.global`, `alerts.view/dismiss`.
 - Dept?: No.
 - Landing: `/dashboard/customer-service` (`dashboard.customer_service.view`).
-- Sees/can do — frontend: CRM products/customers/price-agreements/sales-orders (read)/complaints/inquiries
-  (`spa/src/routes/crmRoutes.tsx:39-235`); return-management list/detail/create/edit/complete
-  (not receive/inspect — those are warehouse/QC, `spa/src/routes/advancedRoutes.tsx:127-184`);
-  self-service. Backend: customer/inquiry/complaint/price-agreement/RMA lifecycle endpoints
-  (except receive/inspect/dispose-gated steps owned by other roles).
+- Sees/can do — frontend: read-only customer/product lookup, complaints and inquiries
+  (`spa/src/routes/crmRoutes.tsx:39-235`); customer-return list/detail/create/edit/complete
+  (not supplier returns, receive/inspect/approve — those stay with Purchasing, Warehouse/QC
+  and designated approvers,
+  `spa/src/routes/advancedRoutes.tsx:127-184`); self-service. Backend: customer/inquiry/complaint/RMA
+  lifecycle endpoints; no customer-master writes, sales-order or price-agreement access,
+  product-to-customer assignment, selling-price changes or price proposals.
   Demo account: `customerservice@ogami.test` (`api/database/seeders/DemoAccountSeeder.php:47`).
 
 ### 1.6 `sales_officer` — Sales Officer
 
-- Key permissions (`api/database/seeders/RolePermissionSeeder.php:698-719`):
-  `crm.view`, `accounting.customers.view`, `crm.products.view`,
+- Key permissions (`api/database/seeders/RolePermissionSeeder.php:755-781`):
+  `crm.view`, `accounting.customers.view/manage`, `crm.products.view`,
+  `crm.products.customer_access.manage`, `crm.products.prices.manage`,
   `crm.price_agreements.view/propose`, `crm.sales_orders.view/create/update/delete/confirm/cancel`,
   `dashboard.sales.view`, `search.global`, `alerts.view/dismiss`. No complaints/inquiries/RMA.
 - Dept?: No.
 - Landing: `/dashboard/sales` (`dashboard.sales.view`).
-- Sees/can do — frontend: `/chains` tracker (holds `crm.sales_orders.view`,
+- Sees/can do — frontend: maintain customer master records, assign products to customers, manage selling prices,
+  propose customer price offers, and manage sales orders; Finance approves customer price offers. `/chains` tracker (holds `crm.sales_orders.view`,
   `spa/src/routes/dashboardRoutes.tsx`) with sales lookup; bottleneck section hidden without
   `dashboard.view_bottlenecks` (M10); CRM products/pricing-requests/sales-orders pages;
   self-service. Backend: SO full lifecycle (create/update/delete/confirm/cancel) + price-request

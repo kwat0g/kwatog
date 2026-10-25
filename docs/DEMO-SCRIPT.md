@@ -12,7 +12,8 @@
 > docker compose start horizon         # drains seeded MRP/payslip jobs; MAIL_MAILER=log in api/.env so nothing e-mails
 > docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder   # stamps batch numbers on the WOs the queue just created + hardens the hero QC trace
 > docker compose exec api php artisan db:seed --class=DefenseHeroSeeder
-> docker compose exec api php artisan demo:verify   # must print PASSED — 0 critical failures
+> docker compose exec api php artisan db:seed --class=AnalyticsDemoSeeder   # computes KPI history and runs enabled DSS detectors from source records
+> docker compose exec api php artisan demo:verify --analytics   # checks provenance, KPI trends, widget payloads, forecasts, and DSS runs
 > cd spa && npm run test:defense     # strict showcase walk — must print PASS for all rows
 > ```
 >
@@ -22,6 +23,8 @@
 > that exist. Skipping it leaves the flagship traceability search and the
 > Certificate of Conformance button empty — `demo:verify` now FAILs on
 > `hero_trace` if that state is ever reached.
+>
+> Demo demand forecasts use the production forecasting service. Completed actuals are reconciled from confirmed sales orders. `AnalyticsDemoSeeder` completes three monthly histories linking sales orders, work-order material issues, outgoing QC, delivery, and invoices; computes 24 months of KPI snapshots from those and other source rows; and runs registered DSS detectors without changing their shadow/advisory modes. It leaves one overdue delivery schedule and one upcoming schedule attached to open production orders, with QC and delivery proof still pending, so analytics show both exceptions and planned work without skipping a stage. Run it after the queue drains so MRP work orders exist.
 > Log in as `admin@ogami.test` / `password`. `migrate:fresh --seed` runs the full
 > reference + demo chain (SOs → MRP → work orders → deliveries), and
 > `DefenseHeroSeeder` adds the open accounting period, leave balances, and the

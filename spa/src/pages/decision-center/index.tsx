@@ -1,283 +1,638 @@
-/** DSS Wave 0-4 — Decision Center list page. Display only: every number comes from the API. */
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { LuTriangleAlert, LuCircleAlert, LuInfo, LuChevronDown } from '@/lib/icons';
-import { reportMutationError } from '@/lib/formErrors';
-import { dssApi } from '@/api/dss';
-import type { Recommendation, RecommendationListParams, RecommendationSeverity } from '@/types/dss';
+/** Role-scoped DSS decision workbench. */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { LuTriangleAlert, LuCircleAlert, LuInfo, LuRefreshCw } from '@/lib/icons';
+import { dssApi, type DssCoverage } from '@/api/dss';
+import type {
+  Recommendation,
+  RecommendationListParams,
+  RecommendationOption,
+  RecommendationSeverity,
+  RecommendationStatus,
+} from '@/types/dss';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { Input } from '@/components/ui/Input';
-import { ToggleChip } from '@/components/ui/SegmentedControl';
-import { DataTablePagination } from '@/components/ui/DataTablePagination';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { formatConfidence, formatImpact, rationaleEntries, severityVariant } from './helpers';
+import { formatImpact, severityVariant } from './helpers';
+import {
+  decisionView,
+  detectorLabel,
+  recommendationStatusLabel,
+  severityLabel,
+} from './presentation';
 
-const severityIcon = (s: RecommendationSeverity) =>
-  s === 'critical' ? LuTriangleAlert : s === 'warning' ? LuCircleAlert : LuInfo;
+const severityIcons = {
+  critical: LuTriangleAlert,
+  warning: LuCircleAlert,
+  info: LuInfo,
+} satisfies Record<RecommendationSeverity, typeof LuInfo>;
 
-function WhyPanel({ rec }: { rec: Recommendation }) {
-  const [open, setOpen] = useState(false);
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-xs text-link flex items-center gap-1"
-      >
-        Why this? <LuChevronDown size={12} />
-      </button>
-    );
+const severityOptions: RecommendationOption[] = [
+  { value: 'critical', label: 'Critical' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'info', label: 'Information' },
+];
+
+const statusFallback: RecommendationOption[] = [
+  { value: 'open', label: 'New' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'snoozed', label: 'Snoozed' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'executed', label: 'Executed' },
+  { value: 'dismissed', label: 'Dismissed' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'expired', label: 'Expired' },
+];
+
+const FILTER_KEYS = [
+  'search',
+  'severity',
+  'domain',
+  'owner_role',
+  'status',
+  'sort',
+  'direction',
+  'page',
+  'per_page',
+] as const;
+
+const isSeverity = (value: string | null): value is RecommendationSeverity =>
+  value === 'critical' || value === 'warning' || value === 'info';
+const isStatus = (value: string | null): value is RecommendationStatus =>
+  value !== null && statusFallback.some((option) => option.value === value);
+const isSort = (value: string | null): value is NonNullable<RecommendationListParams['sort']> =>
+  value === 'priority_score' || value === 'created_at';
+const isDirection = (value: string | null): value is 'asc' | 'desc' =>
+  value === 'asc' || value === 'desc';
+
+function positiveInteger(value: string | null, fallback: number, max = Number.MAX_SAFE_INTEGER) {
+  if (!value || !/^\d+$/.test(value)) return fallback;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 && number <= max ? number : fallback;
+}
+
+function readFilters(params: URLSearchParams): RecommendationListParams {
+  const search = params.get('search') || undefined;
+  const domain = params.get('domain') || undefined;
+  const owner_role = params.get('owner_role') || undefined;
+  const severity = params.get('severity');
+  const status = params.get('status');
+  const sort = params.get('sort');
+  const direction = params.get('direction');
+  return {
+    search,
+    domain,
+    owner_role,
+    severity: isSeverity(severity) ? severity : undefined,
+    status: isStatus(status) ? status : undefined,
+    sort: isSort(sort) ? sort : undefined,
+    direction: isDirection(direction) ? direction : undefined,
+    page: positiveInteger(params.get('page'), 1),
+    per_page: positiveInteger(params.get('per_page'), 20, 100),
+  };
+}
+
+function filtersToSearch(filters: RecommendationListParams): string {
+  const params = new URLSearchParams();
+  for (const key of FILTER_KEYS) {
+    const value = filters[key];
+    if (value === undefined || value === null || value === '') continue;
+    if (key === 'page' && value === 1) continue;
+    if (key === 'per_page' && value === 20) continue;
+    if (key === 'sort' && value === 'priority_score') continue;
+    if (key === 'direction' && value === 'desc') continue;
+    params.set(key, String(value));
   }
+  const value = params.toString();
+  return value ? `?${value}` : '';
+}
+
+function emptyCoverageDescription(coverage?: DssCoverage): string {
+  if (!coverage)
+    return 'Decision check health is unavailable. Refresh to check whether checks are running.';
+  if (!coverage.engine_enabled) return 'Decision support is paused. Contact a DSS administrator.';
+  if (coverage.available_detectors === 0) return 'No decision checks are available for your role.';
+
+  const healthIssues = [
+    coverage.failed_detectors > 0
+      ? `${coverage.failed_detectors} check${coverage.failed_detectors === 1 ? '' : 's'} failed`
+      : null,
+    coverage.partial_detectors > 0
+      ? `${coverage.partial_detectors} check${coverage.partial_detectors === 1 ? '' : 's'} returned incomplete scans`
+      : null,
+  ].filter((issue): issue is string => issue !== null);
+
+  if (healthIssues.length > 0) {
+    return `${healthIssues.join(' and ')} on the latest run. Review decision check health; failed checks can leave recommendations incomplete.`;
+  }
+  if (coverage.disabled_detectors === coverage.available_detectors) {
+    return `All ${coverage.available_detectors} decision checks are disabled.`;
+  }
+  if (coverage.shadow_detectors === coverage.available_detectors) {
+    return `${coverage.available_detectors} decision checks are running in shadow mode. They are being calibrated before recommendations reach users.`;
+  }
+
+  return `No recommendations match this view. ${coverage.advisory_detectors} checks are publishing advice; ${coverage.shadow_detectors} remain in calibration; ${coverage.disabled_detectors} are disabled.`;
+}
+
+function DetectorHealth({ checks }: { checks: DssCoverage['checks'] }) {
+  if (checks.length === 0) return null;
+  const failed = checks.filter((check) => check.last_run?.status === 'failed').length;
+  const partial = checks.length - failed;
+
   return (
-    <dl className="mt-2 rounded-md border border-subtle bg-elevated/40 px-3 py-2 space-y-1">
-      <div className="flex justify-between gap-4 text-xs">
-        <dt className="text-text-subtle">Detector</dt>
-        <dd className="font-mono tabular-nums">
-          {rec.detector_id} · {rec.detector_version}
-        </dd>
-      </div>
-      <div className="flex justify-between gap-4 text-xs">
-        <dt className="text-text-subtle">Data sufficiency</dt>
-        <dd>{rec.data_sufficiency}</dd>
-      </div>
-      {rationaleEntries(rec.rationale).map(([k, v]) => (
-        <div key={k} className="flex justify-between gap-4 text-xs">
-          <dt className="text-text-subtle capitalize">{k}</dt>
-          <dd className="font-mono tabular-nums text-right break-all">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <details className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-warning-fg">
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-1 font-medium">
+        <span className="inline-flex items-center gap-2">
+          <LuTriangleAlert size={14} aria-hidden="true" />
+          {checks.length} decision check{checks.length === 1 ? '' : 's'} need attention
+        </span>
+        <span className="text-xs font-normal">
+          {[failed > 0 ? `${failed} failed` : null, partial > 0 ? `${partial} partial` : null]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      </summary>
+      <ul className="mt-2 grid grid-cols-1 gap-2 border-t border-warning/30 pt-2 sm:grid-cols-2">
+        {checks.map((check) => (
+          <li
+            key={check.id}
+            className="flex min-w-0 items-center justify-between gap-2 rounded border border-default bg-canvas px-2.5 py-2"
+          >
+            <span className="min-w-0 text-xs text-primary">{detectorLabel(check.id)}</span>
+            <Chip variant={check.last_run?.status === 'failed' ? 'danger' : 'warning'}>
+              {check.last_run?.status === 'failed' ? 'Failed' : 'Partial'}
+            </Chip>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
-function ActionRow({ rec }: { rec: Recommendation }) {
-  const queryClient = useQueryClient();
-  const [mode, setMode] = useState<'dismiss' | 'snooze' | null>(null);
-  const [reason, setReason] = useState('');
-  const [until, setUntil] = useState('');
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['dss'] });
-
-  const act = useMutation({
-    mutationFn: (args: {
-      action: 'accept' | 'dismiss' | 'snooze';
-      reason?: string;
-      snoozed_until?: string;
-    }) =>
-      dssApi.act(rec.id, args.action, { reason: args.reason, snoozed_until: args.snoozed_until }),
-    onSuccess: (_, args) => {
-      toast.success(
-        args.action === 'accept'
-          ? 'Recommendation accepted'
-          : args.action === 'dismiss'
-            ? 'Recommendation dismissed'
-            : 'Recommendation snoozed',
-      );
-      setMode(null);
-      invalidate();
-    },
-    onError: (error) => reportMutationError(error, 'Failed to update recommendation'),
-  });
-
+function SummaryCard({
+  label,
+  value,
+  severity,
+}: {
+  label: string;
+  value?: number;
+  severity?: RecommendationSeverity;
+}) {
+  const Icon = severity ? severityIcons[severity] : null;
   return (
-    <div className="mt-2 flex items-center gap-2 flex-wrap">
-      <Button
-        size="xs"
-        variant="primary"
-        disabled={act.isPending}
-        onClick={() => act.mutate({ action: 'accept' })}
-      >
-        {act.isPending ? 'Working…' : 'Accept'}
-      </Button>
-      <Button
-        size="xs"
-        variant="secondary"
-        onClick={() => setMode(mode === 'dismiss' ? null : 'dismiss')}
-      >
-        Dismiss
-      </Button>
-      <Button
-        size="xs"
-        variant="secondary"
-        onClick={() => setMode(mode === 'snooze' ? null : 'snooze')}
-      >
-        Snooze
-      </Button>
-      {mode === 'dismiss' && (
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            act.mutate({ action: 'dismiss', reason });
-          }}
-        >
-          <Input
-            placeholder="Why does this not apply? (required)"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            fieldSize="sm"
-          />
-          <Button
-            size="xs"
-            variant="danger"
-            type="submit"
-            disabled={act.isPending || !reason.trim()}
-          >
-            Confirm
-          </Button>
-        </form>
-      )}
-      {mode === 'snooze' && (
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            act.mutate({ action: 'snooze', snoozed_until: new Date(until).toISOString() });
-          }}
-        >
-          <Input
-            type="date"
-            value={until}
-            onChange={(e) => setUntil(e.target.value)}
-            fieldSize="sm"
-          />
-          <Button size="xs" variant="secondary" type="submit" disabled={act.isPending || !until}>
-            Confirm
-          </Button>
-        </form>
-      )}
+    <div className="min-w-0 rounded-md border border-default bg-canvas px-4 py-3">
+      <div className="flex items-center gap-2 text-xs text-secondary">
+        {Icon && <Icon size={13} aria-hidden="true" />}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 font-mono text-xl tabular-nums text-primary" aria-live="polite">
+        {value === undefined ? '—' : new Intl.NumberFormat('en-PH').format(value)}
+      </div>
     </div>
   );
 }
 
+function ownerLabel(recommendation: Recommendation, options: RecommendationOption[]): string {
+  const labels = new Map(options.map(({ value, label }) => [value, label]));
+  const values = Array.isArray(recommendation.owner_role_slugs)
+    ? recommendation.owner_role_slugs.filter((value): value is string => typeof value === 'string')
+    : [];
+  const known = [...new Set(values.map((value) => labels.get(value)).filter(Boolean))];
+  return known.length ? known.join(', ') : 'Owner not recorded';
+}
+
+function statusVariant(status: Recommendation['status']) {
+  return status === 'open' || status === 'in_progress'
+    ? 'info'
+    : status === 'snoozed'
+      ? 'warning'
+      : status === 'resolved'
+        ? 'success'
+        : 'neutral';
+}
+
 export default function DecisionCenterPage() {
-  const [filters, setFilters] = useState<RecommendationListParams>({ page: 1, per_page: 20 });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [notice, setNotice] = useState('');
+  const latestSearch = useRef(searchParams.toString());
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['dss', 'recommendations', filters],
-    queryFn: () => dssApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+  useEffect(() => {
+    latestSearch.current = searchParams.toString();
+  }, [searchParams]);
 
-  const toggleSeverity = (sev: RecommendationSeverity) =>
-    setFilters((f) => ({ ...f, severity: f.severity === sev ? undefined : sev, page: 1 }));
+  const filters = useMemo(() => readFilters(new URLSearchParams(searchParams)), [searchParams]);
+  const legacySelectedId = searchParams.get('id');
+  const listSearch = filtersToSearch(filters);
 
-  const groups = (data?.data ?? []).reduce<Record<RecommendationSeverity, Recommendation[]>>(
-    (acc, r) => {
-      (acc[r.severity] ||= []).push(r);
-      return acc;
+  useEffect(() => {
+    if (legacySelectedId) {
+      navigate(`/decision-center/${encodeURIComponent(legacySelectedId)}${listSearch}`, {
+        replace: true,
+      });
+    }
+  }, [legacySelectedId, listSearch, navigate]);
+
+  const updateUrl = useCallback(
+    (patch: Partial<RecommendationListParams>, options: { replace?: boolean } = {}) => {
+      const current = new URLSearchParams(latestSearch.current);
+      const next = new URLSearchParams();
+      for (const key of FILTER_KEYS) {
+        const value = Object.prototype.hasOwnProperty.call(patch, key)
+          ? patch[key]
+          : current.get(key);
+        if (value === undefined || value === null || value === '') continue;
+        if (key === 'page' && value === 1) continue;
+        if (key === 'per_page' && value === 20) continue;
+        if (key === 'sort' && value === 'priority_score') continue;
+        if (key === 'direction' && value === 'desc') continue;
+        next.set(key, String(value));
+      }
+      latestSearch.current = next.toString();
+      setSearchParams(next, { replace: options.replace });
     },
-    { critical: [], warning: [], info: [] },
+    [setSearchParams],
   );
 
-  const total = data?.meta.total ?? 0;
+  const updateFilter = (key: string, value: unknown) => {
+    updateUrl(
+      { [key]: typeof value === 'string' && value !== '' ? value : undefined, page: 1 },
+      { replace: value === undefined || value === '' },
+    );
+  };
+
+  const optionsQuery = useQuery({
+    queryKey: ['dss', 'recommendations', 'options'],
+    queryFn: dssApi.options,
+    staleTime: 60_000,
+  });
+  const options = optionsQuery.isError ? undefined : optionsQuery.data;
+  const scopedFiltersValid =
+    (!filters.domain && !filters.owner_role) ||
+    (!!options &&
+      (!filters.domain || options.domains.some((option) => option.value === filters.domain)) &&
+      (!filters.owner_role ||
+        options.owner_roles.some((option) => option.value === filters.owner_role)));
+
+  useEffect(() => {
+    if (options) {
+      const missingDomain =
+        filters.domain && !options.domains.some((option) => option.value === filters.domain);
+      const missingOwner =
+        filters.owner_role &&
+        !options.owner_roles.some((option) => option.value === filters.owner_role);
+      if (missingDomain || missingOwner) {
+        updateUrl(
+          {
+            domain: missingDomain ? undefined : filters.domain,
+            owner_role: missingOwner ? undefined : filters.owner_role,
+            page: 1,
+          },
+          { replace: true },
+        );
+        setNotice(
+          'An area or team filter was cleared because it is no longer available to your role.',
+        );
+      }
+      return;
+    }
+
+    if (optionsQuery.isError && (filters.domain || filters.owner_role)) {
+      updateUrl({ domain: undefined, owner_role: undefined, page: 1 }, { replace: true });
+      setNotice('Area and team filters were cleared because filter choices could not be verified.');
+    }
+  }, [filters.domain, filters.owner_role, options, optionsQuery.isError, updateUrl]);
+
+  const summaryFilters = useMemo(() => {
+    const params = { ...filters };
+    delete params.page;
+    delete params.per_page;
+    return params;
+  }, [filters]);
+
+  const listQuery = useQuery({
+    queryKey: ['dss', 'recommendations', filters],
+    queryFn: () => dssApi.list(filters),
+    enabled: scopedFiltersValid,
+  });
+  const summaryQuery = useQuery({
+    queryKey: ['dss', 'recommendations', 'summary', summaryFilters],
+    queryFn: () => dssApi.summary(summaryFilters),
+    enabled: scopedFiltersValid,
+  });
+  const coverageQuery = useQuery({
+    queryKey: ['dss', 'coverage'],
+    queryFn: dssApi.coverage,
+  });
+  const isRefreshing =
+    listQuery.isFetching ||
+    summaryQuery.isFetching ||
+    optionsQuery.isFetching ||
+    coverageQuery.isFetching;
+  const coverage = coverageQuery.data;
+  const checksNeedingAttention =
+    coverage?.checks.filter(
+      (check) => check.last_run?.status === 'failed' || check.last_run?.status === 'partial',
+    ) ?? [];
+
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: options?.statuses ?? statusFallback,
+    },
+    {
+      key: 'severity',
+      label: 'Severity',
+      type: 'select',
+      options: options?.severities ?? severityOptions,
+    },
+    { key: 'domain', label: 'Area', type: 'select', options: options?.domains ?? [] },
+    {
+      key: 'owner_role',
+      label: 'Responsible team',
+      type: 'select',
+      options: options?.owner_roles ?? [],
+    },
+  ];
+
+  const summary = summaryQuery.data;
+  const selectRecommendation = (recommendation: Recommendation) =>
+    navigate(`/decision-center/${recommendation.id}${listSearch}`);
+
+  const columns: Column<Recommendation>[] = [
+    {
+      key: 'status',
+      header: 'Status',
+      className: 'w-28',
+      cell: (recommendation) => (
+        <Chip variant={statusVariant(recommendation.status)}>
+          {recommendationStatusLabel(recommendation.status)}
+        </Chip>
+      ),
+    },
+    {
+      key: 'priority_score',
+      header: 'Priority',
+      sortable: true,
+      className: 'w-24',
+      cell: (recommendation) => (
+        <Chip variant={severityVariant(recommendation.severity)}>
+          {severityLabel(recommendation.severity)}
+        </Chip>
+      ),
+    },
+    {
+      key: 'decision',
+      header: 'Decision',
+      className: 'min-w-[230px]',
+      cell: (recommendation) => {
+        const view = decisionView(recommendation);
+        const href = `/decision-center/${recommendation.id}${listSearch}`;
+        return (
+          <div className="min-w-0 py-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Link to={href} className="break-words text-sm font-medium text-link">
+                {view.title}
+              </Link>
+              <Chip variant="neutral">{view.area}</Chip>
+            </div>
+            <p className="mt-1 max-w-2xl whitespace-normal text-xs text-secondary">
+              {view.summary}
+            </p>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'impact',
+      header: 'Business impact',
+      className: 'min-w-[130px]',
+      cell: (recommendation) => {
+        const impact = formatImpact(
+          recommendation.impact_estimate,
+          recommendation.impact_currency ?? recommendation.impact_unit,
+          recommendation.impact_is_estimate,
+        );
+        return impact ? (
+          <span className="block">
+            {recommendation.impact_metric && (
+              <span className="block text-xs text-muted">{recommendation.impact_metric}</span>
+            )}
+            <span>{impact}</span>
+          </span>
+        ) : (
+          <span className="text-muted">Not available</span>
+        );
+      },
+    },
+    {
+      key: 'responsible_team',
+      header: 'Responsible team',
+      className: 'min-w-[140px]',
+      cell: (recommendation) => ownerLabel(recommendation, options?.owner_roles ?? []),
+    },
+    {
+      key: 'evidence',
+      header: 'Evidence',
+      className: 'min-w-[125px]',
+      cell: (recommendation) => (
+        <span className="text-secondary">{decisionView(recommendation).evidenceLabel}</span>
+      ),
+    },
+  ];
+
+  const refresh = () =>
+    void Promise.all([
+      listQuery.refetch(),
+      summaryQuery.refetch(),
+      optionsQuery.refetch(),
+      coverageQuery.refetch(),
+    ]);
 
   return (
     <div>
       <PageHeader
         title="Decision Center"
-        subtitle={data ? `${total} open recommendation${total === 1 ? '' : 's'}` : undefined}
+        subtitle={
+          summary
+            ? `${summary.total} recommendation${summary.total === 1 ? '' : 's'} in this view`
+            : undefined
+        }
+        refreshingQueryKey={['dss']}
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={refresh}
+            disabled={isRefreshing}
+            icon={<LuRefreshCw size={13} className={isRefreshing ? 'animate-spin' : undefined} />}
+          >
+            Refresh Decision Center
+          </Button>
+        }
       />
 
-      <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
-        {(['critical', 'warning', 'info'] as RecommendationSeverity[]).map((s) => (
-          <ToggleChip key={s} active={filters.severity === s} onClick={() => toggleSeverity(s)}>
-            <Chip variant={severityVariant(s)}>{s}</Chip>
-          </ToggleChip>
-        ))}
-        <span className="text-2xs text-text-subtle ml-2">
-          Advisory only — the DSS recommends, people decide.
-        </span>
+      <FilterBar
+        filters={filterConfig}
+        values={filters as Record<string, unknown>}
+        onSearch={(search) =>
+          updateUrl({ search: search || undefined, page: 1 }, { replace: true })
+        }
+        onFilter={updateFilter}
+        searchPlaceholder="Search decisions, customers, work orders, bills, POs, NCRs, inspections, lots, or documents…"
+        searchMaxLength={120}
+      />
+
+      <div className="px-5 pt-2 text-right text-2xs text-text-subtle">
+        Advisory only — DSS recommends; people decide.
       </div>
 
-      {isLoading && !data && <SkeletonTable columns={1} rows={6} />}
-
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load recommendations"
-          action={
-            <Button variant="secondary" onClick={() => refetch()}>
-              Retry
+      {notice && (
+        <div className="px-5 pt-3" role="status">
+          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+            <span>{notice}</span>
+            <Button variant="ghost" size="sm" onClick={() => setNotice('')}>
+              Dismiss
             </Button>
-          }
-        />
-      )}
-
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="check-circle"
-          title="No open recommendations"
-          description="Nothing needs a decision right now. New recommendations appear here as detectors report them."
-        />
-      )}
-
-      {data && data.data.length > 0 && (
-        <div className="px-5 pb-6 space-y-4">
-          {(['critical', 'warning', 'info'] as RecommendationSeverity[]).map((sev) => {
-            const items = groups[sev];
-            if (!items.length) return null;
-            const SevIcon = severityIcon(sev);
-            return (
-              <section key={sev}>
-                <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2 flex items-center gap-2">
-                  <SevIcon size={11} />
-                  <span>{sev}</span>
-                  <span className="font-mono tabular-nums text-text-subtle">·</span>
-                  <span className="font-mono tabular-nums text-text-subtle">{items.length}</span>
-                </h2>
-                <div className="rounded-md border border-subtle divide-y divide-subtle bg-canvas">
-                  {items.map((rec) => {
-                    const impact = formatImpact(
-                      rec.impact_estimate,
-                      rec.impact_unit,
-                      rec.impact_is_estimate,
-                    );
-                    return (
-                      <div key={rec.id} className="px-3 py-2.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link
-                            to={`/decision-center/${rec.id}`}
-                            className="text-sm font-medium text-link"
-                          >
-                            {rec.type.replace(/_/g, ' ')} · {rec.domain}
-                          </Link>
-                          <Chip variant="neutral">{rec.detector_id}</Chip>
-                          {impact && (
-                            <span className="font-mono tabular-nums text-xs text-primary">
-                              {impact}
-                            </span>
-                          )}
-                          <span className="text-2xs text-text-subtle">
-                            confidence {formatConfidence(rec.confidence)}
-                          </span>
-                          {rec.data_sufficiency !== 'sufficient' && (
-                            <Chip variant="warning">thin data</Chip>
-                          )}
-                        </div>
-                        <WhyPanel rec={rec} />
-                        <ActionRow rec={rec} />
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-          {data.meta.last_page > 1 && (
-            <DataTablePagination
-              meta={data.meta}
-              perPage={filters.per_page}
-              onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-              onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
-            />
-          )}
+          </div>
         </div>
       )}
+
+      {optionsQuery.isError && (
+        <div className="px-5 pt-3" role="status">
+          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+            <span>
+              Area and responsible team filters are unavailable. Other filters remain usable.
+            </span>
+            <div className="flex items-center gap-2">
+              {(filters.domain || filters.owner_role) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateUrl({ domain: undefined, owner_role: undefined, page: 1 })}
+                >
+                  Clear area and team
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => void optionsQuery.refetch()}>
+                Retry filter choices
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {coverageQuery.isError && (
+        <div className="px-5 pt-3" role="status">
+          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+            <span>
+              Decision check health is unavailable. Recommendation visibility is unchanged.
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => void coverageQuery.refetch()}>
+              Retry health
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <section
+        aria-label="Recommendation overview"
+        className="mx-auto grid max-w-[1600px] grid-cols-2 gap-3 px-5 py-4 lg:grid-cols-4"
+      >
+        <SummaryCard label="Current view" value={summary?.total} />
+        <SummaryCard label="Critical" value={summary?.by_severity.critical} severity="critical" />
+        <SummaryCard label="Warning" value={summary?.by_severity.warning} severity="warning" />
+        <SummaryCard label="Information" value={summary?.by_severity.info} severity="info" />
+      </section>
+
+      {checksNeedingAttention.length > 0 && !listQuery.isError && (
+        <div className="mx-auto max-w-[1600px] px-5 pb-3">
+          <DetectorHealth checks={checksNeedingAttention} />
+        </div>
+      )}
+
+      <main className="mx-auto max-w-[1600px] px-5 pb-6">
+        {(!scopedFiltersValid || listQuery.isLoading) && !listQuery.data && (
+          <SkeletonTable columns={5} rows={6} />
+        )}
+
+        {listQuery.isError && (
+          <section className="rounded-md border border-default bg-surface">
+            <EmptyState
+              icon="alert-circle"
+              title="Failed to load recommendations"
+              description="Recommendations could not be loaded. Try again. If the problem continues, contact your DSS administrator."
+              action={
+                <Button variant="secondary" onClick={() => void listQuery.refetch()}>
+                  Retry
+                </Button>
+              }
+            />
+          </section>
+        )}
+
+        {listQuery.data && !listQuery.isError && listQuery.data.data.length === 0 && (
+          <section className="rounded-md border border-default bg-surface">
+            <EmptyState
+              icon={checksNeedingAttention.length > 0 ? 'alert-circle' : 'check-circle'}
+              title={
+                listQuery.data.meta.total > 0
+                  ? 'No recommendations on this page'
+                  : filters.severity
+                    ? `No ${severityLabel(filters.severity)} recommendations`
+                    : 'No recommendations match this view'
+              }
+              description={
+                listQuery.data.meta.total > 0
+                  ? `${listQuery.data.meta.total} recommendations match these filters, but none appear on this page.`
+                  : filters.severity
+                    ? `No recommendations match ${severityLabel(filters.severity)} priority. Clear the severity filter to see all recommendations.`
+                    : emptyCoverageDescription(coverage)
+              }
+              action={
+                listQuery.data.meta.total > 0 && (filters.page ?? 1) > 1 ? (
+                  <Button variant="secondary" onClick={() => updateUrl({ page: 1 })}>
+                    Go to first page
+                  </Button>
+                ) : undefined
+              }
+            />
+            {checksNeedingAttention.length > 0 && (
+              <div className="border-t border-default px-4 py-3 sm:px-6">
+                <DetectorHealth checks={checksNeedingAttention} />
+              </div>
+            )}
+          </section>
+        )}
+
+        {listQuery.data && !listQuery.isError && listQuery.data.data.length > 0 && (
+          <div className="min-w-0 rounded-md border border-default bg-canvas p-2 sm:p-3">
+            <DataTable
+              columns={columns}
+              data={listQuery.data.data}
+              meta={listQuery.data.meta}
+              onPageChange={(page) => updateUrl({ page })}
+              onPageSizeChange={(per_page) => updateUrl({ per_page, page: 1 })}
+              onSort={(sort, direction) =>
+                updateUrl({ sort: sort as RecommendationListParams['sort'], direction, page: 1 })
+              }
+              currentSort={filters.sort ?? 'priority_score'}
+              currentDirection={filters.direction ?? 'desc'}
+              onRowClick={selectRecommendation}
+              tableKey="decision-center"
+              emptyState={<EmptyState size="compact" title="No matching decisions" />}
+            />
+          </div>
+        )}
+      </main>
     </div>
   );
 }

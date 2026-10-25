@@ -13,6 +13,8 @@ class DssRunLog extends Model
 {
     use HasFactory, HasHashId;
 
+    public const INTERRUPTION_REASON = 'Runner worker interrupted before completing the detector run.';
+
     protected $table = 'dss_run_logs';
 
     protected $fillable = [

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { LuArchiveRestore, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
+import { LuArchiveRestore, LuCamera, LuPencil, LuPlus, LuTrash2 } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { productsApi, type ProductListParams } from '@/api/crm/products';
@@ -21,14 +21,17 @@ import { formatPeso } from '@/lib/formatNumber';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
 export default function ProductsListPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('crm.products.manage');
+ const canViewCosts = can('inventory.costs.review') || can('inventory.costs.approve');
  const [filters, setFilters] = useUrlFilters<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
+ const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['crm', 'products', filters, { trashed: archiveToTrashed(scope) }],
@@ -56,7 +59,49 @@ export default function ProductsListPage() {
   toast.error(e.response?.data?.message ?? 'Failed to restore product.');
   } });
 
+ const uploadImage = useMutation({
+  mutationFn: ({ id, file }: { id: string; file: File }) => productsApi.uploadImage(id, file),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['crm', 'products'] });
+   toast.success('Product photo updated.');
+  },
+  onError: (e: AxiosError<{ message?: string }>) => {
+   toast.error(e.response?.data?.message ?? 'Failed to upload product photo.');
+  },
+ });
+
+ const costColumn: Column<Product> = {
+ key: 'cost', header: 'Std Cost', align: 'right',
+ cell: (r) => <NumCell>{formatPeso(r.standard_cost)}</NumCell> };
  const columns: Column<Product>[] = [
+ {
+ key: 'photo', header: 'Photo',
+ cell: (r) => (
+ <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+ {r.image_url ? (
+ <ProductPhotoButton photo={{ url: r.image_url, name: r.name, partNumber: r.part_number }} className="h-11 w-11" onView={setPhotoPreview} />
+ ) : (
+ <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded border border-default bg-surface text-muted">
+ <LuCamera size={16} />
+ </div>
+ )}
+ {canManage && <label className="cursor-pointer text-xs text-accent hover:underline">
+ {uploadImage.isPending ? 'Uploading…' : r.image_url ? 'Change' : 'Add photo'}
+ <input
+ type="file"
+ accept="image/jpeg,image/png,image/webp"
+ className="sr-only"
+ disabled={uploadImage.isPending}
+ onClick={(event) => event.stopPropagation()}
+ onChange={(event) => {
+ const file = event.currentTarget.files?.[0];
+ if (file) uploadImage.mutate({ id: r.id, file });
+ event.currentTarget.value = '';
+ }}
+ />
+ </label>}
+ </div>
+ ) },
  {
  key: 'part_number', header: 'Part #',
  cell: (r) => (
@@ -68,12 +113,12 @@ export default function ProductsListPage() {
  <div>
  <div className="font-medium">{r.name}</div>
  {r.description && <div className="text-xs text-muted truncate max-w-md">{r.description}</div>}
+ {r.base_selling_price == null && <div role="status" className="mt-1 text-xs text-warning-fg">No base price · customer agreement required to order</div>}
+ {r.minimum_selling_price == null && <div role="status" className="mt-1 text-xs text-warning-fg">No minimum price · Sales offers blocked until configured</div>}
  </div>
  ) },
  { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
- {
- key: 'cost', header: 'Std Cost', align: 'right',
- cell: (r) => <NumCell>{formatPeso(r.standard_cost)}</NumCell> },
+ ...(canViewCosts ? [costColumn] : []),
  {
  key: 'has_bom', header: 'BOM',
  cell: (r) => r.has_bom ? <Chip variant="success">Yes</Chip> : <Chip variant="neutral">—</Chip> },
@@ -121,6 +166,7 @@ export default function ProductsListPage() {
 
  return (
  <div>
+ <ProductPhotoViewer photo={photoPreview} onClose={() => setPhotoPreview(null)} />
  <PageHeader
  title="Products"
  subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'product' : 'products'}` : undefined}
@@ -138,7 +184,7 @@ export default function ProductsListPage() {
  searchPlaceholder="Search part number or name…"
  actions={<ArchiveFilter value={scope} onChange={setScope} />}
  />
- {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={8} />}
+ {isLoading && !data && <SkeletonTable columns={canManage ? 8 : 7} rows={8} />}
  {isError && (
  <EmptyState
  icon="alert-circle"

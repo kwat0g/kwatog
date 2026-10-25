@@ -61,7 +61,7 @@ browser profiles or switch accounts at each handoff.
 | `driver@ogami.test` | Driver | Driver delivery list, delivery status, delivery receipt/photo flow |
 | `finance@ogami.test` | Finance Officer | Invoices, bills, budgets, collections, payroll approval/finalization |
 | `crm@ogami.test` | Sales Officer | Sales orders, customer negotiation, and commercial records |
-| `customerservice@ogami.test` | Customer Service Officer | Customer records, inquiries, complaints, and returns |
+| `customerservice@ogami.test` | Customer Service Officer | Customer inquiries, complaints, and returns; customer records are read-only |
 | `hr@ogami.test` | HR Officer | Employees, attendance, leave, loans, payroll creation/computation |
 | `depthead@ogami.test` | Department Head | Department leave, overtime, loan, and Purchase Request approvals |
 | `maintenance@ogami.test` | Maintenance Technician | Maintenance Work Orders and condition-based maintenance |

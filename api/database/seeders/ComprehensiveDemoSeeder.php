@@ -1057,26 +1057,15 @@ class ComprehensiveDemoSeeder extends Seeder
      * =================================================================== */
     private function seedSupplierPerformance(): void
     {
-        $vendors = DB::table('vendors')->get();
         $now = now();
 
-        foreach ($vendors as $v) {
-            DB::table('supplier_performance_snapshots')->insert([
-                'vendor_id'               => $v->id,
-                'period_year'             => $now->year,
-                'period_month'            => $now->month,
-                'on_time_delivery_rate'   => rand(75, 100),
-                'quality_pass_rate'       => rand(85, 100),
-                'price_variance_pct'      => round(rand(-5, 10), 1),
-                'lead_time_variance_days' => rand(-2, 5),
-                'overall_score'           => round(rand(75, 100) * rand(75, 100) / 100, 1),
-                'po_count'                => rand(5, 20),
-                'grn_count'               => rand(3, 15),
-                'computed_at'             => $now,
-            ]);
+        $result = app(\App\Modules\Purchasing\Services\SupplierPerformanceService::class)
+            ->recomputeAll($now->year, $now->month);
+        if ($result['failed'] !== []) {
+            throw new \RuntimeException('Supplier performance demo calculation failed.');
         }
 
-        $this->command?->info('[Supplier Performance] Created ' . count($vendors) . ' performance snapshots.');
+        $this->command?->info('[Supplier Performance] Computed ' . $result['computed'] . ' source-backed performance snapshots.');
     }
 
     /* ===================================================================

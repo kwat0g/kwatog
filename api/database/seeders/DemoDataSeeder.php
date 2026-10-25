@@ -310,21 +310,21 @@ class DemoDataSeeder extends Seeder
         $this->command?->info("Seeded {$created} attendance records (5 days × " . $employees->count() . ' employees).');
     }
 
-    /**
-     * Up to TARGET_SOS sales orders. Confirms the first three so they
-     * trigger the MRP run and produce visible draft work orders. The rest
-     * stay draft so the UI has both states represented.
-     */
+    /** Seed a complete order book and start MRP for each demo order. */
     private function seedSalesOrders(): void
     {
-        if (SalesOrder::count() >= self::TARGET_SOS) {
-            $this->command?->info('Sales orders already seeded.');
-            return;
-        }
-
         $admin = User::where('email', 'admin@ogami.test')->first() ?? User::first();
         if (! $admin) {
             $this->command?->warn('No admin user; skipping sales orders.');
+            return;
+        }
+
+        /** @var SalesOrderService $svc */
+        $svc = app(SalesOrderService::class);
+        $existing = SalesOrder::query()->where('notes', 'like', 'Demo seed%')->count();
+        if ($existing >= self::TARGET_SOS) {
+            $this->confirmDemoSalesOrders($svc);
+            $this->command?->info('Demo sales orders already seeded.');
             return;
         }
 
@@ -347,11 +347,7 @@ class DemoDataSeeder extends Seeder
             return;
         }
 
-        /** @var SalesOrderService $svc */
-        $svc = app(SalesOrderService::class);
-        $existing = SalesOrder::count();
         $needed   = self::TARGET_SOS - $existing;
-        $confirmed = 0;
         $createdCount = 0;
 
         for ($i = 0; $i < $needed; $i++) {
@@ -373,21 +369,38 @@ class DemoDataSeeder extends Seeder
                 ], $admin->id);
                 $createdCount++;
 
-                // Confirm the first three so MRP runs and we get visible WOs.
-                if ($confirmed < 3) {
-                    try {
-                        $svc->confirm($so);
-                        $confirmed++;
-                    } catch (Throwable $e) {
-                        $this->command?->warn("  Confirm failed on {$so->so_number}: " . $e->getMessage());
-                    }
-                }
             } catch (Throwable $e) {
                 $this->command?->warn('  SO create failed: ' . $e->getMessage());
             }
         }
 
+        $confirmed = $this->confirmDemoSalesOrders($svc);
         $this->command?->info("Seeded {$createdCount} sales orders ({$confirmed} confirmed → MRP).");
+    }
+
+    private function confirmDemoSalesOrders(SalesOrderService $service): int
+    {
+        $confirmed = 0;
+        $orders = SalesOrder::query()
+            ->where('notes', 'like', 'Demo seed%')
+            ->orderBy('id')
+            ->limit(self::TARGET_SOS)
+            ->get();
+
+        foreach ($orders as $order) {
+            if ($order->status !== SalesOrderStatus::Draft) {
+                continue;
+            }
+
+            try {
+                $service->confirm($order);
+                $confirmed++;
+            } catch (Throwable $e) {
+                $this->command?->warn("  Confirm failed on {$order->so_number}: {$e->getMessage()}");
+            }
+        }
+
+        return $confirmed;
     }
 
     /**

@@ -125,6 +125,11 @@ Schedule::command('dss:run')
     ->withoutOverlapping(10)
     ->onOneServer();
 
+Schedule::command('dss:maintain')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 // Retry failed critical-alert email handoffs without creating another alert
 // row. The delivery state on the alert supplies bounded backoff and recovery.
 Schedule::command('alerts:retry-critical-emails --limit=100')

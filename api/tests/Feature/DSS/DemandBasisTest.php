@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\DSS;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Support\DemandBasis;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
@@ -15,8 +17,7 @@ class DemandBasisTest extends TestCase
 
     public function test_legacy_sets_match_historical_definitions(): void
     {
-        // Byte-identical to the three pre-unification definitions (F-02):
-        // replenishment hardcoded trio, safety-stock seed default, projection trio.
+        // Consumer sets remain distinct pending the owner decision (F-02).
         $this->assertSame(
             ['material_issue', 'delivery', 'scrap'],
             DemandBasis::legacy(DemandBasis::REPLENISHMENT)
@@ -26,7 +27,7 @@ class DemandBasisTest extends TestCase
             DemandBasis::legacy(DemandBasis::SAFETY_STOCK)
         );
         $this->assertSame(
-            ['material_issue', 'consume', 'production_issue'],
+            ['material_issue'],
             DemandBasis::legacy(DemandBasis::PROJECTION)
         );
     }
@@ -42,9 +43,17 @@ class DemandBasisTest extends TestCase
             $basis->movementTypes(DemandBasis::REPLENISHMENT)
         );
         $this->assertSame(
-            DemandBasis::legacy(DemandBasis::PROJECTION),
+            ['material_issue'],
             $basis->movementTypes(DemandBasis::PROJECTION)
         );
+    }
+
+    public function test_unsupported_configured_movements_fail_closed(): void
+    {
+        app(SettingsService::class)->set('inventory.demand.projection_movement_types', ['material_issue', 'consume'], 'inventory');
+
+        $this->expectException(BusinessRuleException::class);
+        app(DemandBasis::class)->movementTypes(DemandBasis::PROJECTION);
     }
 
     public function test_unknown_consumer_throws(): void

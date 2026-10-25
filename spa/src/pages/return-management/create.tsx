@@ -24,9 +24,11 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { usePermission } from '@/hooks/usePermission';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { localIsoDate } from '@/lib/formatDate';
+import { useAuthStore } from '@/stores/authStore';
 
 const optionalNumber = z.preprocess(
   (value) => (value === '' || value === null ? undefined : value),
@@ -159,6 +161,10 @@ const sourceForExistingLine = (line: NonNullable<ReturnRequest['items']>[number]
 export default function CreateReturnRequestPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { can } = usePermission();
+  const roleSlug = useAuthStore((state) => state.user?.role.slug);
+  const canCreateSupplierReturn =
+    roleSlug !== 'customer_service_officer' || can('purchasing.po.create');
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
   const form = useForm<FormValues>({
@@ -448,7 +454,11 @@ export default function CreateReturnRequestPage() {
       <PageHeader
         title={editing ? 'Edit Return Request' : 'New Return Request'}
         subtitle={
-          editing ? 'Correct a draft before approval' : 'Create a customer or supplier return'
+          editing
+            ? 'Correct a draft before approval'
+            : canCreateSupplierReturn
+              ? 'Create a customer or supplier return'
+              : 'Create a customer return'
         }
         backTo={editing ? `/return-management/${id}` : '/return-management'}
       />
@@ -467,11 +477,13 @@ export default function CreateReturnRequestPage() {
               disabled={editing}
             >
               <option value="">— Select type —</option>
-              {(options?.types ?? []).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              {(options?.types ?? [])
+                .filter((option) => option.value !== 'supplier_return' || canCreateSupplierReturn)
+                .map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
             </Select>
             <Input
               label="Return Date"

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuCheck, LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
+import { LuCheck, LuPackage, LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
 import { useDebounce } from '@/hooks/useDebounce';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
@@ -15,9 +15,10 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { fromCentavos, toCentavos } from '@/lib/money';
 import type { PortalCatalogItem } from '@/types/b2b';
+import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
 
 interface OrderLine {
-  product: PortalCatalogItem;
+  product: PortalCatalogItem & { unit_price: string };
   quantity: string;
 }
 
@@ -44,6 +45,7 @@ export default function CustomerPlaceOrderPage() {
   }, []);
   const [deliveryDate, setDeliveryDate] = useState('');
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<ProductPhotoDetails | null>(null);
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
   const addProductsRef = useRef<HTMLButtonElement>(null);
@@ -107,8 +109,10 @@ export default function CustomerPlaceOrderPage() {
     ? Object.values(quoteError?.response?.data?.errors ?? {}).flat().join(' ') || quoteError?.response?.data?.message || 'Unable to check prices. Try again.' : null;
 
   const addLine = (product: PortalCatalogItem) => {
+    const unitPrice = product.unit_price;
+    if (unitPrice === null) return;
     if (lines.some((line) => line.product.id === product.id)) return;
-    setLines([...lines, { product, quantity: '1' }]);
+    setLines([...lines, { product: { ...product, unit_price: unitPrice }, quantity: '1' }]);
   };
 
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
@@ -165,6 +169,7 @@ export default function CustomerPlaceOrderPage() {
 
   return (
     <div className="[color-scheme:light] dark:[color-scheme:dark]">
+      <ProductPhotoViewer photo={photoPreview} onClose={() => setPhotoPreview(null)} />
       <PageHeader title={id ? `Edit ${existingOrder?.so_number ?? 'order'}` : 'Place an Order'} subtitle={id ? 'Changes are allowed until sales confirms this order.' : 'Select products and quantities. Prices reflect your delivery date and any customer agreement.'}
         backTo={id ? `/portal/customer/orders/${id}` : '/portal/customer/orders'} backLabel={id ? 'Order' : 'My orders'} />
       <form onSubmit={(event) => {
@@ -220,15 +225,24 @@ export default function CustomerPlaceOrderPage() {
                     className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-default bg-canvas">
                     {catalog.map((product) => {
                       const added = lines.some((line) => line.product.id === product.id);
-                      return <li key={product.id} className={`grid grid-cols-[minmax(0,1fr)_80px] items-center gap-x-3 px-4 py-2 sm:grid-cols-[minmax(0,1fr)_100px_80px] sm:px-5 ${added ? 'bg-surface' : 'hover:bg-surface'}`}>
-                        <div className="min-w-0"><p className="font-medium leading-snug break-words">{product.name}</p>
+                      return <li key={product.id} className={`grid grid-cols-[44px_minmax(0,1fr)_80px] items-center gap-x-3 px-4 py-2 sm:grid-cols-[44px_minmax(0,1fr)_100px_80px] sm:px-5 ${added ? 'bg-surface' : 'hover:bg-surface'}`}>
+                        {product.image_url ? (
+                          <ProductPhotoButton photo={{ url: product.image_url, name: product.name, partNumber: product.part_number }} className="col-start-1 row-span-2 row-start-1 h-11 w-11" onView={setPhotoPreview} />
+                        ) : (
+                          <div aria-hidden="true" className="col-start-1 row-span-2 row-start-1 flex h-11 w-11 items-center justify-center rounded border border-default bg-canvas text-muted">
+                            <LuPackage size={18} />
+                          </div>
+                        )}
+                        <div className="col-start-2 row-start-1 min-w-0"><p className="font-medium leading-snug break-words">{product.name}</p>
                           <p className="mt-0.5 font-mono text-xs text-muted">{product.part_number}</p></div>
-                        <p className="col-start-1 row-start-2 text-xs text-muted sm:col-start-2 sm:row-start-1 sm:text-right">
-                          <span className="font-mono tabular-nums">{formatPeso(product.unit_price)}</span> / {product.unit_of_measure || 'unit'}</p>
-                        <Button type="button" size="sm" className="col-start-2 row-span-2 row-start-1 min-h-11 disabled:opacity-100 disabled:text-muted sm:col-start-3 sm:row-span-1"
+                        <p className="col-start-2 row-start-2 text-xs text-muted sm:col-start-3 sm:row-start-1 sm:text-right">
+                          <span className="font-mono tabular-nums">{product.unit_price === null ? 'Price unavailable' : formatPeso(product.unit_price)}</span>{product.unit_price !== null && <> / {product.unit_of_measure || 'unit'}</>}
+                          {product.pricing_issue && <span className="mt-1 block text-warning-fg">{product.pricing_issue}</span>}
+                        </p>
+                        <Button type="button" size="sm" className="col-start-3 row-span-2 row-start-1 min-h-11 disabled:opacity-100 disabled:text-muted sm:col-start-4 sm:row-span-1"
                           icon={added ? <LuCheck size={14} /> : <LuPlus size={14} />}
-                          aria-label={added ? `${product.name} added to order` : `Add ${product.name} to order`}
-                          disabled={added} onClick={() => addLine(product)}>{added ? 'Added' : 'Add'}</Button>
+                          aria-label={added ? `${product.name} added to order` : product.unit_price === null ? `${product.name} cannot be ordered: ${product.pricing_issue ?? 'price unavailable'}` : `Add ${product.name} to order`}
+                          disabled={added || product.unit_price === null} onClick={() => addLine(product)}>{added ? 'Added' : product.unit_price === null ? 'Unavailable' : 'Add'}</Button>
                       </li>;
                     })}
                   </ul>
@@ -252,8 +266,19 @@ export default function CustomerPlaceOrderPage() {
                     <tbody>
                       {lines.map((line, idx) => <tr key={line.product.id} className={trCls}>
                         <Td>
-                          <p className="font-medium leading-snug break-words">{line.product.name}</p>
-                          <p className="mt-0.5 font-mono text-xs text-muted">{line.product.part_number} <span className="font-sans">· {line.product.unit_of_measure || 'unit'}</span></p>
+                          <div className="flex items-center gap-3">
+                            {line.product.image_url ? (
+                              <ProductPhotoButton photo={{ url: line.product.image_url, name: line.product.name, partNumber: line.product.part_number }} className="h-11 w-11" onView={setPhotoPreview} />
+                            ) : (
+                              <div aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-default bg-surface text-muted">
+                                <LuPackage size={16} />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-medium leading-snug break-words">{line.product.name}</p>
+                              <p className="mt-0.5 font-mono text-xs text-muted">{line.product.part_number} <span className="font-sans">· {line.product.unit_of_measure || 'unit'}</span></p>
+                            </div>
+                          </div>
                         </Td>
                         <Td>
                           <Input fieldSize="lg" aria-label={`Quantity for ${line.product.part_number}`} type="number" min={1} step={1} inputMode="numeric" required

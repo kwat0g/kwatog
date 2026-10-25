@@ -12,6 +12,9 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -35,10 +38,10 @@ use Illuminate\Database\Eloquent\Builder;
  *             false (same shape as payroll);
  *   - bill_payment: the bills endpoint has no row scope, so holders of
  *             accounting.bills.view see every bill in the module;
- *   - return_request: same documented decision as payroll — every holder of
- *             `return_management.view` sees every RMA in the module's own
- *             list endpoint, so the permission gate is equivalent and
- *             hasScope() reports false.
+ *   - return_request: customer service has a type scope; other roles use the
+ *             module permission gate without an additional row scope. It is
+ *             still excluded from class-wide DSS aggregates because one role
+ *             is scoped.
  *
  * Before this existed the board gated cards on the module READ permissions
  * alone — and `leave.view` is a self-scoped permission granted to every role,
@@ -48,6 +51,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 final class ApprovalSourceScope
 {
+    /** True when at least one viewer role has a source-specific row restriction. */
     public static function hasScope(string $class): bool
     {
         return in_array($class, [
@@ -55,7 +59,17 @@ final class ApprovalSourceScope
             EmployeeLoan::class,
             PurchaseRequest::class,
             PurchaseOrder::class,
+            ReturnRequest::class,
         ], true);
+    }
+
+    public static function hasScopeFor(string $class, User $user): bool
+    {
+        if ($class === ReturnRequest::class) {
+            return ReturnManagementAccess::customerReturnsOnly($user);
+        }
+
+        return self::hasScope($class);
     }
 
     /**
@@ -71,7 +85,7 @@ final class ApprovalSourceScope
             return [];
         }
 
-        if (! self::hasScope($class)) {
+        if (! self::hasScopeFor($class, $user)) {
             // Unscoped kinds stay permission-gated at the caller; reaching
             // here means the gate passed, so every row is visible.
             return array_fill_keys($ids, true);
@@ -99,6 +113,10 @@ final class ApprovalSourceScope
             EmployeeLoan::class => app(LoanAccessPolicy::class)->visibleTo($query, $user),
             PurchaseRequest::class => app(PurchaseRequestAccessPolicy::class)->visibleTo($query, $user),
             PurchaseOrder::class => app(PurchaseOrderAccessPolicy::class)->visibleTo($query, $user),
+            ReturnRequest::class => $query->when(
+                ReturnManagementAccess::customerReturnsOnly($user),
+                fn (Builder $query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+            ),
             default => $query,
         };
     }

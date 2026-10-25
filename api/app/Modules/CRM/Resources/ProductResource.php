@@ -11,16 +11,25 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $canViewCosts = $request->user()?->hasPermission('inventory.costs.review')
+            || $request->user()?->hasPermission('inventory.costs.approve');
+        $financialChange = $this->financial_change_request;
+
         return [
             'id' => $this->hash_id,
             'part_number' => $this->part_number,
             'name' => $this->name,
             'description' => $this->description,
+            'image_url' => $this->image_path ? "/api/v1/crm/products/{$this->hash_id}/image" : null,
             'unit_of_measure' => $this->unit_of_measure,
-            'standard_cost' => (string) $this->standard_cost,
+            'standard_cost' => $canViewCosts ? (string) $this->standard_cost : null,
             'base_selling_price' => $this->base_selling_price,
             'minimum_selling_price' => $this->minimum_selling_price,
-            'financial_change_request' => $this->financial_change_request ? array_replace($this->financial_change_request, ['proposed_by' => app('hashids')->encode((int) $this->financial_change_request['proposed_by'])]) : null,
+            'financial_change_request' => $canViewCosts && $financialChange ? array_replace($financialChange, [
+                'values' => array_intersect_key($financialChange['values'] ?? [], ['standard_cost' => true]),
+                'original' => array_intersect_key($financialChange['original'] ?? [], ['standard_cost' => true]),
+                'proposed_by' => app('hashids')->encode((int) $financialChange['proposed_by']),
+            ]) : null,
             'portal_visibility' => $this->portal_visibility,
             'portal_customers' => $this->whenLoaded('portalCustomers', fn () => $this->portalCustomers->map(fn ($customer) => [
                 'id' => $customer->hash_id, 'name' => $customer->name,

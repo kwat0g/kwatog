@@ -34,6 +34,7 @@ class Product extends Model
         'part_number', 'name', 'description', 'unit_of_measure',
         'standard_cost', 'revenue_account_id', 'is_active',
         'include_forecast_in_mrp', 'base_selling_price', 'minimum_selling_price', 'portal_visibility',
+        'image_path',
     ];
 
     protected $casts = [

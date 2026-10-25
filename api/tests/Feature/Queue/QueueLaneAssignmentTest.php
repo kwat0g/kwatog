@@ -12,6 +12,7 @@ use App\Common\Mail\NotificationDigestMail;
 use App\Common\Mail\ScheduledExportMail;
 use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\BackupService;
+use App\Jobs\RunDssDetectorJob;
 use App\Modules\Accounting\Jobs\SyncBudgetActuals;
 use App\Modules\Accounting\Listeners\RunBudgetActualsSyncOnRequested;
 use App\Modules\Assets\Jobs\RunMonthlyDepreciationJob;
@@ -41,10 +42,9 @@ use Tests\TestCase;
  *
  *   1. A job naming a lane with NO worker sits in Redis forever. That is what
  *      would happen to any job still saying `low` after the split.
- *   2. A supervisor whose `retry_after` is below its own `timeout` gets its
- *      job re-reserved mid-flight — two restores, two payroll runs. Horizon
- *      defaults that lease to 60s when a supervisor omits it, so silence is
- *      the dangerous case.
+ *   2. A queue connection whose `retry_after` is below a worker `timeout` gets
+ *      its job re-reserved mid-flight — two restores, two payroll runs. The
+ *      effective lease comes from the queue connection, not Horizon options.
  *
  * Both are asserted here rather than trusted, exactly because neither shows up
  * as a symptom until production is busy.
@@ -52,7 +52,7 @@ use Tests\TestCase;
 final class QueueLaneAssignmentTest extends TestCase
 {
     /** Every queue name that has a Horizon supervisor behind it. */
-    private const LANES = ['high', 'default', 'mail', 'automation', 'bulk'];
+    private const LANES = ['high', 'default', 'mail', 'automation', 'bulk', 'dss'];
 
     public function test_every_lane_has_exactly_one_supervisor_and_a_lease_above_its_timeout(): void
     {
@@ -85,7 +85,8 @@ final class QueueLaneAssignmentTest extends TestCase
             }
 
             $timeout = (int) ($options['timeout'] ?? 60);
-            $lease = (int) ($options['retry_after'] ?? 0);
+            $connection = (string) ($options['connection'] ?? 'redis');
+            $lease = (int) config("queue.connections.{$connection}.retry_after", $options['retry_after'] ?? 0);
 
             $this->assertGreaterThan(0, $timeout, "Supervisor [{$name}] has no timeout.");
             $this->assertGreaterThan(
@@ -136,6 +137,16 @@ final class QueueLaneAssignmentTest extends TestCase
             $lease,
             "queue.connections.redis.retry_after ({$lease}s) is below the longest worker timeout ({$longest}s).",
         );
+    }
+
+    public function test_dss_queue_connection_lease_exceeds_worker_and_detector_lock_timeouts(): void
+    {
+        $timeout = (int) config('horizon.defaults.supervisor-dss.timeout');
+        $lease = (int) config('queue.connections.redis_dss.retry_after');
+
+        $this->assertLessThan(310, $timeout);
+        $this->assertGreaterThan($timeout, $lease);
+        $this->assertGreaterThan(310, $lease);
     }
 
     public function test_every_queued_mailable_lands_on_the_mail_lane(): void
@@ -194,6 +205,22 @@ final class QueueLaneAssignmentTest extends TestCase
         $this->assertSame('automation', (new RunBudgetActualsSyncOnRequested)->viaQueue());
     }
 
+    public function test_dss_detector_jobs_use_the_isolated_bounded_lane(): void
+    {
+        $job = new RunDssDetectorJob('dss.master_hygiene');
+
+        $this->assertSame('dss', $job->queue);
+        $this->assertSame('redis_dss', $job->connection);
+        $this->assertSame('dss.master_hygiene', $job->uniqueId());
+        $this->assertGreaterThanOrEqual(
+            config('queue.connections.redis_dss.retry_after'),
+            $job->uniqueFor,
+        );
+        $this->assertSame($job->timeout, config('horizon.defaults.supervisor-dss.timeout'));
+        $this->assertLessThan(310, $job->timeout);
+        $this->assertGreaterThan($job->timeout, config('queue.connections.redis_dss.retry_after'));
+    }
+
     public function test_backup_and_restore_run_on_the_bulk_lane_and_never_retry(): void
     {
         $backup = new CreateBackupJob('op-1');
@@ -241,7 +268,9 @@ final class QueueLaneAssignmentTest extends TestCase
             }
         };
         $queueManager = Mockery::mock();
-        $queueManager->shouldReceive('connection')->with('redis')->once()->andReturn($redisQueue);
+        foreach (collect($expectedTargets)->pluck('connection')->unique() as $connection) {
+            $queueManager->shouldReceive('connection')->with($connection)->once()->andReturn($redisQueue);
+        }
         foreach ($expectedTargets as $target) {
             $queueManager->shouldReceive('pauseFor')
                 ->with($target['connection'], $target['queue'], config('backup.queue_pause_seconds', 21600))
@@ -255,7 +284,7 @@ final class QueueLaneAssignmentTest extends TestCase
                 ->andReturn(true, false);
         }
         Queue::swap($queueManager);
-        config(['queue.connections.redis.block_for' => 1]);
+        config(['queue.connections.redis.block_for' => 1, 'queue.connections.redis_dss.block_for' => 1]);
 
         $service = app(BackupService::class);
         $pause = new \ReflectionMethod(BackupService::class, 'pauseQueues');

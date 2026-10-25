@@ -160,7 +160,7 @@ class ApprovalBoardService
             if ($meta === null) {
                 continue;
             }
-            if (! ApprovalSourceScope::hasScope($class)) {
+            if (! ApprovalSourceScope::hasScopeFor($class, $user)) {
                 $visibleByClass[$class] = ApprovalTypeRegistry::userCanView($user, $meta)
                     ? array_fill_keys(array_values(array_unique($ids)), true)
                     : [];

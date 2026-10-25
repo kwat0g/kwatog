@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Support;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use InvalidArgumentException;
 
@@ -25,6 +26,12 @@ final class DemandBasis
 
     public const PROJECTION = 'projection';
 
+    /** @return list<string> */
+    public static function eligibleMovementTypes(): array
+    {
+        return ['material_issue', 'delivery', 'adjustment_out', 'scrap', 'return_to_vendor'];
+    }
+
     public function __construct(private readonly SettingsService $settings) {}
 
     /** @return list<string> */
@@ -33,11 +40,9 @@ final class DemandBasis
         return match ($consumer) {
             self::REPLENISHMENT => ['material_issue', 'delivery', 'scrap'],
             self::SAFETY_STOCK => ['material_issue', 'delivery', 'adjustment_out', 'scrap', 'return_to_vendor'],
-            // NOTE: `consume` and `production_issue` match no StockMovementType
-            // enum case — the projection effectively counts material_issue only
-            // today. Preserved verbatim (F-15); changing it is a behavior
-            // change for Wave 1, not a drive-by fix.
-            self::PROJECTION => ['material_issue', 'consume', 'production_issue'],
+            // These two historic values are not StockMovementType cases. The
+            // seeded setting is migrated to this effective legacy behavior.
+            self::PROJECTION => ['material_issue'],
             default => throw new InvalidArgumentException("Unknown demand consumer '{$consumer}'."),
         };
     }
@@ -46,18 +51,34 @@ final class DemandBasis
     public function movementTypes(string $consumer): array
     {
         $configured = $this->settings->get("inventory.demand.{$consumer}_movement_types");
-        if (is_array($configured) && $configured !== []) {
-            return array_values($configured);
+        if ($configured !== null && $configured !== []) {
+            return $this->validateConfiguredTypes($configured, "inventory.demand.{$consumer}_movement_types");
         }
 
         // Honor customizations made through the pre-existing safety-stock key.
         if ($consumer === self::SAFETY_STOCK) {
             $legacyKey = $this->settings->get('inventory.safety_stock.issue_movement_types');
-            if (is_array($legacyKey) && $legacyKey !== []) {
-                return array_values($legacyKey);
+            if ($legacyKey !== null && $legacyKey !== []) {
+                return $this->validateConfiguredTypes($legacyKey, 'inventory.safety_stock.issue_movement_types');
             }
         }
 
         return self::legacy($consumer);
+    }
+
+    /** @return list<string> */
+    private function validateConfiguredTypes(mixed $configured, string $key): array
+    {
+        if (! is_array($configured) || $configured === []) {
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+
+        foreach ($configured as $type) {
+            if (! is_string($type) || ! in_array($type, self::eligibleMovementTypes(), true)) {
+                throw new BusinessRuleException("Setting {$key} contains an unsupported demand movement type.");
+            }
+        }
+
+        return array_values(array_unique($configured));
     }
 }

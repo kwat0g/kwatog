@@ -27,6 +27,7 @@ use App\Modules\ReturnManagement\Requests\StoreReturnRequestRequest;
 use App\Modules\ReturnManagement\Requests\UpdateReturnRequestRequest;
 use App\Modules\ReturnManagement\Resources\ReturnRequestResource;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -43,6 +44,7 @@ class ReturnRequestController extends Controller
 
     public function options(Request $request): JsonResponse
     {
+        $supplierReturnsAllowed = ! ReturnManagementAccess::customerReturnsOnly($request->user());
         $read = fn (string $key): array => array_values(array_filter(
             (array) $this->settings->get($key, []),
             static fn ($option): bool => is_array($option) && isset($option['value'], $option['label']),
@@ -67,20 +69,27 @@ class ReturnRequestController extends Controller
             ],
         ];
 
+        if (! $supplierReturnsAllowed) {
+            unset($matrix[ReturnRequestType::SupplierReturn->value]);
+        }
+
         $requestedType = (string) $request->query('type', '');
+        abort_if(! $supplierReturnsAllowed && $requestedType === ReturnRequestType::SupplierReturn->value, 404);
         $requestedFinanceOnly = filter_var($request->query('finance_only', false), FILTER_VALIDATE_BOOLEAN);
         $requestedDispositions = $matrix[$requestedType] ?? null;
         $dispositions = $requestedDispositions
             ? ($requestedDispositions[$requestedFinanceOnly ? 'finance_only' : 'regular'] ?? $requestedDispositions['regular'])
             : array_map(
                 static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
-                DispositionType::cases(),
+                $supplierReturnsAllowed
+                    ? DispositionType::cases()
+                    : DispositionType::allowedFor(ReturnRequestType::CustomerReturn),
             );
 
         return response()->json(['data' => [
             'types' => array_map(
                 static fn (ReturnRequestType $type): array => ['value' => $type->value, 'label' => $type->label()],
-                ReturnRequestType::cases(),
+                $supplierReturnsAllowed ? ReturnRequestType::cases() : [ReturnRequestType::CustomerReturn],
             ),
             'statuses' => array_map(
                 static fn (ReturnRequestStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
@@ -145,6 +154,8 @@ class ReturnRequestController extends Controller
     public function sourceOptions(Request $request): JsonResponse
     {
         $type = (string) $request->query('type');
+        abort_if($type === ReturnRequestType::SupplierReturn->value
+            && ReturnManagementAccess::customerReturnsOnly($request->user()), 404);
 
         if ($type === ReturnRequestType::CustomerReturn->value) {
             $customerId = HashIdFilter::decode($request->query('customer_id'), Customer::class);
@@ -261,6 +272,10 @@ class ReturnRequestController extends Controller
                 'deliveryAttemptOutcome.delivery:id,delivery_number',
             ])->withCount('items');
 
+        if (ReturnManagementAccess::customerReturnsOnly($request->user())) {
+            $q->where('type', ReturnRequestType::CustomerReturn->value);
+        }
+
         // Filters
         if ($type = $request->query('type')) {
             $q->where('type', $type);
@@ -297,8 +312,9 @@ class ReturnRequestController extends Controller
     /**
      * Show a single RMA.
      */
-    public function show(ReturnRequest $returnRequest): ReturnRequestResource
+    public function show(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $returnRequest->load([
             'items.product',
             'items.item',
@@ -347,6 +363,7 @@ class ReturnRequestController extends Controller
     /** Update a still-editable draft and revalidate its source contract. */
     public function update(UpdateReturnRequestRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $rma = $this->service->update($returnRequest, $request->validated(), $request->user());
 
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
@@ -357,6 +374,7 @@ class ReturnRequestController extends Controller
      */
     public function submit(ReturnRequest $returnRequest, Request $request): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $needsEvidence = $returnRequest->type === ReturnRequestType::SupplierReturn
             && str_starts_with((string) $returnRequest->source_key, 'grn-rejection:');
         $validated = $request->validate([
@@ -369,8 +387,9 @@ class ReturnRequestController extends Controller
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
     }
 
-    public function defectPhoto(ReturnRequest $returnRequest): StreamedResponse
+    public function defectPhoto(Request $request, ReturnRequest $returnRequest): StreamedResponse
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         abort_unless($returnRequest->defect_photo_path && Storage::disk('local')->exists($returnRequest->defect_photo_path), 404);
 
         return Storage::disk('local')->download($returnRequest->defect_photo_path, $returnRequest->defect_photo_name);
@@ -381,6 +400,7 @@ class ReturnRequestController extends Controller
      */
     public function approve(ReturnRequest $returnRequest, Request $request): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $validated = $request->validate([
             'remarks' => ['nullable', 'string', 'max:500'],
         ]);
@@ -394,6 +414,7 @@ class ReturnRequestController extends Controller
      */
     public function receive(ReceiveReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $rma = $this->service->receive(
             $returnRequest,
             $request->receivedQuantitiesById(),
@@ -418,6 +439,7 @@ class ReturnRequestController extends Controller
      */
     public function inspect(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $validated = $request->validate([
             'internal_notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -430,6 +452,7 @@ class ReturnRequestController extends Controller
     /** Retry a failed RMA → Quality inspection handoff. */
     public function retryInspection(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $rma = $this->service->retryInspectionHandoff($returnRequest, $request->user());
 
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspection', 'inspections.product']));
@@ -440,6 +463,7 @@ class ReturnRequestController extends Controller
      */
     public function splitItem(SplitReturnRequestItemRequest $request, ReturnRequest $returnRequest, string $line): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $lineId = HashIdFilter::decode($line, ReturnRequestItem::class);
         abort_unless($lineId, 404);
         $rma = $this->service->splitItem($returnRequest, (int) $lineId, (string) $request->validated('split_quantity'), $request->user());
@@ -449,6 +473,7 @@ class ReturnRequestController extends Controller
 
     public function dispose(DisposeReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         return new ReturnRequestResource(
             $this->service->dispose(
                 $returnRequest,
@@ -466,6 +491,7 @@ class ReturnRequestController extends Controller
      */
     public function complete(CompleteReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $locationId = isset($request->validated()['location_id'])
             ? (int) $request->validated()['location_id']
             : null;
@@ -479,6 +505,7 @@ class ReturnRequestController extends Controller
      */
     public function reject(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $validated = $request->validate([
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
         ]);
@@ -493,6 +520,7 @@ class ReturnRequestController extends Controller
      */
     public function cancel(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
+        $this->assertReturnTypeAccess($request, $returnRequest);
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -500,5 +528,14 @@ class ReturnRequestController extends Controller
         $rma = $this->service->cancel($returnRequest, $validated['reason'] ?? null);
 
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+    }
+
+    private function assertReturnTypeAccess(Request $request, ReturnRequest $returnRequest): void
+    {
+        abort_if(
+            ReturnManagementAccess::customerReturnsOnly($request->user())
+                && $returnRequest->type === ReturnRequestType::SupplierReturn,
+            404,
+        );
     }
 }

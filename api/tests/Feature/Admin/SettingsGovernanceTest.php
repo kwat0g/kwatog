@@ -114,6 +114,23 @@ class SettingsGovernanceTest extends TestCase
             ->assertJsonValidationErrors('value');
     }
 
+    public function test_demand_movement_settings_reject_unknown_inventory_movement_types(): void
+    {
+        $setting = 'inventory.demand.projection_movement_types';
+        $before = json_decode((string) DB::table('settings')->where('key', $setting)->value('value'), true);
+
+        $this->actingAs($this->systemAdmin())
+            ->putJson('/api/v1/admin/settings/'.$setting, ['value' => ['material_issue', 'consume']])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('value.1');
+
+        $this->assertSame($before, json_decode((string) DB::table('settings')->where('key', $setting)->value('value'), true));
+
+        $this->actingAs($this->systemAdmin())
+            ->putJson('/api/v1/admin/settings/'.$setting, ['value' => ['material_issue', 'delivery']])
+            ->assertOk();
+    }
+
     public function test_an_update_writes_an_immutable_before_and_after_audit_row(): void
     {
         $this->seedSetting('security.max_login_attempts', 5);

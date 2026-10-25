@@ -128,8 +128,8 @@ services:
       - api
     networks: [ogami-net]
 
-  # One Horizon master, five lanes (api/config/horizon.php):
-  #   high · default · mail · automation · bulk
+  # One Horizon master, six lanes (api/config/horizon.php):
+  #   high · default · mail · automation · bulk · dss
   #
   # This replaces two `queue:work` containers. Those were one process per lane
   # and `--queue=high,default` is serial: priority chose what the single worker

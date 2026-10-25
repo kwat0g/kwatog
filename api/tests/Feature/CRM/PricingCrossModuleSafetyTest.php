@@ -77,7 +77,7 @@ class PricingCrossModuleSafetyTest extends TestCase
         $r = $s->offer(null, $sales, $this->terms($p, $b));
         $this->actingAs($finance)->getJson('/api/v1/crm/price-requests/'.$r->hash_id)->assertOk()->assertJsonPath('data.version', 1);
         $s->offer($r, $sales, array_merge($this->terms($p, $b), ['price' => '16.00']));
-        $this->postJson('/api/v1/crm/price-requests/'.$r->hash_id.'/approve', ['notes' => 'Approved price seen at version 1', 'version' => 1, 'cost_signature' => $s->reviewCost($p)['signature']])->assertUnprocessable();
+        $this->postJson('/api/v1/crm/price-requests/'.$r->hash_id.'/approve', ['notes' => 'Reviewed earlier revision', 'version' => 1, 'cost_signature' => $s->reviewCost($p)['signature']])->assertUnprocessable();
     }
 
     public function test_unexpired_offer_can_be_accepted_next_day(): void
@@ -93,7 +93,7 @@ class PricingCrossModuleSafetyTest extends TestCase
         $this->travelBack();
     }
 
-    public function test_received_finished_good_cost_is_included_in_finance_cost_basis(): void
+    public function test_received_finished_good_cost_blocks_finance_approval_below_cost(): void
     {
         $p = $this->product();
         $i = Item::factory()->create(['code' => $p->part_number, 'item_type' => 'finished_good', 'standard_cost' => '100.0000']);
@@ -109,7 +109,7 @@ class PricingCrossModuleSafetyTest extends TestCase
         $ppc = $this->actor('ppc_head');
         $this->assertFalse($ppc->hasPermission('inventory.costs.approve'));
         $p = $this->product();
-        $this->actingAs($ppc)->putJson('/api/v1/crm/products/'.$p->hash_id, ['standard_cost' => '1.00', 'minimum_selling_price' => '1.00'])->assertForbidden();
+        $this->actingAs($ppc)->putJson('/api/v1/crm/products/'.$p->hash_id, ['standard_cost' => '1.00'])->assertForbidden();
         $this->assertSame('15.00', $p->fresh()->minimum_selling_price);
     }
 
@@ -142,10 +142,10 @@ class PricingCrossModuleSafetyTest extends TestCase
         $p = $this->product();
         $s->offer(null, $this->actor('sales_officer'), $this->terms($p, $this->buyer()));
         $this->assertSame(1, DB::table('notifications')->where('type', 'pricing.negotiation')->where('notifiable_id', $finance->id)->count());
-        $revoked = $this->actor('finance_officer');
-        DB::table('user_permission_overrides')->insert(['user_id' => $revoked->id, 'permission_id' => Permission::where('slug', 'crm.price_agreements.approve')->value('id'), 'type' => 'revoke', 'granted_by' => $finance->id, 'reason' => 'Approval authority withdrawn', 'created_at' => now(), 'updated_at' => now()]);
+        $finance = $this->actor('finance_officer');
+        DB::table('user_permission_overrides')->insert(['user_id' => $finance->id, 'permission_id' => Permission::where('slug', 'crm.price_agreements.approve')->value('id'), 'type' => 'revoke', 'granted_by' => $finance->id, 'reason' => 'Approval authority withdrawn', 'created_at' => now(), 'updated_at' => now()]);
         $s->offer(null, $this->actor('sales_officer'), $this->terms($this->product(), $this->buyer()));
-        $this->assertSame(0, DB::table('notifications')->where('type', 'pricing.negotiation')->where('notifiable_id', $revoked->id)->count());
+        $this->assertSame(0, DB::table('notifications')->where('type', 'pricing.negotiation')->where('notifiable_id', $finance->id)->count());
     }
 
     public function test_unassigned_private_product_is_blocked_before_offer(): void
@@ -181,17 +181,17 @@ class PricingCrossModuleSafetyTest extends TestCase
         $this->assertSame('pending_finance', $r->fresh()->status->value);
     }
 
-    public function test_ppc_proposal_requires_different_finance_reviewer_and_preserves_audit(): void
+    public function test_finance_approves_only_ppc_standard_cost_proposal_and_preserves_audit(): void
     {
         $p = $this->product();
         $ppc = $this->actor('ppc_head');
         $finance = $this->actor('finance_officer');
-        $proposal = $this->actingAs($ppc)->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-proposal', ['standard_cost' => '12.00', 'base_selling_price' => '60.00', 'minimum_selling_price' => '20.00', 'notes' => 'Material cost increase'])->assertOk()->json('data.financial_change_request');
+        $proposal = $this->actingAs($ppc)->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-proposal', ['standard_cost' => '12.00', 'notes' => 'Material cost increase'])->assertOk()->json('data.financial_change_request');
         $this->assertSame($ppc->hash_id, $proposal['proposed_by']);
         $this->assertSame('10.00', $p->fresh()->standard_cost);
         $this->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-decision', ['proposal_id' => $proposal['id'], 'decision' => 'approve', 'notes' => 'Own change'])->assertForbidden();
         $this->actingAs($finance)->getJson('/api/v1/crm/products/'.$p->hash_id)->assertOk();
-        $this->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-decision', ['proposal_id' => $proposal['id'], 'decision' => 'approve', 'notes' => 'Finance checked new cost'])->assertOk()->assertJsonPath('data.standard_cost', '12.00')->assertJsonPath('data.minimum_selling_price', '20.00')->assertJsonPath('data.financial_change_request', null);
+        $this->postJson('/api/v1/crm/products/'.$p->hash_id.'/financial-decision', ['proposal_id' => $proposal['id'], 'decision' => 'approve', 'notes' => 'Finance checked new cost'])->assertOk()->assertJsonPath('data.standard_cost', '12.00')->assertJsonPath('data.minimum_selling_price', '15.00')->assertJsonPath('data.financial_change_request', null);
         $this->assertTrue(AuditLog::where('model_type', Product::class)->where('model_id', $p->id)->get()->contains(fn ($log) => ($log->new_values['financial_change_request']['decision_notes'] ?? null) === 'Finance checked new cost'));
     }
 

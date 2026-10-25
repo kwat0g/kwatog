@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\ReturnManagement\Enums\ReturnCaseStatus;
 use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnCaseAttachment;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;

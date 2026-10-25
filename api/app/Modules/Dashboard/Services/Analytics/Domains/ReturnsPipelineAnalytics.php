@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Support\Analytics\AnalyticsPeriod;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -37,20 +38,24 @@ final class ReturnsPipelineAnalytics extends DomainMetric
 
         $from = $period->from->toDateString();
         $to = $period->to->toDateString();
+        $returns = fn () => DB::table('return_requests')
+            ->whereBetween('return_date', [$from, $to])
+            ->when(
+                ReturnManagementAccess::customerReturnsOnly($user),
+                fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+            );
 
         /** @var array<string, int> $byStatus */
-        $byStatus = DB::table('return_requests')
+        $byStatus = $returns()
             ->selectRaw('status, COUNT(*) AS total')
-            ->whereBetween('return_date', [$from, $to])
             ->groupBy('status')
             ->pluck('total', 'status')
             ->map(static fn ($total): int => (int) $total)
             ->all();
 
         /** @var array<string, int> $byType */
-        $byType = DB::table('return_requests')
+        $byType = $returns()
             ->selectRaw('type, COUNT(*) AS total')
-            ->whereBetween('return_date', [$from, $to])
             ->groupBy('type')
             ->pluck('total', 'type')
             ->map(static fn ($total): int => (int) $total)
@@ -68,10 +73,9 @@ final class ReturnsPipelineAnalytics extends DomainMetric
         // point-in-time "oldest open" mixed into a windowed breakdown reads as
         // if it belonged to the window (a 3-month-old return would show up on a
         // one-week tile). True ageing is its own metric, not this one.
-        $oldestOpen = DB::table('return_requests')
+        $oldestOpen = $returns()
             ->whereIn('status', $openStatuses)
             ->whereNotNull('return_date')
-            ->whereBetween('return_date', [$from, $to])
             ->min('return_date');
 
         return [

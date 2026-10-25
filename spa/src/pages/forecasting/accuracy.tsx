@@ -17,6 +17,7 @@ import {
  XAxis,
  YAxis,
  Legend,
+ ReferenceLine,
 } from 'recharts';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -28,6 +29,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { forecastingApi } from '@/api/forecasting';
 import type { ProductAccuracy } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { chartColor } from '@/lib/chartPalette';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -100,12 +102,13 @@ export default function ForecastAccuracyPage() {
  const biasValue = summaryQ.data?.bias;
  const periodsValue = summaryQ.data?.periods_evaluated ?? 0;
 
- if (summaryQ.isError) {
+ if (summaryQ.isError || productsQ.isError) {
  return (
  <EmptyState
  icon="alert-circle"
- title="Failed to load accuracy data"
- action={<Button variant="secondary" onClick={() => { summaryQ.refetch(); productsQ.refetch(); }}>Retry</Button>}
+ title="Failed to load forecast accuracy"
+ description="The accuracy summary or product breakdown could not be refreshed."
+ action={<Button variant="secondary" onClick={() => { void summaryQ.refetch(); void productsQ.refetch(); }}>Retry</Button>}
  />
  );
  }
@@ -164,7 +167,11 @@ export default function ForecastAccuracyPage() {
  )}
 
  {/* Forecast vs Actual chart */}
- <Panel title={`Monthly Forecast vs Actual — ${year}`} noPadding>
+ <Panel
+ title={`Monthly forecast vs. actual · ${year}`}
+ meta={chartData.length > 0 ? `${chartData.length} periods` : undefined}
+ noPadding
+ >
  {summaryQ.isLoading ? (
  <div className="p-4"><SkeletonBlock className="h-[300px]" /></div>
  ) : chartData.length === 0 ? (
@@ -175,49 +182,68 @@ export default function ForecastAccuracyPage() {
  />
  ) : (
  <div className="p-4">
- <ResponsiveContainer width="100%" height={300}>
- <ComposedChart data={chartData}>
- <CartesianGrid strokeDasharray="3 3" className="stroke-border-default" />
+ <ResponsiveContainer width="100%" height={340}>
+ <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+ <CartesianGrid vertical={false} stroke="var(--border-subtle)" />
  <XAxis
  dataKey="label"
- tick={{ fontSize: 11, className: 'fill-text-subtle' }}
- axisLine={{ className: 'stroke-border-default' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ axisLine={{ stroke: 'var(--border-default)' }}
+ tickLine={false}
+ minTickGap={12}
  />
  <YAxis
- tick={{ fontSize: 11, className: 'fill-text-subtle' }}
- axisLine={{ className: 'stroke-border-default' }}
+ yAxisId="demand"
+ tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ axisLine={false}
+ tickLine={false}
+ width={42}
+ />
+ <YAxis
+ yAxisId="variance"
+ orientation="right"
+ tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+ axisLine={false}
+ tickLine={false}
+ width={42}
  />
  <RTooltip
  contentStyle={{
- backgroundColor: 'var(--bg-surface)',
+ backgroundColor: 'var(--bg-elevated)',
  border: '1px solid var(--border-default)',
  borderRadius: 6,
+ color: 'var(--text-primary)',
  fontSize: 12,
  }}
+ formatter={(value, name) => [value == null ? '—' : Number(value).toLocaleString(), name]}
  />
- <Legend wrapperStyle={{ fontSize: 12 }} />
+ <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)' }} />
+ <ReferenceLine y={0} yAxisId="variance" stroke="var(--border-strong)" />
  <Bar
+ yAxisId="variance"
  dataKey="variance"
  name="Variance"
- fill="var(--warning)"
- opacity={0.35}
+ fill={chartColor(2)}
+ fillOpacity={0.45}
  barSize={20}
  />
  <Line
+ yAxisId="demand"
  type="monotone"
  dataKey="forecast"
  name="Forecast"
- stroke="var(--accent)"
+ stroke={chartColor(0)}
  strokeWidth={2}
- dot={{ r: 3 }}
+ dot={{ r: 3, fill: chartColor(0) }}
  />
  <Line
+ yAxisId="demand"
  type="monotone"
  dataKey="actual"
  name="Actual"
- stroke="var(--success)"
+ stroke={chartColor(3)}
  strokeWidth={2}
- dot={{ r: 3 }}
+ dot={{ r: 3, fill: chartColor(3) }}
  />
  </ComposedChart>
  </ResponsiveContainer>
@@ -240,20 +266,30 @@ export default function ForecastAccuracyPage() {
  <table className={tableCls}>
  <thead>
  <tr className={theadTrCls}>
- <Th className="cursor-pointer select-none" onClick={() => toggleSort('part_number')}>
+ <Th aria-sort={sortField === 'part_number' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+ <button type="button" className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset" onClick={() => toggleSort('part_number')}>
  Part #{sortIndicator('part_number')}
+ </button>
  </Th>
- <Th className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
+ <Th aria-sort={sortField === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+ <button type="button" className="rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset" onClick={() => toggleSort('name')}>
  Product{sortIndicator('name')}
+ </button>
  </Th>
- <Th align="right" className="cursor-pointer select-none" onClick={() => toggleSort('mape')}>
+ <Th align="right" aria-sort={sortField === 'mape' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+ <button type="button" className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset" onClick={() => toggleSort('mape')}>
  MAPE %{sortIndicator('mape')}
+ </button>
  </Th>
- <Th align="right" className="cursor-pointer select-none" onClick={() => toggleSort('bias')}>
+ <Th align="right" aria-sort={sortField === 'bias' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+ <button type="button" className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset" onClick={() => toggleSort('bias')}>
  Bias %{sortIndicator('bias')}
+ </button>
  </Th>
- <Th align="right" className="cursor-pointer select-none" onClick={() => toggleSort('periods_evaluated')}>
+ <Th align="right" aria-sort={sortField === 'periods_evaluated' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+ <button type="button" className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset" onClick={() => toggleSort('periods_evaluated')}>
  Periods{sortIndicator('periods_evaluated')}
+ </button>
  </Th>
  </tr>
  </thead>

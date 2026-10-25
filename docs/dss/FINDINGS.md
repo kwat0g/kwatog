@@ -19,7 +19,7 @@ decisions, proposed fix track (S = small, M = medium).
 - Locations: `Inventory/Services/AutoReplenishmentService.php:220-226`
   (`material_issue+delivery+scrap`) vs `SafetyStockRecomputeService` (`material_issue+delivery+
   adjustment_out+scrap+return_to_vendor`) vs `Forecasting/Services/StockOutProjectionService.php:99-108`
-  (`material_issue|consume|production_issue`).
+  (valid `material_issue` default; custom sets remain distinct).
 - Same item gets three different "daily demand" numbers → replenishment, safety stock, and projection
   can contradict each other on the same screen.
 - Fix (S): one `DemandBasis` value object / settings key `inventory.demand.movement_types` consumed by
@@ -112,19 +112,17 @@ decisions, proposed fix track (S = small, M = medium).
   per-machine cards); `work_orders.quantity_* decimal(10,0)` — no partial-unit precision.
 - Fix: label fleet vs per-machine explicitly in DSS cards; no schema change proposed now.
 
-## F-15 Projection demand types match no enum case [data-semantics, MEDIUM] — found W0-5
+## F-15 Projection demand types match no enum case [data-semantics, MEDIUM] — closed 2026-10-24
 
 - Location: `api/app/Modules/Forecasting/Services/StockOutProjectionService.php:72`
   (now via `DemandBasis::PROJECTION`).
-- `whereIn('movement_type', ['material_issue', 'consume', 'production_issue'])` — but
-  `StockMovementType` has no `consume` or `production_issue` cases, so the projection has
-  effectively counted `material_issue` only. Same item gets a thinner "demand" here than in
-  replenishment/safety-stock (extends F-02).
-- Preserved verbatim in W0-5 (changing it alters projections — a behavior change, not a
-  drive-by fix). Centralized in `DemandBasis`, so the fix is one settings-seed + seed-value
-  change with a backtest.
-- Fix (S, Wave 1): confirm the intended set with PPC (likely add `delivery` for FG items),
-  update `inventory.demand.projection_movement_types`, backtest projection accuracy before/after.
+- The seeded projection set included `consume` and `production_issue`, neither a
+  `StockMovementType` case. The effective default was already `material_issue` only.
+- The default and stored seeded setting now explicitly use `material_issue`; an additive migration
+  changes only the untouched legacy default. Admin writes and runtime reads reject unsupported
+  demand movement names. Custom valid sets remain intact.
+- This does not settle F-02: projection, replenishment, and safety-stock sets remain different
+  until PPC approves their demand definitions.
 
 ## F-12 / F-13 closed in W0-6 (no code)
 

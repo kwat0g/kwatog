@@ -90,7 +90,7 @@ HR/attendance/leave/loans operator; payroll maker (create/compute, never approve
 | Outstanding loans (live) | `loans.outstanding` (company-wide operator — A§1.2) | MoM ledger (`loan_payments` LEDGER — B§) | data not available: zero-interest cap = 1-mo salary policy, not a KPI | `/hr/loans` |
 Blocked snapshots (gate not held → stripped at render, D§2): oee/dppm/FPY/OTD/supplier-quality/AR/budget/NCR/inv-turnover/WO-completion — **data not available: `KpiSnapshotService` gate unheld**.
 
-### 3. Graph analytics (7)
+### 3. Graph analytics (5)
 | Chart | Purpose → decision |
 |---|---|
 | AreaTrend attendance rate by dept/week (`attendances` OVERWRITE-per-day; intra-day = `attendance_punches` — B§) | spot dept slippage → coaching / shift review |
@@ -268,9 +268,9 @@ Amount band (≥₱50k terminal vs skipped) · kind (PR/PO/bill/loan/salary/asse
 At spec time, the role landed on `/dashboard/default` with no catalog entry or default rows. Phase 2 E added `dashboard.customer_service.view`, a role-default layout, and `/dashboard/customer-service`; see `PROGRESS.md`.
 
 ### 1. Persona & decisions
-CRM complaints/inquiries/RMA lifecycle owner (A§1.5, 00§A). **Daily:** new complaints/inquiries, RMA intake + QC-defect notices, return-receive/inspect handoffs (owned by warehouse/QC — A§1.5). **Weekly:** complaint SLA aging, 8D progress, CoC attach completeness on confirms. **Monthly:** complaint Pareto by product/defect, RMA cycle time, price-agreement renewal watch.
+CRM inquiries, complaints and customer-return lifecycle owner. **Daily:** new inquiries/complaints, RMA intake and QC-defect handoffs. **Weekly:** complaint SLA aging and 8D progress. **Monthly:** complaint Pareto by product/defect and customer-return cycle time. Customer and product lookup stay read-only; Sales owns sales orders and customer pricing.
 
-### 2. KPI cards (8 live; **all snapshots DNA: no KPI-module slug held** — §1.5 vs 00§0-map)
+### 2. Customer-service queue widgets
 | Card | Value | Delta / sparkline | Target | Click-through |
 |---|---|---|---|---|
 | Open complaints | `crm.open_complaints` (`crm.complaints.view` ✓) live | WoW; daily from `complaints` created_at (TRENDABLE-STATUS-MACHINE — B§) | data not available: no complaint KPI definition | `/crm/complaints` |
@@ -278,9 +278,6 @@ CRM complaints/inquiries/RMA lifecycle owner (A§1.5, 00§A). **Daily:** new com
 | Open inquiries | `crm.inquiries.view/manage` ✓ live | WoW | data not available | `/crm/inquiries` |
 | Open returns | `rma.open_returns` (`return_management.view` ✓) | WoW (returns tables nearly unindexed — B-F12/F§: filter may be slow pre-index) | data not available | `/return-management` |
 | Returns awaiting approval | `rma.pending_approval` live | WoW | data not available | `/return-management` |
-| SOs awaiting confirm detail | `crm.sales_orders.view` ✓ open-SO count (8 indexed stage timestamps — B§) | WoW | data not available | `/crm/sales-orders` |
-| Price offers pending | `price_agreements.view/manage/propose` ✓ | WoW | data not available | `/crm/price-agreements` |
-| CoC coverage on confirms | confirms with CoC attached vs `manual_required` (B-F2/chain-1 CoC gate) | WoW | data not available: no CoC KPI definition | `/crm/sales-orders` |
 
 ### 3. Graph analytics (7)
 | Chart | Purpose → decision |
@@ -290,29 +287,27 @@ CRM complaints/inquiries/RMA lifecycle owner (A§1.5, 00§A). **Daily:** new com
 | AreaTrend inquiry→complaint conversion (weekly, parent-timestamp join — B§ rule) | intervention timing |
 | Table RMA pipeline by stage (request→receive→inspect→dispose/complete; receive/inspect owned by others — A§1.5) | chase handoff owners |
 | Bar RMA cycle time by disposition (scrap/rework/use-as-is/return-to-supplier enum — CLAUDE.md) | policy tune |
-| Table SO confirm readiness (delivery requires passed output-bound inspection + CoC — B-chain-1) | promise dates |
-| Bar price-agreement expiry horizon (renewal suggestion — opp. #6) | renegotiate early |
 
 ### 4. Forecast widgets
 All 7 DSS panels **data not available: gates unheld** (`forecasting.view`, `accounting.dashboard.view`, `quality.view`, `hr.employees.view`, `attendance.view` all absent — §1.5). Forecastable alternatives from TRENDABLE sources (B§): complaint-volume projection from `complaints` history (STATUS-MACHINE + `audit_logs`) — build as live trend (not MA/seasonal engine) until gate decision; demand-forecast panels remain PPC-owned (`/forecasting/demand` guard UNVERIFIED for this role — excluded from shortcuts).
 
 ### 5. Approval inbox & quick actions
-Acts on: **none** — holds `return_management.view/manage/dispose/complete` but NOT `approve` (§1.5); return_request steps are `department_head → production_manager` + finance-only single (C§1) — CSO creates/manages lifecycle, approval by others. Return-case custom single-step actor UNVERIFIED (C§2) → queue surfaces at `/return-management/:id` with actability marked UNVERIFIED. Price propose (not approve — finance approves, A§1.3) → `/crm/price-agreements/requests/:id/offer`. Complaint 8D submit (reserved `8d_report` type NOT wired to `ApprovalService::submit()` — A§5.9) → lifecycle action, not approval. **Board-blind flag:** RMA/8D/price actions never appear on `/approvals` (custom/reserved, C§2/§5, A§5.9).
+Acts on: **none** — holds `return_management.view/manage/dispose/complete` but NOT `approve`; managers/Finance approve returns. Customer Service creates and manages customer-return cases; receiving and inspection stay with Warehouse/QC. Complaint 8D submit is a lifecycle action, not an approval-board action.
 
 ### 6. Alerts / exceptions
-Portal RMA + QC-defect notices (C§3 present) · NCR 15-min tiers + 8D 15-min + CAPA (D§15–17) · return step-handoff notices **missing** (C§3) → age-based chase column · document-review 7d (D§19) for CoC/8D docs · Action Center 24h default (D§18) · returns index debt → tally slowness risk (B§4/F§).
+Portal RMA + QC-defect notices (C§3 present) · NCR 15-min tiers + 8D 15-min + CAPA (D§15–17) · return step-handoff notices **missing** (C§3) → age-based chase column · document-review 7d (D§19) for 8D documents · Action Center 24h default (D§18) · returns index debt → tally slowness risk (B§4/F§).
 
 ### 7. DSS recommendations
-1. NCR root-cause ranking (opp. #7) linked from complaint Pareto. 2. SO commit-date feasibility + expedite ranking (opp. #9) for promise-dating. 3. Collector-worklist assist: CSO holds `accounting.customers.view/manage` (A§1.5) → dunning-tier awareness (D§31) without collection posting. 4. Price-renewal suggestion (opp. #6) from expiry horizon.
+Complaint root-cause ranking linked from complaint Pareto; return-case aging and handoff recommendations. Customer Service has no customer-master write, sales-order or pricing permissions.
 
 ### 8. Activity feed
-Complaint/inquiry lifecycle + RMA `cases/lines/events` rows (B§ returns-10) · price-offer propose/approve trail · SO confirm + CoC attach + draft-invoice handoff (`Generated`/`ManualRequired`/`NotRequired` — B-chain-1) · activity feeds exist on SO (scope-cut list — §0). QC-inspect/receive steps appear as handoff events owned by other roles.
+Complaint/inquiry lifecycle and customer-return `cases/lines/events`; QC inspection and receiving appear as handoff events owned by other roles.
 
 ### 9. Shortcuts (route-verified)
-`/dashboard/customer-service` (current; Phase 2 E) · `/crm/complaints` · `/crm/complaints/new` · `/crm/inquiries` · `/crm/customers` · `/crm/products` · `/crm/price-agreements` · `/crm/price-agreements/requests` · `/crm/sales-orders` · `/return-management` · `/return-management/new` · `/return-management/cases` · `/approvals` · `/action-center` · `/notifications`.
+`/dashboard/customer-service` · `/crm/complaints` · `/crm/complaints/new` · `/crm/inquiries` · `/crm/customers` (read-only) · `/crm/products` (read-only) · customer-return management · `/return-management/cases` · `/approvals` · `/action-center` · `/notifications`.
 
 ### 10. Filters
-Customer · product (finished-goods catalog in CRM — CLAUDE.md namespace gotcha) · complaint severity/status · RMA stage/disposition · date range · channel (portal vs direct; portal principals separate guards — A§0/§3) · CoC status (attached/`manual_required`).
+Customer · product (finished-goods catalog in CRM — CLAUDE.md namespace gotcha) · complaint severity/status · customer-RMA stage/disposition · date range · channel (portal vs direct; portal principals separate guards — A§0/§3).
 
 ---
 

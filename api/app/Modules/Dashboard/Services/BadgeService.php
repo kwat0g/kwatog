@@ -46,7 +46,9 @@ use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Shipment;
@@ -537,6 +539,10 @@ class BadgeService
                 'label'       => 'Returns (RMA)',
                 'description' => 'Returns awaiting processing',
                 'counter'     => fn (): int => ReturnRequest::query()
+                    ->when(
+                        ReturnManagementAccess::customerReturnsOnly($user),
+                        fn ($query) => $query->where('type', ReturnRequestType::CustomerReturn->value),
+                    )
                     ->whereNotIn('status', [
                         ReturnRequestStatus::Completed->value,
                         ReturnRequestStatus::Rejected->value,

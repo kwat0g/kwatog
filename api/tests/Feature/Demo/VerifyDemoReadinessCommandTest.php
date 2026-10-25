@@ -13,13 +13,17 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\SupplyChain\Models\Delivery;
+use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\DefenseHeroSeeder;
+use Database\Seeders\KpiDefinitionSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -77,12 +81,16 @@ class VerifyDemoReadinessCommandTest extends TestCase
         $tables = [
             'users', 'invoices', 'invoice_items', 'collections', 'deliveries',
             'accounting_periods', 'employee_leave_balances', 'event_outbox',
-            'chain_step_runs', 'failed_jobs',
+            'chain_step_runs', 'failed_jobs', 'dashboard_widgets', 'kpi_snapshots',
+            'demand_forecasts', 'dss_run_logs', 'dss_recommendations',
+            'goods_receipt_notes', 'inspections', 'inspection_measurements',
+            'work_orders', 'material_issue_slips', 'material_issue_slip_items',
+            'delivery_items', 'delivery_proofs', 'supplier_performance_snapshots',
         ];
 
         $snap = [];
         foreach ($tables as $table) {
-            if (\Illuminate\Support\Facades\Schema::hasTable($table)) {
+            if (Schema::hasTable($table)) {
                 $snap[$table] = DB::table($table)->count();
             }
         }
@@ -104,6 +112,25 @@ class VerifyDemoReadinessCommandTest extends TestCase
         $this->assertSame($before, $this->snapshot(), 'demo:verify must never write a single row.');
     }
 
+    public function test_analytics_verification_checks_payloads_without_writing(): void
+    {
+        $this->seedDemoActors();
+        $this->seed([SettingsSeeder::class, DashboardWidgetSeeder::class, KpiDefinitionSeeder::class]);
+        $before = $this->snapshot();
+
+        $exit = Artisan::call('demo:verify', ['--analytics' => true, '--no-warn' => true]);
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exit, 'Analytics verification must fail when seeded histories and runs are absent.');
+        $this->assertStringContainsString('analytics_process_history', $output);
+        $this->assertStringContainsString('analytics_supplier_history', $output);
+        $this->assertStringContainsString('analytics_widgets', $output);
+        $this->assertStringContainsString('kpi_trends', $output);
+        $this->assertStringContainsString('forecast_history', $output);
+        $this->assertStringContainsString('dss_runs', $output);
+        $this->assertSame($before, $this->snapshot(), 'demo:verify --analytics must remain read-only.');
+    }
+
     public function test_verify_flags_fabricated_paid_invoice(): void
     {
         $this->seedDemoActors();
@@ -112,15 +139,15 @@ class VerifyDemoReadinessCommandTest extends TestCase
 
         DB::table('invoices')->insert([
             'invoice_number' => 'INV-HERO-BAD',
-            'customer_id'    => $this->createCustomer(),
-            'date'           => today()->toDateString(),
-            'due_date'       => today()->addDays(30)->toDateString(),
-            'total_amount'   => '5000.00',
-            'balance'        => '0.00',
-            'status'         => 'paid',
-            'created_by'     => $userId,
-            'created_at'     => now(),
-            'updated_at'     => now(),
+            'customer_id' => $this->createCustomer(),
+            'date' => today()->toDateString(),
+            'due_date' => today()->addDays(30)->toDateString(),
+            'total_amount' => '5000.00',
+            'balance' => '0.00',
+            'status' => 'paid',
+            'created_by' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Artisan::call('demo:verify');
@@ -148,11 +175,11 @@ class VerifyDemoReadinessCommandTest extends TestCase
     private function createCustomer(): int
     {
         return DB::table('customers')->insertGetId([
-            'name'               => 'Hero Customer',
-            'is_active'          => true,
+            'name' => 'Hero Customer',
+            'is_active' => true,
             'payment_terms_days' => 30,
-            'created_at'         => now(),
-            'updated_at'         => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
@@ -169,87 +196,87 @@ class VerifyDemoReadinessCommandTest extends TestCase
         );
 
         $product = Product::create([
-            'part_number'     => 'HERO-PROD-001',
-            'name'            => 'Hero Product',
+            'part_number' => 'HERO-PROD-001',
+            'name' => 'Hero Product',
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => 10.00,
-            'is_active'       => true,
+            'standard_cost' => 10.00,
+            'is_active' => true,
         ]);
 
         $so = SalesOrder::create([
-            'so_number'          => 'SO-HERO-'.substr(uniqid(), -5),
-            'customer_id'        => $this->createCustomer(),
-            'date'               => today()->toDateString(),
-            'subtotal'           => 100.00,
-            'vat_amount'         => 12.00,
-            'total_amount'       => 112.00,
-            'status'             => 'confirmed',
+            'so_number' => 'SO-HERO-'.substr(uniqid(), -5),
+            'customer_id' => $this->createCustomer(),
+            'date' => today()->toDateString(),
+            'subtotal' => 100.00,
+            'vat_amount' => 12.00,
+            'total_amount' => 112.00,
+            'status' => 'confirmed',
             'payment_terms_days' => 30,
-            'created_by'         => $user->id,
+            'created_by' => $user->id,
         ]);
 
         SalesOrderItem::create([
             'sales_order_id' => $so->id,
-            'product_id'     => $product->id,
-            'quantity'       => 10,
-            'unit_price'     => 10.00,
-            'total'          => 100.00,
-            'delivery_date'  => Carbon::today()->addDays(7)->toDateString(),
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'unit_price' => 10.00,
+            'total' => 100.00,
+            'delivery_date' => Carbon::today()->addDays(7)->toDateString(),
         ]);
 
         Delivery::create([
             'delivery_number' => 'DEL-HERO-'.substr(uniqid(), -5),
-            'sales_order_id'  => $so->id,
-            'status'          => 'delivered',
-            'scheduled_date'  => today()->toDateString(),
-            'delivered_at'    => now(),
-            'created_by'      => $user->id,
+            'sales_order_id' => $so->id,
+            'status' => 'delivered',
+            'scheduled_date' => today()->toDateString(),
+            'delivered_at' => now(),
+            'created_by' => $user->id,
         ]);
 
         // Leave request prerequisites so the seeder has balances to create.
         $dept = Department::create(['name' => 'Production', 'code' => 'PRD']);
-        $pos  = Position::create(['title' => 'Operator', 'department_id' => $dept->id]);
+        $pos = Position::create(['title' => 'Operator', 'department_id' => $dept->id]);
         $employee = Employee::create([
-            'employee_no'          => 'OGM-HERO-001',
-            'first_name'           => 'Hero',
-            'last_name'            => 'Worker',
-            'birth_date'           => '1990-01-01',
-            'gender'               => 'male',
-            'civil_status'         => 'single',
-            'nationality'          => 'Filipino',
-            'department_id'        => $dept->id,
-            'position_id'          => $pos->id,
-            'employment_type'      => 'regular',
-            'pay_type'             => 'monthly',
+            'employee_no' => 'OGM-HERO-001',
+            'first_name' => 'Hero',
+            'last_name' => 'Worker',
+            'birth_date' => '1990-01-01',
+            'gender' => 'male',
+            'civil_status' => 'single',
+            'nationality' => 'Filipino',
+            'department_id' => $dept->id,
+            'position_id' => $pos->id,
+            'employment_type' => 'regular',
+            'pay_type' => 'monthly',
             'basic_monthly_salary' => '20000.00',
-            'date_hired'           => '2024-01-01',
+            'date_hired' => '2024-01-01',
         ]);
 
         $leaveTypeId = DB::table('leave_types')->insertGetId([
-            'name'                         => 'Service Incentive Leave',
-            'code'                         => 'SIL-HERO',
-            'default_balance'              => 5.0,
-            'is_paid'                      => true,
-            'requires_document'            => false,
+            'name' => 'Service Incentive Leave',
+            'code' => 'SIL-HERO',
+            'default_balance' => 5.0,
+            'is_paid' => true,
+            'requires_document' => false,
             'is_convertible_on_separation' => true,
-            'is_convertible_year_end'      => false,
-            'conversion_rate'              => 1.00,
-            'is_active'                    => true,
-            'created_at'                   => now(),
-            'updated_at'                   => now(),
+            'is_convertible_year_end' => false,
+            'conversion_rate' => 1.00,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         DB::table('leave_requests')->insert([
             'leave_request_no' => 'LR-HERO-001',
-            'employee_id'      => $employee->id,
-            'leave_type_id'    => $leaveTypeId,
-            'start_date'       => today()->addDays(5)->toDateString(),
-            'end_date'         => today()->addDays(7)->toDateString(),
-            'days'             => 2.0,
-            'reason'           => 'Demo hero leave request',
-            'status'           => 'pending_hr',
-            'created_at'       => now(),
-            'updated_at'       => now(),
+            'employee_id' => $employee->id,
+            'leave_type_id' => $leaveTypeId,
+            'start_date' => today()->addDays(5)->toDateString(),
+            'end_date' => today()->addDays(7)->toDateString(),
+            'days' => 2.0,
+            'reason' => 'Demo hero leave request',
+            'status' => 'pending_hr',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 }

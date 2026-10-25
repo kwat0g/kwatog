@@ -24,10 +24,12 @@ class DssRecommendationEvent extends Model
         'actor_id',
         'reason',
         'metadata',
+        'viewed_on',
     ];
 
     protected $casts = [
         'metadata' => 'array',
+        'viewed_on' => 'date',
     ];
 
     public function recommendation(): BelongsTo

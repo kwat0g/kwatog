@@ -37,6 +37,14 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(notifications, { permissions: new Set(), roleSlug: 'system_admin' })).toBe(true);
   });
 
+  it('shows Decision Center only to roles granted DSS access', () => {
+    const decisionCenter = item('/decision-center');
+
+    expect(isNavItemVisible(decisionCenter, { permissions: new Set(), features: allFeatures, roleSlug: 'employee' })).toBe(false);
+    expect(isNavItemVisible(decisionCenter, { permissions: new Set(), features: allFeatures, roleSlug: 'driver' })).toBe(false);
+    expect(isNavItemVisible(decisionCenter, { permissions: new Set(['dss.view']), features: allFeatures, roleSlug: 'hr_officer' })).toBe(true);
+  });
+
   it('shows the chain tracker to sales-order or bottleneck viewers only', () => {
     const tracker = item('/chains');
     expect(isNavItemVisible(tracker, { permissions: new Set(['crm.sales_orders.view']) })).toBe(true);
