@@ -139,6 +139,11 @@ class Bill extends Model
         return $q->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial]);
     }
 
+    public function scopeOverdue(Builder $q): Builder
+    {
+        return $q->open()->whereDate('due_date', '<', today()->toDateString());
+    }
+
     /**
      * Derived workflow state for a PO-linked bill. Keeping this derived from
      * the persisted match snapshot avoids another mutable status column while

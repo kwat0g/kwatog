@@ -34,6 +34,7 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use Carbon\Carbon;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -997,5 +998,43 @@ class BadgeControllerTest extends TestCase
             ->getJson('/api/v1/budget-transfers?status=pending&actionable=1')
             ->assertOk();
         $this->assertSame($tracked['pending_transfers']['count'], $pendingTransfers->json('meta.total'));
+    }
+
+    public function test_overdue_bill_badge_matches_the_filtered_bill_list(): void
+    {
+        $now = Carbon::parse('2026-06-15 12:00:00', config('app.timezone'));
+        Carbon::setTestNow($now);
+
+        try {
+            $finance = User::factory()->create([
+                'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+            ]);
+            Bill::factory()->create(['due_date' => today()->subDay()]);
+            Bill::factory()->create([
+                'status' => 'partial',
+                'amount_paid' => 100,
+                'balance' => 900,
+                'due_date' => today()->subDay(),
+            ]);
+            Bill::factory()->create(['due_date' => today()]);
+            Bill::factory()->create(['status' => 'paid', 'due_date' => today()->subDay()]);
+            Bill::factory()->create(['status' => 'draft', 'due_date' => today()->subDay()]);
+            Bill::factory()->create(['status' => 'cancelled', 'due_date' => today()->subDay()]);
+
+            $badgeCount = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data.overdue_bills.count');
+            $overdueList = $this->actingAs($finance, 'sanctum')
+                ->getJson('/api/v1/bills?overdue=1')
+                ->assertOk();
+
+            $this->assertSame(2, $badgeCount);
+            $this->assertSame($badgeCount, $overdueList->json('meta.total'));
+            $this->assertSame(['partial', 'unpaid'], collect($overdueList->json('data'))->pluck('status')->sort()->values()->all());
+            $this->assertSame([true, true], collect($overdueList->json('data'))->pluck('is_overdue')->all());
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 }
