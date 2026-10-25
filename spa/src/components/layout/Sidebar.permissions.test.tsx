@@ -7,7 +7,7 @@ vi.mock('@/hooks/useBadges', () => ({
 import { SECTIONS, isNavItemVisible, navItemForPermissions } from './Sidebar';
 
 function item(path: string) {
-  const found = SECTIONS.flatMap((section) => section.items).find((entry) => entry.to === path);
+  const found = SECTIONS.flatMap((section) => section.items).find((entry) => entry.to.split('?')[0] === path);
   if (!found) throw new Error(`Missing sidebar item ${path}`);
   return found;
 }
@@ -115,7 +115,7 @@ describe('role-aligned sidebar permissions', () => {
   });
 
   it('keeps secondary pages out of the shared navigation sitemap', () => {
-    const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to));
+    const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to.split('?')[0]));
 
     expect(paths).not.toContain('/calendar');
     expect(paths).not.toContain('/hr/training/matrix');
@@ -415,6 +415,11 @@ describe('approval navigation boundaries', () => {
   it('attaches the profile-request badge to its review queue', () => {
     expect(item('/hr/profile-update-requests').badgeKey).toBe('profile_requests');
     expect(item('/hr/employees').badgeKey).toBeUndefined();
+  });
+
+  it('routes the inquiry badge to the new triage filter', () => {
+    expect(item('/crm/inquiries').badgeKey).toBe('inquiries');
+    expect(item('/crm/inquiries').to).toBe('/crm/inquiries?status=new');
   });
 
   it('keeps default labels while permission data is unavailable', () => {

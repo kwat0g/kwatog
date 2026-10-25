@@ -30,7 +30,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
-use App\Modules\Landing\Models\ContactInquiry;
+use App\Modules\Landing\Services\ContactInquiryInboxService;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
@@ -431,8 +431,8 @@ class BadgeService
                 'permissions' => ['crm.inquiries.view'],
                 'label'       => 'Inquiries',
                 'description' => 'New contact-form inquiries',
-                'counter'     => fn (): int => ContactInquiry::query()
-                    ->whereIn('status', [ContactInquiryStatus::New->value, ContactInquiryStatus::InProgress->value])
+                'counter'     => fn (): int => app(ContactInquiryInboxService::class)
+                    ->listQuery(['status' => ContactInquiryStatus::New->value])
                     ->count(),
             ],
 

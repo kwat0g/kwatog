@@ -210,11 +210,12 @@ export const SECTIONS: NavSection[] = [
     description: 'Sales and customer relationship management',
     items: [
       {
-        to: '/crm/inquiries',
+        to: '/crm/inquiries?status=new',
         label: 'Customer Inquiries',
         icon: LuInbox,
         feature: 'crm',
         permission: 'crm.inquiries.view',
+        badgeKey: 'inquiries',
       },
       {
         to: '/crm/sales-orders',
@@ -1022,8 +1023,11 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     () =>
       visibleSections
         .flatMap((s) => s.visibleItems)
-        .filter((item) => pathname === item.to || pathname.startsWith(item.to + '/'))
-        .sort((a, b) => b.to.length - a.to.length)[0],
+        .filter((item) => {
+          const path = item.to.split('?')[0];
+          return pathname === path || pathname.startsWith(path + '/');
+        })
+        .sort((a, b) => b.to.split('?')[0].length - a.to.split('?')[0].length)[0],
     [visibleSections, pathname],
   );
 
