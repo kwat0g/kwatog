@@ -23,6 +23,21 @@ Route::prefix('auth')->group(function (): void {
     // the reset-password form needs them while the user is still signed out.
     Route::get('password-policy', [AuthUserController::class, 'passwordPolicy']);
 
+    // WS-A.1 — Public accept of an invite token (no auth, throttled).
+    // Placed BEFORE the auth:sanctum group so the accept endpoint stays
+    // reachable for users who do not yet have a session.
+    Route::post('invites/accept', [UserInviteController::class, 'accept'])
+        ->middleware('throttle:auth');
+
+    // WS-A.1 — Authenticated invite management (HR / system_admin).
+    Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired',
+                       'permission:auth.users.invite'])
+        ->group(function (): void {
+            Route::get('invites',              [UserInviteController::class, 'index']);
+            Route::post('invites',             [UserInviteController::class, 'store']);
+            Route::delete('invites/{invite}',  [UserInviteController::class, 'destroy']);
+        });
+
     // Authenticated. NOTE: GET /auth/user is intentionally OUTSIDE the
     // `password.expired` gate — the SPA must be able to bootstrap (and the
     // change-password screen must know who the current user is) even when

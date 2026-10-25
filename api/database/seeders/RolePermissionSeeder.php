@@ -63,6 +63,12 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'business_policies.view',          'name' => 'View Business Policies'],
             ],
 
+            // WS-A.1 — Auth / portal-account lifecycle
+            'auth' => [
+                ['slug' => 'auth.users.invite', 'name' => 'Invite Employee to Self-Service Portal',
+                 'description' => 'Issue, list, and revoke one-time invites that link an employee record to a portal user account.'],
+            ],
+
             // HR
             'hr' => [
                 ['slug' => 'hr.departments.view',         'name' => 'View Departments'],
