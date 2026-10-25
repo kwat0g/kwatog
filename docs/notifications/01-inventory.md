@@ -305,7 +305,7 @@ Local aggregate rows include `chain.payslip_ready` (526 rows, many users with em
 
 ## Sidebar audit and badge parity status
 
-The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus the post-discovery `/budgeting/transfers` delta. Current 29 definitions are fully enumerated there. Baseline had 22 attached keys and seven unattached definitions; the current branch attaches `pending_transfers`, leaving six unattached: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, and `shipments`.
+The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus the post-discovery `/budgeting/transfers` delta in draft PR #367. Current 29 definitions are fully enumerated there. Baseline had 22 attached keys and seven unattached definitions; the current branch attaches `pending_transfers`, leaving six unattached: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, and `shipments`.
 
 | Current implementation delta | Gate and count | Destination and parity | Coverage |
 | --- | --- | --- | --- |

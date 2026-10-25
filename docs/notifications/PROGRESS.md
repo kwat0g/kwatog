@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), alert unread/list parity is in draft PR [#366](https://github.com/kwat0g/kwatog/pull/366), and budget-transfer badge/list parity is on `notifications/fix-budget-transfer-badge-parity`. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), alert unread/list parity is in draft PR [#366](https://github.com/kwat0g/kwatog/pull/366), and budget-transfer badge/list parity is in draft PR [#367](https://github.com/kwat0g/kwatog/pull/367). Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -198,7 +198,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `AlertsHardeningTest` targeted parity test: **1 passed / 7 assertions**. `pages/alerts/index.test.tsx`: **3 passed**. Direct PHPUnit, targeted SPA tests, PHP syntax, ESLint, and `git diff --check` passed. Full SPA typecheck still fails in exports, Action Center, invite, stock transfer, purchase-order, and profile files; none is in this PR.
 - `php artisan test --filter=...` still fails before filtering because existing `RecommendationAudienceScopeTest.php` declares `AudienceFakeDetector::detect(): array`, incompatible with `DetectorInterface::detect(): DetectorScanResult`; running the target file with direct PHPUnit succeeds. No sidebar item or existing SPA consumer uses `/alerts/unread-count`; it is a page-level count action only. Whether read state should be personal remains a business question.
 
-## Separate finding fix: F-05/F-09 budget-transfer badge/list parity (draft branch)
+## Separate finding fix: F-05/F-09 budget-transfer badge/list parity (draft PR [#367](https://github.com/kwat0g/kwatog/pull/367))
 
 - Adds Finance > Budget Transfers, gated by `budgeting.view` or `budgeting.approve`. A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; approval-only users can open only transfers they may approve. The filter and badge both use `BudgetTransfer::scopeAwaitingApprovalFor()`, matching the service's direct/delegated role-separation rule. The existing combined Phase 2 budget signal at `/budgeting?signal=awaiting_my_approval` remains incomplete.
 - `BudgetTransferTest.php`: **2 passed / 19 assertions** for approval-only access, same-role exclusion, active delegation, and badge/list parity. `BadgeControllerTest.php`: **1 passed / 11 assertions** for VP badge/list parity. `Sidebar.behavior.test.tsx`: **28 passed**; `Sidebar.permissions.test.tsx`: **21 passed**.
