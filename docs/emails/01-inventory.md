@@ -68,13 +68,13 @@ These are type families, not a claim that every similarly named event is mailed.
 
 | Module | Dedicated email IDs | Generic notifications (E-023) / other |
 |---|---|---|
-| Auth / Admin | E-029–E-031 | User provisioning and password reset paths |
+| Auth / Admin | E-029, E-031 | User password reset and secure account setup |
 | Accounting | E-001–E-004 | Approval, payment, bill, dunning-escalation notifications |
 | Assets | — | Monthly depreciation jobs found; no dedicated email path found |
 | Attendance | — | Overtime and missing-timeout notifications; generic email only where `send()` and opted-in |
 | B2B / supplier & customer portals | E-005–E-008 | Portal event notices include in-app-only delivery paths |
 | CRM | E-009–E-011 | Pricing, complaint SLA, customer response, order chain notifications |
-| HR / Recruitment | E-012–E-015, E-032–E-033 | Onboarding, separation, training, applicant alerts |
+| HR / Recruitment | E-012–E-015, E-032–E-033 | Employee account security, separation, training, applicant alerts |
 | Inventory | — | Low-stock, GRN, cost-review, replenishment notices |
 | Leave / Loans | — | Leave and loan status notifications |
 | Maintenance | — | Assignment, breakdown, repeat-breakdown, handover notices |
@@ -97,7 +97,7 @@ These are type families, not a claim that every similarly named event is mailed.
 | External customer | E-001–E-004, E-009–E-011, E-020–E-023 | Most use the customer/party email on the triggering record; some use portal-user email lists/fallbacks. App RBAC does not cover external addresses; verify ownership, public fields, and duplicates per flow. |
 | External supplier | E-004, E-005–E-008, E-017–E-021 | Vendor email, supplier contact, invitation email, or supplier portal user depending on trigger. Fallback and inactive portal-user handling need verification. |
 | Applicant/candidate | E-012–E-015 | Candidate-provided application email. Do not expose internal notes or interview details beyond intended recipient. |
-| Internal staff / approver | E-023, E-024, E-026–E-033 | Caller-specific role/permission or employee/user resolution; E-023 and digest require explicit preferences. Temporary credential messages are P0. |
+| Internal staff / approver | E-023–E-024, E-026–E-029, E-031–E-033 | Caller-specific role/permission or employee/user resolution; E-023 and digest require explicit preferences. E-030 is removed; current welcome/reset messages use secure links. |
 | Executive | E-023, E-027–E-028 | Summary audience is code-defined; verify exactly which roles/permissions and whether summaries contain sensitive rows. |
 | System admin / sales inbox | E-026, E-034 and failure notifications | Permission audience or configured inbox. Verify settings values, no open relay, and no broad body exposure. |
 
@@ -125,7 +125,7 @@ This is a recommendation list, not an instruction to add email. In-app/Reverb no
 | Maintenance due / work assigned / breakdown | Scheduled reminders and generic notices exist; some call paths only notify in-app | Assigned technician and maintenance supervisor | Identify missed high-severity/out-of-shift alerts; use dedupe and escalation criteria. |
 | Quality inspection/NCR overdue and containment actions | Generic alert notifications and scheduled escalation paths exist; no dedicated template | QC owner, production/quality approver | Decide whether high-severity containment requires guaranteed mail; never email restricted/customer details without review. |
 | Supplier/customer document delivery | PO, invoice, receipt, credit note, delivery, complaint and return emails exist; coverage is incomplete across related lifecycle events | External contact recorded on transaction | Identify missing lifecycle messages (e.g. shipment dispatched/ETA, payment received) and confirm recipient consent/contractual need. |
-| Account onboarding | Welcome messages exist but include temporary passwords; no onboarding guidance-only secure variant found | New staff/portal user | Replace credential delivery with secure activation/reset before treating as complete. |
+| Account onboarding | Internal welcome/reset and portal account messages now use secure setup/reset links; E-030 legacy temporary-password flow was removed | New staff/portal user | Consider role-specific onboarding guidance after HR/security review; no credentials in email. |
 | Scheduled export / production summary delivery failure | Failure notification is present for some commands; other job failures rely on Horizon/failed-job monitoring | Export owner / operations admin | Check all mail/scheduler failures reach a monitored channel; avoid sending full error details. |
 | Backup/restore and system health | Backup/restore jobs and scheduler-health mechanisms exist; no dedicated direct email found in static search | System administrators | Decide whether mail alert is needed; otherwise verify existing health dashboard/monitoring is monitored. |
 | Training expiry, onboarding, separation | In-app/generic messages and scheduled reminders exist | Employee, manager, HR based on visibility | Confirm sensitive content, preference policy, cadence, and stop conditions. |
