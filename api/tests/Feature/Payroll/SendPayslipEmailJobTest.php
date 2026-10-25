@@ -36,7 +36,16 @@ class SendPayslipEmailJobTest extends TestCase
 
         (new SendPayslipEmailJob($payroll->id))->handle();
 
-        Mail::assertSent(PayslipMail::class, fn (PayslipMail $mail): bool => $mail->hasTo('a@example.test'));
+        Mail::assertSent(PayslipMail::class, function (PayslipMail $mail): bool {
+            $html = $mail->render();
+            $mail->assertSeeInText('secure Self-Service portal');
+
+            return $mail->hasTo('a@example.test')
+                && str_contains($html, 'https://portal.example.test/self-service/payslips')
+                && str_contains($html, '<title>Payslip ready</title>')
+                && str_contains($html, 'Open secure payslip portal')
+                && ! $mail->hasAttachment('payslip.pdf');
+        });
         $sent = $payroll->fresh();
         $this->assertNotNull($sent->payslip_emailed_at);
         $this->assertSame(Payroll::EMAIL_SENT, $sent->payslip_email_status);
