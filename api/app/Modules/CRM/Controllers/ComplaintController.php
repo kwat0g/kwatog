@@ -38,7 +38,10 @@ class ComplaintController
             }
         }
 
-        return CustomerComplaintResource::collection($this->service->list($f));
+        $user = $request->user();
+        $viewerId = $user->hasPermission('crm.complaints.manage') ? (int) $user->id : 0;
+
+        return CustomerComplaintResource::collection($this->service->list($f, $viewerId));
     }
 
     public function options(): JsonResponse

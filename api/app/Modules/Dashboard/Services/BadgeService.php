@@ -15,7 +15,6 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
@@ -447,14 +446,10 @@ class BadgeService
             'open_complaints' => [
                 'permissions' => ['crm.complaints.view'],
                 'label'       => 'Complaints',
-                'description' => 'Open customer complaints',
-                'counter'     => fn (): int => CustomerComplaint::query()
-                    ->whereNotIn('status', [
-                        ComplaintStatus::Resolved->value,
-                        ComplaintStatus::Closed->value,
-                        ComplaintStatus::Cancelled->value,
-                    ])
-                    ->count(),
+                'description' => 'Open complaints assigned to you',
+                'counter'     => fn (): int => $user->hasPermission('crm.complaints.manage')
+                    ? CustomerComplaint::query()->openAssignedTo((int) $user->id)->count()
+                    : 0,
             ],
 
             // Quality > Inspections — drafts awaiting readings + active ones.

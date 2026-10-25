@@ -102,6 +102,28 @@ it('opens the to-inspect queue when inspections has a positive badge', () => {
   );
 });
 
+it('opens the open-complaints filter when complaints has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'open_complaints'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Complaints',
+          description: 'Open complaints assigned to you',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/crm/complaints']}>
+      <Sidebar roleSlug="customer_service_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Customer Complaints/ })).toHaveAttribute(
+    'href',
+    '/crm/complaints?signal=open',
+  );
+});
+
 it('expands the active module, expires unvisited peeks, and keeps visited modules open', () => {
   render(<MemoryRouter initialEntries={['/mrp/plans']}><Harness /></MemoryRouter>);
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'true');

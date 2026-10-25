@@ -165,6 +165,9 @@ class BadgeControllerTest extends TestCase
     {
         $admin = Role::where('slug', 'system_admin')->firstOrFail();
         $user = User::factory()->create(['role_id' => $admin->id]);
+        $complaintViewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+        ]);
 
         // ── Inquiries (no FK chain needed; inquiry_no is service-assigned) ─
         DB::table('contact_inquiries')->insert([
@@ -183,6 +186,7 @@ class BadgeControllerTest extends TestCase
             'status'           => 'open',
             'description'      => 'Customer complaint',
             'created_by'       => $user->id,
+            'assigned_to'      => $user->id,
             'created_at'       => now(),
             'updated_at'       => now(),
         ]);
@@ -194,6 +198,18 @@ class BadgeControllerTest extends TestCase
             'status'           => 'closed',
             'description'      => 'Old complaint',
             'created_by'       => $user->id,
+            'created_at'       => now(),
+            'updated_at'       => now(),
+        ]);
+        DB::table('customer_complaints')->insert([
+            'complaint_number' => 'CMP-TEST-0003',
+            'customer_id'      => $customer->id,
+            'received_date'    => today()->toDateString(),
+            'severity'         => 'medium',
+            'status'           => 'investigating',
+            'description'      => 'Complaint investigation in progress',
+            'created_by'       => $user->id,
+            'assigned_to'      => $complaintViewer->id,
             'created_at'       => now(),
             'updated_at'       => now(),
         ]);
@@ -355,6 +371,48 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(1, $resp['overdue_bills']['count']);
         $this->assertSame(2, $resp['open_postings']['count']);
         $this->assertSame(2, $resp['training_upcoming']['count']);
+
+        $complaintList = $this->actingAs($complaintViewer, 'sanctum')
+            ->getJson('/api/v1/crm/complaints?signal=open')
+            ->assertOk();
+        $complaintBadge = $this->actingAs($complaintViewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.open_complaints.count');
+
+        $this->assertSame(1, $complaintList->json('meta.total'));
+        $this->assertSame($complaintList->json('meta.total'), $complaintBadge);
+        $this->assertSame(['investigating'], $complaintList->json('data.*.status'));
+
+        $unassignedViewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+        ]);
+        $unassignedList = $this->actingAs($unassignedViewer, 'sanctum')
+            ->getJson('/api/v1/crm/complaints?signal=open')
+            ->assertOk();
+        $unassignedBadge = $this->actingAs($unassignedViewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.open_complaints.count');
+
+        $this->assertSame(0, $unassignedList->json('meta.total'));
+        $this->assertSame(0, $unassignedBadge);
+
+        $readOnlyViewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'vice_president')->value('id'),
+        ]);
+        $this->assertTrue($readOnlyViewer->hasPermission('crm.complaints.view'));
+        $this->assertFalse($readOnlyViewer->hasPermission('crm.complaints.manage'));
+        $readOnlyList = $this->actingAs($readOnlyViewer, 'sanctum')
+            ->getJson('/api/v1/crm/complaints?signal=open')
+            ->assertOk();
+        $readOnlyBadge = $this->actingAs($readOnlyViewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.open_complaints.count');
+
+        $this->assertSame(0, $readOnlyList->json('meta.total'));
+        $this->assertSame(0, $readOnlyBadge);
 
         $qualityUser = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
