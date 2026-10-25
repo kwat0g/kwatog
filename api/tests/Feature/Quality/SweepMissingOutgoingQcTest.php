@@ -156,6 +156,12 @@ class SweepMissingOutgoingQcTest extends TestCase
 
     public function test_escalates_a_wo_that_cannot_be_repaired_and_notifies_work_order_viewers(): void
     {
+        $this->assertDatabaseHas('settings', ['key' => 'quality.outgoing_qc.notification_roles']);
+        app(SettingsService::class)->set('quality.outgoing_qc.notification_roles', ['qc_inspector', 'production_manager'], 'quality');
+        $productionManager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            'is_active' => true,
+        ]);
         // No active spec: the stateful refusal the sweep must escalate, not swallow.
         InspectionSpec::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
         $wo = $this->completedWoWithOutput();
@@ -173,6 +179,10 @@ class SweepMissingOutgoingQcTest extends TestCase
             ->count());
 
         // NotificationService writes the database channel directly.
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'chain.outgoing_qc_missing',
+            'notifiable_id' => $this->user->id,
+        ]);
         $this->assertDatabaseHas('notifications', [
             'type' => 'chain.outgoing_qc_missing',
             'notifiable_id' => $manager->id,
