@@ -9,10 +9,12 @@ use App\Common\Mail\UserNotificationMail;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use Illuminate\Notifications\Notification as LaravelNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Str;
 
 /**
@@ -148,6 +150,17 @@ class NotificationService
         array $recipientReasons = [],
     ): void {
         $this->dispatch($recipients, $type, $data, false, $dedupeKey, $recipientReasons);
+    }
+
+    /** Deliver an existing Laravel notification through the central dispatcher. */
+    public function sendLaravelNotification(User|Collection|array $recipients, LaravelNotification $notification): void
+    {
+        $users = $this->normaliseRecipients($recipients);
+        if ($users === []) {
+            return;
+        }
+
+        NotificationFacade::send($users, $notification);
     }
 
     /**

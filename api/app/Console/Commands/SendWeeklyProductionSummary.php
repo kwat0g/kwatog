@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Notifications\WeeklyProductionSummary;
 use App\Modules\Production\Services\ProductionSummaryService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Notification;
 
 /**
  * Task A10 — Weekly Friday 18:00 production summary email.
@@ -63,7 +63,7 @@ class SendWeeklyProductionSummary extends Command
         }
 
         try {
-            Notification::send($emailUsers, new WeeklyProductionSummary($summary));
+            app(NotificationService::class)->sendLaravelNotification($emailUsers, new WeeklyProductionSummary($summary));
         } catch (\Throwable $e) {
             app(EmailDeliveryFailureNotifier::class)->notify(
                 $users,
