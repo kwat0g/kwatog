@@ -10,7 +10,7 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
+| 3. Backend foundation | In progress | Units 1–3 have PRs; F-12 subject-channel authorization is in a separate pending PR. F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
 | 4. Frontend | In progress (F-08 navigation slice) | Bell and Center notification rows with permitted destinations are anchors; broader notification UI and multi-signal sidebar remain open. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
@@ -51,7 +51,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include other notification UI behavior and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include other notification UI behavior and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-12 applies source row scopes to procurement chain channels; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -137,12 +137,18 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include other notif
 - `PortalNotifications.test.tsx`: **5 passed**, including center navigation, bell navigation, middle-click read handling, and rejection of cross-realm links.
 - `npm run typecheck` reports only existing errors in export, invite, stock-transfer, and purchase-order files; no error names either changed notification component. Impeccable mechanical detector returned no findings. Visual browser QA was not run.
 
+## Separate finding fix: F-12 subject channel authorization
+
+- Production work-order, machine, and payroll-period channels now require the matching list permission and an existing subject. Chain channels decode the subject ID, fail closed when an entity type has no broadcaster model mapping, and use `ApprovalSourceScope` for purchase request/order visibility; other chain entities have no additional row scope in their corresponding list/detail paths.
+- `BroadcastAuthorizationTest`: **7 passed / 17 assertions**, including department-head positive and cross-department negative PR/PO access, plus existing/missing work-order, machine, payroll-period, and work-order chain subjects.
+- This aligns channels with existing route scopes. Work-order, machine, and payroll visibility remains permission-wide, as in their list/detail endpoints. Tests did not exercise every role or all eight chain entity types.
+
 ## Outstanding proof / risks
 
 1. Review sensitive policy: payroll, HR/discipline, finance, executive escalation, system-admin fanout, portal contacts.
 2. Seed one user per local role and department/site scope; run positive and negative recipient scenarios after approval.
 3. Compare each badge to the destination list's total under same filter and authorization for every eligible role.
-4. Verify channel authorization for unauthenticated, cross-user, and cross-scope cases.
+4. Verify channel authorization for all roles and all eight chain entity types; current regression tests cover cross-user, unauthenticated, direct subject existence, and cross-department PR/PO access.
 5. Validate route links, legacy renderer, responsive/keyboard UI, and performance after implementation.
 6. No test suite, browser/e2e session, or seeded-user scenario ran in discovery.
 
