@@ -181,7 +181,7 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_budget_outcome_notice_omits_detail_link_after_submitter_loses_view_access(): void
+    public function test_budget_outcome_notice_is_suppressed_after_submitter_loses_view_access(): void
     {
         $this->seed(RolePermissionSeeder::class);
         $submitter = User::factory()->withRole('finance_officer')->create();
@@ -204,10 +204,10 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         ], [['account_id' => $this->expenseAccount()->id, 'jan' => '10.00']]);
         $service->approve($service->submit($budget, $submitter->id), $checker->id);
 
-        $notice = DB::table('notifications')->where('notifiable_id', $submitter->id)
-            ->where('type', 'approval.completed')->first();
-        $this->assertNotNull($notice);
-        $this->assertNull(json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $submitter->id,
+            'type' => 'approval.completed',
+        ]);
     }
 
     public function test_eligible_approval_only_user_can_read_submitted_budget(): void

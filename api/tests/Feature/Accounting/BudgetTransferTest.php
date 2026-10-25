@@ -70,7 +70,7 @@ class BudgetTransferTest extends TestCase
         $this->assertSame('1300.00', $to->fresh()->annual_total);
     }
 
-    public function test_transfer_outcome_notice_omits_detail_link_without_budget_view_access(): void
+    public function test_transfer_outcome_notice_is_suppressed_without_budget_view_access(): void
     {
         [$service, $maker, $checker, $from, $to] = $this->livePair('1000.00', '1000.00');
         UserPermissionOverride::create([
@@ -81,6 +81,7 @@ class BudgetTransferTest extends TestCase
             'reason' => 'Notification link access test.',
         ]);
         $maker->flushPermissionsCache();
+        $this->assertFalse($maker->fresh()->hasPermission('budgeting.view'));
 
         $transfer = $service->request([
             'from_line_item_id' => $from->id,
@@ -91,12 +92,12 @@ class BudgetTransferTest extends TestCase
         ], $maker->id);
         $service->approve($transfer, $checker->id);
 
-        $notice = DB::table('notifications')->where('notifiable_id', $maker->id)
+        $this->assertFalse(DB::table('notifications')
+            ->where('notifiable_id', $maker->id)
             ->where('type', 'approval.completed')
+            ->whereRaw("data->>'entity_type' = 'budget_transfer'")
             ->whereRaw("data->>'entity_id' = ?", [$transfer->hash_id])
-            ->first();
-        $this->assertNotNull($notice);
-        $this->assertNull(json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
+            ->exists());
     }
 
     public function test_transfer_maker_checker_is_enforced_by_user_and_role(): void

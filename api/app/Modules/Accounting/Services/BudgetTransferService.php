@@ -187,14 +187,14 @@ class BudgetTransferService
     private function notifyRequester(BudgetTransfer $transfer, string $type, string $title): void
     {
         $requester = User::query()->whereKey($transfer->requested_by)->where('is_active', true)->first();
-        if (! $requester) {
+        if (! $requester || ! $requester->hasPermission('budgeting.view')) {
             return;
         }
 
         app(NotificationService::class)->send($requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget transfer was rejected.' : 'Your budget transfer was approved.',
-            'link_to' => $requester->hasPermission('budgeting.view') ? "/budgeting/transfers/{$transfer->hash_id}" : null,
+            'link_to' => "/budgeting/transfers/{$transfer->hash_id}",
             'entity_type' => 'budget_transfer',
             'entity_id' => $transfer->hash_id,
         ], "budget-transfer:decision:{$transfer->id}:".($transfer->rejected_at?->timestamp ?? $transfer->approved_at?->timestamp));

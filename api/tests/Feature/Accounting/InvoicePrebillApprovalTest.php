@@ -284,14 +284,10 @@ class InvoicePrebillApprovalTest extends TestCase
         $this->assertSame('draft', $approved->status->value);
         $this->assertNull($approved->journal_entry_id);
         $this->assertSame(0, JournalEntry::query()->count());
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $maker->id,
             'type' => 'approval.completed',
         ]);
-        $outcome = DB::table('notifications')->where('notifiable_id', $maker->id)
-            ->where('type', 'approval.completed')->first();
-        $this->assertNotNull($outcome);
-        $this->assertNull(json_decode((string) $outcome->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
 
         $approvalAuditCount = DB::table('audit_logs')
             ->where('model_type', $invoice->getMorphClass())
@@ -357,6 +353,26 @@ class InvoicePrebillApprovalTest extends TestCase
         $this->assertSame('finalized', $invoice->fresh()->status->value);
         $this->assertSame($approver->id, $invoice->fresh()->prebill_approved_by);
         $this->assertSame(1, JournalEntry::query()->count());
+    }
+
+    public function test_prebill_outcome_links_to_submitter_visible_invoice(): void
+    {
+        $maker = $this->user('finance_officer');
+        $approver = $this->user('finance_officer');
+        $invoice = $this->createPrebill($maker);
+
+        $this->actingAs($approver)
+            ->postJson('/api/v1/invoices/'.$invoice->hash_id.'/approve-prebill')
+            ->assertOk();
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_id', $maker->id)
+            ->where('type', 'approval.completed')
+            ->whereRaw("data->>'entity_type' = 'invoice'")
+            ->whereRaw("data->>'entity_id' = ?", [$invoice->hash_id])
+            ->first();
+        $this->assertNotNull($notice);
+        $this->assertSame('/accounting/invoices/'.$invoice->hash_id, json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 
     public function test_cancelled_prebill_cannot_be_approved_finalized_or_edited(): void

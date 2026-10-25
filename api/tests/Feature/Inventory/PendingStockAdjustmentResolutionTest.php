@@ -132,6 +132,69 @@ class PendingStockAdjustmentResolutionTest extends TestCase
             ->assertJsonPath('data.0.id', $adjustment->hash_id);
     }
 
+    public function test_outcome_notice_requires_a_permission_that_can_open_the_adjustment_list(): void
+    {
+        $finance = $this->userWith('finance_officer', ['inventory.adjust.approve']);
+        $requester = $this->userWith('warehouse_staff', ['inventory.adjust']);
+        $adjustment = $this->pendingAdjustment($requester);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $requester->id,
+            'permission_id' => Permission::query()->where('slug', 'inventory.adjust')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $finance->id,
+            'reason' => 'Adjustment outcome notice access test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $requester->flushPermissionsCache();
+
+        $this->actingAs($finance)
+            ->patchJson($this->url($adjustment, 'reject'), ['reason' => 'Access revoked before decision.'])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $requester->id,
+            'type' => 'approval.rejected',
+        ]);
+
+        $approverOnlyRequester = $this->userWith('warehouse_staff', ['inventory.adjust']);
+        $approvalPermission = Permission::query()->where('slug', 'inventory.adjust.approve')->firstOrFail();
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $approverOnlyRequester->id,
+            'permission_id' => $approvalPermission->id,
+            'type' => 'grant',
+            'granted_by' => $finance->id,
+            'reason' => 'Adjustment list permission test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $approverOnlyRequester->flushPermissionsCache();
+        $visibleAdjustment = $this->pendingAdjustment($approverOnlyRequester);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $approverOnlyRequester->id,
+            'permission_id' => Permission::query()->where('slug', 'inventory.adjust')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $finance->id,
+            'reason' => 'Adjustment list permission test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $approverOnlyRequester->flushPermissionsCache();
+
+        $this->actingAs($finance)
+            ->patchJson($this->url($visibleAdjustment, 'approve'))
+            ->assertOk();
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_id', $approverOnlyRequester->id)
+            ->where('type', 'approval.completed')
+            ->whereRaw("data->>'entity_type' = 'stock_adjustment'")
+            ->whereRaw("data->>'entity_id' = ?", [$visibleAdjustment->hash_id])
+            ->first();
+        $this->assertNotNull($notice);
+        $this->assertSame('/inventory/stock-adjustments', json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
+    }
+
     public function test_wrong_actors_and_every_action_after_a_terminal_state_are_rejected_without_writes(): void
     {
         $requester = $this->userWith('warehouse_staff', ['inventory.adjust']);

@@ -126,6 +126,10 @@ class BillServiceTest extends TestCase
         ], $user);
 
         $this->assertSame(BillPaymentStatus::Posted, $payment->status);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $user->id,
+            'type' => 'bill_payment.posted',
+        ]);
         $this->assertSame('3360.00', (string) $bill->fresh()->amount_paid);
         $payment = $this->approvePayment($svc, $bill, $payment);
         $bill->refresh();
@@ -246,18 +250,14 @@ class BillServiceTest extends TestCase
         }
 
         $service->approvePayment($bill->fresh(), $first, $vp);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $finance->id,
             'type' => 'approval.completed',
         ]);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $finance->id,
             'type' => 'bill_payment.posted',
         ]);
-        $postedNotice = DB::table('notifications')->where('notifiable_id', $finance->id)
-            ->where('type', 'bill_payment.posted')->first();
-        $this->assertNotNull($postedNotice);
-        $this->assertNull(json_decode((string) $postedNotice->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
         $this->assertSame('20000.00', (string) $bill->fresh()->balance);
         $last = $service->recordPayment($bill->fresh(), [
             'cash_account_id' => $cashId, 'payment_date' => '2026-04-15',
