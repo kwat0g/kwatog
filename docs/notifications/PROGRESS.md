@@ -25,6 +25,7 @@
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | `cee47e18` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
+| F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | pending |
 
 ## Coverage ledger
 
@@ -43,7 +44,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge scopes, profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-16 is fixed at all six inventoried sender paths. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge scope, profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 now reuses the approval board filter; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -78,6 +79,12 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 - Budget, transfer, invoice, and bill checks match destination route permissions. Stock-adjustment list access accepts `inventory.adjust` or `inventory.adjust.approve`; either supports the existing list link.
 - PR #336 CI backend job fails before PHPUnit on the existing duplicate `PdfRenderService::ensureDompdfDirs()` declaration in `origin/main`; tracked separately as F-22. Local targeted tests pass.
 - This closes F-16's six inventoried sender paths. Broader subject authorization across other notification families remains open for central resolver work.
+
+## Separate finding fix: F-02 approval badge scope
+
+- `BadgeService.approvals` now reads the approval board's `summary.my_action`, so it inherits the board's supported type, permission, delegation, and source-row filtering. The test verifies badge/board count parity and excludes an out-of-department leave row plus an unsupported approval type.
+- Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions**. The board still caps its summary at the requested page size (default 100); this undercount is separately tracked as F-23. F-03 purchase-request badge scope remains open.
+- Full BadgeControllerTest and all-role badge/list parity were not run. No frontend changes.
 
 ## Outstanding proof / risks
 

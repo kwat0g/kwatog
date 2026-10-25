@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Common\Services\ApprovalBoardService;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Support\DepartmentScope;
@@ -207,23 +208,13 @@ class BadgeService
         $roleSlug = $user->role?->slug;
 
         return [
-            // Overview > Approvals — every pending approval-record row routed to this role.
+            // Reuse the board's filtered queue so sidebar count matches the cards shown there.
             'approvals' => [
                 'permissions' => ['approvals.board.view'],
                 'label'       => 'Approvals',
-                'description' => 'Pending approvals waiting on your role',
-                'counter'     => function () use ($user): int {
-                    $slugs = array_values(array_unique(array_filter([
-                        $user->role?->slug,
-                        ...ApprovalDelegation::actsForRoles($user->id, now()),
-                    ])));
-
-                    return $slugs === [] ? 0 : ApprovalRecord::query()
-                        ->where('action', 'pending')
-                        ->where('is_current', true)
-                        ->whereIn('role_slug', $slugs)
-                        ->count();
-                },
+                'description' => 'Approvals requiring your action',
+                'counter'     => fn (): int => (int) app(ApprovalBoardService::class)
+                    ->board($user)['summary']['my_action'],
             ],
 
             'action_center' => [
