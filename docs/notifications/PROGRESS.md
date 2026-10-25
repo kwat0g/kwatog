@@ -132,6 +132,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `PermissionOverrideNotificationCopyTest`: **1 passed / 29 assertions**, covering add, update, remove, restore, no-link copy, raw slug/enum exclusion, and actor exclusion. Pint and `git diff --check` pass.
 - Queue long-wait link remains in separate PR [#346](https://github.com/kwat0g/kwatog/pull/346); verify it before marking F-15 fully closed.
 
+## Separate finding fix: F-24 invoice payment review audience
+
+- The payment-submission flow is a shared Finance review queue, not an assigned queue: `InvoicePaymentSubmission` has no reviewer assignment, and verify/reject routes use `accounting.invoices.collect`. Invoice detail requires `accounting.invoices.view`; the list/detail service adds no record-specific row scope.
+- Recipients now need active `accounting.invoices.collect` and `accounting.invoices.view` access. Exclude `system_admin`, whose permission bypass made it appear to be a Finance reviewer. Event timing, dedupe key, message, link, and review workflow stay unchanged.
+- `InvoicePaymentSubmissionServiceTest`: **13 passed / 80 assertions**. Negative checks exclude system administrators, inactive Finance users, a user granted collection permission without invoice visibility, and a view-only executive; the Finance Officer receives the exact invoice link.
+- Empty-recipient fallback/audit remains open in the central notification service. Do not use a generic system-admin fallback for customer payment data without an explicit business rule.
+
 ## Separate finding fix: F-02 approval badge scope
 
 - `BadgeService.approvals` now reads the approval board's `summary.my_action`, so it inherits the board's supported type, permission, delegation, and source-row filtering. The test verifies badge/board count parity and excludes an out-of-department leave row plus an unsupported approval type.

@@ -95,9 +95,12 @@ class InvoicePaymentSubmissionService
                     'proof_mime' => $mime, 'proof_size' => $proof->getSize(), 'proof_sha256' => $digest,
                     'idempotency_key' => $key, 'request_fingerprint' => $fingerprint,
                 ]);
-                $recipients = User::query()->where('is_active', true)->with('role')->get()
-                    ->filter(fn (User $user) => $user->hasPermission('accounting.invoices.collect'));
-                app(NotificationService::class)->sendInApp($recipients, 'invoice.payment_submitted', [
+                $notifications = app(NotificationService::class);
+                $recipients = $notifications->usersWithPermission('accounting.invoices.collect')
+                    // System administrators bypass permissions; they are not payment reviewers.
+                    ->reject(fn (User $user) => $user->role?->slug === 'system_admin')
+                    ->filter(fn (User $user) => $user->hasPermission('accounting.invoices.view'));
+                $notifications->sendInApp($recipients, 'invoice.payment_submitted', [
                     'title' => 'Customer payment awaits verification', 'message' => 'Review payment for '.$locked->invoice_number.'.',
                     'link_to' => '/accounting/invoices/'.$locked->hash_id,
                 ], 'invoice-payment:'.$row->hash_id.':pending');
