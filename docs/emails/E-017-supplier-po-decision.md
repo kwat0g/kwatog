@@ -19,3 +19,5 @@ Accepted/rejected copy distinguishes accepted proposed terms, a response returne
 Rendered HTML is 25,301 bytes. Chromium screenshots were inspected at 1440px and 390px, light and dark; no horizontal overflow or missing logo. This does not verify Gmail, Outlook, Apple Mail, or Yahoo rendering, mail delivery, or inbox placement. See [screenshots](screenshots/).
 
 Purchasing and the accountant must review the external wording and PO amounts. The data-protection contact must review supplier contact handling. No legal or compliance claim is made.
+
+Follow-up preview review reopened desktop-dark and mobile-light: the CTA is visible and mobile details wrap without clipping. Currency still displays `PHP` pending EF-120. The preview footer contains test-domain contact values and certification copy; these must be verified in company settings before external delivery.
