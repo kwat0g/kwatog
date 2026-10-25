@@ -43,7 +43,7 @@ export default function ProductDetailPage() {
   const debouncedCustomerSearch = useDebounce(customerSearch, 300);
   const [accessVisibility, setAccessVisibility] = useState<'standard' | 'restricted'>('restricted');
   const [accessCustomerIds, setAccessCustomerIds] = useState<string[]>([]);
-  const { data: customerOptions = [], isError: customerOptionsError, refetch: retryCustomerOptions } = useQuery({
+  const { data: customerOptions, isError: customerOptionsError, refetch: retryCustomerOptions } = useQuery({
     queryKey: ['crm', 'products', 'customer-options', debouncedCustomerSearch],
     queryFn: () => productsApi.customerOptions({ search: debouncedCustomerSearch || undefined }),
     enabled: editingAccess && canManageCustomerAccess,
@@ -52,7 +52,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     setKnownCustomers((current) => {
       const byId = new Map(current.map((customer) => [customer.id, customer]));
-      [...(data?.portal_customers ?? []), ...customerOptions].forEach((customer) => byId.set(customer.id, customer));
+      [...(data?.portal_customers ?? []), ...(customerOptions ?? [])].forEach((customer) => byId.set(customer.id, customer));
       return [...byId.values()];
     });
   }, [data?.portal_customers, customerOptions]);
