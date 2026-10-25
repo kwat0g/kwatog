@@ -5,6 +5,7 @@ import {
   useRef,
   useMemo,
   useState,
+  useId,
   type ReactNode,
   type KeyboardEvent,
 } from 'react';
@@ -77,7 +78,7 @@ export interface DataTableProps<T> {
 
   /**
    * Stable key for persisting per-user preferences (density, hidden columns).
-   * When omitted, prefs are session-only via local component state.
+   * When omitted, density uses an automatic route-scoped key; column visibility stays opt-in.
    */
   tableKey?: string;
   /** Renders an inline expandable detail row when set. The chevron column appears at the start. */
@@ -113,9 +114,9 @@ export interface DataTableProps<T> {
 // ─── Density mapping ───────────────────────────────────────────
 
 const rowHeight: Record<TableDensity, string> = {
-  compact: 'h-9',
-  default: 'h-row',
-  spacious: 'h-14',
+  compact: 'h-row-compact',
+  default: 'h-row-comfortable',
+  spacious: 'h-row-spacious',
 };
 
 const cellPadding: Record<TableDensity, string> = {
@@ -195,10 +196,12 @@ export function DataTable<T>({
   }, []);
 
   // ─── Persistent prefs ─────────────────────────────────────
-  const prefs = useTablePrefsStore((s) => (tableKey ? s.byTable[tableKey] : undefined));
+  const tableInstanceId = useId();
+  const preferenceKey = tableKey ?? `auto:${typeof window === 'undefined' ? '/' : window.location.pathname}:${tableInstanceId}`;
+  const prefs = useTablePrefsStore((s) => s.byTable[preferenceKey]);
   const setStoreDensity = useTablePrefsStore((s) => s.setDensity);
   const setStoreHidden = useTablePrefsStore((s) => s.setHiddenColumns);
-  const density: TableDensity = densityProp ?? prefs?.density ?? 'default';
+  const density: TableDensity = densityProp ?? prefs?.density ?? 'compact';
   const hiddenColumnKeys = useMemo(
     () => new Set(prefs?.hiddenColumns ?? columns.filter((c) => c.defaultHidden).map((c) => c.key)),
     [prefs?.hiddenColumns, columns],
@@ -208,7 +211,7 @@ export function DataTable<T>({
 
   const handleDensityChange = (d: TableDensity) => {
     onDensityChange?.(d);
-    if (tableKey) setStoreDensity(tableKey, d);
+    setStoreDensity(preferenceKey, d);
   };
 
   const toggleColumnVisibility = (colKey: string) => {
@@ -339,7 +342,7 @@ export function DataTable<T>({
   // Pinned-column sticky styles. We embed inline styles for `left:` because
   // Tailwind can't dynamically compute the cumulative offset.
   const pinnedTHClass = 'sticky bg-canvas z-20';
-  const pinnedTDClass = 'sticky bg-canvas';
+  const pinnedTDClass = 'sticky';
 
   const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0);
   const rowExpands = Boolean(renderExpanded && expandOnRowClick && !onRowClick);
@@ -492,7 +495,7 @@ export function DataTable<T>({
                   className={cn(
                     cellPadding[density],
                     'w-8 text-left text-table-header text-muted font-semibold',
-                    rowHeight.default,
+                    rowHeight[density],
                     stickyHeader && 'sticky top-0 z-20',
                   )}
                 >
@@ -509,7 +512,7 @@ export function DataTable<T>({
                   className={cn(
                     cellPadding[density],
                     'w-7 text-left text-table-header text-muted font-semibold',
-                    rowHeight.default,
+                    rowHeight[density],
                     stickyHeader && 'sticky top-0 z-20',
                   )}
                   aria-label="Expand row"
@@ -527,7 +530,7 @@ export function DataTable<T>({
                     className={cn(
                       cellPadding[density],
                       'text-table-header text-muted font-semibold select-none',
-                      rowHeight.default,
+                      rowHeight[density],
                       alignClass[col.align ?? 'left'],
                       isPinned && pinnedTHClass,
                       isPinned && 'border-r border-default',
@@ -591,7 +594,7 @@ export function DataTable<T>({
                           ? 'bg-accent/10 hover:bg-accent/15 outline outline-2 outline-accent -outline-offset-2 z-10'
                           : highlightedRowId && rid === highlightedRowId
                             ? 'bg-subtle outline outline-2 outline-accent/50 -outline-offset-2 z-10'
-                            : 'hover:bg-surface hover:z-10',
+                            : cn(i % 2 === 1 && 'bg-[var(--bg-zebra-even)]', 'hover:bg-surface hover:z-10'),
                         rowHeight[density],
                       )}
                       onClick={(e) => {
@@ -654,6 +657,11 @@ export function DataTable<T>({
                               cellPadding[density],
                               alignClass[col.align ?? 'left'],
                               isPinned && pinnedTDClass,
+                              isPinned && (isSelected
+                                ? 'bg-accent/10'
+                                : highlightedRowId && rid === highlightedRowId
+                                  ? 'bg-subtle'
+                                  : i % 2 === 1 ? 'bg-[var(--bg-zebra-even)]' : 'bg-canvas'),
                               isPinned && 'border-r border-default',
                               col.className,
                             )}

@@ -250,7 +250,13 @@
           "scrollWidth": 101,
           "clientWidth": 1,
           "scrollHeight": 21,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 101,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
         }
       ],
       "verticalScrollContainers": [],
@@ -272,7 +278,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Work orders"
+            ]
           },
           {
             "tag": "h1",
@@ -286,7 +296,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "WO-LAYOUT-202610-001In progress"
+            ]
           },
           {
             "tag": "div",
@@ -300,7 +314,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "PART-001 — Layout test product"
+            ]
           },
           {
             "tag": "button",
@@ -314,21 +332,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
-            "text": "Pause",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 4,
+            "examples": [
+              "Extend run",
+              "Pause",
+              "Complete"
+            ]
           },
           {
             "tag": "button",
@@ -342,21 +352,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
             "background": "color(srgb 0.85098 0.470588 0.282353)",
-            "contrast": 5.89
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
-            "text": "Complete",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 5.89,
+            "count": 1,
+            "examples": [
+              "Record output"
+            ]
           },
           {
             "tag": "h3",
@@ -370,7 +370,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 8,
+            "examples": [
+              "Historical production review",
+              "Production batch",
+              "Details"
+            ]
           },
           {
             "tag": "span",
@@ -384,7 +390,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 4,
+            "examples": [
+              "0 reports",
+              "IATF 16949 traceability",
+              "0 lines"
+            ]
           },
           {
             "tag": "p",
@@ -398,7 +410,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "No historical reports for this work order."
+            ]
           },
           {
             "tag": "button",
@@ -412,7 +428,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Details"
+            ]
           },
           {
             "tag": "button",
@@ -426,35 +446,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.839216 0.807843 0.756863)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 11.77
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Production batch",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "span",
-            "className": "min-w-0 text-caption text-muted",
-            "text": "IATF 16949 traceability",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 11.77,
+            "count": 1,
+            "examples": [
+              "Operations"
+            ]
           },
           {
             "tag": "dt",
@@ -468,119 +464,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Machine / Mold",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Produced",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Details",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Product",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Sales order",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Machine",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Mold",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Assigned workers",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 17,
+            "examples": [
+              "Batch no.",
+              "Machine / Mold",
+              "Produced"
+            ]
           },
           {
             "tag": "span",
@@ -594,63 +484,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Target / Produced",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Good / Reject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Planned start",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Production due",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Not assigned"
+            ]
           },
           {
             "tag": "span",
@@ -664,63 +502,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Actual",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Materials",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "span",
-            "className": "min-w-0 text-caption text-muted",
-            "text": "0 lines",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
-            "text": "View reservations",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Planning deadline"
+            ]
           },
           {
             "tag": "div",
@@ -734,63 +520,12 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Recent outputs",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "span",
-            "className": "min-w-0 text-caption text-muted",
-            "text": "0 entries",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "p-4 text-sm text-muted",
-            "text": "No output recorded yet.",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Linked records",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 7.04,
+            "count": 2,
+            "examples": [
+              "No materials defined (no active BOM).",
+              "No output recorded yet."
+            ]
           },
           {
             "tag": "div",
@@ -804,49 +539,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted leading-tight",
-            "text": "Layout press",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "450",
-            "lineHeight": "15px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted leading-tight",
-            "text": "Layout mold",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "450",
-            "lineHeight": "15px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Activity",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 7.04,
+            "count": 3,
+            "examples": [
+              "qty 25",
+              "Layout press",
+              "Layout mold"
+            ]
           },
           {
             "tag": "div",
@@ -860,91 +559,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
-            "text": "2026-10-25",
-            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
-            "size": 12,
-            "weight": "450",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Production cost snapshot",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "BOM used",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Inventory value / unit",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Basis",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Frozen at",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 2,
+            "examples": [
+              "2026-10-25"
+            ]
           },
           {
             "tag": "p",
@@ -958,7 +577,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Standard valuation is an estimate. Materials shows standard and actual usage; re"
+            ]
           }
         ],
         "combinations": [
@@ -976,37 +599,31 @@
           {
             "tag": "span",
             "size": 12,
-            "text": "Planning deadline"
+            "text": "Planning deadline",
+            "count": 1,
+            "examples": [
+              "Planning deadline"
+            ]
           },
           {
             "tag": "div",
             "size": 12,
-            "text": "qty 25"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "Layout press"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "Layout mold"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "2026-10-25"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "2026-10-25"
+            "text": "qty 25",
+            "count": 5,
+            "examples": [
+              "qty 25",
+              "Layout press",
+              "Layout mold"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Standard valuation is an estimate. Materials shows standard and actual usage; re"
+            "text": "Standard valuation is an estimate. Materials shows standard and actual usage; re",
+            "count": 1,
+            "examples": [
+              "Standard valuation is an estimate. Materials shows standard and actual usage; re"
+            ]
           }
         ],
         "below12px": [],
@@ -1018,49 +635,77 @@
           "width": 93,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
           "height": 28,
           "background": "color(srgb 0.85098 0.470588 0.282353)",
-          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "Operations",
           "width": 99,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.839216 0.807843 0.756863)"
+          "color": "color(srgb 0.839216 0.807843 0.756863)",
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "recordLinks": [
@@ -1102,113 +747,189 @@
           "width": 93,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
           "height": 28,
           "background": "color(srgb 0.85098 0.470588 0.282353)",
-          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "Operations",
           "width": 99,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.839216 0.807843 0.756863)"
+          "color": "color(srgb 0.839216 0.807843 0.756863)",
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "controls": [
         {
           "label": "Extend run",
           "width": 93,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
-          "height": 40
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "controlsBelow44": [
         {
           "label": "Extend run",
           "width": 93,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
-          "height": 40
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "scrollContextCount": 1
@@ -1433,7 +1154,13 @@
           "scrollWidth": 101,
           "clientWidth": 1,
           "scrollHeight": 21,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 101,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
         },
         {
           "tag": "span",
@@ -1448,7 +1175,13 @@
           "scrollWidth": 185,
           "clientWidth": 171,
           "scrollHeight": 21,
-          "clientHeight": 21
+          "clientHeight": 21,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 185,
+          "maxClientWidth": 171,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 21
         }
       ],
       "verticalScrollContainers": [],
@@ -1470,7 +1203,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Work orders"
+            ]
           },
           {
             "tag": "h1",
@@ -1484,7 +1221,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "WO-LAYOUT-202610-001In progress"
+            ]
           },
           {
             "tag": "div",
@@ -1498,7 +1239,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "PART-001 — Layout test product"
+            ]
           },
           {
             "tag": "button",
@@ -1512,21 +1257,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
-            "text": "Pause",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 4,
+            "examples": [
+              "Extend run",
+              "Pause",
+              "Complete"
+            ]
           },
           {
             "tag": "button",
@@ -1540,21 +1277,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
             "background": "color(srgb 0.85098 0.470588 0.282353)",
-            "contrast": 5.89
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
-            "text": "Complete",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 5.89,
+            "count": 1,
+            "examples": [
+              "Record output"
+            ]
           },
           {
             "tag": "h3",
@@ -1568,7 +1295,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 8,
+            "examples": [
+              "Historical production review",
+              "Production batch",
+              "Details"
+            ]
           },
           {
             "tag": "span",
@@ -1582,7 +1315,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 4,
+            "examples": [
+              "0 reports",
+              "IATF 16949 traceability",
+              "0 lines"
+            ]
           },
           {
             "tag": "p",
@@ -1596,7 +1335,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "No historical reports for this work order."
+            ]
           },
           {
             "tag": "button",
@@ -1610,7 +1353,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Details"
+            ]
           },
           {
             "tag": "button",
@@ -1624,35 +1371,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.839216 0.807843 0.756863)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 11.77
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Production batch",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "span",
-            "className": "min-w-0 text-caption text-muted",
-            "text": "IATF 16949 traceability",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 11.77,
+            "count": 1,
+            "examples": [
+              "Operations"
+            ]
           },
           {
             "tag": "dt",
@@ -1666,119 +1389,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Machine / Mold",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Produced",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Details",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Product",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Sales order",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Machine",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Mold",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Assigned workers",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 17,
+            "examples": [
+              "Batch no.",
+              "Machine / Mold",
+              "Produced"
+            ]
           },
           {
             "tag": "span",
@@ -1792,63 +1409,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Target / Produced",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Good / Reject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Planned start",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Production due",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Not assigned"
+            ]
           },
           {
             "tag": "span",
@@ -1862,63 +1427,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Actual",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Materials",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "span",
-            "className": "min-w-0 text-caption text-muted",
-            "text": "0 lines",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 px-3 text-caption border-hairline border-default bg-transparent text-primary hover:bg-elevated active:scale-[0.98] transition-colors",
-            "text": "View reservations",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Planning deadline"
+            ]
           },
           {
             "tag": "div",
@@ -1932,63 +1445,12 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Recent outputs",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "span",
-            "className": "min-w-0 text-caption text-muted",
-            "text": "0 entries",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "p-4 text-sm text-muted",
-            "text": "No output recorded yet.",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Linked records",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 7.04,
+            "count": 2,
+            "examples": [
+              "No materials defined (no active BOM).",
+              "No output recorded yet."
+            ]
           },
           {
             "tag": "div",
@@ -2002,49 +1464,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted leading-tight",
-            "text": "Layout press",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "450",
-            "lineHeight": "15px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "text-xs text-muted leading-tight",
-            "text": "Layout mold",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 12,
-            "weight": "450",
-            "lineHeight": "15px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Activity",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 7.04,
+            "count": 3,
+            "examples": [
+              "qty 25",
+              "Layout press",
+              "Layout mold"
+            ]
           },
           {
             "tag": "div",
@@ -2058,91 +1484,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "div",
-            "className": "text-2xs font-mono tabular-nums text-muted mt-0.5",
-            "text": "2026-10-25",
-            "font": "\"Spline Sans Mono Variable\", \"SF Mono\", Menlo, monospace",
-            "size": 12,
-            "weight": "450",
-            "lineHeight": "16.8px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "h3",
-            "className": "text-subsection font-semibold text-primary",
-            "text": "Production cost snapshot",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 16,
-            "weight": "600",
-            "lineHeight": "24px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.960784 0.945098 0.917647)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "BOM used",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Inventory value / unit",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Basis",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
-          },
-          {
-            "tag": "dt",
-            "className": "text-muted",
-            "text": "Frozen at",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "450",
-            "lineHeight": "18.2px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.658824 0.623529 0.576471)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 2,
+            "examples": [
+              "2026-10-25"
+            ]
           },
           {
             "tag": "p",
@@ -2156,7 +1502,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Standard valuation is an estimate. Materials shows standard and actual usage; re"
+            ]
           }
         ],
         "combinations": [
@@ -2174,37 +1524,31 @@
           {
             "tag": "span",
             "size": 12,
-            "text": "Planning deadline"
+            "text": "Planning deadline",
+            "count": 1,
+            "examples": [
+              "Planning deadline"
+            ]
           },
           {
             "tag": "div",
             "size": 12,
-            "text": "qty 25"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "Layout press"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "Layout mold"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "2026-10-25"
-          },
-          {
-            "tag": "div",
-            "size": 12,
-            "text": "2026-10-25"
+            "text": "qty 25",
+            "count": 5,
+            "examples": [
+              "qty 25",
+              "Layout press",
+              "Layout mold"
+            ]
           },
           {
             "tag": "p",
             "size": 12,
-            "text": "Standard valuation is an estimate. Materials shows standard and actual usage; re"
+            "text": "Standard valuation is an estimate. Materials shows standard and actual usage; re",
+            "count": 1,
+            "examples": [
+              "Standard valuation is an estimate. Materials shows standard and actual usage; re"
+            ]
           }
         ],
         "below12px": [],
@@ -2216,49 +1560,77 @@
           "width": 93,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
           "height": 28,
           "background": "color(srgb 0.85098 0.470588 0.282353)",
-          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "Operations",
           "width": 99,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.839216 0.807843 0.756863)"
+          "color": "color(srgb 0.839216 0.807843 0.756863)",
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "recordLinks": [
@@ -2300,116 +1672,193 @@
           "width": 93,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
           "height": 28,
           "background": "color(srgb 0.85098 0.470588 0.282353)",
-          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "Operations",
           "width": 99,
           "height": 40,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.839216 0.807843 0.756863)"
+          "color": "color(srgb 0.839216 0.807843 0.756863)",
+          "count": 1,
+          "examples": [
+            "Operations"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.960784 0.945098 0.917647)"
+          "color": "color(srgb 0.960784 0.945098 0.917647)",
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "controls": [
         {
           "label": "Extend run",
           "width": 93,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
-          "height": 40
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "controlsBelow44": [
         {
           "label": "Extend run",
           "width": 93,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Extend run"
+          ]
         },
         {
           "label": "Pause",
           "width": 85,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Pause"
+          ]
         },
         {
           "label": "Record output",
           "width": 135,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Record output"
+          ]
         },
         {
           "label": "Complete",
           "width": 106,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Complete"
+          ]
         },
         {
           "label": "Details",
           "width": 74,
-          "height": 40
+          "height": 40,
+          "count": 1,
+          "examples": [
+            "Details"
+          ]
         },
         {
           "label": "View reservations",
           "width": 133,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "View reservations"
+          ]
         }
       ],
       "scrollContextCount": 1
     }
-  ]
+  ],
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values."
 }

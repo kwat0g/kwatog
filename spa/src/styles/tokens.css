@@ -139,8 +139,9 @@
   --radius-full: 9999px;
 
   /* ─── Density — office. [data-theme='floor'] overrides all three. ─── */
-  --row-height: 48px;
+  --row-height: 36px;
   --row-height-compact: 36px;
+  --row-height-comfortable: 48px;
   --row-height-spacious: 56px;
   --hit-min: 28px;
   --font-size-body: 14px;
@@ -346,6 +347,9 @@
 
   /* Density — the only palette that raises these. */
   --row-height: 48px;
+  --row-height-compact: 44px;
+  --row-height-comfortable: 48px;
+  --row-height-spacious: 56px;
   --hit-min: 44px;
   --font-size-body: 15px;
 }

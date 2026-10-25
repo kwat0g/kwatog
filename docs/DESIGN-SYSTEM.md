@@ -17,8 +17,8 @@ hairline borders. Shadows exist only for true overlays — menu, modal, toast �
 are warm-tinted, never neutral black.
 
 **Information density over whitespace.** Real ERPs show more data per screen than
-web apps. Tight rows, packed columns, monospace numbers, inline status. Base body
-size is 13px and office table rows are 32px; these are spec, not preference.
+web apps, with enough separation for long work sessions. Body text is 14px and
+data tables offer Comfortable, Compact, and Spacious density per user.
 
 **Serif for display, sans for interface.** Instrument Serif carries page titles and
 gives the product its voice. It ships at weight 400 only — never apply a weight
@@ -89,7 +89,10 @@ user-selectable. See `stores/themeStore.ts` (`pushOverride` / `popOverride`).
   --ring-offset: #fdfcfa;
 
   /* Density — floor overrides all three */
-  --row-height: 32px;
+  --row-height: 36px;
+  --row-height-compact: 36px;
+  --row-height-comfortable: 48px;
+  --row-height-spacious: 56px;
   --hit-min: 28px;
   --font-size-body: 13px;
 }
@@ -254,10 +257,10 @@ silently — the browser falls back and nothing errors.
 
 | Name | Size | Line height | Usage |
 |---|---|---|---|
-| `text-2xs` | 10px | 1.4 | Column headers (uppercase, tracked), muted labels |
-| `text-xs` | 11px | 1.4 | Chip text, badges, meta |
-| `text-sm` | 12px | 1.4 | Table cells, secondary text |
-| `text-base` | 13px | 1.5 | Body, form inputs, navigation |
+| `text-2xs` | 12px | 1.4 | Compact metadata and labels |
+| `text-xs` | 12px | 1.4 | Chip text, badges, metadata |
+| `text-sm` | 13px | 1.4 | Compact table cells and secondary text |
+| `text-base` | 14px | 1.5 | Body, form inputs, navigation |
 | `text-md` | 14px | 1.4 | Card titles, section headers |
 | `text-lg` | 16px | 1.3 | Panel titles |
 | `text-xl` | 20px | 1.25 | — |
@@ -279,16 +282,17 @@ values.
 No weight class — the family is 400-only. Subtitles, breadcrumbs and actions stay
 on `font-sans`; serif in small UI text reads as a mistake.
 
-### Numbers, IDs, dates — always mono
+### Numbers, IDs, dates
 
 ```tsx
-<span className="font-mono tabular-nums">₱ 486,500.00</span>
+<span className="tabular-nums">₱ 486,500.00</span>
 <span className="font-mono tabular-nums">PO-202604-0015</span>
 ```
 
-Tabular figures align vertically across table columns.
+Use Public Sans with tabular figures for quantities, money, and dates. Reserve
+monospace for IDs, codes, and references.
 
-## SPACING (8px grid with 4px increments)
+## SPACING (4px base scale)
 
 ```
 0.5 = 2px    1 = 4px    1.5 = 6px    2 = 8px
@@ -299,8 +303,8 @@ Tabular figures align vertically across table columns.
 - Inside cells, chips, badges: 2–8px padding
 - Between form fields: 12px
 - Between sections: 16–20px
-- Page padding: 16–20px (not 24+)
-- Card padding: 12–16px (not 20+)
+- Page gutters: 16px below 640px, 24px from 640–1439px, 32px at 1440px+
+- Card padding: 16–24px by surface and viewport
 
 ## BORDER RADIUS
 
@@ -350,14 +354,17 @@ Neutral-black shadows on a warm canvas read as dirt.
 ## DENSITY TOKENS
 
 ```
-h-row        → var(--row-height)   32px office · 48px floor
-min-h-hit    → var(--hit-min)      28px office · 44px floor
+h-row        → var(--row-height)          36px office · 48px floor
+h-row-compact → var(--row-height-compact)  36px office · 44px floor
+h-row-comfortable → var(--row-height-comfortable) 48px
+h-row-spacious → var(--row-height-spacious) 56px
+min-h-hit    → var(--hit-min)      44px touch target
 min-w-hit    → var(--hit-min)
 ```
 
-Components read these unconditionally instead of branching on theme. `DataTable`'s
-`compact` and `spacious` densities stay fixed — those are explicit operator
-choices the palette should not override.
+Components read touch targets unconditionally. `DataTable` defaults to Compact
+and offers Comfortable and Spacious. Density persists per authenticated account
+and table key.
 
 ## ANIMATIONS
 
@@ -495,13 +502,13 @@ const chipVariants = {
 
 ### Data table
 
-- Row height: `h-row` — **32px** office, 48px floor. `compact` 28px, `spacious` 40px stay fixed
-- Header: `h-row`, 10px uppercase tracked muted, `--bg-thead`
+- Row height: Compact 36px default, Comfortable 48px, Spacious 56px
+- Header: 14px sentence-case Public Sans, semibold, `--bg-thead`
 - Sticky header: `--bg-thead` **plus a bottom border** — there is no blur to separate it
-- Cell padding: 0 10px
+- Cell padding: 12px horizontal; vertical padding follows density
 - Row separator: hairline `--border-subtle`; hover `--bg-row-hover`
-- Zebra: `--bg-zebra-even`
-- Numbers: `font-mono tabular-nums`, right-aligned
+- Zebra: alternating rows use `--bg-zebra-even`
+- Numbers and dates: Public Sans with `tabular-nums`; numeric values right-aligned
 - Selected row outline: `outline-accent` (**not** a landing token)
 
 Table tokens (`--bg-thead`, `--bg-zebra-*`, `--bg-row-hover`) are not mapped as
