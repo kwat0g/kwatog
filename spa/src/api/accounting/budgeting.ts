@@ -93,7 +93,7 @@ export const budgetingApi = {
  }).then((r) => r.data.data),
 
   // Budget Transfers (virement)
-  transfers: (params?: { status?: string; page?: number; per_page?: number }) =>
+  transfers: (params?: { status?: string; actionable?: boolean; page?: number; per_page?: number }) =>
   client.get<PaginatedResponse<BudgetTransfer>>('/budget-transfers', { params }).then((r) => r.data),
 
   transfer: (id: string) =>

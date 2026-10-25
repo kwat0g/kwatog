@@ -2,13 +2,13 @@
 
 **Audit date:** 2026-10-25
 **Evidence:** static source review plus aggregate-only queries against local development database.
-**Code changes:** none. Notification and badge behavior remains unchanged.
+**Code changes at inventory capture:** none. Follow-up implementation deltas and verification are tracked in `PROGRESS.md` and the addenda below.
 
 ## Coverage and confidence
 
-`00-discovery.md` contains full module/status discovery, all 73 internal sidebar destinations, 19 portal destinations, nine compact-shell destinations, and the 29 backend badge definitions. This report cross-references that inventory and lists every one of the 129 `NotificationService` call sites with its event-type expression and immediate audience expression. Mail-only Laravel notifications, custom alert email, payroll payslip mail, digest, and failure-wrapper paths appear in the separate-path register below.
+`00-discovery.md` contains the Phase 0 baseline of 73 internal sidebar destinations, 19 portal destinations, nine compact-shell destinations, and 29 backend badge definitions. Its post-discovery addendum records the added Budget Transfers sidebar item. This report cross-references that inventory and lists every one of the 129 `NotificationService` call sites with its event-type expression and immediate audience expression. Mail-only Laravel notifications, custom alert email, payroll payslip mail, digest, and failure-wrapper paths appear in the separate-path register below.
 
-Static source coverage is complete for the inspected repository. Runtime recipient-to-role delivery, authorization outcomes, badge/list parity, and frontend visual behavior are **not verified**. No seeded-user scenario, test suite, browser session, or production query ran. A source expression such as `$audience` identifies the value passed to the service; its construction remains in the cited caller and is not a runtime recipient trace.
+Static source coverage is complete for the inspected repository. At inventory capture, runtime recipient-to-role delivery, authorization outcomes, badge/list parity, and frontend visual behavior were **not verified**; no seeded-user scenario, test suite, browser session, or production query had run. Follow-up targeted scenarios are listed in `PROGRESS.md`; complete role matrices and visual QA remain outstanding. A source expression such as `$audience` identifies the value passed to the service; its construction remains in the cited caller and is not a runtime recipient trace.
 
 ## Master notification findings
 
@@ -305,7 +305,11 @@ Local aggregate rows include `chain.payslip_ready` (526 rows, many users with em
 
 ## Sidebar audit and badge parity status
 
-The exhaustive route inventory is the 73-row internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`. Current 29 definitions are likewise fully enumerated there. 22 keys are attached to nav items; seven definitions are not attached: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, `shipments`, and `pending_transfers`.
+The route inventory is the 73-row Phase 0 internal destination table, 19-row portal table, and nine compact-shell items in `00-discovery.md`, plus the post-discovery `/budgeting/transfers` delta. Current 29 definitions are fully enumerated there. Baseline had 22 attached keys and seven unattached definitions; the current branch attaches `pending_transfers`, leaving six unattached: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, and `shipments`.
+
+| Current implementation delta | Gate and count | Destination and parity | Coverage |
+| --- | --- | --- | --- |
+| Finance > Budget Transfers | `budgeting.view` or `budgeting.approve`; badge counts pending rows the current user can approve under `BudgetTransferService::canApprove()` role-separation rules. | Positive badge opens `/budgeting/transfers?status=pending&actionable=1`. `BudgetTransfer::scopeAwaitingApprovalFor()` powers both badge count and list filter. Approval-only users are restricted to that actionable queue; users with view access retain the broader list. | Direct approver and active-delegate tests compare badge count with list total and exclude same-role requests. Browser visual QA remains outstanding. |
 
 | Finding | Current implementation | Destination/parity result | Severity |
 | --- | --- | --- | --- |
@@ -319,7 +323,7 @@ The exhaustive route inventory is the 73-row internal destination table, 19-row 
 | Query cost | One closure/query per active badge key; not a single grouped query. Cache TTL defaults to 30s. | Count query volume can approach active keys per user/cache miss; no p95/query-count benchmark ran. | Medium-high |
 | Refresh and invalidation | SPA polls every 60s; pauses hidden; cache version globally touched by 26 observed model classes; `StockLevel` intentionally absent. | Low-stock can be stale until TTL/poll; not every contributing model write proven covered. | Medium |
 | Alerts | `/alerts` default list includes every unresolved/non-dismissed row; `unreadCount()` counts global unresolved/non-dismissed rows with `is_read=false`. Both are permission gated. Draft PR #366 adds `is_read=false` list filtering and a “shared unread” page action that opens the same scope. There is no sidebar Alerts item or current caller of the count endpoint. | The count is global because alert read/dismiss fields are on the shared `alerts` row. Filtered list and count now have parity coverage; whether the business wants personal read state remains open. | Medium |
-| Unwired badge definitions | Seven backend counts have no sidebar destination. | No clickable matching list item. | Medium |
+| Unwired badge definitions | Six backend counts remain without a sidebar destination: `training_expiry`, `training_upcoming`, `open_postings`, `inquiries`, `mrb_holds`, `shipments`. | `pending_transfers` now has a permission-gated list route and matching filter. | Medium |
 | Compact shells | Employee self-service, factory, maintenance mobile show no counters. | Candidate actionable signals are absent; no visual or route parity checked. | Medium |
 
 The supplied route table includes destinations with no existing badge. Candidate signals are listed per module in `00-discovery.md` and proposed in `02-policy-and-plan.md`; unknowns are marked where status/date/owner semantics need business confirmation.
@@ -343,7 +347,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 
 | Module | Notification types/triggers found | Sidebar item / current badge keys | Coverage note |
 | --- | --- | --- | --- |
-| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Statements/vendors no count | Candidate AR/AP states exceed current two signals. |
+| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Budget Transfers `pending_transfers`; Statements/vendors no count | Candidate AR/AP states exceed current signals. Phase 2's combined `finance.budget.awaiting_my_approval` route at `/budgeting?signal=awaiting_my_approval` remains incomplete. |
 | Admin | Permission override, account provisioning, mail failure, backup/queue/system paths | Users, roles, audit, settings, sessions, backups, gov tables; no sidebar counts | System-health notices need admin-only destinations and permissions. |
 | Assets | No `NotificationService` call identified | Fixed Assets; no badge | Asset transfer/disposal state exists; candidate only if actionable list is reliable. |
 | Attendance | Missing timeout, overtime submitted/decided | Attendance no count; Overtime `overtime` | Own exception vs approver action must be separated. |

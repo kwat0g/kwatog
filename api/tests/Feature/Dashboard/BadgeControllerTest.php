@@ -768,5 +768,9 @@ class BadgeControllerTest extends TestCase
             ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
         $this->assertSame(2, $tracked['pending_budgets']['count']);
         $this->assertSame(1, $tracked['pending_transfers']['count']);
+        $pendingTransfers = $this->actingAs($vp, 'sanctum')
+            ->getJson('/api/v1/budget-transfers?status=pending&actionable=1')
+            ->assertOk();
+        $this->assertSame($tracked['pending_transfers']['count'], $pendingTransfers->json('meta.total'));
     }
 }

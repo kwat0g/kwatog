@@ -272,15 +272,15 @@ The `ShouldBroadcast` inventory includes: `UserNotificationCreated`, `Permission
 
 ## Sidebar and navigation discovery
 
-The internal ERP sidebar is `spa/src/components/layout/Sidebar.tsx`, permission/feature gated by frontend metadata. It defines 73 internal destinations; 22 carry a badge key. Supplier/customer portals define 19 destinations total. Employee self-service has a six-item conditional mobile bottom navigation; factory floor has two tabs; maintenance mobile has one tab. The three compact shells do not render badge counters.
+The Phase 0 capture of the internal ERP sidebar is `spa/src/components/layout/Sidebar.tsx`, permission/feature gated by frontend metadata. It recorded 73 internal destinations; 22 carried a badge key. Supplier/customer portals define 19 destinations total. Employee self-service has a six-item conditional mobile bottom navigation; factory floor has two tabs; maintenance mobile has one tab. The three compact shells do not render badge counters. Later implementation deltas are listed below the baseline inventory.
 
-`BadgeService` is the backend badge source, registered at `GET /dashboards/badges`. It defines 29 count keys; 22 are wired to internal sidebar items. Counts are cached per user (default 30 seconds; setting-bounded), use one closure/query per active key, and trigger global version invalidation plus an empty `BadgesChanged` private-channel ping for observed model writes. SPA polling is 60 seconds and pauses in background. StockLevel changes are intentionally not observed; low-stock relies on TTL/poll.
+`BadgeService` is the backend badge source, registered at `GET /dashboards/badges`. It defined 29 count keys at capture; 22 were wired to internal sidebar items. The current implementation branch wires 23. Counts are cached per user (default 30 seconds; setting-bounded), use one closure/query per active key, and trigger global version invalidation plus an empty `BadgesChanged` private-channel ping for observed model writes. SPA polling is 60 seconds and pauses in background. StockLevel changes are intentionally not observed; low-stock relies on TTL/poll.
 
 Current visual behavior: one numeric badge per nav item; counts over 99 render as `99+`; no signal chips/popovers. Collapsed item badges remain visible. Collapsed module groups sum child counts and show the highest current severity; the summary is in a title/ARIA label. Mobile uses the same one-badge rendering. There is no signal legend or global system-notice strip in the main shell; alerts, Action Center, and DSS have separate screens.
 
-The complete internal destination/badge-key inventory is below. `—` means no badge key.
+The Phase 0 internal destination/badge-key inventory is below, followed by its implementation delta. `—` means no badge key.
 
-**Internal item count:** 73; **with badge keys:** 22.
+**Phase 0 internal item count:** 73; **current count:** 74; **baseline items with badge keys:** 22; **current items with badge keys:** 23.
 
 | Path | Label | Permission gate | Feature gate | Badge key |
 | --- | --- | --- | --- | --- |
@@ -327,6 +327,7 @@ The complete internal destination/badge-key inventory is below. `—` means no b
 | `/quality/ncrs` | `Nonconformance Reports (NCRs)` | `quality.ncr.view` | `quality` | `ncrs` |
 | `/quality/traceability` | `Lot Traceability` | `quality.inspections.view` | `quality` | — |
 | `/budgeting` | `Budgeting` | `budgeting.view` | `budgeting` | `pending_budgets` |
+| `/budgeting/transfers` | `Budget Transfers` | any: `budgeting.view`, `budgeting.approve` | `budgeting` | `pending_transfers` (implementation delta) |
 | `/accounting/invoices` | `Accounts Receivable Invoices` | `accounting.invoices.view` | `accounting` | `draft_invoices` |
 | `/accounting/bills` | `Accounts Payable Bills` | `accounting.bills.view` | `accounting` | `overdue_bills` |
 | `/accounting/vendors` | `Vendors` | `accounting.vendors.view` | `accounting` | — |
@@ -357,6 +358,10 @@ The complete internal destination/badge-key inventory is below. `—` means no b
 | `/accounting/portal-access` | `Portal Access` | `b2b.portal_access.view` | none | — |
 | `/admin/backups` | `Backup & Restore` | `admin.backups.view` | none | — |
 | `/admin/gov-tables` | `Government Contribution Tables` | `admin.gov_tables.manage` | none | — |
+
+### Post-discovery implementation delta
+
+Draft branch `notifications/fix-budget-transfer-badge-parity` adds `/budgeting/transfers` (`Budget Transfers`), shown to users with `budgeting.view` or `budgeting.approve`, under the `budgeting` feature. Its `pending_transfers` badge opens `?status=pending&actionable=1`; the badge and filter share the same pending-approval scope. The original 73-destination, 22-badge-key counts above remain the Phase 0 baseline.
 
 | Shell | Path | Label |
 | --- | --- | --- |
@@ -416,7 +421,7 @@ The 29 backend keys and their current meanings are defined in `api/app/Modules/D
 | `draft_invoices` | Invoices in `draft`. |
 | `overdue_bills` | Unpaid/partial bills with `due_date < today()` in app timezone. |
 | `pending_budgets` | Budgets with status `submitted`. |
-| `pending_transfers` | Budget transfers with status `pending`. |
+| `pending_transfers` | Phase 0 baseline counted all transfers with status `pending`; the current branch scopes this to pending transfers the user can approve under the direct/delegated maker-checker rule. |
 
 ## Candidate signal data discovery
 

@@ -176,7 +176,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         });
 
         Route::prefix('budget-transfers')->group(function () {
-            Route::get('/', [BudgetTransferController::class, 'index'])->middleware('permission:budgeting.view');
+            Route::get('/', [BudgetTransferController::class, 'index'])->middleware('permission_any:budgeting.view,budgeting.approve');
             Route::get('/{budgetTransfer}', [BudgetTransferController::class, 'show']);
             Route::post('/', [BudgetTransferController::class, 'store'])->middleware('permission:budgeting.manage');
             Route::post('/{budgetTransfer}/approve', [BudgetTransferController::class, 'approve'])->middleware('approval_permission:budgeting.approve');

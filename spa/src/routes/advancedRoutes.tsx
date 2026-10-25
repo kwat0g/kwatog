@@ -77,7 +77,7 @@ export const advancedRoutes = (
       <Route
         path="/budgeting/transfers"
         element={
-          <PermissionGuard permission="budgeting.view">
+          <PermissionGuard permission="budgeting.view" approvalAnyOf={['budgeting.approve']}>
             <BudgetTransferListPage />
           </PermissionGuard>
         }
