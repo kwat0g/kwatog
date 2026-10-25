@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #338, stacked after PR #337.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #340, stacked after PR #339.
 
 ## Phase status
 
@@ -28,6 +28,7 @@
 | F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | `af68eb60` |
 | F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | `8512116d` |
 | F-04. Badge destination permissions | `notifications/fix-badge-route-permissions` | [#339](https://github.com/kwat0g/kwatog/pull/339) | `7089562c` |
+| F-01. Profile-request badge route and query parity | `notifications/fix-profile-request-badge-route` | [#340](https://github.com/kwat0g/kwatog/pull/340) | `93c0f12c` |
 
 ## Coverage ledger
 
@@ -46,7 +47,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attached to wrong route, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 now reuses the approval board filter; F-03 now shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -100,6 +101,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include profile bad
 - Targeted API test: `BadgeControllerTest::test_badge_permissions_match_destination_list_permissions` **1 passed / 18 assertions**. An employee with only `payroll.view` cannot open Payroll Periods and receives no periods badge; period-view, complaints-view-only, and warehouse-delivery users can open their destination and receive its badge.
 - No frontend changes. Full role matrix and feature-flag combinations remain untested.
 
+## Separate finding fix: F-01 profile-request badge
+
+- Moved `profile_requests` from Employees to Bank Account Changes/Profile Change Requests. The badge now shares `ProfileUpdateRequestService::reviewQueueQuery()` with the list endpoint, so HR users count their default `pending` queue under the same department/view-all scope and Finance-only users count only `requires_finance` `pending_finance` rows across the finance queue.
+- Targeted parity test: `BadgeControllerTest::test_profile_request_badge_matches_the_hr_and_finance_review_queues` **1 passed / 8 assertions**. Department-head list and badge both count **2**; finance-officer list and badge both count **3** in seeded test fixtures, including excluded statuses, non-finance rows, and an out-of-department HR row. Existing Finance bank-request workflow test: **1 passed / 34 assertions**. Sidebar permission suite: **21 passed**.
+- The first `artisan test --filter` invocation could not load the test suite because an unrelated existing `AudienceFakeDetector::detect()` return type conflicts with `DetectorInterface`. Running the target test file directly with PHPUnit succeeded. Full role parity remains open under F-09.
+- PHP syntax and `git diff --check` pass. `pint --test` still reports existing formatting violations in these legacy files; no file-wide formatting was applied.
+
 ## Outstanding proof / risks
 
 1. Review sensitive policy: payroll, HR/discipline, finance, executive escalation, system-admin fanout, portal contacts.
@@ -111,4 +119,4 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include profile bad
 
 ## Resume instruction
 
-Continue Phase 3 from `02-policy-and-plan.md`, starting with remaining central-service work. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
+Continue with the next isolated high-priority finding or Phase 3 unit from `02-policy-and-plan.md`. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
