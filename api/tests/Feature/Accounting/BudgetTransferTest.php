@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
@@ -319,12 +320,72 @@ class BudgetTransferTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.can_approve', true);
 
+        $sameRoleRequester = User::factory()->withRole('employee')->create();
+        $sameRoleTransfer = $service->request([
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'Same-role request must stay hidden.',
+        ], $sameRoleRequester->id);
+        $this->actingAs($approver)->getJson('/api/v1/budget-transfers?status=pending&actionable=1')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $transfer->hash_id);
+        $this->actingAs($approver)->getJson("/api/v1/budget-transfers/{$sameRoleTransfer->hash_id}")
+            ->assertForbidden();
+
         $sameRole = User::factory()->withRole('finance_officer')->create();
         $this->actingAs($sameRole)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.can_approve', false);
         $outsider = User::factory()->withRole('employee')->create();
         $this->actingAs($outsider)->getJson("/api/v1/budget-transfers/{$transfer->hash_id}")->assertForbidden();
+    }
+
+    public function test_delegated_approver_badge_matches_their_pending_transfer_list(): void
+    {
+        [$service, $maker, , $from, $to] = $this->livePair('1000.00', '1000.00');
+        $transfer = $service->request([
+            'from_line_item_id' => $from->id,
+            'to_line_item_id' => $to->id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'Delegated approval visibility probe.',
+        ], $maker->id);
+        $delegator = User::factory()->withRole('vice_president')->create();
+        $delegate = User::factory()->withRole('employee')->create();
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $delegator->id,
+            'reason' => 'Budget transfer delegated approval test',
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $delegate->flushPermissionsCache();
+        $this->assertTrue($delegate->fresh()->hasPermission('budgeting.view'));
+        $this->assertFalse($delegate->fresh()->hasPermission('budgeting.approve'));
+        $this->assertTrue(ApprovalDelegation::canActForPermission($delegate->fresh(), 'budgeting.approve'));
+        $this->assertSame([(int) $delegator->role_id], ApprovalDelegation::permissionRoleIds($delegate->fresh(), 'budgeting.approve'));
+        $list = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/budget-transfers?status=pending&actionable=1')
+            ->assertOk();
+        $badge = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.pending_transfers.count');
+
+        $this->assertSame([$transfer->hash_id], $list->json('data.*.id'));
+        $this->assertSame($badge, $list->json('meta.total'));
+        $this->assertSame(1, $badge);
     }
 
     /**

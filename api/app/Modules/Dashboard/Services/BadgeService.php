@@ -548,12 +548,10 @@ class BadgeService
 
             // Finance > Budgeting — transfer requests awaiting a checker.
             'pending_transfers' => [
-                'permissions' => ['budgeting.approve'],
+                'permissions' => ['budgeting.approve', 'budgeting.view'],
                 'label'       => 'Budget transfers',
                 'description' => 'Budget transfers awaiting approval',
-                'counter'     => fn (): int => BudgetTransfer::query()
-                    ->where('status', 'pending')
-                    ->count(),
+                'counter'     => fn (): int => BudgetTransfer::query()->awaitingApprovalFor($user)->count(),
             ],
         ];
     }

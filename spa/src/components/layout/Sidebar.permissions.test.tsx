@@ -45,6 +45,13 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(decisionCenter, { permissions: new Set(['dss.view']), features: allFeatures, roleSlug: 'hr_officer' })).toBe(true);
   });
 
+  it('shows budget transfers to viewers and approvers only', () => {
+    const transfers = item('/budgeting/transfers');
+    expect(isNavItemVisible(transfers, { permissions: new Set(['budgeting.view']) })).toBe(true);
+    expect(isNavItemVisible(transfers, { permissions: new Set(['budgeting.approve']) })).toBe(true);
+    expect(isNavItemVisible(transfers, { permissions: new Set() })).toBe(false);
+  });
+
   it('shows the chain tracker to sales-order or bottleneck viewers only', () => {
     const tracker = item('/chains');
     expect(isNavItemVisible(tracker, { permissions: new Set(['crm.sales_orders.view']) })).toBe(true);
@@ -366,6 +373,7 @@ describe('role-aligned sidebar permissions', () => {
     );
     expect(financePaths).toEqual([
       '/budgeting',
+      '/budgeting/transfers',
       '/accounting/invoices',
       '/accounting/bills',
       '/accounting/vendors',

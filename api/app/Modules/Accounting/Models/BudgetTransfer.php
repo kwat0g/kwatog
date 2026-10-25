@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Models;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Enums\BudgetTransferStatus;
 use App\Modules\Auth\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BudgetTransfer extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'transfer_number',
@@ -30,6 +33,30 @@ class BudgetTransfer extends Model
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
     ];
+
+    public function scopeAwaitingApprovalFor(Builder $query, User $approver): Builder
+    {
+        $permission = 'budgeting.approve';
+        $roleIds = ApprovalDelegation::permissionRoleIds($approver, $permission);
+
+        if ($roleIds === []) {
+            return $query->whereRaw('1 = 0');
+        }
+        $onlyApprovalRole = count($roleIds) === 1 ? $roleIds[0] : null;
+
+        return $query->where('status', BudgetTransferStatus::Pending->value)
+            ->where(function (Builder $query) use ($approver, $onlyApprovalRole): void {
+                $query->whereNull('requested_by')
+                    ->orWhereHas('requester', function (Builder $requester) use ($approver, $onlyApprovalRole): void {
+                        $requester->whereKeyNot($approver->getKey());
+                        if ($onlyApprovalRole !== null) {
+                            $requester->where(function (Builder $query) use ($onlyApprovalRole): void {
+                                $query->whereNull('role_id')->orWhere('role_id', '<>', $onlyApprovalRole);
+                            });
+                        }
+                    });
+            });
+    }
 
     public function fromLine(): BelongsTo
     {

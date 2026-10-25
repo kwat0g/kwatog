@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
@@ -27,19 +27,24 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'neutral' | 'danger
 
 export default function BudgetTransferListPage() {
   const { can, canApprove } = usePermission();
+  const canViewAll = can('budgeting.view');
   const canManage = can('budgeting.manage');
   const canApproveTransfer = canApprove('budgeting.approve');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFromUrl = searchParams.get('status') ?? '';
+  const status = canViewAll ? statusFromUrl : 'pending';
+  const actionable = searchParams.get('actionable') === '1';
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
   const [rejectId, setRejectId] = useState<string | null>(null);
 
   const listQuery = useQuery({
-    queryKey: ['budget-transfers', status, page, perPage],
+    queryKey: ['budget-transfers', status, actionable, page, perPage],
     queryFn: () => budgetingApi.transfers({
       status: status || undefined,
+      actionable: actionable || undefined,
       page,
       per_page: perPage,
     }),
@@ -94,13 +99,20 @@ export default function BudgetTransferListPage() {
             size="sm"
             label="Transfer status"
             value={status}
-            onChange={(value) => { setStatus(value); setPage(1); }}
-            options={[
+            onChange={(value) => {
+              setPage(1);
+              const next = new URLSearchParams(searchParams);
+              if (value) next.set('status', value);
+              else next.delete('status');
+              if (value !== 'pending') next.delete('actionable');
+              setSearchParams(next);
+            }}
+            options={canViewAll ? [
               { value: '', label: 'All' },
               { value: 'pending', label: 'Pending' },
               { value: 'approved', label: 'Approved' },
               { value: 'rejected', label: 'Rejected' },
-            ]}
+            ] : [{ value: 'pending', label: 'Pending' }]}
           />
         }
       >
