@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, and PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, and PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -140,7 +140,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `InvoicePaymentSubmissionServiceTest`: **13 passed / 80 assertions**. Negative checks exclude system administrators, inactive Finance users, a user granted collection permission without invoice visibility, and a view-only executive; the Finance Officer receives the exact invoice link.
 - Empty-recipient fallback/audit remains open in the central notification service. Do not use a generic system-admin fallback for customer payment data without an explicit business rule.
 
-## Separate finding fix: F-25 AR dunning audience and links
+## Separate finding fix: F-25 AR dunning audience and links (PR [#363](https://github.com/kwat0g/kwatog/pull/363))
 
 - Final-tier escalation, missing-email fallback, and queued-mail failure now share active AR reviewers who hold both `accounting.invoices.collect` and `accounting.invoices.view`; exclude `system_admin` permission bypass. Queued mail failure re-resolves current access rather than trusting its queue-time ID snapshot.
 - Internal dunning escalation and email-failure notices link to the exact invoice. Customer reminder recipients and portal links stay unchanged; dunning schedule, tier timing, and email preference behavior stay unchanged.
