@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #343, stacked after PR #342.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #344, stacked after PR #343.
 
 ## Phase status
 
@@ -11,7 +11,7 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
-| 4. Frontend | Not started | Blocked by approved registry/link contracts. |
+| 4. Frontend | In progress (F-08 navigation slice) | Bell and Center notification rows with permitted destinations are anchors; broader notification UI and multi-signal sidebar remain open. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
@@ -32,6 +32,7 @@
 | F-18. Pricing notification role allow-list | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | `9e9243a0` |
 | F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | `9fc19063` |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | `673e3f5c` |
+| F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | `6b4fef06` |
 
 ## Coverage ledger
 
@@ -50,7 +51,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include notification links/UI behavior and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include other notification UI behavior and configured-role audiences without record scope. F-01 moves the profile-request badge to its queue and shares the list query; F-02 reuses the approval board filter; F-03 shares the purchase-request pending-approval scope with its count endpoint; F-04 aligns three badge permission gates with their destination routes; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role notification leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -129,6 +130,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - API: `NotificationCatalogTest` **8 passed / 58 assertions**; `WorkOrderInlineReworkTest::test_resolved_wo_closes_automatically_once_with_notification` **1 passed / 6 assertions**. SPA `notificationMeta.test.ts`: **15 passed**.
 - PHP syntax and `git diff --check` pass. Frontend typecheck and full suites were not run.
 - Existing recipient scope questions remain open; this metadata fix does not prove role isolation.
+
+## Separate finding fix: F-08 notification links
+
+- Bell and Center notification rows with allowed record destinations now use React Router anchors. Primary click marks unread rows read and navigates; middle-click marks read while preserving the browser's new-tab behavior. Portal rows still require the matching realm prefix. Missing or out-of-realm links keep the non-navigating button behavior.
+- `PortalNotifications.test.tsx`: **5 passed**, including center navigation, bell navigation, middle-click read handling, and rejection of cross-realm links.
+- `npm run typecheck` reports only existing errors in export, invite, stock-transfer, and purchase-order files; no error names either changed notification component. Impeccable mechanical detector returned no findings. Visual browser QA was not run.
 
 ## Outstanding proof / risks
 
