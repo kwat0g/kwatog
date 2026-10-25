@@ -16,6 +16,14 @@
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
 
+## Phase 3 PR stack
+
+| Unit | Branch | PR | Commit |
+| --- | --- | --- | --- |
+| 1. Versioned payload contract | `notifications/phase3-central-contract` | [#332](https://github.com/kwat0g/kwatog/pull/332) | `a8a479e0` |
+| 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | `e85cc70f` |
+| 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | `cee47e18` |
+
 ## Coverage ledger
 
 - NotificationService call sites inventoried: **129 / 129** found by scan and cross-check; all 129 remain on existing entry points.
