@@ -15,6 +15,8 @@
 - Screenshots: [desktop light](screenshots/e012-application-received-desktop-light.png), [desktop dark](screenshots/e012-application-received-desktop-dark.png), [mobile light](screenshots/e012-application-received-mobile-light.png), [mobile dark](screenshots/e012-application-received-mobile-dark.png).
 - Browser checks do not prove Gmail, Outlook, Apple Mail, Yahoo, or mobile mail-client rendering. Footer preview uses seeded local branding data and requires owner verification.
 
+- Follow-up review: the dark desktop CTA label is present in the screenshot; a cropped browser view confirmed it. Full-page image scaling made the label hard to see. Footer contact details are seeded preview data, not verified company information.
+
 ## Review
 
 Applicant personal-data handling requires review by the company's HR and data-protection contacts. Real-client rendering remains unverified.
