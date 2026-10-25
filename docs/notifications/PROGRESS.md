@@ -11,7 +11,7 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–3 have PRs; F-12 subject-channel authorization is in PR #345. F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
-| 4. Frontend | In progress (F-08 navigation slice) | Bell and Center notification rows with permitted destinations are anchors; broader notification UI and multi-signal sidebar remain open. |
+| 4. Frontend | In progress (F-08 navigation slice) | Bell and Center notification rows with permitted destinations are anchors; F-15 adds the verified admin queue-health destination for long-wait notices. Broader notification UI and multi-signal sidebar remain open. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
@@ -142,6 +142,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include other notif
 - Production work-order, machine, and payroll-period channels now require the matching list permission and an existing subject. Chain channels decode the subject ID, fail closed when an entity type has no broadcaster model mapping, and use `ApprovalSourceScope` for purchase request/order visibility; other chain entities have no additional row scope in their corresponding list/detail paths.
 - `BroadcastAuthorizationTest`: **7 passed / 17 assertions**, including department-head positive and cross-department negative PR/PO access, plus existing/missing work-order, machine, payroll-period, and work-order chain subjects.
 - This aligns channels with existing route scopes. Work-order, machine, and payroll visibility remains permission-wide, as in their list/detail endpoints. Tests did not exercise every role or all eight chain entity types.
+
+## Separate finding fix: F-15 queue long-wait destination
+
+- Queue long-wait notices now link to `/dashboard/admin`, the existing route containing the Queue Health panel. Its route permission matches the listener's active `system_admin` recipient rule.
+- `HorizonLongWaitNotificationTest`: **2 passed / 12 assertions**, including the persisted destination and existing recipient/dedupe behavior.
+- The three permission-override notices remain intentionally unlinked: they go to the affected user, but only system administrators can open `/admin/users/{id}` overrides, and no self-service review route exists. See `FINDINGS.md` for the gap.
 
 ## Outstanding proof / risks
 
