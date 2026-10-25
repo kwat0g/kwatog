@@ -6,8 +6,6 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
 use App\Common\Services\ApprovalBoardService;
-use App\Common\Models\ApprovalDelegation;
-use App\Common\Models\ApprovalRecord;
 use App\Common\Support\DepartmentScope;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -41,8 +39,7 @@ use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -205,8 +202,6 @@ class BadgeService
      */
     private function definitions(User $user): array
     {
-        $roleSlug = $user->role?->slug;
-
         return [
             // Reuse the board's filtered queue so sidebar count matches the cards shown there.
             'approvals' => [
@@ -228,17 +223,13 @@ class BadgeService
 
             // Procurement > Purchase requests — pending PRs routed to this role.
             'purchase_requests' => [
-                'permissions' => ['purchasing.pr.approve'],
+                // Match the list route; the counter separately requires approval permission.
+                'permissions' => ['purchasing.view'],
                 'label'       => 'Purchase Requests',
                 'description' => 'Purchase requests awaiting approval',
-                'counter'     => fn (): int => $roleSlug === null ? 0
-                    : ApprovalRecord::query()
-                        ->where('approvable_type', (new PurchaseRequest)->getMorphClass())
-                        ->where('action', 'pending')
-                        ->where('is_current', true)
-                        ->where('role_slug', $roleSlug)
-                        ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending->value))
-                        ->count(),
+                'counter'     => fn (): int => $user->hasPermission('purchasing.pr.approve')
+                    ? app(PurchaseRequestAccessPolicy::class)->pendingApprovalsFor($user)->count()
+                    : 0,
             ],
 
             // HR > Leave management — pending requests visible to this approver tier.

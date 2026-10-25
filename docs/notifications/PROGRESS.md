@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; Phase 3 foundation in progress on `notifications/fix-approval-outcome-access`.
+**Current gate:** Phase 2 approved; Phase 3 foundation in progress. Latest separate finding fix is PR #338, stacked after PR #337.
 
 ## Phase status
 
@@ -26,6 +26,7 @@
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | `af68eb60` |
+| F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | pending |
 
 ## Coverage ledger
 
@@ -44,7 +45,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge scope, profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 now reuses the approval board filter; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 now reuses the approval board filter; F-03 now shares the purchase-request pending-approval scope with its count endpoint; F-16 is fixed at all six inventoried sender paths. F-23 records the board's existing 100-item summary cap. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -84,7 +85,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge sc
 
 - `BadgeService.approvals` now reads the approval board's `summary.my_action`, so it inherits the board's supported type, permission, delegation, and source-row filtering. The test verifies badge/board count parity and excludes an out-of-department leave row plus an unsupported approval type.
 - Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions**. The board still caps its summary at the requested page size (default 100); this undercount is separately tracked as F-23. F-03 purchase-request badge scope remains open.
-- Full BadgeControllerTest and all-role badge/list parity were not run. No frontend changes.
+- Full BadgeControllerTest and all-role badge/list parity were not run. F-03 is covered in the following section; no frontend changes in F-02.
+
+## Separate finding fix: F-03 purchase-request badge scope
+
+- `PurchaseRequestAccessPolicy::pendingApprovalsFor()` is now the shared query for the sidebar badge and existing `pending-count` endpoint. It applies the current pending step, active direct/delegated role slugs, submitter exclusion, and the same row scope as the PR list. Badge visibility now requires `purchasing.view`; counting also requires `purchasing.pr.approve`.
+- Targeted API test: `PurchaseRequestHardeningTest::test_pending_count_excludes_self_submissions_and_other_roles_steps` **1 passed / 18 assertions**, covering direct approver, active delegate, role with no workflow step, and a user whose approval-permission override still cannot open the list.
+- The sidebar still navigates to the unfiltered PR list; badge drill-down parity remains open under F-09. No frontend changes.
 
 ## Outstanding proof / risks
 
