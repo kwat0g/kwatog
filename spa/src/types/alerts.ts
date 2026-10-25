@@ -50,6 +50,7 @@ export interface AlertListParams {
  type?: AlertType[];
  entity_type?: string;
  is_dismissed?: boolean;
+ is_read?: boolean;
  search?: string;
  page?: number;
  per_page?: number;

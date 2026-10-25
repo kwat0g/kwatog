@@ -237,6 +237,12 @@ class AlertsHardeningTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.count', 1);
 
+        $unreadList = $this->actingAs($user)
+            ->getJson('/api/v1/alerts?is_dismissed=false&is_read=false')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $this->assertSame($unread->hash_id, $unreadList->json('data.0.id'));
+
         $this->actingAs($user)
             ->getJson('/api/v1/alerts?is_dismissed=not-a-boolean')
             ->assertStatus(422);

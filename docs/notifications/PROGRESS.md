@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), and training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365). Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), and alert unread/list parity is in progress on `notifications/fix-alert-count-parity`. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -191,6 +191,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Employees now get a hash-addressed self-service training-record link. Its endpoint resolves the session employee and returns only their matching record; a second employee receives 404. Configured HR/department recipients get the exact HR training-record route, gated by `hr.employees.trainings.view` and `EmployeeCompetenceScope`.
 - `TrainingExpiryAlertTest.php`: **11 passed / 39 assertions**, including exact per-audience links, HR access, employee-owner access, cross-employee 404, and employee denial on the HR route. SPA route test: **2 passed**. Targeted ESLint, PHP syntax, and `git diff --check` pass.
 - New detail view is read-only and shares one component across the owner-only and scoped-HR APIs. Visual QA and full-suite verification remain outstanding. F-14's message-detail and recipient-scope review remains separate.
+
+## Separate finding fix: F-10 shared alert unread/list parity
+
+- `/alerts` accepts `is_read`; unread count and list use the same active, non-dismissed, unread predicate. The alert page labels this as shared state because the database stores `is_read` on the global alert row, and its “Show shared unread alerts” action resets other filters before opening the matching list.
+- `AlertsHardeningTest` targeted parity test: **1 passed / 7 assertions**. `pages/alerts/index.test.tsx`: **3 passed**. Direct PHPUnit, targeted SPA tests, PHP syntax, ESLint, and `git diff --check` passed. Full SPA typecheck still fails in exports, Action Center, invite, stock transfer, purchase-order, and profile files; none is in this PR.
+- `php artisan test --filter=...` still fails before filtering because existing `RecommendationAudienceScopeTest.php` declares `AudienceFakeDetector::detect(): array`, incompatible with `DetectorInterface::detect(): DetectorScanResult`; running the target file with direct PHPUnit succeeds. No sidebar item or existing SPA consumer uses `/alerts/unread-count`; it is a page-level count action only. Whether read state should be personal remains a business question.
 
 ## Outstanding proof / risks
 

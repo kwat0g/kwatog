@@ -47,6 +47,9 @@ class AlertController
             // Default: unresolved only
             $query->whereNull('resolved_at')->where('is_dismissed', false);
         }
+        if (array_key_exists('is_read', $filters)) {
+            $query->where('is_read', $filters['is_read']);
+        }
         if (! empty($filters['search'])) {
             $s = $filters['search'];
             $query->where(fn ($q) => $q
@@ -91,8 +94,7 @@ class AlertController
     public function unreadCount(): JsonResponse
     {
         abort_unless(auth()->user()?->can('alerts.view'), 403);
-        $count = Alert::whereNull('resolved_at')
-            ->where('is_dismissed', false)
+        $count = Alert::active()
             ->where('is_read', false)
             ->count();
 
