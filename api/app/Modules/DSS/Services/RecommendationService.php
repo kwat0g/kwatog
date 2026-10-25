@@ -80,7 +80,14 @@ class RecommendationService
         }
         $query->orderBy('id', 'desc');
 
-        return $query->paginate((int) ($filters['per_page'] ?? 20), ['*'], 'page', (int) ($filters['page'] ?? 1));
+        $page = $query->paginate((int) ($filters['per_page'] ?? 20), ['*'], 'page', (int) ($filters['page'] ?? 1));
+        $page->setCollection(
+            $page->getCollection()->filter(
+                fn (DssRecommendation $rec): bool => $this->canSee($user, $rec->detector_id) && $this->audienceAllows($user, $rec)
+            )->values()
+        );
+
+        return $page;
     }
 
     public function summary(User $user, array $filters = []): array
@@ -235,37 +242,6 @@ class RecommendationService
             }
             $q->orWhereRaw("EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(rationale->'sample_documents') = 'array' THEN rationale->'sample_documents' ELSE '[]'::jsonb END) AS sample_document(value) WHERE jsonb_typeof(value) = 'object' AND jsonb_typeof(value->'document') = 'string' AND value->>'document' ".SearchOperator::like().' ?)', [$pattern]);
         });
-    }
-
-        if (! empty($filters['severity'])) {
-            $query->where('severity', $filters['severity']);
-        }
-
-        if (! empty($filters['domain'])) {
-            $query->where('domain', $filters['domain']);
-        }
-
-        if (! empty($filters['detector_id'])) {
-            $query->where('detector_id', $filters['detector_id']);
-        }
-
-        // Newest and highest-priority first; severity rank applied in PHP would
-        // break pagination, so priority_score (which already embeds severity)
-        // is the single sort key.
-        $query->orderByDesc('priority_score')->orderByDesc('id');
-
-        $perPage = min((int) ($filters['per_page'] ?? 20), 100);
-        $page = $query->paginate($perPage);
-
-        // Detector scoping in PHP: owner-permission sets are per-detector, not
-        // per-row, so SQL cannot express "user holds ≥1 of this set" without a
-        // join against the permission graph. Pages are small (≤100); filter
-        // the collection and keep the paginator shape.
-        $page->setCollection(
-            $page->getCollection()->filter(
-                fn (DssRecommendation $rec): bool => $this->canSee($user, $rec->detector_id) && $this->audienceAllows($user, $rec)
-            )->values()
-        );
     }
 
     public function expireForPause(?string $detectorId = null): int
