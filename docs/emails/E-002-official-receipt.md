@@ -16,7 +16,7 @@ Status: template implemented in draft PR; accountant approval required before ex
 
 - `FeatureEmailIntegrationTest`: 9 tests passed, 52 assertions, including issue-time recipient and content snapshot, amount, subject, SPA link, and plain-text output.
 - Temporary render fixture: 1 test passed, 2 assertions. No mail transport was contacted and no real email was sent.
-- Browser preview inspected at 1440px desktop and 390px mobile, in light/dark schemes. Document width stayed within viewport. HTML size: 22,816 bytes. Screenshots: [desktop light](screenshots/official-receipt-desktop-light.png), [desktop dark](screenshots/official-receipt-desktop-dark.png), [mobile light](screenshots/official-receipt-mobile-light.png), [mobile dark](screenshots/official-receipt-mobile-dark.png).
+- Re-rendered the existing HTML fixture with the current landing-page logo's light/dark PNG variants; no mail transport was contacted. Browser preview inspected at 1440px desktop and 390px mobile, in light/dark schemes. Document width matched viewport in both. HTML size: 22,816 bytes. Screenshots: [desktop light](screenshots/official-receipt-desktop-light.png), [desktop dark](screenshots/official-receipt-desktop-dark.png), [mobile light](screenshots/official-receipt-mobile-light.png), [mobile dark](screenshots/official-receipt-mobile-dark.png).
 - Browser render does not verify Gmail, Outlook, Apple Mail, Yahoo, or mobile email clients.
 - Preview footer uses test database branding values; production identity remains subject to owner/accountant verification.
 
