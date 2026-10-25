@@ -19,6 +19,9 @@
   --space-12: 48px;
   --space-16: 64px;
   --page-gutter: 16px;
+  --page-content-narrow: 72ch;
+  --form-grid-gap: var(--space-4);
+  --detail-layout-gap: var(--space-4);
   --topbar-height: 48px;
 
   /* ─── Type scale ─── */
@@ -32,6 +35,16 @@
   --font-size-table-header: 14px;
   --font-size-table-cell: 14px;
   --font-size-code: 14px;
+  --line-height-page-title: 36px;
+  --line-height-section-title: 28px;
+  --line-height-subsection: 24px;
+  --line-height-body: 1.5;
+  --line-height-body-small: 19px;
+  --line-height-caption: 18px;
+  --line-height-label: 18px;
+  --line-height-table-header: 18px;
+  --line-height-table-cell: 20px;
+  --line-height-code: 18px;
   --font-weight-body: 400;
 
   /* ─── Canvas ─── */

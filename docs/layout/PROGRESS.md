@@ -9,7 +9,7 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 | 0 — Audit | Static architecture, route, and surface inventory complete. Full runtime inspection of every route is still open. | [`00-audit.md`](00-audit.md), 361-row `route-inventory.csv`, 361-row `page-issue-matrix.csv`, `surface-inventory.csv`, baseline screenshots. |
 | 1 — Findings | Findings documented for the static inventory and the rendered Stock Adjustments baseline. Other routes are explicitly unmeasured. | [`01-findings.md`](01-findings.md). |
 | 2 — Spec/pilot | Approved. Three pilot routes plus Work Order link, button, and status color follow-ups implemented. | [`02-spec.md`](02-spec.md), [`00-audit.md`](00-audit.md), screenshots/reports. |
-| 3 — Foundation rollout | Approved. Per-user table/sidebar preferences, Compact default, and zebra behavior implemented in the shared table system. | Layout primitives, tokens, guards, and audit gallery remain to consolidate. |
+| 3 — Foundation rollout | Shared shell/container, form/detail layouts, toolbar, pagination naming, token line heights, layout guard, and gallery examples implemented. Table/sidebar preferences, Compact default, and zebra behavior landed in the preceding unit. | This foundation unit is ready for review; Phase 4 route migrations remain open. |
 | 4 — Page rollout | Not started. Wait for pilot review. | — |
 | 5 — Verification | Pilot browser/layout checks completed; automated application tests, accessibility, performance, and full role walkthrough are not yet recorded here. | `spa/scripts/layout-audit.mjs`; reports under `screenshots/after/pilot-final/` and `screenshots/states/`. |
 
@@ -23,6 +23,17 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 - Dark native dropdown was captured on the create form. Work Order detail with five synthetic linked IDs was separately rendered dark at 375 and 1440px to verify link color.
 - Pilot strict measurement summaries report zero findings. They check content edges, sidebar clearance, page overflow, scroll behavior, table/type/contrast samples, dark color-scheme, dropdown colors, and linked-ID visibility. A zero pilot score is not a whole-project result.
 - 500-row fixture produced 500 DOM rows and no page-level horizontal overflow. Runtime performance was not timed.
+
+## Phase 3 foundation unit
+
+- Added `PageContainer`, `FormGrid`, `DetailLayout`, and canonical `Toolbar` primitives. Existing `FilterBar` and `DataTableToolbar` compose `Toolbar`; pagination has canonical `TablePagination` with a compatibility export. Existing route gutters remain intact until their Phase 4 migrations.
+- Added named line-height and content-layout tokens; extended the component gallery with spacing/type scales, density examples, page containers, form/detail grids, and toolbar. Fixed the gallery screenshot helper so it hides only the app sidebar, leaving demo asides visible.
+- Added `npm run audit:layout` and a CI step. It rejects new arbitrary size/spacing classes and raw CSS/inline layout values, and requires changed inventoried route pages to use a shared shell or document a special-layout exception. It checks additions against the PR base; existing debt remains.
+- Stock Adjustments was re-rendered with 50 synthetic rows at 375px and 1280px, in Light and Dark. Strict measurement score: 0 at all four captures. Before/after images and reports are under `screenshots/{before,after}/layout-foundation/`. Gallery baselines cover all eight sections and both dialog states at 390px and 1280px; all were visually reviewed and checked.
+- The changed Stock Adjustments toolbar and table layout remained visually stable; the main change consolidates the markup behind shared primitives. The gallery now demonstrates the primitives directly.
+- Gallery inspection exposed one pre-existing shared-component issue: `ChainHeader` labels overlap at 390px. Logged as F-006 for the detail-route rollout; not changed in this foundation unit.
+- Focused SPA tests: 7 files / 17 tests passed. Gallery Playwright: 21 passed with one worker. E2E TypeScript check passed. Changed TypeScript/TSX ESLint, token audit (1,097 files), layout audit (14 changed source files), `git diff --check`, and Vite production build passed.
+- Full SPA typecheck was rerun: it reports only existing unrelated failures in exports, missing `lucide-react`, Action Center, stock transfers, purchase-order duplicate props, and profile indexing. No errors point to this foundation diff.
 
 ## Whole-project coverage
 
@@ -49,4 +60,4 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 
 ## Next action
 
-Continue Phase 3 on the separate layout branch: preserve behavior, consolidate shared shell/layout/table primitives, add guards/gallery, and verify against the Phase 2 baseline. Keep Phase 4 route migrations in separate module units.
+Review and merge the Phase 3 foundation PR. Then start Phase 4 with the highest-severity route group, keeping each module migration independently reviewable. Full route rendering, per-role walkthroughs, modal/drawer states, print views, axe, and performance checks remain open.

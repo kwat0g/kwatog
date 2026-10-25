@@ -36,6 +36,8 @@ import {
   LuUpload,
 } from '@/lib/icons';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageContainer, PageShell } from '@/components/layout/PageShell';
+import { DetailLayout, FormGrid } from '@/components/layout/ContentLayouts';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus, type ChipVariant } from '@/components/ui/Chip';
@@ -73,6 +75,7 @@ import { LinkedRecords, type LinkedRecordGroup } from '@/components/ui/LinkedRec
 import { ActivityStream, type ActivityItem } from '@/components/ui/ActivityStream';
 import { SpecToleranceBar } from '@/components/ui/SpecToleranceBar';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
+import { Toolbar } from '@/components/ui/Toolbar';
 import { cn } from '@/lib/cn';
 import type { PaginationMeta } from '@/types';
 
@@ -88,6 +91,18 @@ const SECTIONS = [
   { id: 'tables', title: 'Tables' },
   { id: 'records', title: 'Record patterns' },
   { id: 'overlays', title: 'Overlays (interactive)' },
+] as const;
+
+const SPACING_TOKENS = [
+  ['space-1', '4px'], ['space-2', '8px'], ['space-3', '12px'], ['space-4', '16px'],
+  ['space-5', '20px'], ['space-6', '24px'], ['space-8', '32px'], ['space-10', '40px'],
+  ['space-12', '48px'], ['space-16', '64px'],
+] as const;
+
+const TYPE_SAMPLES = [
+  ['Page title', 'text-page-title'], ['Section title', 'text-section-title'],
+  ['Subsection', 'text-subsection'], ['Body', 'text-body'],
+  ['Caption', 'text-caption'], ['Table cell', 'text-table-cell'], ['Code / ID', 'text-code'],
 ] as const;
 
 interface SectionProps {
@@ -244,10 +259,11 @@ export default function ComponentGalleryPage() {
   const [currency, setCurrency] = useState('486500.00');
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+    <PageShell variant="grid" className="gap-8">
       <PageHeader
         title="Component gallery"
         subtitle="Every shared primitive and its states, in isolation. Sections marked with a name are photographed by the visual baseline gate."
+        inset={false}
         actions={
           <Button
             variant="secondary"
@@ -647,10 +663,94 @@ export default function ComponentGalleryPage() {
       <Section
         id="tables"
         title="Tables"
-        note="One primitive under 119 call sites: sticky header, mono tabular figures, a pagination footer and an optional selection column."
+        note="Shared layout building blocks, token scales, and table states."
       >
+        <Demo name="Spacing and type scales">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
+              <h3 className="mb-3 text-label font-medium text-primary">Spacing</h3>
+              <div className="flex flex-col gap-2">
+                {SPACING_TOKENS.map(([name, value]) => (
+                  <div key={name} className="flex items-center gap-3">
+                    <code className="w-16 shrink-0 text-caption text-muted">{name}</code>
+                    <span className="h-3 rounded-sm bg-accent" style={{ width: `var(--${name})` }} />
+                    <span className="text-caption tabular-nums text-secondary">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-3 text-label font-medium text-primary">Typography</h3>
+              <div className="flex flex-col gap-3">
+                {TYPE_SAMPLES.map(([label, className]) => (
+                  <div key={label} className="flex items-baseline justify-between gap-3 border-b border-subtle pb-2">
+                    <span className={cn(className, 'min-w-0 text-primary')}>{label}</span>
+                    <code className="shrink-0 text-caption text-muted">{className}</code>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Demo>
+
         <Demo name="DataTable">
           <DataTable columns={COLUMNS} data={ROWS} meta={ROWS_META} getRowId={(r) => r.id} />
+        </Demo>
+
+        <Demo name="Density states" hint="Compact is the default. Comfortable and Spacious remain available for longer sessions and touch use.">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {([
+              ['compact', 'Compact'],
+              ['default', 'Comfortable'],
+              ['spacious', 'Spacious'],
+            ] as const).map(([density, label]) => (
+              <div key={density} className="min-w-0">
+                <h3 className="mb-2 text-label font-medium text-primary">{label}</h3>
+                <DataTable
+                  columns={COLUMNS.slice(0, 2)}
+                  data={ROWS.slice(0, 2)}
+                  density={density}
+                  stickyHeader={false}
+                />
+              </div>
+            ))}
+          </div>
+        </Demo>
+
+        <Demo name="Page gutters and content width" hint="Fluid content shares responsive gutters. Narrow content stays readable without limiting data tables.">
+          <div className="flex flex-col gap-3">
+            <PageContainer className="rounded-md border border-default bg-subtle">
+              <div className="rounded-sm bg-canvas p-3 text-label text-primary">Fluid container · 16 / 24 / 32px gutters</div>
+            </PageContainer>
+            <PageContainer variant="narrow" className="rounded-md border border-default bg-subtle">
+              <div className="rounded-sm bg-canvas p-3 text-label text-primary">Narrow content · 72ch maximum</div>
+            </PageContainer>
+          </div>
+        </Demo>
+
+        <Demo name="FormGrid">
+          <FormGrid columns={4}>
+            <Input label="Item code" defaultValue="WIP-08-001" />
+            <Input label="Description" defaultValue="Wiper bushing" />
+            <Input label="Quantity" defaultValue="1,250" />
+            <Input label="Unit cost" defaultValue="₱ 14.2500" />
+          </FormGrid>
+        </Demo>
+
+        <Demo name="DetailLayout">
+          <DetailLayout
+            aside={<Panel title="Record summary">Status, owner, and next action.</Panel>}
+          >
+            <Panel title="Record details">Wide record fields stay in the main column.</Panel>
+          </DetailLayout>
+        </Demo>
+
+        <Demo name="Toolbar">
+          <Toolbar
+            className="rounded-md border border-default bg-surface p-2"
+            start={<><span className="text-label font-medium text-primary">Stock adjustments</span><Button variant="secondary" size="sm">Filters</Button></>}
+            end={<><Button variant="secondary" size="sm">Columns</Button><Button variant="secondary" size="sm">Export</Button></>}
+          />
         </Demo>
       </Section>
 
@@ -741,6 +841,6 @@ export default function ComponentGalleryPage() {
           onClose={() => setConfirmOpen(false)}
         />
       </Section>
-    </div>
+    </PageShell>
   );
 }

@@ -5,6 +5,7 @@ import { Checkbox } from './Checkbox';
 import type { Column } from './DataTable';
 import type { TableDensity } from '@/stores/tablePrefsStore';
 import { focusRing } from '@/lib/focus';
+import { Toolbar } from './Toolbar';
 
 interface ToolbarProps<T> {
  columns: Column<T>[];
@@ -32,7 +33,11 @@ export function DataTableToolbar<T>({
  if (!showVisibilityToggle && !showDensity) return null;
 
  return (
- <div data-layout="table-toolbar" className="relative mb-4 flex flex-wrap items-center justify-end gap-2">
+ <Toolbar
+ layout="table-toolbar"
+ className="relative mb-4 justify-end"
+ end={(
+ <>
  {showVisibilityToggle && (
  <>
  <button
@@ -88,6 +93,8 @@ export function DataTableToolbar<T>({
  </select>
  </label>
  )}
- </div>
+ </>
+ )}
+ />
  );
 }

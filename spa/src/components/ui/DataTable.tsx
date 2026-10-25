@@ -17,7 +17,7 @@ import { Checkbox } from './Checkbox';
 import { RowContextMenu, type RowContextMenuItem } from './RowContextMenu';
 import { useTablePrefsStore, type TableDensity } from '@/stores/tablePrefsStore';
 import { DataTableToolbar } from './DataTableToolbar';
-import { DataTablePagination } from './DataTablePagination';
+import { TablePagination } from './DataTablePagination';
 import { EmptyState } from './EmptyState';
 import type { PaginationMeta } from '@/types';
 
@@ -688,7 +688,7 @@ export function DataTable<T>({
       </div>
 
       {meta && onPageChange && (
-        <DataTablePagination
+        <TablePagination
           meta={meta}
           onPageChange={onPageChange}
           onPageSizeChange={onPageSizeChange}
