@@ -13,5 +13,6 @@ The queued mailable freezes customer display name, sales-order number/hash/total
 The redesigned email uses the shared branding and title/preheader, one authenticated customer-order CTA, the decision outcome, response type, order total at decision time, and proposed delivery date when present. It excludes resolution notes from the email; the customer can review sales feedback in the portal.
 
 `SalesOrderResponseTest`: 18 passed, 84 assertions. Covers event-time content after mutations, separate delivery to a single address, case-insensitive deduplication, inactive/invalid recipient filtering, customer-address fallback, and sales notification when no valid address exists. Mailer forced to `array`; no real email sent. Rendered HTML is about 24 KB; browser-inspected at 1440px desktop and 390px mobile in light/dark. Screenshots: `screenshots/e011-sales-order-decision-{desktop,mobile}-{light,dark}.png`.
+- Re-inspected all four captures: decision and recorded total remain clear; no overflow; total uses `PHP`, covered by EF-120 / PR #319.
 
 External decision wording and customer data handling need review by the company's accountant and data protection contact. Real-client rendering remains unverified.
