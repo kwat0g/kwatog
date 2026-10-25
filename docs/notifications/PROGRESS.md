@@ -134,6 +134,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 
 ## Separate finding fix: F-09 inspection badge parity
 
+- PR [#354](https://github.com/kwat0g/kwatog/pull/354) is a draft stacked on #353.
 - `Inspection::toInspect()` now defines the shared draft/in-progress predicate for both the `pending_inspections` badge and `work_queue=to_inspect` list queue. A positive badge opens that queue.
 - `BadgeControllerTest::test_widened_scope_badge_counts_track_recent_rows`: **1 passed / 18 assertions**, including parity under the `qc_inspector` role. `Sidebar.behavior.test.tsx`: **26 passed**.
 - This remains an area-wide queue matching the current list. The proposed per-user inspection action signal needs separate assignment/authorization verification.
