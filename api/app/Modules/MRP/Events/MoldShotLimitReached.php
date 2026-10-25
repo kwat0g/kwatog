@@ -35,12 +35,6 @@ class MoldShotLimitReached implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        return [
-            'mold_id'                      => $this->mold->hash_id,
-            'mold_code'                    => $this->mold->mold_code,
-            'name'                         => $this->mold->name,
-            'current_shot_count'           => (int) $this->mold->current_shot_count,
-            'max_shots_before_maintenance' => (int) $this->mold->max_shots_before_maintenance,
-        ];
+        return ['refresh' => true];
     }
 }

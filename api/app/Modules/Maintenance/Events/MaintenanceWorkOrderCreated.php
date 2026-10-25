@@ -36,16 +36,6 @@ class MaintenanceWorkOrderCreated implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        $wo = $this->workOrder;
-        return [
-            'id'                => $wo->hash_id,
-            'mwo_number'        => $wo->mwo_number,
-            'maintainable_type' => $wo->maintainable_type instanceof \BackedEnum ? $wo->maintainable_type->value : $wo->maintainable_type,
-            'type'              => $wo->type instanceof \BackedEnum ? $wo->type->value : $wo->type,
-            'priority'          => $wo->priority instanceof \BackedEnum ? $wo->priority->value : $wo->priority,
-            'status'            => $wo->status instanceof \BackedEnum ? $wo->status->value : $wo->status,
-            'description'       => $wo->description,
-            'created_at'        => optional($wo->created_at)?->toISOString(),
-        ];
+        return ['refresh' => true];
     }
 }

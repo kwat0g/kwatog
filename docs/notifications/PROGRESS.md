@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #352 removes sales-order detail data from the shared production broadcast. Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #358 removes record data from shared production and maintenance dashboard broadcasts. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -116,6 +116,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `SalesOrderConfirmed` still broadcasts on the shared private `production.dashboard` channel, but now sends only `{ refresh: true }`. The SPA handler ignores event payload and invalidates production dashboard queries, so no order number, customer, or amount is needed.
 - `OutboxFactEventToleranceTest.php`: **12 passed / 33 assertions**, including the private channel and exact `refresh`-only payload. Pint and PHP syntax checks passed.
 - PR #352 is stacked on #351. CI was pending at last check. Broader subject-channel authorization and payroll metadata review remain open.
+
+## Separate finding fix: F-12 shared dashboard broadcast payloads
+
+- Production and maintenance dashboard listeners only invalidate/refetch their lists or dashboard queries. Events on those shared channels now carry only `{ refresh: true }`; identifiers, quantities, reasons, candidate lists, and descriptions stay off broad dashboard channels.
+- The production output page now refetches the authorized work-order detail after an output event instead of consuming cumulative output values from the event payload.
+- `DashboardBroadcastPayloadTest`: **1 passed / 8 assertions**. The plan event's focused outbox test: **1 passed / 3 assertions**, retaining the active/cancelled delivery guard. The SPA `record-output.test.tsx`: **5 passed**. Pint, ESLint, and `git diff --check` passed.
+- Payroll progress channel uses `payroll.periods.view`, matching the period detail endpoint's current gate. No additional payroll scope restriction is proposed without the still-open HR/Finance audience decision.
 
 ## Separate finding fix: F-02 approval badge scope
 

@@ -65,12 +65,6 @@ export default function RecordOutputPage() {
   const [handoverReason, setHandoverReason] = useState('');
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [liveCumulative, setLiveCumulative] = useState<{
-    produced: number;
-    good: number;
-    reject: number;
-    scrap: string;
-  } | null>(null);
   const [pending, setPending] = useState<{ data: RecordOutputData; key: string } | null>(null);
   const [uncertain, setUncertain] = useState(false);
 
@@ -94,18 +88,7 @@ export default function RecordOutputPage() {
   });
 
   // Subscribe to live updates so the cumulative panel reflects every recording.
-  useEcho<{
-    total_quantity_produced: number;
-    total_quantity_good: number;
-    total_quantity_rejected: number;
-    scrap_rate: string;
-  }>(`production.wo.${id}`, '.output.recorded', (p) => {
-    setLiveCumulative({
-      produced: p.total_quantity_produced,
-      good: finishFirst ? wo.data?.qc_accepted_quantity ?? 0 : p.total_quantity_good,
-      reject: finishFirst ? wo.data?.awaiting_qc_quantity ?? p.total_quantity_produced : p.total_quantity_rejected,
-      scrap: p.scrap_rate,
-    });
+  useEcho(`production.wo.${id}`, '.output.recorded', () => {
     qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
   });
 
@@ -221,16 +204,14 @@ export default function RecordOutputPage() {
     submit.mutate(submission);
   };
 
-  const cumulative =
-    liveCumulative ??
-    (wo.data
-      ? {
-          produced: wo.data.produced_quantity ?? wo.data.quantity_produced,
-    good: finishFirst ? wo.data.qc_accepted_quantity ?? 0 : wo.data.quantity_good,
-          reject: finishFirst ? wo.data.awaiting_qc_quantity ?? wo.data.quantity_produced : wo.data.quantity_rejected,
-          scrap: wo.data.scrap_rate,
-        }
-      : { produced: 0, good: 0, reject: 0, scrap: '0' });
+  const cumulative = wo.data
+    ? {
+        produced: wo.data.produced_quantity ?? wo.data.quantity_produced,
+        good: finishFirst ? wo.data.qc_accepted_quantity ?? 0 : wo.data.quantity_good,
+        reject: finishFirst ? wo.data.awaiting_qc_quantity ?? wo.data.quantity_produced : wo.data.quantity_rejected,
+        scrap: wo.data.scrap_rate,
+      }
+    : { produced: 0, good: 0, reject: 0, scrap: '0' };
   const outputBlocked =
     handoverBlocked ||
     !crew.data?.current ||
