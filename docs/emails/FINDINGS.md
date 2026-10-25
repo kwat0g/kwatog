@@ -38,6 +38,12 @@ Date: 2026-10-20. Static findings only; reachability and runtime impact remain u
 | EF-029 | Missing `FRONTEND_URL` fell back to the API `APP_URL` | `config('app.frontend_url')` defaulted to `APP_URL`, which can send email links to the decoupled API origin when `FRONTEND_URL` is missing. | Fixed on the shared-foundation branch: default to `http://localhost`; production must provide `FRONTEND_URL`. |
 | EF-065 | Email copy hardcoded the company display name | Multiple mail views and portal mail subjects used `Ogami Philippines` directly, so owner-configured identity could not update all messages consistently. | Shared foundation now uses configured sender-name values in email copy and checks views for the old literal; PHPUnit verification pending. |
 
+| EF-021 | Candidate status preview uses invalid stage fixture | E-013 captures pass `updated` as both stage values, but `updated` is not an `ApplicationStage`; the fallback renders “Application updated” twice and does not verify real stage labels. This is preview-data quality, not evidence of a production trigger defect. | Use valid, distinct stage values before refreshing E-013 screenshots. |
+
+| EF-022 | Supplier PO decision details are awkward on mobile | E-017 390px captures show the two-column Markdown table wrapping labels and values into narrow columns, reducing scanability. No clipping observed. | Replace table with stacked labeled facts in the E-017 template and rerender mobile captures. |
+
+| EF-023 | Published PO preview is long at the 10-item limit (closed; not a defect) | Source review confirmed `SupplierPurchaseOrderMail` shows at most 10 items and reports the remaining count; the fixture contains exactly 10, so no remainder line appears. Long content is bounded and complete for the selected rows. | No change. Keep the existing 10-item cap and remaining-count link. |
+
 No code-level fix was applied as part of Phase 0/1.
 
 - **EF-024 — Sales order confirmation must use event-time values.** PR #231 snapshots recipient and order details when confirmation is raised so later edits do not change queued email content.
