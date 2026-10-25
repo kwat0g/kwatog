@@ -7,7 +7,6 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\DepartmentScope;
-use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
@@ -540,11 +539,7 @@ class BadgeService
                 'permissions' => ['accounting.bills.view'],
                 'label'       => 'Bills (AP)',
                 'description' => 'Overdue bills payable',
-                'counter'     => fn (): int => Bill::query()
-                    ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
-                    ->whereNotNull('due_date')
-                    ->where('due_date', '<', today())
-                    ->count(),
+                'counter'     => fn (): int => Bill::query()->overdue()->count(),
             ],
 
             // Finance > Budgeting — submitted budgets awaiting a checker.

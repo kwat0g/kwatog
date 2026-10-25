@@ -310,6 +310,7 @@ The route inventory is the 73-row Phase 0 internal destination table, 19-row por
 | Current implementation delta | Gate and count | Destination and parity | Coverage |
 | --- | --- | --- | --- |
 | Finance > Budget Transfers | `budgeting.view` or `budgeting.approve`; badge counts pending rows the current user can approve under `BudgetTransferService::canApprove()` role-separation rules. | Positive badge opens `/budgeting/transfers?status=pending&actionable=1`. `BudgetTransfer::scopeAwaitingApprovalFor()` powers both badge count and list filter. Approval-only users are restricted to that actionable queue; users with view access retain the broader list. | Direct approver and active-delegate tests compare badge count with list total and exclude same-role requests. Browser visual QA remains outstanding. |
+| Finance > Accounts Payable Bills | `accounting.bills.view`; unpaid/partial bills due before Manila today. | Positive badge opens `/accounting/bills?overdue=1`; `Bill::scopeOverdue()` powers both the badge and API list filter. This is the page's existing `overdue` query parameter; `signal=overdue` was not supported. | Finance Officer test compares badge and list totals and excludes due-today, paid, draft, and cancelled bills. `due_date` is non-null in the database schema. Sidebar click-through test passes. |
 
 | Finding | Current implementation | Destination/parity result | Severity |
 | --- | --- | --- | --- |

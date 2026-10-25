@@ -83,8 +83,7 @@ class BillService
             $q->whereDate('date', '<=', $filters['to']);
         }
         if (! empty($filters['overdue'])) {
-            $q->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial])
-                ->whereDate('due_date', '<', now());
+            $q->overdue();
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];

@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), alert unread/list parity is in draft PR [#366](https://github.com/kwat0g/kwatog/pull/366), and budget-transfer badge/list parity is in draft PR [#367](https://github.com/kwat0g/kwatog/pull/367). Recipient ownership rules remain open.
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), alert unread/list parity is in draft PR [#366](https://github.com/kwat0g/kwatog/pull/366), budget-transfer badge/list parity is in draft PR [#367](https://github.com/kwat0g/kwatog/pull/367), and AP overdue badge/list parity is in progress on `notifications/fix-ap-bills-badge-parity`. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -203,6 +203,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Adds Finance > Budget Transfers, gated by `budgeting.view` or `budgeting.approve`. A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; approval-only users can open only transfers they may approve. The filter and badge both use `BudgetTransfer::scopeAwaitingApprovalFor()`, matching the service's direct/delegated role-separation rule. The existing combined Phase 2 budget signal at `/budgeting?signal=awaiting_my_approval` remains incomplete.
 - `BudgetTransferTest.php`: **2 passed / 19 assertions** for approval-only access, same-role exclusion, active delegation, and badge/list parity. `BadgeControllerTest.php`: **1 passed / 11 assertions** for VP badge/list parity. `Sidebar.behavior.test.tsx`: **28 passed**; `Sidebar.permissions.test.tsx`: **21 passed**.
 - Changed PHP files passed syntax checks. Model, controller, and transfer workflow test passed targeted Pint; targeted ESLint and `git diff --check` passed. Full SPA typecheck still fails in unrelated export, Action Center, invite, stock-transfer, purchase-order, and profile files; no changed file was named. Pint still flags style rules in `routes.php` and `BadgeControllerTest.php`; broad formatting was avoided. Mechanical Impeccable detector reported no findings. Browser visual QA and full-suite verification remain outstanding.
+
+## Separate finding fix: F-09 AP overdue badge/list parity
+
+- `Bill::scopeOverdue()` is shared by the `overdue_bills` badge and `/bills?overdue=1` list filter. Definition: unpaid or partially paid bill with due date before `today()` in `Asia/Manila`; draft, paid, and cancelled statuses are excluded. Database schema requires a due date.
+- Sidebar badge opens `/accounting/bills?overdue=1`. Phase 2's earlier `signal=overdue` target did not match the existing page filter and is corrected in the catalog.
+- `BadgeControllerTest.php`: **15 passed / 175 assertions**, including Finance Officer badge/list parity and due-today, paid, draft, and cancelled exclusions. `Sidebar.behavior.test.tsx`: **29 passed** after the first run caught the Finance section's collapsed state in the new click-through test. Targeted ESLint passes.
+- PHP syntax and `git diff --check` pass. Pint `--test` reports style violations across the four checked PHP files; no broad formatting was applied. Browser visual QA and full-suite verification remain outstanding.
 
 ## Outstanding proof / risks
 
