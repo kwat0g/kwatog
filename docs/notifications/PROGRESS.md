@@ -106,9 +106,9 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 
 ## Separate finding fix: F-20 sales-order confirmation notice
 
-- Configured planning recipients must now hold both `production.schedule.view` and `crm.sales_orders.view`; the link targets `/crm/sales-orders/{hash_id}` and includes the sales-order subject fields. The title includes the order number; a per-confirmation dedupe key prevents repeat rows.
-- `OutboxFactEventToleranceTest.php`: **9 passed / 26 assertions**, including the exact route/payload, duplicate delivery, positive PPC delivery, and negative schedule/order permission cases. Pint and PHP syntax checks passed.
-- PR #351 is stacked on #350. Owner/actor targeting remains unresolved: `SalesOrder` has creator and sales-representative fields, but the event does not carry the confirmer and policy has not identified which field is the order owner. The broader `production.dashboard` event channel remains F-12.
+- Configured planners must hold both `production.schedule.view` and `crm.sales_orders.view`. When the confirming user is captured, the order creator also receives the notice if they can open the order; the confirmer is excluded. Legacy outbox payloads default actor to null and do not notify the creator. The record link, order number, subject fields, and per-confirmation dedupe key are included.
+- `OutboxFactEventToleranceTest.php`: **11 passed / 30 assertions**, including exact route/payload, duplicate delivery, creator and actor targeting, legacy payload compatibility, and negative permission cases. Pint passed on the event, listener, and test; PHP syntax passed on all four changed PHP files.
+- PR #351 is stacked on #350. `created_by` is the only active user ownership relation; `sales_rep_id` exists in schema but no application writer/reader was found. Confirm whether imported/nonstandard sales-representative values should also receive notices. The broader `production.dashboard` event channel remains F-12.
 - CI for #351 was not yet available when recorded. F-22 remains a backend CI blocker on earlier PRs.
 
 ## Separate finding fix: F-02 approval badge scope

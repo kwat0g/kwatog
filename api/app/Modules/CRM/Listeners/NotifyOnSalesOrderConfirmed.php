@@ -32,11 +32,14 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
 
             $roles = array_values(array_filter((array) $this->settings->get('crm.sales_order_confirmed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
+                ->where(fn ($query) => ($event->actorUserId !== null ? $query->whereKey($so->created_by) : $query)
+                    ->orWhereHas('role', fn ($role) => $role->whereIn('slug', $roles)))
                 ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('production.schedule.view')
-                    && $user->hasPermission('crm.sales_orders.view'));
+                ->filter(fn (User $user): bool => $user->id !== $event->actorUserId
+                    && $user->hasPermission('crm.sales_orders.view')
+                    && (($event->actorUserId !== null && $user->id === (int) $so->created_by)
+                        || ($user->hasPermission('production.schedule.view') && in_array($user->role?->slug, $roles, true))));
 
             $this->notifications->send($audience, 'chain.so_confirmed', [
                 'title' => "Sales order {$so->so_number} confirmed",

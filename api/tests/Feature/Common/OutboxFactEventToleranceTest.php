@@ -160,6 +160,45 @@ class OutboxFactEventToleranceTest extends TestCase
         ]);
     }
 
+    public function test_sales_order_confirmation_notice_includes_creator_and_excludes_confirming_planner(): void
+    {
+        $creator = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+        $so = SalesOrder::factory()->create(['created_by' => $creator->id]);
+        $so->forceFill(['status' => 'confirmed'])->save();
+
+        app(NotifyOnSalesOrderConfirmed::class)->handle(new SalesOrderConfirmed(
+            $so->fresh(),
+            actorUserId: $this->ppc->id,
+        ));
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $creator->id,
+            'type' => 'chain.so_confirmed',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $this->ppc->id,
+            'type' => 'chain.so_confirmed',
+        ]);
+    }
+
+    public function test_sales_order_outbox_payload_without_actor_remains_compatible(): void
+    {
+        $so = $this->confirmedOrder();
+        $codec = app(OutboxEventCodec::class);
+        $encoded = $codec->encode(new SalesOrderConfirmed($so, actorUserId: $this->ppc->id));
+
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+        $this->assertSame($this->ppc->id, $event->actorUserId);
+
+        unset($encoded['payload']['actorUserId']);
+
+        $event = $codec->decode($encoded['event_type'], $encoded['payload']);
+
+        $this->assertNull($event->actorUserId);
+    }
+
     public function test_an_order_cancelled_before_delivery_is_not_announced_as_confirmed(): void
     {
         $so = $this->confirmedOrder();
