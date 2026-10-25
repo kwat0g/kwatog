@@ -1,6 +1,6 @@
 # E-029–E-033 account-security email update
 
-Status: implementation in progress. Review gate: focused API checks and browser renders remain pending. No email was sent.
+Status: local implementation verified; PR CI and shared plain-text branding fix remain pending. HR/legal/data-protection review is required before production. No email was sent.
 
 ## Trigger and recipient audit
 
@@ -19,7 +19,9 @@ Status: implementation in progress. Review gate: focused API checks and browser 
 - CTA and fallback URL point to the SPA `/reset-password` route. The route exists at `spa/src/routes/authRoutes.tsx:38`; password reset remains an authenticated token-confirmation flow and does not mutate state on GET.
 - Link lifetime comes from `security.password_reset_expiry_minutes`. Tokens are random, single use, stored by hash, and invalidated on redemption or replacement. Email queue transport carries the raw token because the recipient must redeem it; delivery logs do not store message bodies.
 - Queue policy stays on the `mail` lane with after-commit dispatch and bounded retries. The change preserves recipients and triggers. Legacy queued Auth welcome/reset notifications get a fresh one-time link instead of delivering the temporary password still present in their old payload.
+- Exhausted queue retries for Auth reset, legacy reset, and Admin welcome now create an in-app delivery-failure notice for active `admin.users.manage` users. HR subclasses retain their existing `hr.employees.view` fallback. Failure notices exclude the token and raw provider exception.
 - The Admin > Users API continues returning the generated temporary password to its authorized caller as existing UI behavior. That password is not included in any email body.
+- Admin and HR account-provisioning toggles say “Send account setup email,” matching the one-time setup-link message.
 
 ## Verification and open checks
 

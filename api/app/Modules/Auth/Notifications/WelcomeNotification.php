@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Notifications;
 
 use App\Common\Services\EmailBrandingService;
+use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Modules\Auth\Services\PasswordResetService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 /**
  * Welcome email sent when an employee's system account is provisioned.
@@ -84,5 +86,15 @@ class WelcomeNotification extends Notification implements ShouldQueue
                 'expiryMinutes' => $this->expiryMinutes,
                 'footerNote' => 'If you were not expecting this account, contact your company administrator.',
             ]);
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        app(EmailDeliveryFailureNotifier::class)->notifyPermission(
+            'admin.users.manage',
+            'Account setup email',
+            'A new user setup link could not be delivered. Ask the user to request a reset link.',
+            ['reason' => 'The queued welcome notification failed.'],
+        );
     }
 }

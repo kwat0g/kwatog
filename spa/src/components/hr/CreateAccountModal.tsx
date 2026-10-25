@@ -77,7 +77,7 @@ export function CreateAccountModal({ isOpen, onClose, employeeId }: Props) {
  </p>
 
  <div className="flex items-center justify-between text-sm">
- <span className="text-secondary">Send welcome email with temporary password</span>
+ <span className="text-secondary">Send account setup email</span>
  <Switch {...register('send_welcome')} />
  </div>
 
