@@ -118,6 +118,11 @@ class StockAdjustmentQueueTest extends TestCase
             ->assertJsonCount(0, 'data');
 
         $this->actingAs($finance)
+            ->getJson('/api/v1/inventory/stock-adjustments?id=0')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+
+        $this->actingAs($finance)
             ->patchJson('/api/v1/inventory/stock-adjustments/'.$target->hash_id.'/approve')
             ->assertOk();
 

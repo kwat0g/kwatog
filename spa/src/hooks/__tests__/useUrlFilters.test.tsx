@@ -14,12 +14,13 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { useUrlFilters } from '../useUrlFilters';
 
 interface Filters extends Record<string, unknown> {
+  id: string;
   page: number;
   per_page: number;
   search?: string;
 }
 
-const DEFAULTS: Filters = { page: 1, per_page: 25 };
+const DEFAULTS: Filters = { id: '', page: 1, per_page: 25 };
 
 let setFiltersRef: (next: Filters | ((prev: Filters) => Filters)) => void;
 let navigateRef: (delta: number) => void;
@@ -34,6 +35,7 @@ function Probe() {
       <span data-testid="qs">{search}</span>
       <span data-testid="path">{pathname}</span>
       <span data-testid="page">{filters.page}</span>
+      <span data-testid="id">{filters.id}</span>
       <span data-testid="term">{filters.search ?? ''}</span>
     </>
   );
@@ -55,6 +57,11 @@ describe('useUrlFilters', () => {
     mount('/list?page=3&search=bushing');
     expect(screen.getByTestId('page').textContent).toBe('3');
     expect(screen.getByTestId('term').textContent).toBe('bushing');
+  });
+
+  it('seeds an exact record ID deep link', () => {
+    mount('/list?id=hashed-record-id');
+    expect(screen.getByTestId('id').textContent).toBe('hashed-record-id');
   });
 
   it('writes changes to the query string', () => {

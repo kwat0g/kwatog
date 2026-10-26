@@ -32,13 +32,13 @@ const statusLabel: Record<SupplierListingStatus, string> = {
   superseded: 'Superseded',
 };
 
-type ReviewFilters = { search: string; status: SupplierListingStatus | ''; page: number; per_page: number };
+type ReviewFilters = { id: string; search: string; status: SupplierListingStatus | ''; page: number; per_page: number };
 
 export default function SupplierListingsReviewPage() {
   const qc = useQueryClient();
   const { canApprove } = usePermission();
   const canReview = canApprove('purchasing.supplier_listings.review');
-  const [filters, setFilters] = useUrlFilters<ReviewFilters>({ search: '', status: '', page: 1, per_page: 25 });
+  const [filters, setFilters] = useUrlFilters<ReviewFilters>({ id: '', search: '', status: '', page: 1, per_page: 25 });
   const [rejecting, setRejecting] = useState<SupplierItemListing | null>(null);
   const [bulkRejectRows, setBulkRejectRows] = useState<SupplierItemListing[]>([]);
   const [reason, setReason] = useState('');

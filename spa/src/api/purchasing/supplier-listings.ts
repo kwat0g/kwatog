@@ -9,7 +9,7 @@ export interface SupplierListingBulkResult {
 }
 
 export const supplierListingsApi = {
-  list: (params?: ListParams & { status?: SupplierListingStatus | '' }) =>
+  list: (params?: ListParams & { id?: string; status?: SupplierListingStatus | '' }) =>
     client.get<PaginatedResponse<SupplierItemListing>>('/purchasing/supplier-listings', { params }).then((r) => r.data),
   approve: (id: string) =>
     client.patch<ApiSuccess<SupplierItemListing>>(`/purchasing/supplier-listings/${id}/approve`).then((r) => r.data.data),
