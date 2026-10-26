@@ -15,6 +15,7 @@ use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\StockAdjustment;
+use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Database\Eloquent\Model;
 
@@ -40,6 +41,7 @@ final class NotificationSubjectAccessRegistry
                 && ($user->hasPermission('inventory.adjust') || $user->hasPermission('inventory.adjust.approve')),
             SupplierItemListing::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && $user->hasPermission('purchasing.supplier_listings.view'),
+            EmployeeLoan::class => self::userCanViewLoan($user, $subject),
             Budget::class => self::budgetingEnabled() && self::userCanViewBudget($user, $subject),
             BudgetTransfer::class => self::budgetingEnabled() && (
                 $user->hasPermission('budgeting.view')
@@ -48,6 +50,17 @@ final class NotificationSubjectAccessRegistry
             default => ApprovalTypeRegistry::forClass($class) !== null
                 && ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey()),
         };
+    }
+
+    private static function userCanViewLoan(User $user, Model $subject): bool
+    {
+        $settings = app(SettingsService::class);
+
+        // Employees read their own loans through HR's owner-scoped self-service route.
+        return ($settings->get('modules.hr', false) === true
+                && (int) $user->employee_id === (int) $subject->employee_id)
+            || ($settings->get('modules.loans', false) === true
+                && ApprovalTypeRegistry::userCanViewRecord($user, EmployeeLoan::class, (int) $subject->getKey()));
     }
 
     private static function budgetingEnabled(): bool

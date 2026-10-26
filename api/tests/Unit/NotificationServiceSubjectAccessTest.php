@@ -15,9 +15,11 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -368,6 +370,53 @@ class NotificationServiceSubjectAccessTest extends TestCase
         );
 
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.disabled_supplier_listing_subject']);
+    }
+
+    public function test_loan_subject_allows_the_owner_route_and_scoped_internal_readers(): void
+    {
+        app(SettingsService::class)->set('modules.hr', true, 'modules');
+        app(SettingsService::class)->set('modules.loans', true, 'modules');
+        $loanView = Permission::firstOrCreate(
+            ['slug' => 'loans.view'],
+            ['name' => 'View loans', 'module' => 'loans'],
+        );
+        $financeRole = Role::firstOrCreate(['slug' => 'finance_officer'], ['name' => 'Finance Officer']);
+        $financeRole->permissions()->syncWithoutDetaching([$loanView->id]);
+        $employee = Employee::factory()->create();
+        $otherEmployee = Employee::factory()->create();
+        $owner = User::factory()->withRole('employee')->create(['employee_id' => $employee->id]);
+        $other = User::factory()->withRole('employee')->create(['employee_id' => $otherEmployee->id]);
+        $finance = User::factory()->withRole($financeRole->slug)->create();
+        $loan = EmployeeLoan::factory()->create(['employee_id' => $employee->id]);
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject(
+            $loan,
+            [$owner, $finance, $other],
+            'test.loan_subject_access',
+            ['title' => 'Loan update', 'message' => 'The loan changed.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $owner->id, 'type' => 'test.loan_subject_access']);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $finance->id, 'type' => 'test.loan_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $other->id, 'type' => 'test.loan_subject_access']);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $owner->id);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $finance->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $other->id);
+
+        app(SettingsService::class)->set('modules.hr', false, 'modules');
+        app(SettingsService::class)->set('modules.loans', false, 'modules');
+        app(NotificationService::class)->sendForSubject(
+            $loan,
+            [$owner, $finance],
+            'test.disabled_loan_subject',
+            ['title' => 'Loan update', 'message' => 'Both loan routes are disabled.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $owner->id, 'type' => 'test.disabled_loan_subject']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $finance->id, 'type' => 'test.disabled_loan_subject']);
     }
 
     public function test_budget_subject_allows_only_viewers_and_distinct_approvers(): void

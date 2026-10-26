@@ -536,7 +536,15 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Registered `SupplierItemListing` with its list-route access rule: Purchasing must be enabled and the recipient must hold `purchasing.supplier_listings.view`. The review route allows `purchasing.supplier_listings.review`, but the list route requires the view permission; a review-only recipient is denied by the notification gate.
 - `supplier_listing_submitted` now uses `sendForSubject()`. Existing `ApprovalDelegation::approvalAudience('purchasing.supplier_listings.review')`, list-view filter, message, list link, and event timing stay unchanged. The internal event remains separate from supplier-portal notices.
 - `NotificationServiceSubjectAccessTest.php`, `SupplierItemListingTest.php`, and `SupplierListingBulkTest.php`: **29 passed / 150 assertions**. Covers subject metadata, module disablement, rejection of review-only access, and the current reviewer audience. Two test mocks now use partial mocks so `ApprovalDelegation::approvalAudience()` can call the real `usersWithPermission()` helper; previously the mocks swallowed that lookup and the service caught the resulting exception.
-- PHP syntax, Pint on all five changed files, and `git diff --check` pass. Test run used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #419 is based on stock-adjustment subject gate PR #418; CI status is pending.
+- PHP syntax, Pint on all five changed files, and `git diff --check` pass. Test run used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #419 is based on stock-adjustment subject gate PR #418. API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate); finding-lifecycle passes.
+
+
+## Phase 3 HR loan subject access gate (draft PR pending)
+
+- Migrated `loans.submitted`, `loans.approved`, and `loans.rejected` through `sendForSubject()`. Internal readers must pass the existing `loans.view` permission and `LoanAccessPolicy` scope. Employee outcome notices use the HR self-service route, which permits only the account linked to the loan's employee; the gate now recognizes that route even without `loans.view`.
+- The sender's current configured-role and `LoanAccessPolicy` recipient selection, owner-only outcome target, message, amount, and links remain unchanged. HR and Loans feature flags are checked against the actual destination routes.
+- Subject access test: **1 passed / 8 assertions**; it accepts the own employee route and scoped Finance reader, denies another employee, and denies both routes when disabled. `LoanNotificationTest.php`: **6 passed / 16 assertions**, including exact subject metadata for submitted and employee outcome notices.
+- PHP syntax and `git diff --check` pass. Pint passes the registry, submitted listener, and new unit test; it flags `unary_operator_spaces` in the existing decision listener and `blank_line_before_statement` in the existing feature test. No broad formatting applied. Tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR and CI status remain pending.
 
 ## Outstanding proof / risks
 
