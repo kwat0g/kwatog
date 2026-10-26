@@ -14,7 +14,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { PortalInvoiceSummary } from '@/types/b2b';
 
-type InvoiceFilters = { page: number; per_page: number; status?: string };
+type InvoiceFilters = { page: number; per_page: number; status?: string; signal?: 'unpaid' | 'overdue' };
 
 const DEFAULT_FILTERS: InvoiceFilters = { page: 1, per_page: 25 };
 
@@ -67,6 +67,16 @@ export default function CustomerInvoicesPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
+    {
+      key: 'signal',
+      label: 'Balance',
+      type: 'select',
+      options: [
+        { value: '', label: 'All balances' },
+        { value: 'unpaid', label: 'Unpaid' },
+        { value: 'overdue', label: 'Overdue' },
+      ],
+    },
     {
       key: 'status',
       label: 'Status',

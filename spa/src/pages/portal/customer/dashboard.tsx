@@ -53,7 +53,7 @@ export default function CustomerDashboardPage() {
               label="Open Invoices"
               value={data.open_invoice_count}
               helper="Invoices due"
-              linkTo="/portal/customer/invoices"
+              linkTo="/portal/customer/invoices?signal=unpaid"
             />
             <StatCard
               label="Outstanding"

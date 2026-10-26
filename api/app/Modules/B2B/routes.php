@@ -199,6 +199,7 @@ Route::prefix('b2b/customer')->group(function () {
             Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
             // Sales-order negotiation — customer accepts / proposes changes / declines.
             Route::post('orders/{salesOrder}/respond', [CustomerPortalController::class, 'respondToSalesOrder'])->middleware('throttle:sensitive');
+            Route::get('badges', [CustomerPortalController::class, 'invoiceSignals']);
             Route::get('invoices', [CustomerPortalController::class, 'invoices']);
             Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
             Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
