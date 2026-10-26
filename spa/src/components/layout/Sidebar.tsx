@@ -210,11 +210,12 @@ export const SECTIONS: NavSection[] = [
     description: 'Sales and customer relationship management',
     items: [
       {
-        to: '/crm/inquiries',
+        to: '/crm/inquiries?status=new',
         label: 'Customer Inquiries',
         icon: LuInbox,
         feature: 'crm',
         permission: 'crm.inquiries.view',
+        badgeKey: 'inquiries',
       },
       {
         to: '/crm/sales-orders',
@@ -619,6 +620,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuLandmark,
         feature: 'hr',
         anyPermissions: ['hr.employees.view', 'hr.profile_updates.finance_review'],
+        badgeKey: 'profile_requests',
       },
       {
         to: '/hr/employees',
@@ -626,7 +628,6 @@ export const SECTIONS: NavSection[] = [
         icon: LuUsers,
         feature: 'hr',
         anyPermissions: ['hr.employees.view', 'hr.salary_adjustments.view'],
-        badgeKey: 'profile_requests',
       },
       {
         to: '/hr/departments',
@@ -836,6 +837,8 @@ interface SidebarProps {
 
 export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }: SidebarProps) {
   const collapsed = useSidebarStore((s) => s.collapsed);
+  const expandAllPreference = useSidebarStore((s) => s.expandAll);
+  const setExpandAllPreference = useSidebarStore((s) => s.setExpandAll);
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const peek = useSidebarStore((s) => s.peek);
   const [hovered, setHovered] = useState(false);
@@ -1022,8 +1025,11 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     () =>
       visibleSections
         .flatMap((s) => s.visibleItems)
-        .filter((item) => pathname === item.to || pathname.startsWith(item.to + '/'))
-        .sort((a, b) => b.to.length - a.to.length)[0],
+        .filter((item) => {
+          const path = item.to.split('?')[0];
+          return pathname === path || pathname.startsWith(path + '/');
+        })
+        .sort((a, b) => b.to.split('?')[0].length - a.to.split('?')[0].length)[0],
     [visibleSections, pathname],
   );
 
@@ -1041,18 +1047,16 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const [modules, setModules] = useState({
     pathname,
     activeSectionLabel,
-    expanded: activeModuleSectionLabel ? [activeModuleSectionLabel] : [],
+    expandAll: expandAllPreference,
+    expanded: expandAllPreference
+      ? moduleSections.map((section) => section.label)
+      : activeModuleSectionLabel ? [activeModuleSectionLabel] : [],
   });
-  if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel) {
-    const expandedAll =
-      moduleSections.length > 0 &&
-      moduleSections.every((section) => modules.expanded.includes(section.label));
-    const expanded = expandedAll
-      ? modules.expanded
-      : activeModuleSectionLabel
-        ? [activeModuleSectionLabel]
-        : [];
-    setModules({ pathname, activeSectionLabel, expanded });
+  if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel || modules.expandAll !== expandAllPreference) {
+    const expanded = expandAllPreference
+      ? moduleSections.map((section) => section.label)
+      : activeModuleSectionLabel ? [activeModuleSectionLabel] : [];
+    setModules({ pathname, activeSectionLabel, expandAll: expandAllPreference, expanded });
   }
 
   useEffect(() => {
@@ -1067,14 +1071,17 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const toggleAll = () => {
     peekTimers.current.forEach(clearTimeout);
     peekTimers.current.clear();
+    const nextExpandAll = !allExpanded;
+    setExpandAllPreference(nextExpandAll);
     setModules({
       pathname,
       activeSectionLabel,
-      expanded: allExpanded
-        ? activeModuleSectionLabel
+      expandAll: nextExpandAll,
+      expanded: nextExpandAll
+        ? moduleSections.map((section) => section.label)
+        : activeModuleSectionLabel
           ? [activeModuleSectionLabel]
           : []
-        : moduleSections.map((section) => section.label),
     });
   };
 
@@ -1082,12 +1089,16 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     clearTimeout(peekTimers.current.get(label));
     peekTimers.current.delete(label);
     const open = !modules.expanded.includes(label);
+    const expanded = open
+      ? [...modules.expanded, label]
+      : modules.expanded.filter((entry) => entry !== label);
+    const nowAllExpanded = moduleSections.length > 0 && moduleSections.every((section) => expanded.includes(section.label));
+    if (nowAllExpanded !== expandAllPreference) setExpandAllPreference(nowAllExpanded);
     setModules({
       pathname,
       activeSectionLabel,
-      expanded: open
-        ? [...modules.expanded, label]
-        : modules.expanded.filter((entry) => entry !== label),
+      expandAll: nowAllExpanded,
+      expanded,
     });
     if (open && !visited.current.has(label)) {
       const expire = () => {

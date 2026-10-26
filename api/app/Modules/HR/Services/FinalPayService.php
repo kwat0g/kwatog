@@ -25,6 +25,7 @@ use App\Modules\Loans\Services\LoanService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Services\EmploymentProrationService;
 use App\Modules\Payroll\Support\EmployedDayFraction;
 use Carbon\CarbonInterface;
 use Closure;

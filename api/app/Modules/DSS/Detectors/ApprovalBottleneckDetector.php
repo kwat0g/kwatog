@@ -7,6 +7,7 @@ namespace App\Modules\DSS\Detectors;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 
 /**
  * D25 — approval bottleneck view. The escalation sweep already reminds and
@@ -47,7 +48,7 @@ class ApprovalBottleneckDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $defaults = $this->defaultParams();
         $reminderHours = max(1, (int) ($context['reminder_hours'] ?? $defaults['reminder_hours']));
@@ -57,14 +58,16 @@ class ApprovalBottleneckDetector implements DetectorInterface
 
         /** @var array<string, array{count: int, oldest_hours: int, evidence: list<string>}> $byRole */
         $byRole = [];
+        $rowsScanned = 0;
 
         ApprovalRecord::query()
             ->where('action', 'pending')
             ->where('is_current', true)
             ->where('created_at', '<', $cutoff)
             ->orderBy('id')
-            ->chunkById(200, function ($records) use (&$byRole, $maxEvidence): void {
+            ->chunkById(200, function ($records) use (&$byRole, &$rowsScanned, $maxEvidence): void {
                 foreach ($records as $record) {
+                    $rowsScanned++;
                     $role = (string) $record->role_slug;
                     $ageHours = (int) abs(now()->diffInHours($record->created_at));
 
@@ -105,6 +108,6 @@ class ApprovalBottleneckDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $rowsScanned);
     }
 }

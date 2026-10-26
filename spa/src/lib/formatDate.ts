@@ -1,5 +1,11 @@
 import { format, parseISO, formatDistanceToNow, isValid } from 'date-fns';
 
+const manilaDateTime = new Intl.DateTimeFormat('en-US', {
+ timeZone: 'Asia/Manila',
+ month: 'short', day: 'numeric', year: 'numeric',
+ hour: 'numeric', minute: '2-digit', hour12: true,
+});
+
 const toDate = (value: string | Date | null | undefined): Date | null => {
  if (!value) return null;
  const d = value instanceof Date ? value : parseISO(value);
@@ -28,7 +34,9 @@ export function formatDateIso(value: string | Date | null | undefined, fallback 
 
 export function formatDateTime(value: string | Date | null | undefined, fallback = '—'): string {
  const d = toDate(value);
- return d ? format(d, 'MMM d, yyyy · h:mm a') : fallback;
+ if (!d) return fallback;
+ const parts = Object.fromEntries(manilaDateTime.formatToParts(d).map(({ type, value: part }) => [type, part]));
+ return `${parts.month} ${parts.day}, ${parts.year} · ${parts.hour}:${parts.minute} ${parts.dayPeriod}`;
 }
 
 export function formatTime(value: string | Date | null | undefined, fallback = '—'): string {

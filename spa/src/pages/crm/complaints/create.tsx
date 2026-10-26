@@ -73,7 +73,7 @@ export default function CreateComplaintPage() {
  queryFn: () => complaintsApi.options(),
  });
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: '',

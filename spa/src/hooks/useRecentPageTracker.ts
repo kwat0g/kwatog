@@ -20,7 +20,7 @@ export function useRecentPageTracker() {
  for (const section of SECTIONS) {
  const match = section.items.find(
  (item) =>
- item.to === pathname &&
+ item.to.split('?')[0] === pathname &&
  isNavItemVisible(item, { permissions, features, roleSlug }),
  );
  if (match) {
