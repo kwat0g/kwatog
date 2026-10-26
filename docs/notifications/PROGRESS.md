@@ -380,6 +380,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - PHP syntax and `git diff --check` pass. Targeted Pint reports four style issues in touched legacy files (`AlertEngineService`, daily production summary, `UserProvisioningService`, and `NotificationCatalogTest`); broad formatting was avoided. Full provisioning/reset verification remains blocked by F-33 until #372 reaches this stack.
 - This unit centralizes delivery only; policy recipient resolution, subject authorization, preferences for Laravel Notification classes, and lifecycle handling remain open.
 
+## Exclude inactive internal notice recipients (draft PR #403)
+
+- `NotificationService::normaliseRecipients()` now excludes inactive and soft-deleted internal `User` records. Both `send()` and `sendLaravelNotification()` share this check; portal-recipient delivery is unchanged.
+- Adapted the regression test to the current service API after #397 removed the unused `notify()` wrapper. It proves inactive/deleted users receive no in-app row, realtime event, or Laravel notification, while an active user still receives the in-app notice.
+- `NotificationServiceTest.php`: **10 passed / 36 assertions**, including the inactive-recipient regression. PHP syntax, Pint on both changed PHP files, and `git diff --check` pass. This recipient filter does not replace subject-access authorization or the Phase 2 rule resolver.
+
 ## Separate finding fix: F-12 chain broadcast payload (draft PR #398)
 
 - `ChainStepAdvanced` now broadcasts only `{refresh: true}` under the new `.chain.refresh` event name. The SPA only invalidates its current record and chain queries; it no longer needs status, document number, completed steps, or actor name from the channel.
