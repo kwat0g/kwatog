@@ -189,6 +189,7 @@ final class NotificationCatalog
                 ['key' => 'quality.inspection_failed', 'label' => 'QC inspection failed', 'description' => 'A quality inspection failed. An NCR may be required.'],
                 ['key' => 'quality.inspection_awaiting_review', 'label' => 'QC result awaiting review', 'description' => 'An inspector finished a result that needs a second person to check it before it is final.'],
                 ['key' => 'chain.delivery_drafted', 'label' => 'Delivery drafted', 'description' => 'Outgoing QC passed and a delivery draft is ready to pick and dispatch.'],
+                ['key' => 'delivery.source_review_required', 'label' => 'Shipment source needs review', 'description' => 'Shipment source stock is no longer valid and needs ImpEx and Quality review.'],
                 ['key' => 'chain.delivery_confirmed', 'label' => 'Delivery confirmed', 'description' => 'A delivery has been confirmed and an invoice draft was created.'],
                 ['key' => 'chain.delivery_attempt_reported', 'label' => 'Delivery exception needs a depot count', 'description' => 'A driver reported a delivery exception that needs physical return reconciliation.'],
                 ['key' => 'return.restocked', 'label' => 'Returned goods restocked', 'description' => 'Customer-returned goods were moved back into sellable stock. Warehouse should shelf and verify them.'],

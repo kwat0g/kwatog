@@ -520,11 +520,11 @@ class SalesOrderStockFulfillmentTest extends TestCase
         $this->assertSame([], $result['retired_delivery_ids']);
         $this->assertSame('scheduled', $delivery->fresh()->status->value);
         $this->assertSame('0.000', app(SalesOrderSupplyService::class)->lineCoverage($line->fresh())['ready_quantity']);
-        $notice = $deliveryViewer->notifications()->where('type', 'mrp_run_completed')->firstOrFail();
+        $notice = $deliveryViewer->notifications()->where('type', 'delivery.source_review_required')->firstOrFail();
         $this->assertSame(Delivery::class, $notice->data['subject_type']);
         $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
         $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
-        $this->assertSame(0, $createOnly->notifications()->where('type', 'mrp_run_completed')->count());
+        $this->assertSame(0, $createOnly->notifications()->where('type', 'delivery.source_review_required')->count());
     }
 
     public function test_safety_incoming_budget_is_shared_once_and_stable_on_both_replay_orders(): void
