@@ -49,19 +49,6 @@ class MrpPlanGenerated implements ShouldBroadcast, ToleratesNewerModelState
 
     public function broadcastWith(): array
     {
-        $this->plan->loadMissing('salesOrder:id,so_number');
-
-        return [
-            'plan_id' => $this->plan->hash_id,
-            'mrp_plan_no' => $this->plan->mrp_plan_no,
-            'sales_order' => $this->plan->salesOrder ? [
-                'id' => $this->plan->salesOrder->hash_id,
-                'so_number' => $this->plan->salesOrder->so_number,
-            ] : null,
-            'shortages_found' => (int) $this->plan->shortages_found,
-            'auto_pr_count' => (int) $this->plan->auto_pr_count,
-            'draft_wo_count' => (int) $this->plan->draft_wo_count,
-            'version' => (int) $this->plan->version,
-        ];
+        return ['refresh' => true];
     }
 }

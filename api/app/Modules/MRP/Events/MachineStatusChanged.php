@@ -31,7 +31,7 @@ class MachineStatusChanged implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('production.machine.' . $this->machine->hash_id),
+            new PrivateChannel('production.machine.'.$this->machine->hash_id),
             new PrivateChannel('production.dashboard'),
         ];
     }
@@ -43,12 +43,6 @@ class MachineStatusChanged implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        return [
-            'machine_id'   => $this->machine->hash_id,
-            'machine_code' => $this->machine->machine_code,
-            'from'         => $this->from,
-            'to'           => $this->to,
-            'reason'       => $this->reason,
-        ];
+        return ['refresh' => true];
     }
 }

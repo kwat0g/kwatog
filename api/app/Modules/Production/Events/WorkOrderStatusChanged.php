@@ -44,12 +44,6 @@ class WorkOrderStatusChanged implements ShouldBroadcast, ToleratesNewerModelStat
 
     public function broadcastWith(): array
     {
-        return [
-            'wo_id' => $this->workOrder->hash_id,
-            'wo_number' => $this->workOrder->wo_number,
-            'from' => $this->from,
-            'to' => $this->to,
-            'reason' => $this->reason,
-        ];
+        return ['refresh' => true];
     }
 }

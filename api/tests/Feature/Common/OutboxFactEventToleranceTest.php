@@ -281,7 +281,7 @@ class OutboxFactEventToleranceTest extends TestCase
         $plan->update(['draft_wo_count' => 1]);
 
         $event = $codec->decode($encoded['event_type'], $encoded['payload']);
-        $this->assertSame(1, $event->broadcastWith()['draft_wo_count']);
+        $this->assertSame(['refresh' => true], $event->broadcastWith());
         $this->assertTrue($event->broadcastWhen());
 
         $this->travel(5)->seconds();

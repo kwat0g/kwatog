@@ -41,6 +41,7 @@
 | F-18. Pricing recipient negative-role coverage | `notifications/fix-pricing-recipient-role-scope` | [#350](https://github.com/kwat0g/kwatog/pull/350) | merged as `9a5a0525`; source filter in #341 |
 | F-20. Sales-order confirmation notice access and link | `notifications/fix-sales-order-confirmation-notice` | [#351](https://github.com/kwat0g/kwatog/pull/351) | merged as `cab02246` |
 | F-12. Sales-order broadcast payload minimization | `notifications/minimize-sales-order-broadcast` | [#352](https://github.com/kwat0g/kwatog/pull/352) | `ff2a2a92` plus current-main merge |
+| F-12. Shared dashboard event payload minimization | `notifications/minimize-dashboard-broadcast-payloads` | [#358](https://github.com/kwat0g/kwatog/pull/358) | pending review |
 
 ## Coverage ledger
 
@@ -142,6 +143,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - Private subject channels now require destination permission and an existing subject. Chain authorization fails closed on unmapped types and applies `ApprovalSourceScope` to purchase requests and orders; work orders, machines, and payroll periods follow their existing module-wide endpoint permissions.
 - On the pre-merge feature head: `BroadcastAuthorizationTest` **7 passed / 17 assertions**, including out-of-department PR/PO denial and missing-subject denial. Tests were not rerun after merge.
 - All eight chain entity types, every role, and cross-scope model policies were not tested.
+
+## Separate finding fix: F-12 shared dashboard payloads
+
+- Eight production/maintenance broadcast events now send only `{ refresh: true }`. Their SPA dashboard listeners only invalidate/refetch queries; the output-entry page now refetches the authorized work-order detail instead of reading cumulative totals from the event payload.
+- On the original feature head, `DashboardBroadcastPayloadTest` passed **1 test / 8 assertions** and the focused plan outbox tolerance case passed **1 / 3**. PHP was unavailable for a post-integration rerun. After integrating current main, `record-output.test.tsx` passed **5 tests**.
+- F-12 remains open for payroll progress payload sensitivity and the full subject-channel role/scope matrix. CI on the feature head was blocked before PHPStan/PHPUnit by inherited F-22 and before SPA lint/typecheck/Vitest/build by the existing dependency audit.
 
 ## Separate finding fix: F-15 queue long-wait destination
 
