@@ -2198,7 +2198,7 @@ class DeliveryService
             'link_to' => "/supply-chain/deliveries/{$d->hash_id}",
             'entity_type' => 'delivery',
             'entity_id' => $d->hash_id,
-        ]);
+        ], "invoice-auto-failed:{$d->id}");
     }
 
     public function delete(Delivery $d): void
