@@ -10,6 +10,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
@@ -93,6 +95,18 @@ Broadcast::channel(
     function (User $user, string $entityType, string $hashId) use ($canViewSubject): bool {
         if (! in_array($entityType, ChainDefinitions::allowedTypes(), true)) {
             return false;
+        }
+
+        if ($entityType === 'purchase_order') {
+            if (! $user->hasPermission('purchasing.view') && ! $user->hasPermission('purchasing.po.approve')) {
+                return false;
+            }
+
+            $id = PurchaseOrder::tryDecodeHash($hashId);
+            $purchaseOrder = $id === null ? null : PurchaseOrder::query()->find($id);
+
+            return $purchaseOrder !== null
+                && app(PurchaseOrderAccessPolicy::class)->canView($user, $purchaseOrder);
         }
 
         $class = ChainBroadcaster::entityClassFor($entityType);

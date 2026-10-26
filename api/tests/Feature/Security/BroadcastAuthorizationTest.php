@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Security;
 
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -95,6 +96,38 @@ class BroadcastAuthorizationTest extends TestCase
                 'channel_name' => "private-user.{$user->hash_id}",
             ])
             ->assertForbidden();
+    }
+
+    public function test_purchase_order_chain_channel_uses_the_record_visibility_scope(): void
+    {
+        $user = $this->userWithPermissions('purchasing.view');
+        $own = PurchaseOrder::factory()->create(['created_by' => $user->id]);
+        $foreign = PurchaseOrder::factory()->create(['created_by' => User::factory()->create()->id]);
+
+        $this->authorizeChannel($user, "private-chain.purchase_order.{$own->hash_id}")->assertOk();
+        $this->authorizeChannel($user, "private-chain.purchase_order.{$foreign->hash_id}")->assertForbidden();
+    }
+
+    public function test_purchase_order_approver_can_authorize_the_detail_channel_without_list_permission(): void
+    {
+        $approver = $this->userWithPermissions('purchasing.po.approve');
+        $purchaseOrder = PurchaseOrder::factory()->create();
+
+        $this->authorizeChannel($approver, "private-chain.purchase_order.{$purchaseOrder->hash_id}")->assertOk();
+    }
+
+    private function userWithPermissions(string ...$permissions): User
+    {
+        $role = Role::create([
+            'name' => 'Broadcast test '.substr(uniqid(), -5),
+            'slug' => 'broadcast_test_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync(
+            Permission::query()->whereIn('slug', $permissions)->pluck('id')->all(),
+        );
+
+        return User::factory()->create(['role_id' => $role->id]);
     }
 
     public function test_department_head_can_only_subscribe_to_purchase_requests_in_their_row_scope(): void
