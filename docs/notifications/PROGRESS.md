@@ -868,7 +868,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The test now uses seeded `system_admin`, which holds `crm.price_agreements.manage`, so the request reaches the immutable-agreement business rule instead of stopping at route authorization.
 - `PriceNegotiationLifecycleTest.php`: **7 passed / 57 assertions**. This changes only the test actor; route permission remains unchanged.
 
-## Phase 3 MRP run notice access and exact run links
+## Phase 3 MRP run notice access and exact run links (draft PR [#463](https://github.com/kwat0g/kwatog/pull/463))
 
 - MRP outcome notices now use the persisted `MrpRun` subject and `/mrp/plans?run={hash}` target. The run list applies that hash filter, and the MRP page shows the requested run in its status panel.
 - Recipients must be active and hold both `mrp.plans.view` and `mrp.runs.view`; configured daily roles use the same gate. Exclude the run trigger. The daily command's duplicate notice was removed; automation sends one deduplicated notification.
