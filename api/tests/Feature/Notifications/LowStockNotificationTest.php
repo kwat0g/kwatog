@@ -131,7 +131,7 @@ class LowStockNotificationTest extends TestCase
         $pr = PurchaseRequest::factory()->create();
         $failure = new RuntimeException('notification database unavailable');
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->once()->andThrow($failure);
+        $notifications->shouldReceive('sendForSubject')->once()->andThrow($failure);
         app()->instance(NotificationService::class, $notifications);
 
         try {
