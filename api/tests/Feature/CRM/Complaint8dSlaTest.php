@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\CRM;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -27,6 +28,7 @@ class Complaint8dSlaTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
 
         // Seed recipient pool used by the service (production_manager + qc_inspector).
         foreach (['qc_inspector', 'production_manager'] as $slug) {
@@ -85,6 +87,27 @@ class Complaint8dSlaTest extends TestCase
             'tier' => 'd3',
             'status' => 'sent',
             'attempts' => 1,
+        ]);
+        $notice = DB::table('notifications')->where('type', '8d.sla')->first();
+        $data = json_decode($notice->data, true);
+        $this->assertSame(CustomerComplaint::class, $data['subject_type']);
+        $this->assertSame((string) $c->id, $data['subject_id']);
+        $this->assertSame('/crm/complaints/'.$c->hash_id, $data['link_to']);
+        $recipient = User::query()->findOrFail($notice->notifiable_id);
+        $this->actingAs($recipient)
+            ->getJson('/api/v1/crm/complaints/'.$c->hash_id)
+            ->assertOk();
+
+        $outsider = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        app(NotificationService::class)->sendForSubject($c, $outsider, 'test.complaint_subject_access', [
+            'title' => 'Review complaint',
+            'link_to' => '/crm/complaints/'.$c->hash_id,
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $outsider->id,
+            'type' => 'test.complaint_subject_access',
         ]);
     }
 
@@ -194,9 +217,9 @@ class Complaint8dSlaTest extends TestCase
         $inboxRowsBefore = DB::table('notifications')->count();
         $realNotifications = app(NotificationService::class);
         $notifications = \Mockery::mock(NotificationService::class)->makePartial();
-        $notifications->shouldReceive('send')->once()->andReturnUsing(
-            function (array $recipients, string $type, array $data) use ($realNotifications): void {
-                $realNotifications->send($recipients, $type, $data);
+        $notifications->shouldReceive('sendForSubject')->once()->andReturnUsing(
+            function (CustomerComplaint $subject, array $recipients, string $type, array $data) use ($realNotifications): void {
+                $realNotifications->sendForSubject($subject, $recipients, $type, $data);
                 throw new RuntimeException('simulated notification failure');
             },
         );
