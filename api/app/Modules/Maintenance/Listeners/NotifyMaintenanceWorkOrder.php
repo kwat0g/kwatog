@@ -17,7 +17,11 @@ class NotifyMaintenanceWorkOrder
     public function handle(MaintenanceWorkOrderCreated $event): void
     {
         $order = $event->workOrder;
-        $supervisors = User::query()->where('is_active', true)
+        $supervisorQuery = User::query()->where('is_active', true);
+        if ($order->created_by !== null) {
+            $supervisorQuery->whereKeyNot($order->created_by);
+        }
+        $supervisors = $supervisorQuery
             ->whereHas('role', fn ($query) => $query->where('slug', 'maintenance_supervisor'))
             ->get()
             ->filter(fn (User $user): bool => $user->hasPermission('maintenance.view'))
