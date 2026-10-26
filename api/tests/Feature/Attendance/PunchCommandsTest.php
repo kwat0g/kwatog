@@ -153,7 +153,7 @@ class PunchCommandsTest extends TestCase
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $eligibleHead->id, 'type' => 'attendance.missing_time_out']);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedHead->id, 'type' => 'attendance.missing_time_out']);
 
-        $expectedLink = '/hr/attendance?missing_time_out=1';
+        $expectedLink = '/hr/attendance?missing_time_out=1&from=2026-10-07&to=2026-10-07';
         $hrNotice = $hr->notifications()->where('type', 'attendance.missing_time_out')->firstOrFail();
         $headNotice = $eligibleHead->notifications()->where('type', 'attendance.missing_time_out')->firstOrFail();
         $this->assertSame(Attendance::class, $headNotice->data['subject_type']);
@@ -162,9 +162,10 @@ class PunchCommandsTest extends TestCase
         $this->assertSame('3 employee(s) have no time out for Oct 7, 2026.', $hrNotice->data['message']);
         $this->assertSame($expectedLink, $headNotice->data['link_to']);
         $this->assertSame('2 employee(s) in '.$dept->name.' have no time out for Oct 7, 2026.', $headNotice->data['message']);
-        $this->assertSame(3, $this->actingAs($hr)->getJson('/api/v1/attendance/attendances?missing_time_out=1')->assertOk()->json('meta.total'));
-        $this->assertSame(2, $this->actingAs($eligibleHead)->getJson('/api/v1/attendance/attendances?missing_time_out=1')->assertOk()->json('meta.total'));
-        $this->assertSame(0, $this->actingAs($revokedHead)->getJson('/api/v1/attendance/attendances?missing_time_out=1')->assertOk()->json('meta.total'));
+        $filter = 'missing_time_out=1&from=2026-10-07&to=2026-10-07';
+        $this->assertSame(3, $this->actingAs($hr)->getJson('/api/v1/attendance/attendances?'.$filter)->assertOk()->json('meta.total'));
+        $this->assertSame(2, $this->actingAs($eligibleHead)->getJson('/api/v1/attendance/attendances?'.$filter)->assertOk()->json('meta.total'));
+        $this->assertSame(0, $this->actingAs($revokedHead)->getJson('/api/v1/attendance/attendances?'.$filter)->assertOk()->json('meta.total'));
         app(NotificationService::class)->sendForSubject(Attendance::query()->where('employee_id', $emp->id)->firstOrFail(), $revokedHead, 'test.attendance_scope', [
             'title' => 'Missing time-out',
             'link_to' => $expectedLink,
