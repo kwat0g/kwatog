@@ -110,6 +110,28 @@ it('opens held material-review records from the MRB badge', () => {
   );
 });
 
+it('opens all active shipment stages from the inbound shipment badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'shipments'
+      ? {
+          count: 3,
+          severity: 'warning',
+          label: 'Shipments',
+          description: 'Inbound shipments in transit, customs, or cleared',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/supply-chain/shipments']}>
+      <Sidebar roleSlug="purchasing_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Inbound Shipments/ })).toHaveAttribute(
+    'href',
+    '/supply-chain/shipments?status=mid_pipe',
+  );
+});
+
 it('opens only new inquiries from the actionable inquiry badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'inquiries'
