@@ -27,6 +27,8 @@ use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Landing\Enums\ContactInquiryStatus;
+use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Database\Seeders\RolePermissionSeeder;
@@ -227,6 +229,27 @@ class BadgeControllerTest extends TestCase
             ->json('data.profile_requests.count');
         $this->assertSame(3, $financeList->json('meta.total'));
         $this->assertSame($financeList->json('meta.total'), $financeBadge);
+    }
+
+    public function test_inquiries_badge_matches_the_new_inquiry_list_filter(): void
+    {
+        $customerService = User::factory()->create([
+            'role_id' => Role::where('slug', 'customer_service_officer')->value('id'),
+        ]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::InProgress]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::Closed]);
+
+        $list = $this->actingAs($customerService, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk();
+        $badge = $this->actingAs($customerService, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.inquiries.count');
+
+        $this->assertSame(1, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void

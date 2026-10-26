@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3 and F-16–F-17, F-01–F-04 merged; F-18 pricing audience scope in PR #341.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-16–F-17, F-01–F-04, and F-18 merged; F-05 inquiry badge/list parity in PR #342.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and F-16–F-17 merged (#332–#336); F-01–F-04 badge fixes merged (#337–#340). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3 and F-16–F-17 merged (#332–#336); F-01–F-04 and F-18 fixes merged (#337–#341). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
 | 4. Frontend | Partial | PR #334 hydrates realtime toast titles through the owner-scoped endpoint. Bell/Center behavior, links, accessibility, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-04, and F-18 tests passed on earlier feature heads. Post-merge tests for #334 and #336–#341 were not rerun. The latest no-list-access endpoint assertion remains unrun. Role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-04, F-18, and F-05 tests passed on earlier feature heads. Post-merge tests for #334 and #336–#342 were not rerun. The latest no-list-access endpoint assertion remains unrun. Role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
 
 ## Phase 3 PR stack
 
@@ -29,7 +29,8 @@
 | F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | merged as `5569d897` |
 | F-04. Badge route permissions | `notifications/fix-badge-route-permissions` | [#339](https://github.com/kwat0g/kwatog/pull/339) | merged as `f4c63a4c` |
 | F-01. Profile-request badge route and query parity | `notifications/fix-profile-request-badge-route` | [#340](https://github.com/kwat0g/kwatog/pull/340) | merged as `ba5e429a` |
-| F-18. Pricing notification role audience | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | `aedd4fa5` |
+| F-18. Pricing notification role audience | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | merged as `aa8d28b2` |
+| F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | `26ba6550` |
 
 ## Coverage ledger
 
@@ -48,7 +49,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PRs #337–#340 align approval and purchase-request badge scopes, route permissions, and profile-request queue placement. PR #341 respects existing pricing audience role lists; product/customer assignment scope remains open. Purchase Requests still link to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PRs #337–#340 align approval and purchase-request badge scopes, route permissions, and profile-request queue placement. PR #341 respects existing pricing audience role lists; product/customer assignment scope remains open. PR #342 adds a `new` inquiry filter shared by its badge and list. Purchase Requests still link to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -101,6 +102,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include missing eve
 - The profile-request badge moved from Employees to Bank Account Changes/Profile Change Requests. `ProfileUpdateRequestService::reviewQueueQuery()` is shared by list and badge, preserving HR department scope and Finance's `pending_finance`/`requires_finance` filters.
 - `BadgeControllerTest::test_profile_request_badge_matches_the_hr_and_finance_review_queues` passed **1 test / 8 assertions**; existing finance bank-request workflow test passed **1 / 34**; `Sidebar.permissions.test.tsx` passed **21 tests** on the pre-merge feature head. Post-merge tests were not rerun.
 - Full role-by-role list parity and browser layout were not checked.
+
+## Separate finding fix: F-05 CRM inquiry badge
+
+- The inquiry badge now counts only `ContactInquiryStatus::New`. `ContactInquiryInboxService::listQuery()` powers the badge and list; the sidebar opens `/crm/inquiries?status=new`. Query-aware active-link and recent-page matching preserve navigation behavior with the filter.
+- On the pre-merge feature head: API parity test **1 passed / 4 assertions**; sidebar permission and behavior tests **46 passed across two files**. Tests were not rerun after merge.
+- Six badge definitions remain unattached; see `FINDINGS.md`. No full role matrix or browser layout check.
 
 ## Separate finding fix: F-18
 

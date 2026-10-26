@@ -67,6 +67,13 @@ it('expands the active module, expires unvisited peeks, and keeps visited module
   expect(screen.queryByRole('checkbox', { name: 'Peek sidebar' })).not.toBeInTheDocument();
 });
 
+it('keeps a filtered sidebar destination active', () => {
+  render(<MemoryRouter initialEntries={['/crm/inquiries?status=new']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  const link = screen.getByRole('link', { name: 'Customer Inquiries' });
+  expect(link).toHaveAttribute('href', '/crm/inquiries?status=new');
+  expect(link).toHaveAttribute('aria-current', 'page');
+});
+
 it('widens the rail after 150ms and reveals labels on keyboard focus', () => {
   useSidebarStore.getState().setCollapsed(true);
   render(<MemoryRouter><Sidebar roleSlug="system_admin" /></MemoryRouter>);
