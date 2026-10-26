@@ -390,3 +390,9 @@ The legacy `pending_so` badge counted every `draft`, including orders never sent
 - It requires `leave.view`, the stage permission, and the active direct/delegated workflow role, applies the same `DepartmentScope` as the list service, excludes the employee's own request, and ignores status/trashed overrides in signal mode. The SPA sidebar deep link and page filter use the same signal key.
 - `LeaveApprovalBadgeParityTest` covers department and HR scope, own/cross-department rows, terminal and stale rows, wrong-role permission holders, active same-department delegates, and badge/list total parity. See `PROGRESS.md` for test evidence.
 - Static review found that the ordinary page exposed approve/reject buttons by permission while the API also enforced workflow role, current step, and separation of duties. F-32 is fixed separately in draft PR #396: API list/detail resources expose shared-policy `can_approve`, rejection checks the active stage permission, and SPA row/detail/bulk actions use that result. Event timing is unchanged.
+
+## Follow-up verification: native Laravel dispatch boundary
+
+- `NotificationService::notify()` had no repository callers; Ncr and Maintenance senders already use `send()`. The unused legacy wrapper is removed in draft PR #397.
+- `NotificationCatalogTest` now locks the remaining direct Laravel dispatch sites to mail-only authentication links, production summaries, and critical-alert email. Its channel checks cover loadable notification classes; HR password-reset is excluded from runtime verification under F-33.
+- This does not migrate direct `Mail::to(...)` transactional/customer/supplier paths or change their timing. The HR password-reset subclass fails class loading (F-33) and remains unverified until its separate fix.

@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft PR [#396](https://github.com/kwat0g/kwatog/pull/396) aligns Leave action visibility with the active approval step and API authorization; targeted API tests pass **34/34 (160 assertions)** and SPA tests pass **7/7**. Draft PR [#395](https://github.com/kwat0g/kwatog/pull/395) adds Leave approval badge/list parity; PR [#394](https://github.com/kwat0g/kwatog/pull/394) adds delegate-aware overtime approval badges; #391–#393 cover profile, maintenance, and overtime list/read parity. Draft PRs #386–#389 cover inbound shipment, Sales Orders confirmation, and Production work-order permissions. API CI still has the unrelated F-22 syntax blocker; SPA CI reports existing dependency advisories. Full SPA typecheck has unrelated project-wide errors. Central dispatch, remaining badge parity, notification catalogs, and scoped recipients remain open. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Draft PR [#397](https://github.com/kwat0g/kwatog/pull/397) removes the unused legacy in-app notification wrapper and guards direct Laravel notification dispatch; mail-only HR password-reset loading defect F-33 remains separate. Draft PR [#396](https://github.com/kwat0g/kwatog/pull/396) aligns Leave action visibility with the active approval step and API authorization; targeted API tests pass **34/34 (160 assertions)** and SPA tests pass **7/7**. Draft PR [#395](https://github.com/kwat0g/kwatog/pull/395) adds Leave approval badge/list parity; PR [#394](https://github.com/kwat0g/kwatog/pull/394) adds delegate-aware overtime approval badges; #391–#393 cover profile, maintenance, and overtime list/read parity. Draft PRs #386–#389 cover inbound shipment, Sales Orders confirmation, and Production work-order permissions. API CI still has the unrelated F-22 syntax blocker; SPA CI reports existing dependency advisories. Full SPA typecheck has unrelated project-wide errors. Remaining direct transactional mail, badge parity, notification catalogs, and scoped recipients remain open. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -39,6 +39,7 @@
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
 | F-32. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | pending |
+| 1.1. Native dispatch boundary guard | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -351,6 +352,19 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Leave row, detail, and bulk controls follow `can_approve`. Rejection now also requires the permission for the request's active stage, matching the approved policy. Legacy/self-service resource rows default the field to `false`; approval and notification event timing is unchanged.
 - API `LeaveApprovalBadgeParityTest`, `LeaveRequestVisibilityTest`, and `LeaveRequestHardeningTest`: **34 passed / 160 assertions**, including direct/delegated positives, wrong-role/system-admin negatives, stage-specific reject permission, prior-step separation-of-duties, and existing scope checks. SPA leave list/detail and approval-history tests: **7 passed**. Targeted ESLint, PHP syntax, focused Pint on policy/service/test, and `git diff --check` pass. Controller/resource files retain pre-existing Pint style exceptions; no broad formatting applied.
 - No browser click-through or end-to-end session run. Draft PR #396 is stacked on #395.
+
+## Separate finding: F-33 HR password-reset notification load failure
+
+- `EmployeePasswordResetNotification` fails PHP method-signature compatibility when autoloaded because its parent references unimported `Throwable`, resolving to the Auth notification namespace. The issue surfaced while checking which direct Laravel notification paths remain mail-only; no reset email was queued.
+- Logged in `FINDINGS.md`; not fixed in the central-dispatch unit. The HR password-reset path remains unverified until a separate fix and send test.
+
+## Central dispatch boundary (draft PR #397)
+
+- Repository search found no callers of `NotificationService::notify()`; its comment naming Ncr/Maintenance as legacy callers was stale. Those services already use `send()`, so the unused Laravel-native wrapper is removed.
+- `NotificationCatalogTest` pins direct Laravel dispatch files to the existing mail-only authentication, production-summary, and critical-alert flows and fails if the legacy wrapper returns. `via()` checks cover loadable classes; the HR reset subclass remains unverified under F-33. Direct `Mail::to(...)` paths and event timing are unchanged.
+- Older `audit/domains/platform/notifications/*` snapshots still claim NcrService calls the wrapper; current code search shows those references are stale historical findings, not live call sites.
+- `NotificationCatalogTest`: **9 passed / 74 assertions**. Focused Pint passes for `NotificationService`; the existing `NotificationCatalogTest` file retains baseline style debt. PHP syntax and `git diff --check` pass.
+- F-33 was discovered while checking an HR mail exception and logged separately. No email sender migration or browser verification is included.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
