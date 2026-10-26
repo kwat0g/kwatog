@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3 and F-17 merged; F-16 outcome-access fix in PR #336.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-17, and F-16 merged; F-02 approval badge scope in PR #337.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and F-17 merged (#332–#335); F-16 outcome-access fix is in PR #336. Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3, F-17, and F-16 merged (#332–#336). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
 | 4. Frontend | Partial | PR #334 hydrates realtime toast titles through the owner-scoped endpoint. Bell/Center behavior, links, accessibility, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3 and F-16 tests passed on earlier commits. Post-rebase PR #334 and #336 tests have no result; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Targeted unit 1–3, F-16, and F-02 tests passed on earlier feature heads. Post-merge tests for #334, #336, and #337 were not rerun; role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
 
 ## Phase 3 PR stack
 
@@ -24,7 +24,8 @@
 | 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | merged as `1b4ba8aa` |
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | merged as `00eef8df` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | merged as `89b9b1df` |
-| F-16. Submitter outcome access | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `e00d08f3` |
+| F-16. Submitter outcome access | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | merged as `a9e3f394` |
+| F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | `af68eb60` |
 
 ## Coverage ledger
 
@@ -38,12 +39,12 @@
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
 - Payload schema v1 fields: `schema_version`, `event_type`, optional `subject_type`, `subject_id`, and caller-supplied `actor_id`. Existing `title`, `message`, `link_to`, event timing, recipients, channels, and legacy rows remain unchanged.
-- Core `ApprovalService` action-required notices resolve only the active step's role holders and active delegates who pass the mapped action permission and `ApprovalTypeRegistry::userCanViewRecord`; exclude submitter and known acting approver. Store `recipient_reason` on each in-app row. Other approval senders and event families remain on existing paths.
+- Core `ApprovalService` action-required notices resolve only the active step's role holders and active delegates who pass the mapped action permission and `ApprovalTypeRegistry::userCanViewRecord`; exclude submitter and known acting approver. Store `recipient_reason` on each in-app row. F-16 outcome access is gated at all six inventoried senders. Other approval senders and event families remain on existing paths.
 - Realtime notification events now publish only notification ID and type on the recipient's private channel; channel authorization requires both matching user ID and `notifications.view`. SPA fetches full content from `GET /notifications/{id}`, scoped to that user. `badges` remains an authenticated private, content-free refresh channel.
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge scopes, profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. PR #336 adds subject-view gates to the six inventoried decision-notice senders; its targeted tests were not rerun after rebase. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge scope, profile badge attachment, permission-gate mismatches, missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PR #337 makes the approval badge share the board's current queue filter. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -72,6 +73,12 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 
 - Custom approval escalation no longer adds every active `system_admin` after record-specific recipient checks. `CustomApprovalDelegationAndEscalationTest` passed **5 tests / 29 assertions**, including a prebill editor exclusion case. Existing broken assertions in that test were repaired so the suite runs.
 - Escalation timing is unchanged. No supervisor recipient resolver was found in this service; `approval_escalation` still goes to eligible approvers. See F-23 for this remaining policy gap.
+
+## Separate finding fix: F-02
+
+- `BadgeService.approvals` now reads the approval board's `summary.my_action`, inheriting supported-type, permission, delegation, and source-row filtering. The feature test compares badge and board counts and excludes an out-of-department leave row plus an unsupported approval type.
+- Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions** on the pre-merge feature head. Post-merge tests were not rerun. The board summary still caps at 100 rows; F-24 tracks this separate limitation. F-03 purchase-request badge scope remains open.
+- Full `BadgeControllerTest` and all-role badge/list parity were not run. No frontend changes.
 
 ## Outstanding proof / risks
 

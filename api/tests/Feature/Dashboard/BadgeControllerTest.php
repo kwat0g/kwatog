@@ -22,6 +22,7 @@ use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -329,20 +330,35 @@ class BadgeControllerTest extends TestCase
 
     public function test_department_head_sees_pending_approvals_with_severity(): void
     {
+        $departmentA = Department::factory()->create();
+        $departmentB = Department::factory()->create();
+        $headEmployee = Employee::factory()->create(['department_id' => $departmentA->id]);
         $deptHead = Role::where('slug', 'department_head')->firstOrFail();
-        $user = User::factory()->create(['role_id' => $deptHead->id]);
+        $user = User::factory()->create([
+            'role_id' => $deptHead->id,
+            'employee_id' => $headEmployee->id,
+        ]);
 
-        // 25 pending records routed to this role → severity must be 'danger'.
+        // Twenty-five visible records trigger danger severity.
         for ($i = 0; $i < 25; $i++) {
-            ApprovalRecord::create([
-                'approvable_type' => 'X',
-                'approvable_id'   => $i + 1,
-                'step_order'      => 1,
-                'role_slug'       => 'department_head',
-                'action'          => 'pending',
-                'created_at'      => now(),
-            ]);
+            $this->addPendingLeaveApproval($headEmployee, 'department_head');
         }
+        // The badge must exclude records outside the board's row scope and unsupported types.
+        $this->addPendingLeaveApproval(Employee::factory()->create(['department_id' => $departmentB->id]), 'department_head');
+        ApprovalRecord::create([
+            'approvable_type' => 'UnknownApprovalType',
+            'approvable_id' => 999,
+            'step_order' => 1,
+            'role_slug' => 'department_head',
+            'action' => 'pending',
+            'is_current' => true,
+            'created_at' => now(),
+        ]);
+
+        $board = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/approvals/board')
+            ->assertOk()
+            ->json('data');
 
         $resp = $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/dashboards/badges')
@@ -350,23 +366,21 @@ class BadgeControllerTest extends TestCase
             ->json('data');
 
         $this->assertArrayHasKey('approvals', $resp);
-        $this->assertSame(25, $resp['approvals']['count']);
+        $this->assertSame(25, $board['summary']['my_action']);
+        $this->assertSame($board['summary']['my_action'], $resp['approvals']['count']);
         $this->assertSame('danger', $resp['approvals']['severity']);
     }
 
     public function test_severity_warning_for_small_count(): void
     {
+        $department = Department::factory()->create();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
         $deptHead = Role::where('slug', 'department_head')->firstOrFail();
-        $user = User::factory()->create(['role_id' => $deptHead->id]);
-
-        ApprovalRecord::create([
-            'approvable_type' => 'X',
-            'approvable_id'   => 1,
-            'step_order'      => 1,
-            'role_slug'       => 'department_head',
-            'action'          => 'pending',
-            'created_at'      => now(),
+        $user = User::factory()->create([
+            'role_id' => $deptHead->id,
+            'employee_id' => $employee->id,
         ]);
+        $this->addPendingLeaveApproval($employee, 'department_head');
 
         $resp = $this->actingAs($user, 'sanctum')
             ->getJson('/api/v1/dashboards/badges')
@@ -375,6 +389,21 @@ class BadgeControllerTest extends TestCase
 
         $this->assertSame(1, $resp['approvals']['count']);
         $this->assertSame('warning', $resp['approvals']['severity']);
+    }
+
+    private function addPendingLeaveApproval(Employee $employee, string $roleSlug): void
+    {
+        $leave = LeaveRequest::factory()->create(['employee_id' => $employee->id]);
+
+        ApprovalRecord::create([
+            'approvable_type' => LeaveRequest::class,
+            'approvable_id' => $leave->id,
+            'step_order' => 1,
+            'role_slug' => $roleSlug,
+            'action' => 'pending',
+            'is_current' => true,
+            'created_at' => now(),
+        ]);
     }
 
     public function test_zero_count_yields_neutral_severity(): void
