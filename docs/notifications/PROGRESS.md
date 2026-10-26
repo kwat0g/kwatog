@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; PRs #353, #354, #357, and #358 merged. PR #359 updates permission-override message copy; PR #362 narrows invoice payment-review recipients to users who can open the invoice. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, and #362 merged. PR #363 narrows AR dunning recipients, deep-links internal notices, and rechecks access for queued mail failures. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
@@ -10,11 +10,12 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and F-16–F-18, F-01–F-06, F-08, F-12, F-15, and F-24 fixes are merged (#332–#347). F-03 filtered list and permission parity merged in #348; #349 adds role-to-route regression coverage for the #339 permission fix; #350 adds a negative test for the #341 pricing recipient filter. #351 updates sales-order confirmation recipients and links; PR #352 minimizes its shared-channel payload. Global authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3 and the documented findings fixes through #362 are merged. PRs #353, #354, and #357 add three badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients. PR #363 updates AR dunning recipients and links. Global authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-06, F-08, F-12, and F-18 tests passed on earlier feature heads. PR #346's original queue test passed before the permission gate was added; its new revoked-permission case is unverified. PR #347's pre-rebase targeted runs passed: `ApprovalBoardTest.php` 5 tests / 27 assertions and `BadgeControllerTest.php` 11 tests / 118 assertions, including the 101-row parity case. No post-rebase rerun; PHP unavailable locally. PR #348's original feature-head runs passed `BadgeControllerTest.php` 12 tests / 124 assertions, `PurchaseRequestHardeningTest.php` 15 / 36, and `Sidebar.behavior.test.tsx` 24 tests. The new approval-only/no-list-access regression and all tests after current-main integration remain unverified; PHP is unavailable locally. PR #349's original feature-head `BadgeControllerTest.php` passed 13 tests / 141 assertions; these role-to-route tests were not rerun after current-main integration. PR #350's original feature-head `PricingReviewNotificationAudienceTest.php` passed 2 tests / 6 assertions; it was not rerun after current-main integration. PR #351's original feature-head `OutboxFactEventToleranceTest.php` passed 11 tests / 30 assertions; it was not rerun after current-main integration. PR #352's original feature-head test passed 12 tests / 33 assertions; it was not rerun after current-main integration. PHP is unavailable locally. Post-merge tests for #334 and #336–#351 were not rerun. Visual baseline was cancelled; browser QA, all-role/channel coverage, broad badge parity, and full-suite verification remain open. The latest no-list-access endpoint assertion remains unrun. |
+| 7. Verification | Partial | Targeted unit 1–3 and earlier finding tests passed on their feature heads; broad role, channel, and badge parity remains incomplete. SPA sidebar tests passed after integration for #353 (**28**), #354 (**29**), and #357 (**30**); #358 `record-output.test.tsx` passed **5**. Backend feature tests for #353, #354, #357, #359, #362, and #363 were not rerun after integration because PHP is unavailable locally. We did not run tests that use the database. CI checks were not awaited under the user's instruction; GitHub reported checks in progress at merge time. No database was touched. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
 
 ## Phase 3 PR stack
 
@@ -46,7 +47,8 @@
 | F-09. Assigned complaint badge/list parity | `notifications/fix-open-complaint-badge-parity` | [#357](https://github.com/kwat0g/kwatog/pull/357) | merged as `f592f6ca` |
 | F-12. Shared dashboard event payload minimization | `notifications/minimize-dashboard-broadcast-payloads` | [#358](https://github.com/kwat0g/kwatog/pull/358) | merged as `4c26b530` |
 | F-15. Permission-override notice copy | `notifications/fix-permission-override-notice-copy` | [#359](https://github.com/kwat0g/kwatog/pull/359) | merged as `79e1dbc6` |
-| F-25. Invoice payment-review recipient scope | `notifications/fix-invoice-payment-notice-audience` | [#362](https://github.com/kwat0g/kwatog/pull/362) | pending review |
+| F-25. Invoice payment-review recipient scope | `notifications/fix-invoice-payment-notice-audience` | [#362](https://github.com/kwat0g/kwatog/pull/362) | merged as `d776cc0c` |
+| F-26. AR dunning audience and links | `notifications/fix-ar-dunning-review-audience` | [#363](https://github.com/kwat0g/kwatog/pull/363) | pending review |
 
 ## Coverage ledger
 
@@ -174,6 +176,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - Recipients now need both permissions and active status. Exclude `system_admin` because `usersWithPermission()` intentionally includes permission-bypass admins, who are not Finance reviewers. Existing message, link, dedupe key, and submission timing stay unchanged.
 - On the original feature head, `InvoicePaymentSubmissionServiceTest` passed **13 tests / 80 assertions**. The added negative case excludes a system administrator, inactive Finance user, collect-only user, and view-only executive, while confirming the Finance reviewer gets the exact invoice link. PHP is unavailable locally for a post-integration rerun.
 - Empty-recipient fallback/audit remains open in the central notification service. No generic system-admin fallback is approved for customer payment data.
+
+## Separate finding fix: F-26 AR dunning audience and links
+
+- Final-tier escalation, missing-email fallback, and queued-mail failure use active AR reviewers holding both `accounting.invoices.collect` and `accounting.invoices.view`; exclude `system_admin` permission bypass. Queued failure now resolves current access rather than using its queue-time ID snapshot.
+- Internal escalation and email-failure notices link to the exact invoice. Customer reminder recipients and portal links stay unchanged; dunning schedule, tier timing, and email preference behavior stay unchanged.
+- On the original feature head, `RunArDunningCommandTest` passed **12 tests / 58 assertions**. Positive and negative cases cover Finance Officer, system administrator, view-only executive, and collection access revoked before a queued email failure. PHP is unavailable locally for a post-integration rerun.
+- The original PR also refreshed three stale peso-symbol expectations; current main already asserts through `CurrencyDisplayService`. Pint and PHP syntax checks passed on the original feature head; the integrated diff passes `git diff --check`.
+- If no eligible AR reviewer exists, the system still sends no notice or audit. Central empty-recipient fallback remains open; no generic administrator fallback is used for finance data.
 
 
 ## Separate finding fix: F-24 approval-board total
