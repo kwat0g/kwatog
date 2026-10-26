@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft subject-access stack reaches Delivery in [PR #427](https://github.com/kwat0g/kwatog/pull/427), after the Purchase Request gate in #426. Earlier stack includes Purchase Orders in #424 and separate F-41 fix in #425. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft subject-access stack reaches Delivery in [PR #427](https://github.com/kwat0g/kwatog/pull/427), after the Purchase Request gate in #426. Separate [PR #428](https://github.com/kwat0g/kwatog/pull/428) fixes F-42 event classification on top of #427. Earlier stack includes Purchase Orders in #424 and separate F-41 fix in #425. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
 
 ## Phase status
 
@@ -41,6 +41,7 @@
 | Phase 3. Approval-backed subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | `2eb2b843`, `e855165e` |
 | Phase 3. Purchase Request subject access gate | `notifications/purchase-request-subject-access` | [#426](https://github.com/kwat0g/kwatog/pull/426) | `65e54054` |
 | Phase 3. Delivery subject access gate | `notifications/delivery-subject-access` | [#427](https://github.com/kwat0g/kwatog/pull/427) | `df71d2c5` |
+| F-42. Delivery source alert metadata | `fix/delivery-source-notification-type` | [#428](https://github.com/kwat0g/kwatog/pull/428) | `afb2e8a4` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -604,6 +605,11 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Searched all API delivery links and `entity_type` values. Migrated the internal delivery-draft, automatic-supply blocker, delivery-attempt, missing-arrival, and customer-email failure notifications (missing email, enqueue failure, queued mail failure). Existing recipients, event timing, and dedupe keys remain. The delivery-drafted notice now identifies Delivery as its subject because that is the record its link opens; prior rows remain renderable through their stored `link_to`.
 - `NotificationServiceSubjectAccessTest.php`: **17 passed / 114 assertions**. Focused delivery-draft, delivery-attempt, and email-failure tests: **4 passed / 20 assertions**. Automatic-supply reconciliation notice: **1 passed / 12 assertions**. PHP syntax and `git diff --check` pass. Pint reports seven legacy style issues in touched files; no broad formatting applied. Tests used and restored the temporary F-22 workaround.
 - The after-commit Delivery Trace notice has no dedicated recipient scenario test yet. PR checks were pending at this update. Full suite, browser/e2e, and complete role matrix remain open.
+
+## Separate finding fix: F-42 shipment source event classification (draft PR [#428](https://github.com/kwat0g/kwatog/pull/428))
+
+- Replaced the MRP planning event key on the invalid shipment-source hold with `delivery.source_review_required`; added the key to the preferences catalog and the SPA alert metadata. MRP run notifications retain `mrp_run_completed`.
+- `NotificationCatalogTest::test_every_emitted_notification_type_is_in_the_catalog` and the automatic-supply blocker scenario: **2 passed / 14 assertions**. SPA `notificationMeta.test.ts`: **16 passed**. `git diff --check` passes. The backend run used the temporary F-22 syntax workaround and restored `PdfRenderService.php` exactly. Draft PR #428 is separately based on the Delivery subject-access gate #427; PR checks pending.
 
 ## Outstanding proof / risks
 
