@@ -6,6 +6,8 @@ namespace App\Modules\DSS\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\SearchOperator;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\DSS\Enums\RecommendationEventType;
 use App\Modules\DSS\Models\DssRecommendation;
@@ -80,7 +82,14 @@ class RecommendationService
         }
         $query->orderBy('id', 'desc');
 
-        return $query->paginate((int) ($filters['per_page'] ?? 20), ['*'], 'page', (int) ($filters['page'] ?? 1));
+        $page = $query->paginate((int) ($filters['per_page'] ?? 20), ['*'], 'page', (int) ($filters['page'] ?? 1));
+        $page->setCollection(
+            $page->getCollection()->filter(
+                fn (DssRecommendation $rec): bool => $this->canSee($user, $rec->detector_id) && $this->audienceAllows($user, $rec)
+            )->values()
+        );
+
+        return $page;
     }
 
     public function summary(User $user, array $filters = []): array
@@ -237,37 +246,6 @@ class RecommendationService
         });
     }
 
-        if (! empty($filters['severity'])) {
-            $query->where('severity', $filters['severity']);
-        }
-
-        if (! empty($filters['domain'])) {
-            $query->where('domain', $filters['domain']);
-        }
-
-        if (! empty($filters['detector_id'])) {
-            $query->where('detector_id', $filters['detector_id']);
-        }
-
-        // Newest and highest-priority first; severity rank applied in PHP would
-        // break pagination, so priority_score (which already embeds severity)
-        // is the single sort key.
-        $query->orderByDesc('priority_score')->orderByDesc('id');
-
-        $perPage = min((int) ($filters['per_page'] ?? 20), 100);
-        $page = $query->paginate($perPage);
-
-        // Detector scoping in PHP: owner-permission sets are per-detector, not
-        // per-row, so SQL cannot express "user holds ≥1 of this set" without a
-        // join against the permission graph. Pages are small (≤100); filter
-        // the collection and keep the paginator shape.
-        $page->setCollection(
-            $page->getCollection()->filter(
-                fn (DssRecommendation $rec): bool => $this->canSee($user, $rec->detector_id) && $this->audienceAllows($user, $rec)
-            )->values()
-        );
-    }
-
     public function expireForPause(?string $detectorId = null): int
     {
         $query = DssRecommendation::query();
@@ -365,22 +343,7 @@ class RecommendationService
 
             $this->assertVisible($user, $recommendation);
 
-            if (in_array($recommendation->status, ['open', 'in_progress', 'snoozed'], true)
-                && $recommendation->expires_at !== null
-                && $recommendation->expires_at->lte(now())) {
-                $from = $recommendation->status;
-                $recommendation->status = 'expired';
-                $recommendation->save();
-                $this->recordEvent(
-                    $recommendation,
-                    RecommendationEventType::Expired,
-                    $from,
-                    'expired',
-                    null,
-                    'Recommendation validity window ended.',
-                    ['source' => 'lazy_expiry'],
-                );
-
+            if ($this->expireIfPast($recommendation)) {
                 return ['recommendation' => $recommendation, 'expired' => true];
             }
 
@@ -434,6 +397,45 @@ class RecommendationService
             || ! $this->audienceAllows($user, $recommendation)) {
             abort(403, 'You do not have access to this recommendation.');
         }
+    }
+
+    private function detectorIsActive(string $detectorId): bool
+    {
+        return $this->params->detectorEnabled($detectorId)
+            && $this->params->detectorMode($detectorId) === 'advisory';
+    }
+
+    /** @return list<string> */
+    private function userRoleSlugs(User $user): array
+    {
+        return array_values(array_unique(array_filter(
+            array_merge([$user->role?->slug], ApprovalDelegation::actsForRoles($user->id, now())),
+            static fn ($slug): bool => is_string($slug) && $slug !== '',
+        )));
+    }
+
+    private function expireIfPast(DssRecommendation $recommendation): bool
+    {
+        if (! in_array($recommendation->status, ['open', 'in_progress', 'snoozed'], true)
+            || $recommendation->expires_at === null
+            || ! $recommendation->expires_at->lte(now())) {
+            return false;
+        }
+
+        $from = $recommendation->status;
+        $recommendation->status = 'expired';
+        $recommendation->save();
+        $this->recordEvent(
+            $recommendation,
+            RecommendationEventType::Expired,
+            $from,
+            'expired',
+            null,
+            'Recommendation validity window ended.',
+            ['source' => 'lazy_expiry'],
+        );
+
+        return true;
     }
 
     /**

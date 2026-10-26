@@ -76,7 +76,7 @@ export default function InvoiceFormPage() {
  const vatConfigured = policies?.vat_status === 'VAT Registered' && policies.vat_rate !== null;
  const vatRateLabel = vatConfigured ? `${(Number(policies.vat_rate) * 100).toLocaleString()}%` : '—';
 
- const form = useForm<FormValues>({
+ const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  customer_id: presetCustomer, date: localIsoDate(),

@@ -8,6 +8,7 @@ use App\Common\Services\ChainBottleneckService;
 use App\Common\Services\SettingsService;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 
 /**
  * D26 — stuck documents. Reuses ChainBottleneckService (the chain widget's
@@ -57,7 +58,7 @@ class StuckDocumentDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $criticalMultiple = max(1, (int) ($context['critical_multiple'] ?? $this->defaultParams()['critical_multiple']));
         $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_key']));
@@ -65,8 +66,10 @@ class StuckDocumentDetector implements DetectorInterface
         $resultLimit = $this->settings->get('dashboard.chain_bottlenecks.result_limit', 50);
 
         $emissions = [];
+        $rowsScanned = 0;
 
         foreach ($this->bottlenecks->detectAll() as $key => $rows) {
+            $rowsScanned += count($rows);
             if ($rows === []) {
                 continue;
             }
@@ -107,6 +110,6 @@ class StuckDocumentDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $rowsScanned);
     }
 }

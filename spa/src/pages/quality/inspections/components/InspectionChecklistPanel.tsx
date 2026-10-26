@@ -438,7 +438,7 @@ function LegacyInspectionChecklistPanel({ inspection, canManage }: Props) {
                 className="min-h-11"
                 onChange={(event) => setNeedsAttention(event.target.checked)}
               />
-              <Button type="button" size="touch" onClick={passAllRemaining} disabled={save.isPending || saveMeasurements.isPending}>
+              <Button type="button" variant="primary" size="touch" onClick={passAllRemaining} disabled={save.isPending || saveMeasurements.isPending}>
                 PASS all remaining
               </Button>
             </div>

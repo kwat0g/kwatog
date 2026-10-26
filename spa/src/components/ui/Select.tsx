@@ -30,8 +30,8 @@ const shellSize: Record<FieldSize, string> = {
 
 const textSize: Record<FieldSize, string> = {
   sm: 'pl-2 pr-7 text-xs',
-  md: 'pl-3 pr-8 text-sm',
-  lg: 'pl-3 pr-8 text-base',
+  md: 'pl-3 pr-8 text-md',
+  lg: 'pl-3 pr-8 text-md',
   xl: 'pl-4 pr-9 text-xl',
 };
 
@@ -219,7 +219,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
         {label && (
-          <label htmlFor={selectId} className="text-xs text-muted font-medium">
+          <label htmlFor={selectId} className="text-label text-muted font-medium">
             {label}
             {required && (
               <span aria-hidden="true" className="text-danger-fg ml-0.5">
@@ -229,6 +229,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </label>
         )}
         <div
+          data-touch-target
           className={cn(
             'relative flex items-stretch rounded-md border bg-elevated overflow-hidden transition-colors duration-fast',
             'hover:border-strong hover:bg-canvas',
@@ -263,12 +264,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </span>
         </div>
         {error && (
-          <span id={`${selectId}-error`} role="alert" className="text-xs text-danger-fg">
+          <span id={`${selectId}-error`} role="alert" className="text-caption text-danger-fg">
             {error}
           </span>
         )}
         {helper && !error ? (
-          <span id={`${selectId}-helper`} className="text-xs text-muted">
+          <span id={`${selectId}-helper`} className="text-caption text-muted">
             {helper}
           </span>
         ) : null}

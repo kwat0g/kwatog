@@ -1,5 +1,5 @@
 import { LuTriangleAlert, LuCircleCheck, LuShieldAlert, LuWrench } from '@/lib/icons';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { formatInt } from '@/lib/formatNumber';
 
@@ -128,9 +128,7 @@ export function MoldShotMeter({
         </div>
         <div className="bg-surface p-2 rounded-md border border-default/50">
           <span className="text-2xs text-muted block">Tooling Status</span>
-          <span className="font-mono font-medium capitalize text-primary">
-            {status ?? 'Active'}
-          </span>
+          <Chip variant={chipVariantForStatus(status ?? 'active')}>{status ?? 'Active'}</Chip>
         </div>
       </div>
 

@@ -77,7 +77,7 @@ export default function ApplicationTrackPage() {
             placeholder="RCT-XXXXXX"
             className="font-mono uppercase tracking-widest"
           />
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" variant="primary" disabled={mutation.isPending}>
             <LuSearch size={16} />
             {mutation.isPending ? 'Searching...' : 'Track'}
           </Button>

@@ -31,7 +31,7 @@ export default function CreateMaintenanceSchedulePage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { maintainable_type: '', maintainable_id: '', interval_type: '', estimated_duration_minutes: 60, is_active: true },
  });
