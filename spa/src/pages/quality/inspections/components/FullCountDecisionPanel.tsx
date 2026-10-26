@@ -85,7 +85,7 @@ export function FullCountDecisionPanel({ inspection, canManage }: { inspection: 
       </>}
       {good !== null && <p role="status" className="text-sm font-medium">{good.toLocaleString()} pieces eligible for acceptance</p>}
       {submit.isError && <p role="alert" className="text-sm text-danger-fg">{submit.error.response?.data?.message ?? 'Could not save inspection. Your input is retained.'}</p>}
-      <div className="flex justify-end border-t border-default pt-4"><Button type="submit" loading={submit.isPending} disabled={!ready || submit.isPending}>Submit inspection</Button></div>
+      <div className="flex justify-end border-t border-default pt-4"><Button type="submit" variant="primary" loading={submit.isPending} disabled={!ready || submit.isPending}>Submit inspection</Button></div>
     </form> : <div className="space-y-2 p-4 text-sm">
       {stale && <p role="alert">This inspection changed. Reload the page for the latest result.</p>}
       {current.sample_defect_count != null && <p>{current.sample_defect_count.toLocaleString()} defective · {(current.batch_quantity - current.sample_defect_count).toLocaleString()} good pieces</p>}

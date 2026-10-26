@@ -164,6 +164,7 @@ export default function CustomerPricingPage() {
               Accept terms
             </Button>
             <Button
+              variant="danger"
               disabled={decision.isPending}
               onClick={() => decision.mutate({ row: r, decision: 'reject' })}
             >

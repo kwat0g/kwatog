@@ -776,6 +776,7 @@ export function ChecklistDecisionPanel({
               </Button>
               <Button
                 type="submit"
+                variant="primary"
                 loading={save.isPending}
                 disabled={save.isPending || blockers.length > 0}
               >

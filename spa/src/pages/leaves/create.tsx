@@ -93,7 +93,7 @@ export default function CreateLeavePage() {
  const lookupFailed = lookups.some(query => query.isError);
  const lookupPending = lookups.some(query => query.isFetching);
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  employee_id: user?.employee?.id ?? '',

@@ -70,7 +70,7 @@ export default function CustomerInvoiceDetailPage() {
         backLabel="Invoices"
         actions={invoice ? (
           <div className="flex flex-wrap gap-2">
-          {invoice.can_submit_payment && <Button size="sm" onClick={() => setShowPayment(true)}>Submit payment</Button>}
+          {invoice.can_submit_payment && <Button variant="primary" size="sm" onClick={() => setShowPayment(true)}>Submit payment</Button>}
           <Button variant="secondary" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
             Download PDF
           </Button>

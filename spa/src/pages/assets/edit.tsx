@@ -70,7 +70,7 @@ export default function EditAssetPage() {
     [data?.acquisition_cost, data?.salvage_value],
   );
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof baseSchema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     values: data
       ? {

@@ -167,7 +167,7 @@ export default function CreateReturnRequestPage() {
     roleSlug !== 'customer_service_officer' || can('purchasing.po.create');
   const { id } = useParams<{ id: string }>();
   const editing = Boolean(id);
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       type: '',
