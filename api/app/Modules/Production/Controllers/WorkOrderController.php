@@ -62,7 +62,7 @@ class WorkOrderController
      *     security={{"sanctum":{}}},
      *
      *     @OA\Parameter(name="status[]", in="query", required=false, description="One or more statuses (a single status= value is also accepted)", @OA\Schema(type="array", @OA\Items(type="string", enum={"planned","confirmed","in_progress","paused","completed","closed","cancelled"}))),
-     *     @OA\Parameter(name="signal", in="query", required=false, description="Actionable work-order signal", @OA\Schema(type="string", enum={"overdue","due_soon"})),
+     *     @OA\Parameter(name="signal", in="query", required=false, description="Actionable work-order signal", @OA\Schema(type="string", enum={"overdue","due_soon","paused"})),
      *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
      *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=15)),
      *
@@ -73,7 +73,7 @@ class WorkOrderController
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        $request->validate(['signal' => ['nullable', 'in:overdue,due_soon']]);
+        $request->validate(['signal' => ['nullable', 'in:overdue,due_soon,paused']]);
 
         return WorkOrderResource::collection($this->service->list($request->query()));
     }

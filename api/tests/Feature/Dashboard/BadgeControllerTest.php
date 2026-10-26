@@ -255,6 +255,44 @@ class BadgeControllerTest extends TestCase
         }
     }
 
+    public function test_production_paused_badge_matches_filtered_list_and_requires_lifecycle_permission(): void
+    {
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+        ]);
+        $this->assertTrue($user->hasPermission('production.work_orders.lifecycle'));
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create(['status' => $status->value]);
+        }
+        WorkOrder::factory()->create(['status' => WorkOrderStatus::Paused->value])->delete();
+
+        $listResponse = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=paused')
+            ->assertOk();
+        $badges = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $listResponse->json('meta.total'));
+        $this->assertSame($listResponse->json('meta.total'), $badges['work_orders_paused']['count']);
+
+        $planner = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
+        ]);
+        $this->assertTrue($planner->hasPermission('production.work_orders.view'));
+        $this->assertFalse($planner->hasPermission('production.work_orders.lifecycle'));
+        $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=paused')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $plannerBadges = $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_paused', $plannerBadges);
+    }
+
     public function test_widened_scope_badges_are_permission_gated(): void
     {
         $employee = Role::where('slug', 'employee')->firstOrFail();
