@@ -327,7 +327,8 @@ export const SECTIONS: NavSection[] = [
         label: 'Production Work Orders',
         icon: WorkOrderIcon,
         feature: 'production',
-        permission: 'production.work_orders.view',
+        permission: 'production.view',
+        anyPermissions: ['production.work_orders.view'],
         badgeKeys: ['work_orders_awaiting_confirmation', 'work_orders', 'work_orders_due_soon', 'work_orders_paused'],
       },
       {

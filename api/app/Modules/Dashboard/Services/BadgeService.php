@@ -413,12 +413,14 @@ class BadgeService
             ],
             'work_orders' => [
                 'permissions' => ['production.work_orders.view'],
+                'required_permissions' => ['production.view'],
                 'label'       => 'Overdue',
                 'description' => 'Overdue production work orders',
                 'counter'     => fn (): int => WorkOrder::query()->overdue()->count(),
             ],
             'work_orders_due_soon' => [
                 'permissions' => ['production.work_orders.view'],
+                'required_permissions' => ['production.view'],
                 'label'       => 'Due soon',
                 'description' => 'Production work orders due within the configured window',
                 'counter'     => fn (): int => WorkOrder::query()->dueSoon(
