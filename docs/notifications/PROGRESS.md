@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft subject-access stack reaches Inventory in [PR #429](https://github.com/kwat0g/kwatog/pull/429), based on the Delivery gate #427 and separate F-42 event-classification fix #428. Earlier stack includes Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. API CI remains blocked by inherited F-22; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft subject-access stack reaches Inventory cost reviews in [PR #430](https://github.com/kwat0g/kwatog/pull/430), after item/GRN gates in #429 and the Delivery gate #427. Separate F-42 event-classification fix #428 precedes #429. Earlier stack includes Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. API CI remains blocked by inherited F-22; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
 
 ## Phase status
 
@@ -43,6 +43,7 @@
 | Phase 3. Delivery subject access gate | `notifications/delivery-subject-access` | [#427](https://github.com/kwat0g/kwatog/pull/427) | `df71d2c5` |
 | F-42. Delivery source alert metadata | `fix/delivery-source-notification-type` | [#428](https://github.com/kwat0g/kwatog/pull/428) | `afb2e8a4` |
 | Phase 3. Inventory item and GRN subject access gate | `notifications/inventory-subject-access` | [#429](https://github.com/kwat0g/kwatog/pull/429) | `ee1ccd26` |
+| F-43. Cost-review actor exclusion and subject access | `notifications/item-cost-review-subject-access` | [#430](https://github.com/kwat0g/kwatog/pull/430) | `8a3292f6` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -618,6 +619,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Migrated the low-stock notice and automatic-replenishment blocker to their Item subjects, and the goods-received notice to its GRN subject. Existing recipient selectors, event timing, links, dedupe keys, and channel choices remain; the existing in-app-only blocker explicitly keeps email disabled.
 - `NotificationServiceSubjectAccessTest.php`, GRN, low-stock, and automatic-replenishment tests: **34 passed / 158 assertions**, including permission-denial and module-disabled coverage. `git diff --check` passes. Pint reports one existing brace-style issue in `NotifyOnLowStockPrCreated.php`; no broad formatting applied. Tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly.
 - Inventory cost-review notices remain outside this item/GRN slice; their actor self-notice is tracked separately as F-43. PR #429 CI, browser/e2e, and the full role matrix remain open.
+
+## Separate finding fix: F-43 cost-review actor exclusion (draft PR #430)
+
+- Registered `ItemCostReview` under the Inventory feature flag and `inventory.costs.review` list permission. Both cost-review event paths now use `sendForSubject()`; decision outcomes exclude the acting approver and remain visible to other authorized active reviewers.
+- `NotificationServiceSubjectAccessTest.php` and `ItemCostReviewTest.php`: **19 passed / 133 assertions**, including actor-negative and other-reviewer-positive outcomes. Pint passes all four touched PHP files; `git diff --check` passes. Tests used and restored the temporary F-22 workaround.
+- A broader pricing-review run exposes two existing failures on the unchanged #429 base: one test calls `ProductService::update()` with price fields prohibited by the API request (the supported route uses `updateSellingPrices()`), and one expects all permission holders while the source filters to Sales, Customer Service, and system-admin roles. Recipient-policy/test reconciliation remains open; no unrelated production behavior changed here.
+- Exact cost-review click-through remains separate F-44. PR #430 checks and full suite remain open.
 
 ## Outstanding proof / risks
 
