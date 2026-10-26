@@ -216,6 +216,10 @@
     font-weight: 600;
   }
 
+  .data-table-column-resizer {
+    touch-action: none;
+  }
+
   .table-scroll-frame[data-more-left='true']::before {
     content: '‹';
     left: 1px;
