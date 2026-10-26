@@ -8,8 +8,11 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Common\Support\ApprovalTypeRegistry;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -83,12 +86,14 @@ class ApprovalEscalationService
                     }
 
                     $hours = (int) abs(now()->diffInHours($rec->created_at));
-                    $this->notifications->send($approver, 'approval_reminder', [
-                        'title' => 'Approval Reminder',
-                        'message' => "Approval pending for {$hours}h on "
-                                     .class_basename((string) $rec->approvable_type).'.',
-                        'link_to' => $this->linkFor($rec),
-                    ], $this->notificationKey($rec, 'reminder'));
+                    $this->sendSubjectNotification(
+                        $rec,
+                        $approver,
+                        'approval_reminder',
+                        'Review overdue approval',
+                        "This approval has been pending for {$hours}h. Open the record to review it.",
+                        $this->notificationKey($rec, 'reminder'),
+                    );
                     $rec->update(['reminder_sent_at' => now()]);
                     $count++;
                 } catch (\Throwable $e) {
@@ -134,12 +139,14 @@ class ApprovalEscalationService
                         continue;
                     }
 
-                    $this->notifications->send($recipients, 'approval_escalation', [
-                        'title' => 'Approval Escalation',
-                        'message' => "Escalation: approval pending {$hours}h on "
-                                     .class_basename((string) $rec->approvable_type).'.',
-                        'link_to' => $this->linkFor($rec),
-                    ], $this->notificationKey($rec, 'escalation'));
+                    $this->sendSubjectNotification(
+                        $rec,
+                        $recipients,
+                        'approval_escalation',
+                        'Review escalated approval',
+                        "This approval has been pending for {$hours}h. Open the record to act.",
+                        $this->notificationKey($rec, 'escalation'),
+                    );
 
                     $rec->update([
                         'escalated_at' => now(),
@@ -310,13 +317,14 @@ class ApprovalEscalationService
             $hours = (int) abs(now()->diffInHours($rec->created_at));
 
             $recipients = collect([$approver, $superior])->filter()->unique('id');
-            $this->notifications->send($recipients, 'approval_escalation', [
-                'title' => 'Approval SLA Escalation',
-                'message' => "SLA escalation: approval still pending {$hours}h on "
-                             .class_basename((string) $rec->approvable_type)
-                             .'. Routed to superior for action.',
-                'link_to' => $this->linkFor($rec),
-            ], $this->notificationKey($rec, 'auto-escalation').':'.(string) $rec->escalated_at);
+            $this->sendSubjectNotification(
+                $rec,
+                $recipients,
+                'approval_escalation',
+                'Review SLA escalation',
+                "This approval is still pending after {$hours}h. It has been escalated for action.",
+                $this->notificationKey($rec, 'auto-escalation').':'.(string) $rec->escalated_at,
+            );
 
             $rec->update([
                 'escalated_at' => now(),
@@ -376,6 +384,26 @@ class ApprovalEscalationService
         $parentHashId = $approvable?->{$parentRelation}?->hash_id;
 
         return ApprovalTypeRegistry::linkFor((string) $rec->approvable_type, $hashId, $parentHashId);
+    }
+
+    private function sendSubjectNotification(
+        ApprovalRecord $record,
+        User|Collection $recipients,
+        string $type,
+        string $title,
+        string $message,
+        string $dedupeKey,
+    ): void {
+        $subject = $record->approvable;
+        if (! $subject instanceof Model || ! NotificationSubjectAccessRegistry::supports($subject->getMorphClass())) {
+            throw new BusinessRuleException('Approval reminder subject is missing or has no access rule.');
+        }
+
+        $this->notifications->sendForSubject($subject, $recipients, $type, [
+            'title' => $title,
+            'message' => $message,
+            'link_to' => $this->linkFor($record),
+        ], $dedupeKey);
     }
 
     private function notificationKey(ApprovalRecord $rec, string $kind): string

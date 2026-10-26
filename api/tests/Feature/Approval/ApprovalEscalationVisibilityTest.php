@@ -25,6 +25,7 @@ class ApprovalEscalationVisibilityTest extends TestCase
     {
         $this->seed(RolePermissionSeeder::class);
         app(SettingsService::class)->set('approvals.reminder_hours', 1, 'approval');
+        app(SettingsService::class)->set('modules.return_management', true, 'modules');
         Cache::forget('settings:approvals.reminder_hours');
 
         $roleId = Role::query()->where('slug', 'department_head')->value('id');
@@ -67,5 +68,18 @@ class ApprovalEscalationVisibilityTest extends TestCase
             'notifiable_id' => $hidden->id,
             'type' => 'approval_reminder',
         ]);
+
+        $notification = DB::table('notifications')
+            ->where('notifiable_id', $visible->id)
+            ->where('type', 'approval_reminder')
+            ->firstOrFail();
+        $data = json_decode($notification->data, true);
+        $this->assertSame(ReturnRequest::class, $data['subject_type']);
+        $this->assertSame((string) $rma->id, $data['subject_id']);
+        $this->assertSame("/return-management/{$rma->hash_id}", $data['link_to']);
+        $this->assertStringNotContainsString('ReturnRequest', $data['message']);
+        $this->actingAs($visible)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk();
     }
 }
