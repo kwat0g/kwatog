@@ -6,6 +6,7 @@ namespace Tests\Feature\Quality;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -299,6 +300,7 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
 
     public function test_delivery_draft_notice_uses_exact_delivery_and_effective_view_permission(): void
     {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
         [$wo, $inspection] = $this->arrange(unitPrice: '75.00');
         $warehouseRole = Role::query()->where('slug', 'warehouse_staff')->firstOrFail();
         $allowed = User::factory()->create(['role_id' => $warehouseRole->id, 'is_active' => true]);
@@ -318,6 +320,9 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
         $delivery = Delivery::query()->where('sales_order_id', $wo->sales_order_id)->firstOrFail();
         $notice = $allowed->notifications()->where('type', 'chain.delivery_drafted')->firstOrFail();
         $this->assertSame("/supply-chain/deliveries/{$delivery->hash_id}", $notice->data['link_to']);
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame($delivery->hash_id, $notice->data['entity_id']);
         $this->assertSame(0, $revoked->notifications()->where('type', 'chain.delivery_drafted')->count());
         $this->actingAs($allowed)->getJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id)->assertOk();
         $this->actingAs($revoked)->getJson('/api/v1/supply-chain/deliveries/'.$delivery->hash_id)->assertForbidden();

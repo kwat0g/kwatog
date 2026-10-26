@@ -24,6 +24,7 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -31,7 +32,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -62,6 +63,9 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('purchasing.view')
                 && $subject instanceof PurchaseRequest
                 && app(PurchaseRequestAccessPolicy::class)->canView($user, $subject),
+            Delivery::class => app(SettingsService::class)->get('modules.supply_chain', false) === true
+                && ($user->hasPermission('supply_chain.view') || $user->hasPermission('supply_chain.deliveries.view'))
+                && $subject instanceof Delivery,
             PurchaseOrder::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && ($user->hasPermission('purchasing.view') || $user->hasPermission('purchasing.po.approve'))
                 && $subject instanceof PurchaseOrder

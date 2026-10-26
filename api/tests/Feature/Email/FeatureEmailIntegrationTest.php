@@ -209,6 +209,54 @@ class FeatureEmailIntegrationTest extends TestCase
         });
     }
 
+    public function test_missing_customer_delivery_email_fallback_carries_delivery_subject(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        $operator = User::factory()->withRole('system_admin')->create();
+        $customer = Customer::factory()->create(['email' => null]);
+        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id, 'created_by' => $operator->id]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DR-FALLBACK-001',
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'confirmed',
+            'scheduled_date' => today(),
+            'created_by' => $operator->id,
+        ]);
+
+        app(EmailCustomerOnDeliveryConfirmed::class)->handle(new DeliveryConfirmed($delivery, null));
+
+        Mail::assertNothingQueued();
+        $notice = $operator->notifications()->where('type', 'email.delivery_failed')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+    }
+
+    public function test_queued_customer_delivery_email_failure_fallback_carries_delivery_subject(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        $operator = User::factory()->withRole('system_admin')->create();
+        $withoutView = User::factory()->create();
+        $customer = Customer::factory()->create();
+        $salesOrder = SalesOrder::factory()->create(['customer_id' => $customer->id, 'created_by' => $operator->id]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DR-QUEUE-FAIL-001',
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'confirmed',
+            'scheduled_date' => today(),
+            'created_by' => $operator->id,
+        ]);
+
+        (new CustomerDeliveryConfirmedMail($delivery, null, [$operator->id, $withoutView->id]))
+            ->failed(new \RuntimeException('Mail transport failed.'));
+
+        $notice = $operator->notifications()->where('type', 'email.delivery_failed')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+        $this->assertSame(0, $withoutView->notifications()->where('type', 'email.delivery_failed')->count());
+    }
+
     public function test_customer_delivery_email_uses_confirmation_time_values_after_outbox_replay(): void
     {
         $this->seed(SettingsSeeder::class);
