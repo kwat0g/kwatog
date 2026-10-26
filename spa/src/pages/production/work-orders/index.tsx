@@ -270,7 +270,7 @@ export default function WorkOrdersListPage() {
 
   const filterConfig: FilterConfig[] = [
     { key: 'signal', label: 'Signal', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'overdue', label: 'Overdue' },
+      { value: '', label: 'All' }, { value: 'overdue', label: 'Overdue' }, { value: 'due_soon', label: 'Due soon' },
     ] },
     { key: 'production_purpose', label: 'Purpose', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'stock', label: 'For stock' }, { value: 'order', label: 'Sales Order' }, { value: 'internal', label: 'Internal' },

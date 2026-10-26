@@ -92,6 +92,18 @@ class WorkOrderListFilterTest extends TestCase
         $response->assertStatus(422)->assertJsonValidationErrors('signal');
     }
 
+    public function test_due_soon_signal_accepts_the_registered_filter(): void
+    {
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Planned->value,
+            'planned_end' => now()->addDay(),
+        ]);
+
+        $this->actingAs($this->user)->getJson('/api/v1/production/work-orders?signal=due_soon')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+    }
+
     public function test_no_status_filter_returns_all_rows(): void
     {
         WorkOrder::factory()->count(3)->create();

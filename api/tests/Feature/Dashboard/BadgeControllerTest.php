@@ -41,6 +41,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use Carbon\Carbon;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -187,6 +188,71 @@ class BadgeControllerTest extends TestCase
             ->assertOk()
             ->json('data');
         $this->assertArrayNotHasKey('work_orders', $employeeBadges);
+    }
+
+    public function test_production_due_soon_badge_matches_filtered_list_for_active_statuses_and_window_edges(): void
+    {
+        $this->seed(SettingsSeeder::class);
+        $timezone = config('app.timezone');
+        config(['app.timezone' => 'Asia/Manila']);
+        Carbon::setTestNow(Carbon::parse('2026-10-26 09:00:00', 'Asia/Manila'));
+
+        try {
+            $user = User::factory()->create([
+                'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+            ]);
+
+            foreach (WorkOrderStatus::cases() as $status) {
+                WorkOrder::factory()->create([
+                    'status' => $status->value,
+                    'planned_end' => now()->copy()->startOfDay()->addDays(3)->endOfDay(),
+                ]);
+            }
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::InProgress->value,
+                'planned_end' => now(),
+            ]);
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::InProgress->value,
+                'planned_end' => now()->copy()->startOfDay()->addDays(4),
+            ]);
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::Confirmed->value,
+                'planned_end' => now()->subSecond(),
+            ]);
+            WorkOrder::factory()->create([
+                'status' => WorkOrderStatus::Planned->value,
+                'planned_end' => now()->addDay(),
+            ])->delete();
+
+            $listResponse = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/production/work-orders?signal=due_soon')
+                ->assertOk();
+            $badges = $this->actingAs($user, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data');
+
+            $this->assertSame(5, $listResponse->json('meta.total'));
+            $this->assertSame(5, $badges['work_orders_due_soon']['count']);
+            $this->assertSame(['confirmed', 'in_progress', 'in_progress', 'paused', 'planned'], collect($listResponse->json('data'))
+                ->pluck('status')->sort()->values()->all());
+
+            $employee = User::factory()->create([
+                'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+            ]);
+            $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/production/work-orders?signal=due_soon')
+                ->assertForbidden();
+            $employeeBadges = $this->actingAs($employee, 'sanctum')
+                ->getJson('/api/v1/dashboards/badges')
+                ->assertOk()
+                ->json('data');
+            $this->assertArrayNotHasKey('work_orders_due_soon', $employeeBadges);
+        } finally {
+            Carbon::setTestNow();
+            config(['app.timezone' => $timezone]);
+        }
     }
 
     public function test_widened_scope_badges_are_permission_gated(): void

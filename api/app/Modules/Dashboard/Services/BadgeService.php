@@ -86,6 +86,7 @@ class BadgeService
         'training_upcoming' => 'hr',
         'open_postings' => 'recruitment',
         'work_orders' => 'production',
+        'work_orders_due_soon' => 'production',
         'deliveries' => 'supply_chain',
         'pending_so' => 'crm',
         'inquiries' => 'crm',
@@ -397,6 +398,14 @@ class BadgeService
                 'label'       => 'Overdue',
                 'description' => 'Overdue production work orders',
                 'counter'     => fn (): int => WorkOrder::query()->overdue()->count(),
+            ],
+            'work_orders_due_soon' => [
+                'permissions' => ['production.work_orders.view'],
+                'label'       => 'Due soon',
+                'description' => 'Production work orders due within the configured window',
+                'counter'     => fn (): int => WorkOrder::query()->dueSoon(
+                    (int) $this->settings->get('production.work_orders.due_soon_days', 3),
+                )->count(),
             ],
 
             // Supply chain > Deliveries in transit needing an update.
