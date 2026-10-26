@@ -57,6 +57,10 @@ export default function ComplaintsListPage() {
  ];
 
  const filterConfig: FilterConfig[] = [
+ { key: 'signal', label: 'Queue', type: 'select', options: [
+ { value: '', label: 'All complaints' },
+ { value: 'open', label: 'Assigned open complaints' },
+ ]},
  { key: 'status', label: 'Status', type: 'select', options: [
  { value: '', label: 'All' },
  ...(complaintOptions?.statuses ?? []),
@@ -71,7 +75,7 @@ export default function ComplaintsListPage() {
  <div>
  <PageHeader
  title="Customer complaints"
- subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'complaint' : 'complaints'}` : undefined}
+ subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'complaint' : 'complaints'}${filters.signal === 'open' ? ' · My open and investigating complaints' : ''}` : undefined}
  actions={can('crm.complaints.manage') ? (
  <Button variant="primary" size="sm" icon={<LuPlus size={14} />}
  onClick={() => navigate('/crm/complaints/new')}>

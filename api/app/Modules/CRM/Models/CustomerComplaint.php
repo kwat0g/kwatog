@@ -93,4 +93,10 @@ class CustomerComplaint extends Model
     {
         return $q->where('status', $status);
     }
+
+    public function scopeOpenAssignedTo(Builder $query, int $userId): Builder
+    {
+        return $query->whereIn('status', [ComplaintStatus::Open->value, ComplaintStatus::Investigating->value])
+            ->where('assigned_to', $userId);
+    }
 }

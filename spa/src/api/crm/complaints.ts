@@ -3,6 +3,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { CustomerComplaint, CreateComplaintData, ComplaintSeverity, ComplaintStatus } from '@/types/crm';
 
 export interface ComplaintListParams extends ListParams {
+ signal?: '' | 'open';
  status?: ComplaintStatus;
  severity?: ComplaintSeverity;
  customer_id?: string;

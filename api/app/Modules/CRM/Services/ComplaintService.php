@@ -65,7 +65,7 @@ class ComplaintService
         private readonly SettingsService $settings,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?int $viewerId = null): LengthAwarePaginator
     {
         $q = CustomerComplaint::query()->with([
             'customer:id,name',
@@ -77,6 +77,7 @@ class ComplaintService
         ]);
 
         foreach (['status', 'severity'] as $f) if (! empty($filters[$f])) $q->where($f, $filters[$f]);
+        if (($filters['signal'] ?? null) === 'open') $q->openAssignedTo($viewerId ?? 0);
         if (! empty($filters['customer_id'])) $q->where('customer_id', (int) $filters['customer_id']);
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';

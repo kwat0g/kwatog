@@ -110,6 +110,28 @@ it('opens the to-inspect queue when inspections has a positive badge', () => {
   );
 });
 
+it('opens the assigned complaint queue when complaints has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'open_complaints'
+      ? {
+          count: 1,
+          severity: 'warning',
+          label: 'Complaints',
+          description: 'Open complaints assigned to you',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/crm/complaints']}>
+      <Sidebar roleSlug="customer_service_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Customer Complaints/ })).toHaveAttribute(
+    'href',
+    '/crm/complaints?signal=open',
+  );
+});
+
 
 it('keeps the narrow-screen sidebar rail collapsed while restoring expand all separately', () => {
   vi.stubGlobal('innerWidth', 1024);
