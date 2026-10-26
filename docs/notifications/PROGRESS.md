@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft subject-access stack reaches Purchase Orders in [PR #424](https://github.com/kwat0g/kwatog/pull/424). Separate finding F-41 fixes the supplier cancellation email's rendered contact text. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft subject-access stack reaches Purchase Orders in [PR #424](https://github.com/kwat0g/kwatog/pull/424). Separate finding F-41 is fixed in [PR #425](https://github.com/kwat0g/kwatog/pull/425). API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
 
 ## Phase status
 
@@ -582,7 +582,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The full cancellation-mail test class had one existing snapshot-render assertion failure: it expects `&lt;img ... &gt;`, while Markdown renders the `>` escape as `&amp;gt;`. Re-running against the parent version of the mailable reproduces the same failure; the HTML contains text, not an active tag. This unrelated email-copy/test mismatch stays outside this unit.
 - PHP syntax and `git diff --check` pass; Pint reports existing style debt in legacy touched files. Tests use the temporary F-22 workaround and restore `PdfRenderService.php` exactly. Full API CI, full suite, browser/e2e, and complete role matrix remain open.
 
-## Separate finding fix: F-41 supplier cancellation email text (branch `notifications/fix-cancelled-po-mail-markdown`; PR pending)
+## Separate finding fix: F-41 supplier cancellation email text (draft PR [#425](https://github.com/kwat0g/kwatog/pull/425))
 
 - `SupplierPurchaseOrderCancelledMail::safeMarkdownText()` no longer backslash-escapes `>`; Laravel Markdown now renders a supplier contact such as `Original <img ...>` as inert text with both angle brackets encoded consistently.
 - This corrects the existing snapshot-render test failure reproduced on parent #423. The focused test now passes **1 / 18 assertions**; the full `SupplierPurchaseOrderCancelledNotificationTest.php` class passes **5 / 22 assertions**. No notification audience, link, event, or email recipient changed.
