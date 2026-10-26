@@ -56,7 +56,7 @@ class NotifyMissingTimeOut extends Command
         }
 
         $label = $yesterday->format('M j, Y');
-        $linkTo = '/hr/attendance?missing_time_out=1';
+        $linkTo = '/hr/attendance?missing_time_out=1&from='.$yesterday->toDateString().'&to='.$yesterday->toDateString();
         $failed = 0;
         $sent = 0;
 
