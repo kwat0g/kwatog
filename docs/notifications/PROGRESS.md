@@ -557,6 +557,21 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - F-40 is fixed in the separate draft [#422](https://github.com/kwat0g/kwatog/pull/422): staffing observer and start-reminder sweep now share a slot/crew/issue dedupe key. `WorkOrderScheduleReminderTest.php`: **6 passed / 56 assertions**, including canonical key, changed-slot, changed-crew, and changed-issue coverage. `ProductionAttendanceConnectionTest.php`: **9 passed / 35 assertions**. The original duplicate was reproduced on parent #420. An unchanged issue that clears and returns within one slot may remain deduped until notification lifecycle resolution ships.
 - PHP syntax and `git diff --check` pass. Pint passes all changed files except existing `fully_qualified_strict_types` debt in `AlertEngineService.php`; no broad formatting applied. Targeted tests used and restored the temporary F-22 workaround. API CI remains blocked before PHPUnit by F-22; browser/e2e and full role matrix remain open.
 
+## Separate finding fix: F-40 staffing notice dedupe (draft PR [#422](https://github.com/kwat0g/kwatog/pull/422))
+
+- `WorkOrderAssignmentService::staffingNoticeDedupeKey()` now builds a stable key from slot, crew, and a canonicalized issue set. The staffing observer and upcoming-work-order sweep share it, so one unresolved issue set does not create duplicate review notices.
+- `WorkOrderScheduleReminderTest.php`: **6 passed / 56 assertions**, including key order, slot, crew, and issue distinctions. `ProductionAttendanceConnectionTest.php`: **9 passed / 35 assertions**. PHP syntax, targeted Pint, and `git diff --check` pass; the temporary F-22 workaround was restored.
+- Limit: if an issue clears and returns unchanged within the same slot and crew, the persistent dedupe key may suppress the later cycle until notification lifecycle resolution is implemented.
+
+## Phase 3 Sales Order subject access gate (draft PR [#423](https://github.com/kwat0g/kwatog/pull/423))
+
+- Registered `SalesOrder` against its actual routes: the CRM feature must be enabled and the recipient must hold `crm.sales_orders.view`. The internal list/detail has no additional row scope; this matches the route group and `channels.php` rule.
+- Migrated the Sales Order delivery-risk, confirmation, portal-review, and customer-response notices through `sendForSubject()`. Recipient selection, event timing, messages, links, and prior email preference stay unchanged. Customer-portal notices remain on the exact-customer portal path.
+- Sales Order email-failure fallbacks now carry the SalesOrder model. `NotificationService` passes the subject into queued `UserNotificationMail` failure handling, which rechecks access before writing an in-app fallback if CRM access changed after queueing.
+- `NotificationServiceSubjectAccessTest.php`: **14 passed**, including denied/no-permission, CRM-disabled, and lost-access email fallback cases. `OutboxFactEventToleranceTest.php`: **12 passed**. `SalesOrderResponseTest.php`: **19 passed**. The delivery-risk recipient test passed (**1 / 3 assertions**), as did the internal portal-order notice test (**1 / 5 assertions**).
+- The six-class focused batch had **81 passes / 5 unrelated failures**. Four existing email assertions expect `PHP` while `CurrencyDisplayService` renders PHP as `₱`. One portal-catalog assertion expects no rows while the service returns a visible product with `pricing_issue`; its source and behavior are unchanged here. The specifically changed notification tests pass on rerun.
+- PHP syntax passes for all changed PHP files. Pint passes the registry, central service, Sales Order listener, and both changed subject-access tests. Broader Pint reports existing style debt in other touched files; no broad formatting applied. `git diff --check` passes. Test runs used and restored the temporary F-22 workaround. Full API CI, browser/e2e, and complete role matrix remain open.
+
 ## Outstanding proof / risks
 
 1. Payroll defaults are approved; exact payroll adjustment checker and HR/Finance sensitive audiences remain open business decisions. Review remaining HR/discipline, executive escalation, system-admin fanout, and portal contacts.
