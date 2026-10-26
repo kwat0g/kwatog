@@ -62,6 +62,14 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(overtime, { permissions: new Set(['attendance.view']) })).toBe(false);
   });
 
+  it('shows Leave Management only when the API read and workflow permissions both exist', () => {
+    const leaves = item('/hr/leaves');
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.approve_dept']) })).toBe(false);
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.view']) })).toBe(false);
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.view', 'leave.approve_dept']) })).toBe(true);
+    expect(isNavItemVisible(leaves, { permissions: new Set(['leave.view', 'leave.types.manage']) })).toBe(true);
+  });
+
   it('shows the budget approval queue to viewers and approvers only', () => {
     const budgets = item('/budgeting');
     expect(isNavItemVisible(budgets, { permissions: new Set(['budgeting.view']) })).toBe(true);
@@ -113,6 +121,7 @@ describe('role-aligned sidebar permissions', () => {
     const hr = {
       permissions: new Set([
         'attendance.edit',
+        'leave.view',
         'leave.approve_hr',
         'payroll.periods.view',
         'payroll.statutory.export',
@@ -236,7 +245,7 @@ describe('role-aligned sidebar permissions', () => {
 
   it('shows department approval pages without granting HR or payroll administration', () => {
     const departmentHead = {
-      permissions: new Set(['attendance.ot.approve', 'leave.approve_dept', 'payroll.view']),
+      permissions: new Set(['attendance.ot.approve', 'leave.view', 'leave.approve_dept', 'payroll.view']),
       features: allFeatures,
       roleSlug: 'department_head',
     };

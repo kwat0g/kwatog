@@ -47,6 +47,7 @@ export const leaveBalancesApi = {
 
 export interface LeaveListParams extends ListParams {
  employee_id?: string;
+ signal?: '' | 'awaiting_my_approval';
  status?: string;
  from?: string;
  to?: string;
