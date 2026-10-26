@@ -341,6 +341,15 @@ class RecruitmentApplicationTest extends TestCase
         $scheduled = new InterviewScheduledMail($this->application, $interview, [$this->hrUser->id]);
         $updated = new InterviewDetailsUpdatedMail($this->application, $interview, [$this->hrUser->id]);
 
+        foreach ([$scheduled, $updated] as $mail) {
+            $this->assertSame('Juan Test', $mail->applicantName);
+            $this->assertSame('Test Position', $mail->positionTitle);
+            $this->assertSame('November 2, 2026 9:30 AM', $mail->scheduledAt);
+            $this->assertSame('Cavite interview room', $mail->location);
+            $this->assertSame('Original Interviewer', $mail->interviewerName);
+            $this->assertSame('RCT-TEST01', $mail->trackingCode);
+        }
+
         $scheduled->failed(new \RuntimeException('Mail provider rejected message.'));
         $updated->failed(new \RuntimeException('Mail provider rejected message.'));
 

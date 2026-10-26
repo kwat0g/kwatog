@@ -880,6 +880,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Both callbacks now use the saved mail snapshot for candidate name and application link. `RecruitmentApplicationTest.php` selected case: **1 passed / 5 assertions**, covering both failure callbacks and exact links.
 - PHP syntax and `git diff --check` pass. Pint reports pre-existing formatting issues in these legacy files; no broad formatting was retained. Test used and restored the temporary F-22 syntax workaround. No broader recruitment email recipient migration included.
 
+## Separate finding fix: F-59 initialize interview mail snapshot properties
+
+- Both interview mail constructors now initialize their declared public fields and application hash from the saved email snapshot. Rendered email values remain based on that snapshot.
+- `RecruitmentApplicationTest.php --filter test_interview_email_failures_use_the_application_snapshot_for_fallback`: **1 passed / 17 assertions**. Directly checks the legacy mail fields and both failure fallbacks. The API-wide test file still has unrelated company-setting, after-commit, and rejection-copy failures noted under PR #466.
+- PHP syntax and `git diff --check` pass. Test used and restored the temporary F-22 workaround. Full suite remains open.
+
 ## Resume instruction
 
 Next: continue the remaining dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Keep units on separate branches/PRs; full suite, badge parity, role matrix, and visual QA remain incomplete.

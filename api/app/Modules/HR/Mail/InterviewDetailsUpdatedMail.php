@@ -39,6 +39,16 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
         $this->onQueue('mail');
         $this->afterCommit();
         $this->snapshot = self::snapshotForEmail($application, $interview);
+        $this->applicantName = $this->snapshot['applicant_name'];
+        $this->positionTitle = $this->snapshot['position_title'];
+        $this->scheduledAt = $this->snapshot['scheduled_at']
+            ? Carbon::parse($this->snapshot['scheduled_at'])->timezone(config('app.timezone'))->format('F j, Y g:i A')
+            : 'To be confirmed';
+        $this->location = (string) ($this->snapshot['location'] ?? 'To be confirmed');
+        $this->interviewerName = (string) ($this->snapshot['interviewer_name'] ?? 'To be confirmed');
+        $this->outcome = null;
+        $this->trackingCode = $this->snapshot['tracking_code'];
+        $this->applicationHashId = $this->snapshot['application_hash_id'];
     }
 
     public function envelope(): Envelope
