@@ -508,7 +508,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `NotificationServiceSubjectAccessTest`: **7 passed / 35 assertions**, including allowed budget viewer/distinct approver, denied submitter/same-role peer, and disabled Budgeting module. `BudgetConsumptionAndLifecycleTest.php` plus `BudgetTransferTest.php`: **21 passed / 118 assertions**. PHP syntax, Pint, and `git diff --check` pass. Test runs used the temporary F-22 workaround and restored the source exactly.
 - CI, browser/e2e, and full role matrix remain outstanding. No badge logic changed in this unit.
 
-## Separate finding fix: F-39 bill payment self-notice (draft PR pending)
+## Separate finding fix: F-39 bill payment self-notice (draft PR [#416](https://github.com/kwat0g/kwatog/pull/416))
 
 - `BillService::postApprovedPayment()` now excludes the posting actor from the payment-created notification while retaining a notice for a different active creator with bill-view access.
 - `BillServiceTest.php` self-post and separate-approver scenarios: **2 passed / 23 assertions**; requester still receives the notice when another user posts, approver does not. PHP syntax and `git diff --check` pass. Pint reports test-file style issues (`method_argument_space`, `fully_qualified_strict_types`); no broad formatting applied. The test run used and restored the F-22 workaround.
