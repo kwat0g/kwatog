@@ -78,7 +78,7 @@ class PrePayrollChecklistDetectorTest extends TestCase
 
     public function test_clean_slate_emits_nothing(): void
     {
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_emits_one_row_per_open_period_and_skips_resolved_and_locked(): void
@@ -103,7 +103,7 @@ class PrePayrollChecklistDetectorTest extends TestCase
         $this->flag($locked, $erin, 'zero_pay');
 
         $byKey = [];
-        foreach ($this->detector()->detect() as $emission) {
+        foreach ($this->detector()->detect()->emissions as $emission) {
             $byKey[$emission->dedupeKey] = $emission;
         }
 

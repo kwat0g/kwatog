@@ -6,6 +6,8 @@ namespace App\Modules\DSS\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Support\SearchOperator;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\DSS\Enums\RecommendationEventType;
 use App\Modules\DSS\Models\DssRecommendation;
@@ -341,22 +343,7 @@ class RecommendationService
 
             $this->assertVisible($user, $recommendation);
 
-            if (in_array($recommendation->status, ['open', 'in_progress', 'snoozed'], true)
-                && $recommendation->expires_at !== null
-                && $recommendation->expires_at->lte(now())) {
-                $from = $recommendation->status;
-                $recommendation->status = 'expired';
-                $recommendation->save();
-                $this->recordEvent(
-                    $recommendation,
-                    RecommendationEventType::Expired,
-                    $from,
-                    'expired',
-                    null,
-                    'Recommendation validity window ended.',
-                    ['source' => 'lazy_expiry'],
-                );
-
+            if ($this->expireIfPast($recommendation)) {
                 return ['recommendation' => $recommendation, 'expired' => true];
             }
 
@@ -410,6 +397,45 @@ class RecommendationService
             || ! $this->audienceAllows($user, $recommendation)) {
             abort(403, 'You do not have access to this recommendation.');
         }
+    }
+
+    private function detectorIsActive(string $detectorId): bool
+    {
+        return $this->params->detectorEnabled($detectorId)
+            && $this->params->detectorMode($detectorId) === 'advisory';
+    }
+
+    /** @return list<string> */
+    private function userRoleSlugs(User $user): array
+    {
+        return array_values(array_unique(array_filter(
+            array_merge([$user->role?->slug], ApprovalDelegation::actsForRoles($user->id, now())),
+            static fn ($slug): bool => is_string($slug) && $slug !== '',
+        )));
+    }
+
+    private function expireIfPast(DssRecommendation $recommendation): bool
+    {
+        if (! in_array($recommendation->status, ['open', 'in_progress', 'snoozed'], true)
+            || $recommendation->expires_at === null
+            || ! $recommendation->expires_at->lte(now())) {
+            return false;
+        }
+
+        $from = $recommendation->status;
+        $recommendation->status = 'expired';
+        $recommendation->save();
+        $this->recordEvent(
+            $recommendation,
+            RecommendationEventType::Expired,
+            $from,
+            'expired',
+            null,
+            'Recommendation validity window ended.',
+            ['source' => 'lazy_expiry'],
+        );
+
+        return true;
     }
 
     /**
