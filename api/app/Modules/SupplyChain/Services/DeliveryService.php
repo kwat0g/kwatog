@@ -468,7 +468,7 @@ class DeliveryService
                 if (! $this->isUntouchedAutomaticSupply($delivery)) {
                     $blockers[] = "ImpEx and Quality must review invalid source stock on {$delivery->delivery_number}.";
                     $audience = User::where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->whereIn('slug', ['mrp.plans.run', 'quality.inspections.review', 'supply_chain.deliveries.create']))->get();
-                    $this->notifications->sendForSubject($delivery, $audience, 'mrp_run_completed', [
+                    $this->notifications->sendForSubject($delivery, $audience, 'delivery.source_review_required', [
                         'title' => "Shipment source needs review: {$delivery->delivery_number}", 'message' => end($blockers),
                         'link_to' => "/supply-chain/deliveries/{$delivery->hash_id}", 'entity_type' => 'delivery', 'entity_id' => $delivery->hash_id,
                     ], 'invalid-shipment-source-'.$delivery->id.'-'.$delivery->updated_at->getTimestamp(), emailEnabled: false);

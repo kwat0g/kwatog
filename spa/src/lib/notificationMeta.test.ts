@@ -80,6 +80,13 @@ describe('notificationMeta', () => {
     expect(notificationMeta('delivery.delivered').label).toBe('Confirm receipt');
   });
 
+  it('classifies invalid shipment source notices as delivery alerts', () => {
+    expect(notificationMeta('delivery.source_review_required')).toMatchObject({
+      group: 'alerts',
+      label: 'Delivery',
+    });
+  });
+
   it('does not map types the backend catalog no longer contains', () => {
     const catalog = new Set(catalogKeys());
     const stale = KNOWN_NOTIFICATION_TYPES.filter((key) => !catalog.has(key));

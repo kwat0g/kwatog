@@ -99,6 +99,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
     label: 'Quality',
   },
   'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },
+  'delivery.source_review_required': { icon: LuTriangleAlert, group: 'alerts', label: 'Delivery' },
   'chain.delivery_confirmed': { icon: LuTruck, group: 'system', label: 'Logistics' },
   // A driver-reported delivery exception needs a physical depot count before
   // the return can be reconciled, so it is an alert rather than a status ping.
