@@ -2,10 +2,19 @@
 
 declare(strict_types=1);
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\ChainDefinitions;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
@@ -49,10 +58,9 @@ Broadcast::channel('user.{userId}', fn (User $user, string $userId): bool => $us
 // empty and each client refetches only the keys it has permission to see.
 Broadcast::channel('badges', fn (User $user): bool => true);
 
-/* Series C — Task C4. Chain progress (sales_order/work_order/purchase_order/
- * delivery/grn). One private channel per entity instance. Permission is
- * derived from the entity-type slug; Purchase Orders also check the row scope
- * used by their detail route. Hash IDs are passed verbatim by the SPA.
+/* Series C — Task C4. Chain progress. The channel follows the same module,
+ * permission, and row checks as the entity's detail route. Hash IDs are passed
+ * verbatim by the SPA.
  */
 Broadcast::channel(
     'chain.{entityType}.{hashId}',
@@ -61,18 +69,39 @@ Broadcast::channel(
             return false;
         }
 
-        if ($entityType === 'purchase_order') {
-            if (! $user->hasPermission('purchasing.view') && ! $user->hasPermission('purchasing.po.approve')) {
-                return false;
-            }
+        [$feature, $model, $permissionGroups] = match ($entityType) {
+            'sales_order' => ['crm', SalesOrder::class, [['crm.sales_orders.view']]],
+            'work_order' => ['production', WorkOrder::class, [['production.view', 'production.work_orders.view']]],
+            'purchase_request' => ['purchasing', PurchaseRequest::class, [['purchasing.view']]],
+            'purchase_order' => ['purchasing', PurchaseOrder::class, [['purchasing.view'], ['purchasing.po.approve']]],
+            'delivery' => ['supply_chain', Delivery::class, [['supply_chain.view'], ['supply_chain.deliveries.view']]],
+            'grn' => ['inventory', GoodsReceiptNote::class, [['inventory.view']]],
+            'bill' => ['accounting', Bill::class, [['accounting.bills.view']]],
+            'invoice' => ['accounting', Invoice::class, [['accounting.invoices.view']]],
+            default => [null, null, []],
+        };
 
-            $id = PurchaseOrder::tryDecodeHash($hashId);
-            $purchaseOrder = $id === null ? null : PurchaseOrder::query()->find($id);
-
-            return $purchaseOrder !== null
-                && app(PurchaseOrderAccessPolicy::class)->canView($user, $purchaseOrder);
+        if ($feature === null || ! app(SettingsService::class)->requiredBool("modules.{$feature}")) {
+            return false;
         }
 
-        return $user->hasPermission(ChainDefinitions::viewPermission($entityType));
+        $hasRoutePermission = collect($permissionGroups)->contains(
+            fn (array $group): bool => collect($group)->every(fn (string $permission): bool => $user->hasPermission($permission)),
+        );
+        if (! $hasRoutePermission) {
+            return false;
+        }
+
+        $id = $model::tryDecodeHash($hashId);
+        $record = $id === null ? null : $model::query()->find($id);
+        if ($record === null) {
+            return false;
+        }
+
+        return match ($entityType) {
+            'purchase_request' => app(PurchaseRequestAccessPolicy::class)->canView($user, $record),
+            'purchase_order' => app(PurchaseOrderAccessPolicy::class)->canView($user, $record),
+            default => true,
+        };
     }
 );

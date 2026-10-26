@@ -41,7 +41,7 @@
 | F-32. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | pending |
 | 1.1. Native dispatch boundary guard | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | pending |
 | F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | pending |
-| F-12. Purchase Order chain channel scope | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | pending |
+| F-12. Chain channel route authorization | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -377,11 +377,11 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Channel authorization remains permission-based and is not made record-specific in this unit. Payroll progress payload and audience are unchanged pending HR/Finance policy; F-12 remains open.
 - PR #398 API CI stops at the inherited F-22 duplicate-method syntax error; SPA CI stops at the existing `@vitest/mocker`, `undici`, and `zod` audit advisories. Accessibility, visual baseline, and finding-lifecycle checks pass.
 
-## Separate finding fix: F-12 Purchase Order chain channel scope (draft PR #399)
+## Separate finding fix: F-12 chain channel route authorization (draft PR #399)
 
-- The private Purchase Order chain channel now accepts the same `purchasing.view` or `purchasing.po.approve` route permissions as the detail endpoint, resolves the hashed Purchase Order ID, and checks `PurchaseOrderAccessPolicy::canView()`. Missing, deleted, or out-of-scope Purchase Orders are denied. Approval-only users retain access to the detail channel.
-- `BroadcastAuthorizationTest.php`: **6 passed / 8 assertions**, including own-versus-foreign Purchase Orders and an approver without list permission. Targeted Pint, PHP syntax, and `git diff --check` passed. The combined run with `PurchaseOrderShowScopeTest.php` stopped when the known F-22 duplicate `PdfRenderService::ensureDompdfDirs()` blocked test bootstrap; the standalone broadcast test passed.
-- Other chain entity types still use permission-only authorization. Payroll progress audience/payload remains unchanged pending HR/Finance policy; F-12 remains open.
+- All eight `ChainBroadcaster` entity types now require the matching module to be enabled, the permissions used by their detail routes, and a live, non-deleted record. Work Orders require both `production.view` and `production.work_orders.view`; deliveries accept either detail-route read permission. Purchase Request and Purchase Order channels also apply their record visibility policies. Unknown configured types, malformed/missing IDs, and disabled modules are denied.
+- `BroadcastAuthorizationTest.php`: **11 passed / 32 assertions**. Coverage includes each supported chain type, positive and negative permissions, Purchase Request and Purchase Order row scope, approval-only Purchase Order access, the narrow delivery permission, Work Order parent permission, module disablement, missing records, and private user-channel controls. Pint and `git diff --check` pass.
+- PR #399 API CI still fails at the unrelated F-22 duplicate `PdfRenderService::ensureDompdfDirs()` syntax check. Payroll progress channel policy/payload remains open for HR/Finance review; F-12 is only partially resolved.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
