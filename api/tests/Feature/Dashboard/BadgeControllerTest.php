@@ -535,6 +535,34 @@ class BadgeControllerTest extends TestCase
         $this->assertSame('warning', $resp['approvals']['severity']);
     }
 
+    public function test_approval_board_and_badge_count_items_beyond_the_visible_page_limit(): void
+    {
+        $department = Department::factory()->create();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+
+        for ($i = 0; $i < 101; $i++) {
+            $this->addPendingLeaveApproval($employee, 'department_head');
+        }
+
+        $board = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/approvals/board')
+            ->assertOk()
+            ->json('data');
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(100, $board['my_action']);
+        $this->assertSame(101, $board['summary']['my_action']);
+        $this->assertTrue($board['meta']['pending_truncated']);
+        $this->assertSame(101, $badges['approvals']['count']);
+    }
+
     private function addPendingLeaveApproval(Employee $employee, string $roleSlug): void
     {
         $leave = LeaveRequest::factory()->create(['employee_id' => $employee->id]);

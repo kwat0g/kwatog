@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-16–F-17, F-01–F-06, F-08, F-12, and F-18 merged; F-15 queue-alert link in PR #346.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-16–F-18, F-01–F-06, F-08, F-12, F-15, and F-24 fixes are represented by PRs #332–#347. Full-project migration and role-wide verification remain incomplete.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and F-16–F-17 merged (#332–#336); F-01–F-06, F-08, F-12, and F-18 fixes merged (#337–#345). F-15 queue-alert link/recipient guard is in PR #346. Global authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3 and F-16–F-18, F-01–F-06, F-08, F-12, F-15, and F-24 fixes are in PRs #332–#347. Global authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-06, F-08, F-12, and F-18 tests passed on earlier feature heads. PR #346's original queue test passed before the permission gate was added; its new revoked-permission case is unverified. Post-merge tests for #334 and #336–#346 were not rerun. Visual baseline was cancelled; browser QA, all-role/channel coverage, broad badge parity, and full-suite verification remain open. The latest no-list-access endpoint assertion remains unrun. |
+| 7. Verification | Partial | Targeted unit 1–3 and F-16, F-01–F-06, F-08, F-12, and F-18 tests passed on earlier feature heads. PR #346's original queue test passed before the permission gate was added; its new revoked-permission case is unverified. PR #347's pre-rebase targeted runs passed: `ApprovalBoardTest.php` 5 tests / 27 assertions and `BadgeControllerTest.php` 11 tests / 118 assertions, including the 101-row parity case. No post-rebase rerun; PHP unavailable locally. Post-merge tests for #334 and #336–#347 were not rerun. Visual baseline was cancelled; browser QA, all-role/channel coverage, broad badge parity, and full-suite verification remain open. The latest no-list-access endpoint assertion remains unrun. |
 
 ## Phase 3 PR stack
 
@@ -34,7 +34,8 @@
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-12. Subject channel authorization | `notifications/fix-subject-channel-authorization` | [#345](https://github.com/kwat0g/kwatog/pull/345) | merged as `f7e3e67f` |
-| F-15. Queue long-wait destination and audience | `notifications/fix-queue-long-wait-link` | [#346](https://github.com/kwat0g/kwatog/pull/346) | `f041a933` |
+| F-15. Queue long-wait destination and audience | `notifications/fix-queue-long-wait-link` | [#346](https://github.com/kwat0g/kwatog/pull/346) | merged as `337e0018` |
+| F-24. Full approval-board count beyond page limit | `notifications/fix-approval-board-count` | [#347](https://github.com/kwat0g/kwatog/pull/347) | `40c11ba4` plus current-main merge |
 
 ## Coverage ledger
 
@@ -53,7 +54,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include Notification Center behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PR #345 adds subject existence and known row-scope checks to private channels; all-role coverage and every chain type remain unverified. PR #346 adds `/dashboard/admin` for active system administrators who retain `dashboard.admin.view`; three permission-override notices remain no-link. PR #344 uses anchors for notification destinations. PR #341 respects pricing role lists while product/customer assignment scope remains open. Purchase Requests still link to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include Notification Center behavior, configured-role audiences without record scope, and all-role badge parity (F-09), with board-count cap fixed in PR #347. PR #345 adds subject existence and known row-scope checks to private channels; all-role coverage and every chain type remain unverified. PR #346 adds `/dashboard/admin` for active system administrators who retain `dashboard.admin.view`; three permission-override notices remain no-link. PR #344 uses anchors for notification destinations. PR #341 respects pricing role lists while product/customer assignment scope remains open. Purchase Requests still link to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -142,6 +143,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - Queue-long-wait notices link to `/dashboard/admin`; the link requires `dashboard.admin.view`. Recipient resolution now excludes inactive administrators and system administrators whose user-level permission override removes access to that destination.
 - The original `HorizonLongWaitNotificationTest` run passed **2 tests / 12 assertions** before the permission gate was added. The new revoked-permission negative case was added afterward and remains unverified; current branch tests were not rerun after merge.
 - Three permission-override notices remain no-link because affected users may not open the admin override page.
+
+
+## Separate finding fix: F-24 approval-board total
+
+- `ApprovalBoardService` now paginates distinct pending documents and computes full `summary.my_action` with the same source scopes, role/delegation rules, payroll maker-checker checks, and custom approval path. Board cards stay paginated; the badge consumes the full summary.
+- On the pre-rebase feature head: `ApprovalBoardTest.php` **5 passed / 27 assertions**; `BadgeControllerTest.php` **11 passed / 118 assertions**, including 101 actionable requests, 100 cards, summary 101, badge 101. These tests were not rerun after merging current main; PHP is unavailable locally.
+- Full role-by-role parity, post-rebase verification, and production-scale latency remain unverified.
 
 ## Outstanding proof / risks
 
