@@ -86,7 +86,7 @@ class BudgetTransferService
                     ->whereKey($transfer->getKey())
                     ->awaitingApprovalFor($user)
                     ->exists());
-            app(NotificationService::class)->send($audience, 'approval.action_required', [
+            app(NotificationService::class)->sendForSubject($transfer, $audience, 'approval.action_required', [
                 'title' => "Budget transfer {$transfer->transfer_number} needs approval",
                 'message' => 'A budget transfer is waiting for review.',
                 'link_to' => "/budgeting/transfers/{$transfer->hash_id}",
@@ -193,7 +193,7 @@ class BudgetTransferService
             return;
         }
 
-        app(NotificationService::class)->send($requester, $type, [
+        app(NotificationService::class)->sendForSubject($transfer, $requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your budget transfer was rejected.' : 'Your budget transfer was approved.',
             'link_to' => "/budgeting/transfers/{$transfer->hash_id}",
