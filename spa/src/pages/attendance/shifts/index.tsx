@@ -243,7 +243,7 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
  const {
  register, handleSubmit, watch, setError,
  formState: { errors, isSubmitting },
- } = useForm<FormValues>({
+ } = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  name: editing?.name ?? '',

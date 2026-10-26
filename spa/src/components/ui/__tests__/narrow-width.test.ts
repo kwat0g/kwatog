@@ -85,7 +85,7 @@ describe('Panel header slot (F-010)', () => {
     // `min-w-0` the 340px control forced the whole header to 411px inside a
     // 333px panel — where `overflow-hidden` cut the last options off entirely.
     expect(panel).toContain('flex min-w-0 items-baseline gap-2');
-    expect(panel).toContain('min-w-0 text-xs text-muted');
+    expect(panel).toContain('min-w-0 text-caption text-muted');
   });
 
   it('keeps clipping the rounded corners for everything that declares no narrow mode', () => {

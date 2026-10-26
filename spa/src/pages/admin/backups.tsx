@@ -120,6 +120,11 @@ function canRestoreOperation(operation: BackupOperation): boolean {
  );
 }
 
+function canVerifyOperation(operation: BackupOperation): boolean {
+ return operation.status === 'available'
+  && operation.artifacts.database?.availability === 'local';
+}
+
 function artifactAvailabilityLabel(availability: NonNullable<BackupOperation['artifacts']['database']>['availability']): string {
  switch (availability) {
  case 'local':
@@ -224,9 +229,11 @@ function StatusBlock({ operation }: { operation: BackupOperation }) {
 function BackupRow({
  operation,
  onRestore,
+ onVerify,
 }: {
  operation: BackupOperation;
  onRestore: (operation: BackupOperation) => void;
+ onVerify: (operation: BackupOperation) => void;
 }) {
  const database = operation.artifacts.database;
  const files = operation.artifacts.files;
@@ -260,7 +267,9 @@ function BackupRow({
  <Chip variant="neutral" className="mt-1">{operation.type === 'restore' ? 'Restore' : 'Full backup'}</Chip>
  </td>
  <td className="px-4 py-3 text-right whitespace-nowrap">
- {canRestoreOperation(operation) && (
+ {canVerifyOperation(operation) ? (
+ <Button variant="secondary" size="sm" onClick={() => onVerify(operation)}>Verify archive</Button>
+ ) : canRestoreOperation(operation) && (
  <Button variant="danger" size="sm" icon={<LuRotateCcw size={14} />} onClick={() => onRestore(operation)}>
  Restore
  </Button>
@@ -273,9 +282,11 @@ function BackupRow({
 function BackupCard({
  operation,
  onRestore,
+ onVerify,
 }: {
  operation: BackupOperation;
  onRestore: (operation: BackupOperation) => void;
+ onVerify: (operation: BackupOperation) => void;
 }) {
  const database = operation.artifacts.database;
  const files = operation.artifacts.files;
@@ -303,7 +314,9 @@ function BackupCard({
  <div className="text-sm text-primary mt-0.5">{operation.requested_by_name ?? 'System Administrator'}</div>
  <Chip variant="neutral" className="mt-1">{operation.type === 'restore' ? 'Restore' : 'Full backup'}</Chip>
  </div>
- {canRestoreOperation(operation) && (
+ {canVerifyOperation(operation) ? (
+ <Button variant="secondary" size="sm" onClick={() => onVerify(operation)}>Verify archive</Button>
+ ) : canRestoreOperation(operation) && (
  <Button variant="danger" size="sm" icon={<LuRotateCcw size={14} />} onClick={() => onRestore(operation)}>
  Restore
  </Button>
@@ -346,6 +359,15 @@ export default function AdminBackupsPage() {
  void queryClient.invalidateQueries({ queryKey: ['admin', 'backups'] });
  },
  onError: (error) => reportMutationError(error, 'Could not queue the restore.'),
+ });
+
+ const verifyLegacy = useMutation({
+ mutationFn: backupsApi.verifyLegacy,
+ onSuccess: (result) => {
+ toast.success(result.message);
+ void queryClient.invalidateQueries({ queryKey: ['admin', 'backups'] });
+ },
+ onError: (error) => reportMutationError(error, 'Could not verify the archive.'),
  });
 
  const firstPage = query.data?.pages[0];
@@ -484,14 +506,14 @@ export default function AdminBackupsPage() {
  </thead>
  <tbody>
  {backups.map((operation) => (
- <BackupRow key={`${operation.id ?? 'legacy'}-${operation.created_at}`} operation={operation} onRestore={openRestore} />
+ <BackupRow key={`${operation.id ?? 'legacy'}-${operation.created_at}`} operation={operation} onRestore={openRestore} onVerify={(item) => verifyLegacy.mutate({ database_filename: item.artifacts.database!.name })} />
  ))}
  </tbody>
  </table>
  </div>
  <div className="md:hidden">
  {backups.map((operation) => (
- <BackupCard key={`${operation.id ?? 'legacy'}-${operation.created_at}`} operation={operation} onRestore={openRestore} />
+ <BackupCard key={`${operation.id ?? 'legacy'}-${operation.created_at}`} operation={operation} onRestore={openRestore} onVerify={(item) => verifyLegacy.mutate({ database_filename: item.artifacts.database!.name })} />
  ))}
  </div>
  {query.hasNextPage && (

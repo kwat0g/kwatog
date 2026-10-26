@@ -117,7 +117,7 @@ class CustomerPortalOrderTest extends TestCase
         $this->assertSame('flat', $items[0]['pricing_method']);
     }
 
-    public function test_catalog_excludes_archived_products_and_expired_agreements(): void
+    public function test_catalog_excludes_archived_products_and_marks_expired_agreements_unavailable(): void
     {
         $customer = Customer::factory()->create();
         $user = $this->makePortalUser($customer);
@@ -141,7 +141,11 @@ class CustomerPortalOrderTest extends TestCase
         $response = $this->getJson('/api/v1/b2b/customer/catalog');
 
         $response->assertOk();
-        $this->assertSame([], $response->json('data'));
+        $items = $response->json('data');
+        $this->assertCount(1, $items);
+        $this->assertSame($expired->hash_id, $items[0]['id']);
+        $this->assertNull($items[0]['unit_price']);
+        $this->assertSame('No price is available for this delivery date. Contact Sales.', $items[0]['pricing_issue']);
     }
 
     public function test_catalog_search_filters_by_part_number(): void
