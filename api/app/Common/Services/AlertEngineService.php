@@ -488,7 +488,7 @@ class AlertEngineService
                     ], 'assignment-review-'.$slot->id.'-'.sha1($message), emailEnabled: false);
                     if ($wo->sales_order_id && $wo->planned_end && ($slot->scheduled_end->gt($wo->planned_end) || $slot->scheduled_end->lt(now()))) {
                         $sales = User::where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', 'sales_officer'))->get();
-                        app(NotificationService::class)->sendInApp($sales, 'production.assignment.review', ['title' => 'Delivery risk: '.$wo->wo_number, 'message' => 'Production assignment needs review. Agreed delivery date remains unchanged.', 'link_to' => '/crm/sales-orders/'.$wo->salesOrder->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $wo->salesOrder->hash_id], 'assignment-delivery-risk-'.$slot->id.'-'.sha1($message));
+                        app(NotificationService::class)->sendForSubject($wo->salesOrder, $sales, 'production.assignment.review', ['title' => 'Delivery risk: '.$wo->wo_number, 'message' => 'Production assignment needs review. Agreed delivery date remains unchanged.', 'link_to' => '/crm/sales-orders/'.$wo->salesOrder->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $wo->salesOrder->hash_id], 'assignment-delivery-risk-'.$slot->id.'-'.sha1($message), emailEnabled: false);
                     }
                 }
             });

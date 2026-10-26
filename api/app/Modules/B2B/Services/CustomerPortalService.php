@@ -321,7 +321,7 @@ class CustomerPortalService
                 return;
             }
 
-            $this->notifications->send($audience, 'portal.order_awaiting_review', [
+            $this->notifications->sendForSubject($so, $audience, 'portal.order_awaiting_review', [
                 'title'       => "Portal order {$so->so_number} awaits review",
                 'message'     => "{$portalUser->name} placed a sales order for {$so->customer?->name} via the customer portal. Review and confirm it to start MRP planning.",
                 'link_to'     => "/crm/sales-orders/{$so->hash_id}",
