@@ -190,9 +190,11 @@ class PricingReviewService
 
     private function notify(string $type, string $title, string $message, string $link, string $key, array $roles): void
     {
-        $permission = $link === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($link, '/mrp') ? 'mrp.boms.manage' : (str_starts_with($link, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
+        $permission = $link === '/crm/price-agreements/cost-reviews' ? 'inventory.costs.review' : (str_starts_with($link, '/mrp') ? 'mrp.boms.view' : (str_starts_with($link, '/inventory') ? 'inventory.view' : 'crm.price_agreements.view'));
         $users = $this->activeUsers ??= User::query()->where('is_active', true)->get();
-        $audience = $users->filter(fn (User $user): bool => $user->hasPermission($permission));
+        $roleSlugs = array_fill_keys($roles, true);
+        $audience = $users->filter(fn (User $user): bool => $user->hasPermission($permission)
+            && ($roleSlugs === [] || isset($roleSlugs[$user->role?->slug])));
         app(NotificationService::class)->sendInApp($audience, $type, ['title' => $title, 'message' => $message, 'link_to' => $link], $key);
     }
 
