@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Common\Events\UserNotificationCreated;
+use App\Common\Mail\UserNotificationMail;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
@@ -16,6 +17,7 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
@@ -256,6 +258,109 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.bill_subject_access']);
         Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $viewer->id);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
+    }
+
+    public function test_sales_order_subject_requires_enabled_crm_and_list_permission(): void
+    {
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'crm.sales_orders.view'],
+            ['name' => 'View sales orders', 'module' => 'crm'],
+        );
+        $role = Role::firstOrCreate(
+            ['slug' => 'notification_sales_order_viewer'],
+            ['name' => 'Notification Sales Order Viewer'],
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $viewer = User::factory()->withRole($role->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $salesOrder = SalesOrder::factory()->create();
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.sales_order_subject_access',
+                'subject_type' => SalesOrder::class,
+                'subject_id' => $salesOrder->id,
+                'user_ids' => [$withoutPermission->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.disabled_sales_order_subject',
+                'subject_type' => SalesOrder::class,
+                'subject_id' => $salesOrder->id,
+                'user_ids' => [$viewer->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification delivery skipped: no eligible recipients.',
+            ['type' => 'test.disabled_sales_order_subject'],
+        );
+
+        app(NotificationService::class)->sendForSubject($salesOrder, [$viewer, $withoutPermission], 'test.sales_order_subject_access', [
+            'title' => 'Sales order update',
+            'message' => 'The sales order changed.',
+        ], emailEnabled: false);
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.sales_order_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => 'test.sales_order_subject_access']);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $viewer->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
+
+        app(SettingsService::class)->set('modules.crm', false, 'modules');
+        app(NotificationService::class)->sendForSubject($salesOrder, $viewer, 'test.disabled_sales_order_subject', [
+            'title' => 'Sales order update',
+        ], emailEnabled: false);
+
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.disabled_sales_order_subject']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_sales_order_subject');
+    }
+
+    public function test_subject_gated_email_failure_rechecks_sales_order_access(): void
+    {
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'crm.sales_orders.view'],
+            ['name' => 'View sales orders', 'module' => 'crm'],
+        );
+        $role = Role::firstOrCreate(
+            ['slug' => 'notification_sales_order_email_viewer'],
+            ['name' => 'Notification Sales Order Email Viewer'],
+        );
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $viewer = User::factory()->withRole($role->slug)->create(['email' => 'sales@example.test']);
+        $salesOrder = SalesOrder::factory()->create();
+        DB::table('notification_preferences')->insert([
+            'user_id' => $viewer->id,
+            'notification_type' => 'test.sales_order_email',
+            'channel' => 'email',
+            'enabled' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Event::fake([UserNotificationCreated::class]);
+        Mail::fake();
+
+        app(NotificationService::class)->sendForSubject($salesOrder, $viewer, 'test.sales_order_email', [
+            'title' => 'Sales order update',
+            'message' => 'The sales order changed.',
+            'link_to' => '/crm/sales-orders/'.$salesOrder->hash_id,
+        ]);
+
+        Mail::assertQueued(UserNotificationMail::class, function (UserNotificationMail $mail) use ($salesOrder): bool {
+            self::assertTrue($mail->failureSubject?->is($salesOrder) ?? false);
+            app(SettingsService::class)->set('modules.crm', false, 'modules');
+            $mail->failed(new \RuntimeException('Email provider failed.'));
+
+            return true;
+        });
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $viewer->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 
     public function test_stock_adjustment_subject_requires_enabled_module_and_list_permission(): void

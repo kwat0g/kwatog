@@ -42,6 +42,7 @@ class EmailCustomerOnSalesOrderConfirmed implements ShouldQueue
                 $feature,
                 "Sales order {$salesOrder->so_number} was confirmed, but the customer has no usable email address. Review the order and contact the customer through an approved channel.",
                 $context,
+                $salesOrder,
             );
 
             return;
@@ -59,6 +60,7 @@ class EmailCustomerOnSalesOrderConfirmed implements ShouldQueue
                 $feature,
                 "The confirmation email for sales order {$salesOrder->so_number} could not be accepted by the email provider. Contact the customer through an approved channel.",
                 $context,
+                $salesOrder,
             );
             Log::warning('Customer sales order email enqueue failed', [
                 'sales_order_id' => $salesOrder->id,

@@ -109,6 +109,7 @@ class SalesOrderResponseService
                         'Customer delivery-date proposal',
                         'The proposal was recorded, but no active customer portal user has a valid email address.',
                         ['link_to' => '/crm/sales-orders/'.$row->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id],
+                        $row,
                     );
 
                     return;
@@ -122,6 +123,7 @@ class SalesOrderResponseService
                         recipientUserIds: [(int) $recipient->id],
                         fallbackPermission: 'crm.sales_orders.confirm',
                         deliveryKey: hash('sha256', 'sales-order-delivery-proposal|'.$response->id.'|'.strtolower($address)),
+                        failureSubject: $row,
                     );
                     try {
                         Mail::to($address)->queue($mail);
@@ -136,6 +138,7 @@ class SalesOrderResponseService
                             'Customer delivery-date proposal',
                             'The proposal was recorded, but an email could not be queued for a customer portal user.',
                             ['link_to' => '/crm/sales-orders/'.$row->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $row->hash_id],
+                            $row,
                         );
                     }
                 }
@@ -505,7 +508,7 @@ class SalesOrderResponseService
             $audience = $this->notifications->usersWithPermission($permission)
                 ->filter(fn (User $user): bool => $user->hasPermission('crm.sales_orders.view'));
 
-            $this->notifications->send($audience, 'customer.so_responded', [
+            $this->notifications->sendForSubject($so, $audience, 'customer.so_responded', [
                 'title'       => "Sales order {$so->so_number} — customer {$response->response_type->label()}",
                 'message'     => $this->responseSummary($response),
                 'link_to'     => "/crm/sales-orders/{$so->hash_id}",
@@ -559,6 +562,7 @@ class SalesOrderResponseService
                             'entity_id' => $so->hash_id,
                             'reason' => 'No eligible customer portal or customer email address was available.',
                         ],
+                        $so,
                     );
 
                     return;

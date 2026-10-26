@@ -14,6 +14,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Production\Models\WorkOrder;
@@ -26,7 +27,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -51,6 +52,8 @@ final class NotificationSubjectAccessRegistry
                 $user->hasPermission('budgeting.view')
                 || app(BudgetTransferService::class)->canApprove($subject, $user)
             ),
+            SalesOrder::class => app(SettingsService::class)->get('modules.crm', false) === true
+                && $user->hasPermission('crm.sales_orders.view'),
             default => ApprovalTypeRegistry::forClass($class) !== null
                 && ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey()),
         };

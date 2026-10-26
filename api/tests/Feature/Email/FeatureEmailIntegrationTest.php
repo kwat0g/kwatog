@@ -38,6 +38,7 @@ use App\Modules\Auth\Models\User;
 use App\Common\Mail\EmailIntegrationTestMail;
 use App\Common\Services\EmailBrandingService;
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Services\SettingsService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -52,6 +53,7 @@ class FeatureEmailIntegrationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('modules.crm', true, 'modules');
         Mail::fake();
     }
 
