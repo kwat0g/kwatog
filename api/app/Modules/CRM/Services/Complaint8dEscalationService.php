@@ -268,7 +268,7 @@ class Complaint8dEscalationService
                     // NotificationService inserts all in-app rows in this
                     // transaction and defers realtime/email side effects until
                     // commit. A thrown send rolls back both rows and claims.
-                    $this->notifications->send($audience->all(), '8d.sla', [
+                    $this->notifications->sendForSubject($complaint, $audience->all(), '8d.sla', [
                         'title'       => $subject,
                         'message'     => "Complaint {$complaint->complaint_number} has missed the {$key} SLA window. Review the 8D and act now.",
                         'link_to'     => "/crm/complaints/{$complaint->hash_id}",
