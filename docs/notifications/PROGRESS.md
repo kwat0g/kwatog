@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** F-51 duplicate no-invoice notice fix is in progress on `notifications/dedupe-invoice-handoff-failure`, stacked on delivery subject access #448 and F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. PR #448 finding-lifecycle passes; API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration at line 200). API CI on earlier stack PRs has the same blocker; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
+**Current gate:** F-51 duplicate no-invoice notice fix is in draft PR [#449](https://github.com/kwat0g/kwatog/pull/449), stacked on delivery subject access #448 and F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. PR #448 finding-lifecycle passes; API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration at line 200). PR #449 checks are pending; API CI on earlier stack PRs has the same blocker. SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
 
 ## Phase status
 
@@ -62,7 +62,7 @@
 | Phase 3. Machine breakdown notice subject access | `notifications/machine-maintenance-notice-access` | [#446](https://github.com/kwat0g/kwatog/pull/446) | `d61a79e7` |
 | F-50. Unsupported machine site scope | `notifications/fix-machine-site-scope-finding` | [#447](https://github.com/kwat0g/kwatog/pull/447) | `26ab7989` |
 | Phase 3. Delivery finance notice subject access | `notifications/delivery-invoice-notice-access` | [#448](https://github.com/kwat0g/kwatog/pull/448) | `568d207d` |
-| F-51. Duplicate no-invoice finance notices | `notifications/dedupe-invoice-handoff-failure` | pending | pending |
+| F-51. Duplicate no-invoice finance notices | `notifications/dedupe-invoice-handoff-failure` | [#449](https://github.com/kwat0g/kwatog/pull/449) | `a8b53bed` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -781,12 +781,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `AutoInvoiceOnDeliveryConfirmTest.php`: **6 passed / 54 assertions**. It verifies eligible delivery access and notification metadata, no notice to a finance-only user without Delivery access, and route 200/403 outcomes for those users. The run used and restored the temporary F-22 syntax workaround.
 - `git diff --check` passes. Pint reports one pre-existing `fully_qualified_strict_types` issue in the feature test. Recipient role appropriateness and duplicate no-invoice event notices remain open. PR #448 finding-lifecycle passes; API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration, line 200).
 
-## Separate finding fix: F-51 (draft PR pending)
+## Separate finding fix: F-51 (draft PR [#449](https://github.com/kwat0g/kwatog/pull/449))
 
 - The immediate `invoice.auto_failed` send and the `DeliveryConfirmed` outbox listener could both notify the same finance user about one failed invoice handoff. The direct send runs after commit; the outbox listener is a durable retry path, so both paths remain.
 - Both now use `invoice.auto_failed`, the same Delivery subject/payload, and `invoice-auto-failed:{delivery_id}` as the dedupe key. The second path still provides recovery when the immediate insert fails.
 - `AutoInvoiceOnDeliveryConfirmTest.php`: **6 passed / 56 assertions**. It exercises both send paths and proves one `invoice.auto_failed` row remains and no duplicate `chain.delivery_confirmed` row is added. The run used and restored the temporary F-22 workaround.
-- Existing duplicate notification rows are not backfilled. `git diff --check` passed; full suite and CI remain open.
+- Existing duplicate notification rows are not backfilled. `git diff --check` passed; full suite remains open, and PR #449 checks were pending at last inspection.
 
 ## Resume instruction
 
