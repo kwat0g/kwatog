@@ -21,10 +21,9 @@ use Illuminate\Queue\SerializesModels;
  * already has a uniform `<ChainHeader>` component. A single event keeps
  * the SPA hook generic and avoids one bespoke channel per chain.
  *
- * **Security note:** the payload contains only document numbers, status,
- * and an optional actor display name. NO PII, NO money figures, NO line
- * items. Channel access is gated by per-entity-type permissions in
- * routes/channels.php. Do NOT extend the payload without a security review.
+ * **Security note:** the payload is a content-free refresh ping. The SPA
+ * refetches the record through its normal authorized API route. Do NOT add
+ * record details here; channel authorization is permission-based.
  */
 class ChainStepAdvanced implements ShouldBroadcastNow
 {
@@ -57,20 +56,13 @@ class ChainStepAdvanced implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'chain.step_advanced';
+        // Old SPA bundles ignore this new name and retain their polling fallback.
+        return 'chain.refresh';
     }
 
     /** @return array<string, mixed> */
     public function broadcastWith(): array
     {
-        return [
-            'entity_type'     => $this->entityType,
-            'entity_id'       => $this->entityHashId,
-            'doc_number'      => $this->docNumber,
-            'new_status'      => $this->newStatus,
-            'active_step'     => $this->activeStep,
-            'completed_steps' => $this->completedSteps,
-            'actor_name'      => $this->actorName,
-        ];
+        return ['refresh' => true];
     }
 }

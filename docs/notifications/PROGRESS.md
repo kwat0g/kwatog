@@ -40,6 +40,7 @@
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
 | F-32. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | pending |
 | 1.1. Native dispatch boundary guard | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | pending |
+| F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -365,6 +366,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Older `audit/domains/platform/notifications/*` snapshots still claim NcrService calls the wrapper; current code search shows those references are stale historical findings, not live call sites.
 - `NotificationCatalogTest`: **9 passed / 74 assertions**. Focused Pint passes for `NotificationService`; the existing `NotificationCatalogTest` file retains baseline style debt. PHP syntax and `git diff --check` pass.
 - F-33 was discovered while checking an HR mail exception and logged separately. No email sender migration or browser verification is included.
+
+## Separate finding fix: F-12 chain broadcast payload (draft PR #398)
+
+- `ChainStepAdvanced` now broadcasts only `{refresh: true}` under the new `.chain.refresh` event name. The SPA only invalidates its current record and chain queries; it no longer needs status, document number, completed steps, or actor name from the channel.
+- The new event name lets an already-loaded older SPA bundle ignore the reduced payload and keep its existing 30-second polling fallback. The new SPA refreshes on `.chain.refresh` and retains polling when Reverb is unavailable.
+- `ChainBroadcasterTest.php`: **4 passed / 6 assertions**, including the new event name and exact payload. `useChainProgress.test.tsx`: **2 passed**. PHP syntax and `git diff --check` passed. `Pint --test` reports style issues in these two existing files; broad formatting was avoided.
+- Channel authorization remains permission-based and is not made record-specific in this unit. Payroll progress payload and audience are unchanged pending HR/Finance policy; F-12 remains open.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
