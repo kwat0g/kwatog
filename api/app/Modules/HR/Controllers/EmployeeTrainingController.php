@@ -10,9 +10,9 @@ use App\Modules\HR\Models\Training;
 use App\Modules\HR\Requests\AssignEmployeeTrainingRequest;
 use App\Modules\HR\Requests\CompleteEmployeeTrainingRequest;
 use App\Modules\HR\Resources\EmployeeTrainingResource;
-use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\HR\Services\EmployeeTrainingService;
 use App\Modules\HR\Services\TrainingEvidenceService;
+use App\Modules\HR\Support\EmployeeCompetenceScope;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,6 +37,38 @@ class EmployeeTrainingController
             ->paginate(min(max((int) $request->query('per_page', 25), 1), 100));
 
         return EmployeeTrainingResource::collection($rows);
+    }
+
+    public function all(Request $request): AnonymousResourceCollection
+    {
+        $filters = $request->validate([
+            'signal' => ['nullable', 'in:expired,upcoming'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+        $rows = EmployeeTraining::query()->with(['employee', 'training']);
+        EmployeeCompetenceScope::trainings($rows, $request->user());
+
+        if (($filters['signal'] ?? null) === 'expired') {
+            $rows->expiredForActiveEmployees();
+        } elseif (($filters['signal'] ?? null) === 'upcoming') {
+            $rows->upcomingOrExpiringForActiveEmployees();
+        }
+
+        if (! empty($filters['search'])) {
+            $term = '%'.str_replace(['%', '_'], ['\\%', '\\_'], trim($filters['search'])).'%';
+            $rows->where(fn ($query) => $query
+                ->whereHas('employee', fn ($employee) => $employee
+                    ->where('employee_no', 'ilike', $term)
+                    ->orWhere('first_name', 'ilike', $term)
+                    ->orWhere('last_name', 'ilike', $term))
+                ->orWhereHas('training', fn ($training) => $training->where('name', 'ilike', $term)));
+        }
+
+        return EmployeeTrainingResource::collection(
+            $rows->orderByDesc('scheduled_for')->orderByDesc('id')->paginate((int) ($filters['per_page'] ?? 25))
+        );
     }
 
     public function show(Request $request, EmployeeTraining $record): EmployeeTrainingResource
