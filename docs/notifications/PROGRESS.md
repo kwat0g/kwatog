@@ -884,7 +884,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 - Both interview mail constructors initialize candidate/interview fields and application hash from the saved email snapshot; scheduled-mail company address reads the current setting. Rendered email values remain based on the saved snapshot.
 - `RecruitmentApplicationTest.php --filter test_interview_email_failures_use_the_application_snapshot_for_fallback`: **1 passed / 17 assertions**. Directly checks the legacy mail fields and both failure fallbacks. The API-wide test file still has unrelated company-setting, after-commit, and rejection-copy failures noted under PR #466.
-- PHP syntax and `git diff --check` pass. Test used and restored the temporary F-22 workaround. Full suite remains open.
+- PHP syntax and `git diff --check` pass. Test used and restored the temporary F-22 workaround. PR API CI stops at syntax scanning on the duplicate `PdfRenderService::ensureDompdfDirs()` declaration (F-22), before PHPUnit. Full suite remains open.
 
 ## Resume instruction
 
