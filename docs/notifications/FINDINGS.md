@@ -1,7 +1,7 @@
 # Separate-track findings
 
 **Date:** 2026-10-26
-**Status:** Audit observations. Draft recipient fixes for F-21 and F-22 are tracked in PR #333; other findings remain separate. Recipient changes follow the approved policy.
+**Status:** Audit observations. Recipient fixes for F-21 and F-22 are tracked in PR #333; other findings remain separate. Recipient changes follow the approved policy.
 
 | ID | Severity | Finding | Evidence / certainty | Separate fix direction |
 | --- | --- | --- | --- | --- |

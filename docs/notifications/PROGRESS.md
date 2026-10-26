@@ -10,7 +10,7 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Unit 1 committed; draft PR #333 adds reasoned recipients and the route action-permission gate for core approval-step notices. Outcome notices, custom approval families, authorization coverage outside core approvals, links, Reverb, and signals remain open. |
+| 3. Backend foundation | In progress | Unit 1 committed; PR #333 adds reasoned recipients and the route action-permission gate for core approval-step notices. Outcome notices, custom approval families, authorization coverage outside core approvals, links, Reverb, and signals remain open. |
 | 4. Frontend | Not started | Blocked by approved registry/link contracts. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
