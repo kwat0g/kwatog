@@ -88,6 +88,9 @@ it('shows the due-soon Work Orders filter alongside overdue', () => {
     if (key === 'work_orders_due_soon') {
       return { count: 4, severity: 'warning', label: 'Due soon', description: 'Production work orders due soon' };
     }
+    if (key === 'work_orders_paused') {
+      return { count: 1, severity: 'warning', label: 'Paused', description: 'Production work orders awaiting resume or cancellation' };
+    }
     return undefined;
   });
   render(
@@ -103,6 +106,10 @@ it('shows the due-soon Work Orders filter alongside overdue', () => {
   expect(screen.getByRole('link', { name: 'Production work orders due soon: 4' })).toHaveAttribute(
     'href',
     '/production/work-orders?signal=due_soon',
+  );
+  expect(screen.getByRole('link', { name: 'Production work orders awaiting resume or cancellation: 1' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=paused',
   );
 });
 

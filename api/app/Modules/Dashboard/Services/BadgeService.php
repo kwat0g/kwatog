@@ -86,6 +86,7 @@ class BadgeService
         'open_postings' => 'recruitment',
         'work_orders' => 'production',
         'work_orders_due_soon' => 'production',
+        'work_orders_paused' => 'production',
         'deliveries' => 'supply_chain',
         'pending_so' => 'crm',
         'inquiries' => 'crm',
@@ -414,6 +415,12 @@ class BadgeService
                 'counter'     => fn (): int => WorkOrder::query()->dueSoon(
                     (int) $this->settings->get('production.work_orders.due_soon_days', 3),
                 )->count(),
+            ],
+            'work_orders_paused' => [
+                'permissions' => ['production.work_orders.lifecycle'],
+                'label'       => 'Paused',
+                'description' => 'Production work orders awaiting resume or cancellation',
+                'counter'     => fn (): int => WorkOrder::query()->paused()->count(),
             ],
 
             // Supply chain > Deliveries in transit needing an update.

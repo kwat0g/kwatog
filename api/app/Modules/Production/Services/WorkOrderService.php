@@ -130,6 +130,8 @@ class WorkOrderService
             $q->overdue();
         } elseif (($filters['signal'] ?? '') === 'due_soon') {
             $q->dueSoon((int) $this->settings->get('production.work_orders.due_soon_days', 3));
+        } elseif (($filters['signal'] ?? '') === 'paused') {
+            $q->paused();
         }
 
         if (! empty($filters['production_purpose']) && in_array($filters['production_purpose'], ['stock', 'order', 'internal'], true)) {
