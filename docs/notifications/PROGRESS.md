@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), missing event metadata (#379), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -11,7 +11,7 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; later targeted badge/list comparisons are recorded below. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Approval-only budget and transfer board cards use the shared actionable scopes in PR #377. Global authorization coverage, links, signal registry, and remaining event families are open. |
-| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. Preferences, broader Center interactions, multi-signal rendering, and browser QA remain open. |
+| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. PR #379 adds exact labels/groups for the discovered late-supply, incoming-quality, and dynamic rework event keys. Preferences, broader Center interactions, multi-signal rendering, and browser QA remain open. |
 | 5. Migration | In progress, partial | Budget and transfer badge/list scopes are in PRs #367 and #374; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
@@ -46,7 +46,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include the profile badge attached to the wrong route, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-16 is fixed at all six inventoried sender paths. F-23's 100-item board summary cap fix is tracked in PR #347. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include the profile badge attached to the wrong route, notification UI behavior, and configured-role audiences without record scope. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths. F-23's 100-item board summary cap fix is tracked in PR #347. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -216,6 +216,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Bell and Center rows with valid app destinations now render as React Router anchors. Clicking marks the row read; middle-click/open-in-new-tab retains native anchor behavior. Portal destinations must stay within the current customer/supplier path; external, malformed, and cross-realm links are rejected. Maintenance repeat-breakdown rows retain their schedule destination.
 - `notificationLink.test.ts` and `PortalNotifications.test.tsx`: **6 passed**, including Bell and Center click-through, mark-read, and portal-scope checks. Targeted ESLint and `git diff --check` passed.
 - SPA typecheck still fails on existing unrelated export API, missing `lucide-react`, stock-transfer API, and duplicate purchase-order prop errors; no changed file appears. Browser middle-click, deleted/forbidden record handling, and visual QA remain outstanding.
+
+## Separate finding fix: F-06 notification event metadata (draft PR [#379](https://github.com/kwat0g/kwatog/pull/379))
+
+- Added backend preference-catalog entries and exact SPA icon/group/label metadata for `supplier.shipment_late`, `quality.late_incoming`, and all emitted `production.rework.*` states (`required`, `awaiting_qc`, `qc_failed`, `closed`). Verified each event's linked PO, NCR, production work-order, or self-service work-order route exists in the SPA.
+- API `NotificationCatalogTest.php`: **8 passed / 58 assertions**. SPA `notificationMeta.test.ts`: **15 passed**. Targeted ESLint and `git diff --check` passed.
+- This closes metadata coverage only. It does not broaden or repair the events' recipient selectors; those remain in the recipient audit and separate findings.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

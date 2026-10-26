@@ -97,6 +97,10 @@ class NotificationCatalogTest extends TestCase
             'loans.rejected',
             'attendance.ot_approved',
             'attendance.ot_rejected',
+            'production.rework.required',
+            'production.rework.awaiting_qc',
+            'production.rework.qc_failed',
+            'production.rework.closed',
         ] as $type) {
             $this->assertArrayHasKey($type, $catalog, "Missing catalog entry for {$type}");
         }
