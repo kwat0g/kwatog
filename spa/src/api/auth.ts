@@ -24,7 +24,7 @@ export interface AuthUser {
  sidebar_collapsed: boolean;
  sidebar_peek?: boolean;
  sidebar_expand_all?: boolean;
- table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[] }>;
+ table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[]; columnWidths?: Record<string, number> }>;
  role: AuthRole;
  /** Linked HR employee, when this user account is wired to one. */
  employee: AuthEmployee | null;
@@ -54,7 +54,7 @@ export interface PreferencesPayload {
  sidebar_collapsed?: boolean;
  sidebar_peek?: boolean;
  sidebar_expand_all?: boolean;
- table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[] } | null>;
+ table_preferences?: Record<string, { density?: 'compact' | 'default' | 'spacious'; hiddenColumns?: string[]; columnWidths?: Record<string, number> } | null>;
 }
 
 export const authApi = {

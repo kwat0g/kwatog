@@ -6,6 +6,7 @@ export type TableDensity = 'compact' | 'default' | 'spacious';
 export interface TablePrefs {
   density?: TableDensity;
   hiddenColumns?: string[];
+  columnWidths?: Record<string, number>;
 }
 
 interface TablePrefsState {
@@ -15,6 +16,7 @@ interface TablePrefsState {
   clear: () => void;
   setDensity: (tableKey: string, density: TableDensity) => void;
   setHiddenColumns: (tableKey: string, hidden: string[]) => void;
+  setColumnWidths: (tableKey: string, widths: Record<string, number>) => void;
   reset: (tableKey: string) => void;
 }
 
@@ -45,6 +47,19 @@ export const useTablePrefsStore = create<TablePrefsState>((set, get) => ({
     }));
     if (get().userId) {
       void authApi.updatePreferences({ table_preferences: { [tableKey]: { hiddenColumns } } }).catch(() => {
+        /* The local choice remains active; the next session load syncs from the server. */
+      });
+    }
+  },
+  setColumnWidths: (tableKey, columnWidths) => {
+    set((state) => ({
+      byTable: {
+        ...state.byTable,
+        [tableKey]: { ...(state.byTable[tableKey] ?? {}), columnWidths },
+      },
+    }));
+    if (get().userId) {
+      void authApi.updatePreferences({ table_preferences: { [tableKey]: { columnWidths } } }).catch(() => {
         /* The local choice remains active; the next session load syncs from the server. */
       });
     }
