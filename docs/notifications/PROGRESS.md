@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Unit 1 committed; unit 2 adds reasoned recipient resolution for core approval-step notices. Outcome notices, custom approval families, authorization coverage outside core approvals, links, Reverb, and signals remain open. |
+| 3. Backend foundation | In progress | Unit 1 committed; draft PR #333 adds reasoned recipients and the route action-permission gate for core approval-step notices. Outcome notices, custom approval families, authorization coverage outside core approvals, links, Reverb, and signals remain open. |
 | 4. Frontend | Not started | Blocked by approved registry/link contracts. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted Phase 3 unit 1 and 2 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Unit 1 and pre-follow-up unit 2 test evidence is recorded below. Latest action-permission follow-up awaits PR #333 CI. SPA accessibility, visual, typecheck, lint, Vitest, and build gates passed on run `40372227312`; role-leak, badge parity, notification interactions, and full-suite verification remain open. |
 
 ## Coverage ledger
 
@@ -47,7 +47,7 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 - API: `NotificationServiceHardeningTest` **22 passed / 62 assertions**; `ApprovalNoticeVisibilityTest` **2 passed / 17 assertions**; asset disposal full-chain test **1 passed / 19 assertions**; `ApprovalServiceTest` **18 passed / 44 assertions**; `ApprovalDelegationTest` **19 passed / 72 assertions**.
 - Pint passed on all six changed PHP files. Tests exercise per-user reasons, direct approvers, active delegates, missing view access, inactive/unrelated users, submitter/actor exclusions, and the real approval record path.
 - This is a core `ApprovalService` slice, not whole-project recipient coverage. Custom approval queues, escalations/reminders, submitter outcomes, and other module dispatch sites remain unmigrated or unverified.
-- Local follow-up on PR #333 adds per-type/step action-permission metadata and negative cases for a viewable user whose action permission is revoked, a viewable delegate blocked by the route, an inactive delegate, and an expired delegation. Verification is pending while API CI runs are active. PHP is unavailable locally.
+- Local follow-up on PR #333 adds per-type/step action-permission metadata and negative cases for a viewable user whose action permission is revoked, a viewable delegate blocked by the route, an inactive delegate, and an expired delegation. Verification is pending on PR #333 CI. PHP is unavailable locally.
 - Follow-up commit `3ad0067a` adds a registry-wide assertion that every core approval type declares action permission metadata included in its registry permission list; this assertion is unverified pending PR CI.
 
 ## Outstanding proof / risks
