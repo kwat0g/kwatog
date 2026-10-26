@@ -6,6 +6,8 @@ namespace App\Common\Support;
 
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\SettingsService;
+use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Accounting\Enums\BudgetStatus;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
@@ -54,11 +56,11 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
-    public static function userCanViewRecord(User $user, Model $subject): bool
+    public static function userCanViewRecord(User $user, Model $subject, ?string $linkTo = null): bool
     {
         $class = $subject->getMorphClass();
 
@@ -107,6 +109,7 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $subject instanceof LeaveRequest
                 && ApprovalTypeRegistry::userCanViewRecord($user, LeaveRequest::class, (int) $subject->getKey()),
+            OvertimeRequest::class => self::userCanViewOvertime($user, $subject, $linkTo),
             PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
                 && $user->is_active
                 && $user->hasPermission('payroll.periods.view')
@@ -235,6 +238,40 @@ final class NotificationSubjectAccessRegistry
             selfColumn: 'id',
             selfId: $user->employee_id,
         )->exists();
+    }
+
+    private static function userCanViewOvertime(User $user, Model $subject, ?string $linkTo): bool
+    {
+        if (! $user->is_active || ! $subject instanceof OvertimeRequest || $linkTo === null) {
+            return false;
+        }
+
+        if (str_starts_with($linkTo, '/self-service/overtime/')) {
+            return app(SettingsService::class)->get('modules.attendance', false) === true
+                && app(SettingsService::class)->get('modules.hr', false) === true
+                && (int) $user->employee_id === (int) $subject->employee_id
+                && Employee::query()->whereKey($subject->employee_id)->exists();
+        }
+
+        if (! str_starts_with($linkTo, '/hr/attendance/overtime/')
+            || app(SettingsService::class)->get('modules.attendance', false) !== true
+            || ! $user->hasPermission('attendance.view')) {
+            return false;
+        }
+
+        if (app(OvertimeDecisionPolicy::class)->isAllRecordActor($user)
+            || (int) $user->employee_id === (int) $subject->employee_id) {
+            return true;
+        }
+
+        if (! ApprovalDelegation::canActForPermission($user, 'attendance.ot.approve') || ! $user->employee_id) {
+            return false;
+        }
+
+        $departmentId = Employee::query()->whereKey($user->employee_id)->value('department_id');
+
+        return $departmentId !== null
+            && (int) $departmentId === (int) Employee::query()->whereKey($subject->employee_id)->value('department_id');
     }
 
     private static function budgetingEnabled(): bool

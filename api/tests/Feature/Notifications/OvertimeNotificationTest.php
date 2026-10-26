@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Notifications;
 
+use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
 use App\Modules\Attendance\Listeners\NotifyOnOvertimeDecided;
@@ -15,6 +17,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -37,6 +40,7 @@ class OvertimeNotificationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(SettingsSeeder::class);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -89,7 +93,7 @@ class OvertimeNotificationTest extends TestCase
 
     public function test_submitted_notice_excludes_department_heads_with_revoked_approval_access(): void
     {
-        $ot = OvertimeRequest::factory()->pending()->create();
+        $ot       = OvertimeRequest::factory()->pending()->create();
         $eligible = $this->departmentHeadFor($ot);
         $revoked = $this->departmentHeadFor($ot);
         DB::table('user_permission_overrides')->insert([
@@ -116,6 +120,23 @@ class OvertimeNotificationTest extends TestCase
             'notifiable_id' => $revoked->id,
             'type' => 'attendance.ot_submitted',
         ]);
+        $notice = $eligible->notifications()->where('type', 'attendance.ot_submitted')->firstOrFail();
+        $this->assertSame(OvertimeRequest::class, $notice->data['subject_type']);
+        $this->assertSame((string) $ot->id, $notice->data['subject_id']);
+        $this->assertSame("/hr/attendance/overtime/{$ot->hash_id}", $notice->data['link_to']);
+
+        $otherDepartmentEmployee = Employee::factory()->create();
+        $outOfScope = User::factory()->withRole('department_head')->create([
+            'employee_id' => $otherDepartmentEmployee->id,
+        ]);
+        app(NotificationService::class)->sendForSubject($ot, [$eligible, $outOfScope], 'test.overtime_subject_access', [
+            'title' => 'Review overtime',
+            'link_to' => "/hr/attendance/overtime/{$ot->hash_id}",
+        ], emailEnabled: false);
+        $this->assertSame(1, $eligible->notifications()->where('type', 'test.overtime_subject_access')->count());
+        $this->assertSame(0, $outOfScope->notifications()->where('type', 'test.overtime_subject_access')->count());
+        $this->actingAs($eligible)->getJson('/api/v1/attendance/overtime-requests/'.$ot->hash_id)->assertOk();
+        $this->actingAs($outOfScope)->getJson('/api/v1/attendance/overtime-requests/'.$ot->hash_id)->assertForbidden();
     }
 
     /**
@@ -143,7 +164,7 @@ class OvertimeNotificationTest extends TestCase
     {
         Event::fake([OvertimeRequestDecided::class]);
 
-        $ot       = OvertimeRequest::factory()->pending()->create();
+        $ot = OvertimeRequest::factory()->pending()->create();
         $approver = $this->departmentHeadFor($ot);
 
         app(OvertimeService::class)->reject($ot, $approver, 'No budget.');
@@ -171,11 +192,29 @@ class OvertimeNotificationTest extends TestCase
         $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame("/self-service/overtime/{$ot->hash_id}", $data['link_to']);
         $this->assertSame($ot->hash_id, $data['entity_id']);
+        $this->assertSame(OvertimeRequest::class, $data['subject_type']);
+        $this->assertSame((string) $ot->id, $data['subject_id']);
+        $this->actingAs($owner)->getJson('/api/v1/hr/self-service/overtime/'.$ot->hash_id)->assertOk();
         $this->assertDatabaseMissing('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id' => $other->id,
             'type' => 'attendance.ot_approved',
         ]);
+
+        app(SettingsService::class)->set('modules.hr', false, 'modules');
+        app(NotificationService::class)->sendForSubject($ot, $owner, 'test.disabled_overtime_owner_link', [
+            'title' => 'Overtime decision',
+            'link_to' => "/self-service/overtime/{$ot->hash_id}",
+        ], emailEnabled: false);
+        $this->assertSame(0, $owner->notifications()->where('type', 'test.disabled_overtime_owner_link')->count());
+
+        app(SettingsService::class)->set('modules.hr', true, 'modules');
+        app(SettingsService::class)->set('modules.attendance', false, 'modules');
+        app(NotificationService::class)->sendForSubject($ot, $owner, 'test.disabled_attendance_owner_link', [
+            'title' => 'Overtime decision',
+            'link_to' => "/self-service/overtime/{$ot->hash_id}",
+        ], emailEnabled: false);
+        $this->assertSame(0, $owner->notifications()->where('type', 'test.disabled_attendance_owner_link')->count());
     }
 
     /**

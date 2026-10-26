@@ -195,8 +195,9 @@ class NotificationService
 
         $eligible = [];
         $deniedUserIds = [];
+        $linkTo = is_string($data['link_to'] ?? null) ? $data['link_to'] : null;
         foreach ($this->normaliseRecipients($recipients) as $userId => $user) {
-            if (NotificationSubjectAccessRegistry::userCanViewRecord($user, $subject)) {
+            if (NotificationSubjectAccessRegistry::userCanViewRecord($user, $subject, $linkTo)) {
                 $eligible[$userId] = $user;
             } else {
                 $deniedUserIds[] = $userId;
