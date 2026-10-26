@@ -1,6 +1,6 @@
 # Notification policy and implementation plan — approved baseline
 
-**Status:** approved by the user on 2026-10-25. The proposed defaults below are the Phase 3 policy baseline; any unverified scope or status remains an explicit implementation gate.
+**Status:** approved by the user on 2026-10-25. On 2026-10-26, the budget and transfer approval signal was split into two source-specific list filters; the approved maker-checker recipient rule did not change. Any unverified scope or status remains an explicit implementation gate.
 
 **Evidence base:** `00-discovery.md` and `01-inventory.md`. Current source behavior remains the baseline until an approved, separately reviewable PR changes it. Proposed rules do not assert that a role currently has a permission or scope; backend policy and list scope must verify each recipient.
 
@@ -246,7 +246,8 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `finance.ap.unpaid` | Unpaid payable / warning | Non-void bill with authoritative balance > 0, regardless of due date. | S: finance/AP permission + vendor scope | `/accounting/bills?signal=unpaid` |
 | `finance.ap.overdue` | Overdue payable / warning | Unpaid/partial bill and due date < Manila today, matching the destination list. | S: finance/AP permission + scope | `/accounting/bills?overdue=1` (current list filter) |
 | `finance.ap.due_soon` | Due soon / warning | Open payable balance > 0 and due date today through +3 Manila calendar days. | S: finance/AP permission + scope | `/accounting/bills?signal=due_soon` |
-| `finance.budget.awaiting_my_approval` | Approval / action-required | Submitted budget/transfer at current approval step for user/delegate. | A | `/budgeting?signal=awaiting_my_approval` |
+| `finance.budget.awaiting_my_approval` | Approval / action-required | Budget in `submitted`; require `budgeting.view` and direct or active delegated `budgeting.approve`; exclude self-submission and require at least one eligible approval role different from the submitter's role. This matches the existing `BudgetService` maker-checker rule. | A | `/budgeting?signal=awaiting_my_approval` |
+| `finance.budget_transfer.awaiting_my_approval` | Approval / action-required | Transfer in `pending`; apply the same direct/delegated `budgeting.approve`, self-submission, and different-role checks used by `BudgetTransferService`. | A | `/budgeting/transfers?status=pending&actionable=1` |
 | `hr.leave.awaiting_my_approval` | Leave approval / action-required | Pending department or HR approval at current stage, scoped via existing `DepartmentScope`. | A/S | `/hr/leaves?signal=awaiting_my_approval` |
 | `hr.leave.requester_outcome` | Leave outcome / info | Own leave requests with status `rejected` in self-service history. The current enum has no `returned` status; show an outcome badge only for recent/unseen records if the same list filter supports it. | A: requesting employee | `/self-service/leave?signal=requester_outcome`; off by default unless user enables outcome badges |
 | `hr.overtime.awaiting_my_approval` | Overtime / action-required | Pending overtime at current approver stage and existing `DepartmentScope`. | A/S | `/hr/attendance/overtime?signal=awaiting_my_approval` |
@@ -324,6 +325,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/quality/ncrs` | `ncrs` | `quality.ncr.view` | quality.ncr.open; quality.ncr.overdue; quality.effectiveness.due |
 | `/quality/traceability` | — | `quality.inspections.view` | quality.lot.rejected (covers held lots only if traceability filter exposes held disposition) |
 | `/budgeting` | `pending_budgets` | `budgeting.view` | finance.budget.awaiting_my_approval |
+| `/budgeting/transfers` | `pending_transfers` | any: `budgeting.view`, `budgeting.approve` | finance.budget_transfer.awaiting_my_approval |
 | `/accounting/invoices` | `draft_invoices` | `accounting.invoices.view` | finance.ar.unpaid; finance.ar.overdue; finance.ar.payment_review; finance.invoice.draft |
 | `/accounting/bills` | `overdue_bills` | `accounting.bills.view` | finance.ap.unpaid; finance.ap.overdue; finance.ap.due_soon |
 | `/accounting/vendors` | — | `accounting.vendors.view` | — |

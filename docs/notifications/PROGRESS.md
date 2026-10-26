@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, #366, #367, #485, and #487 merged to `main`. PR #487 promotes the training links from stacked PR #365. PR #369 aligns the AP overdue badge with its list and date semantics. PR #370 centralizes seven existing mail-only Laravel notification sends and merged as `d21770f7`; PR #371 also contains the F-31 PHP callback-signature fix. The centralization unit does not add recipient policy or authorization. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, #366, #367, #485, and #487 merged to `main`. PR #487 promotes the training links from stacked PR #365. PR #369 aligns the AP overdue badge with its list and date semantics. PR #370 centralizes seven existing mail-only Laravel notification sends and merged as `d21770f7`; PR #371 also contains the F-31 PHP callback-signature fix. PR #374 adds budget badge/list parity. The centralization unit does not add recipient policy or authorization. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
@@ -10,9 +10,9 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #485, and #487 are merged to `main`. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning; #364 addresses payroll recipients and links; #487 promotes training links from stacked PR #365; #485 handles generic approval recipient collections; #370 adds a single service entry for existing Laravel mail notifications; #371 also resolves F-31. Global authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–4 and documented fixes through #364, #371, #485, and #487 are merged to `main`. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning; #364 addresses payroll recipients and links; #487 promotes training links from stacked PR #365; #485 handles generic approval recipient collections; #370 adds a single service entry for existing Laravel mail notifications; #371 also resolves F-31; PR #374 aligns the submitted-budget badge with the current-approver queue. Global authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. PR #367 adds the Budget Transfers item; PR #369 confirms the AP overdue badge links to its existing filtered list. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
-| 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. PR #370 routes seven existing Laravel mail notifications through `NotificationService`; their current audiences and timing remain unchanged. Budget-transfer and AP overdue badge/list parity are addressed in PRs #367 and #369; remaining dispatch sites and sidebar signals remain open. |
+| 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. PR #370 routes seven existing Laravel mail notifications through `NotificationService`; their current audiences and timing remain unchanged. Budget approval, transfer, and AP overdue badge/list parity are addressed in PRs #374, #367, and #369; remaining dispatch sites and sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted tests exist for merged PRs and results are recorded below; full role, channel, and badge parity remain incomplete. SPA sidebar tests passed after integration for #353 (**28**), #354 (**29**), and #357 (**30**); #358 `record-output.test.tsx` passed **5**. PR #365's feature-head tests passed **11 API tests / 39 assertions** and **2 SPA tests**. PR #366's targeted tests passed **1 API test / 7 assertions** and **3 SPA tests**. PR #367 targeted API tests passed **22 tests / 235 assertions** and sidebar tests passed **49** on the original feature head; no post-rebase rerun. PR #369's original API parity test passed in `BadgeControllerTest.php` (**15 tests / 175 assertions**) and sidebar tests passed (**29**) before rebase; the due-today row-status assertion was added afterward and remains unverified. PHP is unavailable locally. Full GitHub workflows were not awaited under the user's CI priority. Tests did not use the user's application database. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
 
@@ -53,7 +53,8 @@
 | F-07. Training-expiry deep links | `notifications/fix-training-expiry-links` | [#365](https://github.com/kwat0g/kwatog/pull/365), promotion [#487](https://github.com/kwat0g/kwatog/pull/487) | promoted to `main` as `0d8f00d0` |
 | F-10. Shared alert unread/list parity | `notifications/fix-alert-count-parity` | [#366](https://github.com/kwat0g/kwatog/pull/366) | merged as `49649075` |
 | F-05/F-09. Budget-transfer badge/list parity | `notifications/fix-budget-transfer-badge-parity` | [#367](https://github.com/kwat0g/kwatog/pull/367) | merged as `5364a1b0` |
-| F-09/F-30. AP overdue badge and row-status parity | `notifications/fix-ap-bills-badge-parity` | [#369](https://github.com/kwat0g/kwatog/pull/369) | rebased on `main` |
+| F-09/F-30. AP overdue badge and row-status parity | `notifications/fix-ap-bills-badge-parity` | [#369](https://github.com/kwat0g/kwatog/pull/369) | merged as `46b81627` |
+| F-09. Budget approval badge/list parity | `notifications/fix-budget-approval-badge-parity` | [#374](https://github.com/kwat0g/kwatog/pull/374) | rebased on `main`; review in progress |
 | F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
 ## Coverage ledger
@@ -62,7 +63,7 @@
 - Direct `Mail::to(...)` call sites inventoried: **27 / 27** under `api/app`; mail recipient runtime outcomes not tested.
 - Direct Laravel `->notify()` / `Notification::send()` and central preference email paths inventoried in discovery; mail-only account/security and summary paths remain separate.
 - Internal sidebar routes inventoried: **73 / 73**; portal routes: **19 / 19**; compact-shell links: **9 / 9**.
-- Phase 2 defines **87** signal IDs; static cross-reference found no undefined IDs in the 73 internal, 19 portal, or 9 compact route rows. Disabled/deferred signals stay labeled in the policy table.
+- Phase 2 catalog now defines **88** signal IDs after splitting the budget and transfer approval queues by source list; this keeps the approved maker-checker recipient rule unchanged. Static cross-reference found no undefined IDs in the 73 internal, 19 portal, or 9 compact route rows. Disabled/deferred signals stay labeled in the policy table.
 - Badge definitions inventoried: **29**; currently wired to internal nav: **22**; unwired: **7**.
 - Local role slugs: **17**; existing role-access audit says **16**. Reconcile before role-complete claim.
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
@@ -220,7 +221,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 
 ## Separate finding fix: F-05/F-09 budget-transfer badge/list parity (PR [#367](https://github.com/kwat0g/kwatog/pull/367), merged as `5364a1b0`)
 
-- Adds Finance > Budget Transfers, gated by `budgeting.view` or `budgeting.approve`. A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; approval-only users see only transfers they can approve. `BudgetTransfer::scopeAwaitingApprovalFor()` powers both badge and list and follows direct/delegated maker-checker eligibility. The Phase 2 combined budget signal remains incomplete.
+- Adds Finance > Budget Transfers, gated by `budgeting.view` or `budgeting.approve`. A positive `pending_transfers` badge opens `/budgeting/transfers?status=pending&actionable=1`; approval-only users see only transfers they can approve. `BudgetTransfer::scopeAwaitingApprovalFor()` powers both badge and list and follows direct/delegated maker-checker eligibility. PR #374 implements the budget queue with `Budget::scopeAwaitingApprovalFor()`; transfers remain a separate queue under PR #367.
 - On the original feature head, `BudgetTransferTest.php` plus `BadgeControllerTest.php`: **22 passed / 235 assertions**. `Sidebar.behavior.test.tsx` plus `Sidebar.permissions.test.tsx`: **49 passed**. These targeted results were recorded before rebase; they were not rerun afterward.
 - Existing GitHub workflow blockers: API stops at a duplicate `PdfRenderService::ensureDompdfDirs()` declaration before PHPUnit; SPA stops at `npm audit` findings in `@vitest/mocker`, `undici`, and `zod`. CI was not awaited under the user's priority. Browser visual QA, full suite, and parity across every eligible role remain open.
 
@@ -271,6 +272,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - `PasswordResetNotification::failed()` fully qualifies `\Throwable`, matching the HR subclass callback and preventing the PHP 8.3 class-loading failure. The redundant draft PR #372 carries the same one-line code change and will be closed during final unused-PR cleanup.
 - The targeted `EmployeePasswordResetNotificationTest.php` passed **1 test / 2 assertions**, `UserProvisioningTest.php` passed **8 / 25**, and `UserAdministrationHardeningTest.php` passed **8 / 27** on PR #372's original feature head before the duplicate source fix merged in #371. These were not rerun after merge; PHP is unavailable locally.
 - PR #371's API workflow passed PHP lint and PHPStan, then failed in PHPUnit on unrelated suite errors.
+
+## Separate finding fix: F-09 budget approval badge/list parity (PR [#374](https://github.com/kwat0g/kwatog/pull/374))
+
+- `Budget::scopeAwaitingApprovalFor()` powers `pending_budgets` and `/budgeting?signal=awaiting_my_approval`. It covers submitted budgets awaiting the current direct approver or active delegate, applies the existing maker-checker role separation, and excludes self-submission. The badge and destination require `budgeting.view`.
+- On the original feature head, `BadgeControllerTest.php` passed **16 tests / 189 assertions**, including VP/Finance role separation, delegation, and badge/list parity. `Sidebar.behavior.test.tsx` plus `budgeting/index.test.tsx` passed **31 tests**. Targeted ESLint and `git diff --check` passed.
+- These tests were not rerun after rebase. PHP and Vitest are unavailable locally. Browser visual QA and full-suite verification remain open.
 
 ## Outstanding proof / risks
 
