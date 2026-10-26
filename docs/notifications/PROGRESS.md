@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
-**Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), and training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365). Recipient ownership rules remain open.
+**Updated:** 2026-10-26
+**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), and PR [#383](https://github.com/kwat0g/kwatog/pull/383) adds department-scope proof for those recipients. Recipient ownership rules remain open.
 
 ## Phase status
 
@@ -28,6 +28,7 @@
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
 | F-04. Badge destination permission gates | `notifications/fix-badge-permission-gates` | [#349](https://github.com/kwat0g/kwatog/pull/349) | `3b759909` |
 | F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | `af68eb60` |
+| F-14. Training-expiry department scope proof | `notifications/verify-training-expiry-audience` | [#383](https://github.com/kwat0g/kwatog/pull/383) | `631331a3` |
 
 ## Coverage ledger
 
@@ -191,6 +192,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Employees now get a hash-addressed self-service training-record link. Its endpoint resolves the session employee and returns only their matching record; a second employee receives 404. Configured HR/department recipients get the exact HR training-record route, gated by `hr.employees.trainings.view` and `EmployeeCompetenceScope`.
 - `TrainingExpiryAlertTest.php`: **11 passed / 39 assertions**, including exact per-audience links, HR access, employee-owner access, cross-employee 404, and employee denial on the HR route. SPA route test: **2 passed**. Targeted ESLint, PHP syntax, and `git diff --check` pass.
 - New detail view is read-only and shares one component across the owner-only and scoped-HR APIs. Visual QA and full-suite verification remain outstanding. F-14's message-detail and recipient-scope review remains separate.
+
+## Separate finding proof: F-14 training-expiry audience (draft PR [#383](https://github.com/kwat0g/kwatog/pull/383))
+
+- Added a seeded same-department department-head recipient and a cross-department negative recipient. The in-scope user receives the notice and opens its exact HR detail route; the out-of-scope user receives no row and gets 404.
+- `TrainingExpiryAlertTest.php --filter=only_reaches_department_heads_with_employee_scope`: **1 passed / 4 assertions**. No production code changed; inherited API CI is blocked by F-22 in `PdfRenderService`.
+- This verifies one configured role and department boundary only. Other configured role/scope combinations and visual QA remain unverified.
 
 ## Outstanding proof / risks
 
