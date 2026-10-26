@@ -29,7 +29,7 @@ final class NotifyOnPurchaseOrderSubmitted implements ShouldQueue
                     && $user->hasPermission('purchasing.view')
                     && $access->canView($user, $po))
                 ->values();
-            $notifications->send($audience, 'purchasing.po_pending_approval', [
+            $notifications->sendForSubject($po, $audience, 'purchasing.po_pending_approval', [
                 'title' => "PO {$po->po_number} pending approval",
                 'message' => "Purchase order {$po->po_number} is waiting for {$next->role_slug} review.",
                 'link_to' => '/purchasing/purchase-orders/'.$po->hash_id,

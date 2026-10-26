@@ -234,12 +234,17 @@ class SupplierDeliveryScheduleService
         $audience = $this->notifications->usersWithPermission('purchasing.po.approve');
         $poNumber = $schedule->purchaseOrder?->po_number ?? '—';
 
-        $this->notifications->send($audience, 'supplier.schedule_cancelled', [
+        $purchaseOrder = $schedule->purchaseOrder;
+        if ($purchaseOrder === null) {
+            return;
+        }
+
+        $this->notifications->sendForSubject($purchaseOrder, $audience, 'supplier.schedule_cancelled', [
             'title' => "PO {$poNumber} — supplier cancelled the {$schedule->month} delivery schedule",
             'message' => "Reason: {$schedule->cancel_reason}",
-            'link_to' => $schedule->purchaseOrder ? "/purchasing/purchase-orders/{$schedule->purchaseOrder->hash_id}" : null,
+            'link_to' => "/purchasing/purchase-orders/{$purchaseOrder->hash_id}",
             'entity_type' => 'purchase_order',
-            'entity_id' => $schedule->purchaseOrder?->hash_id,
+            'entity_id' => $purchaseOrder->hash_id,
             'po_number' => $poNumber,
         ]);
     }

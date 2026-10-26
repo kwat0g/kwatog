@@ -45,7 +45,7 @@ class AutoPurchaseOrderServiceTest extends TestCase
             Mockery::mock(TaxPolicyService::class),
         );
         $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->zeroOrMoreTimes();
+        $notifications->shouldReceive('sendForSubject')->zeroOrMoreTimes();
         $this->app->instance(NotificationService::class, $notifications);
     }
 
@@ -64,8 +64,9 @@ class AutoPurchaseOrderServiceTest extends TestCase
         ]);
         $revoked->flushPermissionsCache();
         $notifications = Mockery::mock(NotificationService::class)->makePartial();
-        $notifications->shouldReceive('send')->once()->withArgs(function ($audience, string $type, array $data) use ($eligible): bool {
+        $notifications->shouldReceive('sendForSubject')->once()->withArgs(function (PurchaseOrder $purchaseOrder, $audience, string $type, array $data) use ($eligible): bool {
             return $type === 'auto_po_pending'
+                && $purchaseOrder->exists
                 && collect($audience)->pluck('id')->all() === [$eligible->id]
                 && str_starts_with($data['link_to'], '/purchasing/purchase-orders/');
         });

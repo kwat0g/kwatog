@@ -277,13 +277,13 @@ class SupplierShipmentService
             $recipientReasons = $audience->mapWithKeys(static fn (User $user): array => [
                 $user->id => 'purchasing_delivery_schedule_reviewer',
             ])->all();
-            $this->notifications->sendInApp($audience, 'supplier.shipment_late', [
+            $this->notifications->sendForSubject($purchaseOrder, $audience, 'supplier.shipment_late', [
                 'title' => "PO {$purchaseOrder->po_number}: supplier ETA is late",
                 'message' => "Supplier ETA {$eta} is after the required delivery date {$deadline->toDateString()}.",
                 'link_to' => "/purchasing/purchase-orders/{$purchaseOrder->hash_id}",
                 'entity_type' => 'purchase_order',
                 'entity_id' => $purchaseOrder->hash_id,
-            ], "supplier:shipment:late:{$shipment->id}:{$eta}", $recipientReasons);
+            ], "supplier:shipment:late:{$shipment->id}:{$eta}", $recipientReasons, emailEnabled: false);
         }
 
         return $shipment;
