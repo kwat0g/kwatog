@@ -115,6 +115,7 @@ class SendPayslipEmailJob implements ShouldQueue
                     'entity_id' => $payroll?->hash_id,
                     'reason' => 'The employee has no usable email address for payslip delivery.',
                 ],
+                $payroll,
             );
         }
     }
@@ -155,6 +156,7 @@ class SendPayslipEmailJob implements ShouldQueue
                 'entity_id' => $payroll?->hash_id,
                 'reason' => 'The email provider rejected or could not deliver the payslip.',
             ],
+            $payroll,
         );
     }
 
