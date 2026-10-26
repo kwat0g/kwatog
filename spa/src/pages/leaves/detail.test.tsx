@@ -27,10 +27,6 @@ vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => ({ id: 'u-1', employee_id: 'e-1' }),
 }));
 
-vi.mock('@/components/guards/CanDo', () => ({
-  CanDo: () => null,
-}));
-
 const request = {
   id: 'lr-1',
   leave_request_no: 'LR-202608-0001',
@@ -48,6 +44,7 @@ const request = {
   reason: 'Family matter',
   has_document: false,
   status: 'pending_hr',
+  can_approve: false,
   status_label: 'Pending HR approval',
   dept_approver: null,
   dept_approved_at: null,
@@ -107,5 +104,18 @@ describe('LeaveDetailPage balance panel', () => {
     // `b.leave_type.code`, and the live row is unaffected.
     expect(await screen.findByText('Archived type')).toBeInTheDocument();
     expect(await screen.findByText('VL')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  });
+
+  it('shows approval actions only when the API marks this request actionable', async () => {
+    vi.mocked(leaveRequestsApi.show).mockResolvedValue({ ...request, can_approve: true });
+    vi.mocked(leaveRequestsApi.options).mockResolvedValue({ statuses: [], half_day_periods: [] } as never);
+    vi.mocked(leaveBalancesApi.forEmployee).mockResolvedValue([liveBalance]);
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Approve' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeVisible();
   });
 });

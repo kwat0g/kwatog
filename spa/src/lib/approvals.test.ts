@@ -7,7 +7,7 @@ const cancelled: LeaveRequest = {
   employee: { id: 'employee-1', employee_no: 'DEMO-0009', full_name: 'Manuel Cruz', department: 'Production' },
   leave_type: { id: 'vl', code: 'VL', name: 'Vacation Leave' },
   start_date: '2026-10-13', end_date: '2026-10-13', days: '1.0',
-  half_day_period: null, reason: null, has_document: false, status: 'cancelled',
+  half_day_period: null, reason: null, has_document: false, status: 'cancelled', can_approve: false,
   dept_approver: null, dept_approved_at: null, hr_approver: null, hr_approved_at: null,
   rejection_reason: null, created_at: '2026-10-10T06:00:00+08:00', updated_at: '2026-10-10T06:30:00+08:00',
 };

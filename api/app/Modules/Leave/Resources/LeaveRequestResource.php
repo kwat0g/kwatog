@@ -35,6 +35,7 @@ class LeaveRequestResource extends JsonResource
             'has_document'     => $this->document_path !== null,
             'status'           => $this->status?->value,
             'status_label'     => $this->status?->label(),
+            'can_approve'      => (bool) ($this->can_approve ?? false),
             'dept_approver'    => $this->whenLoaded('deptApprover', fn () => $this->deptApprover ? [
                 'id' => $this->deptApprover->hash_id, 'name' => $this->deptApprover->name,
             ] : null),

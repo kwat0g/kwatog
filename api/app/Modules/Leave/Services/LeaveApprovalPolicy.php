@@ -8,11 +8,19 @@ use App\Common\Services\ApprovalService;
 use App\Common\Support\DepartmentScope;
 use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
+use App\Modules\Leave\Models\LeaveRequest;
 use Illuminate\Database\Eloquent\Builder;
 
 class LeaveApprovalPolicy
 {
     public function __construct(private readonly ApprovalService $approvals) {}
+
+    public function canApprove(LeaveRequest $request, User $user): bool
+    {
+        return $this->awaitingMyApprovalQuery(LeaveRequest::query(), $user)
+            ->whereKey($request->getKey())
+            ->exists();
+    }
 
     /** The leave rows this user can approve at the current workflow step. */
     public function awaitingMyApprovalQuery(Builder $query, User $user): Builder
@@ -40,6 +48,9 @@ class LeaveApprovalPolicy
                 });
             }
         });
+        $query->whereDoesntHave('approvalRecords', fn (Builder $record) => $record
+            ->where('approver_id', $user->id)
+            ->whereIn('action', ['approved', 'rejected']));
         DepartmentScope::apply(
             $query,
             $user,

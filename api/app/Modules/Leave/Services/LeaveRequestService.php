@@ -187,7 +187,18 @@ class LeaveRequestService
             );
         }
 
-        return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        $requests = $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        if ($user && $requests->getCollection()->isNotEmpty()) {
+            $approvableIds = $this->approvalPolicy->awaitingMyApprovalQuery(LeaveRequest::query(), $user)
+                ->whereKey($requests->getCollection()->modelKeys())
+                ->pluck('id')
+                ->all();
+            $requests->getCollection()->each(
+                fn (LeaveRequest $request) => $request->setAttribute('can_approve', in_array($request->getKey(), $approvableIds, true)),
+            );
+        }
+
+        return $requests;
     }
 
     public function submit(int $employeeId, array $data): LeaveRequest
@@ -477,6 +488,12 @@ class LeaveRequestService
             $req = $this->lockRequest($req);
             if (! in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true)) {
                 throw new BusinessRuleException('Only pending requests can be rejected.');
+            }
+            $stagePermission = $req->status === LeaveRequestStatus::PendingDept
+                ? 'leave.approve_dept'
+                : 'leave.approve_hr';
+            if (! $approver->hasPermission($stagePermission)) {
+                throw new ForbiddenActionException('You do not have permission to reject this approval stage.');
             }
             if ($req->status === LeaveRequestStatus::PendingDept) {
                 $this->assertDepartmentDecisionScope($req, $approver);
