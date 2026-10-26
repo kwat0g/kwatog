@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft PR [#397](https://github.com/kwat0g/kwatog/pull/397) removes the unused legacy in-app notification wrapper and guards direct Laravel notification dispatch. The matching HR password-reset signature fix is in draft PR [#372](https://github.com/kwat0g/kwatog/pull/372) on a sibling stack; no duplicate fix is planned. Draft PR [#396](https://github.com/kwat0g/kwatog/pull/396) aligns Leave action visibility with the active approval step and API authorization; targeted API tests pass **34/34 (160 assertions)** and SPA tests pass **7/7**. Draft PR [#395](https://github.com/kwat0g/kwatog/pull/395) adds Leave approval badge/list parity; PR [#394](https://github.com/kwat0g/kwatog/pull/394) adds delegate-aware overtime approval badges; #391–#393 cover profile, maintenance, and overtime list/read parity. Draft PRs #386–#389 cover inbound shipment, Sales Orders confirmation, and Production work-order permissions. API CI still has the unrelated F-22 syntax blocker; SPA CI reports existing dependency advisories. Full SPA typecheck has unrelated project-wide errors. Remaining direct transactional mail, badge parity, notification catalogs, and scoped recipients remain open. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. PR #407 fixes a clearance-detail controller failure found during access verification; PR #406 audits empty notification audiences; this unit scopes separation notices to clearance visibility and excludes the initiator. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
 
 ## Phase status
 
@@ -395,7 +395,8 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 ## Separate finding fix: F-36 clearance detail controller resolution (draft PR #407)
 
 - Clearance detail requests returned 500 while building `SeparationController`: `FinalPayService` referenced `EmploymentProrationService` in HR, but the existing class lives in Payroll.
-- Added the missing Payroll import only. `ClearanceReadScopeTest.php` exercises the exact detail route and department-scope outcomes.
+- Added the missing Payroll import only. `ClearanceReadScopeTest.php`: **4 passed / 61 assertions**, including exact detail-route resolution and department-scope outcomes.
+- PR #407's API CI stops before PHPUnit on inherited F-22: duplicate `PdfRenderService::ensureDompdfDirs()` declaration. PHP syntax and targeted tests pass locally.
 - This fix is isolated from notification changes. No event timing, recipient rule, or final-pay calculation changed.
 
 ## Audit empty notification audiences (draft PR #406)
@@ -403,6 +404,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Structured, Laravel, and DSS notification entry points now log a warning with only event type or notification class when normalization leaves no eligible recipients. They do not fall back to administrators or a broad role, matching the approved Phase 2 rule.
 - `NotificationServiceTest.php`: **12 passed / 44 assertions**. The empty-audience case checks both log contexts and confirms no row, realtime event, or Laravel send; an inactive DSS recipient is also logged and suppressed.
 - API CI inherits F-22 and fails before PHPUnit; finding-lifecycle passes. Preference opt-outs and intentional DSS rate-cap suppression are not logged as empty audiences.
+
+## Separate finding fix: F-35 separation notice access scope (draft PR #408)
+
+- The configured separation roles remain unchanged. Recipients now also need `hr.separation.view`, the same clearance row scope used by `SeparationService::show()`, and must not be the recorded initiator.
+- `SeparationNotificationAudienceTest.php`: **2 passed / 9 assertions**. Same-department delivery and detail access pass; cross-department access returns 404; initiator gets no notice; configured Finance remains eligible through `hr.separation.view_all`.
+- PR #408 API CI fails before PHPUnit on inherited F-22 (`Cannot redeclare ... ensureDompdfDirs()`); finding-lifecycle passes. The focused audience tests pass locally.
+- This narrows delivery only; it does not add the affected employee or new roles to the configured audience. HR/Finance audience policy remains bounded by the approved catalog and current setting.
 
 ## Separate finding fix: F-12 chain broadcast payload (draft PR #398)
 

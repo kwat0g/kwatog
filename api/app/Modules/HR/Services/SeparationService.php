@@ -112,6 +112,13 @@ class SeparationService
         ]);
     }
 
+    public function canView(Clearance $clearance, User $user): bool
+    {
+        return $this->scopeClearances(Clearance::query(), $user)
+            ->whereKey($clearance->id)
+            ->exists();
+    }
+
     /** Global review and department checklist work are separate capabilities. */
     private function scopeClearances(Builder $query, ?User $user): Builder
     {
