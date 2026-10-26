@@ -566,6 +566,14 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - `BillServiceTest.php` self-post and separate-approver scenarios: **2 passed / 23 assertions**; requester still receives the notice when another user posts, approver does not. PHP syntax and `git diff --check` pass. Pint reports test-file style issues (`method_argument_space`, `fully_qualified_strict_types`); no broad formatting applied. The test run used and restored the F-22 workaround.
 - This is isolated from subject-access feature work.
 
+
+## Phase 3 Accounting bill subject access gate (draft PR pending)
+
+- Registered Bill subjects with the global bill detail route rule: Accounting must be enabled and the recipient must have `accounting.bills.view`. Bill payment-posted notices now pass through `sendForSubject()`; the existing requester permission check and actor exclusion remain.
+- Supplier invoice email failure notices now target only the active Bill creator. Both immediate enqueue/invalid-address failures and queued delivery failures carry the Bill subject and pass the same access gate. The old broad `accounting.vendors.view` fanout was removed. No active creator means log and skip; no broad fallback is configured. `Bill.created_by` is the available owner field; no separate AP assignment rule was found in these paths.
+- `NotificationServiceSubjectAccessTest`: **8 passed / 40 assertions**. Supplier invoice email failure target test: **1 passed / 8 assertions**, including the queued-mailable failure path. Bill payment self-post and distinct-poster cases: **2 passed / 23 assertions**. These targeted tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly.
+- PHP syntax checks pass for all six changed PHP files. Pint passes five files; its check reports `class_attributes_separation` in `BillService.php`, outside this change. `git diff --check` passes. API CI remains blocked before PHPUnit by inherited F-22. Draft PR creation and CI verification remain pending.
+
 ## Outstanding proof / risks
 
 1. HR/Finance must configure the payroll-adjustment checker. Review remaining HR/discipline, finance escalation, system-admin fanout, and portal contacts before broadening recipients.

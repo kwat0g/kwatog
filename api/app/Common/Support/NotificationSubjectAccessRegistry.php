@@ -7,6 +7,7 @@ namespace App\Common\Support;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\BudgetStatus;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
@@ -19,7 +20,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Budget::class, BudgetTransfer::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -31,6 +32,8 @@ final class NotificationSubjectAccessRegistry
             // The route group rejects invoice access while Accounting is disabled.
             Invoice::class => app(SettingsService::class)->get('modules.accounting', false) === true
                 && $user->hasPermission('accounting.invoices.view'),
+            Bill::class => app(SettingsService::class)->get('modules.accounting', false) === true
+                && $user->hasPermission('accounting.bills.view'),
             Budget::class => self::budgetingEnabled() && self::userCanViewBudget($user, $subject),
             BudgetTransfer::class => self::budgetingEnabled() && (
                 $user->hasPermission('budgeting.view')
