@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft Maintenance subject-access work is in PR #432, stacked on the cost-review click-through in [PR #431](https://github.com/kwat0g/kwatog/pull/431), actor exclusion and subject access #430, item/GRN gates #429, and the Delivery gate #427. Separate F-42 event-classification fix #428 precedes #429. Earlier stack includes Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. API CI remains blocked by inherited F-22; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft Maintenance creator-exclusion fix is in [PR #433](https://github.com/kwat0g/kwatog/pull/433), stacked on the Maintenance subject-access gate #432 and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. API CI remains blocked by inherited F-22; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
 
 ## Phase status
 
@@ -46,6 +46,7 @@
 | F-43. Cost-review actor exclusion and subject access | `notifications/item-cost-review-subject-access` | [#430](https://github.com/kwat0g/kwatog/pull/430) | `8a3292f6` |
 | F-44. Exact cost-review notification links | `notifications/item-cost-review-deep-links` | [#431](https://github.com/kwat0g/kwatog/pull/431) | `fd584e13` |
 | Phase 3. Maintenance subject access gates | `notifications/maintenance-subject-access` | [#432](https://github.com/kwat0g/kwatog/pull/432) | `cba920bb`, `32c987ef` |
+| F-46. Maintenance assignment notice actor exclusion | `notifications/fix-maintenance-creator-notice` | [#433](https://github.com/kwat0g/kwatog/pull/433) | `d9501a33` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -79,7 +80,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include notification UI behavior and configured-role audiences without record scope. F-01's badge placement is in PR #340; PR #391 adds the approved actionable signal and exact filtered destination. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths; F-28 scopes the late-supplier notice. F-23's 100-item board summary cap fix is tracked in PR #347. F-46 records a Maintenance creator receiving their own assignment-needed notice; it remains for a separate recipient fix. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven beyond findings recorded here.
+See `FINDINGS.md`. Remaining high-priority static mismatches include notification UI behavior and configured-role audiences without record scope. F-01's badge placement is in PR #340; PR #391 adds the approved actionable signal and exact filtered destination. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths; F-28 scopes the late-supplier notice. F-23's 100-item board summary cap fix is tracked in PR #347. F-46's Maintenance actor exclusion is fixed in draft PR #433. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven beyond findings recorded here.
 
 ## Phase 3 unit 1 verification
 
@@ -647,11 +648,17 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 ## Phase 3 Maintenance subject access gates (draft PR [#432](https://github.com/kwat0g/kwatog/pull/432))
 
 - Registered `MaintenanceWorkOrder` against the actual detail-route scope: the Maintenance feature must be enabled, and the recipient must be active with `maintenance.view` or assigned-work read access matching `MaintenanceWorkAccess::canRead()`. Registered `MaintenancePartRequest` against the filtered `/inventory/picking?maintenance_work_order_id=...` destination, which requires the Inventory feature and `inventory.picking.view`.
-- Migrated all eight Maintenance dispatches found in the source scan: assignment needed/assigned, repair submitted/rejected, assignment escalation, shift handover, parts requested, and parts handed over. Existing selector, timing, message, link, dedupe, and email behavior remain; the subject gate adds subject metadata and suppresses recipients without access.
+- Migrated all eight Maintenance dispatches found in the source scan: assignment needed/assigned, repair submitted/rejected, assignment escalation, shift handover, parts requested, and parts handed over. Existing selector, timing, message, link, dedupe, and email behavior remain; the subject gate adds subject metadata and suppresses recipients without access. F-46 separately excludes the creating supervisor from `maintenance.assignment_needed` in PR #433.
 - Tests assert a manager and assigned worker can receive a work-order notice while an unassigned worker and warehouse picker cannot; part requests require the linked picker route. Maintenance lifecycle tests assert the linked subject and exact destination.
 - Combined target run: **40 passed / 336 assertions, 1 existing test failure** across the subject-access unit test and four Maintenance feature files. A second run excluding that known failure passed **40 tests / 333 assertions**. `MaintenanceVerifiedRecoveryTest::test_submission_validates_evidence_and_assignee_and_pending_freezes_mutations` expects 422 but returns 403 on its repeated submit attempt. The failure reproduces with the old `send()` call temporarily restored, so it is tracked separately as F-45. `PdfRenderService.php` was restored exactly after the temporary F-22 workaround.
 - Pint reports three `fully_qualified_strict_types` style issues in pre-existing touched code; no broad formatting applied. `git diff --check` passes. CI, browser/e2e, full role matrix, and full suite remain open.
 
+## Separate finding fix: F-46 Maintenance creator notice (draft PR [#433](https://github.com/kwat0g/kwatog/pull/433))
+
+- `NotifyMaintenanceWorkOrder` now excludes the work-order creator while retaining other active `maintenance_supervisor` users with `maintenance.view`.
+- `MaintenanceRoutingNotificationTest.php`: **5 passed / 31 assertions**, including creator-negative and second-supervisor-positive delivery. Tests used and restored the temporary F-22 workaround. `git diff --check` passes.
+- API CI remains blocked by inherited F-22; browser/e2e and the role matrix remain open.
+
 ## Resume instruction
 
-Next: fix F-46 separately, then extend subject access to the next notification group. F-40 and F-45 remain separate findings. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
+Next: extend subject access to the next notification group. F-40 and F-45 remain separate findings. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
