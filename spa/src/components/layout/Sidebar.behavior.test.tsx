@@ -8,6 +8,7 @@ import { useSidebarStore } from '@/stores/sidebarStore';
 
 vi.mock('@/hooks/useBadges', () => ({ useBadges: () => ({ getBadge: () => undefined }) }));
 vi.mock('@/api/auth', () => ({ authApi: { updatePreferences: vi.fn().mockResolvedValue({}) } }));
+import { authApi } from '@/api/auth';
 
 function Harness() {
   const navigate = useNavigate();
@@ -16,10 +17,34 @@ function Harness() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.clearAllMocks();
   useSidebarStore.getState().init(false);
   useSidebarStore.getState().setCollapsed(false);
 });
+
+it('persists the expand all preference and restores it after initialization', () => {
+  vi.stubGlobal('innerWidth', 1440);
+  render(<MemoryRouter initialEntries={['/mrp/plans']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+  expect(useSidebarStore.getState().expandAll).toBe(true);
+  expect(authApi.updatePreferences).toHaveBeenCalledWith({ sidebar_expand_all: true });
+
+  cleanup();
+  useSidebarStore.getState().init(false, true, true);
+  render(<MemoryRouter initialEntries={['/dashboard']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  expect(screen.getByRole('button', { name: 'Collapse all' })).toBeInTheDocument();
+  screen.getAllByRole('button').filter((button) => button.hasAttribute('aria-expanded'))
+    .forEach((button) => expect(button).toHaveAttribute('aria-expanded', 'true'));
+});
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+it('keeps the narrow-screen sidebar rail collapsed while restoring expand all separately', () => {
+  vi.stubGlobal('innerWidth', 1024);
+  useSidebarStore.getState().init(false, true, true);
+  expect(useSidebarStore.getState().collapsed).toBe(true);
+  expect(useSidebarStore.getState().expandAll).toBe(true);
+  vi.unstubAllGlobals();
+});
 
 it('expands the active module, expires unvisited peeks, and keeps visited modules open', () => {
   render(<MemoryRouter initialEntries={['/mrp/plans']}><Harness /></MemoryRouter>);

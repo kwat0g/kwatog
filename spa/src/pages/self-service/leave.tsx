@@ -203,7 +203,7 @@ export default function SelfServiceLeavePage() {
     setError,
     reset,
     formState: { errors },
-  } = useForm<FormValues>({
+  } = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       leave_type_id: '',

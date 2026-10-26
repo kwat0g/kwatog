@@ -59,4 +59,17 @@ class BackupController
             ],
         ], 202);
     }
+
+    public function verifyLegacy(Request $request, BackupService $backups): JsonResponse
+    {
+        $validated = $request->validate([
+            'database_filename' => ['required', 'string', 'max:180'],
+        ]);
+        $manifest = $backups->adoptLegacy($validated['database_filename']);
+
+        return response()->json([
+            'message' => 'Archive checked; checksum recorded for future restore checks.',
+            'data' => $manifest,
+        ]);
+    }
 }
