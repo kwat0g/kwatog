@@ -163,7 +163,8 @@ class BadgeService
             if ($feature !== null && $this->settings->get("modules.{$feature}", true) !== true) {
                 continue;
             }
-            if (! $this->userHasAny($user, $def['permissions'])) {
+            if (! $this->userHasAny($user, $def['permissions'])
+                || ! $this->userHasAll($user, $def['required_permissions'] ?? [])) {
                 continue;
             }
             try {
@@ -192,6 +193,7 @@ class BadgeService
     /**
      * @return array<string, array{
      *   permissions: array<int, string>,
+     *   required_permissions?: array<int, string>,
      *   label: string,
      *   description: string,
      *   counter: Closure
@@ -402,6 +404,13 @@ class BadgeService
             ],
 
             // Production > Work orders — active work orders past their due time.
+            'work_orders_awaiting_confirmation' => [
+                'permissions' => ['production.work_orders.view'],
+                'required_permissions' => ['production.view', 'production.wo.confirm'],
+                'label'       => 'Awaiting confirmation',
+                'description' => 'Planned production work orders awaiting confirmation',
+                'counter'     => fn (): int => WorkOrder::query()->awaitingConfirmation()->count(),
+            ],
             'work_orders' => [
                 'permissions' => ['production.work_orders.view'],
                 'label'       => 'Overdue',
@@ -417,7 +426,8 @@ class BadgeService
                 )->count(),
             ],
             'work_orders_paused' => [
-                'permissions' => ['production.work_orders.lifecycle'],
+                'permissions' => ['production.work_orders.view'],
+                'required_permissions' => ['production.view', 'production.work_orders.lifecycle'],
                 'label'       => 'Paused',
                 'description' => 'Production work orders awaiting resume or cancellation',
                 'counter'     => fn (): int => WorkOrder::query()->paused()->count(),
@@ -602,6 +612,17 @@ class BadgeService
             }
         }
         return false;
+    }
+
+    /** @param array<int, string> $permissions */
+    private function userHasAll(User $user, array $permissions): bool
+    {
+        foreach ($permissions as $slug) {
+            if (! $user->hasPermission($slug)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function severity(int $count, int $danger, int $warning): string

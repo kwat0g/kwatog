@@ -289,6 +289,135 @@ class BadgeControllerTest extends TestCase
             ->assertOk()
             ->json('data');
         $this->assertArrayNotHasKey('work_orders_paused', $plannerBadges);
+
+        $viewless = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $viewless->id,
+            'permission_id' => Permission::query()->where('slug', 'production.work_orders.lifecycle')->value('id'),
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $grantor->id,
+            'reason' => 'Work-order lifecycle badge gate regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $viewless = $viewless->fresh();
+        $this->assertTrue($viewless->hasPermission('production.work_orders.lifecycle'));
+        $this->assertFalse($viewless->hasPermission('production.work_orders.view'));
+        $this->actingAs($viewless, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=paused')
+            ->assertForbidden();
+        $viewlessBadges = $this->actingAs($viewless, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_paused', $viewlessBadges);
+    }
+
+    public function test_production_release_badge_matches_planned_list_and_requires_view_and_confirm_permissions(): void
+    {
+        $planner = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
+        ]);
+        $this->assertTrue($planner->hasPermission('production.work_orders.view'));
+        $this->assertTrue($planner->hasPermission('production.wo.confirm'));
+
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create(['status' => $status->value]);
+        }
+        WorkOrder::factory()->create(['status' => WorkOrderStatus::Planned->value])->delete();
+
+        $listResponse = $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertOk();
+        $badges = $this->actingAs($planner, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $listResponse->json('meta.total'));
+        $this->assertSame('planned', $listResponse->json('data.0.status'));
+        $this->assertSame($listResponse->json('meta.total'), $badges['work_orders_awaiting_confirmation']['count']);
+
+        $viewOnly = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            ['user_id' => $viewOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view-only regression test', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $viewOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view-only regression test', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $viewOnly = $viewOnly->fresh();
+        $this->assertTrue($viewOnly->hasPermission('production.view'));
+        $this->assertTrue($viewOnly->hasPermission('production.work_orders.view'));
+        $this->assertFalse($viewOnly->hasPermission('production.wo.confirm'));
+        $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $viewOnlyBadges = $this->actingAs($viewOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_awaiting_confirmation', $viewOnlyBadges);
+
+        $confirmOnly = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            ['user_id' => $confirmOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view gate regression test', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $confirmOnly->id, 'permission_id' => Permission::query()->where('slug', 'production.wo.confirm')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge view gate regression test', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $confirmOnly = $confirmOnly->fresh();
+        $this->assertTrue($confirmOnly->hasPermission('production.view'));
+        $this->assertTrue($confirmOnly->hasPermission('production.wo.confirm'));
+        $this->assertFalse($confirmOnly->hasPermission('production.work_orders.view'));
+        $this->actingAs($confirmOnly, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertForbidden();
+        $confirmOnlyBadges = $this->actingAs($confirmOnly, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_awaiting_confirmation', $confirmOnlyBadges);
+
+        $moduleless = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            ['user_id' => $moduleless->id, 'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge parent route gate regression test', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $moduleless->id, 'permission_id' => Permission::query()->where('slug', 'production.wo.confirm')->value('id'),
+                'type' => PermissionOverrideType::Grant->value, 'granted_by' => $grantor->id,
+                'reason' => 'Work-order release badge parent route gate regression test', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        $moduleless = $moduleless->fresh();
+        $this->assertFalse($moduleless->hasPermission('production.view'));
+        $this->assertTrue($moduleless->hasPermission('production.work_orders.view'));
+        $this->assertTrue($moduleless->hasPermission('production.wo.confirm'));
+        $this->actingAs($moduleless, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=release')
+            ->assertForbidden();
+        $modulelessBadges = $this->actingAs($moduleless, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders_awaiting_confirmation', $modulelessBadges);
     }
 
     public function test_widened_scope_badges_are_permission_gated(): void

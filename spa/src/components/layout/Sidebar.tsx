@@ -131,6 +131,7 @@ function badgeDestination(path: string, key: string): string {
     mrb_holds: 'status=held',
     inquiries: 'status=new',
     open_complaints: 'signal=open',
+    work_orders_awaiting_confirmation: 'signal=release',
     work_orders: 'signal=overdue',
     work_orders_due_soon: 'signal=due_soon',
     work_orders_paused: 'signal=paused',
@@ -327,7 +328,7 @@ export const SECTIONS: NavSection[] = [
         icon: WorkOrderIcon,
         feature: 'production',
         permission: 'production.work_orders.view',
-        badgeKeys: ['work_orders', 'work_orders_due_soon', 'work_orders_paused'],
+        badgeKeys: ['work_orders_awaiting_confirmation', 'work_orders', 'work_orders_due_soon', 'work_orders_paused'],
       },
       {
         to: '/production/schedule',
