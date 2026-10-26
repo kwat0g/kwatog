@@ -837,6 +837,8 @@ interface SidebarProps {
 
 export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }: SidebarProps) {
   const collapsed = useSidebarStore((s) => s.collapsed);
+  const expandAllPreference = useSidebarStore((s) => s.expandAll);
+  const setExpandAllPreference = useSidebarStore((s) => s.setExpandAll);
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const peek = useSidebarStore((s) => s.peek);
   const [hovered, setHovered] = useState(false);
@@ -1045,18 +1047,16 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const [modules, setModules] = useState({
     pathname,
     activeSectionLabel,
-    expanded: activeModuleSectionLabel ? [activeModuleSectionLabel] : [],
+    expandAll: expandAllPreference,
+    expanded: expandAllPreference
+      ? moduleSections.map((section) => section.label)
+      : activeModuleSectionLabel ? [activeModuleSectionLabel] : [],
   });
-  if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel) {
-    const expandedAll =
-      moduleSections.length > 0 &&
-      moduleSections.every((section) => modules.expanded.includes(section.label));
-    const expanded = expandedAll
-      ? modules.expanded
-      : activeModuleSectionLabel
-        ? [activeModuleSectionLabel]
-        : [];
-    setModules({ pathname, activeSectionLabel, expanded });
+  if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel || modules.expandAll !== expandAllPreference) {
+    const expanded = expandAllPreference
+      ? moduleSections.map((section) => section.label)
+      : activeModuleSectionLabel ? [activeModuleSectionLabel] : [];
+    setModules({ pathname, activeSectionLabel, expandAll: expandAllPreference, expanded });
   }
 
   useEffect(() => {
@@ -1071,14 +1071,17 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const toggleAll = () => {
     peekTimers.current.forEach(clearTimeout);
     peekTimers.current.clear();
+    const nextExpandAll = !allExpanded;
+    setExpandAllPreference(nextExpandAll);
     setModules({
       pathname,
       activeSectionLabel,
-      expanded: allExpanded
-        ? activeModuleSectionLabel
+      expandAll: nextExpandAll,
+      expanded: nextExpandAll
+        ? moduleSections.map((section) => section.label)
+        : activeModuleSectionLabel
           ? [activeModuleSectionLabel]
           : []
-        : moduleSections.map((section) => section.label),
     });
   };
 
@@ -1086,12 +1089,16 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     clearTimeout(peekTimers.current.get(label));
     peekTimers.current.delete(label);
     const open = !modules.expanded.includes(label);
+    const expanded = open
+      ? [...modules.expanded, label]
+      : modules.expanded.filter((entry) => entry !== label);
+    const nowAllExpanded = moduleSections.length > 0 && moduleSections.every((section) => expanded.includes(section.label));
+    if (nowAllExpanded !== expandAllPreference) setExpandAllPreference(nowAllExpanded);
     setModules({
       pathname,
       activeSectionLabel,
-      expanded: open
-        ? [...modules.expanded, label]
-        : modules.expanded.filter((entry) => entry !== label),
+      expandAll: nowAllExpanded,
+      expanded,
     });
     if (open && !visited.current.has(label)) {
       const expire = () => {

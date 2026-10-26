@@ -15,8 +15,8 @@ const shellSize: Record<FieldSize, string> = {
 
 const textSize: Record<FieldSize, string> = {
   sm: 'px-2 text-xs',
-  md: 'px-3 text-sm',
-  lg: 'px-3 text-base',
+  md: 'px-3 text-md',
+  lg: 'px-3 text-md',
   xl: 'px-4 text-xl',
 };
 
@@ -81,12 +81,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
         {label && (
-          <label htmlFor={inputId} className="text-xs text-muted font-medium">
+          <label htmlFor={inputId} className="text-label text-muted font-medium">
             {label}
             {required && <span aria-hidden="true" className="text-danger-fg ml-0.5">*</span>}
           </label>
         )}
         <div
+          data-touch-target
           className={cn(
             'flex items-stretch rounded-md border overflow-hidden transition-colors duration-fast',
             shellSize[fieldSize],
@@ -104,7 +105,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
         >
           {resolvedPrefix && (
-            <span className="flex items-center px-2 text-xs text-muted bg-elevated border-r border-default">
+            <span className="flex items-center px-2 text-caption text-muted bg-elevated border-r border-default">
               {resolvedPrefix}
             </span>
           )}
@@ -131,17 +132,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             </span>
           )}
           {suffix && (
-            <span className="flex items-center px-2 text-xs text-muted bg-elevated border-l border-default">
+            <span className="flex items-center px-2 text-caption text-muted bg-elevated border-l border-default">
               {suffix}
             </span>
           )}
         </div>
         {error ? (
-          <span id={`${inputId}-error`} role="alert" className="text-xs text-danger-fg">
+          <span id={`${inputId}-error`} role="alert" className="text-caption text-danger-fg">
             {error}
           </span>
         ) : helper ? (
-          <span id={`${inputId}-helper`} className="text-xs text-muted">
+          <span id={`${inputId}-helper`} className="text-caption text-muted">
             {helper}
           </span>
         ) : null}

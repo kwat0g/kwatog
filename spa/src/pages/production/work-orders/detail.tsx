@@ -1104,7 +1104,7 @@ export default function WorkOrderDetailPage() {
                                     </p>
                                     {canInventoryView && (
                                       <Link
-                                        className="mt-1 inline-block text-primary hover:underline"
+                                        className="mt-1 inline-block text-link hover:text-link-hover hover:underline underline-offset-2"
                                         to={`/inventory/stock-levels?view=movements&movement_id=${encodeURIComponent(o.general_ledger_handoff.movement_id)}`}
                                       >
                                         Open stock movement
@@ -1803,6 +1803,7 @@ export default function WorkOrderDetailPage() {
             Cancel
           </Button>
           <Button
+            variant="primary"
             disabled={!releaseReason.trim() || release.isPending}
             loading={release.isPending}
             onClick={() => release.mutate()}

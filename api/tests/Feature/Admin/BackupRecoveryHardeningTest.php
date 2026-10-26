@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Common\Models\BackupOperation;
+use App\Common\Services\BackupManifestStore;
 use App\Common\Services\BackupService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -335,6 +336,25 @@ class BackupRecoveryHardeningTest extends TestCase
         // No manifest means nothing to compare a hash against, so the catalog
         // must not imply it verified one.
         $this->assertNull($legacy['artifacts']['database']['sha256']);
+    }
+
+    public function test_the_admin_catalog_includes_a_scheduled_sidecar_backup(): void
+    {
+        $admin = $this->systemAdmin();
+        $name = 'ogami-20260825-105500.sql.gz';
+        $archive = gzencode('scheduled dump bytes');
+        $this->writeArtifact($name, $archive);
+        $manifest = app(BackupManifestStore::class)->publish($name);
+
+        $data = $this->actingAs($admin)
+            ->getJson('/api/v1/admin/backups')
+            ->assertOk()
+            ->json('data');
+
+        $backup = collect($data['backups'])->firstWhere('id', $manifest['id']);
+        $this->assertNotNull($backup);
+        $this->assertTrue($backup['restorable']);
+        $this->assertSame(hash('sha256', $archive), $backup['artifacts']['database']['sha256']);
     }
 
     public function test_the_catalog_reports_a_manifest_size_mismatch_as_unrestorable(): void

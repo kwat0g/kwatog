@@ -27,7 +27,8 @@ final class NotifySystemAdminsOnQueueLongWait
             $admins = User::query()
                 ->where('is_active', true)
                 ->whereHas('role', static fn ($query) => $query->where('slug', 'system_admin'))
-                ->get();
+                ->get()
+                ->filter(static fn (User $admin): bool => $admin->hasPermission('dashboard.admin.view'));
 
             $this->notifications->sendInApp(
                 $admins,

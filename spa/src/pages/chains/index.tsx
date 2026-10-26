@@ -261,7 +261,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
                           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-subtle"
                         >
                           <LuTriangleAlert size={13} className="shrink-0 text-warning-fg" />
-                          <span className="font-mono text-xs text-primary">{row.doc_number}</span>
+                          <span className="font-mono text-xs text-link">{row.doc_number}</span>
                           <span className="flex-1 truncate text-xs text-secondary">
                             {row.label}
                           </span>

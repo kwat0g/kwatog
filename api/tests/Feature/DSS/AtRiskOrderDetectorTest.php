@@ -59,7 +59,7 @@ class AtRiskOrderDetectorTest extends TestCase
 
     public function test_clean_slate_emits_nothing(): void
     {
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_emits_one_row_per_risk_bucket_and_skips_terminal_and_superseded(): void
@@ -89,7 +89,7 @@ class AtRiskOrderDetectorTest extends TestCase
         ]);
 
         $byKey = [];
-        foreach ($this->detector()->detect() as $emission) {
+        foreach ($this->detector()->detect()->emissions as $emission) {
             $byKey[$emission->dedupeKey] = $emission;
         }
 
@@ -120,7 +120,7 @@ class AtRiskOrderDetectorTest extends TestCase
         $this->activePlan($b, 1, 2, []);
         $this->activePlan($c, 1, 4, []);
 
-        $emissions = $this->detector()->detect(['max_evidence' => 2]);
+        $emissions = $this->detector()->detect(['max_evidence' => 2])->emissions;
 
         $shortage = null;
         foreach ($emissions as $emission) {

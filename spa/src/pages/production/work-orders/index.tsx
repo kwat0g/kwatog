@@ -272,7 +272,7 @@ export default function WorkOrdersListPage() {
     <div>
       <PageHeader
         title="Work orders"
-        actions={can('production.wo.create') ? <Button onClick={() => navigate('/production/work-orders/create')}>Produce for stock</Button> : undefined}
+        actions={can('production.wo.create') ? <Button variant="primary" className="min-h-11 xl:min-h-8" onClick={() => navigate('/production/work-orders/create')}>Produce for stock</Button> : undefined}
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'WO' : 'WOs'}` : undefined}
       />
       <FilterBar
