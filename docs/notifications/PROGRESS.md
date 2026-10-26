@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft subject-access stack reaches Purchase Requests in [PR #426](https://github.com/kwat0g/kwatog/pull/426), stacked after the Purchase Order gate in #424 and separate F-41 fix in #425. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft subject-access stack reaches Delivery in [PR #427](https://github.com/kwat0g/kwatog/pull/427), after the Purchase Request gate in #426. Earlier stack includes Purchase Orders in #424 and separate F-41 fix in #425. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
 
 ## Phase status
 
@@ -40,6 +40,7 @@
 | F-09/F-13. Customer portal AR invoice signal parity | `notifications/customer-ar-signals` | [#411](https://github.com/kwat0g/kwatog/pull/411) | `e7e70315` |
 | Phase 3. Approval-backed subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | `2eb2b843`, `e855165e` |
 | Phase 3. Purchase Request subject access gate | `notifications/purchase-request-subject-access` | [#426](https://github.com/kwat0g/kwatog/pull/426) | `65e54054` |
+| Phase 3. Delivery subject access gate | `notifications/delivery-subject-access` | [#427](https://github.com/kwat0g/kwatog/pull/427) | `df71d2c5` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -596,6 +597,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Added positive owner delivery, negative out-of-scope/approval-only/no-permission delivery, disabled-module suppression, and subject metadata checks for both notification events.
 - `NotificationServiceSubjectAccessTest.php`: **16 passed / 101 assertions**. Focused approval-audience and skipped-auto-conversion tests: **4 passed / 26 assertions**. PHP syntax, Pint on all six changed files, and `git diff --check` pass. Targeted tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly.
 - PR #426 API CI fails in the pre-test PHP syntax step on inherited F-22: duplicate `PdfRenderService::ensureDompdfDirs()` at line 200. The finding-lifecycle check passes. Full suite, browser/e2e, and complete role matrix remain open.
+
+## Phase 3 Delivery subject access gate (draft PR [#427](https://github.com/kwat0g/kwatog/pull/427))
+
+- Route review: the internal delivery group requires `feature:supply_chain`; list/detail both require `supply_chain.view` or `supply_chain.deliveries.view`, and `DeliveryController::show()` adds no row scope. The subject registry now applies those exact checks. Driver detail uses a separate driver-assignment scope and is not targeted by these internal links. Customer-portal delivery detail checks the authenticated user's customer ID; portal status notices stay on the existing exact-customer path.
+- Searched all API delivery links and `entity_type` values. Migrated the internal delivery-draft, automatic-supply blocker, delivery-attempt, missing-arrival, and customer-email failure notifications (missing email, enqueue failure, queued mail failure). Existing recipients, event timing, and dedupe keys remain. The delivery-drafted notice now identifies Delivery as its subject because that is the record its link opens; prior rows remain renderable through their stored `link_to`.
+- `NotificationServiceSubjectAccessTest.php`: **17 passed / 114 assertions**. Focused delivery-draft, delivery-attempt, and email-failure tests: **4 passed / 20 assertions**. Automatic-supply reconciliation notice: **1 passed / 12 assertions**. PHP syntax and `git diff --check` pass. Pint reports seven legacy style issues in touched files; no broad formatting applied. Tests used and restored the temporary F-22 workaround.
+- The after-commit Delivery Trace notice has no dedicated recipient scenario test yet. PR checks were pending at this update. Full suite, browser/e2e, and complete role matrix remain open.
 
 ## Outstanding proof / risks
 
