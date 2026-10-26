@@ -392,6 +392,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Adapted the regression test to the current service API after #397 removed the unused `notify()` wrapper. It proves inactive/deleted users receive no in-app row, realtime event, or Laravel notification, while an active user still receives the in-app notice.
 - `NotificationServiceTest.php`: **10 passed / 36 assertions**, including the inactive-recipient regression. PHP syntax, Pint on both changed PHP files, and `git diff --check` pass. PR #403 API CI fails before PHPUnit on inherited F-22; finding-lifecycle passes. This recipient filter does not replace subject-access authorization or the Phase 2 rule resolver.
 
+## Separate finding fix: F-36 clearance detail controller resolution (draft PR #407)
+
+- Clearance detail requests returned 500 while building `SeparationController`: `FinalPayService` referenced `EmploymentProrationService` in HR, but the existing class lives in Payroll.
+- Added the missing Payroll import only. `ClearanceReadScopeTest.php` exercises the exact detail route and department-scope outcomes.
+- This fix is isolated from notification changes. No event timing, recipient rule, or final-pay calculation changed.
+
 ## Separate finding fix: F-12 chain broadcast payload (draft PR #398)
 
 - `ChainStepAdvanced` now broadcasts only `{refresh: true}` under the new `.chain.refresh` event name. The SPA only invalidates its current record and chain queries; it no longer needs status, document number, completed steps, or actor name from the channel.
