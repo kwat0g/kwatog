@@ -86,13 +86,9 @@ export default function LeavesPage() {
  // what keeps the request honest: a row the caller cannot approve is never
  // submitted, so the batch cannot half-fail on 403s the UI could have
  // predicted. Anything not submitted is reported as untouched, not as done.
- const canApproveDept = can('leave.approve_dept');
- const canApproveHR = can('leave.approve_hr');
- const canApproveAny = canApproveDept || canApproveHR;
-
  const splitByStage = (rows: LeaveRequest[]) => {
- const dept = canApproveDept ? rows.filter((r) => r.status === 'pending_dept') : [];
- const hr = canApproveHR ? rows.filter((r) => r.status === 'pending_hr') : [];
+ const dept = rows.filter((r) => r.can_approve && r.status === 'pending_dept');
+ const hr = rows.filter((r) => r.can_approve && r.status === 'pending_hr');
  return { dept, hr, untouched: rows.length - dept.length - hr.length };
  };
 
@@ -232,13 +228,13 @@ export default function LeavesPage() {
  align: 'right',
  cell: (r) => (
  <div className="flex items-center justify-end gap-1">
- {r.status === 'pending_dept' && can('leave.approve_dept') && (
+ {r.status === 'pending_dept' && r.can_approve && (
  <>
  <Button variant="primary" size="xs" disabled={approveDept.isPending || bulkApprove.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
  <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
  </>
  )}
- {r.status === 'pending_hr' && can('leave.approve_hr') && (
+ {r.status === 'pending_hr' && r.can_approve && (
  <>
  <Button variant="primary" size="xs" disabled={approveHR.isPending || bulkApprove.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
  <Button variant="danger" size="xs" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
@@ -324,8 +320,8 @@ export default function LeavesPage() {
  tableKey="leave-requests"
  onRowClick={(r) => navigate(`/hr/leaves/${r.id}`)} columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
- selectable={canApproveAny}
- bulkActions={canApproveAny ? bulkActions : undefined} /></div>
+ selectable={all.some((r) => r.can_approve)}
+ bulkActions={all.some((r) => r.can_approve) ? bulkActions : undefined} /></div>
  )}
 
  {data && all.length > 0 && view === 'kanban' && (
