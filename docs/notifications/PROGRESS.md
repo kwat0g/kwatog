@@ -38,7 +38,7 @@
 | F-39. Sales Orders confirmation queue | `notifications/sales-order-confirmation-badge` | [#387](https://github.com/kwat0g/kwatog/pull/387) | merged as `16f01f92` |
 | Work Order multi-signal parity | `notifications/production-overdue-badge` | [#388](https://github.com/kwat0g/kwatog/pull/388) | merged as `51d415b7` |
 | F-40. Work Order route/RBAC gate alignment | `notifications/fix-production-badge-route-permissions` | [#389](https://github.com/kwat0g/kwatog/pull/389) | merged as `723cc8f1` |
-| F-41. Production assignment-alert access | `notifications/fix-production-alert-access` | [#390](https://github.com/kwat0g/kwatog/pull/390) | rebased; syntax/diff passed; API not rerun; merge pending |
+| F-41. Production assignment-alert access | `notifications/fix-production-alert-access` | [#390](https://github.com/kwat0g/kwatog/pull/390) | merged as `e6fc83c6`; original-head API test passed; post-rebase API test not run against shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -373,11 +373,18 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Before the fix, the negative case failed because an inactive user received a persisted notification. On the original feature head, `NotificationServiceTest.php --filter=inactive_internal_users_are_excluded_from_notification_delivery` passed **1 test / 8 assertions**, covering database rows, realtime events, Laravel notifications, inactive users, and soft-deleted users. `git diff --check` passed.
 - Post-rebase tests were not rerun because PHP/PHPUnit are unavailable locally. The API CI stopped before PHPUnit on the inherited F-22 duplicate PDF helper; `finding-lifecycle` passed. No SPA files changed, so no SPA CI check applies. CI is waived per the user's instruction.
 
-## Separate finding fix: F-41 Production assignment-alert access (PR [#390](https://github.com/kwat0g/kwatog/pull/390); merge pending)
+## Separate finding fix: F-41 Production assignment-alert access (PR [#390](https://github.com/kwat0g/kwatog/pull/390), merged as `e6fc83c6`)
 
 - `AlertEngineService::checkProduction()` starts with active `ppc_head` and `production_manager` users and adds active `maintenance_tech` users when a slot has a machine or mold. The linked Work Order route requires both `production.view` and `production.work_orders.view`.
 - PR #390 filters the existing assignment-review audience through both route permissions before `NotificationService::sendInApp()`. It leaves event timing, title/body, deep link, dedupe key, PPC/Production Manager candidates, and the separate Sales Officer delivery-risk notice unchanged.
 - `ProductionAssignmentAlertAudienceTest` passed **1 test / 10 assertions** on the original feature head. It proves PPC/Production Manager recipients are retained, Maintenance Technician is excluded, and an eligible notice links to the Work Order. After rebase, PHP 8.3 syntax and `git diff --check` passed. API test was not rerun against shared `ogami_test`. Browser verification remains outstanding.
+
+## Separate signal fix: F-01 Profile Update actionable queue (PR [#391](https://github.com/kwat0g/kwatog/pull/391))
+
+- The `profile_requests` badge now appears on Bank Account Changes and links to `/hr/profile-update-requests?signal=awaiting_my_action`. `ProfileUpdateRequestService::awaitingMyActionQuery()` is shared by the badge and list.
+- HR reviewers need both `hr.employees.view` and `hr.employees.edit`; their rows remain department-scoped and exclude self-submissions. Finance reviewers need `hr.profile_updates.finance_review`; they see only bank requests after HR review, excluding the requester and previous HR reviewer. Users with both audiences see their union. Existing broad review lists retain their prior filters.
+- Original-head API parity coverage passed **9 tests / 69 assertions** for HR, Finance, combined permissions, department-scoped HR, and view-only users. SPA Sidebar and profile-request page tests passed **40 tests**; changed-file ESLint, PHP syntax, and `git diff --check` passed. Post-rebase API tests were not run against shared `ogami_test`; browser QA remains outstanding.
+- Full SPA typecheck reports unrelated existing errors in export helpers, missing `lucide-react`, stock-transfer API, and purchase-order props. Pint reports existing style findings in touched service files; no broad formatting was applied.
 
 ## Outstanding proof / risks
 

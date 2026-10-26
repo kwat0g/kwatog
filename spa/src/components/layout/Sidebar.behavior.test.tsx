@@ -44,6 +44,24 @@ it('persists the expand all preference and restores it after initialization', ()
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
+it('opens Bank Account Changes on the actionable profile-review queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'profile_requests'
+    ? { count: 2, severity: 'warning', label: 'Awaiting my action', description: 'Profile changes you can review' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/profile-update-requests']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  const bankChanges = screen.getByRole('link', { name: /Bank Account Changes/ });
+  expect(bankChanges).toHaveAttribute(
+    'href',
+    '/hr/profile-update-requests?signal=awaiting_my_action',
+  );
+  expect(within(bankChanges).getByText('2')).toBeVisible();
+  expect(within(screen.getByRole('link', { name: /Employees/ })).queryByText('2')).not.toBeInTheDocument();
+});
+
 it('opens the awaiting-approval filter when purchase requests has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'purchase_requests'

@@ -76,6 +76,8 @@ import type { BadgeSeverity } from '@/api/badges';
 
 export interface NavItem {
   to: string;
+  /** Destination with the badge's actionable filter already applied. */
+  badgeTo?: string;
   label: string;
   icon: IconType;
   /** Keep the most urgent cross-module destinations visible above module taxonomy. */
@@ -685,6 +687,7 @@ export const SECTIONS: NavSection[] = [
       },
       {
         to: '/hr/profile-update-requests',
+        badgeTo: '/hr/profile-update-requests?signal=awaiting_my_action',
         label: 'Bank Account Changes',
         icon: LuLandmark,
         feature: 'hr',
@@ -1542,7 +1545,7 @@ const NavLink = memo(function NavLink({
   const link = (
     <Link
       ref={linkRef}
-      to={item.to}
+      to={item.badgeTo ?? item.to}
       aria-label={collapsed ? collapsedLabel : undefined}
       title={collapsed ? collapsedLabel : item.description}
       aria-current={active ? 'page' : undefined}

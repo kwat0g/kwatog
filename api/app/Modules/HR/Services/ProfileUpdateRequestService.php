@@ -87,7 +87,16 @@ class ProfileUpdateRequestService
      */
     public function listForReview(array $filters = [], ?User $user = null): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
-        return $this->reviewQueueQuery($user, $filters)
+        $signal = $filters['signal'] ?? null;
+        if ($signal !== null && $signal !== 'awaiting_my_action') {
+            throw ValidationException::withMessages(['signal' => ['Unsupported signal filter.']]);
+        }
+
+        $query = $signal === 'awaiting_my_action'
+            ? $this->awaitingMyActionQuery($user)
+            : $this->reviewQueueQuery($user, $filters);
+
+        return $query
             ->with(['employee.department', 'requester'])
             ->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
@@ -125,6 +134,53 @@ class ProfileUpdateRequestService
         }
 
         return $query;
+    }
+
+    /** Shared query for the HR and Finance queues a user can act on now. */
+    public function awaitingMyActionQuery(?User $user): Builder
+    {
+        $query = ProfileUpdateRequest::query();
+        if ($user === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $canReviewHr = $user->hasPermission('hr.employees.view') && $user->hasPermission('hr.employees.edit');
+        $canReviewFinance = $user->hasPermission('hr.profile_updates.finance_review');
+        if (! $canReviewHr && ! $canReviewFinance) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $queue) use ($user, $canReviewHr, $canReviewFinance): void {
+            if ($canReviewHr) {
+                $queue->where(function (Builder $hr) use ($user): void {
+                    $hr->where('status', ProfileUpdateStatus::Pending->value)
+                        ->where(fn (Builder $requests) => $requests->whereNull('requested_by')->orWhere('requested_by', '!=', $user->id));
+                    DepartmentScope::apply(
+                        $hr,
+                        $user,
+                        viewAllPermission: 'hr.employees.view_sensitive',
+                        departmentPermission: 'hr.employees.view',
+                        deptColumn: 'department_id',
+                        selfColumn: null,
+                        selfId: null,
+                        deptRelation: 'employee',
+                    );
+                });
+            }
+
+            if ($canReviewFinance) {
+                $financeQueue = function (Builder $finance) use ($user): void {
+                    $finance->where('status', ProfileUpdateStatus::PendingFinance->value)
+                        ->where('requires_finance', true)
+                        ->whereNotNull('reviewed_by')
+                        ->whereNotNull('reviewed_at')
+                        ->where('reviewed_by', '!=', $user->id)
+                        ->where(fn (Builder $requests) => $requests->whereNull('requested_by')->orWhere('requested_by', '!=', $user->id));
+                };
+
+                $canReviewHr ? $queue->orWhere($financeQueue) : $queue->where($financeQueue);
+            }
+        });
     }
 
     /**

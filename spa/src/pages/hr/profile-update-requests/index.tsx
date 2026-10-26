@@ -1,7 +1,7 @@
 import { reportMutationError } from '@/lib/formErrors';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
  Button,
@@ -50,18 +50,24 @@ const STATUS_CHIP: Record<ProfileUpdateRequestStatus, 'warning' | 'info' | 'succ
 export default function ProfileUpdateRequestsPage() {
  const queryClient = useQueryClient();
  const { can } = usePermission();
+  const [searchParams] = useSearchParams();
+  const awaitingMyAction = searchParams.get('signal') === 'awaiting_my_action';
  const canFinance = can('hr.profile_updates.finance_review');
  const canViewEmployees = can('hr.employees.view');
  const canReviewHr = can('hr.employees.edit');
- const [status, setStatus] = useState<ProfileUpdateRequestStatus>(canFinance && !canViewEmployees ? 'pending_finance' : 'pending');
+  const defaultStatus = canFinance && !canViewEmployees ? 'pending_finance' : 'pending';
+  const [status, setStatus] = useState<ProfileUpdateRequestStatus | undefined>(awaitingMyAction ? undefined : defaultStatus);
+  useEffect(() => setStatus(awaitingMyAction ? undefined : defaultStatus), [awaitingMyAction, defaultStatus]);
  const [confirm, setConfirm] = useState<
  | null
  | { kind: 'approve' | 'reject'; stage: 'hr' | 'finance'; row: ProfileUpdateReviewItem }
  >(null);
 
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['hr', 'profile-update-requests', status],
- queryFn: () => profileUpdateRequestsApi.list({ status }),
+    queryKey: ['hr', 'profile-update-requests', awaitingMyAction ? undefined : status, awaitingMyAction],
+    queryFn: () => profileUpdateRequestsApi.list(awaitingMyAction
+      ? { signal: 'awaiting_my_action' }
+      : { status }),
  placeholderData: (prev) => prev,
  });
  const { data: options } = useQuery({
@@ -98,15 +104,15 @@ export default function ProfileUpdateRequestsPage() {
  return (
  <div>
  <PageHeader
- title={canFinance && !canViewEmployees ? "Bank Account Changes" : "Profile Change Requests"}
+ title={awaitingMyAction ? 'Profile Changes Awaiting My Action' : canFinance && !canViewEmployees ? "Bank Account Changes" : "Profile Change Requests"}
  subtitle={data ? `${data.meta.total} requests` : undefined}
  />
 
- <FilterBar
- filters={filterConfig}
- values={{ status }}
- onFilter={(_k, v) => setStatus((v as ProfileUpdateRequestStatus) || 'pending')}
- />
+  {!awaitingMyAction && <FilterBar
+  filters={filterConfig}
+  values={{ status: status ?? '' }}
+  onFilter={(_k, v) => setStatus((v as ProfileUpdateRequestStatus) || undefined)}
+  />}
 
  {isLoading && !data && <SkeletonTable columns={5} rows={6} />}
 
