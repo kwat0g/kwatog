@@ -203,6 +203,24 @@ final class PurchaseRequestAccessPolicy
         ]));
     }
 
+    /** @return Builder<PurchaseRequest> */
+    public function pendingApprovalsFor(User $user): Builder
+    {
+        $roleSlugs = $this->approvalRoleSlugs($user);
+        $query = PurchaseRequest::query()
+            ->where('status', PurchaseRequestStatus::Pending->value)
+            ->where('requested_by', '<>', $user->id);
+        $this->visibleTo($query, $user);
+
+        if ($roleSlugs === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('approvalRecords', fn (Builder $records) => $records
+            ->where('action', 'pending')
+            ->whereIn('role_slug', $roleSlugs));
+    }
+
     /**
      * @return array<string, bool>
      */

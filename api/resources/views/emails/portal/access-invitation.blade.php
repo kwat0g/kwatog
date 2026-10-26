@@ -1,7 +1,7 @@
 <x-mail::message :preheader="$preheader" :title="'Set up your '.ucfirst($portalType).' portal access'">
 # Set up your {{ $portalType }} portal access
 
-Hello {{ $recipientName }},
+Hello {{ $safeRecipientName }},
 
 An administrator created a {{ $portalType }} portal account for you at {{ $brand['name'] }}. Set a private password with the one-time link below. It expires in 60 minutes.
 

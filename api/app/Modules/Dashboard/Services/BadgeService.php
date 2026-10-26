@@ -6,8 +6,6 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
 use App\Common\Services\ApprovalBoardService;
-use App\Common\Models\ApprovalDelegation;
-use App\Common\Models\ApprovalRecord;
 use App\Common\Support\DepartmentScope;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -25,14 +23,14 @@ use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
-use App\Modules\HR\Models\ProfileUpdateRequest;
+use App\Modules\HR\Services\ProfileUpdateRequestService;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
-use App\Modules\Landing\Models\ContactInquiry;
+use App\Modules\Landing\Services\ContactInquiryInboxService;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
@@ -41,8 +39,7 @@ use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -205,8 +202,6 @@ class BadgeService
      */
     private function definitions(User $user): array
     {
-        $roleSlug = $user->role?->slug;
-
         return [
             // Reuse the board's filtered queue so sidebar count matches the cards shown there.
             'approvals' => [
@@ -228,17 +223,13 @@ class BadgeService
 
             // Procurement > Purchase requests — pending PRs routed to this role.
             'purchase_requests' => [
-                'permissions' => ['purchasing.pr.approve'],
+                // Match the list route; the counter separately requires approval permission.
+                'permissions' => ['purchasing.view'],
                 'label'       => 'Purchase Requests',
                 'description' => 'Purchase requests awaiting approval',
-                'counter'     => fn (): int => $roleSlug === null ? 0
-                    : ApprovalRecord::query()
-                        ->where('approvable_type', (new PurchaseRequest)->getMorphClass())
-                        ->where('action', 'pending')
-                        ->where('is_current', true)
-                        ->where('role_slug', $roleSlug)
-                        ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending->value))
-                        ->count(),
+                'counter'     => fn (): int => $user->hasPermission('purchasing.pr.approve')
+                    ? app(PurchaseRequestAccessPolicy::class)->pendingApprovalsFor($user)->count()
+                    : 0,
             ],
 
             // HR > Leave management — pending requests visible to this approver tier.
@@ -334,29 +325,19 @@ class BadgeService
 
             // HR > Profile change requests — pending review queue.
             'profile_requests' => [
-                'permissions' => ['hr.employees.view'],
+                'permissions' => ['hr.employees.view', 'hr.profile_updates.finance_review'],
                 'label'       => 'Profile Requests',
                 'description' => 'Pending employee profile change requests',
-                'counter'     => function () use ($user): int {
-                    $query = ProfileUpdateRequest::query()->where('status', 'pending');
-                    DepartmentScope::apply(
-                        $query,
-                        $user,
-                        viewAllPermission: 'hr.employees.view_sensitive',
-                        departmentPermission: 'hr.employees.view',
-                        deptColumn: 'department_id',
-                        deptRelation: 'employee',
-                    );
-
-                    return $query->count();
-                },
+                'counter'     => fn (): int => app(ProfileUpdateRequestService::class)
+                    ->reviewQueueQuery($user)
+                    ->count(),
             ],
 
             // Payroll > Periods awaiting HR/Finance action (draft or processing).
             // PayrollPeriodStatus has: draft, processing, approved, finalized, disbursed.
             // "Awaiting action" = draft (not yet submitted) + processing (computing / under review).
             'payroll' => [
-                'permissions' => ['payroll.view'],
+                'permissions' => ['payroll.periods.view'],
                 'label'       => 'Payroll',
                 'description' => 'Payroll periods awaiting action',
                 'counter'     => fn (): int => PayrollPeriod::query()
@@ -419,7 +400,7 @@ class BadgeService
 
             // Supply chain > Deliveries in transit needing an update.
             'deliveries' => [
-                'permissions' => ['supply_chain.view'],
+                'permissions' => ['supply_chain.view', 'supply_chain.deliveries.view'],
                 'label'       => 'Deliveries',
                 'description' => 'Deliveries in transit',
                 'counter'     => fn (): int => Delivery::query()
@@ -450,14 +431,14 @@ class BadgeService
                 'permissions' => ['crm.inquiries.view'],
                 'label'       => 'Inquiries',
                 'description' => 'New contact-form inquiries',
-                'counter'     => fn (): int => ContactInquiry::query()
-                    ->whereIn('status', [ContactInquiryStatus::New->value, ContactInquiryStatus::InProgress->value])
+                'counter'     => fn (): int => app(ContactInquiryInboxService::class)
+                    ->listQuery(['status' => ContactInquiryStatus::New->value])
                     ->count(),
             ],
 
             // CRM > Complaints — open / investigating customer complaints.
             'open_complaints' => [
-                'permissions' => ['crm.complaints.manage'],
+                'permissions' => ['crm.complaints.view'],
                 'label'       => 'Complaints',
                 'description' => 'Open customer complaints',
                 'counter'     => fn (): int => CustomerComplaint::query()

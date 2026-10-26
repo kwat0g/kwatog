@@ -12,7 +12,20 @@ class PreferencesController
     public function update(UpdatePreferencesRequest $request): UserResource
     {
         $user = $request->user();
-        $user->fill($request->validated())->save();
+        $preferences = $request->validated();
+        if (array_key_exists('table_preferences', $preferences)) {
+            $tablePreferences = $user->table_preferences ?? [];
+            foreach ($preferences['table_preferences'] as $tableKey => $tablePreference) {
+                if ($tablePreference === null) {
+                    unset($tablePreferences[$tableKey]);
+                    continue;
+                }
+                $tablePreferences[$tableKey] = array_replace($tablePreferences[$tableKey] ?? [], $tablePreference);
+            }
+            $user->table_preferences = $tablePreferences;
+            unset($preferences['table_preferences']);
+        }
+        $user->fill($preferences)->save();
         return new UserResource($user->load('role.permissions'));
     }
 }

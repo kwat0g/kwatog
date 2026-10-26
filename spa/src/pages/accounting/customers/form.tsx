@@ -44,7 +44,7 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { is_active: true } as FormValues,
  values: existing ? {

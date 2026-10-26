@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios';
 import { authApi, type AuthUser, type LoginPayload } from '@/api/auth';
 import { queryClient } from '@/lib/queryClient';
 import { useThemeStore } from './themeStore';
+import { useTablePrefsStore } from './tablePrefsStore';
 import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 
 interface AuthState {
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (status === 401 || status === 419) {
         setFunctionalCurrency(null);
         queryClient.clear();
+        useTablePrefsStore.getState().clear();
         set({
           user: null,
           permissions: new Set(),
@@ -101,6 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Drop the prior user's theme preference. Public/auth pages are light-only,
       // so reset <html data-theme> to light instead of leaking a dark session.
       useThemeStore.getState().init('light');
+      useTablePrefsStore.getState().clear();
     }
   },
 
@@ -121,5 +124,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     // Apply server-side preferences without triggering a reverse PATCH back to the API.
     useThemeStore.getState().init(user.theme_mode);
+    useTablePrefsStore.getState().hydrate(user.id, user.table_preferences ?? {});
   },
 }));

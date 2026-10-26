@@ -414,6 +414,7 @@ export function ReworkPanel({
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="submit"
+                      variant="primary"
                       disabled={!!submission || mutation.isPending || invalidCount}
                     >
                       Record rework output
@@ -434,6 +435,7 @@ export function ReworkPanel({
               )}
               {canUseLifecycle && rework.remaining_quantity === 0 && (
                 <Button
+                  variant="primary"
                   disabled={!!submission || mutation.isPending}
                   onClick={() => setFinishOpen(true)}
                 >

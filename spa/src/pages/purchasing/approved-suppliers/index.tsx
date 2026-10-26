@@ -293,7 +293,7 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
  });
  const policies = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting, dirtyFields } } = useForm<FormValues>({
+ const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting, dirtyFields } } = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { is_preferred: false, last_price: '' },
  });

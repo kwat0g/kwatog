@@ -180,7 +180,7 @@ export function TrialProductionPanel({
               onChange={(event) => setConfirmed(event.target.checked)}
             />
           </fieldset>
-          <Button type="submit" disabled={disabled || !!pending} loading={save.isPending}>
+          <Button type="submit" variant="primary" disabled={disabled || !!pending} loading={save.isPending}>
             Samples ready for QC
           </Button>
         </form>

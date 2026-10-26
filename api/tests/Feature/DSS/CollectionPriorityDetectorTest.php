@@ -52,7 +52,7 @@ class CollectionPriorityDetectorTest extends TestCase
 
     public function test_clean_slate_emits_nothing(): void
     {
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_emits_one_row_per_late_bucket_and_skips_current_window(): void
@@ -78,7 +78,9 @@ class CollectionPriorityDetectorTest extends TestCase
         ]);
 
         $byKey = [];
-        foreach ($this->detector()->detect() as $emission) {
+        $scan = $this->detector()->detect();
+        $this->assertSame(5, $scan->rowsScanned);
+        foreach ($scan->emissions as $emission) {
             $byKey[$emission->dedupeKey] = $emission;
         }
 
@@ -111,7 +113,7 @@ class CollectionPriorityDetectorTest extends TestCase
         $this->overdueInvoice($beta, 45, '5000.00');
         $this->overdueInvoice($gamma, 55, '750.00');
 
-        $emissions = $this->detector()->detect(['max_evidence' => 2]);
+        $emissions = $this->detector()->detect(['max_evidence' => 2])->emissions;
 
         $mid = null;
         foreach ($emissions as $emission) {
