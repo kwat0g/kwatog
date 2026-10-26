@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), missing event metadata (#379), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), missing event metadata (#379), late supplier notice scope (#380), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes at capture, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; later targeted badge/list comparisons are recorded below. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Approval-only budget and transfer board cards use the shared actionable scopes in PR #377. Global authorization coverage, links, signal registry, and remaining event families are open. |
+| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. PR #380 applies purchase-order permission and row visibility to late-supplier notices. Global authorization coverage, signal registry, and remaining event families are open. |
 | 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. PR #379 adds exact labels/groups for the discovered late-supply, incoming-quality, and dynamic rework event keys. Preferences, broader Center interactions, multi-signal rendering, and browser QA remain open. |
 | 5. Migration | In progress, partial | Budget and transfer badge/list scopes are in PRs #367 and #374; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
 | 6. Extras | Not started | No extra features started. |
@@ -23,6 +23,9 @@
 | 1. Versioned payload contract | `notifications/phase3-central-contract` | [#332](https://github.com/kwat0g/kwatog/pull/332) | `a8a479e0` |
 | 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | `e85cc70f` |
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | `cee47e18` |
+| F-08. Notification row anchors | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | `8eeec6fa` |
+| F-06. Late supply, incoming quality, and rework metadata | `notifications/catalog-late-supply-rework-events` | [#379](https://github.com/kwat0g/kwatog/pull/379) | `b07a8a31` |
+| F-28. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -46,7 +49,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include the profile badge attached to the wrong route, notification UI behavior, and configured-role audiences without record scope. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths. F-23's 100-item board summary cap fix is tracked in PR #347. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include the profile badge attached to the wrong route, notification UI behavior, and other configured-role audiences without record scope. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths; F-28 scopes the late-supplier notice. F-23's 100-item board summary cap fix is tracked in PR #347. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven beyond findings recorded here.
 
 ## Phase 3 unit 1 verification
 
@@ -222,6 +225,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Added backend preference-catalog entries and exact SPA icon/group/label metadata for `supplier.shipment_late`, `quality.late_incoming`, and all emitted `production.rework.*` states (`required`, `awaiting_qc`, `qc_failed`, `closed`). Verified each event's linked PO, NCR, production work-order, or self-service work-order route exists in the SPA.
 - API `NotificationCatalogTest.php`: **8 passed / 58 assertions**. SPA `notificationMeta.test.ts`: **15 passed**. Targeted ESLint and `git diff --check` passed.
 - This closes metadata coverage only. It does not broaden or repair the events' recipient selectors; those remain in the recipient audit and separate findings.
+
+## Separate finding fix: F-28 late supplier notice audience (draft PR [#380](https://github.com/kwat0g/kwatog/pull/380))
+
+- Late-ETA notifications now resolve active `purchasing.delivery_schedules.review` permission holders, exclude `system_admin`, and require both purchase-order detail permission (`purchasing.view` or `purchasing.po.approve`) and `PurchaseOrderAccessPolicy::canView()` for the exact PO. Each notice stores `purchasing_delivery_schedule_reviewer` as its recipient reason. Event timing, ETA condition, message, deep link, and dedupe key stay unchanged.
+- Before the fix, the negative test failed because a system administrator received the notice. Its custom review-only fixture also lacked the route's `purchasing.view`/`purchasing.po.approve` gate; the old selector included that role. After the fix, the existing purchasing-officer positive case plus both negative cases pass: **2 tests / 13 assertions**. `git diff --check` passes.
+- API test execution ran in the mounted Laravel container with the changed files safely overlaid and restored. The host has no PHP CLI, so host-side syntax and Pint checks were not run.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

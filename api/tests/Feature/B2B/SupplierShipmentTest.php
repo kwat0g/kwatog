@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\PortalShippingDocument;
@@ -380,9 +381,49 @@ class SupplierShipmentTest extends TestCase
         $id = $late->json('data.id');
         $this->putJson($this->shipmentsUrl($po)."/{$id}", ['estimated_arrival' => now()->addDays(3)->toDateString()])->assertOk();
         $this->assertSame(1, DB::table('notifications')->where('notifiable_id', $buyer->id)->where('type', 'supplier.shipment_late')->count());
+        $notice = DB::table('notifications')->where('notifiable_id', $buyer->id)->where('type', 'supplier.shipment_late')->firstOrFail();
+        $noticeData = json_decode($notice->data, true);
+        $this->assertSame('/purchasing/purchase-orders/'.$po->hash_id, $noticeData['link_to']);
+        $this->assertSame('purchasing_delivery_schedule_reviewer', $noticeData['recipient_reason']);
         $this->putJson($this->shipmentsUrl($po)."/{$id}", ['estimated_arrival' => now()->addDay()->toDateString()])
             ->assertOk()->assertJsonPath('data.late_eta', false);
         $this->assertSame($deadline, $po->fresh()->confirmed_delivery_date?->toDateString());
+    }
+
+    public function test_late_eta_notice_excludes_system_admin_and_users_who_cannot_open_the_po(): void
+    {
+        $po = $this->makePo();
+        $po->forceFill(['confirmed_delivery_date' => now()->addDays(2)->toDateString()])->save();
+        $systemAdmin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $reviewerRole = Role::create([
+            'name' => 'Schedule reviewer '.substr(uniqid(), -5),
+            'slug' => 'schedule_reviewer_'.substr(uniqid(), -5),
+            'is_system' => false,
+        ]);
+        $reviewerRole->permissions()->sync([
+            Permission::query()->where('slug', 'purchasing.delivery_schedules.review')->value('id'),
+        ]);
+        $restrictedReviewer = User::factory()->create(['role_id' => $reviewerRole->id]);
+
+        $this->asSupplier()->postShipment(
+            $this->shipmentsUrl($po),
+            $this->payload(['estimated_arrival' => now()->addDays(3)->toDateString()]),
+        )->assertCreated();
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $systemAdmin->id,
+            'type' => 'supplier.shipment_late',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restrictedReviewer->id,
+            'type' => 'supplier.shipment_late',
+        ]);
+
+        $this->actingAs($restrictedReviewer, 'sanctum')
+            ->getJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}")
+            ->assertForbidden();
     }
 
     public function test_shipments_require_an_accepted_po_with_open_quantity(): void
