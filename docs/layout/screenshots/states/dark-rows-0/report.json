@@ -222,7 +222,13 @@
           "scrollWidth": 101,
           "clientWidth": 1,
           "scrollHeight": 21,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 101,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -237,7 +243,13 @@
           "scrollWidth": 56,
           "clientWidth": 40,
           "scrollHeight": 56,
-          "clientHeight": 40
+          "clientHeight": 40,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 56,
+          "maxClientWidth": 40,
+          "maxScrollHeight": 56,
+          "maxClientHeight": 40
         }
       ],
       "verticalScrollContainers": [],
@@ -259,7 +271,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "Stock Adjustments"
+            ]
           },
           {
             "tag": "div",
@@ -273,7 +289,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Manual in/out adjustments with finance approval for high-value entries"
+            ]
           },
           {
             "tag": "button",
@@ -287,7 +307,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
             "background": "color(srgb 0.85098 0.470588 0.282353)",
-            "contrast": 5.89
+            "contrast": 5.89,
+            "count": 1,
+            "examples": [
+              "New adjustment"
+            ]
           },
           {
             "tag": "svg",
@@ -301,7 +325,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": null
+            "contrast": null,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "span",
@@ -315,7 +341,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "div",
@@ -329,7 +357,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "color(srgb 0.164706 0.145098 0.117647)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "h3",
@@ -343,7 +373,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.960784 0.945098 0.917647)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.31
+            "contrast": 16.31,
+            "count": 1,
+            "examples": [
+              "No adjustments found"
+            ]
           },
           {
             "tag": "p",
@@ -357,7 +391,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.658824 0.623529 0.576471)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 7.04
+            "contrast": 7.04,
+            "count": 1,
+            "examples": [
+              "Record an adjustment when stock needs a manual correction."
+            ]
           }
         ],
         "combinations": [
@@ -377,7 +415,11 @@
           "width": 164,
           "height": 32,
           "background": "color(srgb 0.85098 0.470588 0.282353)",
-          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         }
       ],
       "recordLinks": [],
@@ -397,44 +439,73 @@
           "width": 164,
           "height": 32,
           "background": "color(srgb 0.85098 0.470588 0.282353)",
-          "color": "color(srgb 0.0901961 0.0784314 0.0588235)"
+          "color": "color(srgb 0.0901961 0.0784314 0.0588235)",
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         }
       ],
       "controls": [
         {
           "label": "New adjustment",
           "width": 164,
-          "height": 32
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         },
         {
           "label": "Search item, reason…",
           "width": 220,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Search item, reason…"
+          ]
         },
         {
           "label": "Status",
           "width": 158,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Status"
+          ]
         }
       ],
       "controlsBelow44": [
         {
           "label": "New adjustment",
           "width": 164,
-          "height": 32
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         },
         {
           "label": "Search item, reason…",
           "width": 220,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Search item, reason…"
+          ]
         },
         {
           "label": "Status",
           "width": 158,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Status"
+          ]
         }
       ],
       "scrollContextCount": 0
     }
-  ]
+  ],
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values."
 }

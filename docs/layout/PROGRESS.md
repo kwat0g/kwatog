@@ -9,7 +9,7 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 | 0 — Audit | Static architecture, route, and surface inventory complete. Full runtime inspection of every route is still open. | [`00-audit.md`](00-audit.md), 361-row `route-inventory.csv`, 361-row `page-issue-matrix.csv`, `surface-inventory.csv`, baseline screenshots. |
 | 1 — Findings | Findings documented for the static inventory and the rendered Stock Adjustments baseline. Other routes are explicitly unmeasured. | [`01-findings.md`](01-findings.md). |
 | 2 — Spec/pilot | Approved. Three pilot routes plus Work Order link, button, and status color follow-ups implemented. | [`02-spec.md`](02-spec.md), [`00-audit.md`](00-audit.md), screenshots/reports. |
-| 3 — Foundation rollout | Approved. Separate main-based layout branch prepared for the first foundation unit. | `PageShell`, shared primitives, tokens, and audit gallery remain to consolidate. |
+| 3 — Foundation rollout | Approved. Per-user table/sidebar preferences, Compact default, and zebra behavior implemented in the shared table system. | Layout primitives, tokens, guards, and audit gallery remain to consolidate. |
 | 4 — Page rollout | Not started. Wait for pilot review. | — |
 | 5 — Verification | Pilot browser/layout checks completed; automated application tests, accessibility, performance, and full role walkthrough are not yet recorded here. | `spa/scripts/layout-audit.mjs`; reports under `screenshots/after/pilot-final/` and `screenshots/states/`. |
 
@@ -35,7 +35,11 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 
 ## Known pilot risks
 
-- Global per-table density is still stored in browser `localStorage`, not scoped to an authenticated user. Decide ownership before rollout.
+- Density and visible-column choices now save to the authenticated user's preferences. Existing unscoped browser preferences are not imported because they cannot be safely assigned to an account on shared terminals.
+- Sidebar Expand all now persists per authenticated user. The established narrow-screen sidebar rail behavior remains unchanged.
+- Compact is now the default across shared DataTable and table-cell helpers: 36px office, 44px Floor; Comfortable 48px and Spacious 56px remain available in DataTable. Row stripe colors use the existing Light/Dark/Floor tokens.
+- Phase 3 focused SPA verification: 4 files, 40 tests passed. Authenticated preferences API test: 2 tests / 9 assertions passed in an isolated copy of the running API container. Light/Dark Stock Adjustments browser audit: 14 serial route/theme/viewport captures; all strict checks passed with 50 rows.
+- Whole-project TypeScript check remains blocked by existing errors outside changed files: missing `lucide-react`/exports exports, stock-transfer API export, ActionCenter type, duplicate `type` attributes, and profile null-index errors. No reported type errors point to this preference/table diff.
 - Floor palette is not covered by the light/dark captures.
 - Six small action controls on the Work Order detail sample are below 44px at 375px; this page has not received the layout migration. Resolve touch targets in its module rollout.
 - A source scan across SPA TSX found zero `<Button type="submit">` instances without an explicit variant. Non-submit actions, native buttons, remaining module action hierarchy, and route-level appearance still need visual review.

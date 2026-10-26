@@ -172,11 +172,12 @@ const config: Config = {
         full: 'var(--radius-full)',
       },
 
-      // Density tokens. Office palettes declare 32px / 28px; [data-theme='floor']
-      // raises them to 48px / 44px, so a component reads them unconditionally
-      // rather than branching on theme.
+      // Shared row and touch-target tokens stay theme-aware.
       height: {
         row: 'var(--row-height)',
+        'row-compact': 'var(--row-height-compact)',
+        'row-comfortable': 'var(--row-height-comfortable)',
+        'row-spacious': 'var(--row-height-spacious)',
       },
 
       minHeight: {

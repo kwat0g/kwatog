@@ -54,6 +54,45 @@ function slug(value) {
   return value.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-') || 'root';
 }
 
+function groupSamples(items, fields) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = JSON.stringify(fields.map((field) => item[field]));
+    const group = groups.get(key) ?? { ...item, count: 0, examples: [] };
+    group.count += 1;
+    const example = item.text ?? item.label;
+    if (example && group.examples.length < 3 && !group.examples.includes(example)) group.examples.push(example);
+    for (const field of ['scrollWidth', 'clientWidth', 'scrollHeight', 'clientHeight']) {
+      if (typeof item[field] !== 'number') continue;
+      const aggregate = `max${field[0].toUpperCase()}${field.slice(1)}`;
+      group[aggregate] = Math.max(group[aggregate] ?? item[field], item[field]);
+    }
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
+function compactMetricSamples(metrics) {
+  metrics.horizontalOverflow = groupSamples(metrics.horizontalOverflow, [
+    'tag', 'className', 'horizontal', 'vertical', 'intentionalHorizontal', 'insideMain', 'insideSidebar', 'overflowX', 'overflowY',
+  ]);
+  metrics.verticalScrollContainers = groupSamples(metrics.verticalScrollContainers, [
+    'tag', 'className', 'insideMain', 'insideSidebar', 'overflowX', 'overflowY',
+  ]);
+  metrics.typography.samples = groupSamples(metrics.typography.samples, [
+    'tag', 'className', 'font', 'size', 'weight', 'lineHeight', 'letterSpacing', 'textTransform', 'color', 'background', 'contrast',
+  ]);
+  for (const field of ['below13px', 'below12px', 'contrastBelowAA']) {
+    metrics.typography[field] = groupSamples(metrics.typography[field], ['tag', 'size', 'contrast', 'color', 'background']);
+  }
+  metrics.table?.textBelowMinimum && (metrics.table.textBelowMinimum = groupSamples(metrics.table.textBelowMinimum, ['tag', 'size']));
+  metrics.buttons = groupSamples(metrics.buttons, ['label', 'width', 'height', 'background', 'color']);
+  metrics.buttonTargetsBelow44 = groupSamples(metrics.buttonTargetsBelow44, ['label', 'width', 'height', 'background', 'color']);
+  metrics.controls = groupSamples(metrics.controls, ['label', 'width', 'height']);
+  metrics.controlsBelow44 = groupSamples(metrics.controlsBelow44, ['label', 'width', 'height']);
+  return metrics;
+}
+
 function luminance(rgb) {
   const channel = (value) => {
     const v = value / 255;
@@ -692,7 +731,7 @@ async function main() {
         await page.locator('main#main-content, main').first().waitFor({ state: 'visible', timeout: 15_000 });
         await page.waitForFunction((theme) => document.documentElement.getAttribute('data-theme') === theme, themeMode, { timeout: 10_000 });
         await page.waitForTimeout(350);
-        const metrics = await measure(page);
+        const metrics = compactMetricSamples(await measure(page));
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);
         await page.screenshot({ path: screenshot, fullPage: true });
         if (process.argv.includes('--dropdown-sample')) {
@@ -724,7 +763,8 @@ async function main() {
     if (row.horizontalPageOverflow) issues.push('horizontal page overflow');
     if (row.doubleVerticalScroll) issues.push('nested vertical scroll');
     if (row.table?.stickyProbe.tested && !row.table.stickyProbe.sticksToScroller) issues.push('sticky header scrolls out of table scroller');
-    if (row.typography.contrastBelowAA.length) issues.push(`${row.typography.contrastBelowAA.length} sampled text items below 4.5:1`);
+    const contrastFailures = row.typography.contrastBelowAA.reduce((sum, sample) => sum + sample.count, 0);
+    if (contrastFailures) issues.push(`${contrastFailures} sampled text items below 4.5:1`);
     if (row.recordLinks.some((link) => !link.distinctFromBodyText || (link.contrast !== null && link.contrast < 4.5))) issues.push('clickable record identifier lacks distinct AA text color');
     if (row.typography.below12px.length) issues.push(`${row.typography.below12px.length} sampled text items below 12px`);
     const score = issues.reduce((sum, issue) => {
@@ -745,6 +785,7 @@ async function main() {
     routes: routeList,
     serial: true,
     rankingMethod: 'edge mismatch, page overflow and contrast=5; clearance and double scroll=4; ineffective sticky header=3; sampled text below 13px=2; per route×viewport',
+    sampleGrouping: 'Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values.',
     rankedIssues,
     rows,
   };
@@ -759,7 +800,7 @@ async function main() {
     ...rankedIssues.slice(0, 50).map((item, index) =>
       `| ${index + 1} | ${item.route} | ${item.width}px | ${item.score} | ${item.issues.join('; ') || 'none'} |`),
     '',
-    'Full block geometry, typography, table and button measurements: `report.json`.',
+    'Full block geometry and grouped typography, table, overflow, and button samples: `report.json`; repeated samples retain counts and up to three text examples.',
     '16px sidebar clearance is a provisional audit threshold taken from the brief’s example, not an approved final token.',
   ].join('\n');
   await writeFile(path.join(out, 'summary.md'), `${summary}\n`);

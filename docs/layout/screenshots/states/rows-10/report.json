@@ -255,7 +255,13 @@
           "scrollWidth": 97,
           "clientWidth": 1,
           "scrollHeight": 21,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 97,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -270,7 +276,13 @@
           "scrollWidth": 203,
           "clientWidth": 1,
           "scrollHeight": 21,
-          "clientHeight": 1
+          "clientHeight": 1,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 203,
+          "maxClientWidth": 1,
+          "maxScrollHeight": 21,
+          "maxClientHeight": 1
         },
         {
           "tag": "div",
@@ -285,7 +297,13 @@
           "scrollWidth": 1586,
           "clientWidth": 1119,
           "scrollHeight": 736,
-          "clientHeight": 560
+          "clientHeight": 560,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 1586,
+          "maxClientWidth": 1119,
+          "maxScrollHeight": 736,
+          "maxClientHeight": 560
         },
         {
           "tag": "span",
@@ -300,7 +318,13 @@
           "scrollWidth": 287,
           "clientWidth": 156,
           "scrollHeight": 20,
-          "clientHeight": 20
+          "clientHeight": 20,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 287,
+          "maxClientWidth": 156,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 20
         },
         {
           "tag": "span",
@@ -315,7 +339,13 @@
           "scrollWidth": 332,
           "clientWidth": 176,
           "scrollHeight": 16,
-          "clientHeight": 16
+          "clientHeight": 16,
+          "count": 7,
+          "examples": [],
+          "maxScrollWidth": 332,
+          "maxClientWidth": 176,
+          "maxScrollHeight": 16,
+          "maxClientHeight": 16
         },
         {
           "tag": "span",
@@ -330,7 +360,13 @@
           "scrollWidth": 336,
           "clientWidth": 126,
           "scrollHeight": 20,
-          "clientHeight": 20
+          "clientHeight": 20,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 336,
+          "maxClientWidth": 126,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 20
         },
         {
           "tag": "td",
@@ -345,22 +381,13 @@
           "scrollWidth": 176,
           "clientWidth": 170,
           "scrollHeight": 64,
-          "clientHeight": 64
-        },
-        {
-          "tag": "span",
-          "className": "block max-w-full truncate text-caption text-muted leading-4",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": true,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 326,
-          "clientWidth": 176,
-          "scrollHeight": 16,
-          "clientHeight": 16
+          "clientHeight": 64,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 176,
+          "maxClientWidth": 170,
+          "maxScrollHeight": 64,
+          "maxClientHeight": 64
         },
         {
           "tag": "span",
@@ -375,82 +402,13 @@
           "scrollWidth": 648,
           "clientWidth": 176,
           "scrollHeight": 20,
-          "clientHeight": 20
-        },
-        {
-          "tag": "span",
-          "className": "block max-w-full truncate text-caption text-muted leading-4",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": true,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 332,
-          "clientWidth": 176,
-          "scrollHeight": 16,
-          "clientHeight": 16
-        },
-        {
-          "tag": "span",
-          "className": "block max-w-full truncate text-caption text-muted leading-4",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": true,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 326,
-          "clientWidth": 176,
-          "scrollHeight": 16,
-          "clientHeight": 16
-        },
-        {
-          "tag": "span",
-          "className": "block max-w-full truncate text-caption text-muted leading-4",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": true,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 332,
-          "clientWidth": 176,
-          "scrollHeight": 16,
-          "clientHeight": 16
-        },
-        {
-          "tag": "span",
-          "className": "block max-w-full truncate text-caption text-muted leading-4",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": true,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 326,
-          "clientWidth": 176,
-          "scrollHeight": 16,
-          "clientHeight": 16
-        },
-        {
-          "tag": "span",
-          "className": "block max-w-full truncate text-caption text-muted leading-4",
-          "horizontal": true,
-          "intentionalHorizontal": true,
-          "vertical": false,
-          "insideMain": true,
-          "insideSidebar": false,
-          "overflowX": "hidden",
-          "overflowY": "hidden",
-          "scrollWidth": 332,
-          "clientWidth": 176,
-          "scrollHeight": 16,
-          "clientHeight": 16
+          "clientHeight": 20,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 648,
+          "maxClientWidth": 176,
+          "maxScrollHeight": 20,
+          "maxClientHeight": 20
         }
       ],
       "verticalScrollContainers": [
@@ -467,7 +425,13 @@
           "scrollWidth": 1586,
           "clientWidth": 1119,
           "scrollHeight": 736,
-          "clientHeight": 560
+          "clientHeight": 560,
+          "count": 1,
+          "examples": [],
+          "maxScrollWidth": 1586,
+          "maxClientWidth": 1119,
+          "maxScrollHeight": 736,
+          "maxClientHeight": 560
         }
       ],
       "sidebarVerticalScroll": false,
@@ -605,7 +569,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Stock Adjustments"
+            ]
           },
           {
             "tag": "div",
@@ -619,7 +587,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Manual in/out adjustments with finance approval for high-value entries"
+            ]
           },
           {
             "tag": "button",
@@ -633,7 +605,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.992157 0.988235 0.980392)",
             "background": "color(srgb 0.705882 0.329412 0.164706)",
-            "contrast": 4.83
+            "contrast": 4.83,
+            "count": 1,
+            "examples": [
+              "New adjustment"
+            ]
           },
           {
             "tag": "svg",
@@ -647,7 +623,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": null
+            "contrast": null,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "span",
@@ -661,7 +639,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.12
+            "contrast": 5.12,
+            "count": 1,
+            "examples": []
           },
           {
             "tag": "button",
@@ -675,7 +655,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 1,
+            "examples": [
+              "Columns"
+            ]
           },
           {
             "tag": "label",
@@ -689,7 +673,12 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 2,
+            "examples": [
+              "DensityComfortableCompactSpacious",
+              "Rows2550100"
+            ]
           },
           {
             "tag": "th",
@@ -703,7 +692,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Requested"
+            ]
           },
           {
             "tag": "th",
@@ -717,7 +710,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Requested by"
+            ]
           },
           {
             "tag": "th",
@@ -731,7 +728,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Direction"
+            ]
           },
           {
             "tag": "th",
@@ -745,7 +746,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Item"
+            ]
           },
           {
             "tag": "th",
@@ -759,7 +764,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Location"
+            ]
           },
           {
             "tag": "th",
@@ -773,7 +782,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Quantity"
+            ]
           },
           {
             "tag": "th",
@@ -787,7 +800,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Value"
+            ]
           },
           {
             "tag": "th",
@@ -801,21 +818,12 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
-          },
-          {
-            "tag": "th",
-            "className": "px-3 py-3 text-table-header text-muted font-semibold select-none h-row text-left w-[200px] min-w-[200px]",
-            "text": "Status",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "600",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 2,
+            "examples": [
+              "Reason",
+              "Status"
+            ]
           },
           {
             "tag": "th",
@@ -829,7 +837,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.44
+            "contrast": 5.44,
+            "count": 1,
+            "examples": [
+              "Actions"
+            ]
           },
           {
             "tag": "td",
@@ -843,7 +855,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "Oct 1, 2026 · 9:14 AM",
+              "Oct 2, 2026 · 9:14 AM",
+              "Oct 3, 2026 · 9:14 AM"
+            ]
           },
           {
             "tag": "td",
@@ -857,7 +875,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "A very long employee name for width checks",
+              "Employee 2",
+              "Employee 3"
+            ]
           },
           {
             "tag": "td",
@@ -871,7 +895,12 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "Increase",
+              "Decrease"
+            ]
           },
           {
             "tag": "td",
@@ -885,7 +914,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "SKU-00001Material 1",
+              "RAW-MATERIAL-REFERENCE-0000000000000000001Long material description that should ",
+              "SKU-00003Material 3"
+            ]
           },
           {
             "tag": "div",
@@ -899,7 +934,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 10,
+            "examples": [
+              "Material 1",
+              "Long material description that should remain readable or truncate without wideni",
+              "Material 3"
+            ]
           },
           {
             "tag": "td",
@@ -913,7 +954,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "WH-01-A-01",
+              "WH-02-A-02",
+              "WH-03-A-03"
+            ]
           },
           {
             "tag": "td",
@@ -927,7 +974,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "1.125",
+              "2.25",
+              "123,456,789.125"
+            ]
           },
           {
             "tag": "td",
@@ -941,7 +994,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "₱145.75",
+              "₱291.50",
+              "₱999,999,999,999.99"
+            ]
           },
           {
             "tag": "td",
@@ -955,21 +1014,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "ApprovedApproved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 20,
+            "examples": [
+              "Cycle count correction 1",
+              "ApprovedApproved by Finance Approver · Oct 25, 2026 · 9:14 AM",
+              "Cycle count correction 2"
+            ]
           },
           {
             "tag": "span",
@@ -983,7 +1034,13 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 10,
+            "examples": [
+              "Approved by Finance Approver · Oct 25, 2026 · 9:14 AM",
+              "Awaiting Finance approval",
+              "Rejected by Finance Approver · Oct 25, 2026 · 9:14 AM"
+            ]
           },
           {
             "tag": "td",
@@ -997,175 +1054,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 2, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 2",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Decrease",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "RAW-MATERIAL-REFERENCE-0000000000000000001Long material description that should ",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Long material description that should remain readable or truncate without wideni",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-02-A-02",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "2.25",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱291.50",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 2",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "PendingAwaiting Finance approval",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Awaiting Finance approval",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "ApproveReject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 10,
+            "examples": [
+              "ApproveReject"
+            ]
           },
           {
             "tag": "button",
@@ -1179,7 +1072,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.992157 0.988235 0.980392)",
             "background": "color(srgb 0.705882 0.329412 0.164706)",
-            "contrast": 4.83
+            "contrast": 4.83,
+            "count": 3,
+            "examples": [
+              "Approve"
+            ]
           },
           {
             "tag": "button",
@@ -1193,1407 +1090,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.992157 0.988235 0.980392)",
             "background": "color(srgb 0.658824 0.223529 0.184314)",
-            "contrast": 6.22
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 3, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 3",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Increase",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00003Material 3",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 3",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-03-A-03",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "123,456,789.125",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱999,999,999,999.99",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 3",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "RejectedRejected by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Rejected by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 4, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 4",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Decrease",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00004Material 4",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 4",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-04-A-04",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "4.5",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱583.00",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "A long audit reason used to observe truncation, tooltip behavior, and row height",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "ApprovedApproved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Approved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 5, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 5",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Increase",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00005Material 5",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 5",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-05-A-05",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "5.625",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱728.75",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 5",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "PendingAwaiting Finance approval",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Awaiting Finance approval",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "ApproveReject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-6 px-2 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
-            "text": "Approve",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "500",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.992157 0.988235 0.980392)",
-            "background": "color(srgb 0.705882 0.329412 0.164706)",
-            "contrast": 4.83
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-6 px-2 text-caption bg-danger text-accent-fg font-medium border-hairline border-transparent hover:bg-danger/90 active:scale-[0.98] transition-colors",
-            "text": "Reject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "500",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.992157 0.988235 0.980392)",
-            "background": "color(srgb 0.658824 0.223529 0.184314)",
-            "contrast": 6.22
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 6, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 6",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Decrease",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00006Material 6",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 6",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-06-A-06",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "6.75",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱874.50",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 6",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "RejectedRejected by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Rejected by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 7, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 7",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Increase",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00007Material 7",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 7",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-07-A-07",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "7.875",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱1,020.25",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 7",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "ApprovedApproved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Approved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 8, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 8",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Decrease",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00008Material 8",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 8",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-08-A-08",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "9",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱1,166.00",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 8",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "PendingAwaiting Finance approval",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Awaiting Finance approval",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "ApproveReject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-6 px-2 text-caption bg-accent text-accent-fg font-medium border-hairline border-transparent hover:bg-accent-hover active:scale-[0.98] transition-colors",
-            "text": "Approve",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "500",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.992157 0.988235 0.980392)",
-            "background": "color(srgb 0.705882 0.329412 0.164706)",
-            "contrast": 4.83
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-6 px-2 text-caption bg-danger text-accent-fg font-medium border-hairline border-transparent hover:bg-danger/90 active:scale-[0.98] transition-colors",
-            "text": "Reject",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "500",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.992157 0.988235 0.980392)",
-            "background": "color(srgb 0.658824 0.223529 0.184314)",
-            "contrast": 6.22
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 9, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 9",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Increase",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00009Material 9",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 9",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-09-A-09",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "10.125",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱1,311.75",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 9",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "RejectedRejected by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Rejected by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px] whitespace-nowrap",
-            "text": "Oct 10, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[180px] min-w-[180px]",
-            "text": "Employee 10",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[100px] min-w-[100px]",
-            "text": "Decrease",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[150px] min-w-[150px]",
-            "text": "SKU-00010Material 10",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "div",
-            "className": "text-caption text-muted leading-4 line-clamp-2",
-            "text": "Material 10",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[110px] min-w-[110px] whitespace-nowrap",
-            "text": "WH-10-A-10",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[160px] min-w-[160px] whitespace-nowrap",
-            "text": "11.25",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-right w-[170px] min-w-[170px] whitespace-nowrap",
-            "text": "₱1,457.50",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "Cycle count correction 10",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[200px] min-w-[200px]",
-            "text": "ApprovedApproved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "span",
-            "className": "block max-w-full truncate text-caption text-muted leading-4",
-            "text": "Approved by Finance Approver · Oct 25, 2026 · 9:14 AM",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "16px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "td",
-            "className": "px-3 py-3 text-left w-[136px] min-w-[136px]",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "20px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 6.22,
+            "count": 3,
+            "examples": [
+              "Reject"
+            ]
           },
           {
             "tag": "div",
@@ -2607,21 +1108,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "label",
-            "className": "flex items-center gap-2 text-label text-muted",
-            "text": "Rows2550100",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 14,
-            "weight": "400",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.419608 0.384314 0.34902)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "1–10 of 10"
+            ]
           },
           {
             "tag": "button",
@@ -2635,21 +1126,9 @@
             "textTransform": "none",
             "color": "color(srgb 0.121569 0.105882 0.0862745)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 16.7,
+            "count": 4,
+            "examples": []
           },
           {
             "tag": "span",
@@ -2663,35 +1142,11 @@
             "textTransform": "none",
             "color": "color(srgb 0.419608 0.384314 0.34902)",
             "background": "rgba(0, 0, 0, 0)",
-            "contrast": 5.82
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
-          },
-          {
-            "tag": "button",
-            "className": "inline-flex items-center justify-center gap-2 rounded-md transition-colors duration-fast cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 h-7 w-7 text-caption rounded-md bg-transparent text-primary border-hairline border-transparent hover:bg-subtle/80 active:scale-[0.98] transition-colors text-muted hover:text-primary",
-            "text": "",
-            "font": "\"Public Sans Variable\", -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-            "size": 13,
-            "weight": "400",
-            "lineHeight": "18px",
-            "letterSpacing": "normal",
-            "textTransform": "none",
-            "color": "color(srgb 0.121569 0.105882 0.0862745)",
-            "background": "rgba(0, 0, 0, 0)",
-            "contrast": 16.7
+            "contrast": 5.82,
+            "count": 1,
+            "examples": [
+              "Page 1 of 1"
+            ]
           }
         ],
         "combinations": [
@@ -2716,84 +1171,88 @@
           "width": 164,
           "height": 32,
           "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         },
         {
           "label": "Customize columns",
           "width": 105,
           "height": 36,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Customize columns"
+          ]
         },
         {
           "label": "Approve",
           "width": 69,
           "height": 24,
           "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 3,
+          "examples": [
+            "Approve"
+          ]
         },
         {
           "label": "Reject",
           "width": 57,
           "height": 24,
           "background": "color(srgb 0.658824 0.223529 0.184314)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24,
-          "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24,
-          "background": "color(srgb 0.658824 0.223529 0.184314)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24,
-          "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24,
-          "background": "color(srgb 0.658824 0.223529 0.184314)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 3,
+          "examples": [
+            "Reject"
+          ]
         },
         {
           "label": "First page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
         },
         {
           "label": "Previous page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
         },
         {
           "label": "Next page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
         },
         {
           "label": "Last page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
         }
       ],
       "recordLinks": [],
@@ -2829,251 +1288,312 @@
           "width": 164,
           "height": 32,
           "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         },
         {
           "label": "Customize columns",
           "width": 105,
           "height": 36,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Customize columns"
+          ]
         },
         {
           "label": "Approve",
           "width": 69,
           "height": 24,
           "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 3,
+          "examples": [
+            "Approve"
+          ]
         },
         {
           "label": "Reject",
           "width": 57,
           "height": 24,
           "background": "color(srgb 0.658824 0.223529 0.184314)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24,
-          "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24,
-          "background": "color(srgb 0.658824 0.223529 0.184314)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24,
-          "background": "color(srgb 0.705882 0.329412 0.164706)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24,
-          "background": "color(srgb 0.658824 0.223529 0.184314)",
-          "color": "color(srgb 0.992157 0.988235 0.980392)"
+          "color": "color(srgb 0.992157 0.988235 0.980392)",
+          "count": 3,
+          "examples": [
+            "Reject"
+          ]
         },
         {
           "label": "First page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
         },
         {
           "label": "Previous page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
         },
         {
           "label": "Next page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
         },
         {
           "label": "Last page",
           "width": 28,
           "height": 28,
           "background": "rgba(0, 0, 0, 0)",
-          "color": "color(srgb 0.121569 0.105882 0.0862745)"
+          "color": "color(srgb 0.121569 0.105882 0.0862745)",
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
         }
       ],
       "controls": [
         {
           "label": "New adjustment",
           "width": 164,
-          "height": 32
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         },
         {
           "label": "Search item, reason…",
           "width": 220,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Search item, reason…"
+          ]
         },
         {
           "label": "Status",
           "width": 158,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Status"
+          ]
         },
         {
           "label": "Customize columns",
           "width": 105,
-          "height": 36
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "Customize columns"
+          ]
         },
         {
           "label": "Density",
           "width": 128,
-          "height": 36
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "Density"
+          ]
         },
         {
           "label": "Approve",
           "width": 69,
-          "height": 24
+          "height": 24,
+          "count": 3,
+          "examples": [
+            "Approve"
+          ]
         },
         {
           "label": "Reject",
           "width": 57,
-          "height": 24
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24
+          "height": 24,
+          "count": 3,
+          "examples": [
+            "Reject"
+          ]
         },
         {
           "label": "2550100",
           "width": 68,
-          "height": 36
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "2550100"
+          ]
         },
         {
           "label": "First page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
         },
         {
           "label": "Previous page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
         },
         {
           "label": "Next page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
         },
         {
           "label": "Last page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
         }
       ],
       "controlsBelow44": [
         {
           "label": "New adjustment",
           "width": 164,
-          "height": 32
+          "height": 32,
+          "count": 1,
+          "examples": [
+            "New adjustment"
+          ]
         },
         {
           "label": "Search item, reason…",
           "width": 220,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Search item, reason…"
+          ]
         },
         {
           "label": "Status",
           "width": 158,
-          "height": 30
+          "height": 30,
+          "count": 1,
+          "examples": [
+            "Status"
+          ]
         },
         {
           "label": "Customize columns",
           "width": 105,
-          "height": 36
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "Customize columns"
+          ]
         },
         {
           "label": "Density",
           "width": 128,
-          "height": 36
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "Density"
+          ]
         },
         {
           "label": "Approve",
           "width": 69,
-          "height": 24
+          "height": 24,
+          "count": 3,
+          "examples": [
+            "Approve"
+          ]
         },
         {
           "label": "Reject",
           "width": 57,
-          "height": 24
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24
-        },
-        {
-          "label": "Approve",
-          "width": 69,
-          "height": 24
-        },
-        {
-          "label": "Reject",
-          "width": 57,
-          "height": 24
+          "height": 24,
+          "count": 3,
+          "examples": [
+            "Reject"
+          ]
         },
         {
           "label": "2550100",
           "width": 68,
-          "height": 36
+          "height": 36,
+          "count": 1,
+          "examples": [
+            "2550100"
+          ]
         },
         {
           "label": "First page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "First page"
+          ]
         },
         {
           "label": "Previous page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Previous page"
+          ]
         },
         {
           "label": "Next page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Next page"
+          ]
         },
         {
           "label": "Last page",
           "width": 28,
-          "height": 28
+          "height": 28,
+          "count": 1,
+          "examples": [
+            "Last page"
+          ]
         }
       ],
       "scrollContextCount": 1
     }
-  ]
+  ],
+  "sampleGrouping": "Repeated computed styles and geometry are grouped; count records frequency and examples holds up to three text values."
 }

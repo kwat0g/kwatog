@@ -46,9 +46,9 @@ Proposed gutters for review: 16px below 640px, 24px from 640–1439px, and 32px 
 | Table/toolbar/footer | `DataTable`, `DataTableToolbar`, `DataTablePagination` | One shared table exists; 109 direct uses. Fix shared root once. 162 native `<table>` tags need classification before migration; many may be statement/entry layouts. |
 | Sections/details/forms | `Panel`, `Modal`, `FormActions`, `StickyActionBar`, `SearchableSelect` | Reuse existing components; form/detail grid is mainly route-authored. No shared `FormGrid` or `DetailLayout`. |
 | Dialogs/sheets/drawers | `Modal`, `ConfirmDialog`, `ReasonDialog`, `BottomSheet` | 127/153/24/3 direct occurrences. No named Drawer primitive; identify custom right panels in surface inventory before treating them as drawers. |
-| Density/settings | `tablePrefsStore`, table-key density and column visibility | Stored by table key in browser localStorage, not scoped by account. No global density default or settings control. |
+| Density/settings | `tablePrefsStore`, table-key density and column visibility | Preferences now hydrate and save per authenticated user. Unkeyed `DataTable` instances receive a route-scoped key so their density control works and persists too. |
 
-Existing `docs/DESIGN-SYSTEM.md` documents zebra colors as a table behavior, but current `DataTable` row renderer applies only dividers, hover, selected, and focus classes; zebra tokens are not applied. Keep this mismatch visible for the pilot decision rather than silently changing defaults.
+Existing `docs/DESIGN-SYSTEM.md` defines zebra tokens, but the shared `DataTable` row renderer had not applied them. The user asked to restore zebra striping after the pilot; Phase 3 now applies the existing theme token on alternating unselected rows in Light and Dark.
 
 ## Page families that need special layout review
 
@@ -66,8 +66,8 @@ Existing `docs/DESIGN-SYSTEM.md` documents zebra colors as a table behavior, but
 
 The user approved these concrete defaults in [`02-spec.md`](02-spec.md) on 2026-10-25, preserving Atelier colors and font families:
 
-1. Zebra off by default; no zebra toggle in the pilot.
-2. Comfortable 48px default, Compact 36px, Spacious 56px.
+1. Zebra is on by default after the user's follow-up request; no zebra toggle is included.
+2. Compact 36px is the default, with Comfortable 48px and Spacious 56px available.
 3. 16 / 24 / 32px gutters at <640 / 640–1439 / ≥1440px.
 4. Sentence-case sans table headers.
 5. Monospace for IDs/codes; dates and ordinary numbers use Public Sans with tabular figures.
