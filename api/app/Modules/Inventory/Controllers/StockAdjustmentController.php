@@ -59,6 +59,7 @@ class StockAdjustmentController
         $filters = $request->validate([
             'status'   => ['nullable', 'string', Rule::in(array_map(static fn (StockAdjustmentStatus $status): string => $status->value, StockAdjustmentStatus::cases()))],
             'direction'=> ['nullable', Rule::in(['in', 'out'])],
+            'id'       => ['nullable', 'string', 'max:64'],
             'search'   => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -69,6 +70,9 @@ class StockAdjustmentController
 
         if (!empty($filters['status'])) {
             $q->where('status', $filters['status']);
+        }
+        if (isset($filters['id'])) {
+            $q->whereKey(HashIdFilter::decode($filters['id'], StockAdjustment::class) ?? 0);
         }
         if (!empty($filters['direction'])) {
             $q->where('direction', $filters['direction']);
