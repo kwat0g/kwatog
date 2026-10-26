@@ -190,6 +190,45 @@ class BadgeControllerTest extends TestCase
         $this->assertArrayNotHasKey('work_orders', $employeeBadges);
     }
 
+    public function test_production_overdue_and_due_soon_badges_require_the_parent_route_permission(): void
+    {
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Confirmed->value,
+            'planned_end' => now()->subMinute(),
+        ]);
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::InProgress->value,
+            'planned_end' => now()->addDay(),
+        ]);
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $grantor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $user->id,
+            'permission_id' => Permission::query()->where('slug', 'production.work_orders.view')->value('id'),
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $grantor->id,
+            'reason' => 'Work-order badge parent route permission regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = $user->fresh();
+        $this->assertTrue($user->hasPermission('production.work_orders.view'));
+        $this->assertFalse($user->hasPermission('production.view'));
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=overdue')
+            ->assertForbidden();
+        $badges = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders', $badges);
+        $this->assertArrayNotHasKey('work_orders_due_soon', $badges);
+    }
+
     public function test_production_due_soon_badge_matches_filtered_list_for_active_statuses_and_window_edges(): void
     {
         $this->seed(SettingsSeeder::class);
