@@ -21,6 +21,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -336,6 +337,41 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertSame(Delivery::class, $data['subject_type']);
         $this->assertSame((string) $delivery->id, $data['subject_id']);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => in_array($event->userId, [$createOnly->id, $withoutPermission->id], true));
+    }
+
+    public function test_inventory_item_and_grn_subjects_require_inventory_detail_access(): void
+    {
+        app(SettingsService::class)->set('modules.inventory', true, 'modules');
+        $permission = Permission::firstOrCreate(
+            ['slug' => 'inventory.view'],
+            ['name' => 'View inventory', 'module' => 'inventory'],
+        );
+        $role = Role::firstOrCreate(['slug' => 'notification_inventory_viewer'], ['name' => 'Notification Inventory Viewer']);
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $viewer = User::factory()->withRole($role->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $item = Item::factory()->create();
+        $grn = GoodsReceiptNote::factory()->create();
+
+        Event::fake([UserNotificationCreated::class]);
+        app(NotificationService::class)->sendForSubject($item, [$viewer, $withoutPermission], 'test.item_subject_access', [
+            'title' => 'Item update',
+        ], emailEnabled: false);
+        app(NotificationService::class)->sendForSubject($grn, [$viewer, $withoutPermission], 'test.grn_subject_access', [
+            'title' => 'GRN update',
+        ], emailEnabled: false);
+
+        foreach (['test.item_subject_access', 'test.grn_subject_access'] as $type) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => $type]);
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $withoutPermission->id, 'type' => $type]);
+        }
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
+
+        app(SettingsService::class)->set('modules.inventory', false, 'modules');
+        app(NotificationService::class)->sendForSubject($item, $viewer, 'test.disabled_inventory_subject', [
+            'title' => 'Item update',
+        ], emailEnabled: false);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.disabled_inventory_subject']);
     }
 
     public function test_unregistered_subject_type_fails_closed(): void

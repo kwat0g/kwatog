@@ -15,6 +15,8 @@ use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Production\Models\WorkOrder;
@@ -32,7 +34,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Item::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -48,6 +50,9 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('accounting.bills.view'),
             StockAdjustment::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && ($user->hasPermission('inventory.adjust') || $user->hasPermission('inventory.adjust.approve')),
+            GoodsReceiptNote::class, Item::class => app(SettingsService::class)->get('modules.inventory', false) === true
+                && $user->hasPermission('inventory.view')
+                && ($subject instanceof GoodsReceiptNote || $subject instanceof Item),
             SupplierItemListing::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && $user->hasPermission('purchasing.supplier_listings.view'),
             WorkOrder::class => self::userCanViewWorkOrder($user, $subject),
