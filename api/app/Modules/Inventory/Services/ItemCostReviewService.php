@@ -91,8 +91,10 @@ class ItemCostReviewService
             }
             $row->forceFill(['status' => $target, 'reviewed_by' => $by->id, 'reviewed_at' => now(), 'notes' => $notes])->save();
 
-            $audience = app(NotificationService::class)->usersWithPermission('inventory.costs.review');
-            app(NotificationService::class)->send($audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [
+            $notifications = app(NotificationService::class);
+            $audience = $notifications->usersWithPermission('inventory.costs.review')
+                ->reject(fn (User $user): bool => $user->is($by));
+            $notifications->sendForSubject($row, $audience, $target === Status::Approved ? 'approval.completed' : 'approval.rejected', [
                 'title' => $target === Status::Approved ? 'Supplier cost review approved' : 'Supplier cost review rejected',
                 'message' => "The supplier cost review for {$item->code} was {$target->value}.",
                 'link_to' => '/crm/price-agreements/cost-reviews',
