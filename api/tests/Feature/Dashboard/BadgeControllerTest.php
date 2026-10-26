@@ -844,6 +844,51 @@ class BadgeControllerTest extends TestCase
         $this->assertSame([$budget->hash_id], $list->json('data.*.id'));
     }
 
+    public function test_approval_only_user_gets_restricted_budget_queue_without_broad_badge(): void
+    {
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.approve')->firstOrFail()->id,
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $approver->id,
+            'reason' => 'Approval-only budget queue parity test.',
+        ]);
+        $approver->flushPermissionsCache();
+        $maker = User::factory()->withRole('finance_officer')->create();
+        $actionable = Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $maker->id,
+            'submitted_at' => now(),
+        ]);
+        Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $approver->id,
+            'submitted_at' => now(),
+        ]);
+
+        $this->assertTrue($approver->fresh()->hasPermission('budgeting.approve'));
+        $this->assertFalse($approver->fresh()->hasPermission('budgeting.view'));
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('pending_budgets', $badges);
+
+        $queue = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/budgets')
+            ->assertOk();
+        $this->assertSame(1, $queue->json('meta.total'));
+        $this->assertSame([$actionable->hash_id], $queue->json('data.*.id'));
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/budgets?status=draft')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+        $this->actingAs($approver, 'sanctum')->getJson('/api/v1/budgets/options')->assertForbidden();
+    }
+
     public function test_overdue_bill_badge_matches_the_filtered_bill_list(): void
     {
         $now = Carbon::parse('2026-06-15 12:00:00', config('app.timezone'));

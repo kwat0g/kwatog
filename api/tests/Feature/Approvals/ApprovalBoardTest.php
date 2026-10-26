@@ -7,6 +7,11 @@ namespace Tests\Feature\Approvals;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Support\ApprovalTypeRegistry;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetLineItem;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -134,5 +139,66 @@ class ApprovalBoardTest extends TestCase
         $this->assertContains('overtime', $values);
         $this->assertNotContains('pr', $values);
         $this->getJson('/api/v1/approvals/board?type=pr')->assertUnprocessable();
+    }
+
+    public function test_approval_only_user_sees_only_actionable_budget_board_cards(): void
+    {
+        $approver = $this->user('employee');
+        $maker = $this->user('finance_officer');
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.approve')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $maker->id,
+            'reason' => 'Approval-only budget board visibility test.',
+        ]);
+        $approver->flushPermissionsCache();
+        $actionable = Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $maker->id,
+            'submitted_at' => now(),
+        ]);
+        $transferBudget = Budget::factory()->create(['status' => 'active']);
+        $accounts = collect(['A', 'B'])->map(fn (string $suffix): Account => Account::create([
+            'code' => 'BOARD-'.$suffix.'-'.substr(uniqid(), -6),
+            'name' => 'Board transfer '.$suffix,
+            'type' => 'expense',
+            'normal_balance' => 'debit',
+            'is_active' => true,
+        ]));
+        $lines = $accounts->map(fn (Account $account): BudgetLineItem => BudgetLineItem::create([
+            'budget_id' => $transferBudget->id,
+            'account_id' => $account->id,
+            'jan' => '100.00',
+        ]));
+        DB::table('budget_transfers')->insert([
+            'transfer_number' => 'BOARD-'.substr(uniqid(), -6),
+            'from_line_item_id' => $lines[0]->id,
+            'to_line_item_id' => $lines[1]->id,
+            'month' => 'jan',
+            'amount' => '1.00',
+            'reason' => 'Approval-only board visibility test.',
+            'status' => 'pending',
+            'requested_by' => $maker->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $approver->id,
+            'submitted_at' => now(),
+        ]);
+
+        $this->assertFalse($approver->hasPermission('budgeting.view'));
+        $kinds = array_column(ApprovalTypeRegistry::kindOptions($approver), 'value');
+        $this->assertContains('budget', $kinds);
+        $this->assertContains('budget_transfer', $kinds);
+        $board = app(ApprovalBoardService::class)->board($approver);
+        $budgetCards = array_values(array_filter($board['my_action'], static fn (array $card): bool => $card['type'] === 'budget'));
+        $transferCards = array_values(array_filter($board['my_action'], static fn (array $card): bool => $card['type'] === 'budget_transfer'));
+
+        $this->assertSame([$actionable->hash_id], array_column($budgetCards, 'id'));
+        $this->assertCount(1, $transferCards);
+        $this->assertSame([], $board['awaiting_others']);
     }
 }

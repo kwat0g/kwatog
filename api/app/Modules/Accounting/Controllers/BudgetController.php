@@ -136,6 +136,12 @@ class BudgetController extends Controller
             'status' => ['nullable', Rule::in(array_map(static fn (BudgetStatus $status): string => $status->value, BudgetStatus::cases()))],
         ]);
 
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 401);
+        if (! $actor->hasPermission('budgeting.view')) {
+            $request->merge(['signal' => 'awaiting_my_approval']);
+        }
+
         $query = Budget::with(['fiscalYear', 'department']);
         if ($request->filled('fiscal_year_id')) {
             $query->byFiscalYear((int) $request->input('fiscal_year_id'));
@@ -150,8 +156,6 @@ class BudgetController extends Controller
             $query->where('status', $request->input('status'));
         }
         if ($request->input('signal') === 'awaiting_my_approval') {
-            $actor = $request->user();
-            abort_unless($actor instanceof User, 401);
             $query->awaitingApprovalFor($actor);
         }
         $perPage = (int) $request->input('per_page', 20);

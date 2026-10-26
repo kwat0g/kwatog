@@ -52,6 +52,13 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(transfers, { permissions: new Set() })).toBe(false);
   });
 
+  it('shows the budget approval queue to viewers and approvers only', () => {
+    const budgets = item('/budgeting');
+    expect(isNavItemVisible(budgets, { permissions: new Set(['budgeting.view']) })).toBe(true);
+    expect(isNavItemVisible(budgets, { permissions: new Set(['budgeting.approve']) })).toBe(true);
+    expect(isNavItemVisible(budgets, { permissions: new Set() })).toBe(false);
+  });
+
   it('shows the chain tracker to sales-order or bottleneck viewers only', () => {
     const tracker = item('/chains');
     expect(isNavItemVisible(tracker, { permissions: new Set(['crm.sales_orders.view']) })).toBe(true);

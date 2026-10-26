@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), budget-transfer and AP/budget badge parity (#367, #369, #374), budget recipient/deep-link changes (#375–#376), scoped notification changes (#362–#365), and separate F-22/F-27 fixes (#371 plus a new restricted-budget-queue PR not yet opened). Findings remain separate from migration work; owner and sensitive-audience decisions remain open.
+**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), and scoped notification changes (#362–#365). PRs #374–#375 fail API lint on F-22; #374 SPA CI fails the dependency audit. PR #376 fails API lint on F-22 and SPA CI on the existing `@vitest/mocker`, `undici`, and `zod` audit findings. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -10,9 +10,9 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes at capture, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; later targeted badge/list comparisons are recorded below. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Global authorization coverage, links, signal registry, and remaining event families are open. |
-| 4. Frontend | In progress, partial | Sidebar now links the transfer badge to its filtered list; notification bell/center and multi-signal rendering remain open. |
-| 5. Migration | In progress, partial | Budget-transfer badge/list scope fixed in this branch; remaining notification dispatches and badge definitions are unmigrated. |
+| 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. Approval-only budget and transfer board cards use the shared actionable scopes in PR #377. Global authorization coverage, links, signal registry, and remaining event families are open. |
+| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. Notification bell/center and multi-signal rendering remain open. |
+| 5. Migration | In progress, partial | Budget and transfer badge/list scopes are in PRs #367 and #374; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
 
@@ -213,9 +213,16 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
-- `Budget::scopeAwaitingApprovalFor()` is shared by `pending_budgets` and `/budgets?signal=awaiting_my_approval`. It counts only submitted budgets a direct approver or active delegate can act on under the existing maker-checker role rule, and excludes the submitter acting on their own budget. The badge and list require `budgeting.view`; approval-only users without that permission remain blocked, tracked as F-27.
+- `Budget::scopeAwaitingApprovalFor()` is shared by `pending_budgets` and `/budgets?signal=awaiting_my_approval`. It counts only submitted budgets a direct approver or active delegate can act on under the existing maker-checker role rule, and excludes the submitter acting on their own budget. The badge remains `budgeting.view`-gated per policy; approval-only users now get a separate restricted queue in PR #377.
 - Targeted rerun: `BadgeControllerTest.php` approval/delegation parity tests **2 passed / 25 assertions**; `Sidebar.behavior.test.tsx` plus `budgeting/index.test.tsx`: **31 passed**. Targeted ESLint and `git diff --check` passed.
 - CI API fails before PHPUnit on F-22, duplicate `PdfRenderService::ensureDompdfDirs()`; SPA fails at dependency audit on advisories for `@vitest/mocker`, `undici`, and `zod`; accessibility, visual baseline, and finding-lifecycle checks pass. Browser visual QA and full-suite verification remain outstanding. PR is based on #369.
+
+## Separate finding fix: F-27 restricted budget approval queue (draft PR [#377](https://github.com/kwat0g/kwatog/pull/377))
+
+- Users with `budgeting.approve` but no `budgeting.view` can open `/budgeting` and the budget list API only returns `Budget::scopeAwaitingApprovalFor()` rows. The `pending_budgets` badge stays view-only, matching the approved signal audience; overview, fiscal-year, and options endpoints remain view-only.
+- SPA route and sidebar permit view or approval access. The approval-only page skips overview/fiscal-year/options requests and cannot switch to the broad list. Approval-board budget and transfer cards now use the shared per-record scopes and appear to direct approvers without broad view permission.
+- API: `BadgeControllerTest.php` plus `ApprovalBoardTest.php`: **23 passed / 230 assertions**, including approval-only transfer cards. SPA: Sidebar permission and budget page tests **24 passed**; targeted ESLint and `git diff --check` passed.
+- Full SPA typecheck still fails on unrelated export helpers, missing `lucide-react`, stock-transfer API exports, and duplicate purchase-order `type` props; no changed file is named. API full-suite, browser, and CI verification remain outstanding.
 
 ## Outstanding proof / risks
 

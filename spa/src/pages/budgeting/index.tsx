@@ -20,10 +20,11 @@ import { QueryErrorState } from '@/components/ui/QueryErrorState';
 
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
+  const canView = can('budgeting.view');
   const canManage = can('budgeting.manage');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const awaitingMyApproval = searchParams.get('signal') === 'awaiting_my_approval';
+  const awaitingMyApproval = !canView || searchParams.get('signal') === 'awaiting_my_approval';
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedFiscalYearId, setSelectedFiscalYearId] = useState('');
   const [page, setPage] = useState(1);
@@ -32,6 +33,7 @@ export default function BudgetOverviewPage() {
   const fiscalYearsQuery = useQuery({
     queryKey: ['budget-fiscal-years'],
     queryFn: () => budgetingApi.fiscalYears(),
+    enabled: canView,
   });
   const fiscalYears = useMemo(() => fiscalYearsQuery.data ?? [], [fiscalYearsQuery.data]);
   useEffect(() => {
@@ -45,12 +47,12 @@ export default function BudgetOverviewPage() {
   const overviewQuery = useQuery({
     queryKey: ['budget-overview', selectedFiscalYearId],
     queryFn: () => budgetingApi.overview(selectedFiscalYearId),
-    enabled: !!selectedFiscalYearId,
+    enabled: canView && !!selectedFiscalYearId,
   });
   const { data: overview, isLoading: overviewLoading, error } = overviewQuery;
 
   const budgetListQuery = useQuery({
-    queryKey: ['budgets', selectedFiscalYearId, selectedStatus, awaitingMyApproval, page, perPage],
+    queryKey: ['budgets', canView, selectedFiscalYearId, selectedStatus, awaitingMyApproval, page, perPage],
     queryFn: () => budgetingApi.list({
       ...(awaitingMyApproval
         ? { signal: 'awaiting_my_approval' }
@@ -58,29 +60,38 @@ export default function BudgetOverviewPage() {
       page,
       per_page: perPage,
     }),
-    enabled: !!selectedFiscalYearId,
+    enabled: !canView || !!selectedFiscalYearId,
   });
 
   const { data: budgetOptions } = useQuery({
     queryKey: ['budgets', 'options'],
     queryFn: () => budgetingApi.options(),
+    enabled: canView,
   });
 
   useEffect(() => setPage(1), [selectedFiscalYearId, selectedStatus, awaitingMyApproval, perPage]);
 
-  if (fiscalYearsQuery.isLoading || overviewLoading) {
+  if ((canView && (fiscalYearsQuery.isLoading || overviewLoading)) || (!canView && budgetListQuery.isLoading)) {
     return (
       <div className="p-5 space-y-6">
-        <PageHeader title="Budget Overview" subtitle="Loading..." />
+        <PageHeader title={canView ? 'Budget Overview' : 'Budgets awaiting your approval'} subtitle="Loading..." />
         <SkeletonTable columns={5} rows={6} />
       </div>
     );
   }
-  if (error) {
+  if (canView && error) {
     return (
       <div className="p-5 space-y-6">
         <PageHeader title="Budget Overview" />
         <QueryErrorState subject="the budget overview" onRetry={() => void overviewQuery.refetch()} />
+      </div>
+    );
+  }
+  if (!canView && budgetListQuery.error) {
+    return (
+      <div className="p-5 space-y-6">
+        <PageHeader title="Budgets awaiting your approval" />
+        <QueryErrorState subject="your budget approval queue" onRetry={() => void budgetListQuery.refetch()} />
       </div>
     );
   }
@@ -110,10 +121,10 @@ export default function BudgetOverviewPage() {
   return (
     <div className="p-5 space-y-6">
       <PageHeader
-        title="Budget Overview"
-        subtitle={`FY ${fiscalYear?.year ?? '—'} — Department Budget Summary`}
+        title={canView ? 'Budget Overview' : 'Budgets awaiting your approval'}
+        subtitle={canView ? `FY ${fiscalYear?.year ?? '—'} — Department Budget Summary` : 'Only budgets you can approve are shown.'}
         actions={
-          <div className="flex items-center gap-2">
+          canView ? <div className="flex items-center gap-2">
             <Select
               fieldSize="sm"
               aria-label="Fiscal year"
@@ -130,7 +141,7 @@ export default function BudgetOverviewPage() {
             <Button variant="secondary" size="sm" onClick={() => navigate('/budgeting/transfers')}>
               Transfers
             </Button>
-          </div>
+          </div> : undefined
         }
       />
 
@@ -197,7 +208,7 @@ export default function BudgetOverviewPage() {
       <Panel
         title={awaitingMyApproval ? 'Budgets awaiting your approval' : 'Budgets'}
         meta={awaitingMyApproval
-          ? <Button variant="secondary" size="sm" onClick={() => setSearchParams({})}>Show all budgets</Button>
+          ? canView ? <Button variant="secondary" size="sm" onClick={() => setSearchParams({})}>Show all budgets</Button> : undefined
           : <SegmentedControl size="sm" label="Budget status" value={selectedStatus} onChange={setSelectedStatus} options={[{ value: '', label: 'All' }, ...(budgetOptions?.statuses ?? [])]} />}
       >
         {budgetListQuery.data && budgetListQuery.data.data.length > 0 ? (
