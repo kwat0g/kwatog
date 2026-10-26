@@ -44,7 +44,7 @@ final class ApprovalTypeRegistry
         'loan_write_off' => ['loans.view'],
     ];
 
-    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,view_permission:string,link_record?:bool,permissions:array<int,string>}> */
+    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,view_permission:string,approval_permission?:string,approval_permission_delegated?:bool,approval_permissions_by_role?:array<string,string>,view_permissions?:array<int,string>,link_record?:bool,permissions:array<int,string>}> */
     private const TYPES = [
         'App\\Modules\\Leave\\Models\\LeaveRequest' => [
             'kind' => 'leave',
@@ -53,6 +53,10 @@ final class ApprovalTypeRegistry
             'number' => 'leave_request_no',
             'link' => '/hr/leaves/',
             'view_permission' => 'leave.view',
+            'approval_permissions_by_role' => [
+                'department_head' => 'leave.approve_dept',
+                'hr_officer' => 'leave.approve_hr',
+            ],
             'permissions' => ['leave.view', 'leave.approve_dept', 'leave.approve_hr'],
         ],
         'App\\Modules\\Purchasing\\Models\\PurchaseRequest' => [
@@ -62,6 +66,7 @@ final class ApprovalTypeRegistry
             'number' => 'pr_number',
             'link' => '/purchasing/purchase-requests/',
             'view_permission' => 'purchasing.view',
+            'approval_permission' => 'purchasing.pr.approve',
             'permissions' => ['purchasing.view', 'purchasing.pr.approve'],
         ],
         'App\\Modules\\Purchasing\\Models\\PurchaseOrder' => [
@@ -71,6 +76,8 @@ final class ApprovalTypeRegistry
             'number' => 'po_number',
             'link' => '/purchasing/purchase-orders/',
             'view_permission' => 'purchasing.view',
+            'approval_permission' => 'purchasing.po.approve',
+            'view_permissions' => ['purchasing.view', 'purchasing.po.approve'],
             'permissions' => ['purchasing.view', 'purchasing.po.approve'],
         ],
         'App\\Modules\\Accounting\\Models\\BillPayment' => [
@@ -81,6 +88,7 @@ final class ApprovalTypeRegistry
             'link' => '/accounting/bills/',
             'link_parent' => 'bill',
             'view_permission' => 'accounting.bills.view',
+            'approval_permission' => 'accounting.bills.payment_approve',
             'permissions' => ['accounting.bills.view', 'accounting.bills.payment_approve'],
         ],
         'App\\Modules\\Loans\\Models\\EmployeeLoan' => [
@@ -90,6 +98,7 @@ final class ApprovalTypeRegistry
             'number' => 'loan_no',
             'link' => '/hr/loans/',
             'view_permission' => 'loans.view',
+            'approval_permission' => 'loans.approve',
             'permissions' => ['loans.view', 'loans.approve'],
         ],
         'App\\Modules\\Payroll\\Models\\PayrollPeriod' => [
@@ -99,6 +108,8 @@ final class ApprovalTypeRegistry
             'number' => null,
             'link' => '/payroll/periods/',
             'view_permission' => 'payroll.periods.view',
+            'approval_permission' => 'payroll.periods.approve',
+            'approval_permission_delegated' => true,
             'permissions' => ['payroll.periods.view', 'payroll.periods.approve'],
         ],
         // 2026-09-10 audit — both are ENFORCED chains (services call
@@ -115,6 +126,7 @@ final class ApprovalTypeRegistry
             'link' => '/hr/employees',
             'link_record' => false,
             'view_permission' => 'hr.salary_adjustments.view',
+            'approval_permission' => 'hr.salary_adjustments.act',
             'permissions' => ['hr.salary_adjustments.view', 'hr.salary_adjustments.act'],
         ],
         'App\\Modules\\Assets\\Models\\Asset' => [
@@ -124,6 +136,7 @@ final class ApprovalTypeRegistry
             'number' => 'asset_code',
             'link' => '/assets/',
             'view_permission' => 'assets.view',
+            'approval_permission' => 'assets.dispose.approve',
             'permissions' => ['assets.view', 'assets.dispose.approve'],
         ],
         // Customer service sees customer returns only; ApprovalSourceScope
@@ -136,6 +149,7 @@ final class ApprovalTypeRegistry
             'number' => 'rma_number',
             'link' => '/return-management/',
             'view_permission' => 'return_management.view',
+            'approval_permission' => 'return_management.approve',
             'permissions' => ['return_management.view', 'return_management.approve'],
         ],
     ];
@@ -228,12 +242,34 @@ final class ApprovalTypeRegistry
     public static function userCanViewRecord(User $user, string $class, int $id): bool
     {
         $meta = self::forClass($class);
-        if ($meta === null || ! $user->hasPermission($meta['view_permission'])) {
+        if ($meta === null) {
+            return false;
+        }
+
+        $viewPermissions = $meta['view_permissions'] ?? [$meta['view_permission']];
+        $canView = false;
+        foreach ($viewPermissions as $permission) {
+            if ($user->hasPermission($permission)) {
+                $canView = true;
+                break;
+            }
+        }
+        if (! $canView) {
             return false;
         }
 
         return ! ApprovalSourceScope::hasScope($class)
             || isset(ApprovalSourceScope::visibleIds($class, [$id], $user)[$id]);
+    }
+
+    public static function approvalPermissionForStep(string $class, string $roleSlug): ?string
+    {
+        $meta = self::forClass($class);
+        if ($meta === null) {
+            return null;
+        }
+
+        return $meta['approval_permissions_by_role'][$roleSlug] ?? $meta['approval_permission'] ?? null;
     }
 
     public static function linkFor(string $class, string $hashId, ?string $parentHashId = null): string

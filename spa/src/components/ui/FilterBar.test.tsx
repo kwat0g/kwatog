@@ -24,4 +24,11 @@ describe('FilterBar', () => {
 
     expect(screen.getByText('2 active filters')).toBeInTheDocument();
   });
+
+  it('keeps trailing actions in the shared toolbar end slot', () => {
+    const { container } = render(<FilterBar actions={<button type="button">Export</button>} />);
+
+    expect(screen.getByRole('button', { name: 'Export' }).parentElement).toHaveAttribute('data-toolbar-end');
+    expect(container.querySelector('[data-layout="filter-bar"]')).toHaveClass('px-5');
+  });
 });

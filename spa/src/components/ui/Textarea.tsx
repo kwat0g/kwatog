@@ -49,12 +49,13 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
         {label && (
-          <label htmlFor={taId} className="text-xs text-muted font-medium">
+          <label htmlFor={taId} className="text-label text-muted font-medium">
             {label}
             {required && <span aria-hidden="true" className="text-danger-fg ml-0.5">*</span>}
           </label>
         )}
         <textarea
+          data-touch-target
           ref={ref}
           id={taId}
           required={required}
@@ -68,7 +69,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             onChange?.(e);
           }}
           className={cn(
-            'min-h-[72px] px-3 py-2 rounded-md border bg-canvas text-sm resize-y transition-colors duration-fast',
+            'min-h-[72px] px-3 py-2 rounded-md border bg-canvas text-md resize-y transition-colors duration-fast',
             'hover:border-strong focus:outline-none focus:ring-[3px] focus:ring-accent/20 focus:border-accent',
             'placeholder:text-subtle',
             error ? 'border-danger' : 'border-default',
@@ -78,18 +79,18 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         />
         <div className="flex items-center justify-between">
           {error ? (
-            <span id={`${taId}-error`} role="alert" className="text-xs text-danger-fg">
+            <span id={`${taId}-error`} role="alert" className="text-caption text-danger-fg">
               {error}
             </span>
           ) : helper ? (
-            <span id={`${taId}-helper`} className="text-xs text-muted">
+            <span id={`${taId}-helper`} className="text-caption text-muted">
               {helper}
             </span>
           ) : (
             <span />
           )}
           {counterEnabled && (
-            <span className={cn('text-2xs font-mono tabular-nums', counterColor)}>
+            <span className={cn('text-caption font-sans tabular-nums', counterColor)}>
               {length} / {maxLength}
             </span>
           )}

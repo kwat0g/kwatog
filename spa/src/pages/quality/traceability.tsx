@@ -27,7 +27,7 @@ import { traceabilityApi, type TraceabilityResult } from '@/api/quality/traceabi
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDateTime } from '@/lib/formatDate';
 
@@ -257,9 +257,8 @@ function BatchView({ result }: { result: TraceabilityResult }) {
                   >
                     {i.inspection_number}
                   </Link>
-                  <span className="text-muted ml-2">
-                    {i.stage_label ?? i.stage} · {i.status_label ?? i.status}
-                  </span>
+                  <span className="text-muted ml-2">{i.stage_label ?? i.stage}</span>
+                  <Chip variant={chipVariantForStatus(i.status)}>{i.status_label ?? i.status}</Chip>
                 </li>
               ))}
             </ul>

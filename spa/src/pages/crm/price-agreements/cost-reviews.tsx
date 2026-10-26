@@ -285,6 +285,7 @@ export default function CostReviewsPage() {
               {canDecide && (
                 <>
                   <Button
+                    variant="danger"
                     disabled={!notes.trim() || mutation.isPending}
                     onClick={() => {
                       setError('');
