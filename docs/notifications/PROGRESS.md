@@ -874,7 +874,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Recipients must be active and hold both `mrp.plans.view` and `mrp.runs.view`; configured daily roles use the same gate. Exclude the run trigger. The daily command's duplicate notice was removed; automation sends one deduplicated notification.
 - `MrpAutomationTest.php`: **13 passed / 53 assertions**; `MrpDailyCommandTest.php`: **2 passed / 4 assertions**. Covers allowed PPC, denied Sales/Warehouse, actor exclusion, revoked run permission, exact list filter, and duplicate-run dedupe. PHP syntax, Pint, ESLint, and `git diff --check` pass. No browser QA or full suite run.
 
-## Separate finding fix: F-58 interview mail failure fallback (draft PR)
+## Separate finding fix: F-58 interview mail failure fallback (draft PR [#465](https://github.com/kwat0g/kwatog/pull/465))
 
 - `InterviewScheduledMail::failed()` and `InterviewDetailsUpdatedMail::failed()` read typed properties that their constructors never initialized. A queued mail failure therefore threw before recording the in-app fallback.
 - Both callbacks now use the saved mail snapshot for candidate name and application link. `RecruitmentApplicationTest.php` selected case: **1 passed / 5 assertions**, covering both failure callbacks and exact links.
