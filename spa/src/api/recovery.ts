@@ -16,6 +16,7 @@ export interface RecoveryOperation {
  status: string;
  phase?: string | null;
  error_message?: string | null;
+ rollback_available?: boolean;
 }
 
 export const recoveryApi = {

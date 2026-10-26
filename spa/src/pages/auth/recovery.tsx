@@ -174,10 +174,13 @@ export default function RecoveryPage() {
           <div className="font-medium">Restore {status.status.replaceAll('_', ' ')}</div>
           <div className="mt-1 text-xs text-muted">{status.phase ?? 'Waiting for restore worker'}{status.error_message ? ` · ${status.error_message}` : ''}</div>
          </div>
-         {status.status === 'rollback_required' && (
+         {status.status === 'rollback_required' && status.rollback_available && (
           <Button variant="danger" size="sm" icon={<LuRotateCcw size={14} />} loading={rollback.isPending} onClick={() => rollback.mutate()}>
            Restore rollback copy
           </Button>
+         )}
+         {status.status === 'rollback_required' && !status.rollback_available && (
+          <p className="mt-1 text-xs text-danger-fg">No rollback copy exists. Retry with another verified backup or restore through the database host.</p>
          )}
         </section>
        )}
@@ -235,7 +238,7 @@ export default function RecoveryPage() {
      closeOnOverlayClick={!restore.isPending}
     >
        <div className="space-y-3">
-       <p className="mt-2 text-sm text-danger-fg">This replaces the current database{restoreTarget?.artifacts.files ? ' and private files' : ''}. The system saves a rollback copy first and pauses normal work.</p>
+       <p className="mt-2 text-sm text-danger-fg">This replaces the current database{restoreTarget?.artifacts.files ? ' and private files' : ''}. A rollback copy is made if the target database exists and is readable. If it is missing, restore has no automatic rollback. Normal work pauses during restore.</p>
        <p className="mt-3 break-all font-mono text-xs text-muted">{selectedName}</p>
         <Input
          label="Confirmation phrase"

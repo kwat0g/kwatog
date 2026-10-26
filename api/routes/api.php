@@ -101,19 +101,23 @@ Route::get('/health', function (Request $request) {
 });
 
 // Break-glass recovery does not use users, roles, sessions, or the database
-// backup ledger. The encrypted bearer token is short-lived and restore-only.
+// backup ledger. The short-lived bearer grants only recovery endpoints.
 // Exclude Sanctum's stateful wrapper because its default session store is the database.
 Route::prefix('recovery')
     ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
     ->group(function (): void {
-        Route::post('/session', [RecoveryAccessController::class, 'login'])->middleware('throttle:auth');
+        Route::post('/session', [RecoveryAccessController::class, 'login'])->middleware('throttle:recovery-login');
 
         Route::middleware('recovery.access')->group(function (): void {
-            Route::get('/backups', [RecoveryAccessController::class, 'index']);
+            Route::get('/backups', [RecoveryAccessController::class, 'index'])->middleware('throttle:recovery-read');
             Route::post('/backups/verify', [RecoveryAccessController::class, 'verify'])->middleware('throttle:sensitive');
             Route::post('/restore', [RecoveryAccessController::class, 'restore'])->middleware('throttle:sensitive');
-            Route::get('/operations/{id}', [RecoveryAccessController::class, 'operation']);
-            Route::post('/operations/{id}/rollback', [RecoveryAccessController::class, 'rollback'])->middleware('throttle:sensitive');
+            Route::get('/operations/{id}', [RecoveryAccessController::class, 'operation'])
+                ->whereUuid('id')
+                ->middleware('throttle:recovery-read');
+            Route::post('/operations/{id}/rollback', [RecoveryAccessController::class, 'rollback'])
+                ->whereUuid('id')
+                ->middleware('throttle:sensitive');
         });
     });
 
