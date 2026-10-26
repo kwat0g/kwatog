@@ -21,6 +21,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { TrialProductionPanel } from '@/components/production/TrialProductionPanel';
 import { MaterialHandoverNotice } from '@/components/production/MaterialHandoverNotice';
 import { usePermission } from '@/hooks/usePermission';
@@ -243,13 +244,14 @@ export default function RecordOutputPage() {
     (!finishFirst && !!wo.data.startup_trial && wo.data.startup_trial.state !== 'released');
 
   return (
-    <div>
+    <PageShell variant="grid">
       <PageHeader
+        inset={false}
         title={`${finishFirst ? 'Record production' : 'Record output'}${wo.data ? ` — ${wo.data.wo_number}` : ''}`}
         backTo={`/production/work-orders/${id}`}
         backLabel="Work order"
       />
-      <div className="min-w-0 px-5 py-4 grid gap-4 lg:grid-cols-3">
+      <div className="min-w-0 grid gap-4 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
           {wo.isLoading && (
             <p role="status" className="mb-3 text-sm text-muted">
@@ -496,6 +498,6 @@ export default function RecordOutputPage() {
           </Panel>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

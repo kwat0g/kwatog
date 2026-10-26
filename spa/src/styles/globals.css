@@ -236,17 +236,23 @@
     .page-shell button,
     .page-shell select:not(.sr-only),
     .page-shell [data-touch-target] {
-      min-width: 44px;
-      min-height: 44px;
+      min-width: var(--touch-target-min);
+      min-height: var(--touch-target-min);
+    }
+
+    .page-shell summary {
+      display: flex;
+      min-height: var(--touch-target-min);
+      align-items: center;
     }
 
     .page-shell [data-layout='filter-bar'] input:not([type='hidden']) {
-      min-height: 44px;
+      min-height: var(--touch-target-min);
     }
 
     .page-shell [data-touch-target] input,
     .page-shell [data-touch-target] select {
-      min-height: 44px;
+      min-height: var(--touch-target-min);
     }
   }
 

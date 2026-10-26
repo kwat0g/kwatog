@@ -20,6 +20,7 @@
   --space-16: 64px;
   --page-gutter: 16px;
   --page-content-narrow: 72ch;
+  --touch-target-min: 44px;
   --form-grid-gap: var(--space-4);
   --detail-layout-gap: var(--space-4);
   --topbar-height: 48px;
