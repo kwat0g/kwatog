@@ -147,6 +147,10 @@ function badgeDestination(path: string, key: string): string {
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
+    draft_invoices: 'signal=draft',
+    unpaid_invoices: 'signal=unpaid',
+    overdue_invoices: 'signal=overdue',
+    payment_review_invoices: 'signal=payment_review',
     shipments: 'status=mid_pipe',
     pending_so: 'signal=awaiting_confirmation',
     overtime: 'signal=awaiting_my_approval',
@@ -630,6 +634,7 @@ export const SECTIONS: NavSection[] = [
         feature: 'accounting',
         permission: 'accounting.invoices.view',
         badgeKey: 'draft_invoices',
+        badgeKeys: ['overdue_invoices', 'unpaid_invoices', 'payment_review_invoices', 'draft_invoices'],
       },
       {
         to: '/accounting/bills',

@@ -8,6 +8,7 @@ export interface InvoiceListParams extends ListParams {
  from?: string;
  to?: string;
  overdue?: boolean | string;
+ signal?: 'draft' | 'unpaid' | 'overdue' | 'payment_review';
 }
 
 export const invoicesApi = {

@@ -70,6 +70,13 @@ export default function InvoicesPage() {
  { value: '', label: 'All' },
  ...(invoiceOptions?.statuses ?? []),
  ] },
+ { key: 'signal', label: 'Signal', type: 'select', options: [
+  { value: '', label: 'All signals' },
+  { value: 'draft', label: 'My drafts' },
+  { value: 'unpaid', label: 'Unpaid' },
+  { value: 'overdue', label: 'Overdue' },
+  ...(can('accounting.invoices.collect') ? [{ value: 'payment_review', label: 'Payment review' }] : []),
+ ] },
  { key: 'overdue', label: 'Overdue', type: 'select', options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },
  ];
 
@@ -103,13 +110,13 @@ export default function InvoicesPage() {
     label={statusLabel('unpaid')}
     value={data.data.filter(i => i.display_status === 'unpaid').length}
     helper="in current view"
-    linkTo="?status=unpaid"
+    linkTo="?signal=unpaid"
   />
   <StatCard
     label={statusLabel('overdue')}
     value={data.data.filter(i => i.is_overdue).length}
     helper="in current view"
-    linkTo="?overdue=1"
+    linkTo="?signal=overdue"
     className="border-danger/30 bg-danger-bg/20"
   />
   <StatCard

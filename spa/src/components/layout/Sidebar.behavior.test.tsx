@@ -410,6 +410,66 @@ it('shows AP signals and sends the main link to the highest-severity queue', () 
   expect(signalButton).toHaveFocus();
 });
 
+it('shows AR signals and links each chip to its matching invoice filter', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    const signals = {
+      overdue_invoices: {
+        count: 2,
+        severity: 'warning' as const,
+        label: 'Overdue',
+        description: 'Open invoices past their due date',
+      },
+      unpaid_invoices: {
+        count: 5,
+        severity: 'danger' as const,
+        label: 'Unpaid',
+        description: 'Open invoices with an unpaid balance',
+      },
+      payment_review_invoices: {
+        count: 1,
+        severity: 'warning' as const,
+        label: 'Payment review',
+        description: 'Customer payments awaiting Finance verification',
+      },
+      draft_invoices: {
+        count: 3,
+        severity: 'neutral' as const,
+        label: 'Draft invoices',
+        description: 'Your draft invoices awaiting posting',
+      },
+    };
+    return signals[key as keyof typeof signals];
+  });
+  render(
+    <MemoryRouter initialEntries={['/accounting/invoices']}>
+      <Sidebar roleSlug="finance_officer" />
+    </MemoryRouter>,
+  );
+  const financeSection = screen.getByRole('button', { name: /^Finance/ });
+  if (financeSection.getAttribute('aria-expanded') === 'false') fireEvent.click(financeSection);
+  expect(screen.getByRole('link', { name: /Accounts Receivable Invoices/ })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=unpaid',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Accounts Receivable Invoices signals/ }));
+  expect(screen.getByRole('link', { name: 'Open invoices past their due date: 2' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=overdue',
+  );
+  expect(screen.getByRole('link', { name: 'Open invoices with an unpaid balance: 5' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=unpaid',
+  );
+  expect(screen.getByRole('link', { name: 'Customer payments awaiting Finance verification: 1' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=payment_review',
+  );
+  expect(screen.getByRole('link', { name: 'Your draft invoices awaiting posting: 3' })).toHaveAttribute(
+    'href',
+    '/accounting/invoices?signal=draft',
+  );
+});
+
 it('opens the to-inspect queue when inspections has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'pending_inspections'
