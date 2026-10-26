@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Dashboard;
 
-use App\Common\Models\ApprovalRecord;
-use App\Common\Models\ApprovalDelegation;
 use App\Common\Enums\PermissionOverrideType;
+use App\Common\Models\ApprovalDelegation;
+use App\Common\Models\ApprovalRecord;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
@@ -15,20 +16,23 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\CRM\Models\Product;
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\ProfileUpdateRequest;
 use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Landing\Enums\ContactInquiryStatus;
+use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Leave\Models\LeaveRequest;
-use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -159,6 +163,143 @@ class BadgeControllerTest extends TestCase
             $this->assertIsString($sysResp[$key]['label']);
             $this->assertIsString($sysResp[$key]['description']);
         }
+    }
+
+    public function test_badge_permissions_match_destination_list_permissions(): void
+    {
+        $employeeRole = Role::where('slug', 'employee')->firstOrFail();
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $employee = User::factory()->create(['role_id' => $employeeRole->id]);
+        $this->assertTrue($employee->hasPermission('payroll.view'));
+        $this->assertFalse($employee->hasPermission('payroll.periods.view'));
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('payroll', $employeeBadges);
+
+        $periodReader = User::factory()->create(['role_id' => $employeeRole->id]);
+        $this->grantPermission($periodReader, 'payroll.periods.view', $admin);
+        $this->actingAs($periodReader, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertOk();
+        $periodBadges = $this->actingAs($periodReader, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('payroll', $periodBadges);
+
+        $complaintReader = User::factory()->create([
+            'role_id' => Role::where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->assertTrue($complaintReader->hasPermission('crm.complaints.view'));
+        $this->assertFalse($complaintReader->hasPermission('crm.complaints.manage'));
+        $this->actingAs($complaintReader, 'sanctum')
+            ->getJson('/api/v1/crm/complaints')
+            ->assertOk();
+        $complaintBadges = $this->actingAs($complaintReader, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('open_complaints', $complaintBadges);
+
+        $warehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $this->assertTrue($warehouse->hasPermission('supply_chain.deliveries.view'));
+        $this->assertFalse($warehouse->hasPermission('supply_chain.view'));
+        $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/supply-chain/deliveries')
+            ->assertOk();
+        $deliveryBadges = $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('deliveries', $deliveryBadges);
+    }
+
+    public function test_profile_request_badge_matches_the_hr_and_finance_review_queues(): void
+    {
+        $reviewerEmployee = Employee::factory()->create();
+        $hrReviewer = User::factory()->create([
+            'role_id' => Role::where('slug', 'department_head')->value('id'),
+            'employee_id' => $reviewerEmployee->id,
+        ]);
+        $requester = User::factory()->create();
+        $sameDepartment = Employee::factory()->create(['department_id' => $reviewerEmployee->department_id]);
+        $otherDepartment = Employee::factory()->create();
+
+        $createRequest = static fn (Employee $employee, ProfileUpdateStatus $status, bool $requiresFinance) => ProfileUpdateRequest::query()->create([
+            'employee_id' => $employee->id,
+            'requested_by' => $requester->id,
+            'status' => $status->value,
+            'requires_finance' => $requiresFinance,
+            'changes' => $requiresFinance
+                ? ['bank_name' => 'Test Bank']
+                : ['mobile_number' => '09170000000'],
+        ]);
+
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, false);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Approved, true);
+        $createRequest($otherDepartment, ProfileUpdateStatus::Pending, false);
+
+        $hrList = $this->actingAs($hrReviewer, 'sanctum')
+            ->getJson('/api/v1/hr/profile-update-requests')
+            ->assertOk();
+        $hrBadge = $this->actingAs($hrReviewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.profile_requests.count');
+        $this->assertSame(2, $hrList->json('meta.total'));
+        $this->assertSame($hrList->json('meta.total'), $hrBadge);
+
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($otherDepartment, ProfileUpdateStatus::PendingFinance, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::PendingFinance, false);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Pending, true);
+        $createRequest($sameDepartment, ProfileUpdateStatus::Approved, true);
+
+        $financeList = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/hr/profile-update-requests')
+            ->assertOk();
+        $financeBadge = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.profile_requests.count');
+        $this->assertSame(3, $financeList->json('meta.total'));
+        $this->assertSame($financeList->json('meta.total'), $financeBadge);
+    }
+
+    public function test_inquiries_badge_matches_the_new_inquiry_list_filter(): void
+    {
+        $customerService = User::factory()->create([
+            'role_id' => Role::where('slug', 'customer_service_officer')->value('id'),
+        ]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::InProgress]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::Closed]);
+
+        $list = $this->actingAs($customerService, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk();
+        $badge = $this->actingAs($customerService, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.inquiries.count');
+
+        $this->assertSame(1, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void
@@ -539,6 +680,34 @@ class BadgeControllerTest extends TestCase
         $this->assertSame('warning', $resp['approvals']['severity']);
     }
 
+    public function test_approval_board_and_badge_count_items_beyond_the_visible_page_limit(): void
+    {
+        $department = Department::factory()->create();
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+
+        for ($i = 0; $i < 101; $i++) {
+            $this->addPendingLeaveApproval($employee, 'department_head');
+        }
+
+        $board = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/approvals/board')
+            ->assertOk()
+            ->json('data');
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(100, $board['my_action']);
+        $this->assertSame(101, $board['summary']['my_action']);
+        $this->assertTrue($board['meta']['pending_truncated']);
+        $this->assertSame(101, $badges['approvals']['count']);
+    }
+
     public function test_purchase_request_badge_matches_filtered_list_and_scope(): void
     {
         $department = Department::factory()->create();
@@ -628,6 +797,50 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(1, $badge);
     }
 
+    public function test_purchase_request_badge_is_zero_without_list_access(): void
+    {
+        $department = Department::factory()->create();
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => PermissionOverrideType::Deny,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify approval counts do not expose a queue without list access.',
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Keep approval authority while testing revoked list access.',
+        ]);
+        $approver->flushPermissionsCache();
+        $this->assertTrue($approver->hasPermission('purchasing.pr.approve'));
+        $this->assertFalse($approver->hasPermission('purchasing.view'));
+
+        $this->addPendingPurchaseRequest(User::factory()->create(), $department->id, 'department_head');
+
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests?signal=awaiting_my_approval')
+            ->assertForbidden();
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 0);
+        $badges = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('purchase_requests', $badges);
+    }
+
     private function addPendingPurchaseRequest(User $requester, ?int $departmentId, string $roleSlug): PurchaseRequest
     {
         $request = PurchaseRequest::factory()->create([
@@ -661,6 +874,18 @@ class BadgeControllerTest extends TestCase
             'is_current' => true,
             'created_at' => now(),
         ]);
+    }
+
+    private function grantPermission(User $user, string $permissionSlug, User $admin): void
+    {
+        UserPermissionOverride::create([
+            'user_id' => $user->id,
+            'permission_id' => Permission::where('slug', $permissionSlug)->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify badge access follows the destination list permission.',
+        ]);
+        $user->flushPermissionsCache();
     }
 
     public function test_zero_count_yields_neutral_severity(): void

@@ -6,9 +6,10 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Support\DepartmentScope;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\ProfileUpdateRequest;
-use App\Modules\HR\Enums\ProfileUpdateStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -86,9 +87,15 @@ class ProfileUpdateRequestService
      */
     public function listForReview(array $filters = [], ?User $user = null): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
-        $query = ProfileUpdateRequest::query()
-            ->with(['employee.department', 'requester']);
+        return $this->reviewQueueQuery($user, $filters)
+            ->with(['employee.department', 'requester'])
+            ->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+    }
 
+    /** Query used by both the review list and its sidebar count. */
+    public function reviewQueueQuery(?User $user, array $filters = []): Builder
+    {
+        $query = ProfileUpdateRequest::query();
         $financeOnly = $user?->hasPermission('hr.profile_updates.finance_review')
             && ! $user->hasPermission('hr.employees.view');
 
@@ -110,12 +117,14 @@ class ProfileUpdateRequestService
             );
         }
 
-        $status = $filters['status'] ?? ($financeOnly ? 'pending_finance' : 'pending');
+        $status = $filters['status'] ?? ($financeOnly
+            ? ProfileUpdateStatus::PendingFinance->value
+            : ProfileUpdateStatus::Pending->value);
         if (in_array($status, ProfileUpdateStatus::values(), true)) {
             $query->where('status', $status);
         }
 
-        return $query->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        return $query;
     }
 
     /**

@@ -72,7 +72,7 @@ export default function CalibrationFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const { saved: showSaved, markSaved } = useSavedFeedback();
-  const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: EMPTY_VALUES });
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({ resolver: zodResolver(schema), defaultValues: EMPTY_VALUES });
   const {
     register,
     handleSubmit,

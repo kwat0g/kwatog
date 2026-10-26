@@ -45,7 +45,7 @@ const inquirySchema = z.object({
     .min(1, 'Message is required')
     .max(2000, 'Message is too long (2000 characters max)'),
   consent: z.literal(true, {
-    errorMap: () => ({ message: 'Please accept the privacy notice to continue.' }),
+    error: 'Please accept the privacy notice to continue.',
   }),
 });
 

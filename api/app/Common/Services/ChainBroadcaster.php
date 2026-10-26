@@ -50,6 +50,14 @@ class ChainBroadcaster
         \App\Modules\Accounting\Models\Invoice::class       => 'invoice_number',
     ];
 
+    /** @return class-string<Model>|null */
+    public static function entityClassFor(string $entityType): ?string
+    {
+        $class = array_search($entityType, self::CLASS_TO_TYPE, true);
+
+        return $class === false ? null : $class;
+    }
+
     /**
      * Stage a ChainStepAdvanced event for $entity transitioning to $newStatus.
      * Call this from the transaction that owns the status mutation; the

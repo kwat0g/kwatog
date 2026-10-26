@@ -225,7 +225,8 @@ class PurchaseRequestController
      */
     public function pendingCount(Request $request): JsonResponse
     {
-        $count = $this->access->awaitingMyApprovalQuery($request->user())->count();
+        $user = $request->user();
+        $count = $this->access->pendingApprovalsFor($user)->count();
 
         return response()->json(['data' => ['count' => $count]]);
     }

@@ -9,5 +9,5 @@ interface Props {
 }
 
 export function RouteTransition({ children }: Props) {
-  return <div>{children}</div>;
+  return <div className="route-transition">{children}</div>;
 }

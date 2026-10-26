@@ -51,7 +51,7 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateAssetPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       category: '',
