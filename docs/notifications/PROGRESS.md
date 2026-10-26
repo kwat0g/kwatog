@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PR #391 aligns the HR Profile Requests badge with a user's actionable review queue and merged as `ffb34fdd`. PR #392 adds Maintenance Work Order open/unassigned badge/list parity and merged as `fb904737`. Their original-head API parity tests passed **9 tests / 69 assertions** and **1 test / 16 assertions**. Post-rebase SPA tests passed **3 profile-page tests**, **40 Sidebar tests** for #391, **41 Sidebar tests**, and **1 Maintenance page test** for #392; API tests were not rerun against shared `ogami_test`. PR #393 fixes overtime API route permissions; its original-head regression passed **1 test / 8 assertions**. After rebase, PHP syntax checks and `git diff --check` passed; API tests were not rerun against shared `ogami_test`. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PR #391 merged as `ffb34fdd`; PR #392 merged as `fb904737`; PR #393 merged as `5f630dd7`. Their original-head API parity/regression tests passed **9/69**, **1/16**, and **1/8** respectively. Post-rebase SPA tests for #391/#392 and PHP syntax/diff checks for #392/#393 passed; API tests were not rerun against shared `ogami_test`. PR #394 adds the actionable overtime approval queue and direct/delegated sidebar access. Its original-head tests passed **3 tests / 15 assertions** and **66 SPA tests**, but review found delegate self-review mismatch and added a regression fix. Post-fix API verification remains pending; do not run against shared `ogami_test`. CI is waived per the user's instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -42,6 +42,7 @@
 | F-01. Profile Update actionable queue | `notifications/fix-profile-request-badge` | [#391](https://github.com/kwat0g/kwatog/pull/391) | merged as `ffb34fdd`; original-head API and post-rebase SPA tests passed; post-rebase API test not run against shared DB |
 | F-09. Maintenance Work Order badge/list parity | `notifications/maintenance-work-order-signals` | [#392](https://github.com/kwat0g/kwatog/pull/392) | merged as `fb904737`; original-head API and post-rebase SPA/syntax checks passed; post-rebase API test not run against shared DB |
 | F-42. Overtime route permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | rebased; original-head API test passed; post-rebase syntax/diff checks passed; API test not run against shared DB |
+| F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | rebased; original-head tests passed before a negative-scope defect was found; regression fix added; post-fix API test not run against shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -397,12 +398,18 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - The policy catalog had proposed `signal=unassigned`; API and SPA use `queue=unassigned`, and the sidebar links to that real filter. The open badge also links to the `queue=open` filter.
 - Original-head `MaintenanceWorkOrderBadgeParityTest`: **1 test / 16 assertions**; Sidebar behavior and Maintenance Work Order page tests: **39 passed**. After rebase, `Sidebar.behavior.test.tsx`: **41 passed**, Maintenance Work Order page: **1 passed**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`.
 
-## Separate finding fix: F-42 Overtime route permission parity (PR [#393](https://github.com/kwat0g/kwatog/pull/393))
+## Separate finding fix: F-42 Overtime route permission parity (PR [#393](https://github.com/kwat0g/kwatog/pull/393), merged as `5f630dd7`)
 
 - The SPA lets approvers open the overtime list and request creators open the create page. The API had limited the list and options endpoints to `attendance.view`, returning 403 to approver-only and creator-only users.
 - The list now accepts `attendance.view` or `attendance.ot.approve`; options accept any of `attendance.view`, `attendance.ot.approve`, or `attendance.ot.create`. `OvertimeService::list()` continues applying the existing `OvertimeDecisionPolicy::visibleTo()` row scope.
 - `OvertimeListRoutePermissionTest` passed **1 test / 8 assertions** on the original feature head. It verifies approver access, creator options access, creator-only list denial, and unprivileged list/options denial. Post-rebase API test was not run against shared `ogami_test`.
 - PHP 8.3 syntax checks passed for `Attendance/routes.php` and the feature test; `git diff --check` passed.
+
+## Separate signal fix: F-09 overtime approval badge/list parity (PR [#394](https://github.com/kwat0g/kwatog/pull/394))
+
+- `OvertimeDecisionPolicy::awaitingMyApprovalQuery()` powers both the `overtime` badge and `/attendance/overtime-requests?signal=awaiting_my_approval`. It requires pending status, applies the list's current row scope, and admits direct or active delegated approvers. `Sidebar` and the SPA route use the existing `delegated_approvals` field.
+- The original query excluded the current user's own employee row but included a request submitted by the delegator, despite `assertNotSelfDecision()` rejecting delegates from approving their delegator's own request. The query and parity test now exclude that request only for delegate-only authority; direct approvers retain existing access.
+- Before this review fix, `OvertimeApprovalBadgeParityTest` passed **3 tests / 15 assertions** and Sidebar/overtime SPA tests passed **66 tests** on the original head. The post-fix API regression was not run against shared `ogami_test`; re-run only against an explicitly isolated database. Cross-department delegation remains unverified.
 
 ## Outstanding proof / risks
 
