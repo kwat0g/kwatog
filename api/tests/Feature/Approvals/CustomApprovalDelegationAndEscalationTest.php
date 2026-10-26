@@ -8,10 +8,18 @@ use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\ApprovalEscalationService;
 use App\Common\Services\CustomApprovalEscalationService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockCountItem;
+use App\Modules\Inventory\Models\StockCountSession;
+use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -70,6 +78,7 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
         $maker = $this->user('hr_officer');
         $approver = $this->user('finance_officer');
         $old = now()->subHours(3);
+        app(SettingsService::class)->set('modules.payroll', true, 'modules');
         app(SettingsService::class)->set('approvals.reminder_hours', 1, 'approval');
         app(SettingsService::class)->set('approvals.escalation_hours', 1, 'approval');
         app(SettingsService::class)->set('approvals.auto_resolve.enabled', false, 'approval');
@@ -110,6 +119,15 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             'notifiable_id' => $maker->id,
             'type' => 'approval_reminder',
         ]);
+        $notice = DB::table('notifications')
+            ->where('notifiable_id', $approver->id)
+            ->where('type', 'approval_reminder')
+            ->first();
+        $noticeData = json_decode($notice->data, true);
+        $period = PayrollPeriod::query()->findOrFail($periodId);
+        $this->assertSame(PayrollPeriod::class, $noticeData['subject_type']);
+        $this->assertSame((string) $periodId, $noticeData['subject_id']);
+        $this->assertSame('/payroll/periods/'.$period->hash_id, $noticeData['link_to']);
     }
 
     public function test_custom_sweep_preserves_budget_different_role_rule(): void
@@ -147,6 +165,8 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
         $this->assertFalse($ineligibleApprover->hasPermission('budgeting.view'));
         $this->assertFalse($ineligibleApprover->hasPermission('budgeting.approve'));
         $old = now()->subHours(3);
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        app(SettingsService::class)->set('modules.budgeting', true, 'modules');
         app(SettingsService::class)->set('approvals.reminder_hours', 1, 'approval');
         app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 0, 'inventory');
         $fiscalYearId = DB::table('fiscal_years')->insertGetId([
@@ -182,7 +202,7 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        DB::table('budget_transfers')->insert([
+        $transferId = DB::table('budget_transfers')->insertGetId([
             'transfer_number' => 'SLA-'.substr(uniqid(), -6),
             'from_line_item_id' => $lineItemId,
             'to_line_item_id' => $lineItemId,
@@ -213,7 +233,10 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             ->where('type', 'approval_reminder')
             ->pluck('data')
             ->map(fn (string $json): ?string => json_decode($json, true)['link_to'] ?? null);
-        $this->assertTrue($differentRoleNoticeLinks->contains('/budgeting/transfers'));
+        $this->assertSame(
+            '/budgeting/transfers/'.app('hashids')->encode($transferId),
+            $differentRoleNoticeLinks->first(fn (?string $link): bool => is_string($link) && str_starts_with($link, '/budgeting/transfers/')),
+        );
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $ineligibleApprover->id,
             'type' => 'approval_reminder',
@@ -226,6 +249,7 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
         $approver = $this->user('finance_officer');
         $editor = $this->user('system_admin');
         $old = now()->subHours(3);
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
         app(SettingsService::class)->set('approvals.escalation_hours', 1, 'approval');
         app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 0, 'inventory');
 
@@ -256,6 +280,59 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $editor->id,
             'type' => 'approval_escalation',
+        ]);
+    }
+
+    public function test_custom_stock_count_escalation_checks_the_count_item_access_rule(): void
+    {
+        $maker = $this->user('employee');
+        $approver = $this->user('warehouse_staff');
+        $outsider = $this->user('employee');
+        $old = now()->subHours(3);
+        app(SettingsService::class)->set('modules.inventory', true, 'modules');
+        app(SettingsService::class)->set('approvals.reminder_hours', 1, 'approval');
+        app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 0, 'inventory');
+
+        $session = StockCountSession::query()->create([
+            'session_number' => 'SLA-'.substr(uniqid(), -8),
+            'title' => 'Stale variance approval',
+            'scope' => 'full',
+            'status' => StockCountSessionStatus::InProgress,
+            'created_by' => $maker->id,
+        ]);
+        $countItem = StockCountItem::query()->create([
+            'session_id' => $session->id,
+            'location_id' => WarehouseLocation::factory()->create()->id,
+            'item_id' => Item::factory()->create()->id,
+            'system_quantity' => '1.000',
+            'counted_quantity' => '2.000',
+            'variance' => '1.000',
+            'variance_percent' => '100.00',
+            'status' => StockCountItemStatus::Counted,
+            'counted_by' => $maker->id,
+        ]);
+        DB::table('stock_count_items')->where('id', $countItem->id)->update([
+            'created_at' => $old,
+            'updated_at' => $old,
+        ]);
+
+        $this->assertSame(1, app(CustomApprovalEscalationService::class)->runReminders());
+        $notice = DB::table('notifications')
+            ->where('notifiable_id', $approver->id)
+            ->where('type', 'approval_reminder')
+            ->first();
+        $noticeData = json_decode($notice->data, true);
+        $this->assertSame(StockCountItem::class, $noticeData['subject_type']);
+        $this->assertSame((string) $countItem->id, $noticeData['subject_id']);
+        $this->assertSame('/inventory/stock-count?session_id='.$session->hash_id.'&count_item_id='.$countItem->hash_id, $noticeData['link_to']);
+
+        app(NotificationService::class)->sendForSubject($countItem, $outsider, 'test.stock_count_subject_access', [
+            'title' => 'Review count variance',
+            'link_to' => $noticeData['link_to'],
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $outsider->id,
+            'type' => 'test.stock_count_subject_access',
         ]);
     }
 
