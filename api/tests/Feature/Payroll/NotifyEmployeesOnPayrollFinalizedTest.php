@@ -87,6 +87,8 @@ class NotifyEmployeesOnPayrollFinalizedTest extends TestCase
         $validData = json_decode((string) $validNotice->data, true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame('/self-service/payslips/'.$validPayroll->hash_id, $validData['link_to']);
         $this->assertSame($validPayroll->hash_id, $validData['entity_id']);
+        $this->assertSame(Payroll::class, $validData['subject_type']);
+        $this->assertSame((string) $validPayroll->id, $validData['subject_id']);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $otherValidUser->id,
             'type' => 'chain.payslip_ready',
