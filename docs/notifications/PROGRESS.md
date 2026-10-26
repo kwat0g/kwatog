@@ -311,6 +311,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - API `ProfileUpdateActionBadgeParityTest` plus `ProfileUpdateSodTest`: **9 passed / 69 assertions**. Coverage compares exact badge and destination totals for HR, Finance, dual-permission, department-scoped HR, and view-only users; it includes requester and previous-reviewer exclusions. SPA Sidebar and profile-request page tests: **40 passed**. Targeted ESLint, PHP syntax, and `git diff --check` pass.
 - Pint `--test` reports two existing style issues in `BadgeService.php` and `ProfileUpdateRequestService.php`; the new API test passes Pint. No broad formatting was applied. Full suites and browser visual QA remain outstanding.
 - Full SPA typecheck reports existing export-helper, missing `lucide-react`, stock-transfer API, and duplicate purchase-order property errors; none names a changed file.
+- PR checks: API syntax scan stops on the inherited duplicate `PdfRenderService::ensureDompdfDirs()` in F-22 before PHPUnit; SPA dependency audit stops on four existing advisories (two moderate, two high) before typecheck/Vitest/build. Accessibility, visual baselines, and finding-lifecycle pass.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
