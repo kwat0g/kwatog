@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Notifications;
 
-use App\Modules\Auth\Models\Role;
+use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -23,6 +26,7 @@ class MachineBreakdownNotificationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(SettingsSeeder::class);
     }
 
     public function test_listener_sends_to_maintenance_tech_and_production_manager(): void
@@ -56,8 +60,18 @@ class MachineBreakdownNotificationTest extends TestCase
             'notifiable_id' => $revokedTech->id,
             'type' => 'maintenance.breakdown',
         ]);
+        $notice = $tech->notifications()->where('type', 'maintenance.breakdown')->firstOrFail();
+        $this->assertSame(Machine::class, $notice->data['subject_type']);
+        $this->assertSame((string) $machine->id, $notice->data['subject_id']);
         $this->actingAs($pm)->getJson('/api/v1/mrp/machines/'.$machine->hash_id)->assertOk();
         $this->actingAs($revokedTech)->getJson('/api/v1/mrp/machines/'.$machine->hash_id)->assertForbidden();
+
+        app(SettingsService::class)->set('modules.mrp', false, 'modules');
+        app(NotificationService::class)->sendForSubject($machine, $pm, 'test.machine_module_disabled', [
+            'title' => 'Machine down',
+            'link_to' => "/mrp/machines/{$machine->hash_id}",
+        ], emailEnabled: false);
+        $this->assertSame(0, $pm->notifications()->where('type', 'test.machine_module_disabled')->count());
     }
 
     public function test_listener_includes_reason_and_machine_info_in_message(): void
