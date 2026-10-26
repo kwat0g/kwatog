@@ -9,8 +9,8 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 | 0 — Audit | Static architecture, route, and surface inventory complete. Full runtime inspection of every route is still open. | [`00-audit.md`](00-audit.md), 361-row `route-inventory.csv`, 361-row `page-issue-matrix.csv`, `surface-inventory.csv`, baseline screenshots. |
 | 1 — Findings | Findings documented for the static inventory and the rendered Stock Adjustments baseline. Other routes are explicitly unmeasured. | [`01-findings.md`](01-findings.md). |
 | 2 — Spec/pilot | Approved. Three pilot routes plus Work Order link, button, and status color follow-ups implemented. | [`02-spec.md`](02-spec.md), [`00-audit.md`](00-audit.md), screenshots/reports. |
-| 3 — Foundation rollout | Shared shell/container, form/detail layouts, toolbar, pagination naming, token line heights, layout guard, and gallery examples implemented. Table/sidebar preferences, Compact default, and zebra behavior landed in the preceding unit. | Draft [PR #360](https://github.com/kwat0g/kwatog/pull/360) is open; CI is pending. Phase 4 route migrations remain open. |
-| 4 — Page rollout | Not started. Wait for pilot review. | — |
+| 3 — Foundation rollout | Merged to `main` on 2026-10-26 through PRs #356 and #360. Shared layout primitives, preferences, Compact default, zebra behavior, gallery examples, and layout guard are in `main`. | [PR #356](https://github.com/kwat0g/kwatog/pull/356), [PR #360](https://github.com/kwat0g/kwatog/pull/360). Full API/SPA checks were not complete when merged. Phase 4 route migrations remain open. |
+| 4 — Page rollout | Not started beyond the three pilot routes. Start with the highest-severity route group; pilot review gate has passed. | Route inventory and issue matrix. |
 | 5 — Verification | Pilot browser/layout checks completed; automated application tests, accessibility, performance, and full role walkthrough are not yet recorded here. | `spa/scripts/layout-audit.mjs`; reports under `screenshots/after/pilot-final/` and `screenshots/states/`. |
 
 **Review gate:** passed. User approved the pilot and Phase 3 on 2026-10-25. Pilot metrics remain limited to the rendered routes; do not treat them as proof for all routes.
@@ -34,6 +34,7 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 - Gallery inspection exposed one pre-existing shared-component issue: `ChainHeader` labels overlap at 390px. Logged as F-006 for the detail-route rollout; not changed in this foundation unit.
 - Focused SPA tests: 7 files / 17 tests passed. Gallery Playwright: 21 passed with one worker. E2E TypeScript check passed. Changed TypeScript/TSX ESLint, token audit (1,097 files), layout audit (14 changed source files), `git diff --check`, and Vite production build passed.
 - Full SPA typecheck was rerun: it reports only existing unrelated failures in exports, missing `lucide-react`, Action Center, stock transfers, purchase-order duplicate props, and profile indexing. No errors point to this foundation diff.
+- API cleanup PR #460 also merged to `main`. Its full API workflow was canceled after 48 minutes without a PHPUnit result. PR #356 and #360 were merged with checks pending after CI/CD verification was deprioritized. No migrations were run against the application database; the user-preferences migration is present in source only.
 
 ## Whole-project coverage
 
@@ -60,4 +61,4 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 
 ## Next action
 
-Review and merge the Phase 3 foundation PR. Then start Phase 4 with the highest-severity route group, keeping each module migration independently reviewable. Full route rendering, per-role walkthroughs, modal/drawer states, print views, axe, and performance checks remain open.
+Start Phase 4 with the highest-severity route group, keeping each module migration independently reviewable. The current merged work does not prove all 361 routes. Full route rendering, per-role walkthroughs, modal/drawer states, print views, axe, and performance checks remain open.
