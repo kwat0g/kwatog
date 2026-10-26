@@ -675,6 +675,9 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 - Registered `PayrollPeriod` against active users with the Payroll module enabled and `payroll.periods.view`; registered `PayrollAdjustment` against `payroll.adjustments.view`; registered employee `Payroll` rows against the owner-only `/self-service/payslips/{hash}` route (`payroll.view` and matching employee ID).
 - Migrated all four Payroll notice dispatches: period approval, adjustment approval, adjustment outcome, and payslip readiness. Existing candidate selection, actor exclusions, event timing, copy, links, dedupe, and channels remain unchanged; the added gate suppresses recipients who cannot open the linked subject. Payslip-ready delivery stays limited to the employee who owns that payroll row.
+- Added positive and negative subject-access coverage for period, adjustment, and payslip subjects; feature tests assert subject metadata for all four paths.
+- Targeted API tests: **7 passed / 38 assertions** across the subject-access unit test, period approval, adjustment action/outcome, payslip readiness, and duplicate payslip notice tests. PHP syntax and `git diff --check` pass. Tests used and restored the temporary F-22 workaround.
+- Pint reports **4** pre-existing style violations in touched legacy files; new registry and unit-test code pass. No broad formatting applied. API CI remains blocked by F-22. Exact adjustment checker remains a business-policy gap: current seeded roles grant no operational checker permission; no audience expansion was made.
 
 ## Phase 3 payslip email-failure subject access (draft PR)
 
@@ -682,9 +685,6 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The payroll notification test checks the provider-failure and missing-email paths, exact subject metadata, owner delivery, and a second employee's exclusion.
 - `SendPayslipEmailJobTest.php --filter test_delivery_failure_notifies_only_active_users_with_own_payslip_access`: **1 passed / 8 assertions**. PHP syntax checks and `git diff --check` passed.
 - API CI is blocked in the parent branch by the duplicate `PdfRenderService::ensureDompdfDirs()` declaration, before PHPUnit runs.
-- Added positive and negative subject-access coverage for period, adjustment, and payslip subjects; feature tests assert subject metadata for all four paths.
-- Targeted API tests: **7 passed / 38 assertions** across the subject-access unit test, period approval, adjustment action/outcome, payslip readiness, and duplicate payslip notice tests. PHP syntax and `git diff --check` pass. Tests used and restored the temporary F-22 workaround.
-- Pint reports **4** pre-existing style violations in touched legacy files; new registry and unit-test code pass. No broad formatting applied. API CI remains blocked by F-22. Exact adjustment checker remains a business-policy gap: current seeded roles grant no operational checker permission; no audience expansion was made.
 
 ## Resume instruction
 
