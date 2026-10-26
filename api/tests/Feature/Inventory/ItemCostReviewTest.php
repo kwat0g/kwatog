@@ -30,10 +30,15 @@ class ItemCostReviewTest extends TestCase
         $grn = GoodsReceiptNote::factory()->create(['status' => 'accepted', 'accepted_at' => now()]);
         $line = $grn->items()->create(['purchase_order_item_id' => PurchaseOrderItem::create(['purchase_order_id' => $grn->purchase_order_id, 'item_id' => $item->id, 'description' => 'Cost review material', 'quantity' => '5', 'unit' => $item->unit_of_measure, 'unit_price' => '12.00', 'total' => '60.00'])->id, 'location_id' => WarehouseLocation::factory()->create()->id, 'item_id' => $item->id, 'quantity_received' => '5', 'quantity_accepted' => '5', 'unit_cost' => '12.0000']);
         $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $financeReviewer = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
         $review = app(ItemCostReviewService::class)->capture($line, '12.0000');
         $this->assertSame('10.0000', $item->fresh()->standard_cost);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $finance->id,
+            'type' => 'inventory.receipt_cost_changed',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $financeReviewer->id,
             'type' => 'inventory.receipt_cost_changed',
         ]);
         $warehouse = User::factory()->create(['role_id' => Role::where('slug', 'warehouse_staff')->value('id')]);
@@ -41,10 +46,8 @@ class ItemCostReviewTest extends TestCase
         $this->actingAs($warehouse)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Review'])->assertForbidden();
         $this->actingAs($finance)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Approved receipt cost basis'])->assertOk()->assertJsonPath('data.status', 'approved');
         $this->assertSame('12.0000', $item->fresh()->standard_cost);
-        $this->assertDatabaseHas('notifications', [
-            'notifiable_id' => $finance->id,
-            'type' => 'approval.completed',
-        ]);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $finance->id, 'type' => 'approval.completed']);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $financeReviewer->id, 'type' => 'approval.completed']);
         $this->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Repeat'])->assertOk();
         $staleLine = $grn->items()->create(['purchase_order_item_id' => $line->purchase_order_item_id, 'location_id' => $line->location_id, 'item_id' => $item->id, 'quantity_received' => '5', 'quantity_accepted' => '5', 'unit_cost' => '14.0000']);
         $staleReview = app(ItemCostReviewService::class)->capture($staleLine, '14.0000');
