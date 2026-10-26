@@ -358,10 +358,13 @@ class InspectionNcrTest extends TestCase
         ]);
         app(SettingsService::class)->set('quality.ncr.auto_created_notification_roles', ['qc_inspector']);
 
-        $ncr = $this->ncrSvc->openFromInspectionFailure($this->makeFailedInspection(), $this->user);
+        $inspection = $this->makeFailedInspection(stage: InspectionStage::InProcess);
+        $ncr = $this->ncrSvc->openFromInspectionFailure($inspection, $this->user);
 
         $notice = $this->user->notifications()->where('type', 'auto_ncr_created')->firstOrFail();
         $this->assertSame("/quality/ncrs/{$ncr->hash_id}", $notice->data['link_to']);
+        $this->assertStringContainsString('In-process inspection', $notice->data['message']);
+        $this->assertStringNotContainsString('in_process', $notice->data['message']);
         $this->assertSame(0, $revoked->notifications()->where('type', 'auto_ncr_created')->count());
     }
 

@@ -28,6 +28,12 @@ class IncomingQcTriggerTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        app(SettingsService::class)->set('modules.inventory', true, 'modules');
+    }
+
     public function test_grn_item_creates_an_incoming_inspection_without_misusing_product_id(): void
     {
         $role = Role::create(['name' => 'Incoming QC Test', 'slug' => 'incoming-qc-test']);
@@ -104,6 +110,8 @@ class IncomingQcTriggerTest extends TestCase
         ]);
         $notice = $user->notifications()->where('type', 'chain.incoming_qc_required')->firstOrFail();
         $this->assertSame("/inventory/grns/{$grn->hash_id}", $notice->data['link_to']);
+        $this->assertSame(GoodsReceiptNote::class, $notice->data['subject_type']);
+        $this->assertSame((string) $grn->id, $notice->data['subject_id']);
         $this->assertSame(0, $revokedUser->notifications()->where('type', 'chain.incoming_qc_required')->count());
         $this->actingAs($user)->getJson('/api/v1/inventory/grn/'.$grn->hash_id)->assertOk();
         $this->actingAs($revokedUser)->getJson('/api/v1/inventory/grn/'.$grn->hash_id)->assertForbidden();

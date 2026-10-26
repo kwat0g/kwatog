@@ -151,7 +151,7 @@ class TriggerInProcessQC implements ShouldQueue
                     ->get()
                     ->filter(fn (User $user): bool => $user->hasPermission('quality.inspections.view'));
 
-                app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [
+                app(NotificationService::class)->sendForSubject($created ?? $wo, $recipients, 'chain.in_process_qc_required', [
                     'title' => 'In-process QC required',
                     'message' => "In-process QC required for WO {$wo->wo_number}.",
                     // Open the inspection itself; the WO page is one more click.

@@ -177,7 +177,7 @@ class NcrEscalationService
                     return self::OUTCOME_UNSTAFFED;
                 }
 
-                $this->notifications->send($recipients, 'ncr.escalation', [
+                $this->notifications->sendForSubject($ncr, $recipients, 'ncr.escalation', [
                     'title'       => $subject,
                     'message'     => "NCR {$ncr->ncr_number} (severity {$severity}) has been open without a Corrective action for over {$hoursDue}h. Tier {$nextTier} escalation.",
                     'link_to'     => "/quality/ncrs/{$ncr->hash_id}",

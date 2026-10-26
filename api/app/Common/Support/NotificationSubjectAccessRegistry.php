@@ -30,6 +30,11 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -38,7 +43,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -57,6 +62,19 @@ final class NotificationSubjectAccessRegistry
             GoodsReceiptNote::class, Item::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && $user->hasPermission('inventory.view')
                 && ($subject instanceof GoodsReceiptNote || $subject instanceof Item),
+            Inspection::class => app(SettingsService::class)->get('modules.quality', false) === true
+                && $user->is_active
+                && $user->hasPermission('quality.inspections.view')
+                && $subject instanceof Inspection,
+            NonConformanceReport::class => app(SettingsService::class)->get('modules.quality', false) === true
+                && $user->is_active
+                && $user->hasPermission('quality.ncr.view')
+                && $subject instanceof NonConformanceReport,
+            ReturnRequest::class => app(SettingsService::class)->get('modules.return_management', false) === true
+                && $user->is_active
+                && $user->hasPermission('return_management.view')
+                && $subject instanceof ReturnRequest
+                && ! (ReturnManagementAccess::customerReturnsOnly($user) && $subject->type === ReturnRequestType::SupplierReturn),
             ItemCostReview::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && $user->hasPermission('inventory.costs.review')
                 && $subject instanceof ItemCostReview,
