@@ -216,12 +216,18 @@ class CustomerPortalController extends Controller
 
         $filters = $request->validate([
             'status' => ['sometimes', Rule::enum(InvoiceStatus::class)],
+            'signal' => ['sometimes', Rule::in(['unpaid', 'overdue'])],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
         $paginator = $this->service->invoices($user->customer_id, $filters);
 
         return CustomerPortalInvoiceResource::collection($paginator);
+    }
+
+    public function invoiceSignals(Request $request): JsonResponse
+    {
+        return response()->json(['data' => $this->service->invoiceSignals($this->user($request)->customer_id)]);
     }
 
     /**

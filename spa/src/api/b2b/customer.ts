@@ -163,7 +163,11 @@ export const customerPortalApi = {
   },
 
  // ── Invoices ───────────────────────────────────────
- listInvoices: async (params?: { status?: string; page?: number; per_page?: number }) => {
+ invoiceSignals: async () => {
+ const { data } = await portalClient.get<{ data: { unpaid: number; overdue: number } }>('/b2b/customer/badges');
+ return data.data;
+ },
+ listInvoices: async (params?: { status?: string; signal?: 'unpaid' | 'overdue'; page?: number; per_page?: number }) => {
  const { data } = await portalClient.get<PaginatedResponse<PortalInvoiceSummary>>('/b2b/customer/invoices', { params });
  return data;
  },
