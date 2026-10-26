@@ -11,6 +11,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -307,6 +309,65 @@ class NotificationServiceSubjectAccessTest extends TestCase
 
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $maker->id, 'type' => 'test.disabled_stock_adjustment_subject']);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_stock_adjustment_subject');
+    }
+
+    public function test_supplier_listing_subject_requires_enabled_module_and_list_permission(): void
+    {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
+        $viewPermission = Permission::firstOrCreate(
+            ['slug' => 'purchasing.supplier_listings.view'],
+            ['name' => 'View supplier item listings', 'module' => 'purchasing'],
+        );
+        $reviewPermission = Permission::firstOrCreate(
+            ['slug' => 'purchasing.supplier_listings.review'],
+            ['name' => 'Review supplier item listings', 'module' => 'purchasing'],
+        );
+        $viewerRole = Role::firstOrCreate(['slug' => 'notification_listing_viewer'], ['name' => 'Notification Listing Viewer']);
+        $viewerRole->permissions()->syncWithoutDetaching([$viewPermission->id]);
+        $reviewOnlyRole = Role::firstOrCreate(['slug' => 'notification_listing_reviewer'], ['name' => 'Notification Listing Reviewer']);
+        $reviewOnlyRole->permissions()->syncWithoutDetaching([$reviewPermission->id]);
+        $viewer = User::factory()->withRole($viewerRole->slug)->create();
+        $reviewOnly = User::factory()->withRole($reviewOnlyRole->slug)->create();
+        $vendor = Vendor::factory()->create();
+        $item = Item::factory()->create();
+        $listing = new SupplierItemListing([
+            'vendor_id' => $vendor->id,
+            'item_id' => $item->id,
+            'price' => '100.00',
+            'submitted_at' => now(),
+        ]);
+        $listing->save();
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject(
+            $listing,
+            [$viewer, $reviewOnly],
+            'test.supplier_listing_subject_access',
+            ['title' => 'Supplier listing', 'message' => 'A supplier listing changed.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.supplier_listing_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $reviewOnly->id, 'type' => 'test.supplier_listing_subject_access']);
+        $notificationData = json_decode((string) DB::table('notifications')
+            ->where('notifiable_id', $viewer->id)
+            ->where('type', 'test.supplier_listing_subject_access')
+            ->value('data'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(SupplierItemListing::class, $notificationData['subject_type']);
+        $this->assertSame((string) $listing->id, $notificationData['subject_id']);
+        Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $viewer->id);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $reviewOnly->id);
+
+        app(SettingsService::class)->set('modules.purchasing', false, 'modules');
+        app(NotificationService::class)->sendForSubject(
+            $listing,
+            $viewer,
+            'test.disabled_supplier_listing_subject',
+            ['title' => 'Supplier listing', 'message' => 'The Purchasing module is disabled.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.disabled_supplier_listing_subject']);
     }
 
     public function test_budget_subject_allows_only_viewers_and_distinct_approvers(): void

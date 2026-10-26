@@ -47,8 +47,8 @@ class SupplierItemListingTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
 
-        $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->zeroOrMoreTimes();
+        $notifications = Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('sendForSubject')->zeroOrMoreTimes();
         $this->app->instance(NotificationService::class, $notifications);
 
         $this->vendor = Vendor::factory()->create();
@@ -150,21 +150,29 @@ class SupplierItemListingTest extends TestCase
         ]);
         $revoked->flushPermissionsCache();
 
-        $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->once()->withArgs(function ($audience) use ($revoked): bool {
-            $ids = collect($audience)->pluck('id');
-
-            return $ids->contains($this->purchasingOfficer->id) && ! $ids->contains($revoked->id);
+        $sent = null;
+        $notifications = Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('sendForSubject')->once()->andReturnUsing(function (...$arguments) use (&$sent): void {
+            $sent = $arguments;
         });
         $this->app->instance(NotificationService::class, $notifications);
 
         $item = Item::factory()->create(['is_active' => true]);
-        app(SupplierListingService::class)->submit($this->vendor->id, [
+        $listing = app(SupplierListingService::class)->submit($this->vendor->id, [
             'item_id' => $item->id,
             'supplier_item_code' => 'SAFE-01',
             'price' => '100.00',
             'lead_time_days' => 5,
         ]);
+
+        [$subject, $audience, $type, $data] = $sent;
+        $ids = collect($audience)->pluck('id');
+        $this->assertInstanceOf(SupplierItemListing::class, $subject);
+        $this->assertSame($listing->id, $subject->id);
+        $this->assertSame('supplier_listing_submitted', $type);
+        $this->assertSame('/purchasing/supplier-listings', $data['link_to']);
+        $this->assertContains($this->purchasingOfficer->id, $ids);
+        $this->assertNotContains($revoked->id, $ids);
     }
 
     public function test_duplicate_pending_listing_for_same_item_is_rejected(): void

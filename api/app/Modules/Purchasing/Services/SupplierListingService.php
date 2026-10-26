@@ -347,7 +347,7 @@ class SupplierListingService
                 ->filter(fn (User $user): bool => $user->hasPermission('purchasing.supplier_listings.view'))
                 ->values();
 
-            app(NotificationService::class)->send($reviewers, 'supplier_listing_submitted', [
+            app(NotificationService::class)->sendForSubject($listing, $reviewers, 'supplier_listing_submitted', [
                 'title' => 'Supplier listing awaiting review',
                 'message' => "{$vendor?->name} submitted an item listing for {$item?->code}.",
                 'link_to' => '/purchasing/supplier-listings',

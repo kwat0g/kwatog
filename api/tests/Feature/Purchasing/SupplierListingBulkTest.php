@@ -42,8 +42,8 @@ class SupplierListingBulkTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
 
-        $notifications = Mockery::mock(NotificationService::class);
-        $notifications->shouldReceive('send')->zeroOrMoreTimes();
+        $notifications = Mockery::mock(NotificationService::class)->makePartial();
+        $notifications->shouldReceive('sendForSubject')->zeroOrMoreTimes();
         $this->app->instance(NotificationService::class, $notifications);
 
         $this->vendor = Vendor::factory()->create();
