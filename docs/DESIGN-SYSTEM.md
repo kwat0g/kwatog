@@ -94,7 +94,7 @@ user-selectable. See `stores/themeStore.ts` (`pushOverride` / `popOverride`).
   --row-height-comfortable: 48px;
   --row-height-spacious: 56px;
   --hit-min: 28px;
-  --font-size-body: 13px;
+  --font-size-body: 14px;
 }
 ```
 
@@ -255,28 +255,29 @@ silently — the browser falls back and nothing errors.
 
 ### Type scale
 
-| Name | Size | Line height | Usage |
-|---|---|---|---|
-| `text-2xs` | 12px | 1.4 | Compact metadata and labels |
-| `text-xs` | 12px | 1.4 | Chip text, badges, metadata |
-| `text-sm` | 13px | 1.4 | Compact table cells and secondary text |
-| `text-base` | 14px | 1.5 | Body, form inputs, navigation |
-| `text-md` | 14px | 1.4 | Card titles, section headers |
-| `text-lg` | 16px | 1.3 | Panel titles |
-| `text-xl` | 20px | 1.25 | — |
-| `text-2xl` | 26px | 1.15 | **Page titles** (`font-display`) |
-| `text-3xl` | 32px | 1.1 | Large display |
+| Name | Utility | Size | Line height | Usage |
+|---|---|---:|---:|---|
+| Page title | `text-page-title` | 28px | 36px | One `h1`, Instrument Serif |
+| Section title | `text-section-title` | 20px | 28px | `h2` and page sections |
+| Subsection | `text-subsection` | 16px | 24px | `h3` and panel titles |
+| Body | `text-body` | 14px | 1.5 | Main copy and field values |
+| Body small | `text-body-small` | 14px | 19px | Secondary descriptions |
+| Caption | `text-caption` | 13px | 18px | Supporting metadata |
+| Label | `text-label` | 14px | 18px | Form and control labels |
+| Table header | `text-table-header` | 14px | 18px | Table headings |
+| Table cell | `text-table-cell` | 14px | 20px | Table values |
+| Code / ID | `text-code` | 14px | 18px | Genuine references and IDs |
 
-`xl` and `2xl` are larger than the pre-Atelier scale (18px / 22px). Instrument
-Serif has a small x-height next to Public Sans and read undersized at the old
-values.
+The scale values and line heights come from `--font-size-*` and
+`--line-height-*` tokens. Compact table cells may use the documented 13px
+minimum; other body and table text stays at 14px or larger.
 
 ### Page titles — serif
 
 `components/layout/PageHeader.tsx` renders the `h1` on essentially every page:
 
 ```tsx
-<h1 className="font-display text-2xl text-primary break-words">
+<h1 className="font-display text-page-title text-primary break-words">
 ```
 
 No weight class — the family is 400-only. Subtitles, breadcrumbs and actions stay
@@ -303,6 +304,25 @@ monospace for IDs, codes, and references.
 - Inside cells, chips, badges: 2–8px padding
 - Between form fields: 12px
 - Between sections: 16–20px
+
+## PAGE LAYOUT PRIMITIVES
+
+- `PageShell` owns a route's responsive gutter and supports `fluid`, `grid`, and
+  `narrow` variants. `PageContainer` applies the same width contract to a
+  content region. Data pages stay fluid; narrow prose uses the `72ch` token.
+- `FormGrid` starts with one column, grows to two at 768px, three at 1440px,
+  and four at 1920px when requested. Its gap comes from `--form-grid-gap`.
+- `DetailLayout` keeps main content and an optional aside in one responsive
+  grid; the aside moves below main content on narrow screens.
+- `Toolbar` owns start/end alignment. A page composed inside `PageShell` turns
+  component insets off so the shell supplies the shared responsive gutter;
+  legacy pages retain their existing inset until Phase 4 migration. `FilterBar`
+  and the table toolbar compose it; `PageHeader`, `Panel`, `DataTable`, and
+  `TablePagination` remain the shared primitives for their jobs.
+- `npm run audit:layout` rejects newly added arbitrary size/spacing values and
+  centered max-width wrappers in route files. Changed inventory pages must use
+  a shared shell or document a special-layout exception. Existing layout debt
+  remains for the Phase 4 route migrations.
 - Page gutters: 16px below 640px, 24px from 640–1439px, 32px at 1440px+
 - Card padding: 16–24px by surface and viewport
 

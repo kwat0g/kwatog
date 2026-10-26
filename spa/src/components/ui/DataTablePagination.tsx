@@ -25,7 +25,7 @@ interface PaginationProps {
 /** Sized for dense office tables; 100 is the practical ceiling before the DOM hurts. */
 const PAGE_SIZES = [25, 50, 100] as const;
 
-export function DataTablePagination({
+export function TablePagination({
  meta,
  onPageChange,
  onPageSizeChange,
@@ -103,3 +103,5 @@ export function DataTablePagination({
  </div>
  );
 }
+
+export const DataTablePagination = TablePagination;

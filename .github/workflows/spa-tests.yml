@@ -148,6 +148,15 @@ jobs:
         # palette class from creeping back in.
         run: npm run audit:tokens
 
+      - name: Layout discipline (enforced)
+        env:
+          LAYOUT_AUDIT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$LAYOUT_AUDIT_BASE_SHA" ]; then
+            git fetch --no-tags --depth=1 origin "$LAYOUT_AUDIT_BASE_SHA"
+          fi
+          npm run audit:layout
+
       - name: Vitest
         env:
           CI: 'true'

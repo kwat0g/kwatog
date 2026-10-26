@@ -1,22 +1,26 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-type PageShellProps = {
+export type PageVariant = 'fluid' | 'grid' | 'narrow';
+
+export type PageContainerProps = {
   children: ReactNode;
-  variant?: 'fluid' | 'grid' | 'narrow';
-  viewport?: boolean;
+  variant?: PageVariant;
   className?: string;
 };
 
-export function PageShell({
+type PageShellProps = PageContainerProps & { viewport?: boolean };
+
+function PageFrame({
   children,
   variant = 'fluid',
   viewport = false,
   className,
-}: PageShellProps) {
+  layout,
+}: PageShellProps & { layout: 'page-shell' | 'page-container' }) {
   return (
     <div
-      data-layout="page-shell"
+      data-layout={layout}
       className={cn(
         'page-shell',
         variant === 'grid' && 'page-shell--grid',
@@ -28,4 +32,12 @@ export function PageShell({
       {children}
     </div>
   );
+}
+
+export function PageShell(props: PageShellProps) {
+  return <PageFrame {...props} layout="page-shell" />;
+}
+
+export function PageContainer(props: PageContainerProps) {
+  return <PageFrame {...props} layout="page-container" />;
 }
