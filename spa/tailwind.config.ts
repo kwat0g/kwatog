@@ -17,6 +17,18 @@ const config: Config = {
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
+      spacing: {
+        1: 'var(--space-1)',
+        2: 'var(--space-2)',
+        3: 'var(--space-3)',
+        4: 'var(--space-4)',
+        5: 'var(--space-5)',
+        6: 'var(--space-6)',
+        8: 'var(--space-8)',
+        10: 'var(--space-10)',
+        12: 'var(--space-12)',
+        16: 'var(--space-16)',
+      },
       colors: {
         // Canvas
         canvas: 'color-mix(in srgb, var(--bg-canvas) calc(<alpha-value> * 100%), transparent)',
@@ -132,10 +144,20 @@ const config: Config = {
       },
 
       fontSize: {
-        '2xs': ['10px', { lineHeight: '1.4' }],
-        xs: ['11px', { lineHeight: '1.4' }],
-        sm: ['12px', { lineHeight: '1.4' }],
-        base: ['13px', { lineHeight: '1.5' }],
+        'page-title': ['var(--font-size-page-title)', { lineHeight: 'var(--line-height-page-title)' }],
+        'section-title': ['var(--font-size-section-title)', { lineHeight: 'var(--line-height-section-title)' }],
+        subsection: ['var(--font-size-subsection)', { lineHeight: 'var(--line-height-subsection)' }],
+        body: ['var(--font-size-body)', { lineHeight: 'var(--line-height-body)' }],
+        'body-small': ['var(--font-size-body-small)', { lineHeight: 'var(--line-height-body-small)' }],
+        caption: ['var(--font-size-caption)', { lineHeight: 'var(--line-height-caption)' }],
+        label: ['var(--font-size-label)', { lineHeight: 'var(--line-height-label)' }],
+        'table-header': ['var(--font-size-table-header)', { lineHeight: 'var(--line-height-table-header)' }],
+        'table-cell': ['var(--font-size-table-cell)', { lineHeight: 'var(--line-height-table-cell)' }],
+        code: ['var(--font-size-code)', { lineHeight: 'var(--line-height-code)' }],
+        '2xs': ['12px', { lineHeight: '1.4' }],
+        xs: ['12px', { lineHeight: '1.4' }],
+        sm: ['13px', { lineHeight: '1.4' }],
+        base: ['14px', { lineHeight: '1.5' }],
         md: ['14px', { lineHeight: '1.4' }],
         lg: ['16px', { lineHeight: '1.3' }],
         xl: ['20px', { lineHeight: '1.25' }],
@@ -151,11 +173,12 @@ const config: Config = {
         full: 'var(--radius-full)',
       },
 
-      // Density tokens. Office palettes declare 32px / 28px; [data-theme='floor']
-      // raises them to 48px / 44px, so a component reads them unconditionally
-      // rather than branching on theme.
+      // Shared row and touch-target tokens stay theme-aware.
       height: {
         row: 'var(--row-height)',
+        'row-compact': 'var(--row-height-compact)',
+        'row-comfortable': 'var(--row-height-comfortable)',
+        'row-spacious': 'var(--row-height-spacious)',
       },
 
       minHeight: {

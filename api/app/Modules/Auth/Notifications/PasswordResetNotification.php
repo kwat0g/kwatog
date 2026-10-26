@@ -76,7 +76,7 @@ class PasswordResetNotification extends Notification
             ]);
     }
 
-    public function failed(Throwable $exception): void
+    public function failed(\Throwable $exception): void
     {
         app(EmailDeliveryFailureNotifier::class)->notifyPermission(
             'admin.users.manage',

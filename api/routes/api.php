@@ -7,6 +7,7 @@ use App\Common\Controllers\ApprovalBoardController;
 use App\Common\Controllers\CalendarController;
 use App\Common\Controllers\ChainBottleneckController;
 use App\Common\Controllers\ChainListenerRecoveryController;
+use App\Common\Controllers\RecoveryAccessController;
 use App\Common\Controllers\BusinessPolicyController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 /*
  * Series C — Task C4. Broadcasting auth endpoint used by Reverb.
@@ -97,6 +99,27 @@ Route::get('/health', function (Request $request) {
 
     return response()->json($body, $healthy ? 200 : 503);
 });
+
+// Break-glass recovery does not use users, roles, sessions, or the database
+// backup ledger. The short-lived bearer grants only recovery endpoints.
+// Exclude Sanctum's stateful wrapper because its default session store is the database.
+Route::prefix('recovery')
+    ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+    ->group(function (): void {
+        Route::post('/session', [RecoveryAccessController::class, 'login'])->middleware('throttle:recovery-login');
+
+        Route::middleware('recovery.access')->group(function (): void {
+            Route::get('/backups', [RecoveryAccessController::class, 'index'])->middleware('throttle:recovery-read');
+            Route::post('/backups/verify', [RecoveryAccessController::class, 'verify'])->middleware('throttle:sensitive');
+            Route::post('/restore', [RecoveryAccessController::class, 'restore'])->middleware('throttle:sensitive');
+            Route::get('/operations/{id}', [RecoveryAccessController::class, 'operation'])
+                ->whereUuid('id')
+                ->middleware('throttle:recovery-read');
+            Route::post('/operations/{id}/rollback', [RecoveryAccessController::class, 'rollback'])
+                ->whereUuid('id')
+                ->middleware('throttle:sensitive');
+        });
+    });
 
 Route::middleware(['auth:sanctum', 'permission:business_policies.view'])
     ->get('/business-policies', BusinessPolicyController::class);

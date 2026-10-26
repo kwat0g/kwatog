@@ -254,7 +254,7 @@ function ApplyLoanModal({
  formState: { errors },
  reset,
  watch,
- } = useForm<FormValues>({
+ } = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  // The permitted period count is returned by the live loan-limits query;
  // require the employee to choose it rather than using a stale default.
