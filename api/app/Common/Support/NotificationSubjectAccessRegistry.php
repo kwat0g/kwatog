@@ -19,6 +19,7 @@ use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
@@ -65,7 +66,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, Product::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -110,6 +111,10 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $user->hasPermission('crm.complaints.view')
                 && $subject instanceof CustomerComplaint,
+            Product::class => app(SettingsService::class)->get('modules.crm', false) === true
+                && $user->is_active
+                && ($user->hasPermission('crm.products.view') || $user->hasPermission('inventory.costs.approve'))
+                && $subject instanceof Product,
             EmployeeTraining::class => self::userCanViewEmployeeTraining($user, $subject),
             Employee::class => self::userCanViewEmployee($user, $subject),
             Clearance::class => app(SettingsService::class)->get('modules.hr', false) === true
