@@ -41,7 +41,6 @@ use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Support\ReturnManagementAccess;
-use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Shipment;
 use Closure;
@@ -493,15 +492,11 @@ class BadgeService
 
             // Supply chain > Shipments — mid-pipe inbound shipments.
             'shipments' => [
-                'permissions' => ['supply_chain.view'],
+                'permissions' => ['supply_chain.view', 'supply_chain.shipments.view'],
                 'label'       => 'Shipments',
-                'description' => 'Inbound shipments in transit',
+                'description' => 'Inbound shipments in transit, customs, or cleared',
                 'counter'     => fn (): int => Shipment::query()
-                    ->whereIn('status', [
-                        ShipmentStatus::InTransit->value,
-                        ShipmentStatus::Customs->value,
-                        ShipmentStatus::Cleared->value,
-                    ])
+                    ->midPipe()
                     ->count(),
             ],
 

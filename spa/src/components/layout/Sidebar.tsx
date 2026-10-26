@@ -134,6 +134,7 @@ function badgeDestination(path: string, key: string): string {
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
+    shipments: 'status=mid_pipe',
   };
   const filter = filters[key];
   return filter ? `${path}?${filter}` : path;
@@ -511,6 +512,15 @@ export const SECTIONS: NavSection[] = [
   {
     label: 'Supply Chain',
     items: [
+      {
+        to: '/supply-chain/shipments',
+        label: 'Inbound Shipments',
+        description: 'Track shipments in transit and customs',
+        icon: LuTruck,
+        feature: 'supply_chain',
+        anyPermissions: ['supply_chain.view', 'supply_chain.shipments.view'],
+        badgeKey: 'shipments',
+      },
       {
         to: '/supply-chain/deliveries',
         label: 'Outbound Deliveries',

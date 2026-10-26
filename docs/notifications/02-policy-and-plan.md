@@ -269,6 +269,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `supply_chain.delivery.overdue` | Delivery overdue / warning | Open delivery scheduled before now and not acknowledged/cancelled/completed; use delivery list scope. | A/S: assigned dispatcher/driver/site | `/supply-chain/deliveries?signal=overdue` |
 | `supply_chain.delivery.awaiting_ack` | Acknowledgment / action-required | Delivered/awaiting-ack state not acknowledged by bound customer; portal sees own delivery; internal owner sees assigned row. | A + party-bound portal | `/supply-chain/deliveries?signal=awaiting_ack`; customer `/portal/customer/deliveries?signal=awaiting_ack` |
 | `supply_chain.delivery.in_transit` | In transit / info | Existing definition: `loading` or `in_transit`; retain only if user needs to act, else hide as info. | S: delivery permission + assignment/site | `/supply-chain/deliveries?signal=in_transit` |
+| `supply_chain.shipment.mid_pipe` | Inbound shipment / warning | Active `ShipmentStatus::InTransit`, `Customs`, or `Cleared` records. Other lifecycle states and soft-deleted records are excluded. The list has no narrower record scope. | S: either `supply_chain.view` or `supply_chain.shipments.view`, matching the API route | `/supply-chain/shipments?status=mid_pipe` |
 | `admin.user.locked_or_invite_pending` | Account issue / warning | Locked or expired/pending invite requiring admin action; exclude ordinary inactive users. | Sys: `admin.users.manage` | `/admin/users?signal=locked_or_invite_pending` |
 | `admin.portal_access.pending` | Portal access / action-required | Portal user rows with status `pending` in the existing access list; do not include inactive/locked users. | S: `b2b.portal_access.view` plus account scope | `/accounting/portal-access?status=pending` |
 | `supply_chain.vehicle.maintenance` | Vehicle unavailable / warning | Vehicle status `maintenance`; exclude retired vehicles. Match fleet list `status=maintenance` filter. | S: supply-chain view and fleet scope | `/supply-chain/fleet?status=maintenance` |
@@ -277,7 +278,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `alerts.open` | System alert / severity-derived | Unresolved, non-dismissed Alert rows; explicitly area-wide only if alert list is shared and filter identical. Never call personal unread. | S/Sys per alert type and subject scope | `/alerts?signal=open` |
 | `dss.critical` | DSS critical / critical | Open critical recommendation with active publisher, owner, and record-access rule; disabled today. | A/S only after detector owner approval | `/decision-center?signal=critical` |
 
-### Internal sidebar route coverage: all 73 destinations
+### Internal sidebar route coverage: 76 destinations (73 Phase 0 baseline)
 
 Every internal route appears below. `Current` is the current `Sidebar.tsx` key; `proposed` is for review, not an approved badge. `—` means no reliable actionable signal proposed from current evidence. Permission/feature gates are copied from discovery; backend route authorization remains authoritative.
 
@@ -321,6 +322,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/inventory/transfer-orders` | — | `inventory.adjust` | inventory.transfer.awaiting_my_action |
 | `/inventory/picking` | — | `inventory.picking.view` | inventory.picking.awaiting_action |
 | `/supply-chain/deliveries` | `deliveries` | any: supply_chain.view, supply_chain.deliveries.view | supply_chain.delivery.overdue; supply_chain.delivery.awaiting_ack; supply_chain.delivery.in_transit |
+| `/supply-chain/shipments` | `shipments` | any: supply_chain.view, supply_chain.shipments.view | supply_chain.shipment.mid_pipe |
 | `/supply-chain/fleet` | — | `supply_chain.view` | supply_chain.vehicle.maintenance |
 | `/quality/inspection-specs` | — | `quality.specs.view` | — |
 | `/quality/inspections` | `pending_inspections` | `quality.inspections.view` | quality.inspection.awaiting_my_action |

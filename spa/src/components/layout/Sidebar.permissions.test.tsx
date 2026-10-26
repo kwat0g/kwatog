@@ -143,13 +143,20 @@ describe('role-aligned sidebar permissions', () => {
     expect(paths).toContain('/hr/recruitment');
     expect(paths).not.toContain('/admin/sod');
     expect(paths).not.toContain('/inventory/scanner');
-    expect(paths).not.toContain('/supply-chain/shipments');
+    expect(paths).toContain('/supply-chain/shipments');
   });
 
   it('shows MRB only to users with its record-view permission', () => {
     const mrb = item('/inventory/mrb');
     expect(isNavItemVisible(mrb, { permissions: new Set(['inventory.view']), features: allFeatures })).toBe(false);
     expect(isNavItemVisible(mrb, { permissions: new Set(['inventory.mrb.view']), features: allFeatures })).toBe(true);
+  });
+
+  it('shows inbound shipments to broad or shipment-specific viewers only', () => {
+    const shipments = item('/supply-chain/shipments');
+    expect(isNavItemVisible(shipments, { permissions: new Set(['supply_chain.view']), features: allFeatures })).toBe(true);
+    expect(isNavItemVisible(shipments, { permissions: new Set(['supply_chain.shipments.view']), features: allFeatures })).toBe(true);
+    expect(isNavItemVisible(shipments, { permissions: new Set(['supply_chain.deliveries.view']), features: allFeatures })).toBe(false);
   });
 
   it('uses labels that describe each primary destination', () => {
@@ -169,6 +176,7 @@ describe('role-aligned sidebar permissions', () => {
     expect(item('/inventory/transfer-orders').label).toBe('Inventory Transfers');
     expect(item('/inventory/picking').label).toBe('Material Handover');
     expect(item('/supply-chain/deliveries').label).toBe('Outbound Deliveries');
+    expect(item('/supply-chain/shipments').label).toBe('Inbound Shipments');
     expect(item('/supply-chain/fleet').label).toBe('Delivery Fleet');
     expect(item('/quality/inspection-specs').label).toBe('Inspection Specifications');
     expect(item('/quality/inspections').label).toBe('Quality Inspections');
