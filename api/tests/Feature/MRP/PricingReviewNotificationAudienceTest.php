@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\MRP;
 
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Services\PricingReviewService;
@@ -63,5 +65,33 @@ class PricingReviewNotificationAudienceTest extends TestCase
             DB::table('notifications')->where('type', 'pricing.review_required')->count(),
             'Each product risk should still create its real in-app notification.',
         );
+    }
+
+    public function test_pricing_notice_excludes_permission_holders_outside_the_configured_roles(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $hrRole = Role::query()->where('slug', 'hr_officer')->firstOrFail();
+        $permission = Permission::query()->where('slug', 'crm.price_agreements.view')->firstOrFail();
+        $hrRole->permissions()->attach($permission->id);
+
+        $financeUser = User::factory()->withRole('finance_officer')->create();
+        $hrUser = User::factory()->withRole('hr_officer')->create();
+        $product = Product::factory()->create([
+            'base_selling_price' => null,
+            'minimum_selling_price' => null,
+        ]);
+
+        app(PricingReviewService::class)->handle(new BomPricingReviewRequested(
+            [$product->id],
+            'scheduled_review',
+        ));
+
+        $recipientIds = DB::table('notifications')
+            ->where('type', 'pricing.review_required')
+            ->pluck('notifiable_id')
+            ->all();
+
+        $this->assertContains($financeUser->id, $recipientIds);
+        $this->assertNotContains($hrUser->id, $recipientIds);
     }
 }
