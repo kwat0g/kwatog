@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\DepartmentScope;
@@ -13,6 +14,7 @@ use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
+use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
@@ -163,7 +165,8 @@ class BadgeService
             if ($feature !== null && $this->settings->get("modules.{$feature}", true) !== true) {
                 continue;
             }
-            if (! $this->userHasAny($user, $def['permissions'])
+            if ((! $this->userHasAny($user, $def['permissions'])
+                    && ! $this->userCanApproveAny($user, $def['approval_permissions'] ?? []))
                 || ! $this->userHasAll($user, $def['required_permissions'] ?? [])) {
                 continue;
             }
@@ -193,6 +196,7 @@ class BadgeService
     /**
      * @return array<string, array{
      *   permissions: array<int, string>,
+     *   approval_permissions?: array<int, string>,
      *   required_permissions?: array<int, string>,
      *   label: string,
      *   description: string,
@@ -274,23 +278,12 @@ class BadgeService
             // Payroll > Overtime — pending OT requests.
             'overtime' => [
                 'permissions' => ['attendance.ot.approve'],
+                'approval_permissions' => ['attendance.ot.approve'],
                 'label'       => 'Overtime',
-                'description' => 'Overtime requests awaiting approval',
-                'counter'     => function () use ($user): int {
-                    $query = OvertimeRequest::query()->where('status', 'pending');
-                    DepartmentScope::apply(
-                        $query,
-                        $user,
-                        viewAllPermission: 'hr.employees.view_sensitive',
-                        departmentPermission: 'attendance.ot.approve',
-                        deptColumn: 'department_id',
-                        selfColumn: 'employee_id',
-                        selfId: $user->employee_id ? (int) $user->employee_id : null,
-                        deptRelation: 'employee',
-                    );
-
-                    return $query->count();
-                },
+                'description' => 'Overtime requests awaiting your approval',
+                'counter'     => fn (): int => app(OvertimeDecisionPolicy::class)
+                    ->awaitingMyApprovalQuery(OvertimeRequest::query(), $user)
+                    ->count(),
             ],
 
             // Maintenance > Maintenance WOs — open + in-progress work orders.
@@ -604,6 +597,18 @@ class BadgeService
                 return true;
             }
         }
+        return false;
+    }
+
+    /** @param array<int, string> $permissions */
+    private function userCanApproveAny(User $user, array $permissions): bool
+    {
+        foreach ($permissions as $permission) {
+            if (ApprovalDelegation::canActForPermission($user, $permission)) {
+                return true;
+            }
+        }
+
         return false;
     }
 

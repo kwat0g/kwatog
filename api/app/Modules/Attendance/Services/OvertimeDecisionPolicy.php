@@ -6,6 +6,7 @@ namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
+use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
@@ -20,6 +21,24 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class OvertimeDecisionPolicy
 {
+    /** The pending rows this user can decide; a requester cannot approve their own request. */
+    public function awaitingMyApprovalQuery(Builder $query, User $user): Builder
+    {
+        $query->where('status', OvertimeStatus::Pending->value);
+
+        if (! ApprovalDelegation::canActForPermission($user, 'attendance.ot.approve')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $this->visibleTo($query, $user);
+
+        if ($user->employee_id !== null) {
+            $query->where('employee_id', '<>', $user->employee_id);
+        }
+
+        return $query;
+    }
+
     /** Reuse the overtime list's row scope for worklist surfaces. */
     public function visibleTo(Builder $query, User $user): Builder
     {

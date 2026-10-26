@@ -98,6 +98,8 @@ export interface NavItem {
   permission?: string;
   /** Show when the user has at least one permission in this list. */
   anyPermissions?: string[];
+  /** Show when the user has a direct or delegated approval permission. */
+  approvalPermissions?: string[];
   /** Optional feature flag (e.g. 'hr', 'inventory'). */
   feature?: string;
 }
@@ -144,6 +146,7 @@ function badgeDestination(path: string, key: string): string {
     due_soon_bills: 'signal=due_soon',
     shipments: 'status=mid_pipe',
     pending_so: 'signal=awaiting_confirmation',
+    overtime: 'signal=awaiting_my_approval',
   };
   const filter = filters[key];
   return filter ? `${path}?${filter}` : path;
@@ -724,7 +727,7 @@ export const SECTIONS: NavSection[] = [
         label: 'Overtime',
         icon: LuCalendarClock,
         feature: 'attendance',
-        permission: 'attendance.ot.approve',
+        approvalPermissions: ['attendance.ot.approve'],
         badgeKey: 'overtime',
       },
       // 2026-08-08: the `leaves` badge (pending leave approvals) moved here from
@@ -865,6 +868,7 @@ export const SECTIONS: NavSection[] = [
 
 export interface NavVisibilityContext {
   permissions?: Set<string>;
+  delegatedApprovals?: string[];
   features?: Set<string>;
   roleSlug?: string;
 }
@@ -890,7 +894,7 @@ export function navItemForPermissions(item: NavItem, permissions?: ReadonlySet<s
 
 export function isNavItemVisible(
   item: NavItem,
-  { permissions, features, roleSlug }: NavVisibilityContext,
+  { permissions, delegatedApprovals, features, roleSlug }: NavVisibilityContext,
 ): boolean {
   const isAdmin = roleSlug === 'system_admin';
   if (item.feature && features && !features.has(item.feature)) return false;
@@ -902,16 +906,24 @@ export function isNavItemVisible(
     !item.anyPermissions.some((permission) => permissions.has(permission))
   )
     return false;
+  if (
+    !isAdmin &&
+    item.approvalPermissions?.length &&
+    !item.approvalPermissions.some(
+      (permission) => permissions?.has(permission) || delegatedApprovals?.includes(permission),
+    )
+  ) return false;
   return true;
 }
 
 interface SidebarProps {
   permissions?: Set<string>;
+  delegatedApprovals?: string[];
   features?: Set<string>;
   roleSlug?: string;
 }
 
-export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }: SidebarProps) {
+export const Sidebar = memo(function Sidebar({ permissions, delegatedApprovals, features, roleSlug }: SidebarProps) {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const peek = useSidebarStore((s) => s.peek);
@@ -1015,8 +1027,8 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
 
   // system_admin bypass is handled inside isNavItemVisible.
   const visibility = useMemo(
-    () => ({ permissions, features, roleSlug }),
-    [permissions, features, roleSlug],
+    () => ({ permissions, delegatedApprovals, features, roleSlug }),
+    [permissions, delegatedApprovals, features, roleSlug],
   );
 
   const isVisible = useCallback(

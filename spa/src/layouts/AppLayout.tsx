@@ -113,7 +113,7 @@ function AppLayoutInner() {
  }
  />
  <div className="flex flex-1">
- <Sidebar permissions={permissions} features={features} roleSlug={user?.role?.slug} />
+ <Sidebar permissions={permissions} delegatedApprovals={user?.delegated_approvals} features={features} roleSlug={user?.role?.slug} />
  <main id="main-content" tabIndex={-1} className="flex-1 min-w-0">
  {/* Route content stays immediate; RouteTransition is a semantic wrapper only. */}
  <RouteTransition>

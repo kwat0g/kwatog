@@ -54,6 +54,21 @@ it('opens Bank Account Changes on the actionable profile-review queue', () => {
   expect(within(screen.getByRole('link', { name: /Employees/ })).queryByText('2')).not.toBeInTheDocument();
 });
 
+it('opens Overtime on the actionable approval queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'overtime'
+    ? { count: 3, severity: 'warning', label: 'Overtime', description: 'Overtime requests awaiting your approval' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/attendance/overtime']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Overtime/ })).toHaveAttribute(
+    'href',
+    '/hr/attendance/overtime?signal=awaiting_my_approval',
+  );
+});
+
 it('opens the awaiting-approval filter when purchase requests has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'purchase_requests'

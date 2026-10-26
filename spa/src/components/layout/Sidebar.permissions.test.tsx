@@ -52,6 +52,16 @@ describe('role-aligned sidebar permissions', () => {
     expect(isNavItemVisible(transfers, { permissions: new Set() })).toBe(false);
   });
 
+  it('shows overtime approvals to direct approvers and active delegates only', () => {
+    const overtime = item('/hr/attendance/overtime');
+    expect(isNavItemVisible(overtime, { permissions: new Set(['attendance.ot.approve']) })).toBe(true);
+    expect(isNavItemVisible(overtime, {
+      permissions: new Set(['attendance.view']),
+      delegatedApprovals: ['attendance.ot.approve'],
+    })).toBe(true);
+    expect(isNavItemVisible(overtime, { permissions: new Set(['attendance.view']) })).toBe(false);
+  });
+
   it('shows the budget approval queue to viewers and approvers only', () => {
     const budgets = item('/budgeting');
     expect(isNavItemVisible(budgets, { permissions: new Set(['budgeting.view']) })).toBe(true);
