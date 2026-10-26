@@ -11,6 +11,7 @@ use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\Feature\Attendance\Concerns\PunchFixtures;
@@ -19,6 +20,12 @@ use Tests\TestCase;
 class PunchCommandsTest extends TestCase
 {
     use PunchFixtures, RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(SettingsSeeder::class);
+    }
 
     public function test_purge_nulls_only_coordinates_older_than_the_window(): void
     {
@@ -58,7 +65,7 @@ class PunchCommandsTest extends TestCase
         $this->at('2026-10-08 06:00:00');
         Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
 
-        $this->mock(NotificationService::class, fn ($m) => $m->shouldReceive('send')->andThrow(new \RuntimeException('boom')));
+        $this->mock(NotificationService::class, fn ($m) => $m->shouldReceive('sendForSubject')->andThrow(new \RuntimeException('boom')));
 
         $this->artisan('attendance:notify-missing-timeout')->assertFailed();
     }
@@ -117,7 +124,7 @@ class PunchCommandsTest extends TestCase
     public function test_each_department_head_is_told_about_their_own_departments_open_rows(): void
     {
         $this->seed(\Database\Seeders\RolePermissionSeeder::class);
-        User::factory()->create(['role_id' => Role::query()->where('slug', 'hr_officer')->value('id'), 'is_active' => true]);
+        $hr = User::factory()->create(['role_id' => Role::query()->where('slug', 'hr_officer')->value('id'), 'is_active' => true]);
         $dept = Department::factory()->create();
         $eligibleHead = $this->departmentHead($dept);
         $revokedHead = $this->departmentHead($dept);
@@ -132,14 +139,37 @@ class PunchCommandsTest extends TestCase
             'updated_at' => now(),
         ]);
         $emp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $dept->id]);
+        $secondEmp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $dept->id]);
+        $otherDepartment = Department::factory()->create();
+        $otherDepartmentEmp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $otherDepartment->id]);
         $this->at('2026-10-08 06:00:00');
         Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
+        Attendance::create(['employee_id' => $secondEmp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
+        Attendance::create(['employee_id' => $otherDepartmentEmp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
 
         $this->artisan('attendance:notify-missing-timeout')->assertSuccessful();
 
         $this->assertSame(2, $this->missingTimeoutCount()); // 1 HR + 1 eligible head
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $eligibleHead->id, 'type' => 'attendance.missing_time_out']);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $revokedHead->id, 'type' => 'attendance.missing_time_out']);
+
+        $expectedLink = '/hr/attendance?missing_time_out=1';
+        $hrNotice = $hr->notifications()->where('type', 'attendance.missing_time_out')->firstOrFail();
+        $headNotice = $eligibleHead->notifications()->where('type', 'attendance.missing_time_out')->firstOrFail();
+        $this->assertSame(Attendance::class, $headNotice->data['subject_type']);
+        $this->assertSame((string) Attendance::query()->where('employee_id', $emp->id)->value('id'), $headNotice->data['subject_id']);
+        $this->assertSame($expectedLink, $hrNotice->data['link_to']);
+        $this->assertSame('3 employee(s) have no time out for Oct 7, 2026.', $hrNotice->data['message']);
+        $this->assertSame($expectedLink, $headNotice->data['link_to']);
+        $this->assertSame('2 employee(s) in '.$dept->name.' have no time out for Oct 7, 2026.', $headNotice->data['message']);
+        $this->assertSame(3, $this->actingAs($hr)->getJson('/api/v1/attendance/attendances?missing_time_out=1')->assertOk()->json('meta.total'));
+        $this->assertSame(2, $this->actingAs($eligibleHead)->getJson('/api/v1/attendance/attendances?missing_time_out=1')->assertOk()->json('meta.total'));
+        $this->assertSame(0, $this->actingAs($revokedHead)->getJson('/api/v1/attendance/attendances?missing_time_out=1')->assertOk()->json('meta.total'));
+        app(NotificationService::class)->sendForSubject(Attendance::query()->where('employee_id', $emp->id)->firstOrFail(), $revokedHead, 'test.attendance_scope', [
+            'title' => 'Missing time-out',
+            'link_to' => $expectedLink,
+        ], emailEnabled: false);
+        $this->assertSame(0, $revokedHead->notifications()->where('type', 'test.attendance_scope')->count());
 
         $this->artisan('attendance:notify-missing-timeout')->assertSuccessful(); // rerun: deduped
         $this->assertSame(2, $this->missingTimeoutCount());
