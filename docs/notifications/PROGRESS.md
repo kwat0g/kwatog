@@ -321,7 +321,7 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; PR #381 adds
 
 - `NotificationService::normaliseRecipients()` now drops inactive and soft-deleted internal users before structured in-app sends, Laravel notifications, or the legacy wrapper. Portal-recipient delivery remains on its separate path; active-user behavior is unchanged.
 - Before the fix, the negative case failed because an inactive user received a persisted notification. On the original feature head, `NotificationServiceTest.php --filter=inactive_internal_users_are_excluded_from_notification_delivery` passed **1 test / 8 assertions**, covering database rows, realtime events, Laravel notifications, inactive users, and soft-deleted users. `git diff --check` passed.
-- Post-rebase tests were not rerun because PHP/PHPUnit are unavailable locally. Earlier API CI stopped before PHPUnit on the inherited F-22 duplicate PDF helper; CI is waived per the user's instruction. No SPA files changed.
+- Post-rebase tests were not rerun because PHP/PHPUnit are unavailable locally. The API CI stopped before PHPUnit on the inherited F-22 duplicate PDF helper; `finding-lifecycle` passed. No SPA files changed, so no SPA CI check applies. CI is waived per the user's instruction.
 
 ## Outstanding proof / risks
 
