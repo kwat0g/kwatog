@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { FulfillmentDialog } from '@/pages/crm/sales-orders/FulfillmentDialog';
 import { mrpPlansApi } from '@/api/mrp/mrpPlans';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -342,9 +342,10 @@ export default function MrpPlanDetailPage() {
                     >
                       {w.parent ? '↳ ' : ''}
                       {w.wo_number}{' '}
-                      <span className="text-muted">
-                        ({w.status_label ?? w.status}, qty {w.quantity_target})
-                      </span>
+                      <Chip variant={chipVariantForStatus(w.status)} className="font-sans">
+                        {w.status_label ?? w.status}
+                      </Chip>
+                      <span className="text-muted">qty {w.quantity_target}</span>
                       <span className="mt-1 block font-sans text-muted">
                         {w.schedule
                           ? `Production: ${productionDateTime(w.schedule.scheduled_start)} – ${productionDateTime(w.schedule.scheduled_end)}`
@@ -369,9 +370,10 @@ export default function MrpPlanDetailPage() {
                         className="block font-mono text-xs text-accent hover:underline"
                       >
                         {p.pr_number}{' '}
-                        <span className="text-muted">
-                          ({p.status_label ?? p.status} · {p.priority_label ?? p.priority})
-                        </span>
+                        <Chip variant={chipVariantForStatus(p.status)} className="font-sans">
+                          {p.status_label ?? p.status}
+                        </Chip>
+                        <span className="text-muted">{p.priority_label ?? p.priority}</span>
                       </Link>
                       {p.purchase_orders?.map((po) => (
                         <Link
@@ -380,7 +382,9 @@ export default function MrpPlanDetailPage() {
                           className="block pl-4 font-mono text-xs text-accent hover:underline"
                         >
                           ↳ {po.po_number}{' '}
-                          <span className="text-muted">({po.status_label ?? po.status})</span>
+                          <Chip variant={chipVariantForStatus(po.status)} className="font-sans">
+                            {po.status_label ?? po.status}
+                          </Chip>
                         </Link>
                       ))}
                     </div>

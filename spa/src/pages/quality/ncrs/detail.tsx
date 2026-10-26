@@ -15,7 +15,7 @@ import { client } from '@/api/client';
 import type { DefectType } from '@/types/production';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -639,7 +639,8 @@ export default function NcrDetailPage() {
                   ) : (
                     record.mrb_number
                   )}{' '}
-                  · {record.status} · {formatQuantity(record.quantity)}
+                  <Chip variant={chipVariantForStatus(record.status)}>{record.status}</Chip>
+                  · {formatQuantity(record.quantity)}
                 </p>
               ))}
             </Panel>

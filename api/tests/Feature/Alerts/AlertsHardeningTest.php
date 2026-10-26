@@ -14,6 +14,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Database\Factories\ItemFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -24,6 +25,12 @@ use Tests\TestCase;
 class AlertsHardeningTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
+    }
 
     public function test_raise_reuses_one_open_condition_and_rearms_after_recovery(): void
     {

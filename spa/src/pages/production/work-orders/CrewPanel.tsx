@@ -351,6 +351,7 @@ export function AssignmentForm({
         </Button>
         <Button
           type="submit"
+          variant="primary"
           disabled={
             !!invalid ||
             unchanged ||
@@ -1369,7 +1370,7 @@ export function AssignmentReview({
             <Button variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button disabled>{commitLabel ?? (confirm ? 'Confirm work order' : 'Apply assignment')}</Button>
+            <Button variant="primary" disabled>{commitLabel ?? (confirm ? 'Confirm work order' : 'Apply assignment')}</Button>
           </div>
         </div>
       )}

@@ -46,7 +46,7 @@ export default function PostingCreatePage() {
  const [reqTags, setReqTags] = useState<string[]>([]);
  const [reqInput, setReqInput] = useState('');
 
-  const form = useForm<FormData>({
+  const form = useForm<z.input<typeof schema>, unknown, FormData>({
  resolver: zodResolver(schema),
  defaultValues: {
  employment_type: '',

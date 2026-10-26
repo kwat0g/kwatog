@@ -132,7 +132,7 @@ export default function PostingDetailPage() {
  Edit
  </Button>
  {posting.status === 'draft' && (
- <Button size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending} loading={statusMutation.isPending}>
+ <Button variant="primary" size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending} loading={statusMutation.isPending}>
  Publish
  </Button>
  )}

@@ -2,8 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Common\Services\ChainBroadcaster;
+use App\Common\Support\ApprovalSourceScope;
 use App\Common\Support\ChainDefinitions;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
@@ -17,19 +23,49 @@ use Illuminate\Support\Facades\Broadcast;
  * Sprint 6 channels (production), Sprint 8 channels (payroll, inventory,
  * maintenance, user notifications).
  */
+$canViewSubject = static function (User $user, string $hashId, string $permission, string $model): bool {
+    if (! $user->hasPermission($permission)) {
+        return false;
+    }
+
+    $id = HashIdFilter::decode($hashId, $model);
+    if ($id === null) {
+        return false;
+    }
+
+    return ApprovalSourceScope::hasScopeFor($model, $user)
+        ? ApprovalSourceScope::visibleIds($model, [$id], $user) !== []
+        : $model::query()->whereKey($id)->exists();
+};
+
 Broadcast::channel('production.dashboard', fn (User $user): bool => $user->hasPermission('production.dashboard.view')
 );
 
-Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('production.work_orders.view')
+Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool => $canViewSubject(
+    $user,
+    $hashId,
+    'production.work_orders.view',
+    WorkOrder::class,
+)
 );
 
-Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('mrp.machines.view')
+Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => $canViewSubject(
+    $user,
+    $hashId,
+    'mrp.machines.view',
+    Machine::class,
+)
 );
 
 /* Sprint 8 — Task 78. New channels. */
 
 // Payroll period progress contains company-wide run metadata.
-Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('payroll.periods.view')
+Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $canViewSubject(
+    $user,
+    $hashId,
+    'payroll.periods.view',
+    PayrollPeriod::class,
+)
 );
 
 // Maintenance dashboard — open WO updates push live
@@ -54,11 +90,18 @@ Broadcast::channel('badges', fn (User $user): bool => true);
  */
 Broadcast::channel(
     'chain.{entityType}.{hashId}',
-    function (User $user, string $entityType, string $hashId): bool {
+    function (User $user, string $entityType, string $hashId) use ($canViewSubject): bool {
         if (! in_array($entityType, ChainDefinitions::allowedTypes(), true)) {
             return false;
         }
 
-        return $user->hasPermission(ChainDefinitions::viewPermission($entityType));
+        $class = ChainBroadcaster::entityClassFor($entityType);
+
+        return $class !== null && $canViewSubject(
+            $user,
+            $hashId,
+            ChainDefinitions::viewPermission($entityType),
+            $class,
+        );
     }
 );
