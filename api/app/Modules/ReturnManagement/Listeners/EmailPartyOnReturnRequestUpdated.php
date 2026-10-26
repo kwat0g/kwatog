@@ -39,6 +39,7 @@ class EmailPartyOnReturnRequestUpdated implements ShouldQueue
         $permission = 'return_management.view';
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $fallbackUserIds = $fallback->userIdsWithPermission($permission);
+        $isCustomer = ($snapshot['type'] ?? null) === ReturnRequestType::CustomerReturn->value;
         if (! $isCustomer && $fallbackUserIds !== []) {
             $fallbackUserIds = User::query()->with('role')->whereIn('id', $fallbackUserIds)->get()
                 ->reject(fn (User $user): bool => ReturnManagementAccess::customerReturnsOnly($user))
@@ -50,7 +51,6 @@ class EmailPartyOnReturnRequestUpdated implements ShouldQueue
             'entity_id' => $rma->hash_id,
             'reason' => 'The party email was missing, invalid, unreachable, or rejected by the email provider.',
         ];
-        $isCustomer = ($snapshot['type'] ?? null) === ReturnRequestType::CustomerReturn->value;
         $partyLabel = $isCustomer ? 'customer' : 'supplier';
         $partyEmail = trim((string) ($snapshot['party_email'] ?? ''));
 

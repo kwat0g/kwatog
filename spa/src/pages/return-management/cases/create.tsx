@@ -343,7 +343,7 @@ export default function ReturnCaseCreatePage() {
         icon="inbox"
         title="Choose a goods receipt"
         description="Open a finalized GRN to report a receiving shortage."
-        action={<Button onClick={() => navigate('/inventory/grn')}>Open GRNs</Button>}
+        action={<Button variant="primary" onClick={() => navigate('/inventory/grn')}>Open GRNs</Button>}
       />
     );
   }

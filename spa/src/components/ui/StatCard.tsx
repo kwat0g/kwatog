@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/cn';
+import { LuArrowDown, LuArrowUp } from '@/lib/icons';
 
 interface StatCardProps {
   label: string;
@@ -39,7 +40,7 @@ const deltaColor = {
   },
 } as const;
 
-const deltaArrow = { up: '↑', down: '↓', neutral: '·' } as const;
+const deltaText = { up: 'Increase', down: 'Decrease', neutral: 'No change' } as const;
 
 export function StatCard({
   label,
@@ -54,7 +55,7 @@ export function StatCard({
     <>
       {/* text-muted, not text-subtle: this string is what the number MEANS, so it
  is essential text at the 4.5:1 bar, not decoration at the 3:1 bar. */}
-      <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1.5">{label}</div>
+      <div className="text-caption text-muted font-medium mb-1.5">{label}</div>
       {/*
        * The figure must never paint outside its own box (F-009). A fixed
        * 26px (`text-2xl`) value is the spec, but the card is one track of a
@@ -74,25 +75,35 @@ export function StatCard({
        * clipped figure is worse than a two-line one.
        */}
       <div className="@container">
-        <div className="text-[clamp(1rem,12cqw,1.625rem)] font-medium font-mono tabular-nums text-primary leading-tight [overflow-wrap:anywhere]">
+        <div className="text-[clamp(1rem,12cqw,1.625rem)] font-medium font-sans tabular-nums text-primary leading-tight [overflow-wrap:anywhere]">
           {value}
         </div>
       </div>
       {delta && (
         <div
           className={cn(
-            'text-xs font-mono tabular-nums mt-1',
+            'text-caption font-sans tabular-nums mt-1',
             deltaColor[polarity][delta.direction],
           )}
         >
-          {deltaArrow[delta.direction]} {delta.value}
+          <span className="sr-only">{deltaText[delta.direction]} </span>
+          <span className="inline-flex items-center gap-1">
+            {delta.direction === 'up' ? (
+              <LuArrowUp size={12} aria-hidden />
+            ) : delta.direction === 'down' ? (
+              <LuArrowDown size={12} aria-hidden />
+            ) : (
+              <span aria-hidden>·</span>
+            )}
+            {delta.value}
+          </span>
         </div>
       )}
-      {!delta && helper && <div className="text-xs text-muted mt-1">{helper}</div>}
+      {!delta && helper && <div className="text-caption text-muted mt-1">{helper}</div>}
     </>
   );
 
-  const baseClass = 'p-3.5 bg-surface border border-default rounded-md';
+  const baseClass = 'p-4 bg-surface border border-default rounded-md';
 
   if (linkTo) {
     return (

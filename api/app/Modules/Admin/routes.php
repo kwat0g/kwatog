@@ -95,6 +95,8 @@ Route::prefix('admin/backups')
             ->middleware('permission:admin.backups.view');
         Route::post('/', [BackupController::class, 'store'])
             ->middleware(['permission:admin.backups.manage', 'throttle:sensitive']);
+        Route::post('/verify-legacy', [BackupController::class, 'verifyLegacy'])
+            ->middleware(['permission:admin.backups.manage', 'throttle:sensitive']);
         Route::post('/restore', [BackupController::class, 'restore'])
             ->middleware(['permission:admin.backups.manage', 'throttle:sensitive']);
     });

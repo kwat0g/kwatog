@@ -41,10 +41,38 @@ it('portal inbox marks its own notice read and navigates to customer next step',
     <NotificationsListPage api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} linkPrefix="/portal/customer" />
     <Routes><Route path="/" element={null} /><Route path="/portal/customer/orders/order-1" element={<p>Customer order opened</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review delivery date: Accept or decline proposed date.' }));
+  const link = await screen.findByRole('link', { name: 'Review delivery date: Accept or decline proposed date.' });
+  expect(link).toHaveAttribute('href', '/portal/customer/orders/order-1');
+  fireEvent.click(link);
   expect(await screen.findByText('Customer order opened')).toBeVisible();
   await waitFor(() => expect(portalApi.markRead).toHaveBeenCalledWith('notice-1'));
   expect(notificationsApi.list).not.toHaveBeenCalled();
+});
+
+it('portal bell notification is a link and marks read when opened', async () => {
+  const portalApi = api();
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
+    <Routes><Route path="/" element={null} /><Route path="/portal/customer/orders/order-1" element={<p>Customer order opened</p>} /></Routes>
+  </MemoryRouter></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+  const link = await screen.findByRole('link', { name: /Review delivery date/ });
+  expect(link).toHaveAttribute('href', '/portal/customer/orders/order-1');
+  fireEvent.click(link);
+  expect(await screen.findByText('Customer order opened')).toBeVisible();
+  await waitFor(() => expect(portalApi.markRead).toHaveBeenCalledWith('notice-1'));
+});
+
+it('marks a bell notice read on middle-click while preserving its anchor destination', async () => {
+  const portalApi = api();
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
+  </MemoryRouter></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+  const link = await screen.findByRole('link', { name: /Review delivery date/ });
+  fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+  await waitFor(() => expect(portalApi.markRead).toHaveBeenCalledWith('notice-1'));
+  expect(link).toHaveAttribute('href', '/portal/customer/orders/order-1');
 });
 
 it('portal inbox never follows internal or other realm links', async () => {

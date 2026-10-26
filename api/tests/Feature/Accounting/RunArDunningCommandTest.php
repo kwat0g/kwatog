@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Mail\InvoiceDunningMail;
 use App\Modules\Accounting\Models\Customer;
@@ -48,10 +49,11 @@ class RunArDunningCommandTest extends TestCase
         $mail = new InvoiceDunningMail($invoice->fresh('customer'), 7, 8);
         $html = $mail->render();
         $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
-        $this->assertStringContainsString('PHP 1,000.00', $html);
+        $balance = app(CurrencyDisplayService::class)->format('1000.00');
+        $this->assertStringContainsString($balance, $html);
         $this->assertStringContainsString('Balance due when reminder was generated', $html);
         $this->assertStringContainsString('Review invoice', $html);
-        $this->assertStringContainsString('Payment reminder: '.$invoice->invoice_number.' · PHP 1,000.00 · 8 days overdue', $mail->envelope()->subject);
+        $this->assertStringContainsString('Payment reminder: '.$invoice->invoice_number.' · '.$balance.' · 8 days overdue', $mail->envelope()->subject);
         $this->assertSame(7, $invoice->fresh()->last_dunning_tier);
     }
 
@@ -121,7 +123,7 @@ class RunArDunningCommandTest extends TestCase
             $this->assertStringNotContainsString('Changed customer', $html);
             $this->assertStringContainsString('INV-DUNNING-SNAPSHOT', $html);
             $this->assertStringNotContainsString('INV-CHANGED', $html);
-            $this->assertStringContainsString('PHP 1,234.56', $html);
+            $this->assertStringContainsString(app(CurrencyDisplayService::class)->format('1234.56'), $html);
             $this->assertStringNotContainsString('9,999.00', $html);
             $this->assertStringContainsString('Sep 1, 2026', $html);
 

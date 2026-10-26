@@ -289,14 +289,15 @@ class FeatureEmailIntegrationTest extends TestCase
 
         Mail::assertQueued(CustomerInvoiceFinalizedMail::class, function (CustomerInvoiceFinalizedMail $mail) use ($invoice): bool {
             $html = $mail->render();
+            $amount = app(\App\Common\Services\CurrencyDisplayService::class)->format('1120.00');
+            $mail->assertSeeInText('Due date');
+            $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
 
             return $mail->hasTo('billing@example.test')
                 && $mail->invoice->is($invoice)
                 && str_contains($html, 'INV-EMAIL-001')
                 && str_contains($html, '<title>Invoice INV-EMAIL-001 is ready</title>')
-                && str_contains($html, 'PHP 1,120.00')
-                && $mail->assertSeeInText('Due date')
-                && $mail->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id)
+                && str_contains($html, $amount)
                 && str_contains($mail->envelope()->subject, 'Invoice issued: INV-EMAIL-001');
         });
     }
@@ -394,7 +395,7 @@ class FeatureEmailIntegrationTest extends TestCase
         $this->assertStringContainsString('Molded component 10', $html);
         $this->assertStringNotContainsString('Molded component 11', $html);
         $this->assertStringContainsString('1 additional item(s)', $html);
-        $queued->assertSeeInText('PHP 1,120.00');
+        $queued->assertSeeInText(app(\App\Common\Services\CurrencyDisplayService::class)->format('1120.00'));
         $queued->assertSeeInText('/portal/customer/invoices/'.$invoice->hash_id);
         $this->assertStringNotContainsString("\r", $queued->envelope()->subject);
         $this->assertStringNotContainsString("\n", $queued->envelope()->subject);
@@ -441,14 +442,15 @@ class FeatureEmailIntegrationTest extends TestCase
             $this->assertStringNotContainsString('Changed customer', $html);
             $this->assertStringContainsString('OR-2026-001', $html);
             $this->assertStringNotContainsString('OR-CHANGED', $html);
-            $this->assertStringContainsString('PHP 15,000.00', $html);
+            $amount = app(\App\Common\Services\CurrencyDisplayService::class)->format('15000.00');
+            $this->assertStringContainsString($amount, $html);
             $this->assertStringNotContainsString('99,999.00', $html);
             $this->assertStringContainsString('INV-RECEIPT-001', $html);
             $this->assertStringNotContainsString('INV-CHANGED', $html);
             $this->assertStringContainsString('<title>Official receipt OR-2026-001 issued</title>', $html);
             $this->assertStringContainsString('View related invoice', $html);
             $this->assertStringContainsString('quote the receipt number', $html);
-            $this->assertStringContainsString('Official receipt issued: OR-2026-001 · PHP 15,000.00', $mail->envelope()->subject);
+            $this->assertStringContainsString('Official receipt issued: OR-2026-001 · '.$amount, $mail->envelope()->subject);
             $mail->assertSeeInText('/portal/customer/invoices/'.$mail->officialReceipt->invoice->hash_id);
 
             return true;
@@ -496,13 +498,14 @@ class FeatureEmailIntegrationTest extends TestCase
             $this->assertStringNotContainsString('Changed customer', $html);
             $this->assertStringContainsString('CN-2026-001', $html);
             $this->assertStringNotContainsString('CN-CHANGED', $html);
-            $this->assertStringContainsString('PHP 1,120.00', $html);
+            $amount = app(\App\Common\Services\CurrencyDisplayService::class)->format('1120.00');
+            $this->assertStringContainsString($amount, $html);
             $this->assertStringNotContainsString('9,999.00', $html);
             $this->assertStringNotContainsString('Changed reason', $html);
             $this->assertStringContainsString('<title>Customer Credit note CN-2026-001 finalized</title>', $html);
             $this->assertStringContainsString('Open customer portal', $html);
-            $this->assertStringContainsString('Customer credit note finalized: CN-2026-001 · PHP 1,120.00', $mail->envelope()->subject);
-            $mail->assertSeeInText('PHP 1,120.00');
+            $this->assertStringContainsString('Customer credit note finalized: CN-2026-001 · '.$amount, $mail->envelope()->subject);
+            $mail->assertSeeInText($amount);
 
             return true;
         });

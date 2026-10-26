@@ -72,7 +72,7 @@ class StuckDocumentDetectorTest extends TestCase
 
     public function test_clean_slate_emits_nothing(): void
     {
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_emits_one_row_per_key_with_audience_and_skips_next_approver(): void
@@ -99,7 +99,7 @@ class StuckDocumentDetectorTest extends TestCase
             'updated_at' => Carbon::now()->subHours(30),
         ]);
 
-        $emissions = $this->detector()->detect();
+        $emissions = $this->detector()->detect()->emissions;
         $byKey = [];
         foreach ($emissions as $emission) {
             $byKey[$emission->rationale['bottleneck_key']] = $emission;

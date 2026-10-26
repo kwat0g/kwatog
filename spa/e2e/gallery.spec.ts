@@ -93,7 +93,7 @@ async function openGallery(page: Page, width: number, height: number) {
    * `visibility: hidden` (not `display: none`) keeps their layout footprint,
    * so the content width is exactly what a real user sees. */
   await page.addStyleTag({
-    content: 'header.sticky, aside { visibility: hidden !important; }',
+    content: 'header.sticky, aside[aria-label="Sidebar"] { visibility: hidden !important; }',
   });
 }
 
@@ -105,6 +105,7 @@ for (const viewport of VIEWPORTS) {
       const section = page.locator(`[data-gallery-section="${id}"]`);
       await expect(section, `section ${id} is missing from the gallery`).toHaveCount(1);
       await section.scrollIntoViewIfNeeded();
+      if (id === 'tables') await expect(section.locator('.detail-layout__aside')).toBeVisible();
 
       await expect(section).toHaveScreenshot(`${id}-${viewport.name}.png`, SCREENSHOT);
     });
@@ -227,4 +228,17 @@ test('gallery — the baseline can see a planted change (negative control)', asy
     ...SCREENSHOT,
     timeout: 5_000,
   });
+});
+
+test('gallery — form grid follows the approved breakpoints', async ({ page }) => {
+  await openGallery(page, 375, 844);
+
+  for (const [width, expectedColumns] of [[375, 1], [768, 2], [1280, 2], [1440, 3], [1920, 4]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    const grid = page.locator('[data-layout="form-grid"][data-columns="4"]');
+    const columns = await grid.evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length,
+    );
+    expect(columns, `FormGrid at ${width}px`).toBe(expectedColumns);
+  }
 });

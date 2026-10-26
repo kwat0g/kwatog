@@ -350,7 +350,8 @@ describe('late production reports', () => {
     await waitFor(() =>
       expect(workOrdersApi.lateProductionReports).toHaveBeenLastCalledWith('wo-1', undefined, 2),
     );
-    expect(await screen.findByText(/OLDER-BATCH · pending/)).toBeInTheDocument();
+    expect(await screen.findByText('OLDER-BATCH')).toBeInTheDocument();
+    expect(screen.getByText('pending')).toBeInTheDocument();
     expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
   });
 
@@ -384,7 +385,8 @@ describe('late production reports', () => {
     await waitFor(() =>
       expect(workOrdersApi.myLateProductionReports).toHaveBeenLastCalledWith('wo-1', 2),
     );
-    expect(await screen.findByText(/OLDER-OWN-BATCH · pending/)).toBeInTheDocument();
+    expect(await screen.findByText('OLDER-OWN-BATCH')).toBeInTheDocument();
+    expect(screen.getByText('pending')).toBeInTheDocument();
     expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
   });
 });

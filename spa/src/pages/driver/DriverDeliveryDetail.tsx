@@ -213,7 +213,7 @@ export default function DriverDeliveryDetail() {
  <DetailRow label="Expected delivery">{data.expected_delivery_date ? formatDate(data.expected_delivery_date) : 'Not set'}</DetailRow>
  <DetailRow label="Carrier">{data.carrier ?? 'Not assigned'}</DetailRow>
  <DetailRow label="Status">
- <strong className="font-medium">{state}</strong>
+ <Chip variant={deliveryStatusVariant[data.status]}>{state}</Chip>
  </DetailRow>
  <DetailRow label="Receipt photo">
  {proofCount > 0 ? `${proofCount} on file` : 'Not uploaded'}

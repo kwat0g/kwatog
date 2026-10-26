@@ -43,7 +43,7 @@ import { agingBucketLabel } from '@/lib/labels';
 const paymentSchema = z.object({
   cash_account_id: z.string().min(1, 'Required'),
   payment_date: z.string().min(1, 'Required'),
-  amount: z.coerce.number({ invalid_type_error: 'Payment amount is required.' }).min(0.01, 'Amount must be at least 0.01.').max(999999999999.99, 'Payment amount is too large.'),
+  amount: z.coerce.number({ error: 'Payment amount is required.' }).min(0.01, 'Amount must be at least 0.01.').max(999999999999.99, 'Payment amount is too large.'),
   payment_method: z.string().min(1, 'Required'),
   reference_number: z.string().trim().min(1, 'Reference number is required.').max(50),
 });
@@ -132,7 +132,7 @@ export default function BillDetailPage() {
     formState: { errors },
     reset,
     setValue,
-  } = useForm<PaymentFormValues>({
+  } = useForm<z.input<typeof paymentSchema>, unknown, PaymentFormValues>({
     resolver: zodResolver(paymentSchema.extend({
       amount: paymentSchema.shape.amount.refine(
         (amount) => amount <= Number(unreserved),
@@ -444,7 +444,7 @@ export default function BillDetailPage() {
                   <dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">
                     Purchase order
                   </dt>
-                  <dd>
+                  <dd className="flex flex-wrap items-center gap-2">
                     <a
                       className="text-accent hover:underline font-mono"
                       href={`/purchasing/purchase-orders/${bill.purchase_order.id}`}
@@ -481,8 +481,10 @@ export default function BillDetailPage() {
                       href={`/accounting/journal-entries/${bill.journal_entry.id}`}
                     >
                       {bill.journal_entry.entry_number}
-                    </a>{' '}
-                    · {bill.journal_entry.status_label ?? bill.journal_entry.status}
+                    </a>
+                    <Chip variant={chipVariantForStatus(bill.journal_entry.status)}>
+                      {bill.journal_entry.status_label ?? bill.journal_entry.status}
+                    </Chip>
                   </dd>
                 </div>
               )}
@@ -591,11 +593,13 @@ export default function BillDetailPage() {
                       <span>Cash {formatPeso(p.cash_amount ?? p.amount)}</span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between gap-2 text-muted">
-                    <span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-muted">
+                    <span className="flex flex-wrap items-center gap-2">
                       {p.payment_method_label ?? p.payment_method}
-                      {p.reference_number ? ` · ${p.reference_number}` : ''} ·{' '}
-                      {p.status_label ?? p.status}
+                      {p.reference_number ? ` · ${p.reference_number}` : ''}
+                      <Chip variant={chipVariantForStatus(p.status)}>
+                        {p.status_label ?? p.status}
+                      </Chip>
                     </span>
                     {p.status === 'pending_approval' && bill.status === 'cancelled' && (
                       <span className="text-xs text-muted" role="note">

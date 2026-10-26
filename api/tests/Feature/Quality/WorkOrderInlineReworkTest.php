@@ -419,6 +419,11 @@ class WorkOrderInlineReworkTest extends TestCase
         $this->assertSame('closed', $this->wo->fresh()->status->value);
         $this->assertFalse($service->autoCloseIfReady($this->wo, $this->production));
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $this->production->id, 'type' => 'production.rework.closed']);
+        $data = json_decode((string) DB::table('notifications')
+            ->where('notifiable_id', $this->production->id)
+            ->where('type', 'production.rework.closed')
+            ->value('data'), true);
+        $this->assertSame('WO '.$this->wo->wo_number.' — Rework completed', $data['title']);
     }
 
     public function test_auto_close_refuses_unchecked_qc_or_missing_stock_receipt(): void

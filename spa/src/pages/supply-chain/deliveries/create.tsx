@@ -27,7 +27,7 @@ import { FormActions } from '@/components/ui/FormActions';
 const itemSchema = z.object({
  sales_order_item_id: z.string().min(1, 'Select a line item'),
  quantity: z.coerce
- .number({ invalid_type_error: 'Must be a number' })
+ .number({ error: 'Must be a number' })
  .positive('Must be greater than zero')
  .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-8, 'Use at most 2 decimal places'),
  inspection_id: z.string().min(1, 'Select a passed outgoing inspection'),
@@ -86,7 +86,7 @@ export default function CreateDeliveryPage() {
  const vehiclesLoading = vehiclesQuery.isLoading;
 
  // ── Form ──
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: submission?.data ?? {
  sales_order_id: '',
