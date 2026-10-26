@@ -14,13 +14,14 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\StockAdjustment;
 use Illuminate\Database\Eloquent\Model;
 
 final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, StockAdjustment::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -34,6 +35,8 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('accounting.invoices.view'),
             Bill::class => app(SettingsService::class)->get('modules.accounting', false) === true
                 && $user->hasPermission('accounting.bills.view'),
+            StockAdjustment::class => app(SettingsService::class)->get('modules.inventory', false) === true
+                && ($user->hasPermission('inventory.adjust') || $user->hasPermission('inventory.adjust.approve')),
             Budget::class => self::budgetingEnabled() && self::userCanViewBudget($user, $subject),
             BudgetTransfer::class => self::budgetingEnabled() && (
                 $user->hasPermission('budgeting.view')
