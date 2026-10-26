@@ -6,6 +6,7 @@ namespace App\Common\Support;
 
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\SettingsService;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Accounting\Enums\BudgetStatus;
@@ -56,7 +57,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -109,6 +110,7 @@ final class NotificationSubjectAccessRegistry
                 && $user->is_active
                 && $subject instanceof LeaveRequest
                 && ApprovalTypeRegistry::userCanViewRecord($user, LeaveRequest::class, (int) $subject->getKey()),
+            Attendance::class => self::userCanViewAttendance($user, $subject, $linkTo),
             OvertimeRequest::class => self::userCanViewOvertime($user, $subject, $linkTo),
             PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
                 && $user->is_active
@@ -265,6 +267,34 @@ final class NotificationSubjectAccessRegistry
         }
 
         if (! ApprovalDelegation::canActForPermission($user, 'attendance.ot.approve') || ! $user->employee_id) {
+            return false;
+        }
+
+        $departmentId = Employee::query()->whereKey($user->employee_id)->value('department_id');
+
+        return $departmentId !== null
+            && (int) $departmentId === (int) Employee::query()->whereKey($subject->employee_id)->value('department_id');
+    }
+
+    private static function userCanViewAttendance(User $user, Model $subject, ?string $linkTo): bool
+    {
+        if (! $user->is_active
+            || ! $subject instanceof Attendance
+            || ! is_string($linkTo)
+            || ! str_starts_with($linkTo, '/hr/attendance?missing_time_out=1')
+            || app(SettingsService::class)->get('modules.attendance', false) !== true
+            || ! $user->hasPermission('attendance.view')) {
+            return false;
+        }
+
+        if ($user->role?->slug === 'system_admin'
+            || $user->hasPermission('attendance.edit')
+            || $user->hasPermission('attendance.import')
+            || (int) $user->employee_id === (int) $subject->employee_id) {
+            return true;
+        }
+
+        if (! $user->hasPermission('attendance.ot.approve') || ! $user->employee_id) {
             return false;
         }
 
