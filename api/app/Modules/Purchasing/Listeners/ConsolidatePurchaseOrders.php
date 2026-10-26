@@ -256,7 +256,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 ->get()
                 ->filter(fn (User $user): bool => $user->hasPermission('purchasing.view') && $access->canView($user, $pr))
                 ->values();
-            $this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [
+            $this->notifications->sendForSubject($pr, $audience, 'chain.pr_auto_convert_skipped', [
                 'title' => "PR {$pr->pr_number} needs manual conversion",
                 'message' => "Auto-PO was skipped: {$reason}",
                 'link_to' => "/purchasing/purchase-requests/{$pr->hash_id}",

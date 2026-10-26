@@ -20,8 +20,10 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -57,6 +59,10 @@ final class NotificationSubjectAccessRegistry
             ),
             SalesOrder::class => app(SettingsService::class)->get('modules.crm', false) === true
                 && $user->hasPermission('crm.sales_orders.view'),
+            PurchaseRequest::class => app(SettingsService::class)->get('modules.purchasing', false) === true
+                && $user->hasPermission('purchasing.view')
+                && $subject instanceof PurchaseRequest
+                && app(PurchaseRequestAccessPolicy::class)->canView($user, $subject),
             PurchaseOrder::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && ($user->hasPermission('purchasing.view') || $user->hasPermission('purchasing.po.approve'))
                 && $subject instanceof PurchaseOrder
