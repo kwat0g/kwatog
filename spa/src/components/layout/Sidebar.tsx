@@ -619,6 +619,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuLandmark,
         feature: 'hr',
         anyPermissions: ['hr.employees.view', 'hr.profile_updates.finance_review'],
+        badgeKey: 'profile_requests',
       },
       {
         to: '/hr/employees',
@@ -626,7 +627,6 @@ export const SECTIONS: NavSection[] = [
         icon: LuUsers,
         feature: 'hr',
         anyPermissions: ['hr.employees.view', 'hr.salary_adjustments.view'],
-        badgeKey: 'profile_requests',
       },
       {
         to: '/hr/departments',
