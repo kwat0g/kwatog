@@ -198,7 +198,7 @@ class SweepMissingOutgoingQc extends Command
             $dedupeKey = 'qc-missing-outgoing:'.now()->toDateString().':'.hash('sha256', implode("\n", $lines));
 
             try {
-                $notifications->send($recipients, 'chain.outgoing_qc_missing', [
+                $notifications->sendForSubject($escalated[0][0], $recipients, 'chain.outgoing_qc_missing', [
                     'title' => 'Outgoing QC missing on completed work orders',
                     'message' => count($escalated).' completed work order(s) have output batches with no outgoing QC: '
                         .implode(' | ', $lines),

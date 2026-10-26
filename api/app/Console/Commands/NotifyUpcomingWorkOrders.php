@@ -46,12 +46,12 @@ class NotifyUpcomingWorkOrders extends Command
                             $remaining->scheduled_start = now()->max($slot->scheduled_start);
                             $assignments->assertScheduledCrew($wo, $remaining, allowHoliday: $assignments->holidayAuthorized($slot));
                         } catch (BusinessRuleException $error) {
-                            $notifications->sendInApp($owners, 'production.assignment.review', [
+                            $notifications->sendForSubject($wo, $owners, 'production.assignment.review', [
                                 'title' => 'Production crew needs review: '.$wo->wo_number,
                                 'message' => 'Worker availability changed. Check attendance, shift coverage and crew before Start.',
                                 'link_to' => '/production/work-orders/'.$wo->hash_id,
                                 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,
-                            ], 'wo-crew-review-'.$slot->id.'-'.($crew?->id ?? 'none').'-'.sha1($error->getMessage()));
+                            ], 'wo-crew-review-'.$slot->id.'-'.($crew?->id ?? 'none').'-'.sha1($error->getMessage()), emailEnabled: false);
                         }
                         $stage = $slot->scheduled_start->gt(now()) ? 'upcoming'
                             : (now()->gt($slot->scheduled_start->copy()->addMinutes(ProductionResourceService::START_GRACE_MINUTES)) ? 'missed' : 'due');
@@ -68,17 +68,17 @@ class NotifyUpcomingWorkOrders extends Command
                         };
                         $envelope = ['title' => $title, 'message' => $message, 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id];
                         $key = 'wo-slot-reminder-'.$slot->id.'-'.$slot->scheduled_start->getTimestamp().'-'.$stage;
-                        $notifications->sendInApp($owners, 'production.schedule.reminder', $envelope + [
+                        $notifications->sendForSubject($wo, $owners, 'production.schedule.reminder', $envelope + [
                             'link_to' => '/production/work-orders/'.$wo->hash_id,
-                        ], $key);
+                        ], $key, emailEnabled: false);
                         $workers = $assignments->productionEmployees()->whereIn('id', $crew?->members->pluck('employee_id') ?? [])
                             ->get()->map(fn ($employee) => $employee->user);
                         $workerMessage = $stage === 'upcoming' ? $message
                             : 'Scheduled for '.$when.'. Contact Production management to '.($stage === 'due' ? 'start or resume this WO.' : 'check or reschedule this WO.');
-                        $notifications->sendInApp($workers, 'production.schedule.reminder', array_replace($envelope, [
+                        $notifications->sendForSubject($wo, $workers, 'production.schedule.reminder', array_replace($envelope, [
                             'message' => $workerMessage,
                             'link_to' => '/self-service/work-orders/'.$wo->hash_id,
-                        ]), $key);
+                        ]), $key, emailEnabled: false);
                     });
                 }
             });

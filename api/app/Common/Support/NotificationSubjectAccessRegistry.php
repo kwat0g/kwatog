@@ -16,14 +16,17 @@ use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Database\Eloquent\Model;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, StockAdjustment::class, SupplierItemListing::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -41,6 +44,7 @@ final class NotificationSubjectAccessRegistry
                 && ($user->hasPermission('inventory.adjust') || $user->hasPermission('inventory.adjust.approve')),
             SupplierItemListing::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && $user->hasPermission('purchasing.supplier_listings.view'),
+            WorkOrder::class => self::userCanViewWorkOrder($user, $subject),
             EmployeeLoan::class => self::userCanViewLoan($user, $subject),
             Budget::class => self::budgetingEnabled() && self::userCanViewBudget($user, $subject),
             BudgetTransfer::class => self::budgetingEnabled() && (
@@ -50,6 +54,25 @@ final class NotificationSubjectAccessRegistry
             default => ApprovalTypeRegistry::forClass($class) !== null
                 && ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey()),
         };
+    }
+
+    private static function userCanViewWorkOrder(User $user, Model $subject): bool
+    {
+        if (app(SettingsService::class)->get('modules.production', false) !== true) {
+            return false;
+        }
+
+        if ($user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view')) {
+            return true;
+        }
+
+        try {
+            return app(WorkOrderAssignmentService::class)->historicalCrewQuery($user)
+                ->where('work_order_id', $subject->getKey())
+                ->exists();
+        } catch (HttpException) {
+            return false;
+        }
     }
 
     private static function userCanViewLoan(User $user, Model $subject): bool
