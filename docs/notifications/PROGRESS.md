@@ -14,7 +14,7 @@
 | 4. Frontend | Not started | Blocked by approved registry/link contracts. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted Phase 3 unit 1 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. Both Playwright browser jobs were canceled at the 15-minute limit while apt downloaded system dependencies; `ci/playwright-browser-install` removes that apt install and awaits verification. |
+| 7. Verification | Partial | Targeted Phase 3 unit 1 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. Playwright accessibility and visual-baseline jobs passed on run `40370063996` after `ci/playwright-browser-install` removed the apt dependency install. Vitest passed on retry after one visibility assertion failure. |
 
 ## Coverage ledger
 
