@@ -99,7 +99,7 @@ export default function MaintenanceWorkOrdersListPage() {
  const filterConfig: FilterConfig[] = [
  ...(can('maintenance.wo.assign') ? [{
  key: 'queue', label: 'Queue', type: 'select' as const,
- options: [{ value: '', label: 'All work' }, { value: 'unassigned', label: 'Unassigned' }, { value: 'critical', label: 'Critical' }, { value: 'blocked_by_production', label: 'Blocked by production' }, { value: 'awaiting_verification', label: 'Awaiting verification' }, { value: 'in_progress', label: 'In progress' }, { value: 'overdue_preventive', label: 'Overdue preventive' }],
+ options: [{ value: '', label: 'All work' }, { value: 'open', label: 'Open' }, { value: 'unassigned', label: 'Unassigned' }, { value: 'critical', label: 'Critical' }, { value: 'blocked_by_production', label: 'Blocked by production' }, { value: 'awaiting_verification', label: 'Awaiting verification' }, { value: 'in_progress', label: 'In progress' }, { value: 'overdue_preventive', label: 'Overdue preventive' }],
  }] : []),
  ...(employeeId ? [{
  key: 'assigned_to', label: 'Assignment', type: 'select' as const,

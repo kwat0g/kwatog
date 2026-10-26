@@ -87,13 +87,14 @@ class MaintenanceWorkOrderService
                 }
             }
         }
-        if (in_array($filters['queue'] ?? '', ['unassigned', 'critical'], true)) {
+        $queue = $filters['queue'] ?? '';
+        if ($queue === 'open') {
+            $q->open();
+        } elseif ($queue === 'unassigned') {
+            $q->unassigned();
+        } elseif ($queue === 'critical') {
             $q->whereNotIn('status', ['completed', 'cancelled']);
-            if ($filters['queue'] === 'unassigned') {
-                $q->whereNull('assigned_to');
-            } else {
-                $q->where('priority', 'critical');
-            }
+            $q->where('priority', 'critical');
         }
         if (($filters['queue'] ?? '') === 'awaiting_verification') {
             $q->where('status', 'in_progress')->where('verification_required', true)

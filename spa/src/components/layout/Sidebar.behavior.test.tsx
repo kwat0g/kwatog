@@ -98,6 +98,36 @@ it('opens the overdue filter when Production Work Orders has a positive badge', 
   );
 });
 
+it('shows and routes the open and unassigned Maintenance work-order signals', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'maintenance_wo') {
+      return { count: 4, severity: 'warning', label: 'Maintenance Work Orders', description: 'Open maintenance work orders' };
+    }
+    if (key === 'maintenance_wo_unassigned') {
+      return { count: 2, severity: 'danger', label: 'Unassigned', description: 'Open maintenance work orders without an assignee' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/maintenance/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Maintenance Work Orders/ })).toHaveAttribute(
+    'href',
+    '/maintenance/work-orders?queue=unassigned',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Maintenance Work Orders signals/ }));
+  expect(screen.getByRole('link', { name: 'Open maintenance work orders: 4' })).toHaveAttribute(
+    'href',
+    '/maintenance/work-orders?queue=open',
+  );
+  expect(screen.getByRole('link', { name: 'Open maintenance work orders without an assignee: 2' })).toHaveAttribute(
+    'href',
+    '/maintenance/work-orders?queue=unassigned',
+  );
+});
+
 it('shows the due-soon Work Orders filter alongside overdue', () => {
   badgeMock.getBadge.mockImplementation((key) => {
     if (key === 'work_orders_awaiting_confirmation') {
