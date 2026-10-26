@@ -24,6 +24,8 @@ export { LinkButton } from './LinkButton';
 export { MaskedInput, type MaskedInputProps } from './MaskedInput';
 export { Modal, ModalFooter } from './Modal';
 export { Panel } from './Panel';
+export { Toolbar } from './Toolbar';
+export { TablePagination, DataTablePagination } from './DataTablePagination';
 export { Radio } from './Radio';
 export { Select, type SelectProps, type FieldSize } from './Select';
 export { SegmentedControl, ToggleChip, type SegmentedOption } from './SegmentedControl';

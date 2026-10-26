@@ -206,7 +206,7 @@ export default function MaintenanceWorkOrdersListPage() {
     <Link key={wo.id} to={`${orderPath}/${wo.id}`}
       className={cn('block rounded-md border border-default bg-canvas p-4 active:bg-subtle', focusRing)}>
       <div className="flex items-start justify-between gap-2">
-       <span className="font-mono text-sm font-medium tabular-nums">{wo.mwo_number}</span>
+       <span className="font-mono text-sm font-medium tabular-nums text-link">{wo.mwo_number}</span>
        <Chip variant={PRIORITY_CHIP[wo.priority]}>{wo.priority_label ?? wo.priority}</Chip>
       </div>
       <div className="mt-2 text-sm font-medium">{wo.maintainable?.name ?? '—'}</div>

@@ -106,7 +106,7 @@ export function ItemUomConversions({ itemId, baseUnit }: { itemId: string; baseU
           )
         }
       >
-        <p className="mb-3 text-xs text-muted">
+        <p className="mb-3 text-body-small text-muted">
           Factors record base units per one source unit. Conversions lock when a purchase, receipt,
           or issue uses them.
         </p>

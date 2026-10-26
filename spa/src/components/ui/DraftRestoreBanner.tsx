@@ -12,6 +12,7 @@ interface Props {
  ageMs: number | null;
  onRestore: () => void;
  onDiscard: () => void;
+ inset?: boolean;
 }
 
 function formatAge(ms: number): string {
@@ -25,16 +26,16 @@ function formatAge(ms: number): string {
  return `${day} day${day === 1 ? '' : 's'} ago`;
 }
 
-export function DraftRestoreBanner({ ageMs, onRestore, onDiscard }: Props) {
+export function DraftRestoreBanner({ ageMs, onRestore, onDiscard, inset = true }: Props) {
  const ageLabel = ageMs !== null ? formatAge(ageMs) : '';
  return (
  <div
  role="status"
- className="flex items-center justify-between gap-3 mx-5 mt-4 px-3 py-2 rounded-md border border-warning bg-warning-bg text-warning-fg"
+ className={cn('flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-warning bg-warning-bg text-warning-fg', inset && 'mx-5 mt-4')}
  >
  <div className="flex items-center gap-2">
  <LuClock size={14} />
- <p className="text-sm">
+        <p className="text-body-small">
  You have an unsaved draft from <span className="font-medium">{ageLabel}</span>. Sensitive fields are
  not restored.
  </p>
@@ -43,14 +44,14 @@ export function DraftRestoreBanner({ ageMs, onRestore, onDiscard }: Props) {
  <button
  type="button"
  onClick={onRestore}
- className={cn('h-7 px-2.5 rounded-md text-xs font-medium bg-warning-bg text-warning-fg hover:opacity-90 cursor-pointer', focusRing)}
+ className={cn('h-7 px-2.5 rounded-md text-caption font-medium bg-warning-bg text-warning-fg hover:opacity-90 cursor-pointer', focusRing)}
  >
  Restore
  </button>
  <button
  type="button"
  onClick={onDiscard}
- className={cn('h-7 px-2.5 rounded-md text-xs text-warning-fg hover:bg-warning-bg/20 cursor-pointer', focusRing)}
+ className={cn('h-7 px-2.5 rounded-md text-caption text-warning-fg hover:bg-warning-bg/20 cursor-pointer', focusRing)}
  >
  Discard
  </button>

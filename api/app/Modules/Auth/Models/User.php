@@ -49,6 +49,8 @@ class User extends Authenticatable
         'theme_mode',
         'sidebar_collapsed',
         'sidebar_peek',
+        'sidebar_expand_all',
+        'table_preferences',
     ];
 
     protected $hidden = [
@@ -65,6 +67,8 @@ class User extends Authenticatable
             'must_change_password'  => 'boolean',
             'sidebar_collapsed'     => 'boolean',
             'sidebar_peek'          => 'boolean',
+            'sidebar_expand_all'    => 'boolean',
+            'table_preferences'     => 'array',
             'last_activity'         => 'datetime',
             'password_changed_at'   => 'datetime',
             'locked_until'          => 'datetime',

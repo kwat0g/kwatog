@@ -159,6 +159,7 @@ export default function ProductionSchedulePage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
+              variant="secondary"
               icon={<LuRefreshCw size={14} />}
               disabled={busy || !!dateError}
               loading={snapshot.isFetching}
@@ -168,6 +169,7 @@ export default function ProductionSchedulePage() {
             </Button>
             {canRun && (
               <Button
+                variant="primary"
                 icon={<LuPlay size={14} />}
                 disabled={busy || !ready}
                 onClick={() => {
