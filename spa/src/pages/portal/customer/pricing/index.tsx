@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -36,13 +37,15 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 export default function CustomerPricingPage() {
+  const [searchParams] = useSearchParams();
+  const requestId = searchParams.get('request') ?? undefined;
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const query = useQuery({
-    queryKey: ['portal', 'pricing', page],
-    queryFn: () => customerPortalApi.priceRequests(page),
-    placeholderData: (p) => p,
+    queryKey: ['portal', 'pricing', page, requestId],
+    queryFn: () => customerPortalApi.priceRequests(requestId ? 1 : page, requestId),
+    placeholderData: requestId ? undefined : (p) => p,
   });
   const catalog = useQuery({
     queryKey: ['portal', 'catalog', 'pricing'],

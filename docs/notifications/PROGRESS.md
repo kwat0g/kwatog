@@ -856,6 +856,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `RfqBiddingTest.php`: **21 passed / 260 assertions**. The local run used and restored the temporary F-22 workaround; the source PDF service has no diff.
 - This test-only repair is separate from the notification code.
 
+## Phase 3 Price negotiation notice access and links
+
+- Internal price negotiation notices now pass through the `PriceRequest` subject gate, which checks the CRM module, active recipient, route permission, and exact SPA list target. The internal and portal pricing pages filter to the referenced request; the internal page opens its details modal.
+- Internal and portal actors no longer receive their own lifecycle update. Portal notices remain scoped to active contacts for the record's customer, and the customer-scoped list query returns no row for another account.
+- The two new lifecycle tests pass: **2 tests / 23 assertions**. They cover actor exclusion, unrelated internal role suppression, exact links, invalid hash behavior, and cross-customer denial. PHP syntax, Pint, targeted ESLint, and `git diff --check` pass.
+- Full `PriceNegotiationLifecycleTest.php` run: **6 passed, 1 failed**. Existing `test_accepted_agreement_cannot_be_silently_edited_or_archived` expects HTTP 422 but gets 403 because its `customer_service_officer` lacks the agreement-management permission. This route/test mismatch is separate from this change; record as F-56 and fix in a separate PR. Full SPA typecheck was interrupted due local resource use; no browser QA run.
+
 ## Resume instruction
 
-Next: continue the remaining notification dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Run and record the F-55 RFQ suite, then continue. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
+Next: record and fix F-56 separately, then continue the remaining dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Keep units on separate branches/PRs; full suite, badge parity, role matrix, and visual QA remain incomplete.

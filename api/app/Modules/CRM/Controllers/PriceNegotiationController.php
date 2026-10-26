@@ -18,7 +18,7 @@ class PriceNegotiationController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return PriceRequestResource::collection($this->service->list());
+        return PriceRequestResource::collection($this->service->list(requestHashId: $request->query('request')));
     }
 
     public function show(Request $request, PriceRequest $priceRequest): PriceRequestResource
@@ -33,7 +33,7 @@ class PriceNegotiationController
 
     public function portalIndex(Request $request): AnonymousResourceCollection
     {
-        return PriceRequestResource::collection($this->service->list($request->user('customer_portal')->customer_id));
+        return PriceRequestResource::collection($this->service->list($request->user('customer_portal')->customer_id, $request->query('request')));
     }
 
     public function store(PriceNegotiationRequest $request): JsonResponse

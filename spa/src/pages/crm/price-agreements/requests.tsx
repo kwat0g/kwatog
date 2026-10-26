@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuPlus } from '@/lib/icons';
 import { pricingRequestsApi } from '@/api/crm/pricingRequests';
@@ -32,6 +32,9 @@ const statuses: Record<PriceRequest['status'], { label: string; variant: ChipVar
 export default function PricingRequestsPage() {
   const { can } = usePermission();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestId = searchParams.get('request') ?? undefined;
+  const openedRequest = useRef<string | null>(null);
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<PriceRequest | null>(null);
@@ -45,9 +48,9 @@ export default function PricingRequestsPage() {
     staleTime: 0,
   });
   const query = useQuery({
-    queryKey: ['pricing-requests', page],
-    queryFn: () => pricingRequestsApi.list(page),
-    placeholderData: (prev) => prev,
+    queryKey: ['pricing-requests', page, requestId],
+    queryFn: () => pricingRequestsApi.list(requestId ? 1 : page, requestId),
+    placeholderData: requestId ? undefined : (prev) => prev,
   });
   const action = useMutation({
     mutationFn: async (decision: 'approve' | 'withdraw') => {
@@ -79,12 +82,23 @@ export default function PricingRequestsPage() {
       );
     },
   });
-  const open = (request: PriceRequest, nextMode: typeof mode) => {
+  const open = useCallback((request: PriceRequest, nextMode: typeof mode) => {
     setSelected(request);
     setMode(nextMode);
     setNotes('');
     setError('');
-  };
+  }, []);
+  useEffect(() => {
+    if (!requestId) {
+      openedRequest.current = null;
+      return;
+    }
+    if (query.isSuccess && !query.isPlaceholderData && openedRequest.current !== requestId) {
+      openedRequest.current = requestId;
+      const request = query.data.data.find((row) => row.id === requestId);
+      if (request) open(request, 'view');
+    }
+  }, [open, query.data, query.isPlaceholderData, query.isSuccess, requestId]);
   const columns: Column<PriceRequest>[] = [
     {
       key: 'product',
