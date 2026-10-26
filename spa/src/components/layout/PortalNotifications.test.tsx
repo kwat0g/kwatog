@@ -24,11 +24,13 @@ it('portal bell renders portal notices, opens portal inbox, and keeps internal c
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   queryClient.setQueryData(['notifications', 'peek'], { ...response, data: [{ ...response.data[0], data: { title: 'Internal payroll secret' } }] });
   render(<QueryClientProvider client={queryClient}><MemoryRouter>
-    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} />
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
     <Routes><Route path="/" element={null} /><Route path="/portal/customer/notifications" element={<p>Customer inbox opened</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
   expect(await screen.findByText('Review delivery date')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Review delivery date: Accept or decline proposed date.' }))
+    .toHaveAttribute('href', '/portal/customer/orders/order-1');
   expect(screen.queryByText('Internal payroll secret')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: 'View all notifications' }));
   expect(await screen.findByText('Customer inbox opened')).toBeVisible();
