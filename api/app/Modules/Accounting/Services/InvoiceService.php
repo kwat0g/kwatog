@@ -662,7 +662,7 @@ class InvoiceService
         });
     }
 
-    public function aging(?Carbon $asOf = null): array
+    public function aging(?Carbon $asOf = null, ?int &$rowsScanned = null): array
     {
         $asOf = ($asOf ?? now())->copy();
         $cutoff = $asOf->copy()->endOfDay();
@@ -688,6 +688,7 @@ class InvoiceService
             })
             ->orderBy('customer_id')
             ->get();
+        $rowsScanned = $rows->count();
 
         $invoiceIds = $rows->modelKeys();
         $collectionRows = InvoiceCollection::query()

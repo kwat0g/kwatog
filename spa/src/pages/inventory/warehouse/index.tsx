@@ -476,7 +476,7 @@ function applyServerErrors<T extends Record<string, unknown>>(
 function WarehouseForm({ mode, existing, onClose, onSaved }: {
  mode: 'create' | 'edit'; existing: Warehouse | null; onClose: () => void; onSaved: () => void;
 }) {
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<WarehouseFormValues>({
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<z.input<typeof warehouseSchema>, unknown, WarehouseFormValues>({
  resolver: zodResolver(warehouseSchema),
  defaultValues: {
  name: existing?.name ?? '',
@@ -524,7 +524,7 @@ function ZoneForm({ mode, existing, warehouseId, onClose, onSaved }: {
  queryFn: warehouseApi.options,
  staleTime: 5 * 60 * 1000,
  });
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<ZoneFormValues>({
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<z.input<typeof zoneSchema>, unknown, ZoneFormValues>({
  resolver: zodResolver(zoneSchema),
  defaultValues: {
  name: existing?.name ?? '',
@@ -565,7 +565,7 @@ function ZoneForm({ mode, existing, warehouseId, onClose, onSaved }: {
 function LocationForm({ mode, existing, zoneId, onClose, onSaved }: {
  mode: 'create' | 'edit'; existing: WarehouseLocation | null; zoneId: string; onClose: () => void; onSaved: () => void;
 }) {
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LocationFormValues>({
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<z.input<typeof locationSchema>, unknown, LocationFormValues>({
  resolver: zodResolver(locationSchema),
  defaultValues: {
  code: existing?.code ?? '',

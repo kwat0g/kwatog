@@ -164,12 +164,18 @@ class WorkOrderReworkService
             'awaiting_qc' => 'Repair production is finished. Fresh quality approval is required.',
             default => 'Production, QC and defect handling are resolved. Work order closed automatically.',
         };
+        $title = match ($state) {
+            'qc_failed' => "WO {$wo->wo_number} — Quality inspection failed",
+            'required' => "WO {$wo->wo_number} — Rework required",
+            'awaiting_qc' => "WO {$wo->wo_number} — Rework awaiting quality inspection",
+            default => "WO {$wo->wo_number} — Rework completed",
+        };
         app(NotificationService::class)->sendInApp($audience, 'production.rework.'.$state, [
-            'title' => "WO {$wo->wo_number} — ".str_replace('_', ' ', $state), 'message' => $message,
+            'title' => $title, 'message' => $message,
             'link_to' => "/production/work-orders/{$wo->hash_id}", 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,
         ], 'wo-rework-'.$state.'-'.($ncr?->id ?? $wo->id));
         app(NotificationService::class)->sendInApp($crewUsers, 'production.rework.'.$state, [
-            'title' => 'WO '.$wo->wo_number.' — '.str_replace('_', ' ', $state), 'message' => $message,
+            'title' => $title, 'message' => $message,
             'link_to' => '/self-service/work-orders', 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,
         ], 'wo-crew-'.$state.'-'.($ncr?->id ?? $wo->id));
     }

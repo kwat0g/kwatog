@@ -435,7 +435,7 @@ export default function SalesOrderDetailPage() {
                 title="Delivery schedule"
                 actions={
                   data.capabilities?.can_propose_delivery ? (
-                    <Button onClick={() => setDeliveryProposalOpen(!deliveryProposalOpen)}>
+                    <Button variant="primary" onClick={() => setDeliveryProposalOpen(!deliveryProposalOpen)}>
                       Propose delivery date
                     </Button>
                   ) : undefined

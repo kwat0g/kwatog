@@ -142,12 +142,12 @@ export default function CustomerOrderDetailPage() {
           order?.capabilities?.can_edit || order?.capabilities?.can_cancel ? (
             <div className="flex gap-2">
               {order.capabilities.can_edit && (
-                <Button onClick={() => navigate(`/portal/customer/orders/${id}/edit`)}>
+                <Button variant="secondary" onClick={() => navigate(`/portal/customer/orders/${id}/edit`)}>
                   Edit order
                 </Button>
               )}
               {order.capabilities.can_cancel && (
-                <Button onClick={() => setCancelOpen(true)}>Cancel order</Button>
+                <Button variant="danger" onClick={() => setCancelOpen(true)}>Cancel order</Button>
               )}
             </div>
           ) : undefined
@@ -163,7 +163,7 @@ export default function CustomerOrderDetailPage() {
       </div>}
       {order?.latest_response?.type === 'cancellation_request' && (
         <div role="status" className="mx-5 mt-3 rounded-md border border-default bg-surface px-4 py-3 text-sm">
-          <p className="font-medium">Cancellation request {order.latest_response.status}</p>
+          <p className="flex flex-wrap items-center gap-2 font-medium">Cancellation request <Chip variant={chipVariantForStatus(order.latest_response.status)}>{order.latest_response.status}</Chip></p>
           <p className="mt-1 text-muted">
             {order.latest_response.status === 'pending'
               ? 'Sales is reviewing production and purchasing commitments. Order remains active until review is complete.'

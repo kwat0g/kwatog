@@ -139,6 +139,7 @@ export default function ApplicationDetailPage() {
  can('hr.recruitment.applications') && !isTerminal ? (
  <>
  <Button
+ variant="primary"
  size="sm"
  icon={<LuArrowRight size={12} />}
  onClick={() => application.stage === 'screening' ? setInterviewMode('advance') : setShowAdvanceConfirm(true)}
@@ -147,12 +148,12 @@ export default function ApplicationDetailPage() {
  >
  {nextStage ? `Move to ${stageLabel.get(nextStage) ?? nextStage}` : 'Advance'}
  </Button>
- <Button variant="secondary" size="sm" className="text-danger-fg" icon={<LuCircleX size={12} />} onClick={() => setShowRejectDialog(true)}>
+ <Button variant="danger" size="sm" icon={<LuCircleX size={12} />} onClick={() => setShowRejectDialog(true)}>
  Reject
  </Button>
  </>
  ) : application.stage === 'hired' && can('hr.recruitment.hire') && !application.converted_employee ? (
- <Button size="sm" icon={<LuUserPlus size={12} />} onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
+ <Button variant="primary" size="sm" icon={<LuUserPlus size={12} />} onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
  Convert to Employee
  </Button>
  ) : undefined
@@ -482,7 +483,7 @@ function InterviewModal({ applicationId, applicantName, mode, onClose }: {
  {errors.root?.server && <p role="alert" className="mt-3 text-sm text-danger-fg">{errors.root.server.message}</p>}
  <ModalFooter className="flex-wrap">
  <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Cancel</Button>
- <Button type="submit" disabled={mutation.isPending} loading={mutation.isPending}>{mode === 'advance' ? 'Schedule & Move to Interview' : 'Schedule interview'}</Button>
+ <Button type="submit" variant="primary" disabled={mutation.isPending} loading={mutation.isPending}>{mode === 'advance' ? 'Schedule & Move to Interview' : 'Schedule interview'}</Button>
  </ModalFooter>
  </form>
  </Modal>

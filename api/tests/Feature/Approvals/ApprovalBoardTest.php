@@ -102,9 +102,13 @@ class ApprovalBoardTest extends TestCase
         $board = app(ApprovalBoardService::class)->board($approver, null, 1, 1);
 
         $this->assertCount(1, $board['my_action']);
-        $this->assertSame(1, $board['summary']['my_action']);
+        $this->assertSame(2, $board['summary']['my_action']);
         $this->assertTrue($board['meta']['pending_truncated']);
         $this->assertSame(1, $board['meta']['pending_limit']);
+
+        $pageTwo = app(ApprovalBoardService::class)->board($approver, null, 1, 1, 2);
+        $this->assertSame(2, $pageTwo['summary']['my_action']);
+        $this->assertCount(1, $pageTwo['my_action']);
     }
 
     public function test_every_advertised_approval_filter_is_accepted_by_the_board(): void
