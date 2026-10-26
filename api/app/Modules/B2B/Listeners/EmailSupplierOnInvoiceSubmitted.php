@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Listeners;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Mail\SupplierInvoiceStatusMail;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -29,24 +30,22 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
         ];
 
         if (! filter_var($snapshot['recipient_email'], FILTER_VALIDATE_EMAIL)) {
-            $fallback->notifyPermission(
-                'accounting.vendors.view',
-                'Supplier invoice email',
+            $this->notifyBillCreator(
+                $bill,
+                $fallback,
                 "Supplier invoice {$invoiceNumber} was submitted, but the supplier has no usable email address. Confirm receipt through the supplier portal or an approved channel.",
                 $context,
             );
+
             return;
         }
 
         try {
-            Mail::to($snapshot['recipient_email'])->queue(new SupplierInvoiceStatusMail(
-                $snapshot,
-                $fallback->userIdsWithPermission('accounting.vendors.view'),
-            ));
+            Mail::to($snapshot['recipient_email'])->queue(new SupplierInvoiceStatusMail($snapshot));
         } catch (\Throwable $e) {
-            $fallback->notifyPermission(
-                'accounting.vendors.view',
-                'Supplier invoice email',
+            $this->notifyBillCreator(
+                $bill,
+                $fallback,
                 "The confirmation email for supplier invoice {$invoiceNumber} could not be accepted by the email provider. Review the submission in Accounts Payable.",
                 $context,
             );
@@ -55,5 +54,18 @@ class EmailSupplierOnInvoiceSubmitted implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /** @param array{link_to?: string, entity_type?: string, entity_id?: string, reason?: string} $context */
+    private function notifyBillCreator(Bill $bill, EmailDeliveryFailureNotifier $fallback, string $message, array $context): void
+    {
+        $creator = $bill->creator()->where('is_active', true)->first();
+        if (! $creator) {
+            Log::warning('Supplier invoice email fallback skipped: no active bill creator.', ['bill_id' => $bill->id]);
+
+            return;
+        }
+
+        $fallback->notify($creator, 'Supplier invoice email', $message, $context, $bill);
     }
 }
