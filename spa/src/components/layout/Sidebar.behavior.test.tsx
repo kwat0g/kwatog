@@ -88,6 +88,28 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
   );
 });
 
+it('opens held material-review records from the MRB badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'mrb_holds'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'MRB / Quarantine',
+          description: 'Lots on hold in quarantine',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/inventory/mrb']}>
+      <Sidebar roleSlug="warehouse_staff" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /MRB \/ Quarantine/ })).toHaveAttribute(
+    'href',
+    '/inventory/mrb?status=held',
+  );
+});
+
 it('opens only new inquiries from the actionable inquiry badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'inquiries'

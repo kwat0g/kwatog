@@ -76,7 +76,9 @@ class QuarantineService
                 'holder:id,name', 'releaser:id,name',
             ]);
 
-        if (! empty($filters['status'])) {
+        if (($filters['status'] ?? null) === MrbStatus::Held->value) {
+            $q->held();
+        } elseif (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['item_id'])) {
