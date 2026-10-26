@@ -874,6 +874,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Recipients must be active and hold both `mrp.plans.view` and `mrp.runs.view`; configured daily roles use the same gate. Exclude the run trigger. The daily command's duplicate notice was removed; automation sends one deduplicated notification.
 - `MrpAutomationTest.php`: **13 passed / 53 assertions**; `MrpDailyCommandTest.php`: **2 passed / 4 assertions**. Covers allowed PPC, denied Sales/Warehouse, actor exclusion, revoked run permission, exact list filter, and duplicate-run dedupe. PHP syntax, Pint, ESLint, and `git diff --check` pass. No browser QA or full suite run.
 
+## Separate finding fix: F-58 interview mail failure fallback (draft PR)
+
+- `InterviewScheduledMail::failed()` and `InterviewDetailsUpdatedMail::failed()` read typed properties that their constructors never initialized. A queued mail failure therefore threw before recording the in-app fallback.
+- Both callbacks now use the saved mail snapshot for candidate name and application link. `RecruitmentApplicationTest.php` selected case: **1 passed / 5 assertions**, covering both failure callbacks and exact links.
+- PHP syntax and `git diff --check` pass. Pint reports pre-existing formatting issues in these legacy files; no broad formatting was retained. Test used and restored the temporary F-22 syntax workaround. No broader recruitment email recipient migration included.
+
 ## Resume instruction
 
 Next: continue the remaining dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Keep units on separate branches/PRs; full suite, badge parity, role matrix, and visual QA remain incomplete.
