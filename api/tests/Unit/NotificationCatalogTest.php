@@ -11,6 +11,7 @@ use App\Common\Notifications\CriticalAlertEmail;
 use App\Modules\Auth\Notifications\PasswordResetNotification;
 use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
 use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
 use App\Modules\Production\Notifications\DailyProductionSummary;
 use App\Modules\Production\Notifications\WeeklyProductionSummary;
@@ -297,6 +298,7 @@ class NotificationCatalogTest extends TestCase
             new EmployeeWelcomeNotification('https://example.test/setup', 60),
             new PasswordResetNotification('https://example.test/reset', 60),
             new PasswordResetLinkNotification('https://example.test/reset', 60),
+            new EmployeePasswordResetNotification('https://example.test/reset', 60),
             new DailyProductionSummary([]),
             new WeeklyProductionSummary([]),
             new CriticalAlertEmail(new Alert),

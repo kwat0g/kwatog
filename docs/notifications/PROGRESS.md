@@ -360,8 +360,8 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 ## Separate finding: F-33 HR password-reset notification load failure
 
 - `EmployeePasswordResetNotification` fails PHP method-signature compatibility when autoloaded because its parent references unimported `Throwable`, resolving to the Auth notification namespace. The issue surfaced while checking which direct Laravel notification paths remain mail-only; no reset email was queued.
-- This is the same callback-signature defect fixed in draft PR [#372](https://github.com/kwat0g/kwatog/pull/372), which fully qualifies `\Throwable`; its existing HR serialization, provisioning, and user-administration tests pass. That sibling PR is not in the #397 branch ancestry, so the fix is not yet present on this stack.
-- No duplicate code fix is planned. `NotificationCatalogTest` still omits the HR subclass because it cannot load before the sibling fix merges; add it to the mail-only class coverage after the fix reaches this stack. No reset email was queued during discovery.
+- The parent signature fix from draft PR [#372](https://github.com/kwat0g/kwatog/pull/372) is carried into the active stack in draft PR #404. `NotificationCatalogTest` now instantiates the HR subclass and confirms its mail-only channel.
+- On this stack, `EmployeePasswordResetNotificationTest.php`: **1 passed / 2 assertions**; `NotificationCatalogTest.php`: **9 passed / 76 assertions**; `UserProvisioningTest.php`: **8 passed / 25 assertions**; `UserAdministrationHardeningTest.php`: **8 passed / 27 assertions**. PHP syntax and `git diff --check` pass. No reset email was queued during discovery.
 
 ## Central dispatch boundary (draft PR #397)
 
