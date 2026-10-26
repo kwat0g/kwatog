@@ -93,9 +93,9 @@ export function SkeletonGrid({ count = 4, className }: { count?: number; classNa
 }
 
 /** Rich detail page skeleton loader with header, KPI row, process timeline, and main layout. */
-export function SkeletonDetail() {
+export function SkeletonDetail({ className }: { className?: string } = {}) {
  return (
- <div className="px-5 py-4 space-y-4">
+ <div className={cn('px-5 py-4 space-y-4', className)}>
  {/* Header skeleton. The widths here are fixed, so at 375px the title block
  and the button pair together exceeded the viewport and pushed the whole
  document sideways — on every detail page, every time one loaded. Wrapping
