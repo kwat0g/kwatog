@@ -11,6 +11,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Events\SeparationInitiated;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -50,5 +52,38 @@ class SeparationNotificationAudienceTest extends TestCase
         $this->assertSame(0, $revoked->notifications()->where('type', 'chain.separation_initiated')->count());
         $this->actingAs($allowed)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertOk();
         $this->actingAs($revoked)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertForbidden();
+    }
+
+    public function test_notice_only_reaches_non_actor_recipients_who_can_open_the_clearance(): void
+    {
+        app(SettingsService::class)->set('hr.separation.notification_roles', ['department_head']);
+        $department = Department::factory()->create();
+        $otherDepartment = Department::factory()->create();
+        $actor = $this->departmentHead($department);
+        $allowed = $this->departmentHead($department);
+        $outOfScope = $this->departmentHead($otherDepartment);
+        $clearance = Clearance::factory()->create([
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+            'initiated_by' => $actor->id,
+        ]);
+
+        app(NotifyOnSeparationInitiated::class)->handle(new SeparationInitiated($clearance));
+
+        $this->assertSame(1, $allowed->notifications()->where('type', 'chain.separation_initiated')->count());
+        $this->assertSame(0, $actor->notifications()->where('type', 'chain.separation_initiated')->count());
+        $this->assertSame(0, $outOfScope->notifications()->where('type', 'chain.separation_initiated')->count());
+        $this->actingAs($allowed)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertOk();
+        $this->actingAs($outOfScope)->getJson('/api/v1/hr/clearances/'.$clearance->hash_id)->assertNotFound();
+    }
+
+    private function departmentHead(Department $department): User
+    {
+        $employee = Employee::factory()->create(['department_id' => $department->id]);
+
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => $employee->id,
+            'is_active' => true,
+        ]);
     }
 }
