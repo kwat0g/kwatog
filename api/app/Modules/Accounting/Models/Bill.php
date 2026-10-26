@@ -144,6 +144,16 @@ class Bill extends Model
         return $q->open()->where('balance', '>', 0);
     }
 
+    public function scopeDueSoon(Builder $q): Builder
+    {
+        $today = today();
+
+        return $q->unpaid()->whereBetween('due_date', [
+            $today->toDateString(),
+            $today->copy()->addDays(3)->toDateString(),
+        ]);
+    }
+
     public function scopeOverdue(Builder $q): Builder
     {
         return $q->open()->whereDate('due_date', '<', today()->toDateString());
