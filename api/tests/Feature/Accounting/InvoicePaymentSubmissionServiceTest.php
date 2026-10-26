@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Enums\PermissionOverrideType;
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\OfficialReceipt;
 use App\Modules\Accounting\Services\InvoicePaymentSubmissionService;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
@@ -19,6 +22,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -57,6 +61,53 @@ class InvoicePaymentSubmissionServiceTest extends TestCase
     protected function proof(): UploadedFile
     {
         return UploadedFile::fake()->createWithContent('receipt.pdf', "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF");
+    }
+
+    public function test_payment_submission_notice_only_reaches_active_reviewers_who_can_open_invoice(): void
+    {
+        $systemAdmin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+        $collectorWithoutInvoiceView = User::factory()->create([
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $collectorWithoutInvoiceView->id,
+            'permission_id' => Permission::where('slug', 'accounting.invoices.collect')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $this->finance->id,
+            'reason' => 'Test collection permission without invoice visibility',
+        ]);
+        $collectorWithoutInvoiceView->flushPermissionsCache();
+        $inactiveReviewer = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+            'is_active' => false,
+        ]);
+        $viewOnlyExecutive = User::factory()->create([
+            'role_id' => Role::where('slug', 'vice_president')->value('id'),
+        ]);
+
+        $this->assertTrue($collectorWithoutInvoiceView->hasPermission('accounting.invoices.collect'));
+        $this->assertFalse($collectorWithoutInvoiceView->hasPermission('accounting.invoices.view'));
+        $this->assertTrue($viewOnlyExecutive->hasPermission('accounting.invoices.view'));
+        $this->assertFalse($viewOnlyExecutive->hasPermission('accounting.invoices.collect'));
+
+        app(InvoicePaymentSubmissionService::class)->submit($this->invoice, $this->payload(), $this->proof(), $this->portal);
+
+        $notices = DB::table('notifications')
+            ->where('type', 'invoice.payment_submitted')
+            ->where('notifiable_type', User::class)
+            ->get();
+
+        $this->assertCount(1, $notices);
+        $this->assertSame($this->finance->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotSame($systemAdmin->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotSame($collectorWithoutInvoiceView->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotSame($inactiveReviewer->id, (int) $notices->first()->notifiable_id);
+        $this->assertNotSame($viewOnlyExecutive->id, (int) $notices->first()->notifiable_id);
+
+        $data = json_decode((string) $notices->first()->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/accounting/invoices/'.$this->invoice->hash_id, $data['link_to']);
     }
 
     public function test_submission_does_not_post_and_verification_posts_once(): void

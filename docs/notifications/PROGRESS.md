@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; PRs #353, #354, #357, and #358 merged. PR #359 updates permission-override message copy without changing recipients. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, and #358 merged. PR #359 updates permission-override message copy; PR #362 narrows invoice payment-review recipients to users who can open the invoice. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
@@ -41,8 +41,12 @@
 | F-18. Pricing recipient negative-role coverage | `notifications/fix-pricing-recipient-role-scope` | [#350](https://github.com/kwat0g/kwatog/pull/350) | merged as `9a5a0525`; source filter in #341 |
 | F-20. Sales-order confirmation notice access and link | `notifications/fix-sales-order-confirmation-notice` | [#351](https://github.com/kwat0g/kwatog/pull/351) | merged as `cab02246` |
 | F-12. Sales-order broadcast payload minimization | `notifications/minimize-sales-order-broadcast` | [#352](https://github.com/kwat0g/kwatog/pull/352) | `ff2a2a92` plus current-main merge |
+| F-09. Pending-QC GRN badge/list parity | `notifications/fix-grn-badge-parity` | [#353](https://github.com/kwat0g/kwatog/pull/353) | merged as `a8ecb9a9` |
+| F-09. Inspection badge/list parity | `notifications/fix-inspection-badge-parity` | [#354](https://github.com/kwat0g/kwatog/pull/354) | merged as `e10db3fd` |
+| F-09. Assigned complaint badge/list parity | `notifications/fix-open-complaint-badge-parity` | [#357](https://github.com/kwat0g/kwatog/pull/357) | merged as `f592f6ca` |
 | F-12. Shared dashboard event payload minimization | `notifications/minimize-dashboard-broadcast-payloads` | [#358](https://github.com/kwat0g/kwatog/pull/358) | merged as `4c26b530` |
-| F-15. Permission-override notice copy | `notifications/fix-permission-override-notice-copy` | [#359](https://github.com/kwat0g/kwatog/pull/359) | pending review |
+| F-15. Permission-override notice copy | `notifications/fix-permission-override-notice-copy` | [#359](https://github.com/kwat0g/kwatog/pull/359) | merged as `79e1dbc6` |
+| F-25. Invoice payment-review recipient scope | `notifications/fix-invoice-payment-notice-audience` | [#362](https://github.com/kwat0g/kwatog/pull/362) | pending review |
 
 ## Coverage ledger
 
@@ -163,6 +167,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - Recipients stay unchanged. The affected user receives the notice; a different administrator who changed the override does not.
 - On the original feature head, `PermissionOverrideNotificationCopyTest` passed **1 test / 29 assertions**, covering add, update, remove, restore, clear copy, raw slug/enum exclusion, no-link behavior, and actor exclusion. PHP is unavailable locally for a post-integration rerun.
 - F-15 remains partial until the queue-long-wait route and recipient gate are verified with the affected role.
+
+## Separate finding fix: F-25 invoice payment-review audience
+
+- Payment submissions use the shared Finance review queue; there is no reviewer assignment field. The seeded `finance_officer` role holds both `accounting.invoices.collect` and `accounting.invoices.view`; the invoice detail route requires the latter and adds no row-level filter.
+- Recipients now need both permissions and active status. Exclude `system_admin` because `usersWithPermission()` intentionally includes permission-bypass admins, who are not Finance reviewers. Existing message, link, dedupe key, and submission timing stay unchanged.
+- On the original feature head, `InvoicePaymentSubmissionServiceTest` passed **13 tests / 80 assertions**. The added negative case excludes a system administrator, inactive Finance user, collect-only user, and view-only executive, while confirming the Finance reviewer gets the exact invoice link. PHP is unavailable locally for a post-integration rerun.
+- Empty-recipient fallback/audit remains open in the central notification service. No generic system-admin fallback is approved for customer payment data.
 
 
 ## Separate finding fix: F-24 approval-board total
