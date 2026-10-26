@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#395 are merged; #395 merged as `d7795f26`. PR #396 aligns Leave approval and rejection controls with the API current-step policy. Original-head API tests passed **34 tests / 160 assertions**; after rebase, its three SPA suites passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#396 are merged; #395 merged as `d7795f26` and #396 as `a4d6e31c`. PR #397 removes the unused legacy in-app notification wrapper and adds dispatch-boundary guards. Original-head Leave API tests passed **34 tests / 160 assertions**; post-rebase SPA tests passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -44,7 +44,8 @@
 | F-42. Overtime route permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | merged as `5f630dd7`; original-head API test passed; post-rebase syntax/diff checks passed; API test not rerun against shared DB |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | merged as `1109dc43`; post-rebase Sidebar 42, permission 28, page 1, ESLint, PHP syntax, and diff checks passed; post-fix API test not run against shared DB |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | merged as `d7795f26`; original-head API tests passed 14/44; post-rebase SPA 73, ESLint, PHP syntax, and diff checks passed; API tests not rerun against shared DB |
-| F-45. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | rebased on `d7795f26`; original-head API tests passed 34/160 and SPA tests 7; post-rebase SPA 7, ESLint, PHP syntax, and diff checks passed; API tests not rerun against shared DB |
+| F-45. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | merged as `a4d6e31c`; original-head API tests passed 34/160 and SPA tests 7; post-rebase SPA 7, ESLint, PHP syntax, and diff checks passed; API tests not rerun against shared DB |
+| 1.1. Native Laravel dispatch boundary | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | rebase onto current `main`; focused API test passed 9/74 on the original head; post-rebase PHP syntax and `git diff --check` passed; API test not rerun against shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -439,3 +440,11 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 ## Resume instruction
 
 Continue Phase 3 from `02-policy-and-plan.md`, starting with remaining central-service work. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
+
+
+## Central dispatch boundary (draft PR #397)
+
+- `NotificationService::notify()` had no repository callers; Ncr and Maintenance already use `send()`. The unused wrapper is removed without changing event timing or direct `Mail::to(...)` paths.
+- `NotificationCatalogTest` guards native Laravel dispatch outside the central service, ensures the wrapper does not return, checks mail-only channels, and inventories object-level `->notify()` calls for review.
+- The earlier HR password-reset signature report was stale against current `main`: PR #371 already fully qualifies `\Throwable`. No HR finding is opened by this PR.
+- The original-head test passed **9 tests / 74 assertions**. Post-rebase PHP 8.3 syntax and `git diff --check` pass. The API test was not rerun against shared `ogami_test`; no database was accessed.

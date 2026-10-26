@@ -403,4 +403,12 @@ The legacy `pending_so` badge counted every `draft`, including orders never sent
 - `LeaveApprovalPolicy::awaitingMyApprovalQuery()` is shared by the `leaves` badge and `/leaves/requests?signal=awaiting_my_approval`. It includes only `pending_dept` with a current pending `department_head` step 1 or `pending_hr` with a current pending `hr_officer` step 2.
 - It requires `leave.view`, the stage permission, and the active direct/delegated workflow role, applies the same `DepartmentScope` as the list service, excludes the employee's own request, and ignores status/trashed overrides in signal mode. The SPA sidebar deep link and page filter use the same signal key.
 - `LeaveApprovalBadgeParityTest` covers department and HR scope, own/cross-department rows, terminal and stale rows, wrong-role permission holders, active same-department delegates, and badge/list total parity. See `PROGRESS.md` for test evidence.
-- Static review found that the ordinary page exposed approve/reject buttons by permission while the API also enforced workflow role, current step, and separation of duties. F-45 is fixed separately in draft PR #396: API list/detail resources expose shared-policy `can_approve`, rejection checks the active stage permission, and SPA row/detail/bulk actions use that result. Event timing is unchanged.
+- Static review found that the ordinary page exposed approve/reject buttons by permission while the API also enforced workflow role, current step, and separation of duties. F-45 is fixed separately in PR #396 (merged as `a4d6e31c`): API list/detail resources expose shared-policy `can_approve`, rejection checks the active stage permission, and SPA row/detail/bulk actions use that result. Event timing is unchanged.
+
+
+## Follow-up verification: native Laravel dispatch boundary
+
+- Repository search found no callers of `NotificationService::notify()`; the Ncr and Maintenance paths already use `send()`. PR #397 removes this unused legacy wrapper.
+- `NotificationCatalogTest` guards direct Laravel notification dispatch outside `NotificationService`, checks that the legacy wrapper stays removed, and verifies the existing mail-only notification classes still declare only the mail channel. A source inventory also pins object-level `->notify()` call counts so new sites require review.
+- PR #371 already fixed the HR password-reset parent signature with `\Throwable`; the earlier draft finding on this path is superseded. The test does not load the HR subclass.
+- Direct `Mail::to(...)` transactional/customer/supplier paths remain outside this cleanup; their recipients and timing are unchanged.
