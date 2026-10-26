@@ -16,6 +16,8 @@ interface PageHeaderProps {
   /** Optional row below the header (e.g. ChainHeader on detail pages). */
   bottom?: ReactNode;
   className?: string;
+  /** Let a shared PageShell own the horizontal gutter for this header. */
+  inset?: boolean;
   /**
    * Overrides the breadcrumb label for this route's final segment. Defaults to
    * the header's own title text with any status `<Chip>` left out, which is
@@ -75,6 +77,7 @@ export function PageHeader({
   actions,
   bottom,
   className,
+  inset = true,
   crumbLabel,
   refreshingQueryKey,
 }: PageHeaderProps) {
@@ -121,20 +124,23 @@ export function PageHeader({
   };
 
   return (
-    <div className={cn('px-5 py-4 border-b border-default bg-canvas', className)}>
+    <div
+      data-layout="page-header"
+      className={cn('py-4 border-b border-default bg-canvas', inset && 'px-5', className)}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {backTo && (
-            <a href={backTo} onClick={handleBackClick} className="inline-flex items-center gap-1 text-xs text-muted hover:text-primary mb-1">
+          <a href={backTo} onClick={handleBackClick} className="inline-flex items-center gap-1 text-caption text-muted hover:text-primary mb-1">
               <LuArrowLeft size={11} />
               {backLabel ?? 'Back'}
             </a>
           )}
- <h1 className="font-display text-2xl text-primary break-words">
+ <h1 className="font-display text-page-title text-primary break-words">
             {title}
             {refreshingQueryKey && <RefreshingIndicator queryKey={refreshingQueryKey} />}
           </h1>
-          {subtitle && <div className="text-xs text-muted mt-0.5">{subtitle}</div>}
+          {subtitle && <div className="text-caption text-muted mt-0.5">{subtitle}</div>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">{actions}</div>}
       </div>

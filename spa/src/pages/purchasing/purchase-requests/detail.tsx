@@ -432,7 +432,7 @@ export default function PurchaseRequestDetailPage() {
                   to={`/purchasing/rfqs/${rfq.id}`}
                   className="flex justify-between items-center gap-3 border-b border-subtle py-2 last:border-0"
                 >
-                  <span className="font-mono">{rfq.rfq_number}</span>
+                  <span className="font-mono text-link">{rfq.rfq_number}</span>
                   <span className="flex gap-3">
                     <Chip variant={rfqStatus(rfq.status).variant}>{rfqStatus(rfq.status).label}</Chip>
                   </span>

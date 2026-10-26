@@ -7,6 +7,7 @@ namespace App\Modules\DSS\Detectors;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
 
@@ -58,7 +59,7 @@ class AtRiskOrderDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_bucket']));
 
@@ -66,12 +67,14 @@ class AtRiskOrderDetector implements DetectorInterface
         $reviews = [];
         $shortageTotal = 0;
 
-        /** @var MrpPlan $plan */
-        foreach (MrpPlan::query()
+        $plans = MrpPlan::query()
             ->where('status', MrpPlanStatus::Active->value)
             ->with('salesOrder:id,so_number,status,customer_id', 'salesOrder.customer:id,name')
             ->orderBy('sales_order_id')
-            ->get() as $plan) {
+            ->get();
+
+        /** @var MrpPlan $plan */
+        foreach ($plans as $plan) {
             $so = $plan->salesOrder;
             if ($so === null || in_array($so->status->value, SalesOrderStatus::terminalForPipeline(), true)) {
                 continue;
@@ -129,7 +132,7 @@ class AtRiskOrderDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $plans->count());
     }
 
     /** @param list<MrpPlan> $plans */

@@ -672,6 +672,8 @@ class PayrollCalculatorService
         }
 
         // Build day-by-day cursor, switching rates as effective dates pass.
+        $periodStart = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
+        $periodEnd = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
         $insideChanges = $history
             ->filter(function ($h) use ($periodStart, $periodEnd) {
                 $eff = \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay();
@@ -689,7 +691,7 @@ class PayrollCalculatorService
             return \Illuminate\Support\Carbon::parse($h->effective_date)->startOfDay()->lte($periodStart);
         });
         $curMonthly = $this->historyMonthly($startRow, $payType)
-            ?? ($startRow === null ? $this->preHistoryMonthly($employee, $history->first(), $payType) : null)
+            ?? ($startRow === null ? $this->preFirstHistoryMonthly($employee, $history->first(), $payType) : null)
             ?? $monthlySalary;
 
         // Build day-by-day cursor, switching rates as effective dates pass.

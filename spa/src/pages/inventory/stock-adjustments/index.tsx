@@ -13,6 +13,7 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
@@ -30,6 +31,14 @@ const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'danger' | 'neutral
 const DEFAULT_FILTERS: StockAdjustmentListParams = {
  page: 1, per_page: 50, status: '',
 };
+
+function statusDetail(row: StockAdjustment): string {
+ if (row.status === 'pending') return 'Awaiting Finance approval';
+ if (row.status === 'approved') {
+  return `Approved by ${row.approved_by?.name ?? 'Approver unavailable'}${row.approved_at ? ` · ${formatDateTime(row.approved_at)}` : ''}`;
+ }
+ return `${row.status === 'rejected' ? 'Rejected' : 'Withdrawn'} by ${row.resolved_by?.name ?? 'Actor unavailable'}${row.resolved_at ? ` · ${formatDateTime(row.resolved_at)}` : ''}${row.resolution_reason ? ` · ${row.resolution_reason}` : ''}`;
+}
 
 export default function StockAdjustmentsPage() {
  const qc = useQueryClient();
@@ -88,39 +97,33 @@ export default function StockAdjustmentsPage() {
  });
 
  const columns: Column<StockAdjustment>[] = [
- { key: 'created_at', header: 'Requested', cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span> },
- { key: 'requested_by', header: 'Requested by', cell: (r) => <span>{r.requested_by?.name ?? '—'}</span> },
- { key: 'direction', header: 'Direction', cell: (r) => (
+ { key: 'created_at', header: 'Requested', className: 'w-[180px] min-w-[180px] whitespace-nowrap', cell: (r) => <span className="font-sans tabular-nums">{formatDateTime(r.created_at)}</span> },
+ { key: 'requested_by', header: 'Requested by', className: 'w-[180px] min-w-[180px]', cell: (r) => <span className="block truncate" title={r.requested_by?.name ?? '—'}>{r.requested_by?.name ?? '—'}</span> },
+ { key: 'direction', header: 'Direction', className: 'w-[100px] min-w-[100px]', cell: (r) => (
  <Chip variant={r.direction === 'in' ? 'success' : 'danger'}>{directionLabels.get(r.direction) ?? r.direction}</Chip>
  ) },
- { key: 'item', header: 'Item', cell: (r) => (
- <div>
- <span className="font-mono">{r.item?.code}</span>
- <div className="text-xs text-muted">{r.item?.name}</div>
+ { key: 'item', header: 'Item', className: 'w-[150px] min-w-[150px]', cell: (r) => (
+ <div className="min-w-0">
+ <span className="block truncate font-mono" title={r.item?.code}>{r.item?.code}</span>
+ <div className="text-caption text-muted leading-4 line-clamp-2" title={r.item?.name}>{r.item?.name}</div>
  </div>
  ) },
- { key: 'location', header: 'Location', cell: (r) => <span className="font-mono">{r.location?.code ?? '—'}</span> },
- { key: 'qty', header: 'Quantity', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.quantity)}</NumCell> },
- { key: 'value', header: 'Value', align: 'right', cell: (r) => <NumCell>{formatPeso(r.value)}</NumCell> },
- { key: 'reason', header: 'Reason', cell: (r) => (
- <span className="block max-w-[260px] truncate text-muted" title={r.reason}>
+ { key: 'location', header: 'Location', className: 'w-[110px] min-w-[110px] whitespace-nowrap', cell: (r) => <span className="font-mono">{r.location?.code ?? '—'}</span> },
+ { key: 'qty', header: 'Quantity', align: 'right', className: 'w-[160px] min-w-[160px] whitespace-nowrap', cell: (r) => <NumCell>{formatQuantity(r.quantity)}</NumCell> },
+ { key: 'value', header: 'Value', align: 'right', className: 'w-[170px] min-w-[170px] whitespace-nowrap', cell: (r) => <NumCell>{formatPeso(r.value)}</NumCell> },
+ { key: 'reason', header: 'Reason', className: 'w-[200px] min-w-[200px]', cell: (r) => (
+ <span className="block truncate text-secondary" title={r.reason}>
  {r.reason}
  </span>
  ) },
- { key: 'status', header: 'Status', cell: (r) => (
+ { key: 'status', header: 'Status', className: 'w-[200px] min-w-[200px]', cell: (r) => (
  <div className="flex flex-col items-start gap-1">
  <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>
- <span className="text-xs text-muted">
- {r.status === 'pending'
- ? 'Awaiting Finance approval'
- : r.status === 'approved'
- ? `Approved by ${r.approved_by?.name ?? 'Approver unavailable'}${r.approved_at ? ` · ${formatDateTime(r.approved_at)}` : ''}`
- : `${r.status === 'rejected' ? 'Rejected' : 'Withdrawn'} by ${r.resolved_by?.name ?? 'Actor unavailable'}${r.resolved_at ? ` · ${formatDateTime(r.resolved_at)}` : ''}${r.resolution_reason ? ` · ${r.resolution_reason}` : ''}`}
- </span>
+ <span className="block max-w-full truncate text-caption text-muted leading-4" title={statusDetail(r)}>{statusDetail(r)}</span>
  </div>
  ) },
  ...(can('inventory.adjust.approve') || can('inventory.adjust')
- ? [{ key: 'actions', header: '', cell: (r: StockAdjustment) => r.status === 'pending' ? (
+ ? [{ key: 'actions', header: 'Actions', className: 'w-[136px] min-w-[136px]', cell: (r: StockAdjustment) => r.status === 'pending' ? (
  <div className="flex flex-wrap justify-end gap-1">
  {r.can_approve && <Button size="xs" variant="primary" onClick={() => setApproveTarget(r)}>Approve</Button>}
  {r.can_reject && <Button size="xs" variant="danger" onClick={() => setRejectTarget(r)}>Reject</Button>}
@@ -132,13 +135,17 @@ export default function StockAdjustmentsPage() {
  ];
 
  return (
- <div>
+ <PageShell variant="fluid" viewport className="stock-adjustments-page">
  <PageHeader
  title="Stock Adjustments"
  subtitle="Manual in/out adjustments with finance approval for high-value entries"
-   actions={can('inventory.adjust') ? <Link to="/inventory/stock-adjustments/create"><Button size="xs" icon={<LuPlus size={14} />}>New adjustment</Button></Link> : null}
+  inset={false}
+  className="mb-6"
+   actions={can('inventory.adjust') ? <Link to="/inventory/stock-adjustments/create"><Button size="md" variant="primary" icon={<LuPlus size={14} />}>New adjustment</Button></Link> : null}
  />
  <FilterBar
+ inset={false}
+ className="mb-4"
  filters={filterConfig}
  values={filters}
  onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
@@ -146,20 +153,24 @@ export default function StockAdjustmentsPage() {
  searchPlaceholder="Search item, reason…"
  />
 
- {isLoading && <SkeletonTable columns={can('inventory.adjust.approve') || can('inventory.adjust') ? 10 : 9} rows={8} />}
+ {isLoading && <div className="min-h-0 flex-1 overflow-auto"><SkeletonTable columns={can('inventory.adjust.approve') || can('inventory.adjust') ? 10 : 9} rows={8} /></div>}
  {isError && (
+ <div className="min-h-0 flex-1 flex items-center justify-center">
  <EmptyState
  icon="alert-circle"
  title="Failed to load adjustments"
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
+ </div>
  )}
  {!isLoading && !isError && (data?.data.length ?? 0) === 0 && (
+ <div className="min-h-0 flex-1 flex items-center justify-center">
  <EmptyState
  icon="inbox"
  title="No adjustments found"
  description={filters.status || filters.search ? 'Try a different search or clear the filters.' : 'Record an adjustment when stock needs a manual correction.'}
  />
+ </div>
  )}
  {!isLoading && !isError && (data?.data.length ?? 0) > 0 && (
  <DataTable
@@ -169,6 +180,8 @@ export default function StockAdjustmentsPage() {
  onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
  onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
  tableKey="stock-adjustments"
+ fillHeight
+ fixedColumnLayout
  />
  )}
 
@@ -204,6 +217,6 @@ export default function StockAdjustmentsPage() {
   pending={withdraw.isPending}
   onConfirm={() => { if (withdrawTarget) withdraw.mutate(withdrawTarget.id); }}
  />
- </div>
+ </PageShell>
  );
 }
