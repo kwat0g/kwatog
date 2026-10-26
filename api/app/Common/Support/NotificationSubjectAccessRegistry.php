@@ -34,6 +34,7 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -57,7 +58,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -129,6 +130,7 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('inventory.picking.view')
                 && $subject instanceof MaintenancePartRequest,
             MaintenanceWorkOrder::class => self::userCanViewMaintenanceWorkOrder($user, $subject),
+            Machine::class => self::userCanViewMachine($user, $subject, $linkTo),
             SupplierItemListing::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && $user->hasPermission('purchasing.supplier_listings.view'),
             WorkOrder::class => self::userCanViewWorkOrder($user, $subject),
@@ -303,6 +305,25 @@ final class NotificationSubjectAccessRegistry
 
         return $departmentId !== null
             && (int) $departmentId === (int) Employee::query()->whereKey($subject->employee_id)->value('department_id');
+    }
+
+    private static function userCanViewMachine(User $user, Model $subject, ?string $linkTo): bool
+    {
+        if (! $user->is_active || ! $subject instanceof Machine || $linkTo === null) {
+            return false;
+        }
+
+        if (str_starts_with($linkTo, '/mrp/machines/')) {
+            return app(SettingsService::class)->get('modules.mrp', false) === true
+                && $user->hasPermission('mrp.machines.view');
+        }
+
+        if (str_starts_with($linkTo, '/maintenance/downtime?search=')) {
+            return app(SettingsService::class)->get('modules.maintenance', false) === true
+                && $user->hasPermission('maintenance.view');
+        }
+
+        return false;
     }
 
     private static function budgetingEnabled(): bool
