@@ -246,13 +246,7 @@ class NotificationService
                     'updated_at' => $now,
                 ];
 
-                $events[] = new UserNotificationCreated($userId, [
-                    'id' => $id,
-                    'type' => $type,
-                    'data' => $recipientData,
-                    'read_at' => null,
-                    'created_at' => $now->toISOString(),
-                ]);
+                $events[] = new UserNotificationCreated($userId, $id, $type);
             }
 
             // email is opt-IN: it requires an explicit enabled row plus a
@@ -300,7 +294,7 @@ class NotificationService
         if ($dedupeKey !== null) {
             $events = array_values(array_filter(
                 $events,
-                static fn (UserNotificationCreated $event): bool => isset($insertedIds[$event->notification['id']]),
+                static fn (UserNotificationCreated $event): bool => isset($insertedIds[$event->notificationId]),
             ));
         }
 

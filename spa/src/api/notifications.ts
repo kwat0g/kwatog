@@ -74,3 +74,6 @@ export const notificationsApi = {
  clearRead: () =>
  client.delete<{ data: { deleted: number } }>('/notifications/clear-read').then((r) => r.data.data),
 };
+
+export const getNotificationById = (id: string) =>
+ client.get<{ data: NotificationRow }>(`/notifications/${id}`).then((r) => r.data.data);

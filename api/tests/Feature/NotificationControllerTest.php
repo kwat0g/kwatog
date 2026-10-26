@@ -55,6 +55,28 @@ class NotificationControllerTest extends TestCase
             ->assertJsonStructure(['data' => [['id', 'type', 'data', 'read_at', 'created_at']]]);
     }
 
+    public function test_show_returns_only_the_callers_notification(): void
+    {
+        $id = $this->createNotification();
+
+        $this->actingAs($this->user)
+            ->getJson("/api/v1/notifications/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $id)
+            ->assertJsonPath('data.data.title', 'Test');
+    }
+
+    public function test_show_cannot_read_another_users_notification(): void
+    {
+        $id = $this->createNotification();
+        $other = User::factory()->create();
+        DB::table('notifications')->where('id', $id)->update(['notifiable_id' => $other->id]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/v1/notifications/{$id}")
+            ->assertNotFound();
+    }
+
     public function test_mark_read(): void
     {
         $id = $this->createNotification();

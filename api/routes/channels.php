@@ -39,7 +39,8 @@ Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasP
 // Per-user notifications channel — backs the SPA bell + toast updates.
 // Laravel's default convention is `App.Models.User.{id}` for notifiable
 // listeners; we use the explicit `user.{id}` channel for clarity.
-Broadcast::channel('user.{userId}', fn (User $user, string $userId): bool => $user->id === User::tryDecodeHash($userId)
+Broadcast::channel('user.{userId}', fn (User $user, string $userId): bool => $user->hasPermission('notifications.view')
+    && $user->id === User::tryDecodeHash($userId)
 );
 
 // Sidebar badge counts — any authenticated user may listen; the payload is

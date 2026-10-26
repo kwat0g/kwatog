@@ -61,8 +61,9 @@ class NotificationServiceTest extends TestCase
 
         Event::assertDispatched(UserNotificationCreated::class, function ($e) use ($user) {
             return $e->userId === $user->id
-                && $e->notification['type'] === 'test.type'
-                && $e->notification['data']['title'] === 'Broadcast Test';
+                && $e->type === 'test.type'
+                && $e->broadcastWith() === ['id' => $e->notificationId, 'type' => 'test.type']
+                && $e->broadcastOn()[0]->name === "private-user.{$user->hash_id}";
         });
     }
 
