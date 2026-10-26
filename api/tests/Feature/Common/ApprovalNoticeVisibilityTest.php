@@ -31,6 +31,20 @@ class ApprovalNoticeVisibilityTest extends TestCase
                 $meta['permissions'],
                 "{$type} must declare its record view permission in the approval registry.",
             );
+
+            $actionPermissions = array_values(array_filter([
+                $meta['approval_permission'] ?? null,
+                ...array_values($meta['approval_permissions_by_role'] ?? []),
+            ]));
+
+            $this->assertNotEmpty($actionPermissions, "{$type} must declare its approval action permission.");
+            foreach ($actionPermissions as $permission) {
+                $this->assertContains(
+                    $permission,
+                    $meta['permissions'],
+                    "{$type} must declare {$permission} in its approval registry permissions.",
+                );
+            }
         }
     }
 
