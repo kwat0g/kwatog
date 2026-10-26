@@ -470,7 +470,7 @@ class NotificationService
     ): void {
         if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
             Log::warning('Notification email skipped: invalid recipient address', [
-                'user_id' => $userId,
+                'user_id' => $recipientUserIds[0] ?? null,
                 'type' => $type,
             ]);
 

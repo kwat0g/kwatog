@@ -11,6 +11,7 @@ import { itemsApi } from '@/api/inventory/items';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { Button, ConfirmDialog, Input, Select, Textarea, Panel } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
@@ -152,19 +153,19 @@ export default function CreateStockAdjustmentPage() {
   });
   const safety = useFormSafety({ form, saved: mutation.isSuccess });
 
-  return <div>
+  return <PageShell variant="grid">
     <PageHeader title="Stock adjustment" subtitle="Correct stock at a specific location with a recorded reason."
-      backTo="/inventory/stock-adjustments" backLabel="Stock adjustments" />
-    <FormDraftBanner safety={safety} />
-    <form noValidate className="px-5 py-4 space-y-4" onSubmit={handleSubmit(values => {
+      backTo="/inventory/stock-adjustments" backLabel="Stock adjustments" inset={false} />
+    <FormDraftBanner safety={safety} inset={false} />
+    <form noValidate className="space-y-4" onSubmit={handleSubmit(values => {
       if (!blocked && !mutation.isPending) setPendingValues(values);
     }, onFormInvalid<Values>())}>
-      {retryValues && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-warning-fg">
+      {retryValues && <div role="alert" className="flex flex-wrap items-center gap-2 text-md text-warning-fg">
         Submission result could not be confirmed. Retry this adjustment to check its result before starting another.
         <Button type="button" variant="secondary" size="sm" disabled={mutation.isPending}
           onClick={() => mutation.mutate(retryValues)}>Retry adjustment</Button>
       </div>}
-      {lookupFailed && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-fg">
+      {lookupFailed && <div role="alert" className="flex flex-wrap items-center gap-2 text-md text-danger-fg">
         Stock adjustment options could not be loaded.
         <Button type="button" variant="secondary" size="sm" onClick={() => lookups.forEach(query => {
           if (query.isError) void query.refetch();
@@ -174,7 +175,7 @@ export default function CreateStockAdjustmentPage() {
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_20rem] gap-4 items-start">
         <div className="min-w-0 space-y-4">
           <Panel title="Stock and location">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
               <Select searchable label="Item" required loading={items.isFetching} onSearch={setItemSearch}
                 {...register('item_id')} value={itemId} error={errors.item_id?.message}>
                 <option value="">Select item…</option>
@@ -195,7 +196,7 @@ export default function CreateStockAdjustmentPage() {
             </div>
           </Panel>
           <Panel title="Adjustment details">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
               <Select label="Direction" required {...register('direction')} value={direction ?? ''} error={errors.direction?.message}>
                 <option value="">Select direction…</option>
                 {adjustmentOptions.data?.directions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -212,13 +213,13 @@ export default function CreateStockAdjustmentPage() {
                 {adjustmentOptions.data?.reasons.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
               <Textarea label="Reason (recorded for audit)" required {...register('reason')} rows={3} maxLength={500}
-                containerClassName="md:col-span-2" placeholder="Explain why the stock needs correction."
+                containerClassName="md:col-span-2 2xl:col-span-3" placeholder="Explain why the stock needs correction."
                 helper="At least 10 characters." error={errors.reason?.message} />
             </div>
           </Panel>
         </div>
         <Panel title="Adjustment preview">
-          <div className="space-y-4 text-sm">
+          <div className="space-y-4 text-md">
             {!selectedLocation ? <p className="text-muted">Select an item and location to see stock and adjustment impact.</p> : <>
               <p className="font-medium break-words">{item?.code ?? level?.item?.code} · {level?.location?.full_code ?? selectedLocation.label}</p>
               <dl className="space-y-2">
@@ -226,18 +227,18 @@ export default function CreateStockAdjustmentPage() {
                   ['On hand', level?.quantity ?? '0'], ['Reserved', level?.reserved_quantity ?? '0'],
                   ['Quality held', level?.quality_held_quantity ?? '0'], ['Can remove', String(removable)],
                 ].map(([label, value]) => <div key={label} className="flex justify-between gap-3">
-                  <dt className="text-muted">{label}</dt><dd className="font-mono tabular-nums">{formatQuantity(value)} {unit}</dd>
+                  <dt className="text-muted">{label}</dt><dd className="font-sans tabular-nums">{formatQuantity(value)} {unit}</dd>
                 </div>)}
               </dl>
               <div className="border-t border-default pt-3 space-y-2">
                 <div className="flex justify-between gap-3"><span className="text-muted">Stock after posting</span>
-                  <span className="font-mono tabular-nums">{quantity && direction && !quantityError
+                  <span className="font-sans tabular-nums">{quantity && direction && !quantityError
                     ? formatQuantity(Number(level?.quantity ?? 0) + (direction === 'in' ? 1 : -1) * Number(quantity)) + ' ' + unit : '—'}</span></div>
                 <div className="flex justify-between gap-3"><span className="text-muted">Estimated value</span>
-                  <span className="font-mono tabular-nums">{formatPeso(estimatedValue)}</span></div>
+                  <span className="font-sans tabular-nums">{formatPeso(estimatedValue)}</span></div>
               </div>
             </>}
-            <p className="text-xs text-muted">{needsApproval
+            <p className="text-caption text-muted">{needsApproval
               ? 'Finance approval is required. Stock stays unchanged until approved.'
               : approvalThreshold > 0 ? 'Adjustments above ' + formatPeso(approvalThreshold) + ' require Finance approval.'
                 : 'Valid adjustments post immediately.'}</p>
@@ -259,5 +260,5 @@ export default function CreateStockAdjustmentPage() {
         <p>{pendingValues.direction === 'in' ? 'Increase' : 'Decrease'} by {pendingValues.quantity} {unit} · {formatPeso(estimatedValue)}</p>
         <p>{needsApproval ? 'Stock stays unchanged until Finance approves.' : 'Stock changes when the adjustment is posted. Higher-value adjustments may require Finance approval.'}</p>
       </div>} />
-  </div>;
+  </PageShell>;
 }

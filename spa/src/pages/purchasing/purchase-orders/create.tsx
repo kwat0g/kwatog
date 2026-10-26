@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import type { AxiosError } from 'axios';
+import { LuPlus as Plus, LuTrash2 as Trash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
@@ -12,6 +13,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { numberInputProps } from '@/lib/numberInput';
+import { localIsoDate } from '@/lib/formatDate';
 
 interface Line {
   item_id: string; description: string; quantity: string; unit: string; unit_price: string;
@@ -23,7 +25,7 @@ export default function CreatePurchaseOrderPage() {
   const prId = search.get('pr_id');
 
   const [meta, setMeta] = useState({
-    vendor_id: '', date: new Date().toISOString().slice(0, 10),
+    vendor_id: '', date: localIsoDate(),
     expected_delivery_date: '', is_vatable: true, remarks: '',
   });
   const [lines, setLines] = useState<Line[]>([{ item_id: '', description: '', quantity: '1', unit: 'pcs', unit_price: '0' }]);
@@ -64,7 +66,7 @@ export default function CreatePurchaseOrderPage() {
       })),
     }),
     onSuccess: (po) => { toast.success(`PO ${po.po_number} created.`); nav(`/purchasing/purchase-orders/${po.id}`); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed.'),
   });
 
   return (
@@ -111,14 +113,14 @@ export default function CreatePurchaseOrderPage() {
                   <td><input className="h-7 w-full px-2 rounded-sm border border-default text-xs" value={l.description}
                     onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, description: e.target.value } : it))} /></td>
                   <td className="text-right">
-                    <input className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums" type="text"
+                    <input className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
                            {...numberInputProps()} value={l.quantity}
                            onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, quantity: e.target.value } : it))} />
                   </td>
                   <td><input className="h-7 w-16 px-2 rounded-sm border border-default text-xs" value={l.unit}
                     onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, unit: e.target.value } : it))} /></td>
                   <td className="text-right">
-                    <input className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums" type="text"
+                    <input className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
                            {...numberInputProps()} value={l.unit_price}
                            onChange={(e) => setLines(lines.map((it, k) => k === i ? { ...it, unit_price: e.target.value } : it))} />
                   </td>

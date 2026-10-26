@@ -39,6 +39,7 @@ interface FilterBarProps {
   */
  searchable?: boolean;
  className?: string;
+ inset?: boolean;
 }
 
 /** Keystroke-to-request delay: long enough to skip mid-word, short enough to feel live. */
@@ -54,6 +55,7 @@ export function FilterBar({
  dateRange,
  actions,
  className,
+ inset = true,
  searchable = true,
 }: FilterBarProps) {
  const external = (values.search as string) ?? '';
@@ -114,7 +116,7 @@ export function FilterBar({
  };
 
  return (
- <div className={cn('flex items-center gap-2 px-5 py-3 border-b border-default flex-wrap', className)}>
+ <div data-layout="filter-bar" className={cn('flex items-center gap-2 py-3 border-b border-default flex-wrap', inset && 'px-5', className)}>
  {searchable && (
  <form
  onSubmit={submit}

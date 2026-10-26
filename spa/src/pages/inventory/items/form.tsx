@@ -83,7 +83,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     queryFn: uomsApi.list,
     staleTime: 300_000,
   });
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       code: '',
