@@ -9,6 +9,7 @@ use App\Common\Services\ApprovalBoardService;
 use App\Common\Services\ApprovalEscalationService;
 use App\Common\Services\CustomApprovalEscalationService;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
@@ -216,6 +217,45 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $ineligibleApprover->id,
             'type' => 'approval_reminder',
+        ]);
+    }
+
+    public function test_escalation_does_not_readd_an_excluded_system_admin_invoice_editor(): void
+    {
+        $maker = $this->user('hr_officer');
+        $approver = $this->user('finance_officer');
+        $editor = $this->user('system_admin');
+        $old = now()->subHours(3);
+        app(SettingsService::class)->set('approvals.escalation_hours', 1, 'approval');
+        app(SettingsService::class)->set('inventory.stock_count.variance_tolerance_pct', 0, 'inventory');
+
+        $invoice = Invoice::factory()->create([
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Stale prebill review.',
+            'prebill_approved_by' => null,
+            'prebill_approved_at' => null,
+            'status' => 'draft',
+            'created_by' => $maker->id,
+            'created_at' => $old,
+            'updated_at' => $old,
+        ]);
+        DB::table('audit_logs')->insert([
+            'user_id' => $editor->id,
+            'action' => 'updated',
+            'model_type' => $invoice->getMorphClass(),
+            'model_id' => $invoice->id,
+            'new_values' => json_encode(['prebill_reason' => 'Edited after submission.']),
+            'created_at' => now(),
+        ]);
+
+        $this->assertSame(1, app(CustomApprovalEscalationService::class)->runEscalations());
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $approver->id,
+            'type' => 'approval_escalation',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $editor->id,
+            'type' => 'approval_escalation',
         ]);
     }
 

@@ -72,13 +72,6 @@ class CustomApprovalEscalationService
                     try {
                         $candidate = $this->candidate($kind, $row);
                         $recipients = $this->eligibleApprovers($candidate);
-                        if ($stage === 'escalation') {
-                            $recipients = $recipients->merge(User::query()
-                                ->where('is_active', true)
-                                ->whereHas('role', static fn ($role) => $role->where('slug', 'system_admin'))
-                                ->whereNotIn('id', $candidate['maker_ids'])
-                                ->get());
-                        }
                         $recipients = $recipients->unique('id')->values();
                         if ($recipients->isEmpty()) {
                             $this->unstaffed++;
