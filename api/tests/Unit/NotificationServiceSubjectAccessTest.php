@@ -30,6 +30,9 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollAdjustment;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -489,6 +492,58 @@ class NotificationServiceSubjectAccessTest extends TestCase
         $this->assertSame(ReturnRequest::class, $data['subject_type']);
         $this->assertSame((string) $return->id, $data['subject_id']);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $customerServiceOfficer->id);
+    }
+
+    public function test_payroll_subjects_match_staff_and_owner_routes(): void
+    {
+        app(SettingsService::class)->set('modules.payroll', true, 'modules');
+        $periodView = Permission::firstOrCreate(['slug' => 'payroll.periods.view'], ['name' => 'View payroll periods', 'module' => 'payroll']);
+        $adjustmentView = Permission::firstOrCreate(['slug' => 'payroll.adjustments.view'], ['name' => 'View payroll adjustments', 'module' => 'payroll']);
+        $payrollView = Permission::firstOrCreate(['slug' => 'payroll.view'], ['name' => 'View payslips', 'module' => 'payroll']);
+        $periodRole = Role::firstOrCreate(['slug' => 'notification_payroll_period_viewer'], ['name' => 'Notification Payroll Period Viewer']);
+        $periodRole->permissions()->syncWithoutDetaching([$periodView->id]);
+        $adjustmentRole = Role::firstOrCreate(['slug' => 'notification_payroll_adjustment_viewer'], ['name' => 'Notification Payroll Adjustment Viewer']);
+        $adjustmentRole->permissions()->syncWithoutDetaching([$adjustmentView->id]);
+        $employeeRole = Role::firstOrCreate(['slug' => 'notification_payslip_viewer'], ['name' => 'Notification Payslip Viewer']);
+        $employeeRole->permissions()->syncWithoutDetaching([$payrollView->id]);
+        $periodViewer = User::factory()->withRole($periodRole->slug)->create();
+        $adjustmentViewer = User::factory()->withRole($adjustmentRole->slug)->create();
+        $employee = Employee::factory()->create();
+        $otherEmployee = Employee::factory()->create();
+        $employeeUser = User::factory()->withRole($employeeRole->slug)->create(['employee_id' => $employee->id]);
+        $otherEmployeeUser = User::factory()->withRole($employeeRole->slug)->create(['employee_id' => $otherEmployee->id]);
+        $withoutPermission = User::factory()->create();
+        $period = PayrollPeriod::factory()->create();
+        $payroll = Payroll::factory()->create(['payroll_period_id' => $period->id, 'employee_id' => $employee->id]);
+        $adjustment = PayrollAdjustment::query()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'original_payroll_id' => $payroll->id,
+            'type' => 'underpayment',
+            'amount' => '500.00',
+            'reason' => 'Missed overtime line',
+            'created_by' => $employeeUser->id,
+        ]);
+        Event::fake([UserNotificationCreated::class]);
+
+        app(NotificationService::class)->sendForSubject($period, [$periodViewer, $withoutPermission], 'test.payroll_period_subject_access', ['title' => 'Payroll review'], emailEnabled: false);
+        app(NotificationService::class)->sendForSubject($adjustment, [$adjustmentViewer, $withoutPermission], 'test.payroll_adjustment_subject_access', ['title' => 'Adjustment review'], emailEnabled: false);
+        app(NotificationService::class)->sendForSubject($payroll, [$employeeUser, $otherEmployeeUser], 'test.payslip_subject_access', ['title' => 'Payslip ready'], emailEnabled: false);
+
+        foreach ([[$periodViewer, 'test.payroll_period_subject_access'], [$adjustmentViewer, 'test.payroll_adjustment_subject_access'], [$employeeUser, 'test.payslip_subject_access']] as [$recipient, $type]) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $recipient->id, 'type' => $type]);
+        }
+        foreach ([[$withoutPermission, 'test.payroll_period_subject_access'], [$withoutPermission, 'test.payroll_adjustment_subject_access'], [$otherEmployeeUser, 'test.payslip_subject_access']] as [$recipient, $type]) {
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $recipient->id, 'type' => $type]);
+        }
+        $payslipData = json_decode((string) DB::table('notifications')->where('notifiable_id', $employeeUser->id)->where('type', 'test.payslip_subject_access')->value('data'), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(Payroll::class, $payslipData['subject_type']);
+        $this->assertSame((string) $payroll->id, $payslipData['subject_id']);
+
+        app(SettingsService::class)->set('modules.payroll', false, 'modules');
+        app(NotificationService::class)->sendForSubject($period, $periodViewer, 'test.disabled_payroll_subject', ['title' => 'Payroll review'], emailEnabled: false);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $periodViewer->id, 'type' => 'test.disabled_payroll_subject']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_payroll_subject');
     }
 
     public function test_unregistered_subject_type_fails_closed(): void

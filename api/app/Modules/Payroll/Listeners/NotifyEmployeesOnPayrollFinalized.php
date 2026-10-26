@@ -66,7 +66,7 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
                     continue;
                 }
 
-                $this->notifications->send($user, 'chain.payslip_ready', [
+                $this->notifications->sendForSubject($payroll, $user, 'chain.payslip_ready', [
                     'title' => 'Payslip Ready',
                     'message' => "Your payslip for {$periodLabel} is ready.",
                     'link_to' => "/self-service/payslips/{$payroll->hash_id}",

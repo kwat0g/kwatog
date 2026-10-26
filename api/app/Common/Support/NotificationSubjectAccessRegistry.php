@@ -23,6 +23,9 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollAdjustment;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderAssignmentService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -43,7 +46,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -75,6 +78,15 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('return_management.view')
                 && $subject instanceof ReturnRequest
                 && ! (ReturnManagementAccess::customerReturnsOnly($user) && $subject->type === ReturnRequestType::SupplierReturn),
+            PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
+                && $user->is_active
+                && $user->hasPermission('payroll.periods.view')
+                && $subject instanceof PayrollPeriod,
+            PayrollAdjustment::class => app(SettingsService::class)->get('modules.payroll', false) === true
+                && $user->is_active
+                && $user->hasPermission('payroll.adjustments.view')
+                && $subject instanceof PayrollAdjustment,
+            Payroll::class => self::userCanViewPayslip($user, $subject),
             ItemCostReview::class => app(SettingsService::class)->get('modules.inventory', false) === true
                 && $user->hasPermission('inventory.costs.review')
                 && $subject instanceof ItemCostReview,
@@ -146,6 +158,15 @@ final class NotificationSubjectAccessRegistry
                 && (int) $user->employee_id === (int) $subject->employee_id)
             || ($settings->get('modules.loans', false) === true
                 && ApprovalTypeRegistry::userCanViewRecord($user, EmployeeLoan::class, (int) $subject->getKey()));
+    }
+
+    private static function userCanViewPayslip(User $user, Model $subject): bool
+    {
+        return app(SettingsService::class)->get('modules.payroll', false) === true
+            && $user->is_active
+            && $user->hasPermission('payroll.view')
+            && $subject instanceof Payroll
+            && (int) $user->employee_id === (int) $subject->employee_id;
     }
 
     private static function budgetingEnabled(): bool

@@ -180,7 +180,10 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
         ]);
         $pending = DB::table('notifications')->where('notifiable_id', $approver->id)
             ->where('type', 'approval.action_required')->first();
-        $this->assertSame('/payroll/adjustments/'.$adjustment->hash_id, json_decode((string) $pending->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
+        $pendingData = json_decode((string) $pending->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/payroll/adjustments/'.$adjustment->hash_id, $pendingData['link_to']);
+        $this->assertSame(PayrollAdjustment::class, $pendingData['subject_type']);
+        $this->assertSame((string) $adjustment->id, $pendingData['subject_id']);
     }
 
     public function test_rejecting_payroll_adjustment_notifies_requester_with_view_access(): void
@@ -208,6 +211,9 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
             'notifiable_id' => $requester->id,
             'type' => 'approval.rejected',
         ]);
+        $outcome = $requester->notifications()->where('type', 'approval.rejected')->firstOrFail();
+        $this->assertSame(PayrollAdjustment::class, $outcome->data['subject_type']);
+        $this->assertSame((string) $adjustment->id, $outcome->data['subject_id']);
         $outcome = DB::table('notifications')->where('notifiable_id', $requester->id)
             ->where('type', 'approval.rejected')->first();
         $this->assertSame('/payroll/adjustments/'.$adjustment->hash_id, json_decode((string) $outcome->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);

@@ -76,7 +76,7 @@ class PayrollAdjustmentService
                 ->filter(fn (User $approver): bool => $approver->hasPermission('payroll.adjustments.view'))
                 ->reject(fn (User $approver): bool => $approver->role?->slug === 'system_admin')
                 ->reject(fn (User $approver): bool => (int) $approver->id === (int) $user->id);
-            app(NotificationService::class)->send($audience, 'approval.action_required', [
+            app(NotificationService::class)->sendForSubject($adj, $audience, 'approval.action_required', [
                 'title' => 'Payroll adjustment needs approval',
                 'message' => 'A payroll adjustment is waiting for review.',
                 'link_to' => "/payroll/adjustments/{$adj->hash_id}",
@@ -174,7 +174,7 @@ class PayrollAdjustmentService
             return;
         }
 
-        app(NotificationService::class)->send($requester, $type, [
+        app(NotificationService::class)->sendForSubject($adjustment, $requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your payroll adjustment was rejected.' : 'Your payroll adjustment was approved.',
             'link_to' => "/payroll/adjustments/{$adjustment->hash_id}",
