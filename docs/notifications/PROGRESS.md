@@ -686,6 +686,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `SendPayslipEmailJobTest.php --filter test_delivery_failure_notifies_only_active_users_with_own_payslip_access`: **1 passed / 8 assertions**. PHP syntax checks and `git diff --check` passed.
 - API CI is blocked in the parent branch by the duplicate `PdfRenderService::ensureDompdfDirs()` declaration, before PHPUnit runs.
 
+## Phase 3 B2B portal email-failure subject access (draft PR)
+
+- Customer and Vendor subjects now use the existing Accounting detail-route permissions. Customer/supplier invitation and password-reset failure fallbacks pass the related master record through the subject gate and link to its exact detail page. Queued mail callbacks rehydrate the subject and suppress notices if it no longer exists.
+- Portal failure tests cover invitation fallback selection, queued invitation failure, password-reset failure after a recipient's view permission is revoked, exact subject/link metadata, and denied users. Focused run: **2 passed / 24 assertions**. `QueueLaneAssignmentTest.php --filter test_every_queued_mailable_lands_on_the_mail_lane`: **1 passed / 29 assertions**. Changed PHP files pass syntax checks and `git diff --check`.
+- Full `PortalPasswordResetTest.php`: **13 passed, 2 failures**. One exposes unsafe Markdown in the existing password-reset email display name and is tracked separately; the queued invitation assertion also reproduces on parent #469. API CI remains blocked by the inherited duplicate PDF helper declaration.
+
 ## Resume instruction
 
 Next: extend subject access to the next notification group. F-40, F-45, and F-47 remain separate findings. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
