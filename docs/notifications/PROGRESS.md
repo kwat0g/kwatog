@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Delivery finance notice subject access is in progress on `notifications/delivery-invoice-notice-access`, stacked on F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. API CI remains blocked by inherited F-22; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
+**Current gate:** Delivery finance notice subject access is in draft PR [#448](https://github.com/kwat0g/kwatog/pull/448), stacked on F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. PR #448 API and finding-lifecycle checks are pending. API CI on earlier stack PRs remains blocked by inherited F-22; SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
 
 ## Phase status
 
@@ -61,7 +61,7 @@
 | F-49. Missing-timeout notice date filter | `notifications/fix-missing-timeout-link-filter` | [#445](https://github.com/kwat0g/kwatog/pull/445) | `dd0f8321` |
 | Phase 3. Machine breakdown notice subject access | `notifications/machine-maintenance-notice-access` | [#446](https://github.com/kwat0g/kwatog/pull/446) | `d61a79e7` |
 | F-50. Unsupported machine site scope | `notifications/fix-machine-site-scope-finding` | [#447](https://github.com/kwat0g/kwatog/pull/447) | `26ab7989` |
-| Phase 3. Delivery finance notice subject access | `notifications/delivery-invoice-notice-access` | pending | pending |
+| Phase 3. Delivery finance notice subject access | `notifications/delivery-invoice-notice-access` | [#448](https://github.com/kwat0g/kwatog/pull/448) | `568d207d` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -773,12 +773,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Proposed a normalized site/assignment relationship and shared Machine/downtime list/detail scope before narrowing recipients. Do not infer site from free-text location.
 - Documentation only; no tests run.
 
-## Phase 3 Delivery finance notice subject access (draft PR pending)
+## Phase 3 Delivery finance notice subject access (draft PR [#448](https://github.com/kwat0g/kwatog/pull/448))
 
 - Both no-invoice notifications now carry the confirmed Delivery as their subject and link to `/supply-chain/deliveries/{hash}`. The SPA route exists; the API detail route is the exact target.
 - Existing role/permission recipient selectors remain unchanged. `sendForSubject()` suppresses finance users with `accounting.invoices.create` who lack `supply_chain.view` or `supply_chain.deliveries.view`; eligible users receive delivery number, exact link, and subject metadata. Existing invoice-created notifications remain gated against Invoice access.
 - `AutoInvoiceOnDeliveryConfirmTest.php`: **6 passed / 54 assertions**. It verifies eligible delivery access and notification metadata, no notice to a finance-only user without Delivery access, and route 200/403 outcomes for those users. The run used and restored the temporary F-22 syntax workaround.
-- `git diff --check` passes. Pint reports one pre-existing `fully_qualified_strict_types` issue in the feature test. Recipient role appropriateness, duplicate no-invoice event notices, full suite, and CI remain open.
+- `git diff --check` passes. Pint reports one pre-existing `fully_qualified_strict_types` issue in the feature test. Recipient role appropriateness, duplicate no-invoice event notices, full suite, and CI remain open; PR #448 checks were pending at last inspection.
 
 ## Resume instruction
 
