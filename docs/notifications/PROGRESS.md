@@ -45,7 +45,7 @@
 | Phase 3. Inventory item and GRN subject access gate | `notifications/inventory-subject-access` | [#429](https://github.com/kwat0g/kwatog/pull/429) | `ee1ccd26` |
 | F-43. Cost-review actor exclusion and subject access | `notifications/item-cost-review-subject-access` | [#430](https://github.com/kwat0g/kwatog/pull/430) | `8a3292f6` |
 | F-44. Exact cost-review notification links | `notifications/item-cost-review-deep-links` | [#431](https://github.com/kwat0g/kwatog/pull/431) | `fd584e13` |
-| Phase 3. Maintenance subject access gates | `notifications/maintenance-subject-access` | draft #432 | pending |
+| Phase 3. Maintenance subject access gates | `notifications/maintenance-subject-access` | [#432](https://github.com/kwat0g/kwatog/pull/432) | `cba920bb`, `32c987ef` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -644,7 +644,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 5. Validate route links, legacy renderer, responsive/keyboard UI, and performance after implementation.
 6. Discovery had no runtime scenarios. Later targeted payroll, finance, approval, and badge tests are recorded above; browser/e2e, cross-role complete matrices, and full-suite runs remain outstanding.
 
-## Phase 3 Maintenance subject access gates (draft PR #432)
+## Phase 3 Maintenance subject access gates (draft PR [#432](https://github.com/kwat0g/kwatog/pull/432))
 
 - Registered `MaintenanceWorkOrder` against the actual detail-route scope: the Maintenance feature must be enabled, and the recipient must be active with `maintenance.view` or assigned-work read access matching `MaintenanceWorkAccess::canRead()`. Registered `MaintenancePartRequest` against the filtered `/inventory/picking?maintenance_work_order_id=...` destination, which requires the Inventory feature and `inventory.picking.view`.
 - Migrated all eight Maintenance dispatches found in the source scan: assignment needed/assigned, repair submitted/rejected, assignment escalation, shift handover, parts requested, and parts handed over. Existing selector, timing, message, link, dedupe, and email behavior remain; the subject gate adds subject metadata and suppresses recipients without access.
