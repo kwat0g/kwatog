@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Common;
 
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Models\ApprovalRecord;
+use App\Common\Services\ApprovalNotificationRecipientResolver;
 use App\Common\Services\ApprovalService;
 use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -159,6 +162,42 @@ class ApprovalNoticeVisibilityTest extends TestCase
                 'type' => 'approval.action_required',
             ]);
         }
+    }
+
+    public function test_po_approver_permission_also_grants_detail_visibility_for_notifications(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+
+        $finance = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $finance->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $finance->id,
+            'reason' => 'Purchase order detail access follows the approve route permission.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $finance->flushPermissionsCache();
+
+        $this->assertFalse($finance->hasPermission('purchasing.view'));
+        $this->assertTrue($finance->hasPermission('purchasing.po.approve'));
+        $po = PurchaseOrder::factory()->create();
+        $step = ApprovalRecord::query()->create([
+            'approvable_type' => $po->getMorphClass(),
+            'approvable_id' => $po->getKey(),
+            'step_order' => 1,
+            'role_slug' => 'finance_officer',
+            'action' => 'pending',
+            'is_current' => true,
+            'created_at' => now(),
+        ]);
+
+        $recipients = app(ApprovalNotificationRecipientResolver::class)->resolveStep($po, $step);
+
+        $this->assertSame([$finance->id], collect($recipients)->flatten(1)->pluck('id')->all());
     }
 
     public function test_empty_approval_audience_is_logged_without_admin_fallback(): void

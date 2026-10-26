@@ -44,7 +44,7 @@ final class ApprovalTypeRegistry
         'loan_write_off' => ['loans.view'],
     ];
 
-    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,view_permission:string,approval_permission?:string,approval_permission_delegated?:bool,approval_permissions_by_role?:array<string,string>,link_record?:bool,permissions:array<int,string>}> */
+    /** @var array<string, array{kind:string,label:string,table:string,number:string|null,link:string,view_permission:string,approval_permission?:string,approval_permission_delegated?:bool,approval_permissions_by_role?:array<string,string>,view_permissions?:array<int,string>,link_record?:bool,permissions:array<int,string>}> */
     private const TYPES = [
         'App\\Modules\\Leave\\Models\\LeaveRequest' => [
             'kind' => 'leave',
@@ -77,6 +77,7 @@ final class ApprovalTypeRegistry
             'link' => '/purchasing/purchase-orders/',
             'view_permission' => 'purchasing.view',
             'approval_permission' => 'purchasing.po.approve',
+            'view_permissions' => ['purchasing.view', 'purchasing.po.approve'],
             'permissions' => ['purchasing.view', 'purchasing.po.approve'],
         ],
         'App\\Modules\\Accounting\\Models\\BillPayment' => [
@@ -241,7 +242,19 @@ final class ApprovalTypeRegistry
     public static function userCanViewRecord(User $user, string $class, int $id): bool
     {
         $meta = self::forClass($class);
-        if ($meta === null || ! $user->hasPermission($meta['view_permission'])) {
+        if ($meta === null) {
+            return false;
+        }
+
+        $viewPermissions = $meta['view_permissions'] ?? [$meta['view_permission']];
+        $canView = false;
+        foreach ($viewPermissions as $permission) {
+            if ($user->hasPermission($permission)) {
+                $canView = true;
+                break;
+            }
+        }
+        if (! $canView) {
             return false;
         }
 
