@@ -213,6 +213,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `TrainingExpiryAlertTest.php`: **11 passed / 39 assertions**, including exact per-audience links, HR access, employee-owner access, cross-employee 404, and employee denial on the HR route. SPA route test: **2 passed**. Targeted ESLint, PHP syntax, and `git diff --check` pass.
 - New detail view is read-only and shares one component across the owner-only and scoped-HR APIs. Visual QA and full-suite verification remain outstanding. F-14's message-detail and recipient-scope review remains separate.
 
+## Separate finding fix: F-14 training-expiry department scope (draft PR #405)
+
+- Added a seeded recipient test for the existing training-expiry audience. A department head linked to an employee in the training employee's department receives the notice and opens the exact training record; a different-department head receives no notice and gets 404.
+- `TrainingExpiryAlertTest.php --filter=test_training_expiry_notice_only_reaches_department_heads_with_employee_scope`: **1 passed / 4 assertions**. This supplements PR #365's employee-owner, HR-scope, and cross-employee link coverage.
+- Message-detail minimization remains open. API CI inherits F-22 and fails before PHPUnit; finding-lifecycle passes.
+
 ## Separate finding fix: F-10 shared alert unread/list parity (draft PR [#366](https://github.com/kwat0g/kwatog/pull/366))
 
 - `/alerts` accepts `is_read`; unread count and list use the same active, non-dismissed, unread predicate. The alert page labels this as shared state because the database stores `is_read` on the global alert row, and its “Show shared unread alerts” action resets other filters before opening the matching list.
