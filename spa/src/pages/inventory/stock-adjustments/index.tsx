@@ -28,7 +28,7 @@ const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'danger' | 'neutral
 };
 
 const DEFAULT_FILTERS: StockAdjustmentListParams = {
- page: 1, per_page: 50, status: '',
+ page: 1, per_page: 50, id: '', status: '',
 };
 
 export default function StockAdjustmentsPage() {

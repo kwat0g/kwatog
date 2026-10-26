@@ -191,7 +191,7 @@ class CustomApprovalEscalationService
                 ->where('status', 'draft')->where('lifecycle_type', 'prebill')->whereNotNull('prebill_reason')
                 ->whereRaw("TRIM(prebill_reason) <> ''")->whereNull('prebill_approved_by')->whereNull('prebill_approved_at')
                 ->where('created_at', '<', $cutoff),
-            'supplier_listing' => DB::table('supplier_item_listings')->select('id', 'supplier_item_code', 'submitted_at as since', 'updated_at as epoch')
+            'supplier_listing' => DB::table('supplier_item_listings')->select('id', 'submitted_at as since', 'updated_at as epoch')
                 ->where('status', 'pending')->where('submitted_at', '<', $cutoff),
             'loan_write_off' => DB::table('employee_loans')->select('id', 'write_off_requested_at as since', 'write_off_requested_by as maker_id')
                 ->where('status', 'write_off_pending')->whereNotNull('write_off_reason')->whereRaw("TRIM(write_off_reason) <> ''")
@@ -214,14 +214,14 @@ class CustomApprovalEscalationService
         ])));
         $routes = [
             'overtime' => ['Overtime request', 'attendance.ot.approve', "/hr/attendance/overtime/{$hashId}", ['attendance.view']],
-            'stock_adjustment' => ['Stock adjustment', 'inventory.adjust.approve', '/inventory/stock-adjustments?status=pending', ['inventory.adjust', 'inventory.adjust.approve']],
+            'stock_adjustment' => ['Stock adjustment', 'inventory.adjust.approve', "/inventory/stock-adjustments?status=pending&id={$hashId}", ['inventory.adjust', 'inventory.adjust.approve']],
             'item_cost_review' => ['Supplier cost review', 'inventory.costs.approve', "/crm/price-agreements/cost-reviews?review={$hashId}", ['inventory.costs.review']],
             'stock_count_variance' => ['Stock-count variance', 'inventory.stock_count.manage', '/inventory/stock-count?session_id='.app('hashids')->encode((int) ($row->session_id ?? 0)).'&count_item_id='.$hashId, ['inventory.stock_count.view']],
             'payroll_adjustment' => ['Payroll adjustment', ['payroll.adjustments.approve', 'payroll.adjustments.reject'], "/payroll/adjustments/{$hashId}", ['payroll.adjustments.view']],
             'budget' => ['Budget', 'budgeting.approve', "/budgeting/{$hashId}", ['budgeting.view']],
             'budget_transfer' => ['Budget transfer', 'budgeting.approve', "/budgeting/transfers/{$hashId}", ['budgeting.view']],
             'invoice_prebill' => ['Prebill invoice', 'accounting.invoices.prebill_approve', "/accounting/invoices/{$hashId}", ['accounting.invoices.view']],
-            'supplier_listing' => ['Supplier listing', 'purchasing.supplier_listings.review', '/purchasing/supplier-listings?status=pending'.(! empty($row->supplier_item_code) ? '&search='.rawurlencode((string) $row->supplier_item_code) : ''), ['purchasing.supplier_listings.view']],
+            'supplier_listing' => ['Supplier listing', 'purchasing.supplier_listings.review', "/purchasing/supplier-listings?status=pending&id={$hashId}", ['purchasing.supplier_listings.view']],
             'loan_write_off' => ['Loan write-off', 'loans.write_off.approve', "/hr/loans/{$hashId}", ['loans.view']],
             'payroll' => ['Payroll period', 'payroll.periods.approve', "/payroll/periods/{$hashId}", ['payroll.periods.view']],
         ];

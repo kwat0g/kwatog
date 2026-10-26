@@ -248,6 +248,23 @@ class SupplierItemListingTest extends TestCase
             ->assertOk();
     }
 
+    public function test_review_queue_id_filter_returns_only_the_target_and_fails_closed_for_unknown_hash(): void
+    {
+        $item = Item::factory()->create();
+        $target = $this->makeListing(['item_id' => $item->id, 'supplier_item_code' => 'SUP-ONE']);
+        $this->makeListing(['item_id' => $item->id, 'supplier_item_code' => 'SUP-TWO']);
+
+        $this->actingAs($this->purchasingOfficer)
+            ->getJson('/api/v1/purchasing/supplier-listings?status=pending&id='.$target->hash_id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $target->hash_id);
+
+        $this->getJson('/api/v1/purchasing/supplier-listings?status=pending&id=invalid-hash')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
     /* ─── Internal: approve ────────────────────────────────── */
 
     public function test_approve_syncs_offer_into_approved_suppliers_with_base_unit_price(): void

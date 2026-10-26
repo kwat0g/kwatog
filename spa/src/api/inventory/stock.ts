@@ -102,6 +102,7 @@ export const stockMovementsApi = {
 // validates it as in|out and exposes no sort-direction param on this endpoint,
 // so the base ListParams meaning is deliberately omitted rather than widened.
 export interface StockAdjustmentListParams extends Omit<ListParams, 'direction'> {
+  id?: string;
   status?: 'pending' | 'approved' | 'rejected' | 'withdrawn' | '';
   direction?: 'in' | 'out';
 }

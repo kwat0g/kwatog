@@ -57,6 +57,7 @@ class StockAdjustmentController
     public function index(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([
+            'id'       => ['nullable', 'string', 'max:64'],
             'status'   => ['nullable', 'string', Rule::in(array_map(static fn (StockAdjustmentStatus $status): string => $status->value, StockAdjustmentStatus::cases()))],
             'direction'=> ['nullable', Rule::in(['in', 'out'])],
             'search'   => ['nullable', 'string', 'max:100'],
@@ -67,6 +68,9 @@ class StockAdjustmentController
             ->with(['item', 'location', 'stockMovement', 'requester', 'approver', 'resolver'])
             ->latest('created_at');
 
+        if (! empty($filters['id'])) {
+            $q->whereKey(HashIdFilter::decode($filters['id'], StockAdjustment::class) ?? 0);
+        }
         if (!empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }

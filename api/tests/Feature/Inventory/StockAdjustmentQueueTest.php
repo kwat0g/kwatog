@@ -92,6 +92,23 @@ class StockAdjustmentQueueTest extends TestCase
         $this->assertSame('pending', $response->json('data.0.status'));
     }
 
+    public function test_index_id_filter_returns_only_that_pending_adjustment_and_fails_closed_for_unknown_hash(): void
+    {
+        $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        $target = $this->pendingAdjustment($warehouse);
+        $this->pendingAdjustment($warehouse);
+
+        $this->actingAs($warehouse)
+            ->getJson('/api/v1/inventory/stock-adjustments?status=pending&id='.$target->hash_id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $target->hash_id);
+
+        $this->getJson('/api/v1/inventory/stock-adjustments?status=pending&id=invalid-hash')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
     public function test_index_hides_approved_rows_when_filtered_pending(): void
     {
         $warehouse = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
