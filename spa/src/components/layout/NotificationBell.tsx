@@ -16,7 +16,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { LuBell } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -26,6 +26,7 @@ import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
 import { focusRingInset } from '@/lib/focus';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
+import { notificationLinkTo } from '@/lib/notificationLink';
 
 const POLL_MS = 60_000;
 const PEEK_COUNT = 8;
@@ -43,7 +44,6 @@ interface NotificationBellProps {
 export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QUERY_KEY, inboxPath = '/notifications', realtime = true, linkPrefix }: NotificationBellProps = {}) {
  useNotificationRealtime(realtime);
  const [open, setOpen] = useState(false);
- const navigate = useNavigate();
  const containerRef = useRef<HTMLDivElement | null>(null);
  const triggerRef = useRef<HTMLButtonElement | null>(null);
  const panelRef = useRef<HTMLDivElement | null>(null);
@@ -119,8 +119,6 @@ export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QU
  if (!n.read_at) {
  markRead.mutate(n.id);
  }
- const link = (n.data?.link_to as string | undefined) ?? null;
- if (link && (!linkPrefix || link.startsWith(linkPrefix + '/'))) navigate(link);
  };
 
  return (
@@ -189,35 +187,57 @@ export function NotificationBell({ api = notificationsApi, queryKey = DEFAULT_QU
  const title = (n.data?.title as string | undefined) ?? meta.label;
  const message = (n.data?.message as string | undefined) ?? '';
  const isUnread = !n.read_at;
+  const link = notificationLinkTo(n.data?.link_to, linkPrefix);
+  const row = (
+   <>
+    <span
+     className={cn(
+      'shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md',
+      isUnread ? 'bg-accent text-accent-fg' : 'bg-elevated text-muted',
+     )}
+    >
+     <Icon size={12} />
+    </span>
+    <span className="min-w-0 flex-1">
+     <span className="block text-sm truncate">{title}</span>
+     {message && (
+      <span className="block text-xs text-muted truncate">{message}</span>
+     )}
+     <span className="block text-2xs text-muted font-mono tabular-nums mt-0.5">
+      {timeAgo(n.created_at)}
+     </span>
+    </span>
+   </>
+  );
  return (
  <li key={n.id}>
- <button
- type="button"
- onClick={() => handleClick(n)}
- className={cn(
- 'w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-elevated transition-colors duration-fast cursor-pointer',
- focusRingInset,
- isUnread && 'border-l-2 border-accent',
- )}
- >
- <span
- className={cn(
- 'shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md',
- isUnread ? 'bg-accent text-accent-fg' : 'bg-elevated text-muted',
- )}
- >
- <Icon size={12} />
- </span>
- <span className="min-w-0 flex-1">
- <span className="block text-sm truncate">{title}</span>
- {message && (
- <span className="block text-xs text-muted truncate">{message}</span>
- )}
- <span className="block text-2xs text-muted font-mono tabular-nums mt-0.5">
- {timeAgo(n.created_at)}
- </span>
- </span>
- </button>
+    {link ? (
+     <Link
+      to={link}
+      onClick={() => handleClick(n)}
+      aria-label={message ? `${title}: ${message}` : title}
+      className={cn(
+       'w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-elevated transition-colors duration-fast cursor-pointer',
+       focusRingInset,
+       isUnread && 'border-l-2 border-accent',
+      )}
+     >
+      {row}
+     </Link>
+    ) : (
+     <button
+      type="button"
+      onClick={() => handleClick(n)}
+      aria-label={message ? `${title}: ${message}` : title}
+      className={cn(
+       'w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-elevated transition-colors duration-fast cursor-pointer',
+       focusRingInset,
+       isUnread && 'border-l-2 border-accent',
+      )}
+     >
+      {row}
+     </button>
+    )}
  </li>
  );
  })}

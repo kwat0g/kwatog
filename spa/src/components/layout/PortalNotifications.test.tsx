@@ -24,15 +24,30 @@ it('portal bell renders portal notices, opens portal inbox, and keeps internal c
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   queryClient.setQueryData(['notifications', 'peek'], { ...response, data: [{ ...response.data[0], data: { title: 'Internal payroll secret' } }] });
   render(<QueryClientProvider client={queryClient}><MemoryRouter>
-    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} />
+  <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
     <Routes><Route path="/" element={null} /><Route path="/portal/customer/notifications" element={<p>Customer inbox opened</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
   fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
   expect(await screen.findByText('Review delivery date')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Review delivery date: Accept or decline proposed date.' }))
+    .toHaveAttribute('href', '/portal/customer/orders/order-1');
   expect(screen.queryByText('Internal payroll secret')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name: 'View all notifications' }));
   expect(await screen.findByText('Customer inbox opened')).toBeVisible();
   expect(notificationsApi.list).not.toHaveBeenCalled();
+});
+
+it('portal bell marks its own notice read and follows the same-realm record link', async () => {
+  const portalApi = api();
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>
+    <NotificationBell api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} inboxPath="/portal/customer/notifications" realtime={false} linkPrefix="/portal/customer" />
+    <Routes><Route path="/" element={null} /><Route path="/portal/customer/orders/order-1" element={<p>Customer order opened</p>} /></Routes>
+  </MemoryRouter></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+  const recordLink = await screen.findByRole('link', { name: 'Review delivery date: Accept or decline proposed date.' });
+  fireEvent.click(recordLink);
+  expect(await screen.findByText('Customer order opened')).toBeVisible();
+  await waitFor(() => expect(portalApi.markRead).toHaveBeenCalledWith('notice-1'));
 });
 
 it('portal inbox marks its own notice read and navigates to customer next step', async () => {
@@ -41,7 +56,9 @@ it('portal inbox marks its own notice read and navigates to customer next step',
     <NotificationsListPage api={portalApi} queryKey={['portal', 'customer', 'reader-1', 'notifications']} linkPrefix="/portal/customer" />
     <Routes><Route path="/" element={null} /><Route path="/portal/customer/orders/order-1" element={<p>Customer order opened</p>} /></Routes>
   </MemoryRouter></QueryClientProvider>);
-  fireEvent.click(await screen.findByRole('button', { name: 'Review delivery date: Accept or decline proposed date.' }));
+  const recordLink = await screen.findByRole('link', { name: 'Review delivery date: Accept or decline proposed date.' });
+  expect(recordLink).toHaveAttribute('href', '/portal/customer/orders/order-1');
+  fireEvent.click(recordLink);
   expect(await screen.findByText('Customer order opened')).toBeVisible();
   await waitFor(() => expect(portalApi.markRead).toHaveBeenCalledWith('notice-1'));
   expect(notificationsApi.list).not.toHaveBeenCalled();
