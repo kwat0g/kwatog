@@ -301,7 +301,7 @@ function IdentityPanel({ profile, email }: { profile: SelfServiceProfile; email:
  </div>
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Employment status</dt>
- <dd><Chip variant={STATUS_CHIP[profile.status] ?? 'neutral'}>{profile.status_label ?? profile.status ?? '—'}</Chip></dd>
+ <dd><Chip variant={STATUS_CHIP[profile.status ?? ''] ?? 'neutral'}>{profile.status_label ?? profile.status ?? '—'}</Chip></dd>
  </div>
  <div>
  <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Birth date</dt>

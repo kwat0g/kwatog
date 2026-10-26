@@ -220,7 +220,7 @@ export default function ActionCenterPage() {
                         <span className="block text-xs text-muted mt-1 line-clamp-2">{item.description}</span>
                         <span className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1.5 text-2xs text-subtle">
                           {item.reference && <span className="font-mono">{item.reference}</span>}
-                          <Chip variant={chipVariantForStatus(item.status)}>{item.status_label}</Chip>
+                          <Chip variant={chipVariantForStatus(item.status_label)}>{item.status_label}</Chip>
                           {item.assigned_to
                             ? <span>Assigned: {item.assigned_to.name}</span>
                             : item.owner_label && <span>Source owner: {item.owner_label}</span>}
