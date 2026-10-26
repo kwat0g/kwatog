@@ -24,6 +24,7 @@ class ListSalesOrderRequest extends FormRequest
             // ValidationException for anything outside SalesOrderStatus —
             // same pattern as WorkOrderService::list().
             'status'      => ['sometimes', 'nullable'],
+            'signal'      => ['sometimes', 'nullable', Rule::in(['awaiting_confirmation'])],
             'date_from'   => ['sometimes', 'nullable', 'date'],
             'date_to'     => ['sometimes', 'nullable', 'date', 'after_or_equal:date_from'],
             'search'      => ['sometimes', 'nullable', 'string', 'max:120'],

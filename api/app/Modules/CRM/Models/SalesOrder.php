@@ -155,6 +155,19 @@ class SalesOrder extends Model
         return $q->where('status', $status instanceof SalesOrderStatus ? $status->value : $status);
     }
 
+    /** Orders awaiting customer confirmation or sales review of a response. */
+    public function scopeAwaitingConfirmation(Builder $q): Builder
+    {
+        return $q->where(function (Builder $query): void {
+            $query->whereIn('status', [
+                SalesOrderStatus::AwaitingConfirmation->value,
+                SalesOrderStatus::DeliveryNegotiation->value,
+            ])->orWhere(fn (Builder $draft): Builder => $draft
+                ->where('status', SalesOrderStatus::Draft->value)
+                ->whereNotNull('customer_confirmation_requested_at'));
+        });
+    }
+
     /**
      * Orders whose demand MRP still owns: every non-terminal SO with at least
      * one undelivered line.
