@@ -9,6 +9,7 @@ const LoginPage = lazy(() => import('@/pages/auth/login'));
 const ChangePasswordPage = lazy(() => import('@/pages/auth/change-password'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/forgot-password'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/reset-password'));
+const RecoveryPage = lazy(() => import('@/pages/auth/recovery'));
 
 export const authRoutes = (
  <>
@@ -31,6 +32,9 @@ export const authRoutes = (
   </Route>
 
   <Route path="/login" element={<Navigate to="/sign-in" replace />} />
+
+ {/* Restore access remains available when there are no ERP accounts. */}
+ <Route path="/recovery" element={<RecoveryPage />} />
 
  {/* Password recovery remains available without a session. */}
  <Route element={<AuthLayout />}>

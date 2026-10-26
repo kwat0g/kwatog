@@ -23,6 +23,8 @@ return [
     // subprocess per retained artifact per request. Restore preflight always
     // reads through.
     'remote_probe_cache_seconds' => (int) env('BACKUP_REMOTE_PROBE_CACHE_SECONDS', 120),
+    // Independent of ERP users so an empty users table does not block recovery.
+    'recovery_secret' => env('BACKUP_RECOVERY_SECRET'),
     's3_bucket' => env('BACKUP_S3_BUCKET'),
     's3_prefix' => env('BACKUP_S3_PREFIX'),
     'aws_access_key_id' => env('AWS_ACCESS_KEY_ID'),
