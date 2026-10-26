@@ -48,23 +48,19 @@ $canViewSubject = static function (User $user, string $hashId, string $permissio
         : $model::query()->whereKey($id)->exists();
 };
 
-Broadcast::channel('production.dashboard', fn (User $user): bool => $user->hasPermission('production.dashboard.view')
+Broadcast::channel('production.dashboard', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.production')
+    && $user->hasPermission('production.view')
+    && $user->hasPermission('production.dashboard.view')
 );
 
-Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool => $canViewSubject(
-    $user,
-    $hashId,
-    'production.work_orders.view',
-    WorkOrder::class,
-)
-);
+Broadcast::channel('production.wo.{hashId}', function (User $user, string $hashId) use ($canViewSubject): bool {
+    return app(SettingsService::class)->requiredBool('modules.production')
+        && $user->hasPermission('production.view')
+        && $canViewSubject($user, $hashId, 'production.work_orders.view', WorkOrder::class);
+});
 
-Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => $canViewSubject(
-    $user,
-    $hashId,
-    'mrp.machines.view',
-    Machine::class,
-)
+Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => app(SettingsService::class)->requiredBool('modules.mrp')
+    && $canViewSubject($user, $hashId, 'mrp.machines.view', Machine::class)
 );
 
 /* Sprint 8 — Task 78. New channels. */
@@ -75,7 +71,8 @@ Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): b
 );
 
 // Maintenance dashboard — open WO updates push live
-Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasPermission('maintenance.view')
+Broadcast::channel('maintenance.dashboard', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.maintenance')
+    && $user->hasPermission('maintenance.view')
 );
 
 // Per-user notifications channel — backs the SPA bell + toast updates.

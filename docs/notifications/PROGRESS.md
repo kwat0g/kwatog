@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#399 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, and #399 as `aa993b56`. PR #400 adds Payroll feature-flag enforcement to period-channel authorization and is ready for merge. Original-head Leave API tests passed **34 tests / 160 assertions**; post-rebase SPA tests passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#400 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, and #400 as `313dfbf0`. PR #401 aligns Production, MRP, and Maintenance channel access and is ready for merge. Original-head Leave API tests passed **34 tests / 160 assertions**; post-rebase SPA tests passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -48,7 +48,8 @@
 | 1.1. Native Laravel dispatch boundary | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | merged as `84ff7bfa`; focused API test passed 9/74 on the original head; post-rebase PHP syntax and `git diff --check` passed; no post-rebase API test against shared DB |
 | F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | merged as `bd3817ff`; original-head API 4/6 and SPA 2 tests passed; post-rebase SPA 2, ESLint, PHP syntax, and diff checks passed; API test not rerun against shared DB |
 | F-12. Chain channel detail access | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | merged as `aa993b56`; original-head broadcast authorization tests passed 11/32; post-rebase PHP 8.3 syntax and `git diff --check` passed; API test not rerun against shared DB |
-| F-12. Payroll progress channel access | `notifications/scope-payroll-progress-channel` | [#400](https://github.com/kwat0g/kwatog/pull/400) | ready; original-head authorization test passed 12/36; post-rebase diff check passed; API test skipped to avoid shared DB; PHP unavailable |
+| F-12. Payroll progress channel access | `notifications/scope-payroll-progress-channel` | [#400](https://github.com/kwat0g/kwatog/pull/400) | merged as `313dfbf0`; original-head authorization test passed 12/36; post-rebase diff check passed; API test skipped to avoid shared DB; PHP unavailable |
+| F-12. Operational channel route authorization | `notifications/scope-operational-channels` | [#401](https://github.com/kwat0g/kwatog/pull/401) | ready; original-head authorization test passed 16/48; post-rebase `git diff --check` passed; API test skipped to avoid shared DB; PHP unavailable |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -452,11 +453,17 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Original-head `BroadcastAuthorizationTest.php`: **11 passed / 32 assertions**. After rebase, PHP 8.3 syntax checks for the event, channel definitions, and feature test passed; `git diff --check` passed. API tests were not rerun against shared `ogami_test`; no database was accessed.
 - Payroll progress payload and audience remain unchanged pending HR/Finance policy. Other subject-channel families remain under review.
 
-## Separate finding fix: F-12 Payroll progress channel access (PR #400, ready for merge)
+## Separate finding fix: F-12 Payroll progress channel access (PR #400, merged as `313dfbf0`)
 
 - `payroll.period.{hashId}` now requires the Payroll feature flag, `payroll.periods.view`, a decodable period hash, and an existing period, matching the period detail route. Progress payload and audience remain unchanged pending HR/Finance review.
 - Original-head `BroadcastAuthorizationTest.php`: **12 passed / 36 assertions**; PHP syntax, targeted Pint, and `git diff --check` passed. After rebase, only `git diff --check` was available. API tests were not rerun against shared `ogami_test`; PHP is unavailable in this workspace.
 - No unauthorized payroll subscription was proven; run metadata/headcount audience remains a policy question.
+
+## Separate finding fix: F-12 operational channel access (PR #401, ready for merge)
+
+- Production dashboard subscription now requires its module, parent read, and dashboard read permissions. Work Order subscription requires the Production module, parent read permission, Work Order detail permission, and a live visible record. Machine subscription requires the MRP module, machine permission, and a live visible record. Maintenance dashboard requires its module and read permission.
+- The existing channels emit refresh-only events; event timing and payload remain unchanged. Original-head `BroadcastAuthorizationTest.php`: **16 passed / 48 assertions**. After rebase, `git diff --check` passed; PHP is unavailable and API tests were not rerun against shared `ogami_test`.
+- Existing dashboard channels remain area-wide refresh pings with no record content.
 
 ## Outstanding proof / risks
 
