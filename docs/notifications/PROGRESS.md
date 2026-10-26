@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; findings through #351 merged. PR #352 strips sales-order fields from a shared dashboard broadcast. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, and #358 merged. PR #359 updates permission-override message copy without changing recipients. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
@@ -41,7 +41,8 @@
 | F-18. Pricing recipient negative-role coverage | `notifications/fix-pricing-recipient-role-scope` | [#350](https://github.com/kwat0g/kwatog/pull/350) | merged as `9a5a0525`; source filter in #341 |
 | F-20. Sales-order confirmation notice access and link | `notifications/fix-sales-order-confirmation-notice` | [#351](https://github.com/kwat0g/kwatog/pull/351) | merged as `cab02246` |
 | F-12. Sales-order broadcast payload minimization | `notifications/minimize-sales-order-broadcast` | [#352](https://github.com/kwat0g/kwatog/pull/352) | `ff2a2a92` plus current-main merge |
-| F-12. Shared dashboard event payload minimization | `notifications/minimize-dashboard-broadcast-payloads` | [#358](https://github.com/kwat0g/kwatog/pull/358) | pending review |
+| F-12. Shared dashboard event payload minimization | `notifications/minimize-dashboard-broadcast-payloads` | [#358](https://github.com/kwat0g/kwatog/pull/358) | merged as `4c26b530` |
+| F-15. Permission-override notice copy | `notifications/fix-permission-override-notice-copy` | [#359](https://github.com/kwat0g/kwatog/pull/359) | pending review |
 
 ## Coverage ledger
 
@@ -155,6 +156,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - Queue-long-wait notices link to `/dashboard/admin`; the link requires `dashboard.admin.view`. Recipient resolution now excludes inactive administrators and system administrators whose user-level permission override removes access to that destination.
 - The original `HorizonLongWaitNotificationTest` run passed **2 tests / 12 assertions** before the permission gate was added. The new revoked-permission negative case was added afterward and remains unverified; current branch tests were not rerun after merge.
 - Three permission-override notices remain no-link because affected users may not open the admin override page.
+
+## Separate finding fix: F-15 permission-override notice copy
+
+- Permission-change notices now show the permission display name and explain whether the rule allows or blocks access. They tell affected users to contact a system administrator if unexpected; no link is included because the admin user page requires `admin.users.manage` and no self-service override page exists.
+- Recipients stay unchanged. The affected user receives the notice; a different administrator who changed the override does not.
+- On the original feature head, `PermissionOverrideNotificationCopyTest` passed **1 test / 29 assertions**, covering add, update, remove, restore, clear copy, raw slug/enum exclusion, no-link behavior, and actor exclusion. PHP is unavailable locally for a post-integration rerun.
+- F-15 remains partial until the queue-long-wait route and recipient gate are verified with the affected role.
 
 
 ## Separate finding fix: F-24 approval-board total
