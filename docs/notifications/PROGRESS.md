@@ -523,12 +523,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - PHP syntax checks pass for all six changed PHP files. Pint passes five files; its check reports `class_attributes_separation` in `BillService.php`, outside this change. `git diff --check` passes. API CI remains blocked before PHPUnit by inherited F-22. Draft PR #417 is based on the separate F-39 finding PR #416. API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate); finding-lifecycle passes.
 
 
-## Phase 3 Inventory stock-adjustment subject access gate (draft PR pending)
+## Phase 3 Inventory stock-adjustment subject access gate (draft PR [#418](https://github.com/kwat0g/kwatog/pull/418))
 
 - Registered `StockAdjustment` with its list-route access rule: Inventory must be enabled and the recipient must hold `inventory.adjust` or `inventory.adjust.approve`. The list route has no row scope; this matches its `permission_any` middleware. Delegated approvers without either list permission fail closed.
 - High-value adjustment approval and requester decision notices now use `sendForSubject()`. Existing direct/current approver selection, requester selection, event timing, and list links remain unchanged.
 - `NotificationServiceSubjectAccessTest` stock-adjustment case: **1 passed / 8 assertions**; proves maker and checker access, denies a user without list permission, and denies all delivery while Inventory is disabled. `PendingStockAdjustmentResolutionTest` approval/rejection case: **1 passed / 30 assertions**; verifies subject metadata for both notices. Its revoked/approver-only audience case: **1 passed / 5 assertions**.
-- PHP syntax passes for all four changed PHP files. Pint passes the registry and new unit test; it flags `unary_operator_spaces` in `StockAdjustmentService.php` and `ordered_imports` in the existing feature test, so no broad formatting was applied. `git diff --check` passes. Test runs used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR and CI status remain pending.
+- PHP syntax passes for all four changed PHP files. Pint passes the registry and new unit test; it flags `unary_operator_spaces` in `StockAdjustmentService.php` and `ordered_imports` in the existing feature test, so no broad formatting was applied. `git diff --check` passes. Test runs used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #418 is based on Bill subject gate PR #417; CI status is pending.
 
 ## Outstanding proof / risks
 
