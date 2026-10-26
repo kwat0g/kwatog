@@ -239,7 +239,7 @@ export default function DriverDeliveryList() {
  >
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-2">
- <span className="font-mono tabular-nums text-sm text-primary">{row.delivery_number}</span>
+ <span className="font-mono tabular-nums text-sm text-link">{row.delivery_number}</span>
  <Chip variant={deliveryStatusVariant[row.status]}>{statusLabel(row)}</Chip>
  </div>
  <div className="mt-1.5 truncate text-sm font-medium text-primary">

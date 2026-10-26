@@ -51,7 +51,10 @@ class CustomerStandardPricingTest extends TestCase
     private function acceptReplacement(CustomerPortalUser $buyer, Product $product, array $terms): void
     {
         $service = app(PriceNegotiationService::class);
-        $sales = User::factory()->create(['role_id' => Role::where('slug', 'sales_officer')->value('id')]);
+        $sales = User::factory()->create([
+            'role_id' => Role::where('slug', 'sales_officer')->value('id'),
+            'is_active' => true,
+        ]);
         $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
         $request = $service->offer(null, $sales, array_merge([
             'customer_id' => $buyer->customer_id, 'product_id' => $product->id, 'price' => '24.00', 'pricing_method' => 'flat',
@@ -70,13 +73,16 @@ class CustomerStandardPricingTest extends TestCase
         $hidden = Product::factory()->create(['base_selling_price' => '40.00', 'portal_visibility' => 'restricted']);
         $missing = Product::factory()->create(['portal_visibility' => 'standard']);
         $catalog = app(CustomerPortalService::class)->catalog($user->customer_id);
-        $this->assertEqualsCanonicalizing([$standard->hash_id, $private->hash_id], array_column($catalog, 'id'));
+        $this->assertEqualsCanonicalizing([$standard->hash_id, $private->hash_id, $missing->hash_id], array_column($catalog, 'id'));
+        $this->assertSame(
+            'No price is available for this delivery date. Contact Sales.',
+            collect($catalog)->firstWhere('id', $missing->hash_id)['pricing_issue'],
+        );
         $this->actingAs($user, 'customer_portal');
         $date = today()->addDays(4)->toDateString();
         $this->postJson('/api/v1/b2b/customer/orders', ['items' => [['product_id' => $standard->hash_id, 'quantity' => '100', 'delivery_date' => $date]]], ['Idempotency-Key' => 'base-order'])
             ->assertCreated()->assertJsonPath('data.total_amount', '2500.00')->assertJsonPath('data.items.0.price_source', 'base');
         $this->postJson('/api/v1/b2b/customer/orders/quote', ['items' => [['product_id' => $hidden->hash_id, 'quantity' => '1', 'delivery_date' => $date]]])->assertStatus(422);
-        $this->assertNotContains($missing->hash_id, array_column($catalog, 'id'));
     }
 
     public function test_server_quote_applies_delivery_date_volume_override_and_detects_changed_prices(): void
@@ -127,8 +133,12 @@ class CustomerStandardPricingTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('tiers.0.unit_price', $e->errors());
         }
+        $sales = User::factory()->create(['role_id' => Role::where('slug', 'sales_officer')->value('id')]);
         $this->expectException(ValidationException::class);
-        app(ProductService::class)->update($product, ['base_selling_price' => '20.00']);
+        app(ProductService::class)->updateSellingPrices($product, $sales, [
+            'base_selling_price' => '20.00',
+            'minimum_selling_price' => '22.00',
+        ]);
     }
 
     public function test_notes_only_save_keeps_original_prices_after_accepted_replacement(): void

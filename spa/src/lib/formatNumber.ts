@@ -15,6 +15,11 @@ const quantity = new Intl.NumberFormat('en-PH', {
  maximumFractionDigits: 3,
 });
 
+const unitCost = new Intl.NumberFormat('en-PH', {
+ minimumFractionDigits: 4,
+ maximumFractionDigits: 4,
+});
+
 const percent = new Intl.NumberFormat('en-PH', {
  style: 'percent',
  minimumFractionDigits: 1,
@@ -43,7 +48,13 @@ export function formatCompactCurrency(value: number | string | null | undefined,
  if (n === null) return fallback;
  const scaled = n / divisor;
  const currency = getFunctionalCurrency();
- return `${currency ? `${currency} ` : ''}${scaled.toFixed(2)}${suffix}`;
+ return `${currency ? `${currency} ` : ''}${decimal.format(scaled)}${suffix}`;
+}
+
+/** Unit costs retain the inventory API's four decimal places and group large values. */
+export function formatUnitCost(value: number | string | null | undefined, fallback = '—'): string {
+ const n = toNumber(value);
+ return n === null ? fallback : unitCost.format(n);
 }
 
 export function formatInt(value: number | string | null | undefined, fallback = '—'): string {

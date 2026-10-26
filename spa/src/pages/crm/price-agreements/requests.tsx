@@ -167,6 +167,7 @@ export default function PricingRequestsPage() {
           {can('crm.price_agreements.propose') &&
             ['requested', 'pending_finance', 'offered'].includes(r.status) && (
               <Button
+                variant="primary"
                 size="sm"
                 onClick={() => navigate(`/crm/price-agreements/requests/${r.id}/offer`)}
               >
