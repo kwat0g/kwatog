@@ -6,7 +6,7 @@ namespace App\Common\Services;
 
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Mail\UserNotificationMail;
-use App\Common\Support\ApprovalTypeRegistry;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
@@ -156,7 +156,7 @@ class NotificationService
     }
 
     /**
-     * Send only to recipients who can open a supported approval-backed subject.
+     * Send only to recipients who can open a registered subject.
      * Unknown subject types fail closed until their module access rule is registered.
      *
      * @param  User|Collection<int, User>|array<int, User>  $recipients
@@ -170,6 +170,7 @@ class NotificationService
         array $data,
         ?string $dedupeKey = null,
         array $recipientReasons = [],
+        bool $emailEnabled = true,
     ): void {
         $class = $subject->getMorphClass();
         if (! $subject->exists || $subject->getKey() === null
@@ -182,7 +183,7 @@ class NotificationService
 
             return;
         }
-        if (ApprovalTypeRegistry::forClass($class) === null) {
+        if (! NotificationSubjectAccessRegistry::supports($class)) {
             Log::warning('Notification delivery skipped: subject has no registered access rule.', [
                 'type' => $type,
                 'subject_type' => $class,
@@ -195,7 +196,7 @@ class NotificationService
         $eligible = [];
         $deniedUserIds = [];
         foreach ($this->normaliseRecipients($recipients) as $userId => $user) {
-            if (ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey())) {
+            if (NotificationSubjectAccessRegistry::userCanViewRecord($user, $subject)) {
                 $eligible[$userId] = $user;
             } else {
                 $deniedUserIds[] = $userId;
@@ -213,7 +214,7 @@ class NotificationService
 
         $data['subject_type'] = $class;
         $data['subject_id'] = (string) $subject->getKey();
-        $this->dispatch($eligible, $type, $data, true, $dedupeKey, $recipientReasons);
+        $this->dispatch($eligible, $type, $data, $emailEnabled, $dedupeKey, $recipientReasons);
     }
 
     /** Deliver an existing Laravel notification through the central dispatcher. */

@@ -18,6 +18,8 @@ class EmailCustomerOnOfficialReceiptIssued implements ShouldQueue
     public function handle(OfficialReceiptIssued $event): void
     {
         $receipt = $event->officialReceipt;
+        $receipt->loadMissing('invoice');
+        $invoice = $receipt->invoice;
         $snapshot = $event->snapshot;
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [
@@ -28,12 +30,20 @@ class EmailCustomerOnOfficialReceiptIssued implements ShouldQueue
         ];
 
         if (! filter_var($snapshot['customer_email'], FILTER_VALIDATE_EMAIL)) {
-            $fallback->notifyPermission(
-                'accounting.invoices.view',
-                'Official receipt email',
-                "Official receipt {$snapshot['or_number']} was issued, but the customer has no usable email address. Send the receipt through an approved channel.",
-                $context,
-            );
+            if ($invoice) {
+                $fallback->notifyPermission(
+                    'accounting.invoices.view',
+                    'Official receipt email',
+                    "Official receipt {$snapshot['or_number']} was issued, but the customer has no usable email address. Send the receipt through an approved channel.",
+                    $context,
+                    $invoice,
+                );
+            } else {
+                Log::warning('Official receipt email fallback skipped: linked invoice is unavailable.', [
+                    'official_receipt_id' => $receipt->id,
+                ]);
+            }
+
             return;
         }
 
@@ -44,12 +54,19 @@ class EmailCustomerOnOfficialReceiptIssued implements ShouldQueue
                 $fallback->userIdsWithPermission('accounting.invoices.view'),
             ));
         } catch (\Throwable $e) {
-            $fallback->notifyPermission(
-                'accounting.invoices.view',
-                'Official receipt email',
-                "Official receipt {$snapshot['or_number']} could not be accepted by the email provider. Send the receipt through an approved channel.",
-                $context,
-            );
+            if ($invoice) {
+                $fallback->notifyPermission(
+                    'accounting.invoices.view',
+                    'Official receipt email',
+                    "Official receipt {$snapshot['or_number']} could not be accepted by the email provider. Send the receipt through an approved channel.",
+                    $context,
+                    $invoice,
+                );
+            } else {
+                Log::warning('Official receipt email fallback skipped: linked invoice is unavailable.', [
+                    'official_receipt_id' => $receipt->id,
+                ]);
+            }
             Log::warning('Official receipt email enqueue failed', [
                 'official_receipt_id' => $receipt->id,
                 'error' => $e->getMessage(),

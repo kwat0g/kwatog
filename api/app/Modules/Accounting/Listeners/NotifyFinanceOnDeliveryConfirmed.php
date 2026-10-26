@@ -44,7 +44,11 @@ class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
                     'link_to' => '/accounting/invoices/create',
                 ];
 
-            $this->notifications->send($financeUsers, 'chain.delivery_confirmed', $data);
+            if ($invoice) {
+                $this->notifications->sendForSubject($invoice, $financeUsers, 'chain.delivery_confirmed', $data);
+            } else {
+                $this->notifications->send($financeUsers, 'chain.delivery_confirmed', $data);
+            }
         } catch (\Throwable $e) {
             Log::warning('NotifyFinanceOnDeliveryConfirmed failed', ['error' => $e->getMessage()]);
             throw $e;
