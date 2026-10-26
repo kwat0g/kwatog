@@ -15,6 +15,8 @@ interface ToolbarProps<T> {
  enableColumnVisibilityToggle?: boolean;
  hiddenColumnKeys: Set<string>;
  toggleColumnVisibility: (key: string) => void;
+ hasCustomWidths: boolean;
+ resetColumnWidths: () => void;
 }
 
 export function DataTableToolbar<T>({
@@ -25,12 +27,14 @@ export function DataTableToolbar<T>({
  enableColumnVisibilityToggle,
  hiddenColumnKeys,
  toggleColumnVisibility,
+ hasCustomWidths,
+ resetColumnWidths,
 }: ToolbarProps<T>) {
  const [visMenuOpen, setVisMenuOpen] = useState(false);
  const showVisibilityToggle = enableColumnVisibilityToggle ?? !!tableKey;
  const showDensity = !!onDensityChange || !!tableKey;
 
- if (!showVisibilityToggle && !showDensity) return null;
+ if (!showVisibilityToggle && !showDensity && !hasCustomWidths) return null;
 
  return (
  <Toolbar
@@ -92,6 +96,15 @@ export function DataTableToolbar<T>({
   <option value="spacious">Spacious</option>
  </select>
  </label>
+ )}
+ {hasCustomWidths && (
+ <button
+ type="button"
+ onClick={resetColumnWidths}
+ className="inline-flex h-9 max-xl:h-11 items-center rounded-md px-2 text-label text-secondary hover:bg-subtle hover:text-primary transition-colors duration-fast"
+ >
+ Reset widths
+ </button>
  )}
  </>
  )}

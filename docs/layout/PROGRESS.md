@@ -59,11 +59,18 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 - Button/status capture reports are in `screenshots/{before,after}/button-status/`. Changed SPA sources pass focused ESLint; `git diff --check` passes. Vite production build passes (21.35s). Focused verification passes 6 files / 66 tests. Full SPA suite: 198 files passed, 1 failed; 1,237 tests passed, 3 failed. All 3 failures are `src/api/exports.test.ts` because `buildExportUrl` is not exported; the same failures reproduce on clean `main`. No layout failures surfaced.
 - Existing user changes were present in the workspace before this layout work. Preserve unrelated files and changes.
 
+## Shared table sizing unit (in review preparation)
+
+- `DataTable` now supports bounded pointer and keyboard column resizing, per-user persisted widths, and reset widths while preserving density/visibility preferences. Widths live in the existing `table_preferences` JSON; no schema migration or application data operation was made.
+- Focused SPA tests cover resize/reset, page-authored minimum-width overrides, clamping stale saved widths, and user-scoped persistence (2 files, 9 tests passed). The Playwright layout audit passed for Stock Adjustments and Production Work Orders in Light and Dark at seven widths; one resize interaction measured 128px → 176px and reset successfully. The mobile reset target measured at least 44px at 375px. Serial production-role Work Orders captures also passed.
+- Before/after captures and reports are under `screenshots/{before,after}/table-column-sizing/`. All 28 strict captures passed across two routes, two themes and seven widths. Resize/reset interaction passed at 375px and 1440px. Changed-file ESLint, layout discipline audit, `git diff --check`, and Vite production build passed. Build output retains existing third-party annotation and chunk warnings. The Laravel preference test is authored but could not run locally because PHP and API containers are unavailable.
+- `/tmp` filled during one rerun; redirecting Playwright temp files to `/var/tmp` restored the full capture pass. Stale-width clamping remains component-tested without a matching browser fixture.
+
 ## Phase 4: Production Work Orders
 
 - Migrated `/production/work-orders`, `/production/work-orders/create`, `/production/work-orders/:id`, and `/production/work-orders/:id/record-output` to the shared page shell. Header, filters, attention section, table, and pagination share the shell's responsive gutter; detail alerts, tabs, and content no longer double-pad the shell.
 - The list now bounds/truncates long work-order, product, sales-order, and machine identifiers with native titles; numeric target/progress remain right-aligned with tabular figures. The Work Order column stays pinned while the rest of the table scrolls inside its border. This changes presentation only; filtering, sorting, pagination, selection, row navigation, and row actions are unchanged.
-- Column defaults are sized per this route, but drag-resize/reset-to-default are not yet supported by the shared table. Keep this in the shared table-system work before marking table-specific Definition of Done complete.
+- Column defaults are sized per this route. Shared drag-resize/reset-to-default is implemented in the separate table sizing unit above; it is not merged yet.
 - Baseline and after captures include four routes × seven widths × two themes. After reports show zero strict findings, zero page overflow, zero double vertical scroll, all block edges aligned within 1px, no sampled contrast below 4.5:1, and touch controls >=44px through 1024px. At 1440px the page gutter grew from 20px to 32px. The 500-row fixture renders 500 rows; Compact row height is a stable 69.25px with the multi-line product and status content, and the sticky header remains inside the table scroller.
 - The 0-row state renders the intentional empty state; 1, 10, 50 and 500 rows were captured in both themes. At 1920px and wider all columns fit without page overflow; at narrower widths any horizontal movement remains inside the table container.
 - Verification: changed-file ESLint, layout discipline audit, and 48 focused create/detail/record-output tests pass. Browser fixture and screenshots use local mocks; no application database was changed or migrated. Impeccable detector returned no findings. Full SPA suite, axe, actual role walkthrough, real production data/crew state, and all other modules remain unchecked.
@@ -71,4 +78,4 @@ Resume from this file. The user approved the three-route pilot and Phase 3 on 20
 
 ## Next action
 
-Start Phase 4 with the highest-severity route group, keeping each module migration independently reviewable. The current merged work does not prove all 361 routes. Full route rendering, per-role walkthroughs, modal/drawer states, print views, axe, and performance checks remain open.
+After the shared table sizing unit is merged, continue Phase 4 with the next highest-severity module. The current merged work does not prove all 361 routes. Full route rendering, per-role walkthroughs, modal/drawer states, print views, axe, and performance checks remain open.
