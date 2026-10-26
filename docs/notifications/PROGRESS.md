@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft PR [#397](https://github.com/kwat0g/kwatog/pull/397) removes the unused legacy in-app notification wrapper and guards direct Laravel notification dispatch; mail-only HR password-reset loading defect F-33 remains separate. Draft PR [#396](https://github.com/kwat0g/kwatog/pull/396) aligns Leave action visibility with the active approval step and API authorization; targeted API tests pass **34/34 (160 assertions)** and SPA tests pass **7/7**. Draft PR [#395](https://github.com/kwat0g/kwatog/pull/395) adds Leave approval badge/list parity; PR [#394](https://github.com/kwat0g/kwatog/pull/394) adds delegate-aware overtime approval badges; #391–#393 cover profile, maintenance, and overtime list/read parity. Draft PRs #386–#389 cover inbound shipment, Sales Orders confirmation, and Production work-order permissions. API CI still has the unrelated F-22 syntax blocker; SPA CI reports existing dependency advisories. Full SPA typecheck has unrelated project-wide errors. Remaining direct transactional mail, badge parity, notification catalogs, and scoped recipients remain open. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Draft PR [#397](https://github.com/kwat0g/kwatog/pull/397) removes the unused legacy in-app notification wrapper and guards direct Laravel notification dispatch. The matching HR password-reset signature fix is in draft PR [#372](https://github.com/kwat0g/kwatog/pull/372) on a sibling stack; no duplicate fix is planned. Draft PR [#396](https://github.com/kwat0g/kwatog/pull/396) aligns Leave action visibility with the active approval step and API authorization; targeted API tests pass **34/34 (160 assertions)** and SPA tests pass **7/7**. Draft PR [#395](https://github.com/kwat0g/kwatog/pull/395) adds Leave approval badge/list parity; PR [#394](https://github.com/kwat0g/kwatog/pull/394) adds delegate-aware overtime approval badges; #391–#393 cover profile, maintenance, and overtime list/read parity. Draft PRs #386–#389 cover inbound shipment, Sales Orders confirmation, and Production work-order permissions. API CI still has the unrelated F-22 syntax blocker; SPA CI reports existing dependency advisories. Full SPA typecheck has unrelated project-wide errors. Remaining direct transactional mail, badge parity, notification catalogs, and scoped recipients remain open. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -358,7 +358,8 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 ## Separate finding: F-33 HR password-reset notification load failure
 
 - `EmployeePasswordResetNotification` fails PHP method-signature compatibility when autoloaded because its parent references unimported `Throwable`, resolving to the Auth notification namespace. The issue surfaced while checking which direct Laravel notification paths remain mail-only; no reset email was queued.
-- Logged in `FINDINGS.md`; not fixed in the central-dispatch unit. The HR password-reset path remains unverified until a separate fix and send test.
+- This is the same callback-signature defect fixed in draft PR [#372](https://github.com/kwat0g/kwatog/pull/372), which fully qualifies `\Throwable`; its existing HR serialization, provisioning, and user-administration tests pass. That sibling PR is not in the #397 branch ancestry, so the fix is not yet present on this stack.
+- No duplicate code fix is planned. `NotificationCatalogTest` still omits the HR subclass because it cannot load before the sibling fix merges; add it to the mail-only class coverage after the fix reaches this stack. No reset email was queued during discovery.
 
 ## Central dispatch boundary (draft PR #397)
 
@@ -374,6 +375,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The new event name lets an already-loaded older SPA bundle ignore the reduced payload and keep its existing 30-second polling fallback. The new SPA refreshes on `.chain.refresh` and retains polling when Reverb is unavailable.
 - `ChainBroadcasterTest.php`: **4 passed / 6 assertions**, including the new event name and exact payload. `useChainProgress.test.tsx`: **2 passed**. PHP syntax and `git diff --check` passed. `Pint --test` reports style issues in these two existing files; broad formatting was avoided.
 - Channel authorization remains permission-based and is not made record-specific in this unit. Payroll progress payload and audience are unchanged pending HR/Finance policy; F-12 remains open.
+- PR #398 API CI stops at the inherited F-22 duplicate-method syntax error; SPA CI stops at the existing `@vitest/mocker`, `undici`, and `zod` audit advisories. Accessibility, visual baseline, and finding-lifecycle checks pass.
 
 ## Separate finding fix: F-12 Purchase Order chain channel scope (draft PR #399)
 
