@@ -210,10 +210,10 @@ const ROWS_META: PaginationMeta = {
 };
 
 const COLUMNS: Column<GalleryRow>[] = [
-  { key: 'number', header: 'Work order', cell: (r) => <span className="font-mono text-primary">{r.number}</span>, sortable: true },
-  { key: 'product', header: 'Product', cell: (r) => <StackedCell primary={r.product} secondary={r.customer} /> },
-  { key: 'quantity', header: 'Qty', cell: (r) => <NumCell>{r.quantity}</NumCell>, align: 'right' },
-  { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status.replace(/_/g, ' ')}</Chip> },
+  { key: 'number', header: 'Work order', cell: (r) => <span className="font-mono text-primary">{r.number}</span>, sortable: true, className: 'min-w-36' },
+  { key: 'product', header: 'Product', cell: (r) => <StackedCell primary={r.product} secondary={r.customer} />, className: 'min-w-44' },
+  { key: 'quantity', header: 'Qty', cell: (r) => <NumCell>{r.quantity}</NumCell>, align: 'right', className: 'min-w-24' },
+  { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status.replace(/_/g, ' ')}</Chip>, className: 'min-w-32' },
 ];
 
 const STATUS_OPTIONS = [
