@@ -253,12 +253,29 @@ class TrainingExpiryAlertTest extends TestCase
             ->first();
 
         $this->assertNotNull($eligibleNotification);
-        $this->assertSame("/hr/employees/{$employee->hash_id}", json_decode($eligibleNotification->data, true)['link_to']);
+        $this->assertSame("/hr/employee-trainings/{$record->hash_id}", json_decode($eligibleNotification->data, true)['link_to']);
         $this->assertNotNull($employeeNotification);
-        $this->assertNull(json_decode($employeeNotification->data, true)['link_to'] ?? null);
+        $this->assertSame("/self-service/trainings/{$record->hash_id}", json_decode($employeeNotification->data, true)['link_to']);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $revokedHr->id,
             'type' => 'training.expiry',
         ]);
+
+        $this->actingAs($eligibleHr)
+            ->getJson("/api/v1/hr/employee-trainings/{$record->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $record->hash_id);
+        $this->actingAs($employeeUser)
+            ->getJson("/api/v1/hr/self-service/trainings/{$record->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $record->hash_id);
+
+        $otherEmployee = Employee::factory()->create();
+        $otherUser = User::factory()->create(['employee_id' => $otherEmployee->id]);
+        $this->actingAs($otherUser)
+            ->getJson("/api/v1/hr/self-service/trainings/{$record->hash_id}")
+            ->assertNotFound();
+        $this->getJson("/api/v1/hr/employee-trainings/{$record->hash_id}")
+            ->assertForbidden();
     }
 }

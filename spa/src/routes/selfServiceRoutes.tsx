@@ -18,6 +18,7 @@ const SelfServiceDocumentsPage = lazy(() => import('@/pages/self-service/documen
 const SelfServiceNotifPrefsPage = lazy(() => import('@/pages/self-service/notification-preferences'));
 const SelfServicePayslipsPage = lazy(() => import('@/pages/self-service/payslips'));
 const SelfServicePayslipDetailPage = lazy(() => import('@/pages/self-service/payslip-detail'));
+const TrainingRecordDetailPage = lazy(() => import('@/pages/hr/training/record-detail'));
 
 const MyWorkOrdersPage = lazy(() => import('@/pages/self-service/work-orders'));
 const MyWorkOrderDetailPage = lazy(() => import('@/pages/self-service/work-orders').then((module) => ({ default: module.MyWorkOrderDetailPage })));
@@ -30,6 +31,7 @@ export const selfServiceRoutes = (
  <Route element={<SelfServiceLayout />}>
  <Route path="/self-service" element={<SelfServiceHomePage />} />
  <Route path="/self-service/profile" element={<SelfServiceProfilePage />} />
+ <Route path="/self-service/trainings/:id" element={<TrainingRecordDetailPage selfService />} />
  <Route path="/self-service/me" element={<SelfServiceMePage />} />
  <Route path="/self-service/documents" element={<SelfServiceDocumentsPage />} />
  <Route path="/self-service/notification-preferences" element={<PermissionGuard permission="notifications.preferences.manage"><SelfServiceNotifPrefsPage /></PermissionGuard>} />

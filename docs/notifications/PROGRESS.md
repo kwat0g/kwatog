@@ -1,20 +1,20 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, and #363 merged. PR #364 scopes payroll recipients and adds exact record links. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
+**Current gate:** Phase 2 approved; PRs #353, #354, #357, #358, #359, #362, #363, #364, and #485 merged to `main`. PR #365 was merged into the already-merged payroll stack branch; promotion PR #487 carries its training links to `main`. Remaining channel and recipient-scope reviews, full-project migration, and role-wide verification remain open.
 
 ## Phase status
 
 | Phase | Status | Evidence |
 | --- | --- | --- |
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
-| 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
+| 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; partial targeted recipient and badge/list comparisons are recorded below. Full role/scope proof remains open. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 and the documented findings fixes through #363 are merged. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning. PR #364 addresses payroll recipients and deep links. Global authorization coverage, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3 and documented fixes through #364 and #485 are merged to `main`. PRs #353, #354, and #357 add badge/list parity slices; #358 minimizes shared dashboard payloads; #359 clarifies permission-override copy; #362 narrows invoice-payment recipients; #363 scopes AR dunning; #364 addresses payroll recipients and links; #485 handles generic approval recipient collections. Training links are in stacked PR #365; promotion PR #487 is open. Global authorization coverage, signal registry, and remaining event families remain open. |
 | 4. Frontend | In progress | PR #344 converts notification rows with allowed destinations to anchors and preserves filtered sidebar navigation from #342. Notification Center filters, accessibility, responsive QA, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted tests exist for the merged PRs and each result is recorded below; full role, channel, and badge parity remains incomplete. SPA sidebar tests passed after integration for #353 (**28**), #354 (**29**), and #357 (**30**); #358 `record-output.test.tsx` passed **5**. No post-merge API tests ran locally because PHP is unavailable. Historical #364 CI failed on baseline issues fixed by merged PRs #368 and #371; current integrated checks must be rerun. We did not run tests against the user's database. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
+| 7. Verification | Partial | Targeted tests exist for merged PRs and results are recorded below; full role, channel, and badge parity remain incomplete. SPA sidebar tests passed after integration for #353 (**28**), #354 (**29**), and #357 (**30**); #358 `record-output.test.tsx` passed **5**. PR #365's feature-head tests passed **11 API tests / 39 assertions** and **2 SPA tests**. No post-merge API tests ran locally because PHP is unavailable. Full GitHub workflows were not awaited under the user's CI priority; current outcomes are not a merge gate. Tests did not use the user's application database. Full suite, browser QA, all-role/channel coverage, and broad badge parity remain open. |
 
 ## Phase 3 PR stack
 
@@ -48,7 +48,9 @@
 | F-15. Permission-override notice copy | `notifications/fix-permission-override-notice-copy` | [#359](https://github.com/kwat0g/kwatog/pull/359) | merged as `79e1dbc6` |
 | F-25. Invoice payment-review recipient scope | `notifications/fix-invoice-payment-notice-audience` | [#362](https://github.com/kwat0g/kwatog/pull/362) | merged as `d776cc0c` |
 | F-26. AR dunning audience and links | `notifications/fix-ar-dunning-review-audience` | [#363](https://github.com/kwat0g/kwatog/pull/363) | merged as `8cfe7abb` |
-| F-27. Payroll recipient scope and deep links | `notifications/fix-payroll-notice-audience` | [#364](https://github.com/kwat0g/kwatog/pull/364) | pending checks |
+| F-27. Payroll recipient scope and deep links | `notifications/fix-payroll-notice-audience` | [#364](https://github.com/kwat0g/kwatog/pull/364) | merged as `658e3be4` |
+| F-07. Training-expiry deep links | `notifications/fix-training-expiry-links` | [#365](https://github.com/kwat0g/kwatog/pull/365), promotion [#487](https://github.com/kwat0g/kwatog/pull/487) | stacked merge; main promotion pending |
+| F-29. Generic approval recipient collection | `fix/approval-notification-recipient-collection` | [#485](https://github.com/kwat0g/kwatog/pull/485) | merged as `4c525aa0` |
 
 ## Coverage ledger
 
@@ -190,8 +192,19 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include Notificatio
 - Period approval excludes permission-bypass administrators and the creator/computer; there is no broad administrator fallback. Payroll-adjustment notices require the recipient to be able to approve or reject this request, and exclude the requester and permission-bypass administrators.
 - The seeded role permissions grant adjustment approval/rejection to no operational role. No action notice reaches anyone until HR/Finance assigns an authorized checker; the PR does not invent a role.
 - Payslip-ready and email-failure notices target the active employee account with current `payroll.view` access and link to that employee's exact payroll row. Payroll adjustment notices link to the exact adjustment; the SPA detail route uses the existing view-protected API endpoint.
-- Feature-head tests previously recorded: `PayrollMakerCheckerTest` **12 tests / 67 assertions**; `PayrollAdjustmentStaleRejectRaceTest` **5 / 15**; `NotifyEmployeesOnPayrollFinalizedTest` **2 / 9**; `PayslipNotificationDedupeTest` **1 / 1**. Re-run on current main before merge; PHP is unavailable in the local shell.
-- Complete full API and SPA CI results, then replace this pending entry with merge and verification evidence. Browser and visual QA remain open.
+- Feature-head tests previously recorded: `PayrollMakerCheckerTest` **12 tests / 67 assertions**; `PayrollAdjustmentStaleRejectRaceTest` **5 / 15**; `NotifyEmployeesOnPayrollFinalizedTest` **2 / 9**; `PayslipNotificationDedupeTest` **1 / 1**. The integrated CI run's only API error was the missing-permission generic-collection failure fixed by #485; no post-merge rerun was awaited. PHP is unavailable in the local shell.
+- PR #364 merged as `658e3be4`. Browser and visual QA remain open; no operational payroll-adjustment checker exists in seeded permissions.
+
+## Separate finding fix: F-07 training-expiry deep links (stacked PR [#365](https://github.com/kwat0g/kwatog/pull/365); main promotion [#487](https://github.com/kwat0g/kwatog/pull/487))
+
+- Employees now get a hash-addressed self-service training-record link. Its endpoint resolves the session employee and returns only their matching record; a second employee receives 404. Configured HR/department recipients get the exact HR training-record route, gated by `hr.employees.trainings.view` and `EmployeeCompetenceScope`.
+- `TrainingExpiryAlertTest.php`: **11 passed / 39 assertions**, including exact per-audience links, HR access, employee-owner access, cross-employee 404, and employee denial on the HR route. SPA route test: **2 passed**. Targeted ESLint, PHP syntax, and `git diff --check` pass on the feature head.
+- PR #365 merged into the already-merged payroll branch, so the feature is not yet in `main`; promotion PR #487 carries the training changes to `main`. The detail view is read-only and shares one component across the owner-only and scoped-HR APIs. Visual QA and post-merge full-suite verification remain outstanding. F-14's message-detail and recipient-scope review remains separate.
+
+## Separate finding fix: F-29 generic approval recipient collection (PR [#485](https://github.com/kwat0g/kwatog/pull/485))
+
+- `ApprovalNotificationRecipientResolver` now extracts keys through `Collection::map()` and `Model::getKey()`, which supports both generic and Eloquent collections. Missing permission configuration can no longer abort approval resubmission.
+- GitHub CI reproduced the failure in `ApprovalServiceTest::test_resubmit_preserves_acted_records` before the fix; PHPStan passed on the fix branch. The full PHPUnit job was not awaited under the user's CI priority. PR #485 merged as `4c525aa0`.
 
 
 ## Separate finding fix: F-24 approval-board total

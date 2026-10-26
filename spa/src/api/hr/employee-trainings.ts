@@ -5,6 +5,8 @@ import type { EmployeeTraining, AssignTrainingData } from '@/types/hr';
 export const employeeTrainingsApi = {
  list: (employeeId: string, params?: ListParams) =>
  client.get<PaginatedResponse<EmployeeTraining>>(`/hr/employees/${employeeId}/trainings`, { params }).then((r) => r.data),
+ show: (id: string) =>
+ client.get<ApiSuccess<EmployeeTraining>>(`/hr/employee-trainings/${id}`).then((r) => r.data.data),
  assign: (employeeId: string, data: AssignTrainingData) =>
  client.post<ApiSuccess<EmployeeTraining>>(`/hr/employees/${employeeId}/trainings`, data).then((r) => r.data.data),
  complete: (recordId: string, data: { completed_at: string; certificate?: File | null }) => {

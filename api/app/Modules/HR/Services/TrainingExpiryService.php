@@ -183,10 +183,13 @@ class TrainingExpiryService
         );
 
         if ($employeeRecipients->isNotEmpty()) {
-            $this->notifications->send($employeeRecipients, 'training.expiry', $payload);
+            $this->notifications->send($employeeRecipients, 'training.expiry', [
+                ...$payload,
+                'link_to' => "/self-service/trainings/{$record->hash_id}",
+            ]);
         }
         if ($staffRecipients->isNotEmpty()) {
-            $payload['link_to'] = $employee ? "/hr/employees/{$employee->hash_id}" : null;
+            $payload['link_to'] = "/hr/employee-trainings/{$record->hash_id}";
             $this->notifications->send($staffRecipients, 'training.expiry', $payload);
         }
     }

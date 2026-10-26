@@ -146,6 +146,8 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     Route::get('/employee-trainings/{record}/certificate', [EmployeeTrainingController::class, 'download'])
         ->middleware('permission:hr.employees.trainings.view')
         ->name('hr.employee-trainings.certificate');
+    Route::get('/employee-trainings/{record}', [EmployeeTrainingController::class, 'show'])
+        ->middleware('permission:hr.employees.trainings.view');
 
     // Training matrix heatmap — must come BEFORE {training} param routes.
     Route::get('training/matrix', [TrainingMatrixController::class, 'index'])
@@ -256,6 +258,7 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
 
         // T3.4.A — read-only training records for the session employee.
         Route::get('/trainings', [SelfServiceController::class, 'trainings']);
+        Route::get('/trainings/{id}', [SelfServiceController::class, 'training']);
     });
 
 
