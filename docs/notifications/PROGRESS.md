@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft PRs [#386](https://github.com/kwat0g/kwatog/pull/386), [#387](https://github.com/kwat0g/kwatog/pull/387), [#388](https://github.com/kwat0g/kwatog/pull/388), and [#389](https://github.com/kwat0g/kwatog/pull/389) align inbound shipment, Sales Orders confirmation, and Production work-order badge/navigation permissions. PR #388's targeted API checks pass 5/5 (62 assertions) and Sidebar behavior passes 36/36. F-29's targeted API checks pass 5/5 (65 assertions); Sidebar permission and Production route tests pass 25/25 and 3/3. The previous #388 API CI failed before PHPUnit on F-22; SPA CI stopped at existing dependency advisories. Local full SPA typecheck reports unrelated project-wide errors. Other open units cover central Laravel dispatch, remaining badge parity, notification anchors/catalogs, and scoped recipient fixes. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Draft PR [#391](https://github.com/kwat0g/kwatog/pull/391) adds the approved profile-review `awaiting_my_action` badge/list parity on top of #390. Draft PRs [#386](https://github.com/kwat0g/kwatog/pull/386), [#387](https://github.com/kwat0g/kwatog/pull/387), [#388](https://github.com/kwat0g/kwatog/pull/388), and [#389](https://github.com/kwat0g/kwatog/pull/389) align inbound shipment, Sales Orders confirmation, and Production work-order badge/navigation permissions. PR #388's targeted API checks pass 5/5 (62 assertions) and Sidebar behavior passes 36/36. F-29's targeted API checks pass 5/5 (65 assertions); Sidebar permission and Production route tests pass 25/25 and 3/3. The previous #388 API CI failed before PHPUnit on F-22; SPA CI stopped at existing dependency advisories. Local full SPA typecheck reports unrelated project-wide errors. Other open units cover central Laravel dispatch, remaining badge parity, notification anchors/catalogs, and scoped recipient fixes. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -33,6 +33,7 @@
 | F-09. Sales Orders confirmation queue parity | `notifications/sales-order-confirmation-badge` | [#387](https://github.com/kwat0g/kwatog/pull/387) | `bcce67a0` |
 | F-09. Production work-order signal/list parity | `notifications/production-overdue-badge` | [#388](https://github.com/kwat0g/kwatog/pull/388) | `f011d84c`, `60e20e2b`, `51bb83d3`, `25f9e78f` |
 | F-29. Production parent-route permission parity | `notifications/fix-production-badge-route-permissions` | [#389](https://github.com/kwat0g/kwatog/pull/389) | `215d4130` |
+| F-01. Profile-review actionable queue parity | `notifications/fix-profile-request-badge` | [#391](https://github.com/kwat0g/kwatog/pull/391) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -56,7 +57,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include notification UI behavior and configured-role audiences without record scope. F-01 badge placement and queue scope are in PR #340; F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths; F-28 scopes the late-supplier notice. F-23's 100-item board summary cap fix is tracked in PR #347. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven beyond findings recorded here.
+See `FINDINGS.md`. Remaining high-priority static mismatches include notification UI behavior and configured-role audiences without record scope. F-01's badge placement is in PR #340; PR #391 adds the approved actionable signal and exact filtered destination. F-02 reuses the approval board filter; F-03 shares a PR current-step scope across the badge, pending-count endpoint, and filtered list; F-04 aligns three badge gates to their destination reads; F-06 event metadata is in PR #379; F-16 is fixed at all six inventoried sender paths; F-28 scopes the late-supplier notice. F-23's 100-item board summary cap fix is tracked in PR #347. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven beyond findings recorded here.
 
 ## Phase 3 unit 1 verification
 
@@ -302,6 +303,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The existing PPC and Production Manager audience and event timing stay unchanged. The sender now filters recipients through both permissions before calling `NotificationService`.
 - `ProductionAssignmentAlertAudienceTest`: **1 passed / 10 assertions**. Confirms PPC and Production Manager receive the alert, Maintenance Technician does not, and an eligible notice links to the exact Work Order.
 - PHP syntax and `git diff --check` pass. `pint --test` reports pre-existing style debt in the inventory query of `AlertEngineService.php`, outside the changed lines. PR CI and full-suite verification remain outstanding.
+
+## Separate finding fix: F-01 Profile Update actionable badge/list parity (draft PR [#391](https://github.com/kwat0g/kwatog/pull/391))
+
+- The `profile_requests` badge now sits on Bank Account Changes and opens `/hr/profile-update-requests?signal=awaiting_my_action`. The approved filter includes only work the current user can perform: HR users need both `hr.employees.view` and `hr.employees.edit` and retain `DepartmentScope`; Finance needs `hr.profile_updates.finance_review` and sees only bank changes after HR review. Both queues exclude self-submissions, and Finance excludes the prior HR reviewer. Users with both audiences see their deduplicated union.
+- `ProfileUpdateRequestService::awaitingMyActionQuery()` supplies the same scope to the badge count and filtered list. Existing unfiltered HR/Finance lists and their default status behavior remain unchanged. The action-filter page hides the status control because this signal spans the active HR and Finance stages.
+- API `ProfileUpdateActionBadgeParityTest` plus `ProfileUpdateSodTest`: **9 passed / 69 assertions**. Coverage compares exact badge and destination totals for HR, Finance, dual-permission, department-scoped HR, and view-only users; it includes requester and previous-reviewer exclusions. SPA Sidebar and profile-request page tests: **40 passed**. Targeted ESLint, PHP syntax, and `git diff --check` pass.
+- Pint `--test` reports two existing style issues in `BadgeService.php` and `ProfileUpdateRequestService.php`; the new API test passes Pint. No broad formatting was applied. Full suites and browser visual QA remain outstanding.
+- Full SPA typecheck reports existing export-helper, missing `lucide-react`, stock-transfer API, and duplicate purchase-order property errors; none names a changed file.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

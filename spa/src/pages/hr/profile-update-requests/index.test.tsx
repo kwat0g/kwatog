@@ -26,9 +26,9 @@ beforeEach(() => {
   });
 });
 
-function renderPage() {
+function renderPage(initialEntry = '/hr/profile-update-requests') {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <MemoryRouter><ProfileUpdateRequestsPage /></MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}><ProfileUpdateRequestsPage /></MemoryRouter>
   </QueryClientProvider>);
 }
 
@@ -48,4 +48,12 @@ it('keeps the HR queue default and employee links for employee reviewers', async
   expect(await screen.findByRole('link', { name: 'Employee Name' })).toHaveAttribute('href', '/hr/employees/employee');
   expect(profileUpdateRequestsApi.list).toHaveBeenCalledWith({ status: 'pending' });
   expect(screen.queryByRole('button', { name: 'Finance Approve' })).not.toBeInTheDocument();
+});
+
+it('loads the exact actionable queue when opened from the sidebar badge', async () => {
+  renderPage('/hr/profile-update-requests?signal=awaiting_my_action');
+  await screen.findByText('Employee Name');
+  expect(profileUpdateRequestsApi.list).toHaveBeenCalledWith({ signal: 'awaiting_my_action' });
+  expect(screen.getByRole('heading', { name: 'Profile Changes Awaiting My Action' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Finance Approve' })).toBeVisible();
 });

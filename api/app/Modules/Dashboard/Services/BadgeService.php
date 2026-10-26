@@ -20,7 +20,7 @@ use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
-use App\Modules\HR\Models\ProfileUpdateRequest;
+use App\Modules\HR\Services\ProfileUpdateRequestService;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
@@ -332,22 +332,12 @@ class BadgeService
 
             // HR > Profile change requests — pending review queue.
             'profile_requests' => [
-                'permissions' => ['hr.employees.view'],
-                'label'       => 'Profile Requests',
-                'description' => 'Pending employee profile change requests',
-                'counter'     => function () use ($user): int {
-                    $query = ProfileUpdateRequest::query()->where('status', 'pending');
-                    DepartmentScope::apply(
-                        $query,
-                        $user,
-                        viewAllPermission: 'hr.employees.view_sensitive',
-                        departmentPermission: 'hr.employees.view',
-                        deptColumn: 'department_id',
-                        deptRelation: 'employee',
-                    );
-
-                    return $query->count();
-                },
+                'permissions' => ['hr.employees.view', 'hr.profile_updates.finance_review'],
+                'label'       => 'Awaiting my action',
+                'description' => 'Profile changes you can review',
+                'counter'     => fn (): int => app(ProfileUpdateRequestService::class)
+                    ->awaitingMyActionQuery($user)
+                    ->count(),
             ],
 
             // Payroll > Periods awaiting HR/Finance action (draft or processing).
