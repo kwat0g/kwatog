@@ -83,6 +83,15 @@ class WorkOrderListFilterTest extends TestCase
         $response->assertStatus(422)->assertJsonValidationErrors('status');
     }
 
+    public function test_invalid_signal_is_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->getJson(
+            '/api/v1/production/work-orders?signal=unknown',
+        );
+
+        $response->assertStatus(422)->assertJsonValidationErrors('signal');
+    }
+
     public function test_no_status_filter_returns_all_rows(): void
     {
         WorkOrder::factory()->count(3)->create();

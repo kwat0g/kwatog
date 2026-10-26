@@ -130,6 +130,7 @@ function badgeDestination(path: string, key: string): string {
     pending_inspections: 'work_queue=to_inspect',
     mrb_holds: 'status=held',
     open_complaints: 'signal=open',
+    work_orders: 'signal=overdue',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',

@@ -36,6 +36,8 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use Carbon\Carbon;
 use Database\Seeders\RolePermissionSeeder;
@@ -136,6 +138,55 @@ class BadgeControllerTest extends TestCase
             ->assertOk()
             ->json('data');
         $this->assertArrayHasKey('payroll', $hrBadges);
+    }
+
+    public function test_production_overdue_badge_matches_filtered_list_for_every_work_order_status(): void
+    {
+        $user = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
+        ]);
+        $this->assertTrue($user->hasPermission('production.work_orders.view'));
+
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create([
+                'status' => $status->value,
+                'planned_end' => now()->subMinute(),
+            ]);
+        }
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::Confirmed->value,
+            'planned_end' => now()->addMinutes(5),
+        ]);
+        WorkOrder::factory()->create([
+            'status' => WorkOrderStatus::InProgress->value,
+            'planned_end' => now()->subMinute(),
+        ])->delete();
+
+        $listResponse = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=overdue')
+            ->assertOk();
+        $list = $listResponse->json('meta.total');
+        $badges = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(2, $list);
+        $this->assertSame($list, $badges['work_orders']['count']);
+        $this->assertSame(['confirmed', 'in_progress'], collect($listResponse->json('data'))
+            ->pluck('status')->sort()->values()->all());
+
+        $employee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/production/work-orders?signal=overdue')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('work_orders', $employeeBadges);
     }
 
     public function test_widened_scope_badges_are_permission_gated(): void

@@ -391,16 +391,12 @@ class BadgeService
                     ->count(),
             ],
 
-            // Production > Work orders — overdue (planned_end passed, not done).
+            // Production > Work orders — active work orders past their due time.
             'work_orders' => [
                 'permissions' => ['production.work_orders.view'],
-                'label'       => 'Work Orders',
+                'label'       => 'Overdue',
                 'description' => 'Overdue production work orders',
-                'counter'     => fn (): int => WorkOrder::query()
-                    ->whereIn('status', ['confirmed', 'in_progress'])
-                    ->whereNotNull('planned_end')
-                    ->where('planned_end', '<', now())
-                    ->count(),
+                'counter'     => fn (): int => WorkOrder::query()->overdue()->count(),
             ],
 
             // Supply chain > Deliveries in transit needing an update.
