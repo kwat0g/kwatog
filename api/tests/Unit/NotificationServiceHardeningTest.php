@@ -301,6 +301,31 @@ class NotificationServiceHardeningTest extends TestCase
         $this->assertSame('PO-202608-0001', $data['po_number']);
         $this->assertSame('purchase_order', $data['entity_type']);
         $this->assertSame('/purchasing/purchase-orders/abc', $data['link_to']);
+        $this->assertSame(1, $data['schema_version']);
+        $this->assertSame('test.extra', $data['event_type']);
+        $this->assertSame('purchase_order', $data['subject_type']);
+        $this->assertSame('abc', $data['subject_id']);
+    }
+
+    public function test_versioned_envelope_keeps_explicit_actor_and_drops_invalid_subject_metadata(): void
+    {
+        $user = User::factory()->create();
+        Event::fake();
+
+        $this->service->send($user, 'test.structured', [
+            'title' => 'Structured event',
+            'actor_id' => ' actor-hash ',
+            'subject_type' => ['invalid'],
+            'subject_id' => new \stdClass,
+        ]);
+
+        $data = json_decode((string) DB::table('notifications')->value('data'), true);
+
+        $this->assertSame(1, $data['schema_version']);
+        $this->assertSame('test.structured', $data['event_type']);
+        $this->assertSame('actor-hash', $data['actor_id']);
+        $this->assertArrayNotHasKey('subject_type', $data);
+        $this->assertArrayNotHasKey('subject_id', $data);
     }
 
     public function test_email_stays_opt_in(): void

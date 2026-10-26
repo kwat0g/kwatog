@@ -48,7 +48,7 @@ jobs:
         run: npm ci
 
       - name: Install the Playwright browser
-        run: npx playwright install --with-deps firefox
+        run: npx playwright install firefox
 
       - name: Accessibility gate (enforced)
         run: npm run test:a11y
@@ -65,6 +65,7 @@ jobs:
   # platform is a re-baseline, not a silent new file.
   gallery:
     name: Visual baselines (component gallery)
+    needs: a11y
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -86,7 +87,7 @@ jobs:
         run: npm ci
 
       - name: Install the Playwright browser
-        run: npx playwright install --with-deps firefox
+        run: npx playwright install firefox
 
       - name: Visual baselines (enforced)
         run: npm run test:gallery

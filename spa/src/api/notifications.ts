@@ -4,15 +4,20 @@ import { client } from './client';
  * Sprint P4 — typed notifications API.
  *
  * Mirrors Laravel's default `notifications` table shape. The `data` column
- * is an opaque JSON blob; we widen the typed shape to surface the common
- * fields shipped by NotificationService::notify(): `title`, `message`,
- * `link_to`. Callers should treat anything else as untrusted.
+ * is an opaque JSON blob; we type the common presentation fields plus the
+ * optional versioned envelope metadata.
+ * Older stored rows may not include the metadata.
  */
 
 export interface NotificationRow {
  id: string;
  type: string;
  data: {
+ schema_version?: number;
+ event_type?: string;
+ subject_type?: string;
+ subject_id?: string;
+ actor_id?: string;
  title?: string;
  message?: string;
  link_to?: string;

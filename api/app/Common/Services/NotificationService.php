@@ -43,6 +43,9 @@ class NotificationService
     /** Message bodies are previewed truncated everywhere they appear. */
     private const MAX_MESSAGE = 2000;
 
+    /** New custom notification rows use this additive payload schema. */
+    private const ENVELOPE_VERSION = 1;
+
     /** Postgres handles far more, but a single INSERT has a bind-param ceiling. */
     private const INSERT_CHUNK = 500;
 
@@ -426,6 +429,28 @@ class NotificationService
             unset($data['link_to']);
         }
 
+        $data['schema_version'] = self::ENVELOPE_VERSION;
+        $data['event_type'] = $type;
+
+        $subjectType = $data['subject_type'] ?? $data['entity_type'] ?? null;
+        $subjectId = $data['subject_id'] ?? $data['entity_id'] ?? null;
+        if (is_string($subjectType) && trim($subjectType) !== ''
+            && (is_int($subjectId) || is_string($subjectId)) && trim((string) $subjectId) !== '') {
+            $data['subject_type'] = trim($subjectType);
+            $data['subject_id'] = trim((string) $subjectId);
+        } else {
+            unset($data['subject_type'], $data['subject_id']);
+        }
+
+        if (is_string($data['actor_id'] ?? null)) {
+            $data['actor_id'] = trim($data['actor_id']);
+            if ($data['actor_id'] === '') {
+                unset($data['actor_id']);
+            }
+        } else {
+            unset($data['actor_id']);
+        }
+
         return $data;
     }
 
@@ -442,11 +467,10 @@ class NotificationService
         string $type,
         array $data,
         ?string $deliveryKey,
-    ): void
-    {
+    ): void {
         if (filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
             Log::warning('Notification email skipped: invalid recipient address', [
-                'user_id' => $userId,
+                'user_id' => $recipientUserIds[0] ?? null,
                 'type' => $type,
             ]);
 
