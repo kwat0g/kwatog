@@ -25,7 +25,7 @@ import { YearEndLeaveModal } from './year-end';
 import type { LeaveRequest } from '@/types/leave';
 
 const DEFAULT_FILTERS: LeaveListParams = {
- page: 1, per_page: 100, sort: 'created_at', direction: 'desc', status: '',
+ page: 1, per_page: 100, sort: 'created_at', direction: 'desc', status: '', signal: '',
 };
 
 export default function LeavesPage() {
@@ -209,6 +209,7 @@ export default function LeavesPage() {
 
  const hasFilters =
  (filters.status !== undefined && filters.status !== '') ||
+ (filters.signal !== undefined && filters.signal !== '') ||
  Boolean(filters.from || filters.to || filters.search);
 
  const columns: Column<LeaveRequest>[] = [
@@ -248,7 +249,7 @@ export default function LeavesPage() {
  },
  ];
 
- const filterConfig: FilterConfig[] = [
+ const filterConfig: FilterConfig[] = filters.signal === 'awaiting_my_approval' ? [] : [
  {
  key: 'status', label: 'Status', type: 'select',
  options: [

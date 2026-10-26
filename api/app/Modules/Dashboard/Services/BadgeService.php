@@ -30,6 +30,7 @@ use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Services\ContactInquiryInboxService;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Services\LeaveApprovalPolicy;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
@@ -248,33 +249,12 @@ class BadgeService
             // HR > Leave management — pending requests visible to this approver tier.
             'leaves' => [
                 'permissions' => ['leave.approve_dept', 'leave.approve_hr'],
+                'required_permissions' => ['leave.view'],
                 'label'       => 'Leaves',
                 'description' => 'Leave requests awaiting your approval',
-                'counter'     => function () use ($user): int {
-                    $statuses = [];
-                    if ($user->hasPermission('leave.approve_dept')) {
-                        $statuses[] = LeaveRequestStatus::PendingDept->value;
-                    }
-                    if ($user->hasPermission('leave.approve_hr')) {
-                        $statuses[] = LeaveRequestStatus::PendingHr->value;
-                    }
-                    if ($statuses === []) {
-                        return 0;
-                    }
-                    $query = LeaveRequest::query()->whereIn('status', $statuses);
-                    DepartmentScope::apply(
-                        $query,
-                        $user,
-                        viewAllPermission: 'leave.approve_hr',
-                        departmentPermission: 'leave.approve_dept',
-                        deptColumn: 'department_id',
-                        selfColumn: 'employee_id',
-                        selfId: $user->employee_id ? (int) $user->employee_id : null,
-                        deptRelation: 'employee',
-                    );
-
-                    return $query->count();
-                },
+                'counter'     => fn (): int => app(LeaveApprovalPolicy::class)
+                    ->awaitingMyApprovalQuery(LeaveRequest::query(), $user)
+                    ->count(),
             ],
 
             // Payroll > Overtime — pending OT requests.

@@ -57,6 +57,7 @@ class LeaveRequestService
         private readonly ApprovalService $approvals,
         private readonly AttendanceDateMutabilityGuard $attendanceMutability,
         private readonly HolidayService $holidays,
+        private readonly LeaveApprovalPolicy $approvalPolicy,
     ) {}
 
     /**
@@ -109,6 +110,7 @@ class LeaveRequestService
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
+        $approvalQueue = ($filters['signal'] ?? '') === 'awaiting_my_approval';
         $q = LeaveRequest::query()
             ->with([
                 'employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id',
@@ -119,7 +121,9 @@ class LeaveRequestService
                 'canceller:id,name',
             ]);
 
-        TrashedFilter::apply($q, $filters);
+        if (! $approvalQueue) {
+            TrashedFilter::apply($q, $filters);
+        }
 
         if (! empty($filters['employee_id'])) {
             $empId = HashIdFilter::decode(
@@ -138,7 +142,7 @@ class LeaveRequestService
                     ->orWhere('middle_name', SearchOperator::like(), SearchOperator::contains($term))
                     ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))));
         }
-        if (! empty($filters['status'])) {
+        if (! empty($filters['status']) && ! $approvalQueue) {
             if ($filters['status'] === 'pending') {
                 $q->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value]);
             } else {
@@ -164,16 +168,24 @@ class LeaveRequestService
          * that role. `leave_requests` carries no department of its own, which is
          * why DepartmentScope now takes a relation to reach it.
          */
-        DepartmentScope::apply(
-            $q,
-            $user,
-            viewAllPermission: 'leave.approve_hr',
-            departmentPermission: 'leave.approve_dept',
-            deptColumn: 'department_id',
-            selfColumn: 'employee_id',
-            selfId: $user?->employee_id ? (int) $user->employee_id : null,
-            deptRelation: 'employee',
-        );
+        if ($approvalQueue) {
+            if ($user) {
+                $this->approvalPolicy->awaitingMyApprovalQuery($q, $user);
+            } else {
+                $q->whereRaw('1 = 0');
+            }
+        } else {
+            DepartmentScope::apply(
+                $q,
+                $user,
+                viewAllPermission: 'leave.approve_hr',
+                departmentPermission: 'leave.approve_dept',
+                deptColumn: 'department_id',
+                selfColumn: 'employee_id',
+                selfId: $user?->employee_id ? (int) $user->employee_id : null,
+                deptRelation: 'employee',
+            );
+        }
 
         return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }

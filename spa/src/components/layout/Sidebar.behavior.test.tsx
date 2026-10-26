@@ -77,6 +77,21 @@ it('opens Overtime on the actionable approval queue', () => {
   );
 });
 
+it('opens Leave Management on the current-stage approval queue', () => {
+  badgeMock.getBadge.mockImplementation((key) => key === 'leaves'
+    ? { count: 3, severity: 'warning', label: 'Leaves', description: 'Leave requests awaiting your approval' }
+    : undefined);
+  render(
+    <MemoryRouter initialEntries={['/hr/leaves']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Leave Management/ })).toHaveAttribute(
+    'href',
+    '/hr/leaves?signal=awaiting_my_approval',
+  );
+});
+
 it('opens the awaiting-approval filter when purchase requests has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'purchase_requests'
