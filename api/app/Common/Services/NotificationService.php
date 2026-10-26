@@ -117,14 +117,16 @@ class NotificationService
      *
      * @param  User|Collection<int, User>|array<int, User>  $recipients
      * @param  array{title?: string, message?: string, link_to?: string, entity_type?: string, entity_id?: string}  $data
+     * @param  array<int, string>  $recipientReasons  Per-user explanation codes, keyed by internal user ID.
      */
     public function send(
         User|Collection|array $recipients,
         string $type,
         array $data,
         ?string $dedupeKey = null,
+        array $recipientReasons = [],
     ): void {
-        $this->dispatch($recipients, $type, $data, true, $dedupeKey);
+        $this->dispatch($recipients, $type, $data, true, $dedupeKey, $recipientReasons);
     }
 
     /**
@@ -136,14 +138,16 @@ class NotificationService
      *
      * @param  User|Collection<int, User>|array<int, User>  $recipients
      * @param  array{title?: string, message?: string, link_to?: string, entity_type?: string, entity_id?: string}  $data
+     * @param  array<int, string>  $recipientReasons  Per-user explanation codes, keyed by internal user ID.
      */
     public function sendInApp(
         User|Collection|array $recipients,
         string $type,
         array $data,
         ?string $dedupeKey = null,
+        array $recipientReasons = [],
     ): void {
-        $this->dispatch($recipients, $type, $data, false, $dedupeKey);
+        $this->dispatch($recipients, $type, $data, false, $dedupeKey, $recipientReasons);
     }
 
     /**
@@ -203,6 +207,7 @@ class NotificationService
         array $data,
         bool $emailEnabled,
         ?string $dedupeKey,
+        array $recipientReasons = [],
     ): void {
         $users = $this->normaliseRecipients($recipients);
 
@@ -214,12 +219,17 @@ class NotificationService
         $prefs = $this->channelPreferences(array_keys($users), $type);
 
         $now = now();
-        $encoded = json_encode($data);
         $rows = [];
         $events = [];
         $emails = [];
 
         foreach ($users as $userId => $user) {
+            $recipientData = $data;
+            $reason = $recipientReasons[$userId] ?? null;
+            if (is_string($reason) && $reason !== '') {
+                $recipientData['recipient_reason'] = $reason;
+            }
+
             // in_app is opt-OUT: it fires unless an explicit row disables it.
             if (($prefs["{$userId}:in_app"] ?? true) !== false) {
                 $id = (string) Str::uuid();
@@ -230,7 +240,7 @@ class NotificationService
                     'notifiable_type' => $user::class,
                     'notifiable_id' => $userId,
                     'dedupe_key' => $dedupeKey,
-                    'data' => $encoded,
+                    'data' => json_encode($recipientData),
                     'read_at' => null,
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -239,7 +249,7 @@ class NotificationService
                 $events[] = new UserNotificationCreated($userId, [
                     'id' => $id,
                     'type' => $type,
-                    'data' => $data,
+                    'data' => $recipientData,
                     'read_at' => null,
                     'created_at' => $now->toISOString(),
                 ]);

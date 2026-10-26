@@ -12,6 +12,7 @@ object:
 | `subject_type` | Optional machine-readable subject type. Uses explicit `subject_type`, or falls back to legacy `entity_type`. |
 | `subject_id` | Optional string subject identifier. Uses explicit `subject_id`, or falls back to legacy `entity_id`. |
 | `actor_id` | Optional caller-supplied string user identifier. It is not inferred from the current session because dispatch may run in a job or under a portal guard. Callers must use the application's public identifier, not a database key. |
+| `recipient_reason` | Optional per-recipient explanation code. Core approval-step notices set `current_approval_step` or `active_approval_delegate`; it is omitted from shared email payloads. |
 
 The top-level notification row continues to own its recipient, dedupe key, read
 state, and timestamps. Existing rows have no `schema_version`; clients keep
