@@ -363,6 +363,8 @@ The Phase 0 internal destination/badge-key inventory is below, followed by its i
 
 Draft PR [#367](https://github.com/kwat0g/kwatog/pull/367) adds `/budgeting/transfers` (`Budget Transfers`), shown to users with `budgeting.view` or `budgeting.approve`, under the `budgeting` feature. Its `pending_transfers` badge opens `?status=pending&actionable=1`; the badge and filter share the same pending-approval scope. The original 73-destination, 22-badge-key counts above remain the Phase 0 baseline.
 
+Draft PR [#374](https://github.com/kwat0g/kwatog/pull/374) adds the `pending_budgets` click-through to `/budgeting?signal=awaiting_my_approval`. The original badge counted every submitted budget; the new badge and filter share `Budget::scopeAwaitingApprovalFor()`, which follows `BudgetService`'s active direct/delegated approver and maker-checker role rules. The transfer queue remains a separate signal and destination.
+
 | Shell | Path | Label |
 | --- | --- | --- |
 | Supplier portal | `/portal/supplier` | Dashboard |

@@ -348,7 +348,7 @@ The supplied route table includes destinations with no existing badge. Candidate
 
 | Module | Notification types/triggers found | Sidebar item / current badge keys | Coverage note |
 | --- | --- | --- | --- |
-| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Budget Transfers `pending_transfers`; Statements/vendors no count | Candidate AR/AP states exceed current signals. Phase 2's combined `finance.budget.awaiting_my_approval` route at `/budgeting?signal=awaiting_my_approval` remains incomplete. |
+| Accounting | Approval, invoice/payment, bill, budget, dunning, delivery confirmation, mail failure | Invoices `draft_invoices`; Bills `overdue_bills`; Budgeting `pending_budgets`; Budget Transfers `pending_transfers`; Statements/vendors no count | Draft PR #374 replaces the raw submitted-budget count with a shared badge/list maker-checker scope and filtered destination. Draft PR #367 covers transfers separately. Candidate AR/AP states exceed current signals. |
 | Admin | Permission override, account provisioning, mail failure, backup/queue/system paths | Users, roles, audit, settings, sessions, backups, gov tables; no sidebar counts | System-health notices need admin-only destinations and permissions. |
 | Assets | No `NotificationService` call identified | Fixed Assets; no badge | Asset transfer/disposal state exists; candidate only if actionable list is reliable. |
 | Attendance | Missing timeout, overtime submitted/decided | Attendance no count; Overtime `overtime` | Own exception vs approver action must be separated. |
