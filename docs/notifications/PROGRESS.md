@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft notification subject-access work reaches Sales Orders in [PR #423](https://github.com/kwat0g/kwatog/pull/423); the current unit extends it to Purchase Orders. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft subject-access stack reaches Purchase Orders in [PR #424](https://github.com/kwat0g/kwatog/pull/424), based on [PR #423](https://github.com/kwat0g/kwatog/pull/423). API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
 
 ## Phase status
 
@@ -572,7 +572,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The six-class focused batch had **81 passes / 5 unrelated failures**. Four existing email assertions expect `PHP` while `CurrencyDisplayService` renders PHP as `₱`. One portal-catalog assertion expects no rows while the service returns a visible product with `pricing_issue`; its source and behavior are unchanged here. The specifically changed notification tests pass on rerun.
 - PHP syntax passes for all changed PHP files. Pint passes the registry, central service, Sales Order listener, and both changed subject-access tests. Broader Pint reports existing style debt in other touched files; no broad formatting applied. `git diff --check` passes. Test runs used and restored the temporary F-22 workaround. Full API CI, browser/e2e, and complete role matrix remain open.
 
-## Phase 3 Purchase Order subject access gate (branch `notifications/purchase-order-subject-access`; PR pending)
+## Phase 3 Purchase Order subject access gate (draft PR [#424](https://github.com/kwat0g/kwatog/pull/424))
 
 - Route review: Purchasing must be enabled; PO detail requires `purchasing.view` or `purchasing.po.approve`, then `PurchaseOrderController::show()` applies `PurchaseOrderAccessPolicy::canView()`. That policy supplies the same owner, department, and current-approver row scope used by the PO list. The generic approval registry already knew the PO scope but its subject gate incorrectly required `purchasing.view` only and ignored the Purchasing feature flag, under-notifying approval-only route users.
 - Added the exact detail-route rule to `NotificationSubjectAccessRegistry` and routed seven internal PO notices through `sendForSubject()`: submitted/approved, auto-PO approval, supplier response, manual dispatch, late supplier ETA, and acknowledged schedule cancellation. Existing recipient selectors, messages, event timing, and links remain. The two prior `sendInApp()` paths remain email-disabled; late-ETA dedupe and recipient reason stay intact.
