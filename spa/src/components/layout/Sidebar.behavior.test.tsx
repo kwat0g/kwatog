@@ -90,6 +90,9 @@ it('opens the overdue filter when Production Work Orders has a positive badge', 
 
 it('shows the due-soon Work Orders filter alongside overdue', () => {
   badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'work_orders_awaiting_confirmation') {
+      return { count: 3, severity: 'warning', label: 'Awaiting confirmation', description: 'Planned production work orders awaiting confirmation' };
+    }
     if (key === 'work_orders') {
       return { count: 2, severity: 'danger', label: 'Overdue', description: 'Overdue production work orders' };
     }
@@ -111,6 +114,14 @@ it('shows the due-soon Work Orders filter alongside overdue', () => {
     '/production/work-orders?signal=overdue',
   );
   fireEvent.click(screen.getByRole('button', { name: /View all Production Work Orders signals/ }));
+  expect(screen.getByRole('link', { name: 'Planned production work orders awaiting confirmation: 3' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=release',
+  );
+  expect(screen.getByRole('link', { name: 'Overdue production work orders: 2' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
   expect(screen.getByRole('link', { name: 'Production work orders due soon: 4' })).toHaveAttribute(
     'href',
     '/production/work-orders?signal=due_soon',

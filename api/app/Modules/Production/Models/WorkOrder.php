@@ -341,6 +341,12 @@ class WorkOrder extends Model
             ->whereNull('work_orders.deleted_at');
     }
 
+    public function scopeAwaitingConfirmation(Builder $q): Builder
+    {
+        return $q->where('status', WorkOrderStatus::Planned->value)
+            ->whereNull('work_orders.deleted_at');
+    }
+
     public function getProgressPercentageAttribute(): float
     {
         $target = (int) $this->quantity_target;

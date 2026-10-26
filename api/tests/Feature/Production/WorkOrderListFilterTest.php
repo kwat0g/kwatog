@@ -104,6 +104,20 @@ class WorkOrderListFilterTest extends TestCase
             ->assertJsonPath('meta.total', 1);
     }
 
+    public function test_release_signal_returns_only_planned_work_orders(): void
+    {
+        foreach (WorkOrderStatus::cases() as $status) {
+            WorkOrder::factory()->create(['status' => $status->value]);
+        }
+        WorkOrder::factory()->create(['status' => WorkOrderStatus::Planned->value])->delete();
+
+        $response = $this->actingAs($this->user)->getJson('/api/v1/production/work-orders?signal=release');
+
+        $response->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.status', WorkOrderStatus::Planned->value);
+    }
+
     public function test_no_status_filter_returns_all_rows(): void
     {
         WorkOrder::factory()->count(3)->create();
