@@ -27,13 +27,15 @@ final class NotifySystemAdminsOnQueueLongWait
             $admins = User::query()
                 ->where('is_active', true)
                 ->whereHas('role', static fn ($query) => $query->where('slug', 'system_admin'))
-                ->get();
+                ->get()
+                ->filter(static fn (User $admin): bool => $admin->hasPermission('dashboard.admin.view'));
 
             $this->notifications->sendInApp(
                 $admins,
                 'queue.long_wait',
                 [
                     'title' => 'Queue backlog: '.$event->queue,
+                    'link_to' => '/dashboard/admin',
                     'message' => sprintf(
                         'Queue [%s] on [%s] has waited %d seconds.',
                         $event->queue,
