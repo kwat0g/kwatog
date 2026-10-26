@@ -63,7 +63,7 @@ export function WorkLogControl({ order }: { order: MaintenanceWorkOrder }) {
         </Select>
         <ModalFooter>
           <Button type="button" variant="secondary" className="min-h-11 md:min-h-8" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button type="submit" className="min-h-11 md:min-h-8" disabled={!finding.trim() || !actionTaken.trim() || !result || result === 'passed' && (order.parts_handover?.pending ?? 0) > 0} loading={mutation.isPending}>Save work record</Button>
+          <Button type="submit" variant="primary" className="min-h-11 md:min-h-8" disabled={!finding.trim() || !actionTaken.trim() || !result || result === 'passed' && (order.parts_handover?.pending ?? 0) > 0} loading={mutation.isPending}>Save work record</Button>
         </ModalFooter>
       </form>
     </Modal>
@@ -135,13 +135,13 @@ export function RecoveryPanel({ order }: { order: MaintenanceWorkOrder }) {
         {fields.map(({ key, label }) => <Textarea key={key} label={label} required rows={3} value={evidence[key]} onChange={(event) => setEvidence({ ...evidence, [key]: event.target.value })} />)}
         <p className="text-xs text-muted">For the functional test, name the check, expected behavior, and observed behavior.</p>
         <p className="text-xs text-muted">Submission locks work logs and parts until a verifier accepts or rejects the repair.</p>
-        <Button type="submit" className="min-h-hit" disabled={fields.some(({ key }) => !evidence[key].trim())} loading={submit.isPending}>Submit repair</Button>
+        <Button type="submit" variant="primary" className="min-h-hit" disabled={fields.some(({ key }) => !evidence[key].trim())} loading={submit.isPending}>Submit repair</Button>
       </form>}
       {actions.includes('verify_repair') && can('maintenance.wo.verify') && <div className="mt-3 space-y-3">
         <p className="text-sm text-secondary">Confirm physical recovery before acceptance. Production resume remains a separate action.</p>
         <Textarea label="Rejection reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} />
         <div className="flex flex-wrap gap-3">
-          <Button className="min-h-hit" onClick={() => verify.mutate('accept')} loading={verify.isPending}>Accept recovery</Button>
+          <Button variant="primary" className="min-h-hit" onClick={() => verify.mutate('accept')} loading={verify.isPending}>Accept recovery</Button>
           <Button variant="danger" className="min-h-hit" disabled={!reason.trim() || verify.isPending} onClick={() => verify.mutate('reject')}>Reject repair</Button>
         </div>
       </div>}

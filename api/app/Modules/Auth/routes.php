@@ -11,6 +11,7 @@ use App\Modules\Auth\Controllers\NotificationController;
 use App\Modules\Auth\Controllers\PreferencesController;
 use App\Modules\Auth\Controllers\ResetPasswordController;
 use App\Modules\Auth\Controllers\SignInController;
+use App\Modules\Auth\Controllers\UserInviteController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {

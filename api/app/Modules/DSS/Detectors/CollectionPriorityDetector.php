@@ -7,6 +7,7 @@ namespace App\Modules\DSS\Detectors;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 
 /**
  * D09 — collections priority. Reuses InvoiceService::aging() (the AR aging
@@ -63,10 +64,11 @@ class CollectionPriorityDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_bucket']));
-        $aging = $this->invoices->aging();
+        $rowsScanned = 0;
+        $aging = $this->invoices->aging(rowsScanned: $rowsScanned);
 
         $emissions = [];
 
@@ -106,6 +108,6 @@ class CollectionPriorityDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $rowsScanned);
     }
 }

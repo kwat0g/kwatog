@@ -47,7 +47,7 @@ export default function AdminCreateUserPage() {
  staleTime: 60_000,
  });
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { department_id: '', employee_id: '', email: '', role_id: '', send_welcome: true },
  });
