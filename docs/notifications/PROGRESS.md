@@ -515,12 +515,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - This is isolated from subject-access feature work.
 
 
-## Phase 3 Accounting bill subject access gate (draft PR pending)
+## Phase 3 Accounting bill subject access gate (draft PR [#417](https://github.com/kwat0g/kwatog/pull/417))
 
 - Registered Bill subjects with the global bill detail route rule: Accounting must be enabled and the recipient must have `accounting.bills.view`. Bill payment-posted notices now pass through `sendForSubject()`; the existing requester permission check and actor exclusion remain.
 - Supplier invoice email failure notices now target only the active Bill creator. Both immediate enqueue/invalid-address failures and queued delivery failures carry the Bill subject and pass the same access gate. The old broad `accounting.vendors.view` fanout was removed. No active creator means log and skip; no broad fallback is configured. `Bill.created_by` is the available owner field; no separate AP assignment rule was found in these paths.
 - `NotificationServiceSubjectAccessTest`: **8 passed / 40 assertions**. Supplier invoice email failure target test: **1 passed / 8 assertions**, including the queued-mailable failure path. Bill payment self-post and distinct-poster cases: **2 passed / 23 assertions**. These targeted tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly.
-- PHP syntax checks pass for all six changed PHP files. Pint passes five files; its check reports `class_attributes_separation` in `BillService.php`, outside this change. `git diff --check` passes. API CI remains blocked before PHPUnit by inherited F-22. Draft PR creation and CI verification remain pending.
+- PHP syntax checks pass for all six changed PHP files. Pint passes five files; its check reports `class_attributes_separation` in `BillService.php`, outside this change. `git diff --check` passes. API CI remains blocked before PHPUnit by inherited F-22. Draft PR #417 is based on the separate F-39 finding PR #416; CI status is pending.
 
 ## Outstanding proof / risks
 
