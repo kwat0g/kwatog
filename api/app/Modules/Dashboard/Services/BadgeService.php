@@ -28,7 +28,6 @@ use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Services\ContactInquiryInboxService;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
-use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Models\MrpPlan;
@@ -78,6 +77,7 @@ class BadgeService
         'leaves' => 'leave',
         'overtime' => 'attendance',
         'maintenance_wo' => 'maintenance',
+        'maintenance_wo_unassigned' => 'maintenance',
         'low_stock' => 'inventory',
         'ncrs' => 'quality',
         'profile_requests' => 'hr',
@@ -300,13 +300,14 @@ class BadgeService
                 'permissions' => ['maintenance.view'],
                 'label'       => 'Maintenance Work Orders',
                 'description' => 'Open maintenance work orders',
-                'counter'     => fn (): int => MaintenanceWorkOrder::query()
-                    ->whereIn('status', [
-                        MaintenanceWorkOrderStatus::Open->value,
-                        MaintenanceWorkOrderStatus::Assigned->value,
-                        MaintenanceWorkOrderStatus::InProgress->value,
-                    ])
-                    ->count(),
+                'counter'     => fn (): int => MaintenanceWorkOrder::query()->open()->count(),
+            ],
+            'maintenance_wo_unassigned' => [
+                'permissions' => ['maintenance.wo.assign'],
+                'required_permissions' => ['maintenance.view'],
+                'label'       => 'Unassigned',
+                'description' => 'Open maintenance work orders without an assignee',
+                'counter'     => fn (): int => MaintenanceWorkOrder::query()->unassigned()->count(),
             ],
 
             // Warehouse > Stock levels — items at/below reorder point.

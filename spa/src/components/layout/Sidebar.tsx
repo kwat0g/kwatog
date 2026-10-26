@@ -136,6 +136,8 @@ function badgeDestination(path: string, key: string): string {
     work_orders: 'signal=overdue',
     work_orders_due_soon: 'signal=due_soon',
     work_orders_paused: 'signal=paused',
+    maintenance_wo: 'queue=open',
+    maintenance_wo_unassigned: 'queue=unassigned',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
@@ -768,6 +770,7 @@ export const SECTIONS: NavSection[] = [
         feature: 'maintenance',
         permission: 'maintenance.view',
         badgeKey: 'maintenance_wo',
+        badgeKeys: ['maintenance_wo', 'maintenance_wo_unassigned'],
       },
       {
         to: '/maintenance/schedules',
