@@ -72,10 +72,17 @@ class PayrollAdjustmentService
             // status non-fillable; service-only.
             $adj->forceFill(['status' => PayrollAdjustmentStatus::Pending->value])->save();
 
-            $audience = ApprovalDelegation::approvalAudience('payroll.adjustments.approve')
-                ->filter(fn (User $approver): bool => $approver->hasPermission('payroll.adjustments.view'))
-                ->reject(fn (User $approver): bool => $approver->role?->slug === 'system_admin')
-                ->reject(fn (User $approver): bool => (int) $approver->id === (int) $user->id);
+            $audience = collect();
+            foreach (['approve', 'reject'] as $action) {
+                $permission = "payroll.adjustments.{$action}";
+                $audience = $audience->merge(
+                    ApprovalDelegation::approvalAudience($permission)
+                        ->filter(fn (User $approver): bool => $approver->hasPermission('payroll.adjustments.view')
+                            && $approver->role?->slug !== 'system_admin'
+                            && ApprovalDelegation::canActForPermission($approver, $permission, [(int) $user->id])),
+                );
+            }
+            $audience = $audience->unique('id')->reject(fn (User $approver): bool => (int) $approver->id === (int) $user->id);
             app(NotificationService::class)->send($audience, 'approval.action_required', [
                 'title' => 'Payroll adjustment needs approval',
                 'message' => 'A payroll adjustment is waiting for review.',
