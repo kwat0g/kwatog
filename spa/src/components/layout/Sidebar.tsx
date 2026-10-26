@@ -1137,6 +1137,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
       let target = item.to;
       if ((entry?.count ?? 0) > 0) {
         if (item.badgeKey === 'purchase_requests') target = `${item.to}?signal=awaiting_my_approval`;
+        else if (item.badgeKey === 'pending_budgets') target = `${item.to}?signal=awaiting_my_approval`;
         else if (item.badgeKey === 'pending_transfers') target = `${item.to}?status=pending&actionable=1`;
         else if (item.badgeKey === 'pending_grn') target = `${item.to}?status=pending_qc`;
         else if (item.badgeKey === 'pending_inspections') target = `${item.to}?work_queue=to_inspect`;

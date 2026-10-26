@@ -129,6 +129,13 @@ class BudgetController extends Controller
     {
         $this->decodeHashIds($request);
 
+        $request->validate([
+            'per_page' => 'nullable|integer|min:1|max:100',
+            'page' => 'nullable|integer|min:1',
+            'signal' => ['nullable', Rule::in(['awaiting_my_approval'])],
+            'status' => ['nullable', Rule::in(array_map(static fn (BudgetStatus $status): string => $status->value, BudgetStatus::cases()))],
+        ]);
+
         $query = Budget::with(['fiscalYear', 'department']);
         if ($request->filled('fiscal_year_id')) {
             $query->byFiscalYear((int) $request->input('fiscal_year_id'));
@@ -142,12 +149,11 @@ class BudgetController extends Controller
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         }
-
-        $request->validate([
-            'per_page' => 'nullable|integer|min:1|max:100',
-            'page' => 'nullable|integer|min:1',
-            'status' => ['nullable', Rule::in(array_map(static fn (BudgetStatus $status): string => $status->value, BudgetStatus::cases()))],
-        ]);
+        if ($request->input('signal') === 'awaiting_my_approval') {
+            $actor = $request->user();
+            abort_unless($actor instanceof User, 401);
+            $query->awaitingApprovalFor($actor);
+        }
         $perPage = (int) $request->input('per_page', 20);
         $budgets = $query->orderByDesc('created_at')->paginate($perPage);
         $this->consumption->hydrate(collect($budgets->items()));
