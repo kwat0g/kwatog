@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { LuSettings2, LuRows3, LuRows2, LuRows4 } from '@/lib/icons';
+import { LuSettings2 } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { Checkbox } from './Checkbox';
 import type { Column } from './DataTable';
 import type { TableDensity } from '@/stores/tablePrefsStore';
 import { focusRing } from '@/lib/focus';
+import { Toolbar } from './Toolbar';
 
 interface ToolbarProps<T> {
  columns: Column<T>[];
@@ -32,7 +33,11 @@ export function DataTableToolbar<T>({
  if (!showVisibilityToggle && !showDensity) return null;
 
  return (
- <div className="flex justify-end mb-2 gap-1 relative">
+ <Toolbar
+ layout="table-toolbar"
+ className="relative mb-4 justify-end"
+ end={(
+ <>
  {showVisibilityToggle && (
  <>
  <button
@@ -40,16 +45,17 @@ export function DataTableToolbar<T>({
  title="Customize columns"
  aria-label="Customize columns"
  onClick={() => setVisMenuOpen((v) => !v)}
- className={cn('h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated transition-colors duration-fast cursor-pointer', focusRing)}
+ className={cn('inline-flex h-9 items-center justify-center gap-2 rounded-md border border-default px-3 text-label text-primary hover:bg-elevated transition-colors duration-fast cursor-pointer', focusRing)}
  >
  <LuSettings2 size={14} />
+ <span>Columns</span>
  </button>
  {visMenuOpen && (
  <div
- className="absolute right-0 top-8 z-30 w-56 bg-elevated border border-default rounded-md py-2"
+ className="absolute right-0 top-10 z-30 w-56 bg-elevated border border-default rounded-md py-2"
  onMouseLeave={() => setVisMenuOpen(false)}
  >
- <div className="px-2.5 pb-1.5 text-2xs uppercase tracking-wider text-muted font-medium">
+ <div className="px-3 pb-2 text-caption text-muted font-medium">
  Columns
  </div>
  {columns
@@ -57,7 +63,7 @@ export function DataTableToolbar<T>({
  .map((c) => (
  <label
  key={c.key}
- className="flex items-center gap-2 px-2.5 h-7 text-xs cursor-pointer hover:bg-subtle"
+ className="flex min-h-9 items-center gap-2 px-3 text-label cursor-pointer hover:bg-subtle"
  >
  <Checkbox
  checked={!hiddenColumnKeys.has(c.key)}
@@ -72,26 +78,23 @@ export function DataTableToolbar<T>({
  )}
  </>
  )}
- {showDensity &&
- (['compact', 'default', 'spacious'] as TableDensity[]).map((d) => {
- const Icon = d === 'compact' ? LuRows4 : d === 'spacious' ? LuRows2 : LuRows3;
- return (
- <button
- key={d}
- title={`${d} rows`}
- aria-label={`${d} density`}
- aria-pressed={density === d}
- onClick={() => onDensityChange?.(d)}
- className={cn(
- 'h-7 w-7 inline-flex items-center justify-center rounded-md border border-default transition-colors duration-fast cursor-pointer',
- focusRing,
- density === d ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
- )}
+ {showDensity && (
+ <label className="flex items-center gap-2 text-label text-muted">
+ <span>Density</span>
+ <select
+  value={density}
+  aria-label="Density"
+  onChange={(event) => onDensityChange?.(event.target.value as TableDensity)}
+  className={cn('h-9 rounded-md border border-default bg-canvas px-3 text-label text-primary cursor-pointer', focusRing)}
  >
- <Icon size={14} />
- </button>
- );
- })}
- </div>
+  <option value="default">Comfortable</option>
+  <option value="compact">Compact</option>
+  <option value="spacious">Spacious</option>
+ </select>
+ </label>
+ )}
+ </>
+ )}
+ />
  );
 }

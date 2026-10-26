@@ -34,7 +34,7 @@ export function LinkedRecords({ groups, className }: LinkedRecordsProps) {
  <div className="flex items-center gap-2">
  <button 
  onClick={item.onClick}
- className="text-[12px] font-mono text-primary hover:underline"
+ className="text-[12px] font-mono text-link hover:text-link-hover hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm"
  >
  {item.id}
  </button>

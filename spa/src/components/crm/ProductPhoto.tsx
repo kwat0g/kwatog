@@ -28,7 +28,7 @@ export function ProductPhotoButton({
       }}
     >
       <img src={photo.url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-      <span aria-hidden="true" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100">
+      <span aria-hidden="true" className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded border border-default bg-canvas text-primary opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100">
         <LuEye size={13} />
       </span>
     </button>

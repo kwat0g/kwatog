@@ -207,7 +207,7 @@ function CreateCreditNoteModal({
     setError,
     setValue,
     formState: { errors },
-  } = useForm<FormValues>({
+  } = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       type: '',
