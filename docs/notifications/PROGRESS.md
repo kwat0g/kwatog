@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft PRs [#386](https://github.com/kwat0g/kwatog/pull/386), [#387](https://github.com/kwat0g/kwatog/pull/387), and [#388](https://github.com/kwat0g/kwatog/pull/388) align inbound shipment, Sales Orders confirmation, and Production awaiting-confirmation/overdue/due-soon/paused badges with their filtered lists. Latest local targeted Production API tests pass 5/5 (62 assertions); Sidebar behavior passes 36/36. Backend CI still fails on F-22; SPA CI stops at existing dependency advisories. Local full SPA typecheck also reports unrelated project-wide errors. F-29 tracks an inherited parent-route permission mismatch for the existing overdue/due-soon keys in its own follow-up PR. Other open units cover central Laravel dispatch, remaining badge parity, notification anchors/catalogs, and scoped recipient fixes. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Draft PRs [#386](https://github.com/kwat0g/kwatog/pull/386), [#387](https://github.com/kwat0g/kwatog/pull/387), and [#388](https://github.com/kwat0g/kwatog/pull/388) align inbound shipment, Sales Orders confirmation, and Production awaiting-confirmation/overdue/due-soon/paused badges with their filtered lists. Latest local targeted Production API tests pass 5/5 (62 assertions); Sidebar behavior passes 36/36. PR #388 checks are rerunning after the latest push; the previous API run failed before PHPUnit on F-22, and SPA CI stopped at dependency advisories. Local full SPA typecheck also reports unrelated project-wide errors. F-29 tracks an inherited parent-route permission mismatch for the existing overdue/due-soon keys and sidebar link in its own follow-up PR. Other open units cover central Laravel dispatch, remaining badge parity, notification anchors/catalogs, and scoped recipient fixes. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -31,7 +31,7 @@
 | F-05/F-09. MRB held-list badge | `notifications/mrb-holds-sidebar` | [#385](https://github.com/kwat0g/kwatog/pull/385) | `aec4fc97`, `def5bc68` |
 | F-04/F-05/F-09. Inbound shipments badge | `notifications/mid-pipe-shipments` | [#386](https://github.com/kwat0g/kwatog/pull/386) | `a168e7a7`, `7c5a50d7` |
 | F-09. Sales Orders confirmation queue parity | `notifications/sales-order-confirmation-badge` | [#387](https://github.com/kwat0g/kwatog/pull/387) | `bcce67a0` |
-| F-09. Production work-order signal/list parity | `notifications/production-overdue-badge` | [#388](https://github.com/kwat0g/kwatog/pull/388) | `f011d84c`, `60e20e2b`, `51bb83d3` plus unpushed changes |
+| F-09. Production work-order signal/list parity | `notifications/production-overdue-badge` | [#388](https://github.com/kwat0g/kwatog/pull/388) | `f011d84c`, `60e20e2b`, `51bb83d3`, `25f9e78f` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
