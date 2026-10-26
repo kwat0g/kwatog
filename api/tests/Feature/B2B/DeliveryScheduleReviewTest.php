@@ -10,10 +10,13 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Services\SupplierDeliveryScheduleService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -228,5 +231,47 @@ class DeliveryScheduleReviewTest extends TestCase
             ->postJson("/api/v1/b2b/portal-access/delivery-schedules/{$supplier->hash_id}/acknowledge")
             ->assertStatus(410);
         $this->assertSame('submitted', $supplier->fresh()->status->value);
+    }
+
+    public function test_withdrawn_acknowledged_supplier_schedule_notifies_only_po_approvers_with_a_direct_link(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $purchaseOrder = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
+        $purchaseOrder->forceFill(['status' => 'acknowledged'])->save();
+        $schedule = $this->supplierSchedule([
+            'vendor_id' => $vendor->id,
+            'purchase_order_id' => $purchaseOrder->id,
+            'status' => 'acknowledged',
+        ]);
+        $portalUser = SupplierPortalUser::create([
+            'vendor_id' => $vendor->id,
+            'name' => 'Supplier Contact',
+            'email' => 'supplier-'.uniqid().'@test.local',
+            'password' => bcrypt('Password1!'),
+            'is_active' => true,
+        ]);
+        $approver = $this->actor(['purchasing.po.approve']);
+        $viewer = $this->actor(['purchasing.view']);
+
+        app(SupplierDeliveryScheduleService::class)->cancel(
+            $schedule,
+            (int) $vendor->id,
+            (int) $portalUser->id,
+            'Supplier cannot meet the planned date.',
+        );
+
+        $notice = DB::table('notifications')
+            ->where('notifiable_id', $approver->id)
+            ->where('type', 'supplier.schedule_cancelled')
+            ->first();
+        $this->assertNotNull($notice);
+        $data = json_decode($notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/purchasing/purchase-orders/'.$purchaseOrder->hash_id, $data['link_to']);
+        $this->assertSame(PurchaseOrder::class, $data['subject_type']);
+        $this->assertSame((string) $purchaseOrder->id, $data['subject_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $viewer->id,
+            'type' => 'supplier.schedule_cancelled',
+        ]);
     }
 }

@@ -458,7 +458,7 @@ class SupplierResponseService
     private function notifyPurchasingAudience(PurchaseOrder $po, PurchaseOrderResponse $response): void
     {
         try {
-            $this->notifications->send($this->purchasingAudience($po), 'supplier.po_responded', [
+            $this->notifications->sendForSubject($po, $this->purchasingAudience($po), 'supplier.po_responded', [
                 'title'       => "PO {$po->po_number} — supplier {$response->response_type->label()}",
                 'message'     => $this->responseSummary($response),
                 'link_to'     => "/purchasing/purchase-orders/{$po->hash_id}",

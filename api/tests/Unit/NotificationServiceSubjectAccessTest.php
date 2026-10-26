@@ -26,6 +26,7 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderCrew;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,6 +39,91 @@ use Tests\TestCase;
 class NotificationServiceSubjectAccessTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_purchase_order_subject_matches_detail_route_permission_and_row_scope(): void
+    {
+        app(SettingsService::class)->set('modules.purchasing', true, 'modules');
+        $view = Permission::firstOrCreate(
+            ['slug' => 'purchasing.view'],
+            ['name' => 'View purchasing', 'module' => 'purchasing'],
+        );
+        $approve = Permission::firstOrCreate(
+            ['slug' => 'purchasing.po.approve'],
+            ['name' => 'Approve purchase orders', 'module' => 'purchasing'],
+        );
+        $viewerRole = Role::firstOrCreate(['slug' => 'notification_po_viewer'], ['name' => 'Notification PO Viewer']);
+        $viewerRole->permissions()->syncWithoutDetaching([$view->id]);
+        $approverRole = Role::firstOrCreate(['slug' => 'notification_po_approver'], ['name' => 'Notification PO Approver']);
+        $approverRole->permissions()->syncWithoutDetaching([$approve->id]);
+        $owner = User::factory()->withRole($viewerRole->slug)->create();
+        $outOfScope = User::factory()->withRole($viewerRole->slug)->create();
+        $approverWithoutListPermission = User::factory()->withRole($approverRole->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $purchaseOrder = PurchaseOrder::factory()->create(['created_by' => $owner->id]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.purchase_order_subject_access',
+                'subject_type' => PurchaseOrder::class,
+                'subject_id' => $purchaseOrder->id,
+                'user_ids' => [$outOfScope->id, $withoutPermission->id],
+            ],
+        );
+
+        app(NotificationService::class)->sendForSubject(
+            $purchaseOrder,
+            [$owner, $approverWithoutListPermission, $outOfScope, $withoutPermission],
+            'test.purchase_order_subject_access',
+            ['title' => 'Purchase order update', 'message' => 'The order changed.'],
+            emailEnabled: false,
+        );
+
+        foreach ([$owner, $approverWithoutListPermission] as $eligible) {
+            $this->assertDatabaseHas('notifications', [
+                'notifiable_id' => $eligible->id,
+                'type' => 'test.purchase_order_subject_access',
+            ]);
+            Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $eligible->id);
+        }
+        foreach ([$outOfScope, $withoutPermission] as $denied) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_id' => $denied->id,
+                'type' => 'test.purchase_order_subject_access',
+            ]);
+            Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $denied->id);
+        }
+
+        app(SettingsService::class)->set('modules.purchasing', false, 'modules');
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.disabled_purchase_order_subject',
+                'subject_type' => PurchaseOrder::class,
+                'subject_id' => $purchaseOrder->id,
+                'user_ids' => [$owner->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification delivery skipped: no eligible recipients.',
+            ['type' => 'test.disabled_purchase_order_subject'],
+        );
+
+        app(NotificationService::class)->sendForSubject(
+            $purchaseOrder,
+            $owner,
+            'test.disabled_purchase_order_subject',
+            ['title' => 'Purchase order update', 'message' => 'Purchasing is disabled.'],
+            emailEnabled: false,
+        );
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $owner->id,
+            'type' => 'test.disabled_purchase_order_subject',
+        ]);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->type === 'test.disabled_purchase_order_subject');
+    }
 
     public function test_only_recipients_with_permission_and_record_scope_get_notice(): void
     {

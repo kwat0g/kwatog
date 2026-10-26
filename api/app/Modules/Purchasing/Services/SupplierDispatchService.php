@@ -282,13 +282,13 @@ class SupplierDispatchService
             ->where('is_active', true)
             ->get();
 
-        app(NotificationService::class)->sendInApp($recipients, 'supplier.dispatch_action_required', [
+        app(NotificationService::class)->sendForSubject($purchaseOrder, $recipients, 'supplier.dispatch_action_required', [
             'title' => 'Supplier PO needs manual transmission',
             'message' => "PO {$purchaseOrder->po_number} has no active supplier portal recipient. Send the approved PO through an approved channel and confirm transmission.",
             'link_to' => "/purchasing/purchase-orders/{$purchaseOrder->hash_id}",
             'entity_type' => 'purchase_order',
             'entity_id' => $purchaseOrder->hash_id,
-        ]);
+        ], emailEnabled: false);
     }
 
     private function recordFailure(int $dispatchId, Throwable $exception): void
