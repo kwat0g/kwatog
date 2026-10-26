@@ -482,6 +482,7 @@ class AlertEngineService
                     if ($slot->machine_id || $slot->mold_id) {
                         $recipients = $recipients->merge(User::where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', 'maintenance_tech'))->get());
                     }
+                    $recipients = $recipients->filter(fn (User $user): bool => $user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view'))->values();
                     app(NotificationService::class)->sendInApp($recipients, 'production.assignment.review', [
                         'title' => 'Assignment needs review: '.$wo->wo_number, 'message' => $message,
                         'link_to' => '/production/work-orders/'.$wo->hash_id, 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,

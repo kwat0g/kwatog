@@ -296,6 +296,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `Sidebar.permissions.test.tsx`: **25 passed**. `productionRoutes.permissions.test.tsx`: **3 passed**, covering parent-only, Work-Order-only, and both permissions.
 - PHP syntax, targeted ESLint, and `git diff --check` pass. Full suite and browser QA remain outstanding.
 
+## Separate finding fix: F-30 Production assignment alert access (draft PR #390)
+
+- Equipment-triggered assignment alerts added active `maintenance_tech` users even though the linked Work Order route requires `production.view` and `production.work_orders.view`, which the seeded technician role lacks.
+- The existing PPC and Production Manager audience and event timing stay unchanged. The sender now filters recipients through both permissions before calling `NotificationService`.
+- `ProductionAssignmentAlertAudienceTest`: **1 passed / 10 assertions**. Confirms PPC and Production Manager receive the alert, Maintenance Technician does not, and an eligible notice links to the exact Work Order.
+- PHP syntax and `git diff --check` pass. `pint --test` reports pre-existing style debt in the inventory query of `AlertEngineService.php`, outside the changed lines. PR CI and full-suite verification remain outstanding.
+
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
 - `Budget::scopeAwaitingApprovalFor()` is shared by `pending_budgets` and `/budgets?signal=awaiting_my_approval`. It counts only submitted budgets a direct approver or active delegate can act on under the existing maker-checker role rule, and excludes the submitter acting on their own budget. The badge remains `budgeting.view`-gated per policy; approval-only users now get a separate restricted queue in PR #377.
