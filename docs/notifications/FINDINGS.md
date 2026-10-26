@@ -1,7 +1,7 @@
 # Separate-track findings
 
-**Date:** 2026-10-25
-**Status:** audit observations only. No application code changed. Each finding needs its own bug-fix PR after policy review where recipient rules are involved.
+**Date:** 2026-10-26
+**Status:** Audit observations. Draft recipient fixes for F-21 and F-22 are tracked in PR #333; other findings remain separate. Recipient changes follow the approved policy.
 
 | ID | Severity | Finding | Evidence / certainty | Separate fix direction |
 | --- | --- | --- | --- | --- |
