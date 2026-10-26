@@ -6,9 +6,11 @@ namespace App\Common\Services;
 
 use App\Common\Events\UserNotificationCreated;
 use App\Common\Mail\UserNotificationMail;
+use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification as LaravelNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -151,6 +153,65 @@ class NotificationService
         array $recipientReasons = [],
     ): void {
         $this->dispatch($recipients, $type, $data, false, $dedupeKey, $recipientReasons);
+    }
+
+    /**
+     * Send only to recipients who can open a supported approval-backed subject.
+     * Unknown subject types fail closed until their module access rule is registered.
+     *
+     * @param  User|Collection<int, User>|array<int, User>  $recipients
+     * @param  array<string, mixed>  $data
+     * @param  array<int, string>  $recipientReasons
+     */
+    public function sendForSubject(
+        Model $subject,
+        User|Collection|array $recipients,
+        string $type,
+        array $data,
+        ?string $dedupeKey = null,
+        array $recipientReasons = [],
+    ): void {
+        $class = $subject->getMorphClass();
+        if (! $subject->exists || $subject->getKey() === null
+            || ! $subject->newQuery()->whereKey($subject->getKey())->exists()) {
+            Log::warning('Notification delivery skipped: subject is unavailable.', [
+                'type' => $type,
+                'subject_type' => $class,
+                'subject_id' => $subject->getKey(),
+            ]);
+
+            return;
+        }
+        if (ApprovalTypeRegistry::forClass($class) === null) {
+            Log::warning('Notification delivery skipped: subject has no registered access rule.', [
+                'type' => $type,
+                'subject_type' => $class,
+                'subject_id' => $subject->getKey(),
+            ]);
+
+            return;
+        }
+
+        $eligible = [];
+        $deniedUserIds = [];
+        foreach ($this->normaliseRecipients($recipients) as $userId => $user) {
+            if (ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $subject->getKey())) {
+                $eligible[$userId] = $user;
+            } else {
+                $deniedUserIds[] = $userId;
+            }
+        }
+
+        if ($deniedUserIds !== []) {
+            Log::warning('Notification recipients lack subject access; delivery suppressed.', [
+                'type' => $type,
+                'subject_type' => $class,
+                'subject_id' => $subject->getKey(),
+                'user_ids' => $deniedUserIds,
+            ]);
+        }
+
+        $this->dispatch($eligible, $type, $data, true, $dedupeKey, $recipientReasons);
     }
 
     /** Deliver an existing Laravel notification through the central dispatcher. */

@@ -379,7 +379,8 @@ class ApprovalService
             }
         }
 
-        $this->notifications->send(
+        $this->notifications->sendForSubject(
+            $approvable,
             collect($recipientsByReason)->flatten(1)->unique('id')->values(),
             'approval.action_required',
             $data,
@@ -397,14 +398,11 @@ class ApprovalService
             return;
         }
 
-        if (! ApprovalTypeRegistry::userCanViewRecord($submitter, $approvable->getMorphClass(), (int) $approvable->getKey())) {
-            return;
-        }
         [$hashId, $link] = $this->approvalLink($approvable, $meta);
         $number = $meta['number'] ? $approvable->getAttribute($meta['number']) : null;
         $reference = is_string($number) && $number !== '' ? " {$number}" : '';
         $message = "{$meta['label']}{$reference} was ".($type === 'approval.rejected' ? 'rejected.' : 'approved.');
-        $this->notifications->send($submitter, $type, [
+        $this->notifications->sendForSubject($approvable, $submitter, $type, [
             'title' => $title,
             'message' => $message,
             'link_to' => $link,

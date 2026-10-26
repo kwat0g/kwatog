@@ -8,6 +8,7 @@ use App\Common\Events\UserNotificationCreated;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Support\ApprovalTypeRegistry;
+use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -34,8 +35,9 @@ class ApprovalSubmitterOutcomeVisibilityTest extends TestCase
         $submitter = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'employee')->value('id'),
         ]);
-        $this->assertFalse(ApprovalTypeRegistry::userCanViewRecord($submitter, Asset::class, 101));
-        $this->notifyOutcome($submitter, 101);
+        $hiddenAsset = $this->asset($submitter, 'AST-NOTIFY-101');
+        $this->assertFalse(ApprovalTypeRegistry::userCanViewRecord($submitter, Asset::class, $hiddenAsset->id));
+        $this->notifyOutcome($submitter, $hiddenAsset);
 
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $submitter->id,
@@ -45,27 +47,33 @@ class ApprovalSubmitterOutcomeVisibilityTest extends TestCase
         $visibleSubmitter = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
-        $this->assertTrue(ApprovalTypeRegistry::userCanViewRecord($visibleSubmitter, Asset::class, 102));
-        $this->notifyOutcome($visibleSubmitter, 102);
+        $visibleAsset = $this->asset($visibleSubmitter, 'AST-NOTIFY-102');
+        $this->assertTrue(ApprovalTypeRegistry::userCanViewRecord($visibleSubmitter, Asset::class, $visibleAsset->id));
+        $this->notifyOutcome($visibleSubmitter, $visibleAsset);
 
         $notice = DB::table('notifications')
             ->where('notifiable_id', $visibleSubmitter->id)
             ->where('type', 'approval.rejected')
             ->first();
         $this->assertNotNull($notice);
-        $this->assertSame('/assets/'.app('hashids')->encode(102), json_decode((string) $notice->data, true)['link_to']);
+        $this->assertSame('/assets/'.$visibleAsset->hash_id, json_decode((string) $notice->data, true)['link_to']);
     }
 
-    private function notifyOutcome(User $submitter, int $assetId): void
+    private function asset(User $submitter, string $assetCode): Asset
     {
-        $asset = new Asset;
-        $asset->setRawAttributes([
-            'id' => $assetId,
-            'asset_code' => "AST-{$assetId}",
+        return Asset::create([
+            'asset_code' => $assetCode,
+            'name' => 'Notification access asset',
+            'category' => AssetCategory::Equipment->value,
+            'acquisition_date' => '2026-01-15',
+            'acquisition_cost' => '12000.00',
+            'useful_life_years' => 5,
             'disposal_requested_by' => $submitter->id,
-        ], true);
-        $asset->exists = true;
+        ]);
+    }
 
+    private function notifyOutcome(User $submitter, Asset $asset): void
+    {
         $method = new ReflectionMethod(ApprovalService::class, 'notifySubmitter');
         $method->setAccessible(true);
         $method->invoke(
