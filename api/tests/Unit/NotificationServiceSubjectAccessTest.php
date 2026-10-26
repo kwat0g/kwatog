@@ -26,6 +26,9 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Maintenance\Models\MaintenancePartRequest;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -974,5 +977,69 @@ class NotificationServiceSubjectAccessTest extends TestCase
         app(SettingsService::class)->set('modules.production', false, 'modules');
         $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($viewer, $wo));
         $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($worker, $wo));
+    }
+
+    public function test_maintenance_subjects_follow_the_linked_detail_and_handover_routes(): void
+    {
+        app(SettingsService::class)->set('modules.maintenance', true, 'modules');
+        app(SettingsService::class)->set('modules.inventory', true, 'modules');
+        $maintenanceView = Permission::firstOrCreate(['slug' => 'maintenance.view'], ['name' => 'View maintenance', 'module' => 'maintenance']);
+        $assignedView = Permission::firstOrCreate(['slug' => 'maintenance.work.assigned'], ['name' => 'View assigned maintenance', 'module' => 'maintenance']);
+        $pickingView = Permission::firstOrCreate(['slug' => 'inventory.picking.view'], ['name' => 'View material handovers', 'module' => 'inventory']);
+        $viewerRole = Role::firstOrCreate(['slug' => 'notification_maintenance_viewer'], ['name' => 'Notification Maintenance Viewer']);
+        $viewerRole->permissions()->sync([$maintenanceView->id]);
+        $workerRole = Role::firstOrCreate(['slug' => 'notification_maintenance_worker'], ['name' => 'Notification Maintenance Worker']);
+        $workerRole->permissions()->sync([$assignedView->id]);
+        $pickerRole = Role::firstOrCreate(['slug' => 'notification_maintenance_picker'], ['name' => 'Notification Maintenance Picker']);
+        $pickerRole->permissions()->sync([$pickingView->id]);
+        $viewer = User::factory()->withRole($viewerRole->slug)->create(['is_active' => true]);
+        $department = Department::firstOrCreate(['code' => 'MAINT'], ['name' => 'Maintenance', 'is_active' => true]);
+        $employee = Employee::factory()->create(['department_id' => $department->id, 'status' => 'active']);
+        $assignedWorker = User::factory()->withRole($workerRole->slug)->create(['employee_id' => $employee->id, 'is_active' => true]);
+        $otherEmployee = Employee::factory()->create(['department_id' => $department->id, 'status' => 'active']);
+        $unassignedWorker = User::factory()->withRole($workerRole->slug)->create(['employee_id' => $otherEmployee->id, 'is_active' => true]);
+        $picker = User::factory()->withRole($pickerRole->slug)->create(['is_active' => true]);
+        $machine = Machine::factory()->create();
+        $order = MaintenanceWorkOrder::query()->create([
+            'mwo_number' => 'NOTICE-'.uniqid(), 'maintainable_type' => 'machine', 'maintainable_id' => $machine->id,
+            'type' => 'corrective', 'priority' => 'high', 'description' => 'Access test', 'status' => 'in_progress',
+            'assigned_to' => $employee->id, 'created_by' => $viewer->id,
+        ]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.maintenance_subject_access',
+                'subject_type' => MaintenanceWorkOrder::class,
+                'subject_id' => $order->id,
+                'user_ids' => [$unassignedWorker->id, $picker->id],
+            ],
+        );
+        app(NotificationService::class)->sendForSubject($order, [$viewer, $assignedWorker, $unassignedWorker, $picker],
+            'test.maintenance_subject_access', ['title' => 'Maintenance update'], emailEnabled: false);
+
+        foreach ([$viewer, $assignedWorker] as $eligible) {
+            $this->assertDatabaseHas('notifications', ['notifiable_id' => $eligible->id, 'type' => 'test.maintenance_subject_access']);
+            Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $eligible->id);
+        }
+        foreach ([$unassignedWorker, $picker] as $denied) {
+            $this->assertDatabaseMissing('notifications', ['notifiable_id' => $denied->id, 'type' => 'test.maintenance_subject_access']);
+            Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $denied->id);
+        }
+        $data = json_decode((string) DB::table('notifications')->where('notifiable_id', $assignedWorker->id)
+            ->where('type', 'test.maintenance_subject_access')->value('data'), true);
+        $this->assertSame(MaintenanceWorkOrder::class, $data['subject_type']);
+        $this->assertSame((string) $order->id, $data['subject_id']);
+
+        $partRequest = new MaintenancePartRequest;
+        $this->assertTrue(NotificationSubjectAccessRegistry::supports(MaintenancePartRequest::class));
+        $this->assertTrue(NotificationSubjectAccessRegistry::userCanViewRecord($picker, $partRequest));
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($unassignedWorker, $partRequest));
+        app(SettingsService::class)->set('modules.maintenance', false, 'modules');
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($viewer, $order));
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($assignedWorker, $order));
+        app(SettingsService::class)->set('modules.inventory', false, 'modules');
+        $this->assertFalse(NotificationSubjectAccessRegistry::userCanViewRecord($picker, $partRequest));
     }
 }

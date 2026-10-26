@@ -43,8 +43,10 @@ class MaintenanceShiftHandoverTest extends TestCase
         $notices = DB::table('notifications')->where('type', 'maintenance.shift_handover')->get();
         $this->assertCount(1, $notices);
         $this->assertSame($supervisor->id, $notices[0]->notifiable_id);
-        $this->assertStringContainsString($incoming->employee->full_name,
-            json_decode($notices[0]->data, true)['message']);
+        $data = json_decode($notices[0]->data, true);
+        $this->assertStringContainsString($incoming->employee->full_name, $data['message']);
+        $this->assertSame(MaintenanceWorkOrder::class, $data['subject_type']);
+        $this->assertSame((string) $order->id, $data['subject_id']);
         $this->assertSame($outgoing->employee_id, $order->fresh()->assigned_to);
     }
 

@@ -45,7 +45,7 @@ class CheckMaintenanceAssignment extends Command
                             $failed = true;
                         }
                         // shortcut: assignment is irreversible in this lifecycle; add an episode identifier if unassignment is introduced.
-                        $notifications->send($recipients, 'maintenance.assignment_escalated', NotifyMaintenanceWorkOrder::payload(
+                        $notifications->sendForSubject($locked, $recipients, 'maintenance.assignment_escalated', NotifyMaintenanceWorkOrder::payload(
                             $locked, 'Critical maintenance remains unassigned: '.$locked->mwo_number,
                             'This critical order has waited at least 15 minutes. Review and assign a technician.',
                         ), 'maintenance:unassigned:'.$locked->id);
@@ -68,7 +68,7 @@ class CheckMaintenanceAssignment extends Command
                         if (! $replacement || $supervisors->isEmpty()) {
                             continue;
                         }
-                        $notifications->send($supervisors, 'maintenance.shift_handover', NotifyMaintenanceWorkOrder::payload(
+                        $notifications->sendForSubject($order, $supervisors, 'maintenance.shift_handover', NotifyMaintenanceWorkOrder::payload(
                             $order, 'Maintenance shift handover: '.$order->mwo_number,
                             $outgoing->full_name.' finishes at '.$shift['end']->format('H:i').'. '
                                 .$replacement['name'].' is available. Review the handover before changing the assignee.',

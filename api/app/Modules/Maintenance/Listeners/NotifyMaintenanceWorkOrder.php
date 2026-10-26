@@ -27,7 +27,7 @@ class NotifyMaintenanceWorkOrder
 
             return;
         }
-        $this->notifications->send($supervisors, 'maintenance.assignment_needed', self::payload(
+        $this->notifications->sendForSubject($order, $supervisors, 'maintenance.assignment_needed', self::payload(
             $order, 'Maintenance assignment needed: '.$order->mwo_number,
             'Review this maintenance order and assign a technician.',
         ), 'maintenance:new:'.$order->id);
