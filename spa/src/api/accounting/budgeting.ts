@@ -7,6 +7,7 @@ export interface BudgetListParams {
  department_id?: string;
  company_wide?: boolean;
  status?: string;
+ signal?: string;
  per_page?: number;
  page?: number;
 }

@@ -703,7 +703,7 @@ class BadgeControllerTest extends TestCase
         ];
     }
 
-    public function test_budgeting_badges_track_submitted_budgets_and_pending_transfers(): void
+    public function test_budget_approval_badge_matches_the_current_approver_list(): void
     {
         $employee = Role::where('slug', 'employee')->firstOrFail();
         $emp = User::factory()->create(['role_id' => $employee->id]);
@@ -746,11 +746,18 @@ class BadgeControllerTest extends TestCase
             return [$budget, $budget->lineItems()->firstOrFail()->fresh()];
         };
 
-        // Two budgets stay submitted: the pending_budgets badge counts them.
+        // Two finance-submitted budgets are actionable by a vice president.
         [$stuckA] = $draftOneLineBudget('Badge submitted A');
         [$stuckB] = $draftOneLineBudget('Badge submitted B');
         $budgets->submit($stuckA, $maker->id);
         $budgets->submit($stuckB, $maker->id);
+
+        // A second vice president cannot approve a budget submitted by that role.
+        $vpMaker = User::factory()->create([
+            'role_id' => Role::where('slug', 'vice_president')->value('id'),
+        ]);
+        [$sameRoleSubmission] = $draftOneLineBudget('Badge same-role submission');
+        $budgets->submit($sameRoleSubmission, $vpMaker->id);
 
         // A second pair goes all the way active so a transfer can pend on it.
         [$liveA, $lineA] = $draftOneLineBudget('Badge live A');
@@ -769,10 +776,72 @@ class BadgeControllerTest extends TestCase
             ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
         $this->assertSame(2, $tracked['pending_budgets']['count']);
         $this->assertSame(1, $tracked['pending_transfers']['count']);
+        $pendingBudgets = $this->actingAs($vp, 'sanctum')
+            ->getJson('/api/v1/budgets?signal=awaiting_my_approval')
+            ->assertOk();
+        $this->assertSame($tracked['pending_budgets']['count'], $pendingBudgets->json('meta.total'));
+        $this->assertSame(['submitted'], array_values(array_unique(array_column($pendingBudgets->json('data'), 'status'))));
+
+        // Finance can review the vice-president's budget, but not budgets raised by its own role.
+        $makerBadges = $this->actingAs($maker, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertSame(1, $makerBadges['pending_budgets']['count']);
+        $makerBudgets = $this->actingAs($maker, 'sanctum')
+            ->getJson('/api/v1/budgets?signal=awaiting_my_approval')
+            ->assertOk();
+        $this->assertSame($makerBadges['pending_budgets']['count'], $makerBudgets->json('meta.total'));
         $pendingTransfers = $this->actingAs($vp, 'sanctum')
             ->getJson('/api/v1/budget-transfers?status=pending&actionable=1')
             ->assertOk();
         $this->assertSame($tracked['pending_transfers']['count'], $pendingTransfers->json('meta.total'));
+    }
+
+    public function test_delegated_budget_badge_matches_the_filtered_list(): void
+    {
+        $maker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $delegator = User::factory()->create([
+            'role_id' => Role::where('slug', 'vice_president')->value('id'),
+        ]);
+        $delegate = User::factory()->create([
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+        ]);
+        $budget = Budget::factory()->create([
+            'status' => 'submitted',
+            'submitted_by' => $maker->id,
+            'submitted_at' => now(),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::query()->where('slug', 'budgeting.view')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $delegator->id,
+            'reason' => 'Budget approval badge parity test',
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'vice_president',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $delegate->flushPermissionsCache();
+
+        $list = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/budgets?signal=awaiting_my_approval')
+            ->assertOk();
+        $badges = $this->actingAs($delegate, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertTrue($delegate->fresh()->hasPermission('budgeting.view'));
+        $this->assertFalse($delegate->fresh()->hasPermission('budgeting.approve'));
+        $this->assertSame(1, $badges['pending_budgets']['count']);
+        $this->assertSame($badges['pending_budgets']['count'], $list->json('meta.total'));
+        $this->assertSame([$budget->hash_id], $list->json('data.*.id'));
     }
 
     public function test_overdue_bill_badge_matches_the_filtered_bill_list(): void
