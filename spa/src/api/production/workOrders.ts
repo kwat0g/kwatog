@@ -29,6 +29,7 @@ import type {
 
 export interface WorkOrderListParams extends ListParams {
   status?: string;
+  signal?: 'overdue' | '';
   production_purpose?: 'stock' | 'order' | 'internal' | '';
   sales_order_id?: string;
   machine_id?: string;

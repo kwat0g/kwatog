@@ -58,6 +58,28 @@ it('opens the awaiting-approval filter when purchase requests has a positive bad
   );
 });
 
+it('opens the overdue filter when Production Work Orders has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'work_orders'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Overdue',
+          description: 'Overdue production work orders',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/production/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+});
+
 it('opens the pending-QC filter when GRN has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'pending_grn'

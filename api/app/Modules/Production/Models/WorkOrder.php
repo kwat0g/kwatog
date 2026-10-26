@@ -310,6 +310,14 @@ class WorkOrder extends Model
         return $q->where('status', $s instanceof WorkOrderStatus ? $s->value : $s);
     }
 
+    public function scopeOverdue(Builder $q): Builder
+    {
+        return $q->whereIn('status', [WorkOrderStatus::Confirmed->value, WorkOrderStatus::InProgress->value])
+            ->whereNotNull('planned_end')
+            ->where('planned_end', '<', now())
+            ->whereNull('work_orders.deleted_at');
+    }
+
     public function getProgressPercentageAttribute(): float
     {
         $target = (int) $this->quantity_target;

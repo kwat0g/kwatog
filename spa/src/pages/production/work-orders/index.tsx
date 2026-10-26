@@ -23,6 +23,7 @@ const DEFAULT_FILTERS: WorkOrderListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
   sort: 'created_at',
   direction: 'desc',
 };
@@ -257,6 +258,9 @@ export default function WorkOrdersListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
+    { key: 'signal', label: 'Signal', type: 'select', options: [
+      { value: '', label: 'All' }, { value: 'overdue', label: 'Overdue' },
+    ] },
     { key: 'production_purpose', label: 'Purpose', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'stock', label: 'For stock' }, { value: 'order', label: 'Sales Order' }, { value: 'internal', label: 'Internal' },
     ] },
