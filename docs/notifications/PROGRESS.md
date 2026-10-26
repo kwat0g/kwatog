@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** F-52 ReturnRequest email-listener fix is in draft PR [#450](https://github.com/kwat0g/kwatog/pull/450), stacked on F-51 duplicate no-invoice notice fix #449, delivery subject access #448, F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. PR #448 finding-lifecycle passes; API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration at line 200). PRs #449–#450 checks remain pending; API CI on earlier stack PRs has the same blocker. SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
+**Current gate:** F-53 supplier-return shipment audience fix is in draft PR [#451](https://github.com/kwat0g/kwatog/pull/451), based on F-52 ReturnRequest email-listener fix in draft PR [#450](https://github.com/kwat0g/kwatog/pull/450). The stack continues through F-51 duplicate no-invoice notice fix #449, delivery subject access #448, F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, and cost-review click-through #431. Earlier stack includes actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. PR #448 finding-lifecycle passes; API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration at line 200). PRs #449–#451 checks remain pending; API CI on earlier stack PRs has the same blocker. SPA CI remains blocked by the existing dependency audit. Cross-role recipient coverage and badge/list parity remain open.
 
 ## Phase status
 
@@ -64,6 +64,7 @@
 | Phase 3. Delivery finance notice subject access | `notifications/delivery-invoice-notice-access` | [#448](https://github.com/kwat0g/kwatog/pull/448) | `568d207d` |
 | F-51. Duplicate no-invoice finance notices | `notifications/dedupe-invoice-handoff-failure` | [#449](https://github.com/kwat0g/kwatog/pull/449) | `a8b53bed` |
 | F-52. ReturnRequest update email listener variable order | `notifications/fix-return-email-listener-scope` | [#450](https://github.com/kwat0g/kwatog/pull/450) | `69a3a366` |
+| F-53. Supplier-return shipment recipient permission | `notifications/fix-supplier-return-notice-audience` | [#451](https://github.com/kwat0g/kwatog/pull/451) | `bda2af2a` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -795,6 +796,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The ordering bug caused supplier and customer ReturnRequest update events to fail with `Undefined variable $isCustomer` before mail delivery. No message, audience, or event timing changed.
 - `ReturnRequestUpdateEmailSnapshotTest.php`: **1 passed / 14 assertions**. The focused run used and restored the temporary F-22 workaround.
 - `git diff --check` passes. Pint reports pre-existing style issues in the listener file. Full suite and CI remain open; PR #450 checks were pending at last inspection.
+
+## Separate finding fix: F-53 (draft PR [#451](https://github.com/kwat0g/kwatog/pull/451))
+
+- Supplier shipment alerts queried `purchasing.po.view`, which is not a seeded permission. `NotificationService::usersWithPermission()` returns no recipients for unknown slugs, so the supplier-return movement alert was dropped for every user.
+- The selector and test fixture now use seeded `purchasing.view`; recipients still need `return_management.view`. The positive test also opens the exact RMA detail endpoint as the notified Purchasing user.
+- `SupplierReturnShipNotificationTest.php`: **4 passed / 13 assertions**. The run used and restored the temporary F-22 workaround.
+- `git diff --check` passes, and `PdfRenderService.php` has no diff. Full suite and CI remain open; PR #451 checks are pending.
 
 ## Resume instruction
 
