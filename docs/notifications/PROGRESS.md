@@ -38,7 +38,7 @@
 | F-09. Maintenance Work Order badge/list parity | `notifications/maintenance-work-order-signals` | [#392](https://github.com/kwat0g/kwatog/pull/392) | `6ba5e170` |
 | F-09/F-13. Internal AR invoice signal parity | `notifications/ar-invoice-signal-parity` | [#410](https://github.com/kwat0g/kwatog/pull/410) | `01ca4eb9`, `73f28caa` |
 | F-09/F-13. Customer portal AR invoice signal parity | `notifications/customer-ar-signals` | [#411](https://github.com/kwat0g/kwatog/pull/411) | `e7e70315` |
-| Phase 3. Approval-backed subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | `2eb2b843` |
+| Phase 3. Approval-backed subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | `2eb2b843`, `e855165e` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -482,9 +482,9 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 ## Phase 3 approval-backed subject access gate (draft PR [#412](https://github.com/kwat0g/kwatog/pull/412))
 
-- `NotificationService::sendForSubject()` now checks that the subject still exists and is not soft-deleted, denies unregistered subject types, then filters active recipients through `ApprovalTypeRegistry::userCanViewRecord()` before database, realtime, or email delivery. Rejected user IDs and unsupported/missing subjects are logged without notification content.
+- `NotificationService::sendForSubject()` now checks that the subject still exists and is not soft-deleted, denies unregistered subject types, then filters active recipients through `ApprovalTypeRegistry::userCanViewRecord()` before database, realtime, or email delivery. It stores the resolved model class and primary key in `subject_type`/`subject_id`. Rejected user IDs and unsupported/missing subjects are logged without notification content.
 - `ApprovalService` uses this central gate for action-required and submitter outcome notices. Its separate submitter visibility check is removed; the existing current-step resolver remains as the recipient rule, with the new service check as defense in depth. Other `NotificationService::send()` call sites remain ungated pending exact per-module access rules and migration.
-- `NotificationServiceSubjectAccessTest`: **3 passed / 13 assertions**; proves allowed requester, same-permission but out-of-scope recipient, missing permission, unknown subject denial, and soft-deleted subject denial. `ApprovalNoticeVisibilityTest`: **3 passed / 20 assertions**; `ApprovalSubmitterOutcomeVisibilityTest`: **1 passed / 5 assertions**; `ApprovalServiceTest`: **18 passed / 44 assertions**. PHP syntax, Pint for changed code/tests, and `git diff --check` pass.
+- `NotificationServiceSubjectAccessTest`: **3 passed / 15 assertions**; proves allowed requester, same-permission but out-of-scope recipient, missing permission, structured subject fields, unknown subject denial, and soft-deleted subject denial. `ApprovalNoticeVisibilityTest`: **3 passed / 20 assertions**; `ApprovalSubmitterOutcomeVisibilityTest`: **1 passed / 5 assertions**; `ApprovalServiceTest`: **18 passed / 44 assertions**. PHP syntax, Pint for changed code/tests, and `git diff --check` pass.
 - Tests used a temporary local removal of inherited F-22 duplicate method and restored it exactly. Full suite and CI remain blocked by F-22; global subject-type coverage, other notification senders, and performance under large approval audiences remain open.
 
 ## Outstanding proof / risks
