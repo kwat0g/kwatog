@@ -365,6 +365,8 @@ PR #342 attaches `inquiries` to `/crm/inquiries?status=new`. PR #367 adds `/budg
 
 PR [#374](https://github.com/kwat0g/kwatog/pull/374) adds the `pending_budgets` click-through to `/budgeting?signal=awaiting_my_approval`. The original badge counted every submitted budget; the new badge and filter share `Budget::scopeAwaitingApprovalFor()`, which follows `BudgetService`'s active direct/delegated approver and maker-checker role rules. The transfer queue remains a separate signal and destination.
 
+Draft PR [#375](https://github.com/kwat0g/kwatog/pull/375) corrects both budget and transfer action-notice audiences. They now apply the same per-record actionable scopes as their lists and badges, excluding a delegate when their delegator's role matches the submitter's role.
+
 | Shell | Path | Label |
 | --- | --- | --- |
 | Supplier portal | `/portal/supplier` | Dashboard |
