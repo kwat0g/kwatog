@@ -140,4 +140,15 @@ class WorkOrderScheduleReminderTest extends TestCase
         $this->assertSame(1, $this->wo->crews()->count());
         $this->assertSame('confirmed', $this->wo->fresh()->status->value);
     }
+
+    public function test_staffing_notice_dedupe_changes_with_slot_or_issue(): void
+    {
+        $assignments = app(WorkOrderAssignmentService::class);
+        $key = $assignments->staffingNoticeDedupeKey(10, 20, ['Worker absent', 'Shift ended']);
+
+        $this->assertSame($key, $assignments->staffingNoticeDedupeKey(10, 20, ['Shift ended', 'Worker absent']));
+        $this->assertNotSame($key, $assignments->staffingNoticeDedupeKey(11, 20, ['Worker absent', 'Shift ended']));
+        $this->assertNotSame($key, $assignments->staffingNoticeDedupeKey(10, 21, ['Worker absent', 'Shift ended']));
+        $this->assertNotSame($key, $assignments->staffingNoticeDedupeKey(10, 20, ['Worker absent']));
+    }
 }

@@ -46,12 +46,13 @@ class NotifyUpcomingWorkOrders extends Command
                             $remaining->scheduled_start = now()->max($slot->scheduled_start);
                             $assignments->assertScheduledCrew($wo, $remaining, allowHoliday: $assignments->holidayAuthorized($slot));
                         } catch (BusinessRuleException $error) {
+                            $issues = $assignments->staffingIssues($wo);
                             $notifications->sendForSubject($wo, $owners, 'production.assignment.review', [
                                 'title' => 'Production crew needs review: '.$wo->wo_number,
                                 'message' => 'Worker availability changed. Check attendance, shift coverage and crew before Start.',
                                 'link_to' => '/production/work-orders/'.$wo->hash_id,
                                 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,
-                            ], 'wo-crew-review-'.$slot->id.'-'.($crew?->id ?? 'none').'-'.sha1($error->getMessage()), emailEnabled: false);
+                            ], $assignments->staffingNoticeDedupeKey($slot->id, $crew?->id, $issues, $error->getMessage()), emailEnabled: false);
                         }
                         $stage = $slot->scheduled_start->gt(now()) ? 'upcoming'
                             : (now()->gt($slot->scheduled_start->copy()->addMinutes(ProductionResourceService::START_GRACE_MINUTES)) ? 'missed' : 'due');
