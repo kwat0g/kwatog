@@ -25,6 +25,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Models\Inspection;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -197,6 +198,15 @@ class OutboxFactEventToleranceTest extends TestCase
         $event = $codec->decode($encoded['event_type'], $encoded['payload']);
 
         $this->assertNull($event->actorUserId);
+    }
+
+    public function test_sales_order_production_dashboard_broadcast_contains_only_a_refresh_ping(): void
+    {
+        $event = new SalesOrderConfirmed($this->confirmedOrder());
+
+        $this->assertInstanceOf(PrivateChannel::class, $event->broadcastOn()[0]);
+        $this->assertSame('private-production.dashboard', $event->broadcastOn()[0]->name);
+        $this->assertSame(['refresh' => true], $event->broadcastWith());
     }
 
     public function test_an_order_cancelled_before_delivery_is_not_announced_as_confirmed(): void
