@@ -486,6 +486,40 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(1, $badge);
     }
 
+    public function test_purchase_request_badge_is_zero_without_list_access(): void
+    {
+        $department = Department::factory()->create();
+        $approver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => Employee::factory()->create(['department_id' => $department->id])->id,
+        ]);
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        UserPermissionOverride::create([
+            'user_id' => $approver->id,
+            'permission_id' => Permission::query()->where('slug', 'purchasing.view')->value('id'),
+            'type' => PermissionOverrideType::Deny,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify approval counts do not expose a queue without list access.',
+        ]);
+        $approver->flushPermissionsCache();
+
+        $this->addPendingPurchaseRequest(User::factory()->create(), $department->id, 'department_head');
+
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests?signal=awaiting_my_approval')
+            ->assertForbidden();
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 0);
+        $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->assertJsonPath('data.purchase_requests.count', 0);
+    }
+
     private function addPendingPurchaseRequest(User $requester, ?int $departmentId, string $roleSlug): PurchaseRequest
     {
         $request = PurchaseRequest::factory()->create([

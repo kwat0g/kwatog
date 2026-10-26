@@ -87,7 +87,9 @@ final class PurchaseRequestAccessPolicy
         $roles = $this->approvalRoleSlugs($user);
         $this->visibleTo($query, $user);
 
-        if (! $user->hasPermission('purchasing.pr.approve') || $roles === []) {
+        if (! $user->hasPermission('purchasing.view')
+            || ! $user->hasPermission('purchasing.pr.approve')
+            || $roles === []) {
             return $query->whereRaw('1 = 0');
         }
 
