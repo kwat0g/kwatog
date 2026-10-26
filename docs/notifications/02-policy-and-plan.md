@@ -299,7 +299,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/crm/complaints` | `open_complaints` | `crm.complaints.view` | crm.complaint.open; crm.complaint.sla_due |
 | `/return-management` | `pending_returns` | `return_management.view` | returns.open_action |
 | `/return-management/cases` | — | `return_management.view` | returns.case_action |
-| `/production/work-orders` | `work_orders_awaiting_confirmation`, `work_orders`, `work_orders_due_soon`, `work_orders_paused` | `production.work_orders.view`; awaiting confirmation additionally needs `production.wo.confirm` | production.release; production.overdue; production.due_soon; production.paused; production.blocked (deferred); production.output_pending |
+| `/production/work-orders` | `work_orders_awaiting_confirmation`, `work_orders`, `work_orders_due_soon`, `work_orders_paused` | `production.view` + `production.work_orders.view`; awaiting confirmation additionally needs `production.wo.confirm` | production.release; production.overdue; production.due_soon; production.paused; production.blocked (deferred); production.output_pending |
 | `/production/schedule` | — | `production.schedule.view` | production.schedule.due_soon; production.schedule.conflict (alert list has persisted types; add matching SPA filter and source access scope) |
 | `/production/routings` | — | `production.routings.view` | — (no reliable actionable status verified) |
 | `/mrp/plans` | `mrp_plans` | `mrp.plans.view` | mrp.shortage; mrp.run_failed_or_stale (only with reliable run state) |
