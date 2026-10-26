@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-17, F-16, and F-02 merged; F-03 purchase-request badge scope in PR #338.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-17, F-16, F-02, and F-03 merged; F-04 badge route permissions in PR #339.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3, F-17, F-16, and F-02 merged (#332–#337). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3, F-17, F-16, and F-02–F-03 merged (#332–#338). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
 | 4. Frontend | Partial | PR #334 hydrates realtime toast titles through the owner-scoped endpoint. Bell/Center behavior, links, accessibility, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3, F-16, F-02, and F-03 tests passed on earlier feature heads. Post-merge tests for #334 and #336–#338 were not rerun; the latest no-list-access endpoint assertion also remains unrun. Role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Targeted unit 1–3, F-16, F-02, F-03, and F-04 tests passed on earlier feature heads. Post-merge tests for #334 and #336–#339 were not rerun; the latest no-list-access endpoint assertion also remains unrun. Role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
 
 ## Phase 3 PR stack
 
@@ -27,6 +27,7 @@
 | F-16. Submitter outcome access | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | merged as `a9e3f394` |
 | F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | merged as `7fbab781` |
 | F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | `1d352861` |
+| F-04. Badge route permissions | `notifications/fix-badge-route-permissions` | [#339](https://github.com/kwat0g/kwatog/pull/339) | `3df17962` |
 
 ## Coverage ledger
 
@@ -45,7 +46,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attachment, permission-gate mismatches, missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PR #337 aligns the approval badge with its board queue; PR #338 aligns the purchase-request badge and pending-count endpoint with the shared PR scope. The PR badge still links to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attachment, missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PR #337 aligns approval badge scope, #338 aligns the purchase-request badge and pending-count endpoint, and #339 aligns three badge gates with destination route permissions. The PR badge still links to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -86,6 +87,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include profile bad
 - `PurchaseRequestAccessPolicy::pendingApprovalsFor()` supplies both the sidebar badge and existing pending-count endpoint. It applies current pending steps, active direct/delegated roles, submitter exclusion, PR row visibility, and requires both `purchasing.view` and `purchasing.pr.approve` before returning rows.
 - Earlier targeted API coverage on the pre-merge feature head: `PurchaseRequestHardeningTest::test_pending_count_excludes_self_submissions_and_other_roles_steps` **1 passed / 18 assertions**; `BadgeControllerTest::test_department_head_sees_pending_approvals_with_severity` **1 passed / 6 assertions**. A new negative assertion for an approval-only user without list access was added after these runs and remains unverified.
 - Sidebar still opens broad PR list; destination-filter parity remains under F-09. No frontend changes.
+
+## Separate finding fix: F-04
+
+- Payroll, Complaints, and Deliveries badge permissions now match their destination list routes: `payroll.periods.view`, `crm.complaints.view`, and either `supply_chain.view` or `supply_chain.deliveries.view`.
+- `BadgeControllerTest::test_badge_permissions_match_destination_list_permissions` passed **1 test / 18 assertions** on the pre-merge feature head. Post-merge tests were not rerun; PHP was unavailable in the rebase worktree.
+- This aligns visibility gates only. Count/filter parity and other route gates remain open.
 
 ## Outstanding proof / risks
 

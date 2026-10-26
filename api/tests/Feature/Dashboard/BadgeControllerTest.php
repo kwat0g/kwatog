@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Dashboard;
 
+use App\Common\Enums\PermissionOverrideType;
 use App\Common\Models\ApprovalRecord;
+use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
@@ -13,6 +15,7 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -106,6 +109,65 @@ class BadgeControllerTest extends TestCase
             $this->assertIsString($sysResp[$key]['label']);
             $this->assertIsString($sysResp[$key]['description']);
         }
+    }
+
+    public function test_badge_permissions_match_destination_list_permissions(): void
+    {
+        $employeeRole = Role::where('slug', 'employee')->firstOrFail();
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $employee = User::factory()->create(['role_id' => $employeeRole->id]);
+        $this->assertTrue($employee->hasPermission('payroll.view'));
+        $this->assertFalse($employee->hasPermission('payroll.periods.view'));
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('payroll', $employeeBadges);
+
+        $periodReader = User::factory()->create(['role_id' => $employeeRole->id]);
+        $this->grantPermission($periodReader, 'payroll.periods.view', $admin);
+        $this->actingAs($periodReader, 'sanctum')
+            ->getJson('/api/v1/payroll-periods')
+            ->assertOk();
+        $periodBadges = $this->actingAs($periodReader, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('payroll', $periodBadges);
+
+        $complaintReader = User::factory()->create([
+            'role_id' => Role::where('slug', 'qc_inspector')->value('id'),
+        ]);
+        $this->assertTrue($complaintReader->hasPermission('crm.complaints.view'));
+        $this->assertFalse($complaintReader->hasPermission('crm.complaints.manage'));
+        $this->actingAs($complaintReader, 'sanctum')
+            ->getJson('/api/v1/crm/complaints')
+            ->assertOk();
+        $complaintBadges = $this->actingAs($complaintReader, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('open_complaints', $complaintBadges);
+
+        $warehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $this->assertTrue($warehouse->hasPermission('supply_chain.deliveries.view'));
+        $this->assertFalse($warehouse->hasPermission('supply_chain.view'));
+        $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/supply-chain/deliveries')
+            ->assertOk();
+        $deliveryBadges = $this->actingAs($warehouse, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayHasKey('deliveries', $deliveryBadges);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void
@@ -404,6 +466,18 @@ class BadgeControllerTest extends TestCase
             'is_current' => true,
             'created_at' => now(),
         ]);
+    }
+
+    private function grantPermission(User $user, string $permissionSlug, User $admin): void
+    {
+        UserPermissionOverride::create([
+            'user_id' => $user->id,
+            'permission_id' => Permission::where('slug', $permissionSlug)->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $admin->id,
+            'reason' => 'Verify badge access follows the destination list permission.',
+        ]);
+        $user->flushPermissionsCache();
     }
 
     public function test_zero_count_yields_neutral_severity(): void

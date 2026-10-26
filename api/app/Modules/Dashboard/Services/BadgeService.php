@@ -347,7 +347,7 @@ class BadgeService
             // PayrollPeriodStatus has: draft, processing, approved, finalized, disbursed.
             // "Awaiting action" = draft (not yet submitted) + processing (computing / under review).
             'payroll' => [
-                'permissions' => ['payroll.view'],
+                'permissions' => ['payroll.periods.view'],
                 'label'       => 'Payroll',
                 'description' => 'Payroll periods awaiting action',
                 'counter'     => fn (): int => PayrollPeriod::query()
@@ -410,7 +410,7 @@ class BadgeService
 
             // Supply chain > Deliveries in transit needing an update.
             'deliveries' => [
-                'permissions' => ['supply_chain.view'],
+                'permissions' => ['supply_chain.view', 'supply_chain.deliveries.view'],
                 'label'       => 'Deliveries',
                 'description' => 'Deliveries in transit',
                 'counter'     => fn (): int => Delivery::query()
@@ -448,7 +448,7 @@ class BadgeService
 
             // CRM > Complaints — open / investigating customer complaints.
             'open_complaints' => [
-                'permissions' => ['crm.complaints.manage'],
+                'permissions' => ['crm.complaints.view'],
                 'label'       => 'Complaints',
                 'description' => 'Open customer complaints',
                 'counter'     => fn (): int => CustomerComplaint::query()
