@@ -491,7 +491,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 - Corrected the stale in-app row expectation from four to three. Inactive users are excluded by `NotificationService::normaliseRecipients()` from database, broadcast, and email delivery.
 - `NotificationServiceHardeningTest.php`: **22 passed / 62 assertions**. PHP syntax, targeted Pint, and `git diff --check` pass. Test used a temporary local workaround for inherited F-22 and restored that file exactly.
-- Production behavior is unchanged. The fix is isolated from notification feature work.
+- Production behavior is unchanged. The fix is isolated from notification feature work. CI API checks fail before PHPUnit at the inherited F-22 duplicate `PdfRenderService::ensureDompdfDirs()` method; finding-lifecycle passes.
 
 ## Phase 3 Accounting invoice subject access gate (draft PR [#414](https://github.com/kwat0g/kwatog/pull/414))
 
@@ -499,7 +499,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Routed internal invoice notices through `sendForSubject()`: prebill approval/outcome, payment-submission review, AR dunning escalation, draft-invoice-ready after delivery, and invoice/official-receipt/dunning email-failure fallbacks. Email-failure notices remain in-app only. Official-receipt fallbacks are skipped and logged if the linked invoice was deleted or is unavailable, because their target route is the invoice detail page.
 - Customer-portal invoice notices remain on the separate portal path; current recipients are selected by the invoice's exact customer ID. Portal subject authorization still needs its own rule and parity review.
 - `NotificationServiceSubjectAccessTest`: **6 passed / 27 assertions**, including positive/negative invoice permission, disabled Accounting module, and subject-gated failure paths. `InvoicePrebillApprovalTest.php`, `InvoicePaymentSubmissionServiceTest.php`, and `RunArDunningCommandTest.php`: **40 passed / 308 assertions**. The separate F-38 test passes **22 / 62**. PHP syntax, selected Pint checks, and `git diff --check` pass.
-- Test runs used a temporary local workaround for inherited F-22 duplicate `PdfRenderService::ensureDompdfDirs()` and restored the source exactly. Broader Pint reports existing style debt in Accounting listener/mail/service files; no broad formatting applied. Full suite, browser/e2e, role matrix, and CI remain outstanding.
+- Test runs used a temporary local workaround for inherited F-22 duplicate `PdfRenderService::ensureDompdfDirs()` and restored the source exactly. PR #414 CI API check stops at the same F-22 syntax error; finding-lifecycle passes. Broader Pint reports existing style debt in Accounting listener/mail/service files; no broad formatting applied. Full suite, browser/e2e, and role matrix remain outstanding.
+
+## Phase 3 Accounting budget and transfer subject access gate (draft PR pending)
+
+- Registered Budget and BudgetTransfer with the actual detail-route rules. Both Accounting and Budgeting feature flags must be enabled. View permission opens any record; approval-only access requires the current submitted/pending state, a valid direct or delegated approver, and the existing maker-checker role rule.
+- Routed budget submission/decision and transfer request/decision notices through `sendForSubject()`. Current role/delegation recipient selection and messages remain unchanged; ineligible users are suppressed by the shared access gate.
+- `NotificationServiceSubjectAccessTest`: **7 passed / 35 assertions**, including allowed budget viewer/distinct approver, denied submitter/same-role peer, and disabled Budgeting module. `BudgetConsumptionAndLifecycleTest.php` plus `BudgetTransferTest.php`: **21 passed / 118 assertions**. PHP syntax, Pint, and `git diff --check` pass. Test runs used the temporary F-22 workaround and restored the source exactly.
+- CI, browser/e2e, and full role matrix remain outstanding. No badge logic changed in this unit.
 
 ## Outstanding proof / risks
 

@@ -8,6 +8,7 @@ use App\Common\Events\UserNotificationCreated;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -206,6 +207,69 @@ class NotificationServiceSubjectAccessTest extends TestCase
             'type' => 'test.disabled_invoice_subject',
         ]);
         Event::assertNotDispatched(UserNotificationCreated::class);
+    }
+
+    public function test_budget_subject_allows_only_viewers_and_distinct_approvers(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('modules.accounting', true, 'modules');
+        $settings->set('modules.budgeting', true, 'modules');
+        $approvalPermission = Permission::firstOrCreate(
+            ['slug' => 'budgeting.approve'],
+            ['name' => 'Approve budgets', 'module' => 'budgeting'],
+        );
+        $viewPermission = Permission::firstOrCreate(
+            ['slug' => 'budgeting.view'],
+            ['name' => 'View budgets', 'module' => 'budgeting'],
+        );
+        $makerRole = Role::firstOrCreate(['slug' => 'notification_budget_maker'], ['name' => 'Notification Budget Maker']);
+        $makerRole->permissions()->attach($approvalPermission->id);
+        $checkerRole = Role::firstOrCreate(['slug' => 'notification_budget_checker'], ['name' => 'Notification Budget Checker']);
+        $checkerRole->permissions()->attach($approvalPermission->id);
+        $viewerRole = Role::firstOrCreate(['slug' => 'notification_budget_viewer'], ['name' => 'Notification Budget Viewer']);
+        $viewerRole->permissions()->attach($viewPermission->id);
+        $submitter = User::factory()->withRole($makerRole->slug)->create();
+        $sameRolePeer = User::factory()->withRole($makerRole->slug)->create();
+        $approver = User::factory()->withRole($checkerRole->slug)->create();
+        $viewer = User::factory()->withRole($viewerRole->slug)->create();
+        $budget = Budget::factory()->create(['status' => 'submitted', 'submitted_by' => $submitter->id]);
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($sameRolePeer, $submitter): bool {
+            $ids = $context['user_ids'] ?? [];
+            sort($ids);
+            $expectedIds = [$sameRolePeer->id, $submitter->id];
+            sort($expectedIds);
+
+            return $message === 'Notification recipients lack subject access; delivery suppressed.'
+                && ($context['type'] ?? null) === 'test.budget_subject_access'
+                && $ids === $expectedIds;
+        });
+        Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($viewer): bool {
+            return $message === 'Notification recipients lack subject access; delivery suppressed.'
+                && ($context['type'] ?? null) === 'test.disabled_budget_subject'
+                && ($context['user_ids'] ?? []) === [$viewer->id];
+        });
+        Log::shouldReceive('warning')->once()->with(
+            'Notification delivery skipped: no eligible recipients.',
+            ['type' => 'test.disabled_budget_subject'],
+        );
+
+        app(NotificationService::class)->sendForSubject($budget, [$approver, $viewer, $sameRolePeer, $submitter], 'test.budget_subject_access', [
+            'title' => 'Budget needs review',
+            'message' => 'A budget was submitted.',
+        ], emailEnabled: false);
+
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $approver->id, 'type' => 'test.budget_subject_access']);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.budget_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $sameRolePeer->id, 'type' => 'test.budget_subject_access']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $submitter->id, 'type' => 'test.budget_subject_access']);
+
+        $settings->set('modules.budgeting', false, 'modules');
+        app(NotificationService::class)->sendForSubject($budget, $viewer, 'test.disabled_budget_subject', [
+            'title' => 'Budget update',
+        ], emailEnabled: false);
+
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $viewer->id, 'type' => 'test.disabled_budget_subject']);
     }
 
     public function test_subject_gated_email_failure_fallback_stays_in_app(): void
