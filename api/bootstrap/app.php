@@ -46,6 +46,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Stateful SPA cookie auth (NEVER bearer tokens). This injects
         // EnsureFrontendRequestsAreStateful into the API middleware group.
         $middleware->statefulApi();
+        // The bearer token on these routes is independent of sessions and the
+        // database, so recovery remains reachable during a restore gate.
+        $middleware->preventRequestsDuringMaintenance(except: ['api/v1/recovery/*']);
+        $middleware->validateCsrfTokens(except: ['api/v1/recovery/*']);
 
         // Global API middleware additions — every API request gets these.
         $middleware->api(prepend: [
@@ -69,6 +73,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // B2B portal guard-type assertion — blocks web-session bleed into
             // the sanctum-driver portal guards (see EnsurePortalGuard).
             'portal' => EnsurePortalGuard::class,
+            'recovery.access' => \App\Common\Middleware\RequireRecoveryAccess::class,
         ]);
 
         // Trust the reverse proxy (Nginx) for real client IP

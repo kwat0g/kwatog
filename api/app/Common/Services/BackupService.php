@@ -81,7 +81,7 @@ class BackupService
     }
 
     public function queueRestore(
-        User $actor,
+        ?User $actor,
         ?string $backupOperationId,
         ?string $databaseFilename,
         ?string $filesFilename,
@@ -133,7 +133,7 @@ class BackupService
 
                 $operation = BackupOperation::create([
                     'id' => (string) Str::uuid(),
-                    'requested_by' => $actor->id,
+                    'requested_by' => $actor?->id,
                     'type' => self::TYPE_RESTORE,
                     'status' => self::STATUS_QUEUED,
                     'active_lock' => 'ogami-backup-recovery',
@@ -145,15 +145,18 @@ class BackupService
                         'scope' => $filesFilename !== null ? 'database_and_private_files' : 'database_only',
                         'manifest_operation_id' => $manifest->id,
                         'manifest_committed' => true,
+                        'requested_via_recovery' => $actor === null,
                         'offsite_configured' => $this->offsiteConfigured(),
                     ],
                 ]);
 
-                $this->audit($operation, $actor, 'backup.restore_requested', [
-                    'manifest_operation_id' => $manifest->id,
-                    'database_filename' => $databaseFilename,
-                    'files_filename' => $filesFilename,
-                ]);
+                if ($actor !== null) {
+                    $this->audit($operation, $actor, 'backup.restore_requested', [
+                        'manifest_operation_id' => $manifest->id,
+                        'database_filename' => $databaseFilename,
+                        'files_filename' => $filesFilename,
+                    ]);
+                }
 
                 return $operation;
             });
@@ -184,6 +187,17 @@ class BackupService
         $isFirstPage = $cursor === null || trim($cursor) === '';
         if ($isFirstPage) {
             $managedNames = [];
+            $sidecars = app(BackupManifestStore::class)->all();
+            $sidecarIds = array_column($sidecars, 'id');
+            $ledgerSidecarIds = $sidecarIds === [] ? [] : BackupOperation::query()
+                ->where('type', self::TYPE_BACKUP)
+                ->where('status', self::STATUS_COMPLETED)
+                ->whereIn('id', $sidecarIds)
+                ->pluck('id')
+                ->map(static fn ($id): string => (string) $id)
+                ->all();
+            $ledgerSidecarIds = array_fill_keys($ledgerSidecarIds, true);
+
             foreach ($operations as $operation) {
                 foreach (['database', 'files'] as $kind) {
                     $name = $operation['artifacts'][$kind]['name'] ?? null;
@@ -193,11 +207,19 @@ class BackupService
                 }
             }
 
-            // Show older local artifacts even if they were created before the
-            // operation ledger existed, or by the cron path that does not write
-            // one. They are read-only: with no committed manifest,
-            // resolveRestoreManifest() refuses them, so the catalog says so
-            // rather than offering a restore that would 422.
+            foreach ($sidecars as $manifest) {
+                $database = $manifest['artifacts']['database'];
+                $databaseFilename = (string) $database['name'];
+                if (isset($ledgerSidecarIds[(string) $manifest['id']]) || isset($managedNames[$databaseFilename])) {
+                    continue;
+                }
+
+                $operations[] = $this->serializeSidecar($manifest);
+                $managedNames[$databaseFilename] = true;
+            }
+
+            // Older local artifacts have no saved checksum until an operator
+            // verifies/adopts them through the backup page.
             foreach ($this->artifactNames('database') as $filename) {
                 if (isset($managedNames[$filename])) {
                     continue;
@@ -253,6 +275,61 @@ class BackupService
         ];
     }
 
+    /** @return array<string, mixed> */
+    public function recoveryIndex(): array
+    {
+        $manifests = app(BackupManifestStore::class)->all();
+        $managedNames = [];
+        $backups = [];
+        foreach ($manifests as $manifest) {
+            $databaseFilename = (string) $manifest['artifacts']['database']['name'];
+            $managedNames[$databaseFilename] = true;
+            $backups[] = $this->serializeSidecar($manifest);
+        }
+
+        foreach ($this->artifactNames('database') as $filename) {
+            if (isset($managedNames[$filename])) {
+                continue;
+            }
+            $artifact = $this->decorateArtifact($this->describeLocalArtifact($filename, 'database'));
+            $createdAt = $this->artifactCreatedAt($filename);
+            $backups[] = [
+                'id' => null,
+                'type' => self::TYPE_BACKUP,
+                'status' => 'available',
+                'artifacts' => ['database' => $artifact, 'files' => null],
+                'manifest_committed' => false,
+                'restorable' => false,
+                'availability' => ['database' => $artifact['availability'], 'files' => null],
+                'error_message' => null,
+                'requested_by' => null,
+                'requested_by_name' => 'Legacy archive · verify before restore',
+                'created_at' => $createdAt,
+                'started_at' => null,
+                'completed_at' => $createdAt,
+            ];
+        }
+
+        usort($backups, static fn (array $a, array $b): int => strcmp(
+            (string) ($b['created_at'] ?? ''),
+            (string) ($a['created_at'] ?? ''),
+        ));
+
+        return ['backups' => $backups];
+    }
+
+    /** @return array<string, mixed> */
+    public function adoptLegacy(string $databaseFilename): array
+    {
+        try {
+            return app(BackupManifestStore::class)->adoptLegacy($databaseFilename);
+        } catch (Throwable $exception) {
+            throw ValidationException::withMessages([
+                'database_filename' => [$this->safeError($exception)],
+            ]);
+        }
+    }
+
     public function runBackup(string $operationId): void
     {
         $operation = BackupOperation::query()->findOrFail($operationId);
@@ -266,6 +343,8 @@ class BackupService
             $exit = Artisan::call('db:full-backup', [
                 '--dir' => $this->backupDirectory(),
                 '--keep' => (string) config('backup.keep', 14),
+                '--manifest-id' => $operationId,
+                '--manifest-source' => 'admin',
             ]);
 
             if ($exit !== 0) {
@@ -984,6 +1063,38 @@ class BackupService
         ];
     }
 
+    /** @param array<string, mixed> $manifest @return array<string, mixed> */
+    private function serializeSidecar(array $manifest): array
+    {
+        $database = $this->decorateArtifact($manifest['artifacts']['database']);
+        $files = is_array($manifest['artifacts']['files'] ?? null)
+            ? $this->decorateArtifact($manifest['artifacts']['files'])
+            : null;
+        $databaseAvailability = $database['availability'];
+        $filesAvailability = $files['availability'] ?? null;
+
+        return [
+            'id' => $manifest['id'],
+            'type' => self::TYPE_BACKUP,
+            'status' => self::STATUS_COMPLETED,
+            'artifacts' => ['database' => $database, 'files' => $files],
+            'manifest_committed' => true,
+            'restorable' => in_array($databaseAvailability, ['local', 'remote'], true)
+                && ($filesAvailability === null || in_array($filesAvailability, ['local', 'remote'], true)),
+            'availability' => ['database' => $databaseAvailability, 'files' => $filesAvailability],
+            'error_message' => null,
+            'requested_by' => null,
+            'requested_by_name' => match ($manifest['source'] ?? null) {
+                'legacy_adopted' => 'Legacy archive · checksum recorded at verification',
+                'admin' => 'Administrator-triggered backup',
+                default => 'System scheduler',
+            },
+            'created_at' => $manifest['created_at'] ?? $database['created_at'],
+            'started_at' => null,
+            'completed_at' => $manifest['created_at'] ?? $database['created_at'],
+        ];
+    }
+
     private function markRunning(BackupOperation $operation): void
     {
         if ($operation->status === self::STATUS_ROLLBACK_REQUIRED) {
@@ -1110,6 +1221,10 @@ class BackupService
                 ->where('type', self::TYPE_BACKUP)
                 ->where('status', self::STATUS_COMPLETED)
                 ->first();
+            if ($manifest === null) {
+                $external = app(BackupManifestStore::class)->find(trim($backupOperationId));
+                $manifest = $external !== null ? $this->sidecarModel($external) : null;
+            }
         } else {
             $databaseFilename = $databaseFilename !== null
                 ? $this->validateArtifactName($databaseFilename, 'database')
@@ -1130,6 +1245,10 @@ class BackupService
                         && ($databaseFilename === null || ($database['name'] ?? null) === $databaseFilename)
                         && ($filesFilename === null || ($files['name'] ?? null) === $filesFilename);
                 });
+            if ($manifest === null && $databaseFilename !== null) {
+                $external = app(BackupManifestStore::class)->find($databaseFilename);
+                $manifest = $external !== null ? $this->sidecarModel($external) : null;
+            }
         }
 
         if (! $manifest) {
@@ -1167,6 +1286,18 @@ class BackupService
         }
 
         return [$manifest, $databaseArtifact, $filesFilename !== null ? $filesArtifact : null];
+    }
+
+    /** @param array<string, mixed> $sidecar */
+    private function sidecarModel(array $sidecar): BackupOperation
+    {
+        return new BackupOperation([
+            'id' => $sidecar['id'],
+            'type' => self::TYPE_BACKUP,
+            'status' => self::STATUS_COMPLETED,
+            'artifacts' => $sidecar['artifacts'],
+            'metadata' => ['manifest_committed' => true, 'manifest_version' => 1],
+        ]);
     }
 
     /** @return array<int, string> */
