@@ -714,7 +714,7 @@ class RecruitmentService
             return;
         }
 
-        $this->notifications->send($hrUsers, 'recruitment.new_application', [
+        $this->notifications->sendForSubject($application, $hrUsers, 'recruitment.new_application', [
             'title' => 'New Job Application',
             'message' => "{$application->full_name} applied for {$posting->title}",
             'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
