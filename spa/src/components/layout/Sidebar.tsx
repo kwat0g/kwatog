@@ -1,6 +1,7 @@
 import { IconType } from '@/lib/icons';
 /* eslint-disable react-refresh/only-export-components -- navigation metadata is intentionally shared with command/search surfaces. */
 import { Link, useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import {
   LuLayoutDashboard,
   LuClock4,
@@ -89,6 +90,8 @@ export interface NavItem {
    * count + severity-coloured Badge.
    */
   badgeKey?: string;
+  /** Multiple actionable signal keys for one sidebar item, in primary-first order. */
+  badgeKeys?: string[];
   /** Optional permission gate slug; sidebar hides items the user can't access. */
   permission?: string;
   /** Show when the user has at least one permission in this list. */
@@ -101,6 +104,30 @@ export interface NavSection {
   label: string;
   description?: string;
   items: NavItem[];
+}
+
+type SidebarBadgeSignal = {
+  key: string;
+  label: string;
+  description: string;
+  count: number;
+  severity: BadgeSeverity;
+  to: string;
+};
+
+function badgeDestination(path: string, key: string): string {
+  const filters: Record<string, string> = {
+    purchase_requests: 'signal=awaiting_my_approval',
+    pending_budgets: 'signal=awaiting_my_approval',
+    pending_transfers: 'status=pending&actionable=1',
+    pending_grn: 'status=pending_qc',
+    pending_inspections: 'work_queue=to_inspect',
+    open_complaints: 'signal=open',
+    overdue_bills: 'overdue=1',
+    unpaid_bills: 'signal=unpaid',
+  };
+  const filter = filters[key];
+  return filter ? `${path}?${filter}` : path;
 }
 
 /**
@@ -566,6 +593,7 @@ export const SECTIONS: NavSection[] = [
         feature: 'accounting',
         permission: 'accounting.bills.view',
         badgeKey: 'overdue_bills',
+        badgeKeys: ['overdue_bills', 'unpaid_bills'],
       },
       {
         to: '/accounting/vendors',
@@ -1123,16 +1151,20 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     const hoverExpanded = !mobile && collapsed && peek && hovered;
     const renderNavItem = (item: NavItem) => {
       const entry = getBadge(item.badgeKey);
-      let target = item.to;
-      if ((entry?.count ?? 0) > 0) {
-        if (item.badgeKey === 'purchase_requests') target = `${item.to}?signal=awaiting_my_approval`;
-        else if (item.badgeKey === 'pending_budgets') target = `${item.to}?signal=awaiting_my_approval`;
-        else if (item.badgeKey === 'pending_transfers') target = `${item.to}?status=pending&actionable=1`;
-        else if (item.badgeKey === 'pending_grn') target = `${item.to}?status=pending_qc`;
-        else if (item.badgeKey === 'pending_inspections') target = `${item.to}?work_queue=to_inspect`;
-        else if (item.badgeKey === 'open_complaints') target = `${item.to}?signal=open`;
-        else if (item.badgeKey === 'overdue_bills') target = `${item.to}?overdue=1`;
-      }
+      const badgeKeys = item.badgeKeys ?? (item.badgeKey ? [item.badgeKey] : []);
+      const signals = badgeKeys.flatMap((key): SidebarBadgeSignal[] => {
+        const signal = getBadge(key);
+        if (!signal || signal.count <= 0) return [];
+        return [{
+          key,
+          label: signal.label ?? signal.description ?? key,
+          description: signal.description ?? signal.label ?? key,
+          count: signal.count,
+          severity: signal.severity,
+          to: badgeDestination(item.to, key),
+        }];
+      });
+      const target = signals[0]?.to ?? item.to;
       return (
         <li key={item.to}>
           <NavLink
@@ -1142,6 +1174,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
             badgeOverride={entry?.count}
             badgeVariant={entry?.severity}
             badgeDescription={entry?.description}
+            badgeSignals={signals}
           />
         </li>
       );
@@ -1151,7 +1184,8 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
       const expanded = modules.expanded.includes(section.label);
       const open = hoverExpanded || active || expanded;
       const sectionBadges = section.visibleItems.flatMap((item) => {
-        const entry = getBadge(item.badgeKey);
+        const badgeKeys = item.badgeKeys ?? (item.badgeKey ? [item.badgeKey] : []);
+        const entry = badgeKeys.map(getBadge).find((badge) => (badge?.count ?? 0) > 0);
         const count = entry?.count ?? item.badge ?? 0;
         return count > 0
           ? [
@@ -1357,6 +1391,7 @@ const NavLink = memo(function NavLink({
   badgeOverride,
   badgeVariant,
   badgeDescription,
+  badgeSignals,
 }: {
   item: NavItem;
   active: boolean;
@@ -1365,14 +1400,91 @@ const NavLink = memo(function NavLink({
   badgeVariant?: BadgeSeverity | 'accent';
   /** What the badge count represents (server-provided, e.g. "Overdue bills payable"). */
   badgeDescription?: string;
+  badgeSignals?: SidebarBadgeSignal[];
 }) {
   const Icon = item.icon;
-  const badgeValue = badgeOverride ?? item.badge;
+  const activeSignals = badgeSignals?.filter((signal) => signal.count > 0) ?? [];
+  const primarySignal = activeSignals[0];
+  const badgeValue = primarySignal?.count ?? badgeOverride ?? item.badge;
+  const badgeTone = primarySignal?.severity ?? badgeVariant ?? 'accent';
+  const primaryDescription = primarySignal?.description ?? badgeDescription ?? item.label;
+  const showSignalLabels = (item.badgeKeys?.length ?? 0) > 1;
+  const hasMultipleSignals = activeSignals.length > 1;
   const hasBadge = badgeValue != null && badgeValue > 0;
+  const signalSummary = activeSignals
+    .map((signal) => `${signal.count} ${signal.description}`)
+    .join(', ');
   const collapsedLabel = hasBadge
-    ? `${item.label}, ${badgeDescription ?? 'badge count'}: ${badgeValue}`
+    ? `${item.label}, ${signalSummary || `${badgeDescription ?? 'badge count'}: ${badgeValue}`}`
     : item.label;
   const linkRef = useRef<HTMLAnchorElement>(null);
+  const signalButtonRef = useRef<HTMLButtonElement>(null);
+  const signalMenuRef = useRef<HTMLDivElement>(null);
+  const signalCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ignoreNextSignalFocus = useRef(false);
+  const focusFirstSignal = useRef(false);
+  const signalMenuId = useId();
+  const [signalsOpen, setSignalsOpen] = useState(false);
+  const [signalMenuPosition, setSignalMenuPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const cancelSignalClose = () => {
+    if (signalCloseTimer.current !== null) clearTimeout(signalCloseTimer.current);
+  };
+  const scheduleSignalClose = () => {
+    cancelSignalClose();
+    signalCloseTimer.current = setTimeout(() => setSignalsOpen(false), 150);
+  };
+
+  useEffect(() => {
+    if (!signalsOpen || !hasMultipleSignals) return;
+
+    const updatePosition = () => {
+      const trigger = signalButtonRef.current?.getBoundingClientRect();
+      const menu = signalMenuRef.current?.getBoundingClientRect();
+      if (!trigger || !menu) return;
+
+      const width = menu.width || 256;
+      const height = menu.height || 160;
+      const left = collapsed && trigger.right + 8 + width <= window.innerWidth
+        ? trigger.right + 8
+        : Math.max(8, trigger.right - width);
+      const top = Math.max(8, Math.min(trigger.bottom + 4, window.innerHeight - height - 8));
+      setSignalMenuPosition({ top, left });
+    };
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)
+        || (!signalButtonRef.current?.contains(target) && !signalMenuRef.current?.contains(target))) {
+        setSignalsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setSignalsOpen(false);
+      if (document.activeElement !== signalButtonRef.current) {
+        ignoreNextSignalFocus.current = true;
+        signalButtonRef.current?.focus();
+      }
+    };
+
+    updatePosition();
+    if (focusFirstSignal.current) {
+      signalMenuRef.current?.querySelector<HTMLAnchorElement>('a')?.focus();
+      focusFirstSignal.current = false;
+    }
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [collapsed, hasMultipleSignals, signalsOpen]);
 
   useEffect(() => {
     if (active && linkRef.current) {
@@ -1392,11 +1504,12 @@ const NavLink = memo(function NavLink({
       aria-current={active ? 'page' : undefined}
       className={cn(
         focusRingInset,
-        'relative flex min-h-11 items-center gap-3 py-1.5 mx-2 mb-0.5 rounded-md text-base transition-colors duration-fast md:min-h-9',
+        'relative flex min-h-11 items-center gap-2 py-1.5 mb-0.5 rounded-md text-base transition-colors duration-fast md:min-h-9',
         active
           ? 'text-primary font-medium bg-accent/10'
           : 'text-secondary hover:bg-elevated hover:text-primary',
-        collapsed ? 'justify-center mx-1 px-0 py-2' : 'px-3',
+        hasMultipleSignals ? 'min-w-0 flex-1' : collapsed ? 'mx-1' : 'mx-2',
+        collapsed ? 'justify-center px-0 py-2' : 'px-3',
       )}
     >
       {active && (
@@ -1408,7 +1521,7 @@ const NavLink = memo(function NavLink({
       />
       {collapsed && hasBadge && (
         <span aria-hidden className="absolute -top-1 right-0 z-10">
-          <Badge variant={badgeVariant ?? 'accent'} className="ring-2 ring-canvas">
+          <Badge variant={badgeTone} className="ring-2 ring-canvas">
             {badgeValue > 99 ? '99+' : badgeValue}
           </Badge>
         </span>
@@ -1418,12 +1531,25 @@ const NavLink = memo(function NavLink({
           <span title={item.label} className="min-w-0 flex-1 truncate">
             {item.label}
           </span>
-          {badgeValue != null && badgeValue > 0 ? (
-            <span className="ml-auto shrink-0">
-              <Tooltip content={`${badgeDescription ?? item.label} · ${badgeValue}`} side="top">
+          {showSignalLabels ? (
+            <span className="ml-auto flex max-w-[58%] flex-wrap justify-end gap-1">
+              {activeSignals.slice(0, 3).map((signal) => (
                 <Badge
-                  variant={badgeVariant ?? 'accent'}
-                  aria-label={`${badgeDescription ?? item.label} — ${badgeValue}`}
+                  key={signal.key}
+                  variant={signal.severity}
+                  className="max-w-full truncate text-[9px]"
+                  aria-label={`${signal.count} ${signal.description}`}
+                >
+                  {signal.count > 99 ? '99+' : signal.count} {signal.label}
+                </Badge>
+              ))}
+            </span>
+          ) : badgeValue != null && badgeValue > 0 ? (
+            <span className="ml-auto shrink-0">
+              <Tooltip content={`${primaryDescription} · ${badgeValue}`} side="top">
+                <Badge
+                  variant={badgeTone}
+                  aria-label={`${primaryDescription} — ${badgeValue}`}
                 >
                   {badgeValue > 99 ? '99+' : badgeValue}
                 </Badge>
@@ -1435,11 +1561,71 @@ const NavLink = memo(function NavLink({
     </Link>
   );
 
-  return collapsed ? (
-    <Tooltip content={item.description ?? collapsedLabel} side="right">
-      {link}
-    </Tooltip>
-  ) : (
-    link
+  const linkWithTooltip = collapsed ? (
+    <Tooltip content={collapsedLabel} side="right">{link}</Tooltip>
+  ) : link;
+
+  if (!hasMultipleSignals) return linkWithTooltip;
+
+  return (
+    <div className={cn('relative flex items-center', collapsed ? 'mx-1' : 'mx-2')}>
+      {linkWithTooltip}
+      <button
+        ref={signalButtonRef}
+        type="button"
+        aria-label={`View all ${item.label} signals: ${signalSummary}`}
+        aria-expanded={signalsOpen}
+        aria-controls={signalMenuId}
+        aria-haspopup="dialog"
+        className="flex h-8 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onMouseEnter={() => {
+          cancelSignalClose();
+          focusFirstSignal.current = false;
+          setSignalsOpen(true);
+        }}
+        onMouseLeave={scheduleSignalClose}
+        onFocus={() => {
+          if (ignoreNextSignalFocus.current) {
+            ignoreNextSignalFocus.current = false;
+            return;
+          }
+          focusFirstSignal.current = true;
+          setSignalsOpen(true);
+        }}
+        onClick={() => {
+          focusFirstSignal.current = true;
+          setSignalsOpen(true);
+        }}
+      >
+        <span aria-hidden>{collapsed ? '•' : '⋯'}</span>
+      </button>
+      {signalsOpen && createPortal(
+        <div
+          ref={signalMenuRef}
+          id={signalMenuId}
+          role="dialog"
+          aria-label={`${item.label} signals`}
+          className="fixed z-[100] max-h-[min(70vh,28rem)] w-64 overflow-auto rounded-md border border-default bg-canvas p-2 shadow-lg"
+          style={signalMenuPosition ?? { top: -9999, left: -9999 }}
+          onMouseEnter={cancelSignalClose}
+          onMouseLeave={scheduleSignalClose}
+        >
+          <p className="px-2 pb-1 text-xs font-semibold text-secondary">{item.label}</p>
+          {activeSignals.map((signal) => (
+            <Link
+              key={signal.key}
+              to={signal.to}
+              aria-label={`${signal.description}: ${signal.count}`}
+              className="flex min-h-9 items-center justify-between gap-3 rounded px-2 text-sm text-secondary hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => setSignalsOpen(false)}
+            >
+              <span className="truncate">{signal.label}</span>
+              <Badge variant={signal.severity}>{signal.count > 99 ? '99+' : signal.count}</Badge>
+            </Link>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
   );
 });

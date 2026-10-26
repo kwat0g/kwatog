@@ -139,6 +139,11 @@ class Bill extends Model
         return $q->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial]);
     }
 
+    public function scopeUnpaid(Builder $q): Builder
+    {
+        return $q->open()->where('balance', '>', 0);
+    }
+
     public function scopeOverdue(Builder $q): Builder
     {
         return $q->open()->whereDate('due_date', '<', today()->toDateString());

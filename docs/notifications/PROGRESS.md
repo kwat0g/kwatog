@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), missing event metadata (#379), late supplier notice scope (#380), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374, #381), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), missing event metadata (#379), late supplier notice scope (#380), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -11,8 +11,8 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; later targeted badge/list comparisons are recorded below. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. PR #380 applies purchase-order permission and row visibility to late-supplier notices. Global authorization coverage, signal registry, and remaining event families are open. |
-| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. PR #379 adds exact labels/groups for the discovered late-supply, incoming-quality, and dynamic rework event keys. Preferences, broader Center interactions, multi-signal rendering, and browser QA remain open. |
-| 5. Migration | In progress, partial | Budget and transfer badge/list scopes are in PRs #367 and #374; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
+| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. PR #379 adds exact labels/groups for the discovered late-supply, incoming-quality, and dynamic rework event keys. PR #381 adds the first multi-signal Bills item. Preferences, broader Center interactions, other multi-signal items, and browser QA remain open. |
+| 5. Migration | In progress, partial | Budget, transfer, overdue-bill, and unpaid-bill signals share list scopes in PRs #367, #369, #374, and #381; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
 
@@ -25,7 +25,8 @@
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | `cee47e18` |
 | F-08. Notification row anchors | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | `8eeec6fa` |
 | F-06. Late supply, incoming quality, and rework metadata | `notifications/catalog-late-supply-rework-events` | [#379](https://github.com/kwat0g/kwatog/pull/379) | `b07a8a31` |
-| F-28. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | pending |
+| F-28. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | `78d4d6e9` |
+| F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -39,7 +40,7 @@
 - Direct Laravel `->notify()` / `Notification::send()` and central preference email paths inventoried in discovery; mail-only account/security and summary paths remain separate.
 - Internal sidebar routes: **73** in the Phase 0 baseline; current branch adds `/budgeting/transfers` (**74 current**); portal routes: **19**; compact-shell links: **9**.
 - Phase 2 approved **87** signal IDs; implementation splits the budget/transfer approval signal into two source-specific definitions (**88 current**) without changing the approved recipient rule. Baseline cross-reference covered 73 internal, 19 portal, and nine compact routes. The current `/budgeting/transfers` route is an implementation delta.
-- Badge definitions inventoried: **29**; baseline wired to internal nav: **22**; current branch wires **23**, leaving **6** unattached.
+- Badge definitions inventoried: **29**; AP unpaid adds one current signal (**30**); baseline wired to internal nav: **22**; current branch wires **24**, leaving **6** unattached.
 - Local role slugs: **17**; existing role-access audit says **16**. Reconcile before role-complete claim.
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
@@ -232,6 +233,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - Before the fix, the negative test failed because a system administrator received the notice. Its custom review-only fixture also lacked the route's `purchasing.view`/`purchasing.po.approve` gate; the old selector included that role. After the fix, the existing purchasing-officer positive case plus both negative cases pass: **2 tests / 13 assertions**. `git diff --check` passes.
 - API test execution ran in the mounted Laravel container with the changed files safely overlaid and restored. The host has no PHP CLI, so host-side syntax and Pint checks were not run.
 - PR #380 API CI failed before PHPUnit during its PHP syntax scan on the inherited duplicate `PdfRenderService::ensureDompdfDirs()` declaration (F-22); governance check passed. No changed-file failure was reported.
+
+## Separate signal fix: F-13 Accounts Payable multi-signal item (draft PR [#381](https://github.com/kwat0g/kwatog/pull/381))
+
+- Accounts Payable now exposes separate overdue and unpaid-balance signals. `Bill::scopeOverdue()` backs the existing `overdue=1` list filter and badge. `Bill::scopeUnpaid()` means status `unpaid`/`partial` with stored balance > 0, excluding draft, paid, cancelled, and zero-balance rows; it backs both `signal=unpaid` and the new badge. Both counters reuse one aggregate query composed from those model scopes.
+- Sidebar Bills shows labeled severity chips, opens the highest-priority active signal on item click, and provides a signal dialog with every active filtered link. Expanded, collapsed, hover, focus, click, Escape, and filter-link behavior are covered by `Sidebar.behavior.test.tsx`.
+- API `BadgeControllerTest.php` targeted permission and parity cases: **2 passed / 73 assertions**. SPA `Sidebar.behavior.test.tsx`: **30 passed**. Targeted ESLint and `git diff --check` pass.
+- `npm run typecheck` reports only existing errors in export helpers, missing `lucide-react`, stock-transfer API exports, and duplicate purchase-order props; none names a changed file. Pint `--test` reports style issues in all four touched PHP files; no broad formatting was applied. Browser visual QA and full-suite checks remain outstanding. AP due-soon and multi-signal coverage for other modules remain open.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

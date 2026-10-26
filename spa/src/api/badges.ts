@@ -14,7 +14,7 @@ export type BadgeSeverity = 'warning' | 'danger' | 'neutral';
 export interface BadgePayload {
  count: number;
  severity: BadgeSeverity;
- /** Human label for the nav slot this badge backs. */
+ /** Human label for this signal. */
  label?: string;
  /** Short explanation of what the count represents. */
  description?: string;
