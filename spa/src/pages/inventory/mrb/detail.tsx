@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { mrbApi } from '@/api/inventory/mrb';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -201,7 +201,10 @@ export default function MrbDetailPage() {
                 )
               }
             />
-            <Field label="NCR status" value={data.ncr?.status_label ?? data.ncr?.status} />
+            <Field
+              label="NCR status"
+              value={data.ncr ? <Chip variant={chipVariantForStatus(data.ncr.status)}>{data.ncr.status_label ?? data.ncr.status}</Chip> : '—'}
+            />
             <Field
               label="Linked inspection"
               value={
@@ -219,7 +222,7 @@ export default function MrbDetailPage() {
             />
             <Field
               label="Inspection status"
-              value={data.inspection?.status_label ?? data.inspection?.status}
+              value={data.inspection ? <Chip variant={chipVariantForStatus(data.inspection.status)}>{data.inspection.status_label ?? data.inspection.status}</Chip> : '—'}
             />
           </dl>
         </Panel>

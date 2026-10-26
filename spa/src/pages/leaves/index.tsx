@@ -410,7 +410,7 @@ function KanbanCol({
  <li key={l.id} className="px-4 py-3 hover:bg-subtle">
  <Link to={`/hr/leaves/${l.id}`} className="block">
  <div className="text-sm font-medium truncate">{l.employee?.full_name ?? '—'}</div>
- <div className="text-xs text-muted font-mono">{l.leave_request_no} · {l.leave_type?.code}</div>
+ <div className="text-xs font-mono"><span className="text-link">{l.leave_request_no}</span> · {l.leave_type?.code}</div>
  <div className="text-xs mt-0.5 font-mono tabular-nums">{formatDate(l.start_date)} → {formatDate(l.end_date)} · {l.days}d</div>
  </Link>
  </li>

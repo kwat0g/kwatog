@@ -9,7 +9,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Mail, X, UserPlus } from 'lucide-react';
+import { LuMail as Mail, LuX as X, LuUserPlus as UserPlus } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import {
   userInvitesApi,
@@ -149,7 +149,7 @@ export default function PortalInvitesPage() {
                     {row.employee ? (
                       <Link to={`/hr/employees/${row.employee.id}`} className="hover:text-primary">
                         <div>{row.employee.full_name}</div>
-                        <div className="font-mono text-xs text-muted">{row.employee.employee_no}</div>
+                        <div className="font-mono text-xs text-link">{row.employee.employee_no}</div>
                       </Link>
                     ) : '—'}
                   </td>

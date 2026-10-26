@@ -91,7 +91,7 @@ export default function ActiveOrders() {
           )}
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono tabular-nums text-sm font-medium">{wo.wo_number}</span>
+            <span className="font-mono tabular-nums text-sm font-medium text-link">{wo.wo_number}</span>
             <Chip variant={workOrderStatusVariant[wo.status]}>
               {wo.status_label ?? wo.status.replace(/_/g, ' ')}
             </Chip>
