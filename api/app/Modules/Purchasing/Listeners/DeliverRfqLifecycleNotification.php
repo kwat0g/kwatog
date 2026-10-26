@@ -78,7 +78,7 @@ final class DeliverRfqLifecycleNotification implements ShouldQueue
         }
 
         [$type, $title, $message] = $copy;
-        $this->notifications->send($audience->unique('id')->values(), $type, [
+        $this->notifications->sendForSubject($rfq, $audience->unique('id')->values(), $type, [
             'title' => $title,
             'message' => $message,
             'link_to' => '/purchasing/rfqs/'.$rfq->hash_id,

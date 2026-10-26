@@ -55,25 +55,31 @@ class AlertOnSupplierDeterioration implements ShouldQueue
             if ($audience->isEmpty()) return;
 
             $current->loadMissing('vendor:id,name');
-            $vendorName = $current->vendor?->name ?? "Vendor #{$current->vendor_id}";
+            $vendor = $current->vendor;
+            if ($vendor === null) return;
+
+            $vendorName = $vendor->name;
             $period     = sprintf('%04d-%02d', $current->period_year, $current->period_month);
 
-            $this->notifications->send($audience, 'purchasing.supplier_deterioration', [
-                'title'       => "Supplier deterioration — {$vendorName}",
-                'message'     => sprintf(
-                    '%s overall score dropped %.1f → %.1f (-%.1f) for %s.',
-                    $vendorName,
-                    (float) $prior->overall_score,
-                    (float) $current->overall_score,
-                    $drop,
-                    $period,
-                ),
-                'link_to'     => $current->vendor
-                    ? "/purchasing/suppliers/{$current->vendor->hash_id}/performance"
-                    : null,
-                'entity_type' => 'supplier_performance_snapshot',
-                'entity_id'   => $current->hash_id,
-            ]);
+            $this->notifications->sendForSubject(
+                $vendor,
+                $audience,
+                'purchasing.supplier_deterioration',
+                [
+                    'title'       => "Supplier deterioration — {$vendorName}",
+                    'message'     => sprintf(
+                        '%s overall score dropped %.1f → %.1f (-%.1f) for %s.',
+                        $vendorName,
+                        (float) $prior->overall_score,
+                        (float) $current->overall_score,
+                        $drop,
+                        $period,
+                    ),
+                    'link_to'     => "/purchasing/suppliers/{$vendor->hash_id}/performance",
+                    'entity_type' => 'supplier_performance_snapshot',
+                    'entity_id'   => $current->hash_id,
+                ],
+            );
         } catch (\Throwable $e) {
             Log::warning('AlertOnSupplierDeterioration failed', [
                 'snapshot_id' => $event->snapshot->id ?? null,
