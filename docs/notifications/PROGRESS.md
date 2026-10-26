@@ -501,7 +501,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `NotificationServiceSubjectAccessTest`: **6 passed / 27 assertions**, including positive/negative invoice permission, disabled Accounting module, and subject-gated failure paths. `InvoicePrebillApprovalTest.php`, `InvoicePaymentSubmissionServiceTest.php`, and `RunArDunningCommandTest.php`: **40 passed / 308 assertions**. The separate F-38 test passes **22 / 62**. PHP syntax, selected Pint checks, and `git diff --check` pass.
 - Test runs used a temporary local workaround for inherited F-22 duplicate `PdfRenderService::ensureDompdfDirs()` and restored the source exactly. PR #414 CI API check stops at the same F-22 syntax error; finding-lifecycle passes. Broader Pint reports existing style debt in Accounting listener/mail/service files; no broad formatting applied. Full suite, browser/e2e, and role matrix remain outstanding.
 
-## Phase 3 Accounting budget and transfer subject access gate (draft PR pending)
+## Phase 3 Accounting budget and transfer subject access gate (draft PR [#415](https://github.com/kwat0g/kwatog/pull/415))
 
 - Registered Budget and BudgetTransfer with the actual detail-route rules. Both Accounting and Budgeting feature flags must be enabled. View permission opens any record; approval-only access requires the current submitted/pending state, a valid direct or delegated approver, and the existing maker-checker role rule.
 - Routed budget submission/decision and transfer request/decision notices through `sendForSubject()`. Current role/delegation recipient selection and messages remain unchanged; ineligible users are suppressed by the shared access gate.
