@@ -84,26 +84,10 @@ final class PurchaseRequestAccessPolicy
      */
     public function awaitingMyApproval(Builder $query, User $user): Builder
     {
-        $roles = $this->approvalRoleSlugs($user);
-        $this->visibleTo($query, $user);
-
-        if (! $user->hasPermission('purchasing.view')
-            || ! $user->hasPermission('purchasing.pr.approve')
-            || $roles === []) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        return $query
-            ->where('status', PurchaseRequestStatus::Pending->value)
-            ->where('requested_by', '<>', $user->id)
-            ->whereHas('approvalRecords', fn ($records) => $records
-                ->where('action', 'pending')
-                ->whereIn('role_slug', $roles));
-    }
-
-    public function awaitingMyApprovalQuery(User $user): Builder
-    {
-        return $this->awaitingMyApproval(PurchaseRequest::query(), $user);
+        return $query->whereIn(
+            'purchase_requests.id',
+            $this->pendingApprovalsFor($user)->select('purchase_requests.id'),
+        );
     }
 
     public function canView(User $user, PurchaseRequest $pr): bool
@@ -231,6 +215,26 @@ final class PurchaseRequestAccessPolicy
             ...$roles,
             ...ApprovalDelegation::actsForRoles($user->id, now()),
         ]));
+    }
+
+    /** @return Builder<PurchaseRequest> */
+    public function pendingApprovalsFor(User $user): Builder
+    {
+        $roleSlugs = $this->approvalRoleSlugs($user);
+        $query = PurchaseRequest::query()
+            ->where('status', PurchaseRequestStatus::Pending->value)
+            ->where('requested_by', '<>', $user->id);
+        $this->visibleTo($query, $user);
+
+        if (! $user->hasPermission('purchasing.view')
+            || ! $user->hasPermission('purchasing.pr.approve')
+            || $roleSlugs === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('approvalRecords', fn (Builder $records) => $records
+            ->where('action', 'pending')
+            ->whereIn('role_slug', $roleSlugs));
     }
 
     /**

@@ -78,7 +78,7 @@ export default function CreateNcrPage() {
     queryFn: () => ncrTemplatesApi.active(),
   });
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       source: '',

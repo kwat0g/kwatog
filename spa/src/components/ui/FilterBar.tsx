@@ -3,6 +3,7 @@ import { LuSearch, LuX } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 import { Select } from './Select';
+import { Toolbar } from './Toolbar';
 
 export interface FilterOption {
  value: string;
@@ -39,6 +40,7 @@ interface FilterBarProps {
   */
  searchable?: boolean;
  className?: string;
+ inset?: boolean;
 }
 
 /** Keystroke-to-request delay: long enough to skip mid-word, short enough to feel live. */
@@ -54,6 +56,7 @@ export function FilterBar({
  dateRange,
  actions,
  className,
+ inset = true,
  searchable = true,
 }: FilterBarProps) {
  const external = (values.search as string) ?? '';
@@ -114,7 +117,12 @@ export function FilterBar({
  };
 
  return (
- <div className={cn('flex items-center gap-2 px-5 py-3 border-b border-default flex-wrap', className)}>
+ <Toolbar
+ layout="filter-bar"
+ inset={inset}
+ className={cn('py-3 border-b border-default', className)}
+ start={(
+ <>
  {searchable && (
  <form
  onSubmit={submit}
@@ -207,7 +215,9 @@ export function FilterBar({
  </button>
  )}
 
- {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
- </div>
+ </>
+ )}
+ end={actions}
+ />
  );
 }

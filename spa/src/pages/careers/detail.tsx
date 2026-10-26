@@ -278,7 +278,7 @@ export default function JobPostingDetailPage() {
  <p role="alert" className="text-xs text-danger-fg">{consentError}</p>
  )}
 
- <Button type="submit" disabled={mutation.isPending} className="w-full">
+ <Button type="submit" variant="primary" disabled={mutation.isPending} className="w-full">
  {mutation.isPending ? 'Submitting...' : 'Submit Application'}
  </Button>
 

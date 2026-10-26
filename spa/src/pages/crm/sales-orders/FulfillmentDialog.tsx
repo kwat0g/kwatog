@@ -51,7 +51,7 @@ export function FulfillmentDialog({ orderId, onClose }: { orderId: string; onClo
       {message && <p role="alert" className="text-danger-fg">{message}</p>}
       <div className="flex flex-wrap justify-end gap-2"><Button variant="secondary" disabled={locked} onClick={() => { void preview.refetch(); }}>Refresh supply</Button>
         <Button variant="secondary" disabled={save.isPending} onClick={onClose}>Cancel</Button>
-        <Button disabled={!preview.data?.editable || !reason.trim() || save.isPending || preview.isFetching} loading={save.isPending} onClick={() => save.mutate()}>Confirm fulfillment</Button></div>
+        <Button variant="primary" disabled={!preview.data?.editable || !reason.trim() || save.isPending || preview.isFetching} loading={save.isPending} onClick={() => save.mutate()}>Confirm fulfillment</Button></div>
     </div>
   </Modal>;
 }

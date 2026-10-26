@@ -28,7 +28,7 @@ class RoleCloneTest extends TestCase
         $roleId = Role::query()->where('slug', 'system_admin')->value('id');
         return User::create([
             'name' => 'Admin', 'email' => 'admin_'.uniqid().'@x.test',
-            'password' => bcrypt('Password1!'), 'role_id' => $roleId,
+            'password' => bcrypt('Password1!'), 'role_id' => $roleId, 'is_active' => true,
         ]);
     }
 
@@ -92,7 +92,7 @@ class RoleCloneTest extends TestCase
         $emp = Role::query()->where('slug', 'employee')->value('id');
         $u = User::create([
             'name' => 'E', 'email' => 'e_'.uniqid().'@x.test',
-            'password' => bcrypt('Password1!'), 'role_id' => $emp,
+            'password' => bcrypt('Password1!'), 'role_id' => $emp, 'is_active' => true,
         ]);
 
         $source = Role::where('slug', 'hr_officer')->firstOrFail();

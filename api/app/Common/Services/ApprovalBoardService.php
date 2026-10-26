@@ -64,6 +64,18 @@ class ApprovalBoardService
         int $pendingPage = 1,
         int $historyPage = 1,
     ): array {
+        return $this->boardPage($user, $kindFilter, $pendingLimit, $historyLimit, $pendingPage, $historyPage, true);
+    }
+
+    private function boardPage(
+        User $user,
+        ?string $kindFilter = null,
+        int $pendingLimit = 100,
+        int $historyLimit = 50,
+        int $pendingPage = 1,
+        int $historyPage = 1,
+        bool $includeTotal = true,
+    ): array {
         $pendingLimit = max(1, min($pendingLimit, 500));
         $historyLimit = max(1, min($historyLimit, 500));
         $pendingPage = max(1, $pendingPage);
@@ -75,60 +87,80 @@ class ApprovalBoardService
         // refuse it), so it must not appear at all — not even redacted.
         $delegatedSlugs = ApprovalDelegation::actsForRoles($user->id, now());
         $userRoleSlugs = $this->roleSlugsFor($user, $delegatedSlugs);
-        $recentDays = app(SettingsService::class)->requiredInt('approvals.recent_history_days', 1, 3650);
-        $historySince = Carbon::now()->subDays($recentDays);
 
         // Pull pending approvals (open columns).
-        $pendingQuery = DB::table('approval_records')
-            ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'created_at'])
+        $pendingTypeMeta = array_filter(
+            ApprovalTypeRegistry::all(),
+            static fn (array $meta): bool => $kindFilter === null || $meta['kind'] === $kindFilter,
+        );
+        $pendingKeys = DB::table('approval_records')
+            ->select(['approvable_type', 'approvable_id'])
             ->where('action', 'pending')
             ->where('is_current', true)
+            ->whereIn('approvable_type', array_keys($pendingTypeMeta))
+            ->groupBy('approvable_type', 'approvable_id')
             ->orderBy('approvable_type')
-            ->orderBy('approvable_id')
-            ->orderBy('step_order');
-
-        if ($kindFilter !== null) {
-            $types = [];
-            foreach (ApprovalTypeRegistry::all() as $class => $meta) {
-                if ($meta['kind'] === $kindFilter) {
-                    $types[] = $class;
-                }
-            }
-            $pendingQuery->whereIn('approvable_type', $types);
-        }
-
-        $pendingRows = $pendingQuery
+            ->orderBy('approvable_id');
+        $pendingKeyRows = $pendingKeys
             ->offset(($pendingPage - 1) * $pendingLimit)
             ->limit($pendingLimit + 1)
             ->get();
-        $pendingTruncated = $pendingRows->count() > $pendingLimit;
-        $pending = $pendingRows->take($pendingLimit)->values();
+        $pendingTruncated = $pendingKeyRows->count() > $pendingLimit;
+        $pendingIdsByType = $pendingKeyRows->take($pendingLimit)
+            ->groupBy('approvable_type')
+            ->map(static fn (Collection $rows): array => $rows->pluck('approvable_id')->map(static fn ($id): int => (int) $id)->all())
+            ->all();
+        $pending = collect();
+        if ($pendingIdsByType !== []) {
+            $pending = DB::table('approval_records')
+                ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'created_at'])
+                ->where('action', 'pending')
+                ->where('is_current', true)
+                ->where(function ($query) use ($pendingIdsByType): void {
+                    foreach ($pendingIdsByType as $type => $ids) {
+                        $query->orWhere(function ($typed) use ($type, $ids): void {
+                            $typed->where('approvable_type', $type)->whereIn('approvable_id', $ids);
+                        });
+                    }
+                })
+                ->orderBy('approvable_type')
+                ->orderBy('approvable_id')
+                ->orderBy('step_order')
+                ->orderBy('id')
+                ->get();
+        }
 
         // Pull recently-actioned approvals (closed columns).
         // A resubmission can leave more than one terminal step for an
         // approvable. Fetch a bounded multiple before de-duplicating, then
         // cap the visible cards below.
-        $actionedQuery = DB::table('approval_records')
-            ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'action', 'remarks', 'acted_at', 'approver_id'])
-            ->whereIn('action', ['approved', 'rejected'])
-            ->where('is_current', true)
-            ->where('acted_at', '>=', $historySince)
-            ->orderByDesc('acted_at');
-        if ($kindFilter !== null) {
-            $types = [];
-            foreach (ApprovalTypeRegistry::all() as $class => $meta) {
-                if ($meta['kind'] === $kindFilter) {
-                    $types[] = $class;
+        $actionedTruncated = false;
+        $actioned = collect();
+        if ($includeTotal) {
+            $recentDays = app(SettingsService::class)->requiredInt('approvals.recent_history_days', 1, 3650);
+            $historySince = Carbon::now()->subDays($recentDays);
+            $actionedQuery = DB::table('approval_records')
+                ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'action', 'remarks', 'acted_at', 'approver_id'])
+                ->whereIn('action', ['approved', 'rejected'])
+                ->where('is_current', true)
+                ->where('acted_at', '>=', $historySince)
+                ->orderByDesc('acted_at');
+            if ($kindFilter !== null) {
+                $types = [];
+                foreach (ApprovalTypeRegistry::all() as $class => $meta) {
+                    if ($meta['kind'] === $kindFilter) {
+                        $types[] = $class;
+                    }
                 }
+                $actionedQuery->whereIn('approvable_type', $types);
             }
-            $actionedQuery->whereIn('approvable_type', $types);
+            $actionedRows = $actionedQuery
+                ->offset(($historyPage - 1) * ($historyLimit * 4))
+                ->limit(($historyLimit * 4) + 1)
+                ->get();
+            $actionedTruncated = $actionedRows->count() > ($historyLimit * 4);
+            $actioned = $actionedRows->take($historyLimit * 4)->values();
         }
-        $actionedRows = $actionedQuery
-            ->offset(($historyPage - 1) * ($historyLimit * 4))
-            ->limit(($historyLimit * 4) + 1)
-            ->get();
-        $actionedTruncated = $actionedRows->count() > ($historyLimit * 4);
-        $actioned = $actionedRows->take($historyLimit * 4)->values();
 
         // For each approvable, find the earliest pending step (the active step).
         $activeStepByApprovable = [];
@@ -296,9 +328,13 @@ class ApprovalBoardService
 
         // Sort my_action by oldest first (most urgent).
         usort($myAction, fn ($a, $b) => strcmp((string) $a['since'], (string) $b['since']));
+        $myActionTotal = count($myAction);
         $pendingTruncated = $pendingTruncated
             || count($myAction) > $pendingLimit
             || count($awaitingOthers) > $pendingLimit;
+        if ($includeTotal && ($pendingPage > 1 || $pendingTruncated)) {
+            $myActionTotal = $this->countAllMyActions($user, $kindFilter);
+        }
         $myAction = array_slice($myAction, 0, $pendingLimit);
         $awaitingOthers = array_slice($awaitingOthers, 0, $pendingLimit);
 
@@ -311,7 +347,7 @@ class ApprovalBoardService
             'approved' => $approved,
             'rejected' => $rejected,
             'summary' => [
-                'my_action' => count($myAction),
+                'my_action' => $myActionTotal,
                 'awaiting_others' => count($awaitingOthers),
                 'approved' => count($approved),
                 'rejected' => count($rejected),
@@ -327,6 +363,21 @@ class ApprovalBoardService
                 'history_has_more' => $actionedTruncated,
             ],
         ];
+    }
+
+    private function countAllMyActions(User $user, ?string $kindFilter): int
+    {
+        $total = 0;
+        $page = 1;
+
+        do {
+            $board = $this->boardPage($user, $kindFilter, 500, 1, $page, 1, false);
+            $total += $board['summary']['my_action'];
+            $hasMore = $board['meta']['pending_has_more'];
+            $page++;
+        } while ($hasMore);
+
+        return $total;
     }
 
     /** @param array<int, string> $delegatedSlugs @return array<int, string> */

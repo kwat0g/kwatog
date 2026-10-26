@@ -50,6 +50,7 @@ class UserInviteTest extends TestCase
             'email'    => 'hr_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
             'role_id'  => $hr->id,
+            'is_active' => true,
         ]);
     }
 
@@ -61,6 +62,7 @@ class UserInviteTest extends TestCase
             'email'    => 'admin_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
             'role_id'  => $admin->id,
+            'is_active' => true,
         ]);
     }
 
@@ -72,6 +74,7 @@ class UserInviteTest extends TestCase
             'email'    => 'emp_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
             'role_id'  => $emp->id,
+            'is_active' => true,
         ]);
     }
 
@@ -88,7 +91,7 @@ class UserInviteTest extends TestCase
             'default_role_id'   => $defaultRoleId,
         ]);
 
-        return Employee::create([
+        return Employee::factory()->create([
             'employee_no'          => 'OGM-T-'.uniqid(),
             'first_name'           => 'Jane',
             'last_name'            => 'Doe',
