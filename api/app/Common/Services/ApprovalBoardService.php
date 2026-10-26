@@ -7,6 +7,8 @@ namespace App\Common\Services;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Support\ApprovalSourceScope;
 use App\Common\Support\ApprovalTypeRegistry;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
@@ -629,21 +631,21 @@ class ApprovalBoardService
                 'Payroll adjustment waiting for approval');
         }
 
-        if ($selected('budget') && $user->hasPermission('budgeting.view')) {
+        if ($selected('budget') && ($user->hasPermission('budgeting.view') || ApprovalDelegation::canActForPermission($user, 'budgeting.approve'))) {
             $canAct = ApprovalDelegation::canActForPermission($user, 'budgeting.approve');
-            $approverRoleIds = ApprovalDelegation::permissionRoleIds($user, 'budgeting.approve');
+            $canView = $user->hasPermission('budgeting.view');
             $query = DB::table('budgets')->where('status', 'submitted')
-                ->where(function ($rows) use ($id, $canAct, $approverRoleIds): void {
-                    $rows->where('submitted_by', $id);
+                ->where(function ($rows) use ($id, $canView, $canAct, $user): void {
+                    if ($canView) {
+                        $rows->where('submitted_by', $id);
+                    }
                     if ($canAct) {
-                        $rows->orWhere(function ($other) use ($id, $approverRoleIds): void {
-                            $other->where(function ($submitter) use ($id): void {
-                                $submitter->where('submitted_by', '<>', $id)->orWhereNull('submitted_by');
-                            })->where(function ($role) use ($approverRoleIds): void {
-                                $role->whereNull('submitted_by')->orWhereNotIn('submitted_by', User::query()
-                                    ->select('id')->whereIn('role_id', $approverRoleIds));
-                            });
-                        });
+                        $actionable = Budget::query()->awaitingApprovalFor($user)->select('budgets.id');
+                        if ($canView) {
+                            $rows->orWhereIn('budgets.id', $actionable);
+                        } else {
+                            $rows->whereIn('budgets.id', $actionable);
+                        }
                     }
                 });
             $rows = $query->orderBy('submitted_at')->offset($offset)->limit($limit + 1)->get();
@@ -653,21 +655,21 @@ class ApprovalBoardService
                 'Submitted budget waiting for approval', 'submitted_at');
         }
 
-        if ($selected('budget_transfer') && $user->hasPermission('budgeting.view')) {
+        if ($selected('budget_transfer') && ($user->hasPermission('budgeting.view') || ApprovalDelegation::canActForPermission($user, 'budgeting.approve'))) {
             $canAct = ApprovalDelegation::canActForPermission($user, 'budgeting.approve');
-            $approverRoleIds = ApprovalDelegation::permissionRoleIds($user, 'budgeting.approve');
+            $canView = $user->hasPermission('budgeting.view');
             $query = DB::table('budget_transfers')->where('status', 'pending')
-                ->where(function ($rows) use ($id, $canAct, $approverRoleIds): void {
-                    $rows->where('requested_by', $id);
+                ->where(function ($rows) use ($id, $canView, $canAct, $user): void {
+                    if ($canView) {
+                        $rows->where('requested_by', $id);
+                    }
                     if ($canAct) {
-                        $rows->orWhere(function ($other) use ($id, $approverRoleIds): void {
-                            $other->where(function ($requester) use ($id): void {
-                                $requester->where('requested_by', '<>', $id)->orWhereNull('requested_by');
-                            })->where(function ($role) use ($approverRoleIds): void {
-                                $role->whereNull('requested_by')->orWhereNotIn('requested_by', User::query()
-                                    ->select('id')->whereIn('role_id', $approverRoleIds));
-                            });
-                        });
+                        $actionable = BudgetTransfer::query()->awaitingApprovalFor($user)->select('budget_transfers.id');
+                        if ($canView) {
+                            $rows->orWhereIn('budget_transfers.id', $actionable);
+                        } else {
+                            $rows->whereIn('budget_transfers.id', $actionable);
+                        }
                     }
                 });
             $rows = $query->orderBy('created_at')->offset($offset)->limit($limit + 1)->get();

@@ -155,7 +155,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
     Route::middleware(['feature:budgeting'])->group(function () {
         Route::prefix('budgets')->group(function () {
             Route::get('/options', [BudgetController::class, 'options'])->middleware('permission:budgeting.view');
-            Route::get('/', [BudgetController::class, 'index'])->middleware('permission:budgeting.view');
+            Route::get('/', [BudgetController::class, 'index'])->middleware('permission_any:budgeting.view,budgeting.approve');
             Route::get('/fiscal-years', [BudgetController::class, 'fiscalYears'])->middleware('permission:budgeting.view');
             Route::post('/fiscal-years', [BudgetController::class, 'storeFiscalYear'])->middleware('permission:budgeting.manage');
             Route::post('/fiscal-years/{fiscalYear}/activate', [BudgetController::class, 'activateFiscalYear'])->middleware('permission:budgeting.manage');
