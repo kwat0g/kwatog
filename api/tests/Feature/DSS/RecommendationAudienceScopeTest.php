@@ -8,6 +8,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\DSS\Models\DssRecommendation;
 use App\Modules\DSS\Services\DetectorRegistry;
 use App\Modules\DSS\Services\DssParameterService;
@@ -42,9 +43,9 @@ class AudienceFakeDetector implements DetectorInterface
         return [];
     }
 
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
-        return [];
+        return new DetectorScanResult([]);
     }
 }
 

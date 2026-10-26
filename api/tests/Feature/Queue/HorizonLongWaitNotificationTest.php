@@ -8,6 +8,7 @@ use App\Common\Listeners\NotifySystemAdminsOnQueueLongWait;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,12 @@ final class HorizonLongWaitNotificationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
+    }
+
     public function test_long_wait_notifies_active_system_admins_and_deduplicates_for_five_minutes(): void
     {
         Carbon::setTestNow('2026-10-20 12:00:00 UTC');
@@ -28,7 +35,20 @@ final class HorizonLongWaitNotificationTest extends TestCase
         try {
             $admin = User::factory()->withRole('system_admin')->create();
             $inactiveAdmin = User::factory()->withRole('system_admin')->create(['is_active' => false]);
+            $revokedAdmin = User::factory()->withRole('system_admin')->create();
             $employee = User::factory()->withRole('employee')->create();
+            $this->assertTrue($admin->hasPermission('dashboard.admin.view'));
+            DB::table('user_permission_overrides')->insert([
+                'user_id' => $revokedAdmin->id,
+                'permission_id' => DB::table('permissions')->where('slug', 'dashboard.admin.view')->value('id'),
+                'type' => 'revoke',
+                'granted_by' => $admin->id,
+                'reason' => 'The account no longer has access to the queue health destination.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $revokedAdmin->flushPermissionsCache();
+            $this->assertFalse($revokedAdmin->hasPermission('dashboard.admin.view'));
 
             $event = new LongWaitDetected('redis', 'default', 75);
             $horizonLock = Mockery::mock(Lock::class);
@@ -51,6 +71,11 @@ final class HorizonLongWaitNotificationTest extends TestCase
             $this->assertDatabaseMissing('notifications', [
                 'type' => 'queue.long_wait',
                 'notifiable_type' => User::class,
+                'notifiable_id' => $revokedAdmin->id,
+            ]);
+            $this->assertDatabaseMissing('notifications', [
+                'type' => 'queue.long_wait',
+                'notifiable_type' => User::class,
                 'notifiable_id' => $employee->id,
             ]);
 
@@ -61,6 +86,7 @@ final class HorizonLongWaitNotificationTest extends TestCase
 
             $this->assertSame('Queue backlog: default', $data['title']);
             $this->assertSame('Queue [default] on [redis] has waited 75 seconds.', $data['message']);
+            $this->assertSame('/dashboard/admin', $data['link_to']);
 
             Carbon::setTestNow('2026-10-20 12:04:59 UTC');
             event($event);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -87,15 +88,16 @@ export default function CreateWorkOrderPage() {
       ? create.error.response?.data?.message
       : create.error?.message;
   return (
-    <div>
+    <PageShell variant="narrow" className="flex flex-col gap-6">
       <PageHeader
+        inset={false}
         title="Produce for stock"
         backTo="/production/work-orders"
         backLabel="Work orders"
         subtitle="Plan new pieces for inventory. Production and QC approval remain required."
       />
       <form
-        className="mx-auto max-w-3xl space-y-6 px-5 py-8"
+        className="w-full space-y-6"
         onSubmit={(event) => {
           event.preventDefault();
           if (valid && !create.isPending && !saved) create.mutate();
@@ -226,6 +228,6 @@ export default function CreateWorkOrderPage() {
           </Button>
         </div>
       </form>
-    </div>
+    </PageShell>
   );
 }
