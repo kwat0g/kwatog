@@ -487,6 +487,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `NotificationServiceSubjectAccessTest`: **3 passed / 15 assertions**; proves allowed requester, same-permission but out-of-scope recipient, missing permission, structured subject fields, unknown subject denial, and soft-deleted subject denial. `ApprovalNoticeVisibilityTest`: **3 passed / 20 assertions**; `ApprovalSubmitterOutcomeVisibilityTest`: **1 passed / 5 assertions**; `ApprovalServiceTest`: **18 passed / 44 assertions**. PHP syntax, Pint for changed code/tests, and `git diff --check` pass.
 - Tests used a temporary local removal of inherited F-22 duplicate method and restored it exactly. Full suite and CI remain blocked by F-22; global subject-type coverage, other notification senders, and performance under large approval audiences remain open.
 
+## Separate finding fix: F-38 inactive-recipient test correction (draft PR pending)
+
+- Corrected the stale in-app row expectation from four to three. Inactive users are excluded by `NotificationService::normaliseRecipients()` from database, broadcast, and email delivery.
+- `NotificationServiceHardeningTest.php`: **22 passed / 62 assertions**. PHP syntax, targeted Pint, and `git diff --check` pass. Test used a temporary local workaround for inherited F-22 and restored that file exactly.
+- Production behavior is unchanged. The fix is isolated from notification feature work.
+
 ## Outstanding proof / risks
 
 1. Payroll defaults are approved; exact payroll adjustment checker and HR/Finance sensitive audiences remain open business decisions. Review remaining HR/discipline, executive escalation, system-admin fanout, and portal contacts.
