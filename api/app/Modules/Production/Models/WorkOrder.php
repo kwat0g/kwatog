@@ -318,6 +318,23 @@ class WorkOrder extends Model
             ->whereNull('work_orders.deleted_at');
     }
 
+    public function scopeDueSoon(Builder $q, int $days = 3): Builder
+    {
+        $days = max(0, min(365, $days));
+        $now = now();
+        $end = $now->copy()->startOfDay()->addDays($days)->endOfDay();
+
+        return $q->whereIn('status', [
+            WorkOrderStatus::Planned->value,
+            WorkOrderStatus::Confirmed->value,
+            WorkOrderStatus::InProgress->value,
+            WorkOrderStatus::Paused->value,
+        ])
+            ->whereNotNull('planned_end')
+            ->whereBetween('planned_end', [$now, $end])
+            ->whereNull('work_orders.deleted_at');
+    }
+
     public function getProgressPercentageAttribute(): float
     {
         $target = (int) $this->quantity_target;

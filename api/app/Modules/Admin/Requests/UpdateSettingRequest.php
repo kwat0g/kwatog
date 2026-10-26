@@ -125,6 +125,7 @@ class UpdateSettingRequest extends FormRequest
             'alerts.ar.warning_overdue_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'alerts.ar.critical_overdue_days' => ['value' => ['required', 'integer', 'min:1', 'max:3650']],
             'alerts.ap.due_soon_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
+            'production.work_orders.due_soon_days' => ['value' => ['required', 'integer', 'min:0', 'max:365']],
             'alerts.quality.scrap_rate_threshold' => ['value' => ['required', 'numeric', 'min:0', 'max:1']],
             'alerts.quality.lookback_hours' => ['value' => ['required', 'integer', 'min:1', 'max:8760']],
             'alerts.quality.minimum_output_count' => ['value' => ['required', 'integer', 'min:1']],

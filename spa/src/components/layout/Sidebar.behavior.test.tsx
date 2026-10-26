@@ -80,6 +80,32 @@ it('opens the overdue filter when Production Work Orders has a positive badge', 
   );
 });
 
+it('shows the due-soon Work Orders filter alongside overdue', () => {
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'work_orders') {
+      return { count: 2, severity: 'danger', label: 'Overdue', description: 'Overdue production work orders' };
+    }
+    if (key === 'work_orders_due_soon') {
+      return { count: 4, severity: 'warning', label: 'Due soon', description: 'Production work orders due soon' };
+    }
+    return undefined;
+  });
+  render(
+    <MemoryRouter initialEntries={['/production/work-orders']}>
+      <Sidebar roleSlug="system_admin" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Work Orders/ })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=overdue',
+  );
+  fireEvent.click(screen.getByRole('button', { name: /View all Production Work Orders signals/ }));
+  expect(screen.getByRole('link', { name: 'Production work orders due soon: 4' })).toHaveAttribute(
+    'href',
+    '/production/work-orders?signal=due_soon',
+  );
+});
+
 it('opens the pending-QC filter when GRN has a positive badge', () => {
   badgeMock.getBadge.mockImplementation((key) =>
     key === 'pending_grn'

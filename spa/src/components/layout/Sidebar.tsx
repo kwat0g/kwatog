@@ -132,6 +132,7 @@ function badgeDestination(path: string, key: string): string {
     inquiries: 'status=new',
     open_complaints: 'signal=open',
     work_orders: 'signal=overdue',
+    work_orders_due_soon: 'signal=due_soon',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
@@ -325,7 +326,7 @@ export const SECTIONS: NavSection[] = [
         icon: WorkOrderIcon,
         feature: 'production',
         permission: 'production.work_orders.view',
-        badgeKey: 'work_orders',
+        badgeKeys: ['work_orders', 'work_orders_due_soon'],
       },
       {
         to: '/production/schedule',
