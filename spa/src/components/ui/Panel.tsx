@@ -44,15 +44,15 @@ export function Panel({
        * whenever the header's content fits, which is every other call site.
        */}
       {(title || meta || actions) && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-default">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4 border-b border-default">
           <div className="flex min-w-0 items-baseline gap-2">
-            {title && <h3 className="text-sm font-medium text-primary">{title}</h3>}
-            {meta && <span className="min-w-0 text-xs text-muted">{meta}</span>}
+            {title && <h3 className="text-subsection font-semibold text-primary">{title}</h3>}
+            {meta && <span className="min-w-0 text-caption text-muted">{meta}</span>}
           </div>
           {actions && <div className="flex items-center gap-1.5">{actions}</div>}
         </div>
       )}
-      <div className={cn(noPadding ? '' : 'p-4', scrollBody && 'overflow-x-auto', bodyClassName)}>
+      <div className={cn(noPadding ? '' : 'p-4 sm:p-5', scrollBody && 'overflow-x-auto', bodyClassName)}>
         {children}
       </div>
     </div>

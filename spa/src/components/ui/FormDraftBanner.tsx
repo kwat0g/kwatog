@@ -22,6 +22,5 @@ export function FormDraftBanner({
 }) {
   const { hasDraft, draftAge, restore, discard } = safety.draftState;
   if (!hasDraft) return null;
-  const banner = <DraftRestoreBanner ageMs={draftAge} onRestore={restore} onDiscard={discard} />;
-  return inset ? banner : <div className="-mx-5 mb-3">{banner}</div>;
+  return <DraftRestoreBanner ageMs={draftAge} onRestore={restore} onDiscard={discard} inset={inset} />;
 }

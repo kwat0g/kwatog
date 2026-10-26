@@ -68,7 +68,7 @@ export default function TrainingFormPage() {
  const { data: training, isLoading: loadingTraining } = trainingQuery;
  const lookupBlocked = departmentsQuery.isError || departmentsQuery.isFetching || (isEdit && (trainingQuery.isError || trainingQuery.isFetching));
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  defaultValues: { is_certification: false },
  });

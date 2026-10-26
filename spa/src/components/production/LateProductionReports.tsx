@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { Button } from '@/components/ui/Button';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
@@ -417,6 +418,7 @@ export function LateProductionEntry({
           )}
           <Button
             type="submit"
+            variant="primary"
             className="min-h-11 w-full sm:w-auto"
             disabled={!valid || !!pending || save.isPending}
             loading={save.isPending}
@@ -487,8 +489,9 @@ export function LateProductionEntry({
             <ul className="mt-2 max-h-96 overflow-y-auto divide-y divide-default">
               {reports.data.data.map((report) => (
                 <li key={report.id} className="py-2 text-sm">
-                  <p className="font-medium">
-                    {report.source_reference} · {report.status.replaceAll('_', ' ')}
+                  <p className="flex flex-wrap items-center gap-2 font-medium">
+                    {report.source_reference}
+                    <Chip variant={chipVariantForStatus(report.status)}>{report.status.replaceAll('_', ' ')}</Chip>
                   </p>
                   <p className="text-muted">
                     {finishFirst
@@ -644,8 +647,9 @@ export function LateProductionReviewQueue({
           return (
             <li key={report.id} className="py-3 space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-medium">
-                  {report.source_reference} · {report.status}
+                <p className="flex flex-wrap items-center gap-2 font-medium">
+                  {report.source_reference}
+                  <Chip variant={chipVariantForStatus(report.status)}>{report.status.replaceAll('_', ' ')}</Chip>
                 </p>
                 <p className="text-xs text-muted">
                   {report.good_count} good · {report.reject_count} rejected ·{' '}
@@ -728,6 +732,7 @@ export function LateProductionReviewQueue({
                   <div className="flex gap-2">
                     {!closed && report.status === 'pending' && (
                       <Button
+                        variant="primary"
                         disabled={
                           approve.isPending ||
                           reject.isPending ||

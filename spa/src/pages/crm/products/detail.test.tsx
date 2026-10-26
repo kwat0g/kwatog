@@ -66,7 +66,7 @@ it('submits a standard cost proposal and retains entries after failure', async (
   show();
   vi.mocked(productsApi.proposeFinancial).mockRejectedValue(new Error('Offline'));
   fireEvent.click(await screen.findByRole('button', { name: 'Propose standard cost change' }));
-  fireEvent.change(screen.getByLabelText('Proposed standard cost'), { target: { value: '20.00' } });
+  fireEvent.change(screen.getByLabelText(/Proposed standard cost/), { target: { value: '20.00' } });
   fireEvent.change(screen.getByLabelText(/Standard cost change reason/), {
     target: { value: 'Material cost review' },
   });
@@ -78,5 +78,5 @@ it('submits a standard cost proposal and retains entries after failure', async (
     }),
   );
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not record financial review.');
-  expect(screen.getByLabelText('Proposed standard cost')).toHaveValue(20);
+  expect(screen.getByLabelText(/Proposed standard cost/)).toHaveValue(20);
 });

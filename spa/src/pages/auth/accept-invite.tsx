@@ -10,7 +10,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { ShieldCheck } from 'lucide-react';
+import { LuShieldCheck as ShieldCheck } from '@/lib/icons';
 import { userInvitesApi } from '@/api/admin/user-invites';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
