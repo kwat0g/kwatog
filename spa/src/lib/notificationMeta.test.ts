@@ -55,6 +55,15 @@ describe('notificationMeta', () => {
     expect(meta.icon).toBe(LuTriangleAlert);
   });
 
+  it('classifies late supply and rework events by the action they need', () => {
+    expect(notificationMeta('supplier.shipment_late').group).toBe('alerts');
+    expect(notificationMeta('quality.late_incoming').group).toBe('alerts');
+    expect(notificationMeta('production.rework.required').group).toBe('approvals');
+    expect(notificationMeta('production.rework.qc_failed').group).toBe('alerts');
+    expect(notificationMeta('production.rework.awaiting_qc').group).toBe('approvals');
+    expect(notificationMeta('production.rework.closed').group).toBe('system');
+  });
+
   it('has an entry for every type in the backend catalog', () => {
     const known = new Set(KNOWN_NOTIFICATION_TYPES);
     const missing = catalogKeys().filter((key) => !known.has(key));

@@ -10,6 +10,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { relative, join } from 'node:path';
+import { isAllowedNeutral } from './token-neutral-policy.mjs';
 
 const PALETTE =
   /\b(?:bg|text|border|ring|from|to|via|divide|outline|shadow|fill|stroke|decoration|accent|caret)-(?:gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/;
@@ -34,23 +35,6 @@ const HEX = /#[0-9a-fA-F]{6}\b/;
  */
 const HARDCODED_NEUTRAL =
   /\b(?:text|bg|border|ring|fill|stroke|divide|outline|from|to|via|decoration|caret|shadow|accent|placeholder)-(?:white|black)(?:\/\d{1,3})?\b/;
-
-/**
- * The one documented exception: a modal scrim.
- *
- * `bg-black/<alpha>` is the overlay wash behind Modal, BottomSheet,
- * CommandPalette and the mobile Sidebar. It is deliberately palette-invariant
- * for the same reason as --plant-map-*: a scrim must darken the page under
- * every theme, so a token that inverts in dark mode would wash the backdrop
- * OUT instead of down. Alpha over an unknown backdrop is also uncontrastable
- * by construction, and no text ever sits directly on a scrim.
- *
- * Narrow on purpose — background only, black only, alpha REQUIRED. An opaque
- * `bg-black`, any `bg-white`, and every `text-*` / `border-*` neutral stay
- * violations, because those are the ones that pair with a token and break
- * contrast.
- */
-const SCRIM_EXCEPTION = /\bbg-black\/\d{1,3}\b/;
 
 /**
  * Retired namespace. `--landing-*` was landing's parallel palette; it is gone,
@@ -110,7 +94,7 @@ for (const file of files) {
     // Matched globally, then filtered — one line can hold both a scrim and a
     // real violation, so exempting the whole line would reopen the hole.
     for (const m of line.matchAll(new RegExp(HARDCODED_NEUTRAL, 'g'))) {
-      if (SCRIM_EXCEPTION.test(m[0])) continue;
+      if (isAllowedNeutral(m[0], line)) continue;
       violations.push(`${rel}:${i + 1}  hardcoded neutral  ${m[0]}`);
     }
   });
@@ -124,7 +108,7 @@ if (violations.length > 0) {
       '\nColour values belong only in src/styles/tokens.css.' +
       '\ntext-white / bg-black etc. are palette-invariant: use --accent-fg for ink' +
       '\non a saturated fill, --text-primary / --bg-canvas otherwise. Only a modal' +
-      '\nscrim (bg-black/<alpha>) is exempt.' +
+      '\nscrim (bg-black/<alpha>) and a white icon on the photo bg-black/60 scrim are exempt.' +
       '\n--landing-* is retired: use the shared Atelier tokens, or --blueprint-*' +
       '\nfor line-work and --plant-map-* for map chrome.\n',
   );

@@ -16,6 +16,8 @@ use Illuminate\Queue\SerializesModels;
 
 class InterviewDetailsUpdatedMail extends QueuedMailable
 {
+    use SerializesModels;
+
     public readonly string $applicantName;
     public readonly string $positionTitle;
     public readonly string $scheduledAt;
@@ -30,15 +32,25 @@ class InterviewDetailsUpdatedMail extends QueuedMailable
 
     /** @param list<int> $fallbackUserIds */
     public function __construct(
-        JobApplication $application,
-        ApplicationInterview $interview,
+        private readonly JobApplication $application,
+        private readonly ApplicationInterview $interview,
         public readonly array $fallbackUserIds = [],
     ) {
         // Lane: mail — see config/horizon.php. Kept off `default` so an
         // email burst cannot sit in front of an approval or a GRN notice.
         $this->onQueue('mail');
         $this->afterCommit();
-        $this->snapshot = self::snapshotForEmail($application, $interview);
+        $this->snapshot = $snapshot = self::snapshotForEmail($application, $interview);
+        $this->applicantName = (string) $snapshot['applicant_name'];
+        $this->positionTitle = (string) $snapshot['position_title'];
+        $this->scheduledAt = $snapshot['scheduled_at']
+            ? Carbon::parse($snapshot['scheduled_at'])->timezone(config('app.timezone'))->format('F j, Y g:i A')
+            : 'To be confirmed';
+        $this->location = (string) $snapshot['location'];
+        $this->interviewerName = (string) $snapshot['interviewer_name'];
+        $this->outcome = null;
+        $this->trackingCode = (string) $snapshot['tracking_code'];
+        $this->applicationHashId = (string) $snapshot['application_hash_id'];
     }
 
     public function envelope(): Envelope

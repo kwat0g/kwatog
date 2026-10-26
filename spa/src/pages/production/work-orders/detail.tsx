@@ -31,6 +31,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
@@ -320,16 +321,15 @@ export default function WorkOrderDetailPage() {
 
   if (isLoading)
     return (
-      <div>
-        {' '}
-        <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
-        <SkeletonDetail />
-      </div>
+      <PageShell variant="grid">
+        <PageHeader inset={false} title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+        <SkeletonDetail className="px-0 py-0" />
+      </PageShell>
     );
   if (isError || !data)
     return (
-      <div>
-        <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+      <PageShell variant="grid">
+        <PageHeader inset={false} title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
         <EmptyState
           icon="alert-circle"
           title="Failed to load work order"
@@ -339,7 +339,7 @@ export default function WorkOrderDetailPage() {
             </Button>
           }
         />
-      </div>
+      </PageShell>
     );
 
   const pendingRepair = data.rework?.find(
@@ -373,8 +373,9 @@ export default function WorkOrderDetailPage() {
     scheduleStatus?.kind === 'awaiting_confirmation' || scheduleStatus?.kind === 'start_available';
 
   return (
-    <div>
+    <PageShell variant="grid">
       <PageHeader
+        inset={false}
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{data.wo_number}</span>
@@ -505,7 +506,7 @@ export default function WorkOrderDetailPage() {
         Date.parse(operationCrew.data.schedule.scheduled_end) <= Date.now() && (
           <div
             role="alert"
-            className="mx-5 mt-4 rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
+            className="rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
           >
             Run reservation ended. Use Extend run to check remaining time and restore recorder
             access.
@@ -514,7 +515,7 @@ export default function WorkOrderDetailPage() {
       {!!data.staffing_warning?.length && (
         <div
           role="alert"
-          className="mx-5 mt-4 rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
+          className="rounded-md border border-default bg-warning-bg p-3 text-warning-fg"
         >
           <p className="text-sm font-medium">
             Crew needs review. Change workers before starting new operations.
@@ -527,7 +528,7 @@ export default function WorkOrderDetailPage() {
         </div>
       )}
       {scheduleStatus && (
-        <div className="px-5 pt-4">
+        <div>
           <div
             role="status"
             className={`flex items-start gap-2 rounded border p-3 ${informationalSchedule ? 'border-info-fg/30 bg-info-bg text-info-fg' : 'border-warning-fg/30 bg-warning-bg text-warning-fg'}`}
@@ -551,7 +552,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {chain.isError && (
-        <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+        <div role="alert" className="py-3 text-sm text-danger-fg">
           Work order progress could not be loaded.{' '}
           <Button variant="secondary" size="sm" onClick={() => chain.refetch()}>
             Retry work order progress
@@ -560,21 +561,20 @@ export default function WorkOrderDetailPage() {
       )}
 
       {data.production_completion_blocker && (
-        <div role="alert" className="mx-5 mt-4 rounded-md border border-default bg-warning-bg p-3 text-warning-fg">
+        <div role="alert" className="rounded-md border border-default bg-warning-bg p-3 text-warning-fg">
           <p className="text-sm font-medium">Target produced. Completion pending.</p>
           <p className="mt-1 text-sm">{data.production_completion_blocker}</p>
         </div>
       )}
 
       {canLifecycle && canRecord && (
-        <div className="px-5 pt-4">
+        <div>
           <LateProductionReviewQueue workOrderId={id!} workOrderStatus={data.status} />
         </div>
       )}
 
       {/* Tabs */}
       <Tabs
-        className="px-5"
         label="Work order sections"
         value={tab}
         onChange={setTab}
@@ -584,12 +584,12 @@ export default function WorkOrderDetailPage() {
         ]}
       />
 
-      {finishFirst && ['completed', 'closed'].includes(data.status) && <div className="px-5 pt-4"><Panel title="Final quality inspection">
+      {finishFirst && ['completed', 'closed'].includes(data.status) && <div><Panel title="Final quality inspection">
         <p className="text-sm">{data.produced_quantity ?? data.quantity_produced} produced · {data.qc_accepted_quantity ?? 0} QC accepted · {data.awaiting_qc_quantity ?? 0} awaiting QC.</p>
         {can('quality.inspections.view') && <Button className="mt-3" variant="secondary" onClick={() => navigate(`/quality/work-orders/${data.id}/final-inspection`)}>Open final inspection</Button>}
       </Panel></div>}
       {data.status === 'in_progress' && processQcBlocked && (
-        <div className="px-5 pt-4">
+        <div>
           <Panel title="Production blocked by quality">
             <p role="alert" className="text-sm text-warning-fg">
               {data.process_quality_blocker ?? 'QC approval is required before normal production.'}
@@ -617,7 +617,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {tab === 'details' && (
-        <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 min-w-0 space-y-4">
             {['completed', 'closed'].includes(data.status) && (
               <Panel
@@ -731,7 +731,7 @@ export default function WorkOrderDetailPage() {
                 <div className="mt-3 text-xs">
                   <Link
                     to={`/quality/traceability?term=${encodeURIComponent(data.batch_number)}`}
-                    className="text-accent hover:underline"
+                    className="inline-flex min-h-11 items-center text-accent hover:underline xl:min-h-0"
                   >
                     View full traceability →
                   </Link>
@@ -1104,7 +1104,7 @@ export default function WorkOrderDetailPage() {
                                     </p>
                                     {canInventoryView && (
                                       <Link
-                                        className="mt-1 inline-block text-primary hover:underline"
+                                        className="mt-1 inline-block text-link hover:text-link-hover hover:underline underline-offset-2"
                                         to={`/inventory/stock-levels?view=movements&movement_id=${encodeURIComponent(o.general_ledger_handoff.movement_id)}`}
                                       >
                                         Open stock movement
@@ -1358,7 +1358,7 @@ export default function WorkOrderDetailPage() {
       )}
 
       {tab === 'operations' && (
-        <div className="px-5 py-4">
+        <div>
           <p className="mb-3 text-sm text-muted">
             Operation operator:{' '}
             {operationCrew.data?.current?.members.find((member) => member.id === employeeId)
@@ -1803,6 +1803,7 @@ export default function WorkOrderDetailPage() {
             Cancel
           </Button>
           <Button
+            variant="primary"
             disabled={!releaseReason.trim() || release.isPending}
             loading={release.isPending}
             onClick={() => release.mutate()}
@@ -1903,6 +1904,6 @@ export default function WorkOrderDetailPage() {
           !shortCompletionReason.trim()
         }
       />
-    </div>
+    </PageShell>
   );
 }

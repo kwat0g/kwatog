@@ -23,7 +23,7 @@ class EmailBrandingService
         return [
             'name' => $this->value('email.brand_name') ?? $legalName,
             'legal_name' => $legalName,
-            'address' => $this->settings->requiredString('company.address'),
+            'address' => $this->value('company.address', (string) config('app.company_address', '')),
             'phone' => $this->value('company.phone'),
             'email' => $this->value('company.email'),
             'sales_email' => $this->value('company.sales_inbox_email'),

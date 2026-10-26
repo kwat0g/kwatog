@@ -179,7 +179,7 @@ describe('decisionView', () => {
     expect(workOrder.facts.map(({ value }) => value)).toEqual([
       'WO_104',
       'In progress',
-      'Oct 1, 2026 · 12:00 AM',
+      'Oct 1, 2026 · 8:00 AM',
       '2.3',
       '1,000',
       '950',
@@ -226,7 +226,7 @@ describe('decisionView', () => {
     );
     expect(maintenance.summary).toContain('Molds');
     expect(maintenance.facts[0]).toEqual({ label: 'Equipment category', value: 'Molds' });
-    expect(maintenance.facts[2]?.value).toBe('Oct 2, 2026 · 3:00 AM');
+    expect(maintenance.facts[2]?.value).toBe('Oct 2, 2026 · 11:00 AM');
     const master = decisionView(
       recommendationFixture({
         type: 'master_hygiene',
@@ -303,7 +303,7 @@ describe('decisionView', () => {
       }),
     );
     expect(paused.facts[1]?.value).toBe('Paused');
-    expect(paused.facts[2]?.value).toContain('12:30');
+    expect(paused.facts[2]?.value).toContain('8:30 PM');
     for (const [raw, label] of [
       ['draft', 'Draft'],
       ['scheduled', 'Scheduled'],

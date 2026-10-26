@@ -262,6 +262,7 @@ export function CountedBatchInspectionPanel({
             <div className="flex justify-end border-t border-default pt-4">
               <Button
                 type="submit"
+                variant="primary"
                 disabled={!ready || submit.isPending}
                 loading={submit.isPending}
               >

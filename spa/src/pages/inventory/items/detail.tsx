@@ -9,8 +9,9 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { PageShell } from '@/components/layout/PageShell';
 import { usePermission } from '@/hooks/usePermission';
-import { formatQuantity } from '@/lib/formatNumber';
+import { formatQuantity, formatUnitCost } from '@/lib/formatNumber';
 import { ItemUomConversions } from './uom-conversions';
 
 const stockChipVariant = {
@@ -55,11 +56,13 @@ export default function ItemDetailPage() {
     );
 
   return (
-    <div>
+    <PageShell variant="grid">
       <PageHeader
         title={
           <span>
-            <span className="font-mono">{data.code}</span> · {data.name}
+            <span className="block break-all font-mono text-code font-medium sm:inline">{data.code}</span>
+            <span className="hidden sm:inline"> · </span>
+            <span className="block sm:inline">{data.name}</span>
           </span>
         }
         backTo="/inventory/items"
@@ -86,18 +89,19 @@ export default function ItemDetailPage() {
             )}
           </div>
         }
-      />
-      <div className="px-5 py-4 space-y-4">
+          inset={false}
+        />
+      <div className="space-y-4">
         {data.classification_needs_review && (
           <div
             role="alert"
-            className="rounded-md border border-warning bg-warning-bg p-4 text-sm text-warning-fg"
+            className="rounded-md border border-warning bg-warning-bg p-4 text-md text-warning-fg"
           >
             Category classification needs review. Inventory remains {data.item_type_label}; edit the
             item to choose a matching category.
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="stat-card-grid grid gap-3">
           <StatCard
             label="On hand"
             value={formatQuantity(data.on_hand_quantity)}
@@ -125,43 +129,43 @@ export default function ItemDetailPage() {
           />
           {data.approved_free_stock !== undefined && <StatCard label="Approved free for orders" value={formatQuantity(data.approved_free_stock)} helper="QC approved; safety stock retained" />}
           {data.incoming_stock_quantity !== undefined && <StatCard label="Incoming stock production" value={formatQuantity(data.incoming_stock_quantity)} helper="Production and QC remain required" />}
-          <StatCard label="Standard cost" value={Number(data.standard_cost).toFixed(4)} />
+          <StatCard label="Standard cost" value={formatUnitCost(data.standard_cost)} />
         </div>
         <Panel title="Specifications">
-          <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-md">
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Category</dt>
+              <dt className="text-caption text-muted">Category</dt>
               <dd>{data.category?.name ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Item type</dt>
+              <dt className="text-caption text-muted">Item type</dt>
               <dd>{data.item_type_label}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Unit of measure</dt>
+              <dt className="text-caption text-muted">Unit of measure</dt>
               <dd>{data.unit_of_measure}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Reorder method</dt>
+              <dt className="text-caption text-muted">Reorder method</dt>
               <dd>{reorderMethodLabel ?? data.reorder_method}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Reorder point</dt>
-              <dd className="font-mono tabular-nums">{formatQuantity(data.reorder_point)}</dd>
+              <dt className="text-caption text-muted">Reorder point</dt>
+              <dd className="font-sans tabular-nums">{formatQuantity(data.reorder_point)}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Safety stock</dt>
-              <dd className="font-mono tabular-nums">{formatQuantity(data.safety_stock)}</dd>
+              <dt className="text-caption text-muted">Safety stock</dt>
+              <dd className="font-sans tabular-nums">{formatQuantity(data.safety_stock)}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">MOQ</dt>
-              <dd className="font-mono tabular-nums">
+              <dt className="text-caption text-muted">MOQ</dt>
+              <dd className="font-sans tabular-nums">
                 {formatQuantity(data.minimum_order_quantity)}
               </dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Lead time</dt>
-              <dd className="font-mono tabular-nums">
+              <dt className="text-caption text-muted">Lead time</dt>
+              <dd className="font-sans tabular-nums">
                 {data.lead_time_days ||
                   itemOptions?.replenishment_basis?.default_lead_time_days ||
                   0}{' '}
@@ -170,13 +174,13 @@ export default function ItemDetailPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Description</dt>
+              <dt className="text-caption text-muted">Description</dt>
               <dd>{data.description ?? '—'}</dd>
             </div>
           </dl>
         </Panel>
         {data.reorder_method === 'days_of_supply' && itemOptions?.replenishment_basis && (
-          <p className="text-sm text-muted mb-4">
+          <p className="text-md text-muted mb-4">
             Replenishment uses average daily issues, deliveries, and scrap over{' '}
             {itemOptions.replenishment_basis.demand_history_days} days, multiplied by effective lead
             time and a {itemOptions.replenishment_basis.coverage_buffer_ratio} coverage buffer.
@@ -189,27 +193,27 @@ export default function ItemDetailPage() {
           <div className="flex flex-wrap gap-2">
             <Link
               to={`/inventory/stock-levels?item_id=${data.id}`}
-              className="text-sm text-accent hover:underline"
+              className="text-md text-accent hover:underline"
             >
               View stock levels
             </Link>
             <span className="text-muted">·</span>
             <Link
               to={`/inventory/stock-levels?view=movements&item_id=${data.id}`}
-              className="text-sm text-accent hover:underline"
+              className="text-md text-accent hover:underline"
             >
               View movements
             </Link>
             <span className="text-muted">·</span>
             <Link
               to={`/inventory/items/${data.id}/quality-plans`}
-              className="text-sm text-accent hover:underline inline-flex items-center gap-1"
+              className="text-md text-accent hover:underline inline-flex items-center gap-1"
             >
               <LuShieldCheck size={12} /> Quality plans
             </Link>
           </div>
         </Panel>
       </div>
-    </div>
+    </PageShell>
   );
 }

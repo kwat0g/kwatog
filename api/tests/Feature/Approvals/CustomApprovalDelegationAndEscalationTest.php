@@ -213,7 +213,7 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             ->where('type', 'approval_reminder')
             ->pluck('data')
             ->map(fn (string $json): ?string => json_decode($json, true)['link_to'] ?? null);
-        $this->assertTrue($differentRoleNoticeLinks->contains('/budgeting/transfers'));
+        $this->assertContains('/budgeting/transfers', $differentRoleNoticeLinks->all());
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $ineligibleApprover->id,
             'type' => 'approval_reminder',

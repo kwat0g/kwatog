@@ -7,6 +7,7 @@ namespace Tests\Feature\Purchasing;
 use App\Common\Enums\PermissionOverrideType;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Modules\Accounting\Models\Vendor;
@@ -93,6 +94,10 @@ class PurchaseRequestHardeningTest extends TestCase
             ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
             ->assertOk()
             ->assertJsonPath('data.count', 2);
+        $this->actingAs($finance)
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->assertJsonPath('data.purchase_requests.count', 2);
 
         $this->assertFalse($requesterTwo->hasPermission('purchasing.pr.approve'));
         $this->actingAs($requesterTwo)
@@ -116,6 +121,56 @@ class PurchaseRequestHardeningTest extends TestCase
             ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
             ->assertOk()
             ->assertJsonPath('data.count', 0);
+        $this->actingAs($noStepApprover)
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->assertJsonPath('data.purchase_requests.count', 0);
+
+        $delegate = $this->user('purchasing_officer', $department);
+        UserPermissionOverride::create([
+            'user_id' => $delegate->id,
+            'permission_id' => Permission::where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $this->user('system_admin')->id,
+            'reason' => 'Exercise an authorized delegate for the finance approval role.',
+        ]);
+        $delegate->flushPermissionsCache();
+        ApprovalDelegation::create([
+            'delegator_user_id' => $finance->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($delegate)
+            ->getJson('/api/v1/purchasing/purchase-requests/pending-count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 3);
+        $this->actingAs($delegate)
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->assertJsonPath('data.purchase_requests.count', 3);
+
+        $cannotView = $this->user('employee', $department);
+        UserPermissionOverride::create([
+            'user_id' => $cannotView->id,
+            'permission_id' => Permission::where('slug', 'purchasing.pr.approve')->value('id'),
+            'type' => PermissionOverrideType::Grant,
+            'granted_by' => $this->user('system_admin')->id,
+            'reason' => 'Verify the badge is hidden when the purchase-request list is forbidden.',
+        ]);
+        $cannotView->flushPermissionsCache();
+        $this->assertFalse($cannotView->hasPermission('purchasing.view'));
+        $this->actingAs($cannotView)
+            ->getJson('/api/v1/purchasing/purchase-requests')
+            ->assertForbidden();
+
+        $response = $this->actingAs($cannotView)
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk();
+        $this->assertArrayNotHasKey('purchase_requests', $response->json('data'));
     }
 
     public function test_total_estimate_and_line_total_keep_centavo_precision(): void
