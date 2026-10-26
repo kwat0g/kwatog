@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
-**Updated:** 2026-10-25
-**Current gate:** Phase 2 approved; PR #359 fixes permission-change notice copy, PR [#362](https://github.com/kwat0g/kwatog/pull/362) narrows invoice payment review recipients, PR [#363](https://github.com/kwat0g/kwatog/pull/363) scopes AR dunning notices, payroll audience/access/link fixes are in draft PR [#364](https://github.com/kwat0g/kwatog/pull/364), training-expiry deep links are in draft PR [#365](https://github.com/kwat0g/kwatog/pull/365), alert unread/list parity is in draft PR [#366](https://github.com/kwat0g/kwatog/pull/366), budget-transfer badge/list parity is in draft PR [#367](https://github.com/kwat0g/kwatog/pull/367), and AP overdue badge/list parity is in draft PR [#369](https://github.com/kwat0g/kwatog/pull/369). Recipient ownership rules remain open.
+**Updated:** 2026-10-26
+**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), budget-transfer and AP/budget badge parity (#367, #369, #374), budget recipient/deep-link changes (#375–#376), scoped notification changes (#362–#365), and separate F-22/F-27 fixes (#371 plus a new restricted-budget-queue PR not yet opened). Findings remain separate from migration work; owner and sensitive-audience decisions remain open.
 
 ## Phase status
 
@@ -208,14 +208,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 
 - `Bill::scopeOverdue()` is shared by the `overdue_bills` badge and `/bills?overdue=1` list filter. Definition: unpaid or partially paid bill with due date before `today()` in `Asia/Manila`; draft, paid, and cancelled statuses are excluded. Database schema requires a due date.
 - Sidebar badge opens `/accounting/bills?overdue=1`. Phase 2's earlier `signal=overdue` target did not match the existing page filter and is corrected in the catalog.
-- `BadgeControllerTest.php`: **15 passed / 175 assertions**, including Finance Officer badge/list parity and due-today, paid, draft, and cancelled exclusions. `Sidebar.behavior.test.tsx`: **29 passed** after the first run caught the Finance section's collapsed state in the new click-through test. Targeted ESLint passes.
+- `BadgeControllerTest.php`: **15 passed / 175 assertions**, including Finance Officer badge/list parity and due-today, paid, draft, and cancelled exclusions. `Sidebar.behavior.test.tsx`: **29 passed** after the first run showed the active Finance link needed no section-toggle interaction; the test now clicks the link directly. Targeted ESLint passes.
 - PHP syntax and `git diff --check` pass. Pint `--test` reports style violations across the four checked PHP files; no broad formatting was applied. Browser visual QA and full-suite verification remain outstanding.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
-- `Budget::scopeAwaitingApprovalFor()` is shared by `pending_budgets` and `/budgets?signal=awaiting_my_approval`. It counts only submitted budgets a direct approver or active delegate can act on under the existing maker-checker role rule, and excludes the submitter acting on their own budget. The badge now requires the same `budgeting.view` permission as its list destination.
-- `BadgeControllerTest.php`: **16 passed / 189 assertions**, including VP and Finance role separation, delegated approval, exact status, and badge/list totals. `Sidebar.behavior.test.tsx` plus `budgeting/index.test.tsx`: **31 passed**. Targeted ESLint and `git diff --check` passed.
-- PHPUnit parsed all changed PHP files. Host PHP CLI is unavailable for standalone `php -l`. Browser visual QA and full-suite verification remain outstanding. PR is based on #369 and inherits its known F-22 CI blocker until that dependency is fixed.
+- `Budget::scopeAwaitingApprovalFor()` is shared by `pending_budgets` and `/budgets?signal=awaiting_my_approval`. It counts only submitted budgets a direct approver or active delegate can act on under the existing maker-checker role rule, and excludes the submitter acting on their own budget. The badge and list require `budgeting.view`; approval-only users without that permission remain blocked, tracked as F-27.
+- Targeted rerun: `BadgeControllerTest.php` approval/delegation parity tests **2 passed / 25 assertions**; `Sidebar.behavior.test.tsx` plus `budgeting/index.test.tsx`: **31 passed**. Targeted ESLint and `git diff --check` passed.
+- CI API fails before PHPUnit on F-22, duplicate `PdfRenderService::ensureDompdfDirs()`; SPA fails at dependency audit on advisories for `@vitest/mocker`, `undici`, and `zod`; accessibility, visual baseline, and finding-lifecycle checks pass. Browser visual QA and full-suite verification remain outstanding. PR is based on #369.
 
 ## Outstanding proof / risks
 
