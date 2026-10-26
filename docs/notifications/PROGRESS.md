@@ -487,11 +487,19 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `NotificationServiceSubjectAccessTest`: **3 passed / 15 assertions**; proves allowed requester, same-permission but out-of-scope recipient, missing permission, structured subject fields, unknown subject denial, and soft-deleted subject denial. `ApprovalNoticeVisibilityTest`: **3 passed / 20 assertions**; `ApprovalSubmitterOutcomeVisibilityTest`: **1 passed / 5 assertions**; `ApprovalServiceTest`: **18 passed / 44 assertions**. PHP syntax, Pint for changed code/tests, and `git diff --check` pass.
 - Tests used a temporary local removal of inherited F-22 duplicate method and restored it exactly. Full suite and CI remain blocked by F-22; global subject-type coverage, other notification senders, and performance under large approval audiences remain open.
 
-## Separate finding fix: F-38 inactive-recipient test correction (draft PR pending)
+## Separate finding fix: F-38 inactive-recipient test correction (draft PR [#413](https://github.com/kwat0g/kwatog/pull/413))
 
 - Corrected the stale in-app row expectation from four to three. Inactive users are excluded by `NotificationService::normaliseRecipients()` from database, broadcast, and email delivery.
 - `NotificationServiceHardeningTest.php`: **22 passed / 62 assertions**. PHP syntax, targeted Pint, and `git diff --check` pass. Test used a temporary local workaround for inherited F-22 and restored that file exactly.
 - Production behavior is unchanged. The fix is isolated from notification feature work.
+
+## Phase 3 Accounting invoice subject access gate (draft PR pending)
+
+- Registered Invoice subjects with the detail-route access rule: `modules.accounting` must be enabled and the user must have `accounting.invoices.view`. Invoice list/detail have no row scope for internal users. Unknown subject types continue to fail closed.
+- Routed internal invoice notices through `sendForSubject()`: prebill approval/outcome, payment-submission review, AR dunning escalation, draft-invoice-ready after delivery, and invoice/official-receipt/dunning email-failure fallbacks. Email-failure notices remain in-app only. Official-receipt fallbacks are skipped and logged if the linked invoice was deleted or is unavailable, because their target route is the invoice detail page.
+- Customer-portal invoice notices remain on the separate portal path; current recipients are selected by the invoice's exact customer ID. Portal subject authorization still needs its own rule and parity review.
+- `NotificationServiceSubjectAccessTest`: **6 passed / 27 assertions**, including positive/negative invoice permission, disabled Accounting module, and subject-gated failure paths. `InvoicePrebillApprovalTest.php`, `InvoicePaymentSubmissionServiceTest.php`, and `RunArDunningCommandTest.php`: **40 passed / 308 assertions**. The separate F-38 test passes **22 / 62**. PHP syntax, selected Pint checks, and `git diff --check` pass.
+- Test runs used a temporary local workaround for inherited F-22 duplicate `PdfRenderService::ensureDompdfDirs()` and restored the source exactly. Broader Pint reports existing style debt in Accounting listener/mail/service files; no broad formatting applied. Full suite, browser/e2e, role matrix, and CI remain outstanding.
 
 ## Outstanding proof / risks
 
