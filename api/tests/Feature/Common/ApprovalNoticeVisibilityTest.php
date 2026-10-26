@@ -49,9 +49,43 @@ class ApprovalNoticeVisibilityTest extends TestCase
         $delegate = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
+        $inactiveDelegate = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'is_active' => false,
+        ]);
+        $expiredDelegate = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $unactionableDelegate = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+        ]);
         ApprovalDelegation::create([
             'delegator_user_id' => $eligible->id,
             'delegate_user_id' => $delegate->id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $eligible->id,
+            'delegate_user_id' => $inactiveDelegate->id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $eligible->id,
+            'delegate_user_id' => $expiredDelegate->id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->subDays(2)->toDateString(),
+            'ends_at' => now()->subDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        ApprovalDelegation::create([
+            'delegator_user_id' => $eligible->id,
+            'delegate_user_id' => $unactionableDelegate->id,
             'role_slug' => 'department_head',
             'starts_at' => now()->subDay()->toDateString(),
             'ends_at' => now()->addDay()->toDateString(),
@@ -68,6 +102,22 @@ class ApprovalNoticeVisibilityTest extends TestCase
         ]);
         $revoked->flushPermissionsCache();
         $this->assertTrue($revoked->hasPermission('return_management.approve'));
+
+        $approvalRevoked = User::factory()->create(['role_id' => $roleId]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $approvalRevoked->id,
+            'permission_id' => Permission::query()->where('slug', 'return_management.approve')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $eligible->id,
+            'reason' => 'Approval notification action-access regression test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $approvalRevoked->flushPermissionsCache();
+        $this->assertTrue($approvalRevoked->hasPermission('return_management.view'));
+        $this->assertFalse($approvalRevoked->hasPermission('return_management.approve'));
+        $this->assertTrue($unactionableDelegate->hasPermission('return_management.view'));
+        $this->assertFalse($unactionableDelegate->hasPermission('return_management.approve'));
 
         $submitter = User::factory()->create(['role_id' => $roleId]);
         $rma = ReturnRequest::query()->create([
@@ -88,7 +138,7 @@ class ApprovalNoticeVisibilityTest extends TestCase
         $delegateNotice = DB::table('notifications')->where('notifiable_id', $delegate->id)->where('type', 'approval.action_required')->first();
         $this->assertSame('current_approval_step', json_decode((string) $directNotice->data, true)['recipient_reason']);
         $this->assertSame('active_approval_delegate', json_decode((string) $delegateNotice->data, true)['recipient_reason']);
-        foreach ([$revoked, $inactive, $unrelatedRole, $submitter] as $excluded) {
+        foreach ([$revoked, $approvalRevoked, $unactionableDelegate, $inactiveDelegate, $expiredDelegate, $inactive, $unrelatedRole, $submitter] as $excluded) {
             $this->assertDatabaseMissing('notifications', [
                 'notifiable_type' => User::class,
                 'notifiable_id' => $excluded->id,

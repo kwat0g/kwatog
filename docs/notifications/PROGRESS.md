@@ -28,7 +28,7 @@
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
 - Payload schema v1 fields: `schema_version`, `event_type`, optional `subject_type`, `subject_id`, and caller-supplied `actor_id`. Existing `title`, `message`, `link_to`, event timing, recipients, channels, and legacy rows remain unchanged.
-- Core `ApprovalService` action-required notices now resolve only the active step's role holders and active delegates who pass `ApprovalTypeRegistry::userCanViewRecord`; exclude submitter and known acting approver. Store `recipient_reason` on each in-app row. Other approval senders and event families remain on existing paths.
+- Core `ApprovalService` action-required notices resolve candidates from the active step, then require the mapped route action permission and `ApprovalTypeRegistry::userCanViewRecord`; exclude submitter and known acting approver. Store `recipient_reason` on each in-app row. Other approval senders and event families remain on existing paths.
 
 ## Current confirmed findings
 
@@ -47,6 +47,7 @@ See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge sco
 - API: `NotificationServiceHardeningTest` **22 passed / 62 assertions**; `ApprovalNoticeVisibilityTest` **2 passed / 17 assertions**; asset disposal full-chain test **1 passed / 19 assertions**; `ApprovalServiceTest` **18 passed / 44 assertions**; `ApprovalDelegationTest` **19 passed / 72 assertions**.
 - Pint passed on all six changed PHP files. Tests exercise per-user reasons, direct approvers, active delegates, missing view access, inactive/unrelated users, submitter/actor exclusions, and the real approval record path.
 - This is a core `ApprovalService` slice, not whole-project recipient coverage. Custom approval queues, escalations/reminders, submitter outcomes, and other module dispatch sites remain unmigrated or unverified.
+- Local follow-up on PR #333 adds per-type/step action-permission metadata and negative cases for a viewable user whose action permission is revoked, a viewable delegate blocked by the route, an inactive delegate, and an expired delegation. Verification is pending while API CI runs are active. PHP is unavailable locally.
 
 ## Outstanding proof / risks
 
