@@ -17,10 +17,9 @@ use Illuminate\Queue\SerializesModels;
  * employees.
  *
  * Private, not public: a payroll run's headcount is company-wide compensation
- * metadata. routes/channels.php already gates this channel on
- * payroll.periods.view, and the SPA's useEcho() subscribes via echo.private() —
- * a public Channel here meant the authorisation was never consulted AND the
- * SPA could not receive the events at all.
+ * metadata. routes/channels.php mirrors the period detail route's enabled
+ * module, read permission, and record-existence checks; the SPA subscribes via
+ * echo.private(). A public Channel would skip authorization entirely.
  *
  * The SPA falls back to TanStack Query polling at 3s, and
  * PayrollProgressTracker caches each snapshot so a mid-run page load renders a
@@ -56,12 +55,12 @@ class PayrollProgressEvent implements ShouldBroadcast
         return [
             'period_id' => $this->period->hash_id,
             'processed' => $this->processed,
-            'total'     => $this->total,
-            'failures'  => $this->failures,
-            'percent'   => $this->total > 0 ? (int) round(($this->processed / $this->total) * 100) : 0,
+            'total' => $this->total,
+            'failures' => $this->failures,
+            'percent' => $this->total > 0 ? (int) round(($this->processed / $this->total) * 100) : 0,
             // The final emit carries the terminal status, so a subscribed page
             // leaves the processing state immediately rather than on next poll.
-            'status'    => $this->period->status?->value,
+            'status' => $this->period->status?->value,
         ];
     }
 }

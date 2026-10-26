@@ -42,6 +42,7 @@
 | 1.1. Native dispatch boundary guard | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | pending |
 | F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | pending |
 | F-12. Chain channel route authorization | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | pending |
+| F-12. Payroll progress channel route authorization | `notifications/scope-payroll-progress-channel` | [#400](https://github.com/kwat0g/kwatog/pull/400) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -381,7 +382,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 - All eight `ChainBroadcaster` entity types now require the matching module to be enabled, the permissions used by their detail routes, and a live, non-deleted record. Work Orders require both `production.view` and `production.work_orders.view`; deliveries accept either detail-route read permission. Purchase Request and Purchase Order channels also apply their record visibility policies. Unknown configured types, malformed/missing IDs, and disabled modules are denied.
 - `BroadcastAuthorizationTest.php`: **11 passed / 32 assertions**. Coverage includes each supported chain type, positive and negative permissions, Purchase Request and Purchase Order row scope, approval-only Purchase Order access, the narrow delivery permission, Work Order parent permission, module disablement, missing records, and private user-channel controls. Pint and `git diff --check` pass.
-- PR #399 API CI still fails at the unrelated F-22 duplicate `PdfRenderService::ensureDompdfDirs()` syntax check. Payroll progress channel policy/payload remains open for HR/Finance review; F-12 is only partially resolved.
+- PR #399 API CI still fails at the unrelated F-22 duplicate `PdfRenderService::ensureDompdfDirs()` syntax check. PR #400 aligns Payroll period subscription access with its detail route; progress payload and intended HR/Finance audience remain open for policy review. F-12 is only partially resolved.
+
+## Separate finding fix: F-12 Payroll progress channel route authorization (draft PR #400)
+
+- `payroll.period.{hashId}` now requires the Payroll feature flag, `payroll.periods.view`, a decodable period hash, and an existing period. This matches `GET /payroll-periods/{period}`. No role audience or progress payload fields changed; the headcount/metadata policy remains open for HR/Finance review.
+- `BroadcastAuthorizationTest.php`: **12 passed / 36 assertions**, covering supported channels, correct and denied read permissions, disabled module, and missing record. PHP syntax, targeted Pint, and `git diff --check` pass.
+- PR #400 API CI inherits the F-22 duplicate `PdfRenderService::ensureDompdfDirs()` blocker. No unauthorized payroll subscription was reproduced.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

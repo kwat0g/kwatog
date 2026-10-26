@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -40,8 +41,15 @@ Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId
 /* Sprint 8 — Task 78. New channels. */
 
 // Payroll period progress contains company-wide run metadata.
-Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('payroll.periods.view')
-);
+Broadcast::channel('payroll.period.{hashId}', function (User $user, string $hashId): bool {
+    if (! app(SettingsService::class)->requiredBool('modules.payroll') || ! $user->hasPermission('payroll.periods.view')) {
+        return false;
+    }
+
+    $id = PayrollPeriod::tryDecodeHash($hashId);
+
+    return $id !== null && PayrollPeriod::query()->whereKey($id)->exists();
+});
 
 // Maintenance dashboard — open WO updates push live
 Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasPermission('maintenance.view')

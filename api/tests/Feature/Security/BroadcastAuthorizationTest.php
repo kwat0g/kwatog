@@ -12,6 +12,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -40,7 +41,7 @@ class BroadcastAuthorizationTest extends TestCase
         ]);
         app(BroadcastManager::class)->forgetDrivers();
         $this->seed(RolePermissionSeeder::class);
-        foreach (['accounting', 'crm', 'inventory', 'production', 'purchasing', 'supply_chain'] as $feature) {
+        foreach (['accounting', 'crm', 'inventory', 'payroll', 'production', 'purchasing', 'supply_chain'] as $feature) {
             app(SettingsService::class)->set("modules.{$feature}", true, 'modules');
         }
         require base_path('routes/channels.php');
@@ -205,6 +206,24 @@ class BroadcastAuthorizationTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_payroll_progress_channel_matches_period_detail_access(): void
+    {
+        $user = $this->userWithPermissions('payroll.periods.view');
+        $period = PayrollPeriod::factory()->create();
+
+        $this->authorizeChannel($user, "private-payroll.period.{$period->hash_id}")->assertOk();
+
+        $this->authorizeChannel($this->userWithPermissions(), "private-payroll.period.{$period->hash_id}")
+            ->assertForbidden();
+
+        app(SettingsService::class)->set('modules.payroll', false, 'modules');
+        $this->authorizeChannel($user, "private-payroll.period.{$period->hash_id}")->assertForbidden();
+
+        app(SettingsService::class)->set('modules.payroll', true, 'modules');
+        $missingHash = app('hashids')->encode(999999999);
+        $this->authorizeChannel($user, "private-payroll.period.{$missingHash}")->assertForbidden();
+    }
+
     private function userWithPermissions(string ...$permissions): User
     {
         $role = Role::create([
@@ -221,9 +240,14 @@ class BroadcastAuthorizationTest extends TestCase
 
     private function authorizeChain(User $user, Model $record, string $type = 'purchase_order'): TestResponse
     {
+        return $this->authorizeChannel($user, "private-chain.{$type}.{$record->hash_id}");
+    }
+
+    private function authorizeChannel(User $user, string $channel): TestResponse
+    {
         return $this->actingAs($user)->postJson('/api/v1/broadcasting/auth', [
             'socket_id' => '1234.5678',
-            'channel_name' => "private-chain.{$type}.{$record->hash_id}",
+            'channel_name' => $channel,
         ]);
     }
 }
