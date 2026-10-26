@@ -253,9 +253,15 @@ class TrainingExpiryAlertTest extends TestCase
             ->first();
 
         $this->assertNotNull($eligibleNotification);
-        $this->assertSame("/hr/employee-trainings/{$record->hash_id}", json_decode($eligibleNotification->data, true)['link_to']);
+        $eligibleData = json_decode($eligibleNotification->data, true);
+        $this->assertSame("/hr/employee-trainings/{$record->hash_id}", $eligibleData['link_to']);
+        $this->assertSame(EmployeeTraining::class, $eligibleData['subject_type']);
+        $this->assertSame((string) $record->id, $eligibleData['subject_id']);
         $this->assertNotNull($employeeNotification);
-        $this->assertSame("/self-service/trainings/{$record->hash_id}", json_decode($employeeNotification->data, true)['link_to']);
+        $employeeData = json_decode($employeeNotification->data, true);
+        $this->assertSame("/self-service/trainings/{$record->hash_id}", $employeeData['link_to']);
+        $this->assertSame(EmployeeTraining::class, $employeeData['subject_type']);
+        $this->assertSame((string) $record->id, $employeeData['subject_id']);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $revokedHr->id,
             'type' => 'training.expiry',

@@ -15,6 +15,9 @@ use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\EmployeeTraining;
+use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCostReview;
@@ -46,7 +49,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Delivery::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -78,6 +81,7 @@ final class NotificationSubjectAccessRegistry
                 && $user->hasPermission('return_management.view')
                 && $subject instanceof ReturnRequest
                 && ! (ReturnManagementAccess::customerReturnsOnly($user) && $subject->type === ReturnRequestType::SupplierReturn),
+            EmployeeTraining::class => self::userCanViewEmployeeTraining($user, $subject),
             PayrollPeriod::class => app(SettingsService::class)->get('modules.payroll', false) === true
                 && $user->is_active
                 && $user->hasPermission('payroll.periods.view')
@@ -168,6 +172,25 @@ final class NotificationSubjectAccessRegistry
             && $user->hasPermission('payroll.view')
             && $subject instanceof Payroll
             && (int) $user->employee_id === (int) $subject->employee_id;
+    }
+
+    private static function userCanViewEmployeeTraining(User $user, Model $subject): bool
+    {
+        if (app(SettingsService::class)->get('modules.hr', false) !== true
+            || ! $user->is_active
+            || ! $subject instanceof EmployeeTraining) {
+            return false;
+        }
+
+        if ((int) $user->employee_id === (int) $subject->employee_id
+            && Employee::query()->whereKey($subject->employee_id)->exists()) {
+            return true;
+        }
+
+        return $user->hasPermission('hr.employees.trainings.view')
+            && EmployeeCompetenceScope::employees(Employee::query(), $user)
+                ->whereKey($subject->employee_id)
+                ->exists();
     }
 
     private static function budgetingEnabled(): bool
