@@ -12,6 +12,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
@@ -29,6 +30,7 @@ use App\Modules\Production\Models\WorkOrderCrew;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\SupplierItemListing;
+use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -235,6 +237,105 @@ class NotificationServiceSubjectAccessTest extends TestCase
             'type' => 'test.disabled_purchase_request_subject',
         ]);
         Event::assertNotDispatched(UserNotificationCreated::class);
+    }
+
+    public function test_delivery_subject_matches_internal_detail_route_and_module_flag(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        $overview = Permission::firstOrCreate(
+            ['slug' => 'supply_chain.view'],
+            ['name' => 'View supply chain', 'module' => 'supply_chain'],
+        );
+        $deliveryView = Permission::firstOrCreate(
+            ['slug' => 'supply_chain.deliveries.view'],
+            ['name' => 'View deliveries', 'module' => 'supply_chain'],
+        );
+        $deliveryCreate = Permission::firstOrCreate(
+            ['slug' => 'supply_chain.deliveries.create'],
+            ['name' => 'Manage deliveries', 'module' => 'supply_chain'],
+        );
+        $overviewRole = Role::firstOrCreate(['slug' => 'notification_delivery_overview'], ['name' => 'Notification Delivery Overview']);
+        $overviewRole->permissions()->syncWithoutDetaching([$overview->id]);
+        $deliveryRole = Role::firstOrCreate(['slug' => 'notification_delivery_viewer'], ['name' => 'Notification Delivery Viewer']);
+        $deliveryRole->permissions()->syncWithoutDetaching([$deliveryView->id]);
+        $createOnlyRole = Role::firstOrCreate(['slug' => 'notification_delivery_creator'], ['name' => 'Notification Delivery Creator']);
+        $createOnlyRole->permissions()->syncWithoutDetaching([$deliveryCreate->id]);
+        $overviewUser = User::factory()->withRole($overviewRole->slug)->create();
+        $deliveryViewer = User::factory()->withRole($deliveryRole->slug)->create();
+        $createOnly = User::factory()->withRole($createOnlyRole->slug)->create();
+        $withoutPermission = User::factory()->create();
+        $order = SalesOrder::factory()->create([
+            'customer_id' => Customer::factory()->create()->id,
+            'created_by' => $overviewUser->id,
+        ]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'NTF-DEL-001',
+            'sales_order_id' => $order->id,
+            'status' => 'scheduled',
+            'scheduled_date' => today(),
+            'created_by' => $overviewUser->id,
+        ]);
+
+        Event::fake([UserNotificationCreated::class]);
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.delivery_subject_access',
+                'subject_type' => Delivery::class,
+                'subject_id' => $delivery->id,
+                'user_ids' => [$createOnly->id, $withoutPermission->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification recipients lack subject access; delivery suppressed.',
+            [
+                'type' => 'test.disabled_delivery_subject',
+                'subject_type' => Delivery::class,
+                'subject_id' => $delivery->id,
+                'user_ids' => [$overviewUser->id],
+            ],
+        );
+        Log::shouldReceive('warning')->once()->with(
+            'Notification delivery skipped: no eligible recipients.',
+            ['type' => 'test.disabled_delivery_subject'],
+        );
+
+        app(NotificationService::class)->sendForSubject(
+            $delivery,
+            [$overviewUser, $deliveryViewer, $createOnly, $withoutPermission],
+            'test.delivery_subject_access',
+            ['title' => 'Delivery update'],
+            emailEnabled: false,
+        );
+        app(SettingsService::class)->set('modules.supply_chain', false, 'modules');
+        app(NotificationService::class)->sendForSubject(
+            $delivery,
+            $overviewUser,
+            'test.disabled_delivery_subject',
+            ['title' => 'Delivery update'],
+            emailEnabled: false,
+        );
+
+        foreach ([$overviewUser, $deliveryViewer] as $eligible) {
+            $this->assertDatabaseHas('notifications', [
+                'notifiable_id' => $eligible->id,
+                'type' => 'test.delivery_subject_access',
+            ]);
+            Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $eligible->id);
+        }
+        foreach ([$createOnly, $withoutPermission, $overviewUser] as $denied) {
+            $this->assertDatabaseMissing('notifications', [
+                'notifiable_id' => $denied->id,
+                'type' => $denied === $overviewUser ? 'test.disabled_delivery_subject' : 'test.delivery_subject_access',
+            ]);
+        }
+        $data = json_decode((string) DB::table('notifications')
+            ->where('notifiable_id', $deliveryViewer->id)
+            ->where('type', 'test.delivery_subject_access')
+            ->value('data'), true);
+        $this->assertSame(Delivery::class, $data['subject_type']);
+        $this->assertSame((string) $delivery->id, $data['subject_id']);
+        Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => in_array($event->userId, [$createOnly->id, $withoutPermission->id], true));
     }
 
     public function test_unregistered_subject_type_fails_closed(): void

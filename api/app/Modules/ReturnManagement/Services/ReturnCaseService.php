@@ -263,15 +263,15 @@ class ReturnCaseService
             ])->save();
             $caseEvent = $this->event($case, 'submitted', 'Shipment not received. Customer Service will check with Dispatch and post an update.',
                 ['type' => 'customer', 'id' => $portalUser->id, 'name' => $portalUser->name]);
-            DB::afterCommit(function () use ($case, $caseEvent): void {
+            DB::afterCommit(function () use ($case, $caseEvent, $delivery): void {
                 $this->notify($case, 'Customer is waiting for their shipment', true, $caseEvent->id);
                 $dispatch = User::query()->where('is_active', true)->whereHas('role.permissions', fn ($q) => $q->where('slug', 'supply_chain.deliveries.create'))->get();
-                $this->notifications->sendInApp($dispatch, 'return.case_updated', [
+                $this->notifications->sendForSubject($delivery, $dispatch, 'return.case_updated', [
                     'title' => 'Check shipment arrival — '.$case->case_number,
                     'message' => 'The customer reports that the shipment has not arrived. Coordinate an update with Customer Service.',
-                    'link_to' => '/supply-chain/deliveries/'.$case->delivery->hash_id,
-                    'entity_type' => 'delivery', 'entity_id' => $case->delivery->hash_id,
-                ], 'delivery-trace:'.$case->id);
+                    'link_to' => '/supply-chain/deliveries/'.$delivery->hash_id,
+                    'entity_type' => 'delivery', 'entity_id' => $delivery->hash_id,
+                ], 'delivery-trace:'.$case->id, emailEnabled: false);
             });
             return $this->show($case);
         }, 3);

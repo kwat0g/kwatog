@@ -97,12 +97,12 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
                     ->get()
                     ->filter(fn (User $user): bool => $user->hasPermission('supply_chain.deliveries.view'));
 
-                app(NotificationService::class)->send($recipients, 'chain.delivery_drafted', [
+                app(NotificationService::class)->sendForSubject($delivery, $recipients, 'chain.delivery_drafted', [
                     'title' => 'Delivery drafted',
                     'message' => "Outgoing QC passed — delivery drafted for WO {$wo->wo_number}.",
                     'link_to' => "/supply-chain/deliveries/{$delivery->hash_id}",
-                    'entity_type' => 'work_order',
-                    'entity_id' => $wo->hash_id,
+                    'entity_type' => 'delivery',
+                    'entity_id' => $delivery->hash_id,
                     'wo_number' => $wo->wo_number,
                 ]);
             } catch (\Throwable $e) {

@@ -6,6 +6,7 @@ namespace Tests\Feature\SupplyChain;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -95,6 +96,39 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $this->assertSame($journalEntriesBefore, DB::table('journal_entries')->count());
         $this->assertSame('0.00', (string) $soLine->fresh()->quantity_delivered);
         $this->assertNull(StockLevel::query()->where('item_id', $finishedGood->id)->where('location_id', $quarantine->id)->value('quantity'));
+    }
+
+    public function test_delivery_attempt_notice_reaches_only_users_who_can_open_delivery(): void
+    {
+        app(SettingsService::class)->set('modules.supply_chain', true, 'modules');
+        [$delivery, $actor] = $this->dispatchedDelivery();
+        $receive = Permission::firstOrCreate(
+            ['slug' => 'return_management.receive'],
+            ['name' => 'Receive returns', 'module' => 'return_management'],
+        );
+        $view = Permission::firstOrCreate(
+            ['slug' => 'supply_chain.deliveries.view'],
+            ['name' => 'View deliveries', 'module' => 'supply_chain'],
+        );
+        $authorizedRole = Role::firstOrCreate(['slug' => 'notification_delivery_return_viewer'], ['name' => 'Notification Delivery Return Viewer']);
+        $authorizedRole->permissions()->syncWithoutDetaching([$receive->id, $view->id]);
+        $unauthorizedRole = Role::firstOrCreate(['slug' => 'notification_delivery_return_only'], ['name' => 'Notification Delivery Return Only']);
+        $unauthorizedRole->permissions()->syncWithoutDetaching([$receive->id]);
+        $authorized = User::factory()->withRole($authorizedRole->slug)->create(['is_active' => true]);
+        $unauthorized = User::factory()->withRole($unauthorizedRole->slug)->create(['is_active' => true]);
+        $line = $delivery->items()->firstOrFail();
+
+        app(DeliveryAttemptOutcomeService::class)->report(
+            $delivery,
+            $actor,
+            $this->reportPayload($line, '0', '0', '4'),
+        );
+
+        $notice = $authorized->notifications()->where('type', 'chain.delivery_attempt_reported')->firstOrFail();
+        $this->assertSame(Delivery::class, $notice->data['subject_type']);
+        $this->assertSame((string) $delivery->id, $notice->data['subject_id']);
+        $this->assertSame('/supply-chain/deliveries/'.$delivery->hash_id, $notice->data['link_to']);
+        $this->assertSame(0, $unauthorized->notifications()->where('type', 'chain.delivery_attempt_reported')->count());
     }
 
     public function test_depot_return_is_source_costed_non_gl_and_cannot_be_replayed_beyond_actual_receipt(): void

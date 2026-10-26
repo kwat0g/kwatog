@@ -559,13 +559,13 @@ class DeliveryAttemptOutcomeService
             return;
         }
 
-        $this->notifications->sendInApp($recipients, 'chain.delivery_attempt_reported', [
+        $this->notifications->sendForSubject($delivery, $recipients, 'chain.delivery_attempt_reported', [
             'title' => 'Delivery exception needs a depot count',
             'message' => "Delivery {$delivery->delivery_number} has an unresolved truck return. Record the physical count and variance.",
             'link_to' => '/supply-chain/deliveries/'.$delivery->hash_id,
             'entity_type' => 'delivery',
             'entity_id' => $delivery->hash_id,
-        ], 'delivery-attempt-outcome:'.$outcome->id.':reported');
+        ], 'delivery-attempt-outcome:'.$outcome->id.':reported', emailEnabled: false);
     }
 
     /** @param array<int,array<string,string>> $rows @return array<int,DeliveryItem> */
