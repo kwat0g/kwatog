@@ -135,6 +135,8 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         ->middleware('permission:hr.salary_adjustments.act');
 
     // T3.4.A — Employee training records (admin assign / complete / cancel).
+    Route::get('/employee-trainings', [EmployeeTrainingController::class, 'all'])
+        ->middleware('permission:hr.employees.trainings.view');
     Route::get('/employees/{employee}/trainings', [EmployeeTrainingController::class, 'index'])
         ->middleware('permission:hr.employees.trainings.view');
     Route::post('/employees/{employee}/trainings', [EmployeeTrainingController::class, 'store'])

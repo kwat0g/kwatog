@@ -57,6 +57,12 @@ final class EmployeeCompetenceScope
         return $record;
     }
 
+    /** @return Builder<EmployeeTraining> */
+    public static function trainings(Builder $query, ?User $actor): Builder
+    {
+        return $query->whereHas('employee', fn (Builder $employee): Builder => self::employees($employee, $actor));
+    }
+
     public static function skill(EmployeeSkill $record, ?User $actor): EmployeeSkill
     {
         $record->loadMissing('employee');

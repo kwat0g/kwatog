@@ -50,6 +50,7 @@ const TrainingMatrixPage = lazy(() => import('@/pages/hr/training/matrix'));
 const TrainingListPage = lazy(() => import('@/pages/hr/training/list'));
 const TrainingFormPage = lazy(() => import('@/pages/hr/training/form'));
 const TrainingRecordDetailPage = lazy(() => import('@/pages/hr/training/record-detail'));
+const EmployeeTrainingRecordsPage = lazy(() => import('@/pages/hr/training/employee-records'));
 
 // Skills
 const SkillsListPage = lazy(() => import('@/pages/hr/skills'));
@@ -90,6 +91,10 @@ export const hrRoutes = (
  <Route
  path="/hr/employees/:id/edit"
  element={<PermissionGuard permission="hr.employees.edit"><EditEmployeePage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/employee-trainings"
+ element={<PermissionGuard permission="hr.employees.trainings.view"><EmployeeTrainingRecordsPage /></PermissionGuard>}
  />
  <Route
  path="/hr/employee-trainings/:id"

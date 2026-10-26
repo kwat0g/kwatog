@@ -17,11 +17,11 @@ use App\Modules\Attendance\Services\OvertimeDecisionPolicy;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
-use App\Modules\HR\Enums\EmployeeTrainingStatus;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
+use App\Modules\HR\Support\EmployeeCompetenceScope;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
@@ -326,32 +326,28 @@ class BadgeService
 
             // HR > Training expiry — employee trainings that have expired.
             'training_expiry' => [
-                'permissions' => ['hr.trainings.view'],
+                'permissions' => ['hr.employees.trainings.view'],
                 'label'       => 'Training Expiry',
                 'description' => 'Expired employee trainings',
-                'counter'     => fn (): int => EmployeeTraining::query()
-                    ->where('status', EmployeeTrainingStatus::Expired->value)
-                    ->count(),
+                'counter'     => function () use ($user): int {
+                    $query = EmployeeTraining::query()->expiredForActiveEmployees();
+                    EmployeeCompetenceScope::trainings($query, $user);
+
+                    return $query->count();
+                },
             ],
 
             // HR > Trainings — sessions coming up or certifications expiring soon.
             // (Complements training_expiry, which counts already-expired rows.)
             'training_upcoming' => [
-                'permissions' => ['hr.trainings.view'],
-                'label'       => 'Trainings',
+                'permissions' => ['hr.employees.trainings.view'],
+                'label'       => 'Upcoming / expiring',
                 'description' => 'Trainings upcoming or expiring soon',
-                'counter'     => function (): int {
-                    return EmployeeTraining::query()
-                        ->whereNotIn('status', [
-                            EmployeeTrainingStatus::Cancelled->value,
-                            EmployeeTrainingStatus::Expired->value,
-                        ])
-                        ->where(fn ($q) => $q
-                            // Scheduled sessions in the next 14 days.
-                            ->whereBetween('scheduled_for', [today(), today()->addDays(14)])
-                            // Completed certifications expiring in the next 30 days.
-                            ->orWhereBetween('expires_at', [today(), today()->addDays(30)]))
-                        ->count();
+                'counter'     => function () use ($user): int {
+                    $query = EmployeeTraining::query()->upcomingOrExpiringForActiveEmployees();
+                    EmployeeCompetenceScope::trainings($query, $user);
+
+                    return $query->count();
                 },
             ],
 
