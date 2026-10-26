@@ -14,7 +14,6 @@ use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
@@ -430,13 +429,13 @@ class BadgeService
                 'counter'     => fn (): int => $user->unreadNotifications()->count(),
             ],
 
-            // Sales orders still awaiting review, negotiation, or confirmation.
+            // Orders awaiting confirmation or a response; exclude unsent drafts.
             'pending_so' => [
                 'permissions' => ['crm.sales_orders.view'],
-                'label'       => 'Sales Orders',
-                'description' => 'Sales orders awaiting confirmation',
+                'label'       => 'Confirmation queue',
+                'description' => 'Sales orders awaiting confirmation or response',
                 'counter'     => fn (): int => SalesOrder::query()
-                    ->whereIn('status', [SalesOrderStatus::Draft->value, SalesOrderStatus::AwaitingConfirmation->value, SalesOrderStatus::DeliveryNegotiation->value])
+                    ->awaitingConfirmation()
                     ->count(),
             ],
 

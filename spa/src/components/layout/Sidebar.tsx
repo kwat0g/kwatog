@@ -135,6 +135,7 @@ function badgeDestination(path: string, key: string): string {
     unpaid_bills: 'signal=unpaid',
     due_soon_bills: 'signal=due_soon',
     shipments: 'status=mid_pipe',
+    pending_so: 'signal=awaiting_confirmation',
   };
   const filter = filters[key];
   return filter ? `${path}?${filter}` : path;

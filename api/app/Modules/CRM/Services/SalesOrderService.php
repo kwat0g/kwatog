@@ -379,6 +379,9 @@ class SalesOrderService
             }
             $q->whereIn('status', $statuses);
         }
+        if (($filters['signal'] ?? null) === 'awaiting_confirmation') {
+            $q->awaitingConfirmation();
+        }
         if (! empty($filters['date_from'])) {
             $q->whereDate('date', '>=', $filters['date_from']);
         }

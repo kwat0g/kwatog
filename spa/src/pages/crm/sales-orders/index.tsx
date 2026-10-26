@@ -37,6 +37,7 @@ const DEFAULT_FILTERS: SalesOrderListParams = {
   page: 1,
   per_page: 25,
   status: '',
+  signal: '',
 };
 
 export default function SalesOrdersListPage() {
@@ -97,6 +98,15 @@ export default function SalesOrdersListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
+    {
+      key: 'signal',
+      label: 'Queue',
+      type: 'select',
+      options: [
+        { value: '', label: 'All orders' },
+        { value: 'awaiting_confirmation', label: 'Awaiting confirmation or response' },
+      ],
+    },
     {
       key: 'status',
       label: 'Status',

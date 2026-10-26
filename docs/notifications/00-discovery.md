@@ -365,6 +365,8 @@ Draft PR [#367](https://github.com/kwat0g/kwatog/pull/367) adds `/budgeting/tran
 
 Draft PR [#374](https://github.com/kwat0g/kwatog/pull/374) adds the `pending_budgets` click-through to `/budgeting?signal=awaiting_my_approval`. The original badge counted every submitted budget; the new badge and filter share `Budget::scopeAwaitingApprovalFor()`, which follows `BudgetService`'s active direct/delegated approver and maker-checker role rules. The transfer queue remains a separate signal and destination.
 
+The Sales Orders `pending_so` badge now shares `SalesOrder::scopeAwaitingConfirmation()` with `/crm/sales-orders?signal=awaiting_confirmation`. Workflow source shows that customer-sent drafts remain `draft` but set `customer_confirmation_requested_at`; unsent drafts are not actionable confirmation work. The scope includes those sent drafts, `awaiting_confirmation`, and `delivery_negotiation` records, and excludes soft-deleted rows through the model's default scope.
+
 | Shell | Path | Label |
 | --- | --- | --- |
 | Supplier portal | `/portal/supplier` | Dashboard |

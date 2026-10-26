@@ -19,6 +19,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
@@ -622,6 +623,51 @@ class BadgeControllerTest extends TestCase
             ->assertOk()
             ->json('data');
         $this->assertArrayNotHasKey('shipments', $warehouseBadges);
+    }
+
+    public function test_sales_order_confirmation_badge_matches_its_filtered_list(): void
+    {
+        $salesOfficer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'sales_officer')->value('id'),
+        ]);
+
+        foreach (SalesOrderStatus::cases() as $status) {
+            SalesOrder::factory()->create(['status' => $status->value]);
+        }
+        SalesOrder::factory()->create([
+            'status' => SalesOrderStatus::Draft->value,
+            'customer_confirmation_requested_at' => now(),
+        ]);
+        SalesOrder::factory()->create([
+            'status' => SalesOrderStatus::AwaitingConfirmation->value,
+        ])->delete();
+
+        $list = $this->actingAs($salesOfficer, 'sanctum')
+            ->getJson('/api/v1/crm/sales-orders?signal=awaiting_confirmation')
+            ->assertOk();
+        $badge = $this->actingAs($salesOfficer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.pending_so.count');
+
+        $this->assertSame(3, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
+        $this->assertEqualsCanonicalizing([
+            SalesOrderStatus::Draft->value,
+            SalesOrderStatus::AwaitingConfirmation->value,
+            SalesOrderStatus::DeliveryNegotiation->value,
+        ], $list->json('data.*.status'));
+
+        $employee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/crm/sales-orders?signal=awaiting_confirmation')
+            ->assertForbidden();
+        $this->assertArrayNotHasKey(
+            'pending_so',
+            $this->actingAs($employee, 'sanctum')->getJson('/api/v1/dashboards/badges')->assertOk()->json('data'),
+        );
     }
 
     public function test_per_badge_severity_override_beats_global_threshold(): void
