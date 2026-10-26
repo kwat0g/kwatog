@@ -22,7 +22,6 @@ use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Models\ProfileUpdateRequest;
-use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
@@ -488,7 +487,7 @@ class BadgeService
                 'label'       => 'MRB / Quarantine',
                 'description' => 'Lots on hold in quarantine',
                 'counter'     => fn (): int => MaterialReviewRecord::query()
-                    ->where('status', MrbStatus::Held->value)
+                    ->held()
                     ->count(),
             ],
 

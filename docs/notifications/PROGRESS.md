@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft PR [#384](https://github.com/kwat0g/kwatog/pull/384) adds the CRM inquiry triage badge. Other open units cover central Laravel dispatch, badge parity, notification anchors and catalogs, and scoped recipient fixes. Backend CI has inherited F-22/PHPStan failures; SPA CI hits existing dependency advisories. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Draft PR [#385](https://github.com/kwat0g/kwatog/pull/385) wires the existing MRB hold count to its filtered list. Other open units cover central Laravel dispatch, badge parity, notification anchors and catalogs, and scoped recipient fixes. Backend CI has inherited F-22/PHPStan failures; SPA CI hits existing dependency advisories. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -11,8 +11,8 @@
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. Initial audit had no seeded-role scenarios; later targeted badge/list comparisons are recorded below. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
 | 3. Backend foundation | In progress | Units 1–3 have PRs; F-17 no-fallback fix is in PR #335; F-16 outcome access guards are in PR #336. Core approval notices resolve scoped recipients; inaccessible outcome recipients are suppressed across approval, budget, bill, invoice, and stock-adjustment paths; user-channel broadcasts carry IDs/types only and hydrate through an owner-scoped endpoint. PR #380 applies purchase-order permission and row visibility to late-supplier notices. Global authorization coverage, signal registry, and remaining event families are open. |
-| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. PR #379 adds exact labels/groups for the discovered late-supply, incoming-quality, and dynamic rework event keys. PR #381 adds the first multi-signal Bills item with overdue, unpaid, and due-soon filters. Preferences, broader Center interactions, other multi-signal items, and browser QA remain open. |
-| 5. Migration | In progress, partial | Budget, transfer, overdue-bill, unpaid-bill, and due-soon bill signals share list scopes in PRs #367, #369, #374, and #381; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
+| 4. Frontend | In progress, partial | Sidebar budget and transfer badges open their filtered lists in PRs #367 and #374. PR #377 exposes the budget queue to approval-only users without loading broad overview data. PR #378 converts linked Bell/Center rows to same-app anchors with mark-read behavior. PR #379 adds exact labels/groups for the discovered late-supply, incoming-quality, and dynamic rework event keys. PR #381 adds multi-signal Bills filters. PR #384 adds inquiry triage; PR #385 adds MRB holds. Preferences, broader Center interactions, other multi-signal items, and browser QA remain open. |
+| 5. Migration | In progress, partial | Budget, transfer, overdue-bill, unpaid-bill, due-soon bill, inquiry triage, and MRB hold signals share list scopes in PRs #367, #369, #374, #381, #384, and #385; approval-only budget queue access is in #377. Remaining notification dispatches and badge definitions are unmigrated. |
 | 6. Extras | Not started | No extra features started. |
 | 7. Verification | Partial | Targeted Phase 3 unit 1–3 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
 
@@ -27,7 +27,8 @@
 | F-06. Late supply, incoming quality, and rework metadata | `notifications/catalog-late-supply-rework-events` | [#379](https://github.com/kwat0g/kwatog/pull/379) | `b07a8a31` |
 | F-28. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | `78d4d6e9` |
 | F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | `4aa553ec`, `3da4952c`, `2f3a48e1`, `8b2b0629` |
-| F-05/F-09. CRM inquiry triage badge | `notifications/triage-inquiry-badge` | [#384](https://github.com/kwat0g/kwatog/pull/384) | `f71c1125` |
+| F-05/F-09. CRM inquiry triage badge | `notifications/triage-inquiry-badge` | [#384](https://github.com/kwat0g/kwatog/pull/384) | `f71c1125`, `8eb01b1f` |
+| F-05/F-09. MRB held-list badge | `notifications/mrb-holds-sidebar` | [#385](https://github.com/kwat0g/kwatog/pull/385) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -39,9 +40,9 @@
 - NotificationService call sites inventoried: **129 / 129** found by scan and cross-check; all 129 remain on existing entry points.
 - Direct `Mail::to(...)` call sites inventoried: **27 / 27** under `api/app`; mail recipient runtime outcomes not tested.
 - Direct Laravel `->notify()` / `Notification::send()` and central preference email paths inventoried in discovery; mail-only account/security and summary paths remain separate.
-- Internal sidebar routes: **73** in the Phase 0 baseline; current branch adds `/budgeting/transfers` (**74 current**); portal routes: **19**; compact-shell links: **9**.
-- Phase 2 approved **87** signal IDs; implementation splits the budget/transfer approval signal into two source-specific definitions (**88 current**) without changing the approved recipient rule. Baseline cross-reference covered 73 internal, 19 portal, and nine compact routes. The current `/budgeting/transfers` route is an implementation delta.
-- Badge definitions inventoried: **29**; AP unpaid and due-soon add two current signals (**31**); baseline wired to internal nav: **22**; current branch wires **26**, leaving **5** unattached.
+- Internal sidebar routes: **73** in the Phase 0 baseline; current branch adds `/budgeting/transfers` and `/inventory/mrb` (**75 current**); portal routes: **19**; compact-shell links: **9**.
+- Phase 2 approved **87** signal IDs; implementation splits the budget/transfer approval signal into two source-specific definitions and adds the existing MRB hold count (**89 current**) without changing notification recipients. Baseline cross-reference covered 73 internal, 19 portal, and nine compact routes.
+- Badge definitions inventoried: **29**; AP unpaid and due-soon add two current signals (**31**); baseline wired to internal nav: **22**; current branch wires **27**, leaving **4** unattached.
 - Local role slugs: **17**; existing role-access audit says **16**. Reconcile before role-complete claim.
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
@@ -249,6 +250,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - The sidebar badge opens that status filter. Badge counts require `crm.inquiries.manage`; the destination also requires `crm.inquiries.view`. Read-only users can open the list but receive a zero actionable count.
 - `BadgeControllerTest::test_inquiry_badge_matches_new_inquiry_list_and_requires_manage_permission`: **1 passed / 10 assertions** in an isolated PostgreSQL test container. It covers the New/In Progress/Closed partition, count/list parity, and a view-only user. `Sidebar.behavior.test.tsx`: **31 passed**, including filtered click-through. Targeted ESLint, PHP syntax, and `git diff --check` pass.
 - The inquiry model is already registered with `BadgeInvalidationObserver`, so status changes invalidate cached counts and trigger the existing badge refresh event. Browser visual QA and full-suite verification remain outstanding.
+
+## Separate signal fix: MRB held-list badge (draft PR [#385](https://github.com/kwat0g/kwatog/pull/385))
+
+- The existing `mrb_holds` count now shares `MaterialReviewRecord::scopeHeld()` with `/inventory/mrb?status=held`. `held` is the only active hold state; `released`, `scrapped`, and `returned` are excluded. The list and badge both use `inventory.mrb.view`, and the list currently has no site or department filter.
+- Warehouse navigation now exposes MRB / Quarantine with the badge and opens the held filter. The item uses the dedicated `inventory.mrb.view` permission, not broad `inventory.view`. `MaterialReviewRecord` was already registered with `BadgeInvalidationObserver`.
+- API: `BadgeControllerTest::test_mrb_hold_badge_matches_the_filtered_list_and_requires_view_permission`: **1 passed / 8 assertions**, including two held rows, one released row, list/badge parity, and denied employee access. SPA `Sidebar.behavior.test.tsx` and `Sidebar.permissions.test.tsx`: **55 passed**. Targeted ESLint and `git diff --check` pass.
+- `pint --test` reports file-wide style issues in `BadgeService.php` and `BadgeControllerTest.php`; `MaterialReviewRecord.php` import ordering was fixed and `QuarantineService.php` passes. No broad formatting was applied. Browser visual QA, full suites, other-role runtime checks, and CI remain outstanding.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

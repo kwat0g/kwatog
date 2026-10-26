@@ -138,12 +138,18 @@ describe('role-aligned sidebar permissions', () => {
     expect(paths).not.toContain('/quality/capability');
     expect(paths).not.toContain('/maintenance/downtime');
     expect(paths).toContain('/crm/inquiries');
+    expect(paths).toContain('/inventory/mrb');
     expect(paths).not.toContain('/quality/calibration');
     expect(paths).toContain('/hr/recruitment');
     expect(paths).not.toContain('/admin/sod');
     expect(paths).not.toContain('/inventory/scanner');
     expect(paths).not.toContain('/supply-chain/shipments');
-    expect(paths).not.toContain('/inventory/mrb');
+  });
+
+  it('shows MRB only to users with its record-view permission', () => {
+    const mrb = item('/inventory/mrb');
+    expect(isNavItemVisible(mrb, { permissions: new Set(['inventory.view']), features: allFeatures })).toBe(false);
+    expect(isNavItemVisible(mrb, { permissions: new Set(['inventory.mrb.view']), features: allFeatures })).toBe(true);
   });
 
   it('uses labels that describe each primary destination', () => {
@@ -157,6 +163,7 @@ describe('role-aligned sidebar permissions', () => {
     expect(item('/mrp/molds').label).toBe('Production Molds');
     expect(item('/inventory/items').label).toBe('Inventory Items');
     expect(item('/inventory/grn').label).toBe('Goods Receipts (GRN)');
+    expect(item('/inventory/mrb').label).toBe('MRB / Quarantine');
     expect(item('/inventory/material-issues').label).toBe('Material Issues');
     expect(item('/inventory/stock-levels').label).toBe('Inventory Stock Levels');
     expect(item('/inventory/transfer-orders').label).toBe('Inventory Transfers');

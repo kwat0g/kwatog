@@ -24,6 +24,7 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
@@ -503,6 +504,55 @@ class BadgeControllerTest extends TestCase
         $this->assertSame(2, $list->json('meta.total'));
         $this->assertSame($list->json('meta.total'), $badge);
         $this->assertSame(['pending_qc', 'pending_qc'], $list->json('data.*.status'));
+    }
+
+    public function test_mrb_hold_badge_matches_the_filtered_list_and_requires_view_permission(): void
+    {
+        $warehouseUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $item = Item::factory()->create();
+        $source = WarehouseLocation::factory()->create();
+        $quarantine = WarehouseLocation::factory()->create();
+
+        foreach ([MrbStatus::Held, MrbStatus::Held, MrbStatus::Released] as $index => $status) {
+            DB::table('material_review_records')->insert([
+                'mrb_number' => 'MRB-BADGE-'.$index,
+                'item_id' => $item->id,
+                'quantity' => 1,
+                'source_location_id' => $source->id,
+                'quarantine_location_id' => $quarantine->id,
+                'status' => $status->value,
+                'held_by' => $warehouseUser->id,
+                'held_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $list = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/inventory/mrb?status=held')
+            ->assertOk();
+        $badge = $this->actingAs($warehouseUser, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.mrb_holds.count');
+
+        $this->assertSame(2, $list->json('meta.total'));
+        $this->assertSame($list->json('meta.total'), $badge);
+        $this->assertSame(['held', 'held'], $list->json('data.*.status'));
+
+        $employee = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/inventory/mrb?status=held')
+            ->assertForbidden();
+        $employeeBadges = $this->actingAs($employee, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+        $this->assertArrayNotHasKey('mrb_holds', $employeeBadges);
     }
 
     public function test_per_badge_severity_override_beats_global_threshold(): void
