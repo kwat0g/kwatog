@@ -30,6 +30,7 @@ class NotifyOnOvertimeSubmitted implements ShouldQueue
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
+                ->where('employee_id', '<>', $emp->id)
                 ->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId))
                 ->get()
                 ->filter(fn (User $user): bool => $user->hasPermission('attendance.ot.approve'))
