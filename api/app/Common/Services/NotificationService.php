@@ -386,7 +386,7 @@ class NotificationService
         $users = [];
 
         foreach ($list as $user) {
-            if (! $user instanceof User || $user->id === null) {
+            if (! $user instanceof User || $user->id === null || ! $user->is_active || $user->trashed()) {
                 continue;
             }
 
