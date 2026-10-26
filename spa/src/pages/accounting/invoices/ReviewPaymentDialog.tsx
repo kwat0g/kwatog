@@ -98,7 +98,7 @@ export function ReviewPaymentDialog({ invoiceId, invoiceNumber, payment, onClose
         <Button variant="secondary" disabled={mutation.isPending} onClick={onClose}>Cancel</Button>
         {!rejecting && <Button variant="secondary" disabled={mutation.isPending} onClick={() => setRejecting(true)}>Reject payment</Button>}
         {rejecting ? <Button variant="danger" loading={mutation.isPending} disabled={!reason.trim() || mutation.isPending || needsReview || refreshing} onClick={() => act('reject')}>Reject payment</Button>
-          : <Button loading={mutation.isPending} disabled={!checked || !bankAccounts.some((row) => row.id === account) || accounts.isFetching || accounts.isError || mutation.isPending || needsReview || refreshing} onClick={() => act('verify')}>Confirm funds received</Button>}
+          : <Button variant="primary" loading={mutation.isPending} disabled={!checked || !bankAccounts.some((row) => row.id === account) || accounts.isFetching || accounts.isError || mutation.isPending || needsReview || refreshing} onClick={() => act('verify')}>Confirm funds received</Button>}
       </ModalFooter>
     </div>
   </Modal>;

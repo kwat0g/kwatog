@@ -21,6 +21,8 @@ import { formatDateTime } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
 import { ProductPhotoButton, ProductPhotoViewer, type ProductPhotoDetails } from '@/components/crm/ProductPhoto';
 
+const EMPTY_CUSTOMER_OPTIONS: Array<{ id: string; name: string }> = [];
+
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -43,7 +45,7 @@ export default function ProductDetailPage() {
   const debouncedCustomerSearch = useDebounce(customerSearch, 300);
   const [accessVisibility, setAccessVisibility] = useState<'standard' | 'restricted'>('restricted');
   const [accessCustomerIds, setAccessCustomerIds] = useState<string[]>([]);
-  const { data: customerOptions = [], isError: customerOptionsError, refetch: retryCustomerOptions } = useQuery({
+  const { data: customerOptions = EMPTY_CUSTOMER_OPTIONS, isError: customerOptionsError, refetch: retryCustomerOptions } = useQuery({
     queryKey: ['crm', 'products', 'customer-options', debouncedCustomerSearch],
     queryFn: () => productsApi.customerOptions({ search: debouncedCustomerSearch || undefined }),
     enabled: editingAccess && canManageCustomerAccess,
@@ -52,7 +54,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     setKnownCustomers((current) => {
       const byId = new Map(current.map((customer) => [customer.id, customer]));
-      [...(data?.portal_customers ?? []), ...customerOptions].forEach((customer) => byId.set(customer.id, customer));
+      [...(data?.portal_customers ?? []), ...(customerOptions ?? [])].forEach((customer) => byId.set(customer.id, customer));
       return [...byId.values()];
     });
   }, [data?.portal_customers, customerOptions]);
@@ -237,7 +239,7 @@ export default function ProductDetailPage() {
                     </Button>
                   )}
                   {canManage && canViewCosts && !proposal && !editingCost && (
-                    <Button size="sm" disabled={!data.is_active} onClick={() => {
+                    <Button variant="primary" size="sm" disabled={!data.is_active} onClick={() => {
                       setStandardCost(data.standard_cost ?? '');
                       setNotes('');
                       setFinancialError('');
@@ -391,6 +393,7 @@ export default function ProductDetailPage() {
                               Approve standard cost change
                             </Button>
                             <Button
+                              variant="danger"
                               disabled={!notes.trim() || financial.isPending}
                               onClick={() => financial.mutate('reject')}
                             >

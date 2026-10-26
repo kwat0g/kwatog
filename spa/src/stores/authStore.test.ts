@@ -10,6 +10,7 @@ vi.mock('@/api/auth', () => ({
  me: vi.fn(),
  login: vi.fn(),
  logout: vi.fn(),
+ updatePreferences: vi.fn(),
  },
 }));
 // Theme init is a side-effect we don't care about here.
@@ -28,6 +29,7 @@ vi.mock('@/lib/queryClient', () => ({
 
 import { authApi } from '@/api/auth';
 import { queryClient } from '@/lib/queryClient';
+import { useTablePrefsStore } from '@/stores/tablePrefsStore';
 
 const fakeUser = {
  id: 'h_abc',
@@ -37,6 +39,7 @@ const fakeUser = {
  permissions: ['hr.employees.view', 'admin.users.manage'],
  features: ['hr', 'production'],
  theme_mode: 'light',
+ table_preferences: { 'inventory.items': { density: 'compact' } },
 } as unknown as Parameters<ReturnType<typeof useAuthStore.getState>['applyUser']>[0];
 
 describe('stores/authStore', () => {
@@ -51,6 +54,7 @@ describe('stores/authStore', () => {
  bootstrapError: null,
  retryAt: 0,
  });
+ useTablePrefsStore.getState().clear();
  });
 
  it('starts unauthenticated and loading', () => {
@@ -69,6 +73,7 @@ describe('stores/authStore', () => {
  expect(s.permissions.has('hr.employees.view')).toBe(true);
  expect(s.permissions.has('does.not.exist')).toBe(false);
  expect(s.features.has('hr')).toBe(true);
+ expect(useTablePrefsStore.getState().byTable['inventory.items']?.density).toBe('compact');
  });
 
  it('bootstrap success populates state from authApi.me()', async () => {
@@ -77,6 +82,7 @@ describe('stores/authStore', () => {
  const s = useAuthStore.getState();
  expect(s.isAuthenticated).toBe(true);
  expect(s.isLoading).toBe(false);
+ expect(useTablePrefsStore.getState().userId).toBe('h_abc');
  expect(s.permissions.has('admin.users.manage')).toBe(true);
  });
 
@@ -88,6 +94,7 @@ describe('stores/authStore', () => {
  expect(s.isAuthenticated).toBe(false);
  expect(s.permissions.size).toBe(0);
  expect(s.isLoading).toBe(false);
+ expect(useTablePrefsStore.getState().userId).toBeNull();
  });
 
  it('retains identity but blocks protected content when bootstrap is throttled', async () => {
