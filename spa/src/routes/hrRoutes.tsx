@@ -125,7 +125,7 @@ export const hrRoutes = (
  />
  <Route
  path="/hr/attendance/overtime"
- element={<PermissionGuard permission="attendance.ot.approve"><OvertimeListPage /></PermissionGuard>}
+ element={<PermissionGuard approvalAnyOf={['attendance.ot.approve']}><OvertimeListPage /></PermissionGuard>}
  />
  <Route
  path="/hr/attendance/overtime/create"
