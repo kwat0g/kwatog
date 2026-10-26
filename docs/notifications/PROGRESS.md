@@ -361,12 +361,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 - `EmployeePasswordResetNotification` fails PHP method-signature compatibility when autoloaded because its parent references unimported `Throwable`, resolving to the Auth notification namespace. The issue surfaced while checking which direct Laravel notification paths remain mail-only; no reset email was queued.
 - The parent signature fix from draft PR [#372](https://github.com/kwat0g/kwatog/pull/372) is carried into the active stack in draft PR #404. `NotificationCatalogTest` now instantiates the HR subclass and confirms its mail-only channel.
-- On this stack, `EmployeePasswordResetNotificationTest.php`: **1 passed / 2 assertions**; `NotificationCatalogTest.php`: **9 passed / 76 assertions**; `UserProvisioningTest.php`: **8 passed / 25 assertions**; `UserAdministrationHardeningTest.php`: **8 passed / 27 assertions**. PHP syntax and `git diff --check` pass. No reset email was queued during discovery.
+- On this stack, `EmployeePasswordResetNotificationTest.php`: **1 passed / 2 assertions**; `NotificationCatalogTest.php`: **9 passed / 76 assertions**; `UserProvisioningTest.php`: **8 passed / 25 assertions**; `UserAdministrationHardeningTest.php`: **8 passed / 27 assertions**. PHP syntax and `git diff --check` pass. PR #404 API CI fails before PHPUnit on inherited F-22; finding-lifecycle passes. No reset email was queued during discovery.
 
 ## Central dispatch boundary (draft PR #397)
 
 - Repository search found no callers of `NotificationService::notify()`; its comment naming Ncr/Maintenance as legacy callers was stale. Those services already use `send()`, so the unused Laravel-native wrapper is removed.
-- `NotificationCatalogTest` pins direct Laravel dispatch files to the existing mail-only authentication, production-summary, and critical-alert flows and fails if the legacy wrapper returns. `via()` checks cover loadable classes; the HR reset subclass remains unverified under F-33. Direct `Mail::to(...)` paths and event timing are unchanged.
+- `NotificationCatalogTest` pins direct Laravel dispatch files to the existing mail-only authentication, production-summary, and critical-alert flows and fails if the legacy wrapper returns. The HR reset subclass was unverified at this PR boundary; PR #404 adds it to mail-only channel coverage after integrating F-33. Direct `Mail::to(...)` paths and event timing are unchanged.
 - Older `audit/domains/platform/notifications/*` snapshots still claim NcrService calls the wrapper; current code search shows those references are stale historical findings, not live call sites.
 - `NotificationCatalogTest`: **9 passed / 74 assertions**. Focused Pint passes for `NotificationService`; the existing `NotificationCatalogTest` file retains baseline style debt. PHP syntax and `git diff --check` pass.
 - F-33 was discovered while checking an HR mail exception and logged separately. No email sender migration or browser verification is included.
@@ -375,16 +375,16 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 
 - Migrates the seven inventoried direct Laravel Notification sends into `NotificationService::sendLaravelNotification()`. Original recipients, notification classes, channels, and dispatch timing stay unchanged.
 - `NotificationCatalogTest` now requires no direct Laravel Notification dispatch outside `NotificationService`, while retaining the no-legacy-wrapper assertion and mail-only channel checks. `NotificationServiceTest` verifies duplicate explicit recipients produce one send and an unrelated user receives none.
-- This is a stacked integration of the existing PR #370 unit with the #397 dispatch guard. The old #370 branch's test expected direct send sites; its expectation is reconciled here. The HR password-reset class remains blocked by F-33 until PR #372 reaches this stack.
+- This is a stacked integration of the existing PR #370 unit with the #397 dispatch guard. The old #370 branch's test expected direct send sites; its expectation is reconciled here. PR #404 later integrates the F-33 parent signature fix and HR subclass test into this stack.
 - Targeted API results on the integrated stack: `NotificationServiceTest`: **9 passed / 28 assertions**; `NotificationCatalogTest`: **9 passed / 74 assertions**; `PasswordResetTest.php`: **13 passed / 40 assertions**; `EmployeeWelcomeNotificationTest.php`: **3 passed / 11 assertions**; focused admin welcome: **1 passed / 4 assertions**. Direct PHPUnit was used because `php artisan test --filter=...` hits the existing `RecommendationAudienceScopeTest` fake-detector signature fatal before filtering.
 - PHP syntax and `git diff --check` pass. Targeted Pint reports four style issues in touched legacy files (`AlertEngineService`, daily production summary, `UserProvisioningService`, and `NotificationCatalogTest`); broad formatting was avoided. Full provisioning/reset verification remains blocked by F-33 until #372 reaches this stack.
-- This unit centralizes delivery only; policy recipient resolution, subject authorization, preferences for Laravel Notification classes, and lifecycle handling remain open.
+- PR #402 API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration); finding-lifecycle passes. This unit centralizes delivery only; policy recipient resolution, subject authorization, preferences for Laravel Notification classes, and lifecycle handling remain open.
 
 ## Exclude inactive internal notice recipients (draft PR #403)
 
 - `NotificationService::normaliseRecipients()` now excludes inactive and soft-deleted internal `User` records. Both `send()` and `sendLaravelNotification()` share this check; portal-recipient delivery is unchanged.
 - Adapted the regression test to the current service API after #397 removed the unused `notify()` wrapper. It proves inactive/deleted users receive no in-app row, realtime event, or Laravel notification, while an active user still receives the in-app notice.
-- `NotificationServiceTest.php`: **10 passed / 36 assertions**, including the inactive-recipient regression. PHP syntax, Pint on both changed PHP files, and `git diff --check` pass. This recipient filter does not replace subject-access authorization or the Phase 2 rule resolver.
+- `NotificationServiceTest.php`: **10 passed / 36 assertions**, including the inactive-recipient regression. PHP syntax, Pint on both changed PHP files, and `git diff --check` pass. PR #403 API CI fails before PHPUnit on inherited F-22; finding-lifecycle passes. This recipient filter does not replace subject-access authorization or the Phase 2 rule resolver.
 
 ## Separate finding fix: F-12 chain broadcast payload (draft PR #398)
 
