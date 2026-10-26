@@ -547,7 +547,7 @@ async function measure(page) {
           optionBackground: option ? getComputedStyle(option).backgroundColor : null,
         };
       });
-    const controls = [...(main?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"]') ?? [])]
+    const controls = [...(main?.querySelectorAll('button:not(.sr-only),a[href],summary,input:not([type="hidden"]):not(.sr-only),select:not(.sr-only),textarea,[role="button"],[role="separator"]') ?? [])]
       .filter((control) => control.getAttribute('aria-hidden') !== 'true' && control.tabIndex !== -1)
       .map((control) => {
         const box = control.getBoundingClientRect();
@@ -759,6 +759,28 @@ async function captureLongTableSamples(page, out, route, width) {
   return screenshots;
 }
 
+async function probeColumnResize(page, screenshotPath) {
+  const handle = page.getByRole('separator').first();
+  if (!(await handle.count())) return null;
+  const before = Number(await handle.getAttribute('aria-valuenow'));
+  const box = await handle.boundingBox();
+  assert.ok(box, 'column resize handle must be visible');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 48, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+  const after = Number(await handle.getAttribute('aria-valuenow'));
+  assert.ok(after > before, 'drag resize must increase width');
+  const reset = page.getByRole('button', { name: 'Reset widths' });
+  assert.ok(await reset.isVisible(), 'custom width must expose Reset widths');
+  const resetBox = await reset.boundingBox();
+  assert.ok(resetBox && ((page.viewportSize()?.width ?? 0) > 1024 || resetBox.height >= 44), 'reset target must be at least 44px high on narrow screens');
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await reset.click();
+  assert.equal(await page.getByRole('button', { name: 'Reset widths' }).count(), 0);
+  return { before, after, reset: true, screenshot: path.relative(ROOT, screenshotPath) };
+}
+
 async function main() {
   const role = arg('role', 'admin');
   const themeMode = arg('theme', 'light');
@@ -812,8 +834,11 @@ async function main() {
         await page.waitForFunction((theme) => document.documentElement.getAttribute('data-theme') === theme, themeMode, { timeout: 10_000 });
         await page.waitForFunction(() => !document.querySelector('main .animate-shimmer'), null, { timeout: 15_000 });
         await page.waitForTimeout(350);
-        const metrics = compactMetricSamples(await measure(page));
         const screenshot = path.join(out, `${slug(route)}-${width}.png`);
+        const resizeSample = process.argv.includes('--resize-sample')
+          ? await probeColumnResize(page, path.join(out, `${slug(route)}-${width}-resized.png`))
+          : null;
+        const metrics = compactMetricSamples(await measure(page));
         await page.screenshot({ path: screenshot, fullPage: rowCount < 300 });
         if (process.argv.includes('--dropdown-sample')) {
           const combo = page.locator('input[role="combobox"]').first();
@@ -831,7 +856,7 @@ async function main() {
         const longTableScreenshots = rowCount >= 300 && !tableSamples && metrics.counts.tables > 0 && width === 1440
           ? await captureLongTableSamples(page, out, route, width)
           : [];
-        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, ...metrics });
+        rows.push({ route, role, theme: themeMode, status: response?.status() ?? null, screenshot: path.relative(ROOT, screenshot), tableSampleScreenshots, longTableScreenshots, resizeSample, ...metrics });
         console.log(`${route} @ ${width}: ${metrics.counts.tables} table(s), ${metrics.counts.rows} row(s), overflow=${metrics.horizontalPageOverflow}`);
       }
     }

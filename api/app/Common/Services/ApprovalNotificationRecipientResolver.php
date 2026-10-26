@@ -43,7 +43,7 @@ final class ApprovalNotificationRecipientResolver
             ? ApprovalDelegation::approvalAudience($approvalPermission)
             : app(NotificationService::class)->usersWithPermission($approvalPermission);
         $actionableUserIds = array_fill_keys(
-            $actionableUsers->modelKeys(),
+            $actionableUsers->map(static fn (User $user): int => (int) $user->getKey())->all(),
             true,
         );
         $excluded = array_fill_keys(array_map('intval', $excludedUserIds), true);

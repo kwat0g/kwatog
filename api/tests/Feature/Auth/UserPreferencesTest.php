@@ -16,7 +16,7 @@ class UserPreferencesTest extends TestCase
     {
         $user = User::factory()->create([
             'table_preferences' => [
-                'inventory.items' => ['density' => 'compact', 'hiddenColumns' => ['supplier']],
+                'inventory.items' => ['density' => 'compact', 'hiddenColumns' => ['supplier'], 'columnWidths' => ['name' => 240]],
             ],
         ]);
 
@@ -24,13 +24,13 @@ class UserPreferencesTest extends TestCase
             'sidebar_collapsed' => false,
             'sidebar_expand_all' => true,
             'table_preferences' => [
-                'inventory.items' => ['density' => 'spacious'],
+                'inventory.items' => ['density' => 'spacious', 'columnWidths' => ['name' => 320, 'code' => 140]],
                 'quality.calibration' => ['density' => 'compact'],
             ],
         ])->assertOk();
 
         $expected = [
-            'inventory.items' => ['density' => 'spacious', 'hiddenColumns' => ['supplier']],
+            'inventory.items' => ['density' => 'spacious', 'hiddenColumns' => ['supplier'], 'columnWidths' => ['name' => 320, 'code' => 140]],
             'quality.calibration' => ['density' => 'compact'],
         ];
 
@@ -49,6 +49,18 @@ class UserPreferencesTest extends TestCase
             ->patchJson('/api/v1/auth/user/preferences', [
                 'table_preferences' => [
                     'inventory.items' => ['density' => 'tiny'],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['table_preferences']);
+    }
+
+    public function test_table_preferences_reject_column_widths_outside_supported_bounds(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->patchJson('/api/v1/auth/user/preferences', [
+                'table_preferences' => [
+                    'inventory.items' => ['columnWidths' => ['name' => 32]],
                 ],
             ])
             ->assertUnprocessable()

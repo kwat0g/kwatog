@@ -47,4 +47,17 @@ describe('tablePrefsStore', () => {
     });
     expect(useTablePrefsStore.getState().byTable['quality.calibration']).toBeUndefined();
   });
+
+  it('persists per-column widths for the signed-in user', () => {
+    useTablePrefsStore.getState().hydrate('user-1');
+    useTablePrefsStore.getState().setColumnWidths('inventory.items', { name: 240, code: 144 });
+
+    expect(useTablePrefsStore.getState().byTable['inventory.items']?.columnWidths).toEqual({
+      name: 240,
+      code: 144,
+    });
+    expect(authApi.updatePreferences).toHaveBeenCalledWith({
+      table_preferences: { 'inventory.items': { columnWidths: { name: 240, code: 144 } } },
+    });
+  });
 });
