@@ -62,7 +62,7 @@ export default function PostingEditPage() {
   });
   const employmentTypes = optionsResponse?.employment_types ?? [];
 
-  const form = useForm<FormData>({
+  const form = useForm<z.input<typeof schema>, unknown, FormData>({
     resolver: zodResolver(schema),
     values: posting
       ? {

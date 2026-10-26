@@ -8,7 +8,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus, type ChipVariant } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -1063,7 +1063,7 @@ export default function ReturnRequestDetailPage() {
                         ) : rma.requires_defect_evidence && rma.replacement_due_date && rma.purchase_order ? (
                           <Link to={`/purchasing/purchase-orders/${rma.purchase_order.id}`} className="text-accent hover:underline font-mono">{rma.purchase_order.po_number}</Link>
                         ) : <span className="text-muted">—</span>}
-                        {rma.replacement_purchase_order && <p className="mt-1 text-xs text-muted">{rma.replacement_purchase_order.status.replaceAll('_', ' ')}. Return completion does not confirm replacement receipt.</p>}
+                        {rma.replacement_purchase_order && <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted"><Chip variant={chipVariantForStatus(rma.replacement_purchase_order.status)}>{rma.replacement_purchase_order.status.replaceAll('_', ' ')}</Chip><span>Return completion does not confirm replacement receipt.</span></p>}
                         {rma.requires_defect_evidence && rma.replacement_due_date && !rma.replacement_purchase_order && <p className="mt-1 text-xs text-muted">Due {formatDate(rma.replacement_due_date)}. Supplier ships replacement against original PO.</p>}
                       </dd>
                     </div>
@@ -1165,7 +1165,7 @@ export default function ReturnRequestDetailPage() {
           <Textarea label={rma.reason_description?.startsWith('QC-') ? 'QC-reported problem' : 'Problem with the items'} required minLength={10} maxLength={2000} readOnly={rma.reason_description?.startsWith('QC-')} helper={rma.reason_description?.startsWith('QC-') ? 'Taken from the completed QC inspection.' : undefined} value={defectProblem} onChange={(event) => setDefectProblem(event.target.value)} placeholder="Describe the defect and affected items" />
           <FileInput label="Photo of defective items" required accept="image/jpeg,image/png,image/webp" helper="JPG, PNG, or WebP · maximum 5 MB" onChange={(event) => setDefectPhoto(event.target.files?.[0] ?? null)} />
           <Input label="Required delivery date" type="date" required min={manilaIsoDate()} value={requiredDeliveryDate} onChange={(event) => setRequiredDeliveryDate(event.target.value)} />
-          <div className="flex justify-end gap-2"><Button type="button" variant="secondary" disabled={submitMut.isPending} onClick={() => setConfirm(null)}>Cancel</Button><Button type="submit" loading={submitMut.isPending} disabled={submitMut.isPending || !defectPhoto || defectProblem.trim().length < 10 || !requiredDeliveryDate || requiredDeliveryDate < manilaIsoDate()}>Send to supplier</Button></div>
+          <div className="flex justify-end gap-2"><Button type="button" variant="secondary" disabled={submitMut.isPending} onClick={() => setConfirm(null)}>Cancel</Button><Button type="submit" variant="primary" loading={submitMut.isPending} disabled={submitMut.isPending || !defectPhoto || defectProblem.trim().length < 10 || !requiredDeliveryDate || requiredDeliveryDate < manilaIsoDate()}>Send to supplier</Button></div>
         </form>
       </Modal>
 

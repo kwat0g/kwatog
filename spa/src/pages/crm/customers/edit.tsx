@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
+import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -28,7 +29,7 @@ export default function CrmCustomerEditPage() {
  enabled: !!id,
  });
 
- const methods = useForm<FormValues>({
+ const methods = useForm<z.input<typeof customerSchema>, unknown, FormValues>({
  resolver: zodResolver(customerSchema),
  defaultValues: {
  name: '',
