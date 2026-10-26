@@ -434,14 +434,16 @@ export default function InvoiceDetailPage() {
                   <dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">
                     Journal entry
                   </dt>
-                  <dd>
+                  <dd className="flex flex-wrap items-center gap-2">
                     <a
                       className="text-accent hover:underline font-mono"
                       href={`/accounting/journal-entries/${invoice.journal_entry.id}`}
                     >
                       {invoice.journal_entry.entry_number}
-                    </a>{' '}
-                    · {invoice.journal_entry.status_label ?? invoice.journal_entry.status}
+                    </a>
+                    <Chip variant={chipVariantForStatus(invoice.journal_entry.status)}>
+                      {invoice.journal_entry.status_label ?? invoice.journal_entry.status}
+                    </Chip>
                   </dd>
                 </div>
               )}

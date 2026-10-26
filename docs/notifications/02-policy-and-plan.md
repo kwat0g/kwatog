@@ -192,7 +192,7 @@ This crosswalk includes every distinct `NotificationService` event-type expressi
 | `approvals.submitted_outcome` | Decision outcome / info | Unread approval decision notifications for the current submitter, limited to records the submitter can open. Include approved/rejected/returned only where the event exists; destination is the same filtered notification list. | A: current submitter | `/notifications?filter=approval_outcomes` |
 | `notifications.unread` | Unread / info | Authenticated user's unread notification rows only. | A | `/notifications?filter=unread` |
 | `portal.notifications.unread` | Unread / info | Unread portal notification rows for the authenticated portal user only; preserve supplier/customer morph and tenant scope. | A: current portal user | `/portal/supplier/notifications?filter=unread` or `/portal/customer/notifications?filter=unread` |
-| `crm.inquiry.triage` | New inquiry / action-required | Contact inquiries in actual untriaged states, excluding resolved/spam/deleted; state enum to be confirmed. | S: inquiry view + assigned/team scope | `/crm/inquiries?signal=triage` |
+| `crm.inquiry.triage` | New inquiry / action-required | `ContactInquiryStatus::New` only. The enum is `new`, `in_progress`, `closed`; transitions leave `new` for `in_progress` or `closed`, so in-progress is already triaged. No spam state or assignment field exists. | S: `crm.inquiries.view`; current list is shared across that permission audience. | `/crm/inquiries?status=new` |
 | `crm.so.awaiting_confirmation` | Awaiting confirmation / action-required | Customer-action orders in `awaiting_confirmation` or `delivery_negotiation`; internal sales queue uses only its own actionable states. Exclude cancelled/closed. | A/S with order scope; portal contact bound to customer for customer-action rows | `/crm/sales-orders?signal=awaiting_confirmation`; customer `/portal/customer/orders?signal=awaiting_confirmation` |
 | `crm.so.response_due` | Due soon / overdue | Open customer response/delivery proposal with due date/time past or within threshold. | A/S with order scope | `/crm/sales-orders?signal=response_due` |
 | `crm.complaint.open` | Open complaint / action-required | Complaint status outside resolved/closed/cancelled, scoped to assigned team/list. | S: complaint view + record scope | `/crm/complaints?signal=open` |
@@ -287,7 +287,7 @@ Every internal route appears below. `Current` is the current `Sidebar.tsx` key; 
 | `/chains/recovery` | — | `dashboard.chain_recovery.view` | system.chain_listener_failed |
 | `/approvals` | `approvals` | `approvals.board.view` | approvals.waiting_on_me |
 | `/notifications` | `unread` | `notifications.view` | notifications.unread; approvals.submitted_outcome |
-| `/crm/inquiries` | — | `crm.inquiries.view` | crm.inquiry.triage |
+| `/crm/inquiries?status=new` | `inquiries` | `crm.inquiries.view` | crm.inquiry.triage |
 | `/crm/sales-orders` | `pending_so` | `crm.sales_orders.view` | crm.so.awaiting_confirmation; crm.so.response_due |
 | `/crm/customers` | — | `accounting.customers.view` | — (no actionable customer master state verified) |
 | `/crm/products` | — | `crm.products.view` | pricing.review_required (item-cost review only if Product list exposes same filter) |

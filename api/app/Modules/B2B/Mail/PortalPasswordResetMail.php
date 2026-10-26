@@ -9,6 +9,7 @@ use App\Common\Services\EmailBrandingService;
 use App\Common\Services\EmailDeliveryFailureNotifier;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Support\HtmlString;
 use Illuminate\Queue\SerializesModels;
 
 class PortalPasswordResetMail extends QueuedMailable
@@ -45,7 +46,7 @@ class PortalPasswordResetMail extends QueuedMailable
                 'brand' => $brand,
                 'preheader' => 'Use your one-time link to reset your '.$this->portalType.' portal password.',
                 'portalType' => $this->portalType,
-                'recipientName' => $this->safeMarkdownText($this->recipientName),
+                'safeRecipientName' => $this->safeMarkdownText($this->recipientName),
                 'resetUrl' => $url,
             ],
         );
@@ -68,14 +69,16 @@ class PortalPasswordResetMail extends QueuedMailable
         );
     }
 
-    private function safeMarkdownText(string $value): string
+    private function safeMarkdownText(string $value): HtmlString
     {
-        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', strip_tags($value)) ?? '');
+        $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
         if ($text === '') {
-            return 'there';
+            return new HtmlString('there');
         }
 
-        return preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? 'there';
+        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|])/u', '\\\\$1', $text) ?? 'there';
+
+        return new HtmlString(htmlspecialchars($escaped, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
     }
 
     private function safeHeaderText(string $value): string

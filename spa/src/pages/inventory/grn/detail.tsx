@@ -17,7 +17,7 @@ import { grnApi } from '@/api/inventory/grn';
 import { supplierActivityApi } from '@/api/b2b/supplier-activity';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -589,7 +589,9 @@ export default function GrnDetailPage() {
                   ) : (
                     <span className="font-mono">{data.qc_inspection.inspection_number}</span>
                   )}{' '}
-                  · {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}
+                  <Chip variant={chipVariantForStatus(data.qc_inspection.status)}>
+                    {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}
+                  </Chip>
                 </dd>
               </div>
             )}
@@ -603,7 +605,9 @@ export default function GrnDetailPage() {
                   >
                     {data.journal_entry.entry_number}
                   </Link>{' '}
-                  · {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}
+                  <Chip variant={chipVariantForStatus(data.journal_entry.status)}>
+                    {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}
+                  </Chip>
                 </dd>
               </div>
             )}
@@ -678,8 +682,10 @@ export default function GrnDetailPage() {
                 >
                   {data.bill.bill_number}
                 </Link>{' '}
-                · {formatPeso(Number(data.bill.total_amount))} ·{' '}
-                {data.bill.status_label ?? data.bill.status}.
+                · {formatPeso(Number(data.bill.total_amount))}{' '}
+                <Chip variant={chipVariantForStatus(data.bill.status)}>
+                  {data.bill.status_label ?? data.bill.status}
+                </Chip>.
                 {data.bill.status !== 'draft'
                   ? ' Posted to the ledger.'
                   : ' Review and post to record the payable.'}
@@ -1044,7 +1050,9 @@ export default function GrnDetailPage() {
                                       {l.inspection.inspection_number}
                                     </span>
                                   )}{' '}
-                                  · {l.inspection.status_label ?? l.inspection.status ?? '—'}
+                                  <Chip variant={chipVariantForStatus(l.inspection.status)}>
+                                    {l.inspection.status_label ?? l.inspection.status ?? '—'}
+                                  </Chip>
                                 </span>
                               )}
                             </div>

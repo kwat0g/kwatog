@@ -98,7 +98,7 @@ export function SubmitPaymentDialog({ invoice, onClose }: { invoice: PortalInvoi
       {needsReview && <Button variant="secondary" type="button" loading={refreshing} onClick={refresh}>Review refreshed invoice</Button>}
       <ModalFooter>
         <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Cancel</Button>
-        <Button type="submit" loading={mutation.isPending} disabled={!isValid || !!proofError(file) || needsReview || refreshing || !reviewed.can_submit_payment || mutation.isPending}>Submit payment evidence</Button>
+        <Button type="submit" variant="primary" loading={mutation.isPending} disabled={!isValid || !!proofError(file) || needsReview || refreshing || !reviewed.can_submit_payment || mutation.isPending}>Submit payment evidence</Button>
       </ModalFooter>
     </form>
   </Modal>;

@@ -85,7 +85,7 @@ export default function CreditNoteDetailPage() {
  onError: (e: AxiosError<ApiValidationError>) => toast.error(e.response?.data?.message ?? 'Failed to finalize.'),
  });
 
- const { register, handleSubmit, reset, formState: { errors } } = useForm<ApplyFormValues>({
+ const { register, handleSubmit, reset, formState: { errors } } = useForm<z.input<typeof applySchema>, unknown, ApplyFormValues>({
  resolver: zodResolver(applySchema),
  });
 

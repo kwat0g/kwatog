@@ -9,6 +9,7 @@ use App\Common\Mail\QueuedMailable;
 use App\Common\Services\EmailBrandingService;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Support\HtmlString;
 
 class CustomerComplaintUpdateMail extends QueuedMailable
 {
@@ -76,11 +77,16 @@ class CustomerComplaintUpdateMail extends QueuedMailable
         );
     }
 
-    private function safeMarkdownText(string $value): string
+    private function safeMarkdownText(string $value): HtmlString
     {
         $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
+        if ($text === '') {
+            return new HtmlString('—');
+        }
 
-        return $text === '' ? '—' : (preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? '—');
+        $escaped = preg_replace('/([\\`*_{}\[\]()#+.!|])/u', '\\\\$1', $text) ?? '—';
+
+        return new HtmlString(htmlspecialchars($escaped, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
     }
 
     private function safeHeaderText(string $value): string

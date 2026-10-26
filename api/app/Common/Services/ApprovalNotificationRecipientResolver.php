@@ -22,9 +22,10 @@ final class ApprovalNotificationRecipientResolver
     public function resolveStep(Model $approvable, ApprovalRecord $step, array $excludedUserIds = []): array
     {
         $class = $approvable->getMorphClass();
+        $meta = ApprovalTypeRegistry::forClass($class);
         if (! $approvable->exists
             || $approvable->getKey() === null
-            || ApprovalTypeRegistry::forClass($class) === null
+            || $meta === null
             || $step->approvable_type !== $class
             || (int) $step->approvable_id !== (int) $approvable->getKey()
             || ! $step->is_current
@@ -32,7 +33,19 @@ final class ApprovalNotificationRecipientResolver
             return [];
         }
 
+        $approvalPermission = ApprovalTypeRegistry::approvalPermissionForStep($class, $step->role_slug);
+        if ($approvalPermission === null) {
+            return [];
+        }
+
         $delegateIds = ApprovalDelegation::activeDelegatesFor($step->role_slug, now());
+        $actionableUsers = ($meta['approval_permission_delegated'] ?? false)
+            ? ApprovalDelegation::approvalAudience($approvalPermission)
+            : app(NotificationService::class)->usersWithPermission($approvalPermission);
+        $actionableUserIds = array_fill_keys(
+            $actionableUsers->modelKeys(),
+            true,
+        );
         $excluded = array_fill_keys(array_map('intval', $excludedUserIds), true);
         $users = User::query()
             ->where('is_active', true)
@@ -53,6 +66,7 @@ final class ApprovalNotificationRecipientResolver
         foreach ($users as $user) {
             $id = (int) $user->getKey();
             if (isset($excluded[$id])
+                || ! isset($actionableUserIds[$id])
                 || ! ApprovalTypeRegistry::userCanViewRecord($user, $class, (int) $approvable->getKey())) {
                 continue;
             }
