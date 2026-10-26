@@ -85,7 +85,7 @@ class SupplierPurchaseOrderCancelledMail extends QueuedMailable
     {
         $text = trim(preg_replace('/[\r\n\t]+/u', ' ', $value) ?? '');
 
-        return $text === '' ? '—' : (preg_replace('/([\\`*_{}\[\]()#+.!|>])/u', '\\\\$1', $text) ?? '—');
+        return $text === '' ? '—' : (preg_replace('/([\\`*_{}\[\]()#+.!])/u', '\\\\$1', $text) ?? '—');
     }
 
     private function safeHeaderText(string $value): string
