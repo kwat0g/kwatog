@@ -679,7 +679,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Targeted API tests: **7 passed / 38 assertions** across the subject-access unit test, period approval, adjustment action/outcome, payslip readiness, and duplicate payslip notice tests. PHP syntax and `git diff --check` pass. Tests used and restored the temporary F-22 workaround.
 - Pint reports **4** pre-existing style violations in touched legacy files; new registry and unit-test code pass. No broad formatting applied. API CI remains blocked by F-22. Exact adjustment checker remains a business-policy gap: current seeded roles grant no operational checker permission; no audience expansion was made.
 
-## Phase 3 payslip email-failure subject access (draft PR)
+## Phase 3 payslip email-failure subject access (draft PR [#469](https://github.com/kwat0g/kwatog/pull/469))
 
 - Both `SendPayslipEmailJob` failure paths now pass the payroll row through the subject authorization gate. The notification remains owner-only and links to the existing self-service payslip page.
 - The payroll notification test checks the provider-failure and missing-email paths, exact subject metadata, owner delivery, and a second employee's exclusion.
