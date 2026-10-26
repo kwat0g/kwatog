@@ -67,6 +67,13 @@ class AutomaticBomPricingReviewTest extends TestCase
 
     public function test_component_cost_refreshes_nested_boms_and_warns_owners_without_changing_agreement(): void
     {
+        $unlistedRole = Role::firstOrCreate(['slug' => 'unlisted_bom_manager'], ['name' => 'Unlisted BOM Manager']);
+        $permissionIds = DB::table('permissions')->whereIn('slug', ['mrp.boms.view', 'mrp.boms.manage'])->pluck('id');
+        DB::table('role_permissions')->insert($permissionIds->map(static fn ($id): array => [
+            'role_id' => $unlistedRole->id,
+            'permission_id' => $id,
+        ])->all());
+        $unlistedViewer = User::factory()->create(['role_id' => $unlistedRole->id]);
         $material = Item::factory()->create(['standard_cost' => '10']);
         $sub = Product::factory()->create();
         $subItem = Item::factory()->create(['code' => $sub->part_number, 'item_type' => 'finished_good']);
@@ -84,8 +91,17 @@ class AutomaticBomPricingReviewTest extends TestCase
         $this->assertSame('40.00', $bom->fresh()->total_cost);
         $this->assertSame('10.00', $old->fresh()->total_cost);
         $this->assertSame('35.00', $agreement->fresh()->price);
+        $this->assertTrue($unlistedViewer->hasPermission('mrp.boms.view'));
+        $this->actingAs($unlistedViewer, 'sanctum')->getJson('/api/v1/mrp/boms')->assertOk();
+        $this->assertDatabaseHas('notifications', [
+            'type' => 'bom.cost_updated',
+            'notifiable_id' => User::whereHas('role', fn ($role) => $role->where('slug', 'ppc_head'))->value('id'),
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'bom.cost_updated',
+            'notifiable_id' => $unlistedViewer->id,
+        ]);
         $this->assertDatabaseHas('notifications', ['type' => 'pricing.review_required']);
-        $this->assertDatabaseHas('notifications', ['type' => 'bom.cost_updated']);
         $warehouse = User::whereHas('role', fn ($role) => $role->where('slug', 'warehouse_staff'))->firstOrFail();
         $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $warehouse->id)->count());
     }
@@ -115,8 +131,20 @@ class AutomaticBomPricingReviewTest extends TestCase
         $inactive->customer->update(['is_active' => false]);
         $this->artisan('pricing:review-agreements')->assertSuccessful();
         $count = DB::table('notifications')->where('type', 'pricing.agreement_expiring')->count();
-        $expected = User::where('is_active', true)->get()->filter(fn ($user) => $user->hasPermission('crm.price_agreements.view'))->count();
-        $this->assertSame($expected, $count);
+        $expectedRecipientIds = User::query()->where('is_active', true)->get()
+            ->filter(fn (User $user): bool => in_array($user->role?->slug, ['sales_officer', 'customer_service_officer', 'system_admin'], true)
+                && $user->hasPermission('crm.price_agreements.view'))
+            ->pluck('id')->map(static fn ($id): int => (int) $id)->sort()->values()->all();
+        $recipientIds = DB::table('notifications')->where('type', 'pricing.agreement_expiring')
+            ->pluck('notifiable_id')->map(static fn ($id): int => (int) $id)->sort()->values()->all();
+        $this->assertSame($expectedRecipientIds, $recipientIds);
+        $finance = User::whereHas('role', fn ($query) => $query->where('slug', 'finance_officer'))->firstOrFail();
+        $this->assertTrue($finance->hasPermission('crm.price_agreements.view'));
+        $this->actingAs($finance, 'sanctum')->getJson('/api/v1/crm/price-agreements')->assertOk();
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'pricing.agreement_expiring',
+            'notifiable_id' => $finance->id,
+        ]);
         $this->artisan('pricing:review-agreements')->assertSuccessful();
         $this->assertSame($count, DB::table('notifications')->where('type', 'pricing.agreement_expiring')->count());
     }

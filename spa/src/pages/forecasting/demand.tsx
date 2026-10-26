@@ -483,6 +483,7 @@ export default function DemandForecastingPage() {
                   }
                 />
                 <Button
+                  variant="primary"
                   onClick={() => recomputeM.mutate()}
                   disabled={
                     !productId ||

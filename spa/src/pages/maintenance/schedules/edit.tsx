@@ -37,7 +37,7 @@ export default function EditMaintenanceSchedulePage() {
  enabled: !!id,
  });
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
  resolver: zodResolver(schema),
  values: data ? {
  description: data.description,
