@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Draft subject-access stack reaches Purchase Orders in [PR #424](https://github.com/kwat0g/kwatog/pull/424). Separate finding F-41 is fixed in [PR #425](https://github.com/kwat0g/kwatog/pull/425). API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
+**Current gate:** Phase 2 approved. Draft subject-access stack reaches Purchase Requests in [PR #426](https://github.com/kwat0g/kwatog/pull/426), stacked after the Purchase Order gate in #424 and separate F-41 fix in #425. API CI still has the unrelated F-22 syntax blocker; full SPA typecheck, cross-role recipient coverage, and badge/list parity remain open.
 
 ## Phase status
 
@@ -39,6 +39,7 @@
 | F-09/F-13. Internal AR invoice signal parity | `notifications/ar-invoice-signal-parity` | [#410](https://github.com/kwat0g/kwatog/pull/410) | `01ca4eb9`, `73f28caa` |
 | F-09/F-13. Customer portal AR invoice signal parity | `notifications/customer-ar-signals` | [#411](https://github.com/kwat0g/kwatog/pull/411) | `e7e70315` |
 | Phase 3. Approval-backed subject access gate | `notifications/subject-access-gate` | [#412](https://github.com/kwat0g/kwatog/pull/412) | `2eb2b843`, `e855165e` |
+| Phase 3. Purchase Request subject access gate | `notifications/purchase-request-subject-access` | [#426](https://github.com/kwat0g/kwatog/pull/426) | `65e54054` |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -587,6 +588,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `SupplierPurchaseOrderCancelledMail::safeMarkdownText()` no longer backslash-escapes `>`; Laravel Markdown now renders a supplier contact such as `Original <img ...>` as inert text with both angle brackets encoded consistently.
 - This corrects the existing snapshot-render test failure reproduced on parent #423. The focused test now passes **1 / 18 assertions**; the full `SupplierPurchaseOrderCancelledNotificationTest.php` class passes **5 / 22 assertions**. No notification audience, link, event, or email recipient changed.
 - This is separate from PO notification access changes in PR #424. PHP syntax, Pint for the mailable, and `git diff --check` pass. The test run used and restored the temporary F-22 workaround.
+
+## Phase 3 Purchase Request subject access gate (draft PR [#426](https://github.com/kwat0g/kwatog/pull/426))
+
+- Route review: the Purchasing API group requires the feature flag, the PR detail route requires `purchasing.view`, and `PurchaseRequestController::show()` applies `PurchaseRequestAccessPolicy::canView()`. The subject registry now enforces all three checks; approval permission alone does not open the detail route.
+- Repository search found two PR-subject notification dispatches: `chain.pr_approved` and `chain.pr_auto_convert_skipped`. Both now use `sendForSubject()`. Their configured-role audience, active-user, permission, and row-scope filters remain. Existing message, timing, and exact PR link remain. No PR email-failure fallback dispatch was found; other `purchase_request` matches are catalog/config or chain-bottleneck reads.
+- Added positive owner delivery, negative out-of-scope/approval-only/no-permission delivery, disabled-module suppression, and subject metadata checks for both notification events.
+- `NotificationServiceSubjectAccessTest.php`: **16 passed / 101 assertions**. Focused approval-audience and skipped-auto-conversion tests: **4 passed / 26 assertions**. PHP syntax, Pint on all six changed files, and `git diff --check` pass. Targeted tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly.
+- PR checks are pending at this update. Full suite, browser/e2e, and complete role matrix remain open.
 
 ## Outstanding proof / risks
 
