@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Purchasing RFQ lifecycle and supplier-performance access is in draft PR [#457](https://github.com/kwat0g/kwatog/pull/457), stacked on #456. #456 API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration); its finding-lifecycle check passes. #455 SPA CI fails on the existing dependency audit (Vitest, undici, and zod advisories); axe and visual checks pass. Earlier stack includes Complaint 8D #456, exact custom approval links #455, custom approval subject access #454, approval-ledger access #453, Return Management access #452, supplier-return permission fix #451, ReturnRequest listener fix #450, invoice-notice deduplication #449, Delivery subject access #448, F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, cost-review click-through #431, actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. Cross-role recipient coverage and badge/list parity remain open.
+**Current gate:** F-55 RFQ test repair is in draft PR [#459](https://github.com/kwat0g/kwatog/pull/459), separate from Purchasing lifecycle access #457. #457 is stacked on Complaint 8D #456. #456 and #457 API CI fail before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration); origin/main already has the fix from merged PR #371, but this older stack has not incorporated it. #455 SPA CI fails on the existing dependency audit (Vitest, undici, and zod advisories); axe and visual checks pass. Earlier stack includes Purchasing RFQ/supplier performance #457, Complaint 8D #456, exact custom approval links #455, custom approval subject access #454, approval-ledger access #453, Return Management access #452, supplier-return permission fix #451, ReturnRequest listener fix #450, invoice-notice deduplication #449, Delivery subject access #448, F-50 machine site-scope gap #447, machine notice subject access #446, F-49 missing-timeout link filter #445, F-48 overtime requester exclusion #444, missing-timeout subject access #443, overtime event subject access #442, Leave event subject access #441, recruitment bottlenecks #440, new applications #439, onboarding #438, separation #437, training expiry #436, Payroll #435, Quality/RMA #434, Maintenance creator-exclusion #433, Maintenance subject access #432, cost-review click-through #431, actor exclusion and subject access #430, item/GRN gates #429, Delivery gate #427, Purchase Requests #426, Purchase Orders #424, and separate F-41 fix #425. Cross-role recipient coverage and badge/list parity remain open.
 
 ## Phase status
 
@@ -71,6 +71,7 @@
 | F-54. Exact custom approval list targets | `notifications/fix-custom-approval-deep-links` | [#455](https://github.com/kwat0g/kwatog/pull/455) | `b6f7db9b` |
 | Phase 3. Complaint 8D SLA subject access | `notifications/complaint-8d-subject-access` | [#456](https://github.com/kwat0g/kwatog/pull/456) | `3380f94d` |
 | Phase 3. Purchasing RFQ and supplier performance subject access | `notifications/rfq-lifecycle-subject-access` | [#457](https://github.com/kwat0g/kwatog/pull/457) | pending |
+| F-55. RFQ test helper chain | `findings/fix-rfq-test-chain` | [#459](https://github.com/kwat0g/kwatog/pull/459) | pending |
 | F-31. Overtime list/options permission parity | `notifications/fix-overtime-list-permission` | [#393](https://github.com/kwat0g/kwatog/pull/393) | `93485538` |
 | F-09. Overtime approval badge/list parity | `notifications/overtime-approval-signal` | [#394](https://github.com/kwat0g/kwatog/pull/394) | `3fef0452` |
 | F-09. Leave approval badge/list parity | `notifications/leave-approval-signal` | [#395](https://github.com/kwat0g/kwatog/pull/395) | `69ca1a5e` |
@@ -849,6 +850,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The shared access test proves permitted buyer/requester delivery and unrelated-user suppression for RFQs, plus vendor performance permission and exact-route checks. RFQ lifecycle listener test: **1 passed / 5 assertions**; supplier deterioration tests: **5 passed / 13 assertions**; notification subject access tests: **25 passed / 185 assertions**.
 - The full RFQ feature file had one pre-existing test error at `RfqBiddingTest.php:513`: `actingAsFresh()` returns `void`, but that test chains `getJson()` from it. Other targeted tests passed. Record and fix that test defect separately. Pint reports existing style findings in touched legacy files; no broad reformat applied. `git diff --check` passes. The local runs used and restored the temporary F-22 workaround.
 
+## Separate finding fix: F-55 RFQ test helper chain (draft PR [#459](https://github.com/kwat0g/kwatog/pull/459))
+
+- Split `actingAsFresh()` from the subsequent request so the non-owner access assertion runs.
+- `RfqBiddingTest.php`: **21 passed / 260 assertions**. The local run used and restored the temporary F-22 workaround; the source PDF service has no diff.
+- This test-only repair is separate from the notification code.
+
 ## Resume instruction
 
-Next: continue the remaining notification dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. The RFQ test-only error at `RfqBiddingTest.php:513` also needs a separate fix. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
+Next: continue the remaining notification dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Run and record the F-55 RFQ suite, then continue. Keep each unit on its own branch/PR and update this file with test evidence, remaining gaps, and findings.
