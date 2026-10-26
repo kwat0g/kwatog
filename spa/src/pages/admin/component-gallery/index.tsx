@@ -66,7 +66,8 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { CopyButton } from '@/components/ui/CopyButton';
-import { ChainHeader, type ChainStep } from '@/components/ui/ChainHeader';
+import { ChainHeader } from '@/components/chain/ChainHeader';
+import type { ChainStep } from '@/types/chain';
 import { StageBreakdown, type StageData } from '@/components/ui/StageBreakdown';
 import { LinkedRecords, type LinkedRecordGroup } from '@/components/ui/LinkedRecords';
 import { ActivityStream, type ActivityItem } from '@/components/ui/ActivityStream';
@@ -145,11 +146,11 @@ const CHIP_VARIANTS: ChipVariant[] = ['success', 'warning', 'danger', 'info', 'p
 const STATUS_SAMPLES = ['approved', 'pending', 'rejected', 'draft', 'in_progress', 'completed'];
 
 const CHAIN_STEPS: ChainStep[] = [
-  { key: 'so', label: 'Sales order', date: '2026-04-03', state: 'done' },
-  { key: 'mrp', label: 'MRP plan', date: '2026-04-04', state: 'done' },
-  { key: 'wo', label: 'Work order', date: '2026-04-06', state: 'active' },
-  { key: 'qc', label: 'Outgoing QC', state: 'pending' },
-  { key: 'delivery', label: 'Delivery', state: 'pending' },
+  { key: 'so', label: 'Sales order', shortLabel: 'Order', date: '2026-04-03', state: 'done' },
+  { key: 'mrp', label: 'MRP plan', shortLabel: 'MRP', date: '2026-04-04', state: 'done' },
+  { key: 'wo', label: 'Work order', shortLabel: 'WO', date: '2026-04-06', state: 'active' },
+  { key: 'qc', label: 'Outgoing QC', shortLabel: 'QC', state: 'pending' },
+  { key: 'delivery', label: 'Delivery', shortLabel: 'Delivery', state: 'pending' },
 ];
 
 const STAGES: StageData[] = [
@@ -659,7 +660,7 @@ export default function ComponentGalleryPage() {
         note="The detail-page vocabulary: where this record sits in its chain, how its population breaks down, what it links to, and what happened to it."
       >
         <Demo name="ChainHeader">
-          <ChainHeader steps={CHAIN_STEPS} />
+          <ChainHeader steps={CHAIN_STEPS} stretch />
         </Demo>
 
         <Demo name="StageBreakdown">

@@ -15,10 +15,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const sizeClasses: Record<Size, string> = {
-  xs: 'h-6 px-2 text-[11px]',
-  sm: 'h-7 px-3 text-xs',
-  md: 'h-8 px-4 text-sm',
-  lg: 'h-9 px-5 text-base font-medium',
+  xs: 'h-6 px-2 text-caption',
+  sm: 'h-7 px-3 text-caption',
+  md: 'h-8 px-4 text-md',
+  lg: 'h-9 px-5 text-md font-medium',
   // 44px — the touch-target floor the PWAs use. Deliberately larger than the
   // desktop scale in DESIGN-SYSTEM.md, which assumes a mouse. Hardcoded rather
   // than `min-h-hit`, which resolves to --hit-min: 28px outside a floor route —
@@ -28,10 +28,10 @@ const sizeClasses: Record<Size, string> = {
 };
 
 const iconOnlySizeClasses: Record<Size, string> = {
-  xs: 'h-6 w-6 text-[11px] rounded',
-  sm: 'h-7 w-7 text-xs rounded-md',
-  md: 'h-8 w-8 text-sm rounded-md',
-  lg: 'h-9 w-9 text-base rounded-md',
+  xs: 'h-6 w-6 text-caption rounded',
+  sm: 'h-7 w-7 text-caption rounded-md',
+  md: 'h-8 w-8 text-caption rounded-md',
+  lg: 'h-9 w-9 text-caption rounded-md',
   // Square 44×44 — same touch-target floor, both axes.
   touch: 'min-h-11 min-w-11 text-base rounded-md',
 };
