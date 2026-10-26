@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Common\Support\ChainDefinitions;
 use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use Illuminate\Support\Facades\Broadcast;
 
 /**
@@ -49,14 +51,26 @@ Broadcast::channel('badges', fn (User $user): bool => true);
 
 /* Series C — Task C4. Chain progress (sales_order/work_order/purchase_order/
  * delivery/grn). One private channel per entity instance. Permission is
- * derived from the entity-type slug. Hash IDs are passed verbatim — the
- * subscribing component is the only consumer that knows what they map to.
+ * derived from the entity-type slug; Purchase Orders also check the row scope
+ * used by their detail route. Hash IDs are passed verbatim by the SPA.
  */
 Broadcast::channel(
     'chain.{entityType}.{hashId}',
     function (User $user, string $entityType, string $hashId): bool {
         if (! in_array($entityType, ChainDefinitions::allowedTypes(), true)) {
             return false;
+        }
+
+        if ($entityType === 'purchase_order') {
+            if (! $user->hasPermission('purchasing.view') && ! $user->hasPermission('purchasing.po.approve')) {
+                return false;
+            }
+
+            $id = PurchaseOrder::tryDecodeHash($hashId);
+            $purchaseOrder = $id === null ? null : PurchaseOrder::query()->find($id);
+
+            return $purchaseOrder !== null
+                && app(PurchaseOrderAccessPolicy::class)->canView($user, $purchaseOrder);
         }
 
         return $user->hasPermission(ChainDefinitions::viewPermission($entityType));

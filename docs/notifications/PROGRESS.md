@@ -41,6 +41,7 @@
 | F-32. Leave action visibility and stage authorization | `notifications/fix-leave-action-authorization` | [#396](https://github.com/kwat0g/kwatog/pull/396) | pending |
 | 1.1. Native dispatch boundary guard | `notifications/central-dispatch-guard` | [#397](https://github.com/kwat0g/kwatog/pull/397) | pending |
 | F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | pending |
+| F-12. Purchase Order chain channel scope | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -373,6 +374,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The new event name lets an already-loaded older SPA bundle ignore the reduced payload and keep its existing 30-second polling fallback. The new SPA refreshes on `.chain.refresh` and retains polling when Reverb is unavailable.
 - `ChainBroadcasterTest.php`: **4 passed / 6 assertions**, including the new event name and exact payload. `useChainProgress.test.tsx`: **2 passed**. PHP syntax and `git diff --check` passed. `Pint --test` reports style issues in these two existing files; broad formatting was avoided.
 - Channel authorization remains permission-based and is not made record-specific in this unit. Payroll progress payload and audience are unchanged pending HR/Finance policy; F-12 remains open.
+
+## Separate finding fix: F-12 Purchase Order chain channel scope (draft PR #399)
+
+- The private Purchase Order chain channel now accepts the same `purchasing.view` or `purchasing.po.approve` route permissions as the detail endpoint, resolves the hashed Purchase Order ID, and checks `PurchaseOrderAccessPolicy::canView()`. Missing, deleted, or out-of-scope Purchase Orders are denied. Approval-only users retain access to the detail channel.
+- `BroadcastAuthorizationTest.php`: **6 passed / 8 assertions**, including own-versus-foreign Purchase Orders and an approver without list permission. Targeted Pint, PHP syntax, and `git diff --check` passed. The combined run with `PurchaseOrderShowScopeTest.php` stopped when the known F-22 duplicate `PdfRenderService::ensureDompdfDirs()` blocked test bootstrap; the standalone broadcast test passed.
+- Other chain entity types still use permission-only authorization. Payroll progress audience/payload remains unchanged pending HR/Finance policy; F-12 remains open.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 
