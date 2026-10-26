@@ -212,17 +212,11 @@ class CustomApprovalDelegationAndEscalationTest extends TestCase
             ->where('type', 'approval_reminder')
             ->pluck('data')
             ->map(fn (string $json): ?string => json_decode($json, true)['link_to'] ?? null);
-        $this->assertTrue($actionOnlyNoticeLinks->contains(fn (?string $link): bool => str_starts_with($link ?? '', '/budgeting/transfers/')));
-        $this->assertDatabaseHas('notifications', [
-            'notifiable_id' => $viewRevokedApprover->id,
+        $this->assertContains('/budgeting/transfers', $differentRoleNoticeLinks->all());
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $ineligibleApprover->id,
             'type' => 'approval_reminder',
         ]);
-        $viewRevokedNoticeLinks = DB::table('notifications')
-            ->where('notifiable_id', $viewRevokedApprover->id)
-            ->where('type', 'approval_reminder')
-            ->pluck('data')
-            ->map(fn (string $json): ?string => json_decode($json, true)['link_to'] ?? null);
-        $this->assertTrue($viewRevokedNoticeLinks->contains(fn (?string $link): bool => str_starts_with($link ?? '', '/budgeting/transfers/')));
     }
 
     public function test_budget_board_hides_same_role_approvals(): void

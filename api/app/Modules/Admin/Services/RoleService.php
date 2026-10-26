@@ -266,19 +266,28 @@ class RoleService
      * Clone an existing role into a brand-new custom role with all
      * permissions copied. The new role is always `is_system = false`.
      */
-    public function clone(Role $source, array $data): Role
+    /**
+     * @param  array{name?: string, slug?: string, description?: string|null}  $overrides
+     */
+    public function clone(Role $source, array $overrides): Role
     {
-        return DB::transaction(function () use ($source, $data) {
+        return DB::transaction(function () use ($source, $overrides) {
             $permissionSlugs = $source->permissions()
                 ->whereNotIn('permissions.slug', self::RETIRED_PERMISSION_SLUGS)
                 ->pluck('permissions.slug')
                 ->all();
             $this->assertPermissionAuthority($permissionSlugs);
 
+            $name = $overrides['name'] ?? ($source->name.' (Copy)');
+            $slug = $overrides['slug'] ?? $this->uniqueSlug($source->slug.'_copy');
+            $description = array_key_exists('description', $overrides)
+                ? $overrides['description']
+                : $source->description;
+
             $clone = Role::create([
-                'name' => $data['name'],
-                'slug' => $data['slug'],
-                'description' => $data['description'] ?? "Cloned from {$source->name}",
+                'name' => $name,
+                'slug' => $slug,
+                'description' => $description,
                 'is_system' => false,
             ]);
 
@@ -299,6 +308,18 @@ class RoleService
 
             return $clone->load('permissions');
         });
+    }
+
+    private function uniqueSlug(string $candidate): string
+    {
+        $slug = $candidate;
+        $suffix = 2;
+
+        while (Role::query()->where('slug', $slug)->exists()) {
+            $slug = $candidate.'_'.$suffix++;
+        }
+
+        return $slug;
     }
 
     /**

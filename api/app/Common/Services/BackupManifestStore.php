@@ -12,7 +12,60 @@ use Symfony\Component\Process\Process;
 class BackupManifestStore
 {
     private const DATABASE_PATTERN = '/\Aogami-[A-Za-z0-9][A-Za-z0-9._-]*\.sql\.gz\z/D';
+
     private const FILES_PATTERN = '/\Aogami-files-[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz\z/D';
+
+    /** @param array<string, mixed> $operation */
+    public function createRecoveryOperation(array $operation): void
+    {
+        $this->withRecoveryOperationLock(function () use ($operation): void {
+            $current = $this->readRecoveryOperation();
+            $metadata = is_array($current['metadata'] ?? null) ? $current['metadata'] : [];
+            $hasRollback = is_array($metadata['pre_restore_artifacts']['database'] ?? null);
+            if (in_array($current['status'] ?? null, ['queued', 'running'], true)
+                || (($current['status'] ?? null) === 'rollback_required' && $hasRollback)) {
+                throw new RuntimeException('A recovery restore is already active or requires rollback.');
+            }
+
+            $this->writeRecoveryOperation($operation);
+        });
+    }
+
+    /** @return array<string, mixed>|null */
+    public function recoveryOperation(string $id): ?array
+    {
+        if (preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i', $id) !== 1) {
+            return null;
+        }
+
+        $operation = $this->readRecoveryOperation();
+
+        return ($operation['id'] ?? null) === $id ? $operation : null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function activeRecoveryOperation(): ?array
+    {
+        $operation = $this->readRecoveryOperation();
+
+        return in_array($operation['status'] ?? null, ['queued', 'running', 'rollback_required'], true)
+            ? $operation
+            : null;
+    }
+
+    /** @param array<string, mixed> $changes */
+    public function updateRecoveryOperation(string $id, array $changes): void
+    {
+        $this->withRecoveryOperationLock(function () use ($id, $changes): void {
+            $operation = $this->recoveryOperation($id);
+            if ($operation === null) {
+                throw new RuntimeException('Recovery operation was not found.');
+            }
+
+            $operation = array_merge($operation, $changes, ['updated_at' => now()->toIso8601String()]);
+            $this->writeRecoveryOperation($operation);
+        });
+    }
 
     /** @return array<string, mixed> */
     public function publish(
@@ -193,6 +246,7 @@ class BackupManifestStore
         }
 
         $files = $manifest['artifacts']['files'] ?? null;
+
         return $files === null || (
             is_array($files)
             && is_string($files['name'] ?? null)
@@ -214,6 +268,55 @@ class BackupManifestStore
     private function manifestPath(string $databaseFilename): string
     {
         return $this->directory().DIRECTORY_SEPARATOR.$databaseFilename.'.manifest.json';
+    }
+
+    /** @return array<string, mixed> */
+    private function readRecoveryOperation(): array
+    {
+        $contents = @file_get_contents($this->directory().DIRECTORY_SEPARATOR.'recovery-operation.json');
+        $operation = is_string($contents) ? json_decode($contents, true) : null;
+
+        return is_array($operation) ? $operation : [];
+    }
+
+    /** @param array<string, mixed> $operation */
+    private function writeRecoveryOperation(array $operation): void
+    {
+        $directory = $this->directory();
+        if (! is_dir($directory) && ! @mkdir($directory, 0770, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Could not prepare the recovery operation store.');
+        }
+
+        $path = $directory.DIRECTORY_SEPARATOR.'recovery-operation.json';
+        $temporary = $path.'.'.Str::uuid().'.tmp';
+        $json = json_encode($operation, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+        if (@file_put_contents($temporary, $json, LOCK_EX) !== strlen($json)
+            || ! @chmod($temporary, 0600)
+            || ! @rename($temporary, $path)) {
+            @unlink($temporary);
+            throw new RuntimeException('Could not persist the recovery operation.');
+        }
+        @chmod($path, 0600);
+    }
+
+    private function withRecoveryOperationLock(callable $callback): void
+    {
+        $directory = $this->directory();
+        if (! is_dir($directory) && ! @mkdir($directory, 0770, true) && ! is_dir($directory)) {
+            throw new RuntimeException('Could not prepare the recovery operation store.');
+        }
+        $lock = @fopen($directory.DIRECTORY_SEPARATOR.'.recovery-operation.lock', 'c');
+        if (! is_resource($lock) || ! flock($lock, LOCK_EX)) {
+            throw new RuntimeException('Could not lock the recovery operation store.');
+        }
+        @chmod($directory.DIRECTORY_SEPARATOR.'.recovery-operation.lock', 0600);
+
+        try {
+            $callback();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     private function directory(): string
