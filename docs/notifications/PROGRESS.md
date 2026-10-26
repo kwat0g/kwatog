@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved. Open work includes central Laravel dispatch (#370), badge parity (#367, #369, #374, #381), restricted budget queue access (#377), budget recipient/deep-link changes (#375–#376), notification row anchors (#378), missing event metadata (#379), late supplier notice scope (#380), and scoped notification changes (#362–#365). API CI remains blocked by inherited F-22/PHPStan failures. SPA CI is blocked at the dependency audit (`@vitest/mocker`, `undici`, and `zod`); local typecheck also reports unrelated export, icon, stock-transfer, and purchase-order errors. PR #373 reaches a second duplicate declaration in `RoleService::clone()`; PR #371 contains that cleanup and an orphaned `RecommendationService` block but currently fails PHPStan. Sensitive recipient ownership rules remain open.
+**Current gate:** Phase 2 approved. Draft PR [#384](https://github.com/kwat0g/kwatog/pull/384) adds the CRM inquiry triage badge. Other open units cover central Laravel dispatch, badge parity, notification anchors and catalogs, and scoped recipient fixes. Backend CI has inherited F-22/PHPStan failures; SPA CI hits existing dependency advisories. Sensitive recipient ownership rules remain open.
 
 ## Phase status
 
@@ -26,7 +26,8 @@
 | F-08. Notification row anchors | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | `8eeec6fa` |
 | F-06. Late supply, incoming quality, and rework metadata | `notifications/catalog-late-supply-rework-events` | [#379](https://github.com/kwat0g/kwatog/pull/379) | `b07a8a31` |
 | F-28. Late supplier notice audience | `notifications/fix-late-supplier-notice-audience` | [#380](https://github.com/kwat0g/kwatog/pull/380) | `78d4d6e9` |
-| F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | `4aa553ec`, `3da4952c`, `2f3a48e1` |
+| F-13. AP multi-signal sidebar | `notifications/multi-signal-ap-badges` | [#381](https://github.com/kwat0g/kwatog/pull/381) | `4aa553ec`, `3da4952c`, `2f3a48e1`, `8b2b0629` |
+| F-05/F-09. CRM inquiry triage badge | `notifications/triage-inquiry-badge` | [#384](https://github.com/kwat0g/kwatog/pull/384) | `f71c1125` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -242,7 +243,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - `npm run typecheck` reports only existing errors in export helpers, missing `lucide-react`, stock-transfer API exports, and duplicate purchase-order props; none names a changed file. Pint `--test` reports style issues in all four touched PHP files; no broad formatting was applied. Browser visual QA and full-suite checks remain outstanding. Multi-signal coverage for other modules remains open.
 - PR #381 API CI stops before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration). SPA CI stops at dependency audit on existing advisories for `@vitest/mocker`, `undici`, and `zod`; accessibility and visual-baseline checks pass. No changed-file CI failure is reported.
 
-## Separate signal fix: CRM inquiry triage badge
+## Separate signal fix: CRM inquiry triage badge (draft PR [#384](https://github.com/kwat0g/kwatog/pull/384))
 
 - The existing `inquiries` counter included both `new` and `in_progress` records, though only `new` means nobody has started handling the inquiry. It now counts `ContactInquiryStatus::New` and uses the same `scopeAwaitingTriage()` as `/crm/inquiries?status=new`.
 - The sidebar badge opens that status filter. Badge counts require `crm.inquiries.manage`; the destination also requires `crm.inquiries.view`. Read-only users can open the list but receive a zero actionable count.
