@@ -1,7 +1,7 @@
 <x-mail::message :preheader="$preheader" :title="'Reset your '.$portalType.' portal password'">
 # Reset your {{ $portalType }} portal password
 
-Hello {{ $recipientName }},
+Hello {{ $safeRecipientName }},
 
 We received a request to reset the password for your {{ $brand['name'] }} {{ $portalType }} portal account.
 
