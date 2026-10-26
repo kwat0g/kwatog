@@ -43,6 +43,7 @@
 | F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | pending |
 | F-12. Chain channel route authorization | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | pending |
 | F-12. Payroll progress channel route authorization | `notifications/scope-payroll-progress-channel` | [#400](https://github.com/kwat0g/kwatog/pull/400) | pending |
+| F-12. Operational channel route authorization | `notifications/scope-operational-channels` | [#401](https://github.com/kwat0g/kwatog/pull/401) | pending |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
 | F-16. Approval outcome access gates | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `c8115e8f`, `6f528ba5` |
 | F-03. Purchase-request badge/list scope | `notifications/fix-purchase-request-badge-scope` | [#348](https://github.com/kwat0g/kwatog/pull/348) | `6c25d82c` |
@@ -389,6 +390,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `payroll.period.{hashId}` now requires the Payroll feature flag, `payroll.periods.view`, a decodable period hash, and an existing period. This matches `GET /payroll-periods/{period}`. No role audience or progress payload fields changed; the headcount/metadata policy remains open for HR/Finance review.
 - `BroadcastAuthorizationTest.php`: **12 passed / 36 assertions**, covering supported channels, correct and denied read permissions, disabled module, and missing record. PHP syntax, targeted Pint, and `git diff --check` pass.
 - PR #400 API CI inherits the F-22 duplicate `PdfRenderService::ensureDompdfDirs()` blocker. No unauthorized payroll subscription was reproduced.
+
+## Separate finding fix: F-12 operational channel route authorization (draft PR #401)
+
+- Production dashboard subscriptions now require `modules.production`, `production.view`, and `production.dashboard.view`. Work Order subscriptions require both detail-route permissions plus a live Work Order; machine subscriptions require `modules.mrp`, `mrp.machines.view`, and a live machine. The maintenance dashboard requires `modules.maintenance` and `maintenance.view`.
+- Source event review confirms these channels carry only `{refresh: true}`; no event timing or payload changed. `BroadcastAuthorizationTest.php`: **16 passed / 48 assertions**, covering route permission mismatches, module disablement, missing records, and the inherited chain/payroll cases. PHP syntax, targeted Pint, and `git diff --check` pass.
+- PR #401 API CI inherits F-22. Existing dashboard private channels remain area-wide by design and carry no record content.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

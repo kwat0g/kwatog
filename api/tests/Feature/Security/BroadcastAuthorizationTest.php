@@ -12,6 +12,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -41,7 +42,7 @@ class BroadcastAuthorizationTest extends TestCase
         ]);
         app(BroadcastManager::class)->forgetDrivers();
         $this->seed(RolePermissionSeeder::class);
-        foreach (['accounting', 'crm', 'inventory', 'payroll', 'production', 'purchasing', 'supply_chain'] as $feature) {
+        foreach (['accounting', 'crm', 'inventory', 'maintenance', 'mrp', 'payroll', 'production', 'purchasing', 'supply_chain'] as $feature) {
             app(SettingsService::class)->set("modules.{$feature}", true, 'modules');
         }
         require base_path('routes/channels.php');
@@ -222,6 +223,57 @@ class BroadcastAuthorizationTest extends TestCase
         app(SettingsService::class)->set('modules.payroll', true, 'modules');
         $missingHash = app('hashids')->encode(999999999);
         $this->authorizeChannel($user, "private-payroll.period.{$missingHash}")->assertForbidden();
+    }
+
+    public function test_production_dashboard_channel_matches_dashboard_route_access(): void
+    {
+        $user = $this->userWithPermissions('production.view', 'production.dashboard.view');
+        $dashboardPermissionOnly = $this->userWithPermissions('production.dashboard.view');
+
+        $this->authorizeChannel($user, 'private-production.dashboard')->assertOk();
+        $this->authorizeChannel($dashboardPermissionOnly, 'private-production.dashboard')->assertForbidden();
+
+        app(SettingsService::class)->set('modules.production', false, 'modules');
+        $this->authorizeChannel($user, 'private-production.dashboard')->assertForbidden();
+    }
+
+    public function test_production_work_order_channel_matches_detail_route_and_record(): void
+    {
+        $user = $this->userWithPermissions('production.view', 'production.work_orders.view');
+        $workOrderOnly = $this->userWithPermissions('production.work_orders.view');
+        $workOrder = WorkOrder::factory()->create();
+
+        $this->authorizeChannel($user, "private-production.wo.{$workOrder->hash_id}")->assertOk();
+        $this->authorizeChannel($workOrderOnly, "private-production.wo.{$workOrder->hash_id}")->assertForbidden();
+
+        $missingHash = app('hashids')->encode(999999999);
+        $this->authorizeChannel($user, "private-production.wo.{$missingHash}")->assertForbidden();
+    }
+
+    public function test_production_machine_channel_matches_machine_detail_route(): void
+    {
+        $user = $this->userWithPermissions('mrp.machines.view');
+        $machine = Machine::factory()->create();
+
+        $this->authorizeChannel($user, "private-production.machine.{$machine->hash_id}")->assertOk();
+
+        app(SettingsService::class)->set('modules.mrp', false, 'modules');
+        $this->authorizeChannel($user, "private-production.machine.{$machine->hash_id}")->assertForbidden();
+
+        app(SettingsService::class)->set('modules.mrp', true, 'modules');
+        $missingHash = app('hashids')->encode(999999999);
+        $this->authorizeChannel($user, "private-production.machine.{$missingHash}")->assertForbidden();
+    }
+
+    public function test_maintenance_dashboard_channel_requires_enabled_module_and_read_permission(): void
+    {
+        $user = $this->userWithPermissions('maintenance.view');
+
+        $this->authorizeChannel($user, 'private-maintenance.dashboard')->assertOk();
+        $this->authorizeChannel($this->userWithPermissions(), 'private-maintenance.dashboard')->assertForbidden();
+
+        app(SettingsService::class)->set('modules.maintenance', false, 'modules');
+        $this->authorizeChannel($user, 'private-maintenance.dashboard')->assertForbidden();
     }
 
     private function userWithPermissions(string ...$permissions): User

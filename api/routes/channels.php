@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -29,14 +30,32 @@ use Illuminate\Support\Facades\Broadcast;
  * Sprint 6 channels (production), Sprint 8 channels (payroll, inventory,
  * maintenance, user notifications).
  */
-Broadcast::channel('production.dashboard', fn (User $user): bool => $user->hasPermission('production.dashboard.view')
+Broadcast::channel('production.dashboard', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.production')
+    && $user->hasPermission('production.view')
+    && $user->hasPermission('production.dashboard.view')
 );
 
-Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('production.work_orders.view')
-);
+Broadcast::channel('production.wo.{hashId}', function (User $user, string $hashId): bool {
+    if (! app(SettingsService::class)->requiredBool('modules.production')
+        || ! $user->hasPermission('production.view')
+        || ! $user->hasPermission('production.work_orders.view')) {
+        return false;
+    }
 
-Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('mrp.machines.view')
-);
+    $id = WorkOrder::tryDecodeHash($hashId);
+
+    return $id !== null && WorkOrder::query()->whereKey($id)->exists();
+});
+
+Broadcast::channel('production.machine.{hashId}', function (User $user, string $hashId): bool {
+    if (! app(SettingsService::class)->requiredBool('modules.mrp') || ! $user->hasPermission('mrp.machines.view')) {
+        return false;
+    }
+
+    $id = Machine::tryDecodeHash($hashId);
+
+    return $id !== null && Machine::query()->whereKey($id)->exists();
+});
 
 /* Sprint 8 — Task 78. New channels. */
 
@@ -52,7 +71,8 @@ Broadcast::channel('payroll.period.{hashId}', function (User $user, string $hash
 });
 
 // Maintenance dashboard — open WO updates push live
-Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasPermission('maintenance.view')
+Broadcast::channel('maintenance.dashboard', fn (User $user): bool => app(SettingsService::class)->requiredBool('modules.maintenance')
+    && $user->hasPermission('maintenance.view')
 );
 
 // Per-user notifications channel — backs the SPA bell + toast updates.
