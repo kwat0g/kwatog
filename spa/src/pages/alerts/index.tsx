@@ -64,6 +64,10 @@ export default function AlertsListPage() {
  queryFn: () => alertsApi.options(),
  staleTime: 5 * 60 * 1000,
  });
+ const { data: unreadCount } = useQuery({
+  queryKey: ['alerts', 'unread-count'],
+  queryFn: () => alertsApi.unreadCount(),
+ });
  const severities = options?.severities ?? [];
  const typeLabels = new Map((options?.types ?? []).map((type) => [type.value, type.label]));
 
@@ -94,6 +98,14 @@ export default function AlertsListPage() {
  });
  };
 
+ const showUnreadOnly = filters.is_read !== false;
+ const toggleUnread = () => setFilters((current) => ({
+  page: 1,
+  per_page: current.per_page ?? 50,
+  is_dismissed: false,
+  ...(showUnreadOnly ? { is_read: false } : {}),
+ }));
+
  const groups = (data?.data ?? []).reduce<Record<AlertSeverity, Alert[]>>(
  (acc, a) => {
  (acc[a.severity] ||= []).push(a);
@@ -103,12 +115,13 @@ export default function AlertsListPage() {
  );
 
  const total = data?.meta.total ?? 0;
+ const listLabel = filters.is_dismissed ? 'dismissed' : filters.is_read === false ? 'unread' : 'active';
 
  return (
  <div>
  <PageHeader
  title="Alerts"
- subtitle={data ? `${total} ${filters.is_dismissed ? 'dismissed' : 'active'} ${total === 1 ? 'alert' : 'alerts'}` : undefined}
+ subtitle={data ? `${total} ${listLabel} ${total === 1 ? 'alert' : 'alerts'}` : undefined}
  />
 
  <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
@@ -121,12 +134,17 @@ export default function AlertsListPage() {
  );
  })}
  <span className="text-2xs text-text-subtle ml-2">
- Showing {filters.is_dismissed ? 'dismissed' : 'active'} alerts
+ Showing {listLabel} alerts
  </span>
+ <LinkButton tone="muted" onClick={toggleUnread} className="ml-auto text-xs">
+  {showUnreadOnly
+   ? `Show shared unread alerts${unreadCount ? ` (${unreadCount.count})` : ''}`
+   : 'Show all active alerts'}
+ </LinkButton>
  <LinkButton
  tone="muted"
  onClick={() => setFilters((f) => ({ ...f, is_dismissed: !f.is_dismissed, page: 1 }))}
- className="ml-auto text-xs"
+ className="text-xs"
  >
  {filters.is_dismissed ? 'Show active' : 'Show dismissed'}
  </LinkButton>
@@ -145,10 +163,12 @@ export default function AlertsListPage() {
  {data && data.data.length === 0 && (
  <EmptyState
  icon="alert-circle"
- title={filters.is_dismissed ? 'No dismissed alerts' : 'No active alerts'}
+ title={filters.is_dismissed ? 'No dismissed alerts' : filters.is_read === false ? 'No unread alerts' : 'No active alerts'}
  description={
  filters.is_dismissed
  ? 'Dismissed alerts appear here for audit reference.'
+ : filters.is_read === false
+ ? 'All active alerts have been marked read.'
  : 'The system is healthy. Alerts will appear here when thresholds are crossed.'
  }
  />

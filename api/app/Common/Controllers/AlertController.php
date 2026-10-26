@@ -39,13 +39,16 @@ class AlertController
             // controller explicit so a future rule change cannot silently
             // turn malformed values into the unresolved view.
             abort_if($val === null, 422, 'The is_dismissed filter must be boolean.');
-            $query->where('is_dismissed', $val);
-            if (! $val) {
-                $query->whereNull('resolved_at');
+            if ($val) {
+                $query->where('is_dismissed', true);
+            } else {
+                $query->active();
             }
         } else {
-            // Default: unresolved only
-            $query->whereNull('resolved_at')->where('is_dismissed', false);
+            $query->active();
+        }
+        if (array_key_exists('is_read', $filters)) {
+            $query->where('is_read', $filters['is_read']);
         }
         if (! empty($filters['search'])) {
             $s = $filters['search'];
@@ -91,8 +94,7 @@ class AlertController
     public function unreadCount(): JsonResponse
     {
         abort_unless(auth()->user()?->can('alerts.view'), 403);
-        $count = Alert::whereNull('resolved_at')
-            ->where('is_dismissed', false)
+        $count = Alert::active()
             ->where('is_read', false)
             ->count();
 
