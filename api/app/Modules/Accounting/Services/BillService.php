@@ -1070,7 +1070,7 @@ class BillService
         app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 
         $requester = User::query()->whereKey($payment->created_by)->where('is_active', true)->first();
-        if ($requester && $requester->hasPermission('accounting.bills.view')) {
+        if ($requester && (int) $requester->id !== (int) $by->id && $requester->hasPermission('accounting.bills.view')) {
             app(NotificationService::class)->send($requester, 'bill_payment.posted', [
                 'title' => 'Bill payment posted',
                 'message' => "Payment for bill {$bill->bill_number} was posted to the ledger.",

@@ -126,7 +126,7 @@ class BillServiceTest extends TestCase
         ], $user);
 
         $this->assertSame(BillPaymentStatus::Posted, $payment->status);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $user->id,
             'type' => 'bill_payment.posted',
         ]);
@@ -309,6 +309,40 @@ class BillServiceTest extends TestCase
             'type' => 'bill_payment.posted',
         ]);
         $this->assertSame(BillPaymentStatus::Rejected, $payment->fresh()->status);
+    }
+
+    public function test_posted_bill_payment_notifies_requester_when_a_different_user_posts_it(): void
+    {
+        Mail::fake();
+        Queue::fake();
+        $finance = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
+        $vendor = Vendor::create(['name' => 'Separate Poster Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-SEPARATE-POSTER', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '50000.00']],
+        ], $finance);
+        $payment = $service->recordPayment($bill, [
+            'cash_account_id' => $cashId, 'payment_date' => '2026-04-12',
+            'amount' => '30000.00', 'payment_method' => PaymentMethod::BankTransfer->value,
+        ], $finance);
+        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
+
+        $service->approvePayment($bill->fresh(), $payment, $vp);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $finance->id,
+            'type' => 'bill_payment.posted',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $vp->id,
+            'type' => 'bill_payment.posted',
+        ]);
     }
 
     public function test_payment_date_before_bill_date_is_rejected(): void
