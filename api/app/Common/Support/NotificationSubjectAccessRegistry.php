@@ -51,7 +51,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, NonConformanceReport::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnRequest::class, SalesOrder::class, StockAdjustment::class, SupplierItemListing::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -84,6 +84,7 @@ final class NotificationSubjectAccessRegistry
                 && $subject instanceof ReturnRequest
                 && ! (ReturnManagementAccess::customerReturnsOnly($user) && $subject->type === ReturnRequestType::SupplierReturn),
             EmployeeTraining::class => self::userCanViewEmployeeTraining($user, $subject),
+            Employee::class => self::userCanViewEmployee($user, $subject),
             Clearance::class => app(SettingsService::class)->get('modules.hr', false) === true
                 && $user->is_active
                 && $user->hasPermission('hr.separation.view')
@@ -197,6 +198,26 @@ final class NotificationSubjectAccessRegistry
             && EmployeeCompetenceScope::employees(Employee::query(), $user)
                 ->whereKey($subject->employee_id)
                 ->exists();
+    }
+
+    private static function userCanViewEmployee(User $user, Model $subject): bool
+    {
+        if (app(SettingsService::class)->get('modules.hr', false) !== true
+            || ! $user->is_active
+            || ! $user->hasPermission('hr.employees.view')
+            || ! $subject instanceof Employee) {
+            return false;
+        }
+
+        return DepartmentScope::apply(
+            Employee::query()->whereKey($subject->getKey()),
+            $user,
+            viewAllPermission: 'hr.employees.view_sensitive',
+            departmentPermission: 'hr.employees.view',
+            deptColumn: 'department_id',
+            selfColumn: 'id',
+            selfId: $user->employee_id,
+        )->exists();
     }
 
     private static function budgetingEnabled(): bool

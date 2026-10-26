@@ -8,6 +8,7 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ActivityFeedService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\NotificationSubjectAccessRegistry;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeOnboarding;
@@ -199,7 +200,17 @@ class OnboardingService
                         return false;
                     }
 
-                    $audience = $this->reminderAudience();
+                    $employee = $onboarding->employee;
+                    if ($employee === null) {
+                        Log::warning('Onboarding reminder skipped because the employee row is unavailable.', [
+                            'onboarding_id' => $onboarding->id,
+                            'employee_id' => $onboarding->employee_id,
+                        ]);
+
+                        return false;
+                    }
+
+                    $audience = $this->reminderAudience($employee);
                     if ($audience->isEmpty()) {
                         // Leave reminder_sent_at null so an operator can add an
                         // HR recipient and the next run retries this row.
@@ -207,28 +218,26 @@ class OnboardingService
                             'onboarding_id' => $onboarding->id,
                             'employee_id' => $onboarding->employee_id,
                         ]);
+
                         return false;
                     }
 
-                    $employee = $onboarding->employee;
                     $notification = [
                         'title' => 'Onboarding incomplete',
                         'message' => sprintf(
                             'Employee %s onboarding has been open for more than %d days.',
-                            $employee?->full_name ?? '#'.$onboarding->employee_id,
+                            $employee->full_name,
                             $staleDays,
                         ),
                         'entity_type' => 'employee',
-                        'entity_id' => $employee?->hash_id,
+                        'entity_id' => $employee->hash_id,
                     ];
-                    if ($employee !== null) {
-                        $notification['link_to'] = "/hr/employees/{$employee->hash_id}";
-                    }
+                    $notification['link_to'] = "/hr/employees/{$employee->hash_id}";
 
                     // NotificationService inserts the in-app row in this same
                     // transaction. Any delivery/database exception therefore
                     // rolls back both the notification and the sent marker.
-                    $this->notifications->sendInApp($audience, 'hr.onboarding.stale', $notification);
+                    $this->notifications->sendForSubject($employee, $audience, 'hr.onboarding.stale', $notification, emailEnabled: false);
                     $onboarding->update(['reminder_sent_at' => now()]);
 
                     return true;
@@ -249,7 +258,7 @@ class OnboardingService
     }
 
     /** @return Collection<int, User> */
-    private function reminderAudience(): Collection
+    private function reminderAudience(Employee $employee): Collection
     {
         $roles = array_values(array_unique(array_filter(
             (array) $this->settings->get('hr.onboarding.notification_roles', ['hr_officer']),
@@ -264,7 +273,9 @@ class OnboardingService
         return User::query()
             ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->filter(fn (User $user): bool => NotificationSubjectAccessRegistry::userCanViewRecord($user, $employee))
+            ->values();
     }
 
     private function lockedTracker(Employee $employee): EmployeeOnboarding

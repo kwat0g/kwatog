@@ -6,6 +6,7 @@ namespace Tests\Feature\HR;
 
 use App\Common\Models\ActivityEvent;
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -170,7 +171,10 @@ class OnboardingTest extends TestCase
             ->where('notifiable_id', $hr->id)
             ->first();
         $this->assertNotNull($notification);
-        $this->assertSame("/hr/employees/{$emp->hash_id}", json_decode($notification->data, true)['link_to']);
+        $noticeData = json_decode($notification->data, true);
+        $this->assertSame("/hr/employees/{$emp->hash_id}", $noticeData['link_to']);
+        $this->assertSame(Employee::class, $noticeData['subject_type']);
+        $this->assertSame((string) $emp->id, $noticeData['subject_id']);
 
         $this->assertSame(0, $ob->sendRemindersForStaleOnboardings());
         $this->assertSame(1, DB::table('notifications')->where('type', 'hr.onboarding.stale')->count());
@@ -272,6 +276,40 @@ class OnboardingTest extends TestCase
         $this->assertNull(EmployeeOnboarding::query()->where('employee_id', $emp->id)->value('reminder_sent_at'));
     }
 
+    public function test_stale_reminders_follow_department_employee_access_scope(): void
+    {
+        app(SettingsService::class)->set('hr.onboarding.notification_roles', ['department_head']);
+        $emp = app(EmployeeService::class)->create($this->basePayload());
+        $sameDepartmentEmployee = Employee::factory()->create(['department_id' => $emp->department_id]);
+        $otherDepartmentEmployee = Employee::factory()->create();
+        $inScope = $this->userForRole('department_head', $sameDepartmentEmployee->id);
+        $outOfScope = $this->userForRole('department_head', $otherDepartmentEmployee->id);
+        EmployeeOnboarding::query()->where('employee_id', $emp->id)->update(['created_at' => now()->subDays(4)]);
+
+        $count = app(OnboardingService::class)->sendRemindersForStaleOnboardings();
+
+        $this->assertSame(1, $count);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $inScope->id, 'type' => 'hr.onboarding.stale']);
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outOfScope->id, 'type' => 'hr.onboarding.stale']);
+        $this->actingAs($inScope)->getJson('/api/v1/hr/employees/'.$emp->hash_id)->assertOk();
+        $this->actingAs($outOfScope)->getJson('/api/v1/hr/employees/'.$emp->hash_id)->assertNotFound();
+    }
+
+    public function test_stale_reminder_remains_retryable_when_configured_role_cannot_view_employee(): void
+    {
+        app(SettingsService::class)->set('hr.onboarding.notification_roles', ['department_head']);
+        $emp = app(EmployeeService::class)->create($this->basePayload());
+        $otherDepartmentEmployee = Employee::factory()->create();
+        $outOfScope = $this->userForRole('department_head', $otherDepartmentEmployee->id);
+        EmployeeOnboarding::query()->where('employee_id', $emp->id)->update(['created_at' => now()->subDays(4)]);
+
+        $count = app(OnboardingService::class)->sendRemindersForStaleOnboardings();
+
+        $this->assertSame(0, $count);
+        $this->assertNull(EmployeeOnboarding::query()->where('employee_id', $emp->id)->value('reminder_sent_at'));
+        $this->assertDatabaseMissing('notifications', ['notifiable_id' => $outOfScope->id, 'type' => 'hr.onboarding.stale']);
+    }
+
     public function test_notification_delivery_failure_leaves_row_retryable(): void
     {
         $emp = app(EmployeeService::class)->create($this->basePayload());
@@ -279,7 +317,7 @@ class OnboardingTest extends TestCase
         EmployeeOnboarding::query()->where('employee_id', $emp->id)->update(['created_at' => now()->subDays(4)]);
 
         $this->mock(NotificationService::class, function ($mock): void {
-            $mock->shouldReceive('sendInApp')->once()->andThrow(new \RuntimeException('notification insert failed'));
+            $mock->shouldReceive('sendForSubject')->once()->andThrow(new \RuntimeException('notification insert failed'));
         });
 
         $count = app(OnboardingService::class)->sendRemindersForStaleOnboardings();
