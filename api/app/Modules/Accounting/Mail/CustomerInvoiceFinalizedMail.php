@@ -115,6 +115,7 @@ class CustomerInvoiceFinalizedMail extends QueuedMailable
                 'entity_id' => $this->snapshot['invoice_hash_id'],
                 'reason' => 'The customer email was unreachable or the email provider rejected the invoice message.',
             ],
+            $this->invoice,
         );
     }
 }

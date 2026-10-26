@@ -181,7 +181,7 @@ class InvoiceService
                 $audience = ApprovalDelegation::approvalAudience('accounting.invoices.prebill_approve')
                     ->filter(fn (User $approver): bool => $approver->hasPermission('accounting.invoices.view'))
                     ->reject(fn (User $approver): bool => (int) $approver->id === (int) $by->id);
-                app(NotificationService::class)->send($audience, 'approval.action_required', [
+                app(NotificationService::class)->sendForSubject($invoice, $audience, 'approval.action_required', [
                     'title' => 'Prebill invoice needs approval',
                     'message' => 'A manual invoice is waiting for prebill approval.',
                     'link_to' => "/accounting/invoices/{$invoice->hash_id}",
@@ -341,7 +341,7 @@ class InvoiceService
 
             $requester = User::query()->whereKey($lockedInvoice->created_by)->where('is_active', true)->first();
             if ($requester && $requester->hasPermission('accounting.invoices.view')) {
-                app(NotificationService::class)->send($requester, 'approval.completed', [
+                app(NotificationService::class)->sendForSubject($lockedInvoice, $requester, 'approval.completed', [
                     'title' => 'Prebill invoice approved',
                     'message' => 'Your manual invoice was approved for prebilling.',
                     'link_to' => "/accounting/invoices/{$lockedInvoice->hash_id}",

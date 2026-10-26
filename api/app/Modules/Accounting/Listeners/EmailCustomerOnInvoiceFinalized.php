@@ -45,6 +45,7 @@ class EmailCustomerOnInvoiceFinalized implements ShouldQueue
                 $feature,
                 "Invoice {$invoice->invoice_number} was finalized, but the customer has no usable email address. Review the invoice and contact the customer through an approved channel.",
                 $context,
+                $invoice,
             );
 
             return;
@@ -62,6 +63,7 @@ class EmailCustomerOnInvoiceFinalized implements ShouldQueue
                 $feature,
                 "The finalized invoice {$invoice->invoice_number} could not be accepted by the email provider. Contact the customer through an approved channel.",
                 $context,
+                $invoice,
             );
             Log::warning('Customer invoice email enqueue failed', [
                 'invoice_id' => $invoice->id,

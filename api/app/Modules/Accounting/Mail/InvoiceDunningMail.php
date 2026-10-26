@@ -84,6 +84,7 @@ class InvoiceDunningMail extends QueuedMailable
                 'entity_id' => $this->snapshot['hash_id'],
                 'reason' => 'The email provider rejected or could not deliver the reminder.',
             ],
+            $this->invoice,
         );
     }
 
