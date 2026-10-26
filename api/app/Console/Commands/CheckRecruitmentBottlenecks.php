@@ -14,6 +14,7 @@ use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Support\RecruitmentNotificationRecipients;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -129,7 +130,7 @@ class CheckRecruitmentBottlenecks extends Command
                     }
 
                     $dedupeKey = 'application:'.$application->id.':'.$stage.':'.sha1($reason);
-                    if ($this->raise($recipients, $notifications, $dedupeKey, 'job_application', $application->hash_id, 'Recruitment bottleneck', $application->full_name.' — '.$reason, '/hr/recruitment/applications/'.$application->hash_id, $dedupHours)) {
+                    if ($this->raise($recipients, $notifications, $application, $dedupeKey, 'job_application', $application->hash_id, 'Recruitment bottleneck', $application->full_name.' — '.$reason, '/hr/recruitment/applications/'.$application->hash_id, $dedupHours)) {
                         $count++;
                     }
                 }
@@ -150,7 +151,7 @@ class CheckRecruitmentBottlenecks extends Command
             ->chunkById(100, function (Collection $postings) use (&$count, $recipients, $notifications, $dedupHours): void {
                 foreach ($postings as $posting) {
                     $dedupeKey = 'posting:'.$posting->id.':expired';
-                    if ($this->raise($recipients, $notifications, $dedupeKey, 'job_posting', $posting->hash_id, 'Recruitment posting expired', "The open posting {$posting->posting_number} — {$posting->title} has passed its closing date and should be closed or extended.", '/hr/recruitment/postings/'.$posting->hash_id, $dedupHours)) {
+                    if ($this->raise($recipients, $notifications, $posting, $dedupeKey, 'job_posting', $posting->hash_id, 'Recruitment posting expired', "The open posting {$posting->posting_number} — {$posting->title} has passed its closing date and should be closed or extended.", '/hr/recruitment/postings/'.$posting->hash_id, $dedupHours)) {
                         $count++;
                     }
                 }
@@ -162,6 +163,7 @@ class CheckRecruitmentBottlenecks extends Command
     private function raise(
         Collection $recipients,
         NotificationService $notifications,
+        Model $subject,
         string $dedupeKey,
         string $entityType,
         string $entityId,
@@ -179,14 +181,14 @@ class CheckRecruitmentBottlenecks extends Command
             return true;
         }
 
-        $notifications->sendInApp($recipients, 'recruitment.bottleneck', [
+        $notifications->sendForSubject($subject, $recipients, 'recruitment.bottleneck', [
             'title' => $title,
             'message' => $message,
             'link_to' => $linkTo,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'dedupe_key' => $dedupeKey,
-        ]);
+        ], $dedupeKey, emailEnabled: false);
 
         return true;
     }
