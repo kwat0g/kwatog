@@ -29,6 +29,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\InvoicePaymentSubmission;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
 use App\Modules\Admin\Listeners\RecordActivityFromEvent;
@@ -324,6 +325,7 @@ class AppServiceProvider extends ServiceProvider
             MrpPlan::class,
             ReturnRequest::class,
             Invoice::class,
+            InvoicePaymentSubmission::class,
             Bill::class,
             Budget::class,
             BudgetTransfer::class,

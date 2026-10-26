@@ -108,6 +108,26 @@ class Invoice extends Model
         return $q->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]);
     }
 
+    public function scopeUnpaid(Builder $q): Builder
+    {
+        return $q->open()->where('balance', '>', 0);
+    }
+
+    public function scopeOverdue(Builder $q): Builder
+    {
+        return $q->unpaid()->whereDate('due_date', '<', today('Asia/Manila'));
+    }
+
+    public function scopeAwaitingPaymentReview(Builder $q): Builder
+    {
+        return $q->unpaid()->whereHas('paymentSubmissions', fn (Builder $submissions) => $submissions->where('status', 'pending'));
+    }
+
+    public function scopeDraftsOwnedBy(Builder $q, User $user): Builder
+    {
+        return $q->where('status', InvoiceStatus::Draft)->where('created_by', $user->id);
+    }
+
     public function isDraft(): bool { return $this->status === InvoiceStatus::Draft; }
 
     public function revisionToken(): string
