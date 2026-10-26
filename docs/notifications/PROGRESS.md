@@ -856,7 +856,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - `RfqBiddingTest.php`: **21 passed / 260 assertions**. The local run used and restored the temporary F-22 workaround; the source PDF service has no diff.
 - This test-only repair is separate from the notification code.
 
-## Phase 3 Price negotiation notice access and links
+## Phase 3 Price negotiation notice access and links (draft PR [#461](https://github.com/kwat0g/kwatog/pull/461))
 
 - Internal price negotiation notices now pass through the `PriceRequest` subject gate, which checks the CRM module, active recipient, route permission, and exact SPA list target. The internal and portal pricing pages filter to the referenced request; the internal page opens its details modal.
 - Internal and portal actors no longer receive their own lifecycle update. Portal notices remain scoped to active contacts for the record's customer, and the customer-scoped list query returns no row for another account.
