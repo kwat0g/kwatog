@@ -81,9 +81,11 @@ class BudgetTransferService
                 'reason' => $reason,
                 'requested_by' => $userId,
             ]);
-            $requester = User::query()->whereKey($userId)->first();
             $audience = ApprovalDelegation::approvalAudience('budgeting.approve')
-                ->filter(fn (User $user): bool => $requester === null || (int) $user->role_id !== (int) $requester->role_id);
+                ->filter(fn (User $user): bool => BudgetTransfer::query()
+                    ->whereKey($transfer->getKey())
+                    ->awaitingApprovalFor($user)
+                    ->exists());
             app(NotificationService::class)->send($audience, 'approval.action_required', [
                 'title' => "Budget transfer {$transfer->transfer_number} needs approval",
                 'message' => 'A budget transfer is waiting for review.',
