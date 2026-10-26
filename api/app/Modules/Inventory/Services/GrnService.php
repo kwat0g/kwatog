@@ -66,7 +66,9 @@ class GrnService
             ->with(['vendor:id,name', 'purchaseOrder:id,po_number', 'receiver:id,name,role_id']);
 
         if (! empty($filters['status'])) {
-            $q->where('status', $filters['status']);
+            $filters['status'] === GrnStatus::PendingQc->value
+                ? $q->pendingQc()
+                : $q->where('status', $filters['status']);
         }
         if (($filters['qc_handoff'] ?? null) === 'action_required') {
             $q->whereIn('incoming_qc_handoff_status', [

@@ -1129,6 +1129,8 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
       const target =
         item.badgeKey === 'purchase_requests' && (entry?.count ?? 0) > 0
           ? `${item.to}?signal=awaiting_my_approval`
+          : item.badgeKey === 'pending_grn' && (entry?.count ?? 0) > 0
+            ? `${item.to}?status=pending_qc`
           : item.to;
       return (
         <li key={item.to}>

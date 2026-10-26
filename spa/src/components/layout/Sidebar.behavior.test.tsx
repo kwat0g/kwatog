@@ -66,6 +66,28 @@ it('opens the awaiting-approval filter when purchase requests has a positive bad
   );
 });
 
+it('opens the pending-QC filter when GRN has a positive badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'pending_grn'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'Receiving (GRN)',
+          description: 'Goods receipts awaiting QC',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/inventory/grn']}>
+      <Sidebar roleSlug="warehouse_staff" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Goods Receipts \(GRN\)/ })).toHaveAttribute(
+    'href',
+    '/inventory/grn?status=pending_qc',
+  );
+});
+
 
 it('keeps the narrow-screen sidebar rail collapsed while restoring expand all separately', () => {
   vi.stubGlobal('innerWidth', 1024);

@@ -24,7 +24,6 @@ use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\EmployeeTraining;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
-use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
@@ -465,9 +464,7 @@ class BadgeService
                 'permissions' => ['inventory.view'],
                 'label'       => 'Receiving (GRN)',
                 'description' => 'Goods receipts awaiting QC',
-                'counter'     => fn (): int => GoodsReceiptNote::query()
-                    ->where('status', GrnStatus::PendingQc->value)
-                    ->count(),
+                'counter'     => fn (): int => GoodsReceiptNote::query()->pendingQc()->count(),
             ],
 
             // Warehouse > MRB / Quarantine — lots physically on hold.
