@@ -40,7 +40,7 @@
 - Direct Laravel `->notify()` / `Notification::send()` and central preference email paths inventoried in discovery; mail-only account/security and summary paths remain separate.
 - Internal sidebar routes: **73** in the Phase 0 baseline; current branch adds `/budgeting/transfers` (**74 current**); portal routes: **19**; compact-shell links: **9**.
 - Phase 2 approved **87** signal IDs; implementation splits the budget/transfer approval signal into two source-specific definitions (**88 current**) without changing the approved recipient rule. Baseline cross-reference covered 73 internal, 19 portal, and nine compact routes. The current `/budgeting/transfers` route is an implementation delta.
-- Badge definitions inventoried: **29**; AP unpaid and due-soon add two current signals (**31**); baseline wired to internal nav: **22**; current branch wires **25**, leaving **6** unattached.
+- Badge definitions inventoried: **29**; AP unpaid and due-soon add two current signals (**31**); baseline wired to internal nav: **22**; current branch wires **26**, leaving **5** unattached.
 - Local role slugs: **17**; existing role-access audit says **16**. Reconcile before role-complete claim.
 - Status/signal catalog: candidate data reviewed for all **23 modules**; exact enum classification, scope parity, and business approval remain outstanding.
 - Unit 1 code changes are limited to `NotificationService` envelope normalization, its unit and portal tests, the SPA notification data type, and schema/progress documentation. No database migration or existing-row rewrite is needed.
@@ -241,6 +241,13 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include the profile
 - API `BadgeControllerTest.php` targeted permission and parity cases: **4 passed / 89 assertions**. SPA `Sidebar.behavior.test.tsx`: **30 passed**. Targeted ESLint and `git diff --check` pass.
 - `npm run typecheck` reports only existing errors in export helpers, missing `lucide-react`, stock-transfer API exports, and duplicate purchase-order props; none names a changed file. Pint `--test` reports style issues in all four touched PHP files; no broad formatting was applied. Browser visual QA and full-suite checks remain outstanding. Multi-signal coverage for other modules remains open.
 - PR #381 API CI stops before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` redeclaration). SPA CI stops at dependency audit on existing advisories for `@vitest/mocker`, `undici`, and `zod`; accessibility and visual-baseline checks pass. No changed-file CI failure is reported.
+
+## Separate signal fix: CRM inquiry triage badge
+
+- The existing `inquiries` counter included both `new` and `in_progress` records, though only `new` means nobody has started handling the inquiry. It now counts `ContactInquiryStatus::New` and uses the same `scopeAwaitingTriage()` as `/crm/inquiries?status=new`.
+- The sidebar badge opens that status filter. Badge counts require `crm.inquiries.manage`; the destination also requires `crm.inquiries.view`. Read-only users can open the list but receive a zero actionable count.
+- `BadgeControllerTest::test_inquiry_badge_matches_new_inquiry_list_and_requires_manage_permission`: **1 passed / 10 assertions** in an isolated PostgreSQL test container. It covers the New/In Progress/Closed partition, count/list parity, and a view-only user. `Sidebar.behavior.test.tsx`: **31 passed**, including filtered click-through. Targeted ESLint, PHP syntax, and `git diff --check` pass.
+- The inquiry model is already registered with `BadgeInvalidationObserver`, so status changes invalidate cached counts and trigger the existing badge refresh event. Browser visual QA and full-suite verification remain outstanding.
 
 ## Separate finding fix: F-09 budget approval badge/list parity (draft PR [#374](https://github.com/kwat0g/kwatog/pull/374))
 

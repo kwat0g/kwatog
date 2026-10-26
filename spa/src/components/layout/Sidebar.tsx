@@ -128,6 +128,7 @@ function badgeDestination(path: string, key: string): string {
     pending_transfers: 'status=pending&actionable=1',
     pending_grn: 'status=pending_qc',
     pending_inspections: 'work_queue=to_inspect',
+    inquiries: 'status=new',
     open_complaints: 'signal=open',
     overdue_bills: 'overdue=1',
     unpaid_bills: 'signal=unpaid',
@@ -249,6 +250,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuInbox,
         feature: 'crm',
         permission: 'crm.inquiries.view',
+        badgeKey: 'inquiries',
       },
       {
         to: '/crm/sales-orders',

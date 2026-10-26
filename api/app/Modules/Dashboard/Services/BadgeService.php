@@ -26,7 +26,6 @@ use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
-use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Models\LeaveRequest;
@@ -445,12 +444,12 @@ class BadgeService
 
             // CRM > Inquiries — public contact-form submissions not yet triaged.
             'inquiries' => [
-                'permissions' => ['crm.inquiries.view'],
-                'label'       => 'Inquiries',
-                'description' => 'New contact-form inquiries',
-                'counter'     => fn (): int => ContactInquiry::query()
-                    ->whereIn('status', [ContactInquiryStatus::New->value, ContactInquiryStatus::InProgress->value])
-                    ->count(),
+                'permissions' => ['crm.inquiries.manage'],
+                'label'       => 'New inquiries',
+                'description' => 'New contact-form inquiries awaiting triage',
+                'counter'     => fn (): int => $user->hasPermission('crm.inquiries.view')
+                    ? ContactInquiry::query()->awaitingTriage()->count()
+                    : 0,
             ],
 
             // CRM > Complaints — open / investigating customer complaints.

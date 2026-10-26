@@ -80,6 +80,28 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
   );
 });
 
+it('opens only new inquiries from the actionable inquiry badge', () => {
+  badgeMock.getBadge.mockImplementation((key) =>
+    key === 'inquiries'
+      ? {
+          count: 2,
+          severity: 'warning',
+          label: 'New inquiries',
+          description: 'New contact-form inquiries awaiting triage',
+        }
+      : undefined,
+  );
+  render(
+    <MemoryRouter initialEntries={['/crm/inquiries']}>
+      <Sidebar roleSlug="customer_service_officer" />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: /Customer Inquiries/ })).toHaveAttribute(
+    'href',
+    '/crm/inquiries?status=new',
+  );
+});
+
 it('shows AP signals and sends the main link to the highest-severity queue', () => {
   badgeMock.getBadge.mockImplementation((key) => {
     if (key === 'overdue_bills') {

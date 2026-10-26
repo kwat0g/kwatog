@@ -26,6 +26,8 @@ use App\Modules\HR\Models\Training;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Landing\Enums\ContactInquiryStatus;
+use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -160,6 +162,56 @@ class BadgeControllerTest extends TestCase
             $this->assertIsString($sysResp[$key]['label']);
             $this->assertIsString($sysResp[$key]['description']);
         }
+    }
+
+    public function test_inquiry_badge_matches_new_inquiry_list_and_requires_manage_permission(): void
+    {
+        $manager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+        ]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::New]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::InProgress]);
+        ContactInquiry::factory()->create(['status' => ContactInquiryStatus::Closed]);
+
+        $triageList = $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk();
+        $managerBadges = $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $triageList->json('meta.total'));
+        $this->assertSame($triageList->json('meta.total'), $managerBadges['inquiries']['count']);
+
+        $viewer = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $actor = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $viewer->id,
+            'permission_id' => Permission::query()->where('slug', 'crm.inquiries.view')->value('id'),
+            'type' => PermissionOverrideType::Grant->value,
+            'granted_by' => $actor->id,
+            'reason' => 'Inquiry badge permission regression test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->assertTrue($viewer->fresh()->hasPermission('crm.inquiries.view'));
+        $this->assertFalse($viewer->fresh()->hasPermission('crm.inquiries.manage'));
+
+        $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/crm/inquiries?status=new')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+        $viewerBadges = $this->actingAs($viewer, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertArrayNotHasKey('inquiries', $viewerBadges);
     }
 
     public function test_widened_scope_badge_counts_track_recent_rows(): void
