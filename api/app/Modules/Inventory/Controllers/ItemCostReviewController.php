@@ -15,9 +15,11 @@ class ItemCostReviewController
 {
     public function __construct(private readonly ItemCostReviewService $service) {}
 
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return ItemCostReviewResource::collection($this->service->list());
+        $filters = $request->validate(['review' => ['nullable', 'string', 'max:64']]);
+
+        return ItemCostReviewResource::collection($this->service->list($filters['review'] ?? null));
     }
 
     public function decide(DecideItemCostReviewRequest $request, ItemCostReview $itemCostReview): ItemCostReviewResource

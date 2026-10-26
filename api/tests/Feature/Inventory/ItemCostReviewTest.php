@@ -13,6 +13,7 @@ use App\Modules\Inventory\Services\ItemCostReviewService;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -41,6 +42,8 @@ class ItemCostReviewTest extends TestCase
             'notifiable_id' => $financeReviewer->id,
             'type' => 'inventory.receipt_cost_changed',
         ]);
+        $costNotice = DB::table('notifications')->where('notifiable_id', $finance->id)->where('type', 'inventory.receipt_cost_changed')->firstOrFail();
+        $this->assertSame('/crm/price-agreements/cost-reviews?review='.$review->hash_id, json_decode($costNotice->data, true)['link_to']);
         $warehouse = User::factory()->create(['role_id' => Role::where('slug', 'warehouse_staff')->value('id')]);
         $this->actingAs($warehouse)->putJson('/api/v1/inventory/items/'.$item->hash_id, ['standard_cost' => '12.0000'])->assertForbidden();
         $this->actingAs($warehouse)->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Review'])->assertForbidden();
@@ -48,9 +51,15 @@ class ItemCostReviewTest extends TestCase
         $this->assertSame('12.0000', $item->fresh()->standard_cost);
         $this->assertDatabaseMissing('notifications', ['notifiable_id' => $finance->id, 'type' => 'approval.completed']);
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $financeReviewer->id, 'type' => 'approval.completed']);
+        $outcomeNotice = DB::table('notifications')->where('notifiable_id', $financeReviewer->id)->where('type', 'approval.completed')->firstOrFail();
+        $this->assertSame('/crm/price-agreements/cost-reviews?review='.$review->hash_id, json_decode($outcomeNotice->data, true)['link_to']);
         $this->postJson('/api/v1/inventory/cost-reviews/'.$review->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Repeat'])->assertOk();
         $staleLine = $grn->items()->create(['purchase_order_item_id' => $line->purchase_order_item_id, 'location_id' => $line->location_id, 'item_id' => $item->id, 'quantity_received' => '5', 'quantity_accepted' => '5', 'unit_cost' => '14.0000']);
         $staleReview = app(ItemCostReviewService::class)->capture($staleLine, '14.0000');
+        $this->actingAs($financeReviewer)->getJson('/api/v1/inventory/cost-reviews?review='.$review->hash_id)
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $review->hash_id);
         $staleLine->update(['unit_cost' => '15.0000']);
         $this->postJson('/api/v1/inventory/cost-reviews/'.$staleReview->hash_id.'/decide', ['version' => 1, 'decision' => 'approve', 'notes' => 'Review changed receipt'])->assertUnprocessable();
         $this->assertSame('12.0000', $item->fresh()->standard_cost);
