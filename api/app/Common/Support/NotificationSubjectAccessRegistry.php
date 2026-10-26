@@ -39,6 +39,7 @@ use App\Modules\Maintenance\Models\MaintenancePartRequest;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Support\MaintenanceWorkAccess;
 use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -66,7 +67,7 @@ final class NotificationSubjectAccessRegistry
 {
     public static function supports(string $class): bool
     {
-        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, PriceRequest::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
+        return in_array($class, [Invoice::class, Bill::class, Budget::class, BudgetTransfer::class, Clearance::class, Delivery::class, Employee::class, EmployeeTraining::class, GoodsReceiptNote::class, Inspection::class, Item::class, ItemCostReview::class, JobApplication::class, JobPosting::class, MaintenancePartRequest::class, MaintenanceWorkOrder::class, Machine::class, MrpRun::class, NonConformanceReport::class, Attendance::class, OvertimeRequest::class, Payroll::class, PayrollAdjustment::class, PayrollPeriod::class, ReturnCase::class, ReturnRequest::class, CustomerComplaint::class, PriceRequest::class, SalesOrder::class, StockAdjustment::class, StockCountItem::class, SupplierItemListing::class, RequestForQuote::class, Vendor::class, WorkOrder::class], true)
             || ApprovalTypeRegistry::forClass($class) !== null;
     }
 
@@ -159,6 +160,12 @@ final class NotificationSubjectAccessRegistry
                 && $subject instanceof MaintenancePartRequest,
             MaintenanceWorkOrder::class => self::userCanViewMaintenanceWorkOrder($user, $subject),
             Machine::class => self::userCanViewMachine($user, $subject, $linkTo),
+            MrpRun::class => app(SettingsService::class)->get('modules.mrp', false) === true
+                && $user->is_active
+                && $subject instanceof MrpRun
+                && $linkTo === '/mrp/plans?run='.$subject->hash_id
+                && $user->hasPermission('mrp.plans.view')
+                && $user->hasPermission('mrp.runs.view'),
             SupplierItemListing::class => app(SettingsService::class)->get('modules.purchasing', false) === true
                 && $user->hasPermission('purchasing.supplier_listings.view'),
             WorkOrder::class => self::userCanViewWorkOrder($user, $subject),

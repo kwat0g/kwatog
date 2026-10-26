@@ -868,6 +868,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - The test now uses seeded `system_admin`, which holds `crm.price_agreements.manage`, so the request reaches the immutable-agreement business rule instead of stopping at route authorization.
 - `PriceNegotiationLifecycleTest.php`: **7 passed / 57 assertions**. This changes only the test actor; route permission remains unchanged.
 
+## Phase 3 MRP run notice access and exact run links
+
+- MRP outcome notices now use the persisted `MrpRun` subject and `/mrp/plans?run={hash}` target. The run list applies that hash filter, and the MRP page shows the requested run in its status panel.
+- Recipients must be active and hold both `mrp.plans.view` and `mrp.runs.view`; configured daily roles use the same gate. Exclude the run trigger. The daily command's duplicate notice was removed; automation sends one deduplicated notification.
+- `MrpAutomationTest.php`: **13 passed / 53 assertions**; `MrpDailyCommandTest.php`: **2 passed / 4 assertions**. Covers allowed PPC, denied Sales/Warehouse, actor exclusion, revoked run permission, exact list filter, and duplicate-run dedupe. PHP syntax, Pint, ESLint, and `git diff --check` pass. No browser QA or full suite run.
+
 ## Resume instruction
 
 Next: continue the remaining dispatch scan. F-40, F-45, F-47, and F-50 remain separate scope/functional findings. Keep units on separate branches/PRs; full suite, badge parity, role matrix, and visual QA remain incomplete.
