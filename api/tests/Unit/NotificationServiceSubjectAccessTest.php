@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
@@ -63,6 +64,12 @@ class NotificationServiceSubjectAccessTest extends TestCase
             'notifiable_id' => $withoutPermission->id,
             'type' => 'test.subject_access',
         ]);
+        $data = json_decode((string) DB::table('notifications')
+            ->where('notifiable_id', $owner->id)
+            ->where('type', 'test.subject_access')
+            ->value('data'), true);
+        $this->assertSame(PurchaseRequest::class, $data['subject_type']);
+        $this->assertSame((string) $request->id, $data['subject_id']);
         Event::assertDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $owner->id);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $unrelated->id);
         Event::assertNotDispatched(UserNotificationCreated::class, fn ($event): bool => $event->userId === $withoutPermission->id);
