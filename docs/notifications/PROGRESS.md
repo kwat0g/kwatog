@@ -595,7 +595,7 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - Repository search found two PR-subject notification dispatches: `chain.pr_approved` and `chain.pr_auto_convert_skipped`. Both now use `sendForSubject()`. Their configured-role audience, active-user, permission, and row-scope filters remain. Existing message, timing, and exact PR link remain. No PR email-failure fallback dispatch was found; other `purchase_request` matches are catalog/config or chain-bottleneck reads.
 - Added positive owner delivery, negative out-of-scope/approval-only/no-permission delivery, disabled-module suppression, and subject metadata checks for both notification events.
 - `NotificationServiceSubjectAccessTest.php`: **16 passed / 101 assertions**. Focused approval-audience and skipped-auto-conversion tests: **4 passed / 26 assertions**. PHP syntax, Pint on all six changed files, and `git diff --check` pass. Targeted tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly.
-- PR checks are pending at this update. Full suite, browser/e2e, and complete role matrix remain open.
+- PR #426 API CI fails in the pre-test PHP syntax step on inherited F-22: duplicate `PdfRenderService::ensureDompdfDirs()` at line 200. The finding-lifecycle check passes. Full suite, browser/e2e, and complete role matrix remain open.
 
 ## Outstanding proof / risks
 
