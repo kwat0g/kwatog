@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-17, and F-16 merged; F-02 approval badge scope in PR #337.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3, F-17, F-16, and F-02 merged; F-03 purchase-request badge scope in PR #338.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3, F-17, and F-16 merged (#332–#336). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3, F-17, F-16, and F-02 merged (#332–#337). Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
 | 4. Frontend | Partial | PR #334 hydrates realtime toast titles through the owner-scoped endpoint. Bell/Center behavior, links, accessibility, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3, F-16, and F-02 tests passed on earlier feature heads. Post-merge tests for #334, #336, and #337 were not rerun; role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Targeted unit 1–3, F-16, F-02, and F-03 tests passed on earlier feature heads. Post-merge tests for #334 and #336–#338 were not rerun; the latest no-list-access endpoint assertion also remains unrun. Role-leak, broad badge parity, frontend interaction, and full-suite verification remain open. |
 
 ## Phase 3 PR stack
 
@@ -25,7 +25,8 @@
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | merged as `00eef8df` |
 | F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | merged as `89b9b1df` |
 | F-16. Submitter outcome access | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | merged as `a9e3f394` |
-| F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | `af68eb60` |
+| F-02. Approval badge source scope | `notifications/fix-approval-badge-scope` | [#337](https://github.com/kwat0g/kwatog/pull/337) | merged as `7fbab781` |
+| F-03. Purchase-request badge scope | `notifications/fix-pr-approval-badge-scope` | [#338](https://github.com/kwat0g/kwatog/pull/338) | `1d352861` |
 
 ## Coverage ledger
 
@@ -44,7 +45,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge scope, profile badge attachment, permission-gate mismatches, missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PR #337 makes the approval badge share the board's current queue filter. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Remaining high-priority static mismatches include profile badge attachment, permission-gate mismatches, missing event metadata, notification links/UI behavior, configured-role audiences without record scope, and the 100-row board cap (F-24). PR #337 aligns the approval badge with its board queue; PR #338 aligns the purchase-request badge and pending-count endpoint with the shared PR scope. The PR badge still links to the broad list. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
@@ -77,8 +78,14 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include PR badge sc
 ## Separate finding fix: F-02
 
 - `BadgeService.approvals` now reads the approval board's `summary.my_action`, inheriting supported-type, permission, delegation, and source-row filtering. The feature test compares badge and board counts and excludes an out-of-department leave row plus an unsupported approval type.
-- Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions** on the pre-merge feature head. Post-merge tests were not rerun. The board summary still caps at 100 rows; F-24 tracks this separate limitation. F-03 purchase-request badge scope remains open.
+- Targeted API tests: `BadgeControllerTest` selected tests **3 passed / 12 assertions** on the pre-merge feature head. Post-merge tests were not rerun. The board summary still caps at 100 rows; F-24 tracks this separate limitation.
 - Full `BadgeControllerTest` and all-role badge/list parity were not run. No frontend changes.
+
+## Separate finding fix: F-03
+
+- `PurchaseRequestAccessPolicy::pendingApprovalsFor()` supplies both the sidebar badge and existing pending-count endpoint. It applies current pending steps, active direct/delegated roles, submitter exclusion, PR row visibility, and requires both `purchasing.view` and `purchasing.pr.approve` before returning rows.
+- Earlier targeted API coverage on the pre-merge feature head: `PurchaseRequestHardeningTest::test_pending_count_excludes_self_submissions_and_other_roles_steps` **1 passed / 18 assertions**; `BadgeControllerTest::test_department_head_sees_pending_approvals_with_severity` **1 passed / 6 assertions**. A new negative assertion for an approval-only user without list access was added after these runs and remains unverified.
+- Sidebar still opens broad PR list; destination-filter parity remains under F-09. No frontend changes.
 
 ## Outstanding proof / risks
 

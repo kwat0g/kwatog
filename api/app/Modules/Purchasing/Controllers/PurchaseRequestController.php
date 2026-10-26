@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Models\ApprovalRecord;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
@@ -227,22 +226,7 @@ class PurchaseRequestController
     public function pendingCount(Request $request): JsonResponse
     {
         $user = $request->user();
-        $roleSlugs = $this->access->approvalRoleSlugs($user);
-
-        // Count only current approval rows the user can actually act on. The
-        // scope also enforces department visibility and excludes self-created
-        // requests, matching ApprovalService's server-side guard.
-        $count = ApprovalRecord::query()
-            ->where('approvable_type', (new PurchaseRequest)->getMorphClass())
-            ->where('action', 'pending')
-            ->where('is_current', true)
-            ->whereIn('role_slug', $roleSlugs)
-            ->whereHasMorph('approvable', [PurchaseRequest::class], function ($q) use ($user): void {
-                $this->access->visibleTo($q, $user);
-                $q->where('status', PurchaseRequestStatus::Pending->value)
-                    ->where('requested_by', '<>', $user->id);
-            })
-            ->count();
+        $count = $this->access->pendingApprovalsFor($user)->count();
 
         return response()->json(['data' => ['count' => $count]]);
     }
