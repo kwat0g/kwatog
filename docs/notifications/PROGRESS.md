@@ -539,12 +539,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - PHP syntax, Pint on all five changed files, and `git diff --check` pass. Test run used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #419 is based on stock-adjustment subject gate PR #418. API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate); finding-lifecycle passes.
 
 
-## Phase 3 HR loan subject access gate (draft PR pending)
+## Phase 3 HR loan subject access gate (draft PR [#420](https://github.com/kwat0g/kwatog/pull/420))
 
 - Migrated `loans.submitted`, `loans.approved`, and `loans.rejected` through `sendForSubject()`. Internal readers must pass the existing `loans.view` permission and `LoanAccessPolicy` scope. Employee outcome notices use the HR self-service route, which permits only the account linked to the loan's employee; the gate now recognizes that route even without `loans.view`.
 - The sender's current configured-role and `LoanAccessPolicy` recipient selection, owner-only outcome target, message, amount, and links remain unchanged. HR and Loans feature flags are checked against the actual destination routes.
 - Subject access test: **1 passed / 8 assertions**; it accepts the own employee route and scoped Finance reader, denies another employee, and denies both routes when disabled. `LoanNotificationTest.php`: **6 passed / 16 assertions**, including exact subject metadata for submitted and employee outcome notices.
-- PHP syntax and `git diff --check` pass. Pint passes the registry, submitted listener, and new unit test; it flags `unary_operator_spaces` in the existing decision listener and `blank_line_before_statement` in the existing feature test. No broad formatting applied. Tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR and CI status remain pending.
+- PHP syntax and `git diff --check` pass. Pint passes the registry, submitted listener, and new unit test; it flags `unary_operator_spaces` in the existing decision listener and `blank_line_before_statement` in the existing feature test. No broad formatting applied. Tests used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #420 is based on supplier-listing subject gate PR #419; CI status is pending.
 
 ## Outstanding proof / risks
 
