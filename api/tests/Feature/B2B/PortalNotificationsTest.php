@@ -49,6 +49,7 @@ class PortalNotificationsTest extends TestCase
             'data' => json_encode(['title' => $title, 'message' => 'Accept or decline the proposed date.']),
             'read_at' => null, 'created_at' => now(), 'updated_at' => now(),
         ]);
+
         return $id;
     }
 
@@ -121,6 +122,9 @@ class PortalNotificationsTest extends TestCase
         $sender->sendPortalInApp([$customer, $customer, $supplier, $internal], 'portal.test', $data, 'proposal:1');
         $sender->sendPortalInApp([$customer, $supplier], 'portal.test', $data, 'proposal:1');
         $this->assertSame(2, DB::table('notifications')->where('dedupe_key', 'proposal:1')->count());
+        $portalData = json_decode((string) DB::table('notifications')->where('notifiable_type', CustomerPortalUser::class)->value('data'), true);
+        $this->assertSame(1, $portalData['schema_version']);
+        $this->assertSame('portal.test', $portalData['event_type']);
         $this->assertDatabaseHas('notifications', ['notifiable_type' => CustomerPortalUser::class, 'notifiable_id' => $customer->id, 'dedupe_key' => 'proposal:1']);
         $this->assertDatabaseHas('notifications', ['notifiable_type' => SupplierPortalUser::class, 'notifiable_id' => $supplier->id, 'dedupe_key' => 'proposal:1']);
         $this->assertDatabaseMissing('notifications', ['notifiable_type' => User::class, 'notifiable_id' => $internal->id, 'dedupe_key' => 'proposal:1']);
