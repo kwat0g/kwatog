@@ -31,16 +31,23 @@ use Throwable;
 class BackupService
 {
     public const TYPE_BACKUP = 'backup';
+
     public const TYPE_RESTORE = 'restore';
 
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_RUNNING = 'running';
+
     public const STATUS_COMPLETED = 'completed';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_ROLLBACK_REQUIRED = 'rollback_required';
+
     public const STATUS_ROLLED_BACK = 'rolled_back';
 
     private const DATABASE_PATTERN = '/\Aogami-[A-Za-z0-9][A-Za-z0-9._-]*\.sql\.gz\z/D';
+
     private const FILES_PATTERN = '/\Aogami-files-[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz\z/D';
 
     public function queueBackup(User $actor): BackupOperation
@@ -104,6 +111,7 @@ class BackupService
             $backupOperationId,
             $databaseFilename,
             $filesFilename,
+            $actor === null,
         );
         $databaseFilename = (string) $databaseArtifact['name'];
         $filesFilename = $filesArtifact !== null ? (string) $filesArtifact['name'] : null;
@@ -118,6 +126,59 @@ class BackupService
         $this->assertArtifactAvailable($databaseFilename, 'database', $databaseArtifact);
         if ($filesFilename !== null && $filesArtifact !== null) {
             $this->assertArtifactAvailable($filesFilename, 'files', $filesArtifact);
+        }
+
+        if ($actor === null) {
+            $this->rejectDatabaseOperationIfAvailable();
+            $id = (string) Str::uuid();
+            $operation = [
+                'id' => $id,
+                'type' => self::TYPE_RESTORE,
+                'status' => self::STATUS_QUEUED,
+                'artifacts' => [
+                    'database' => $databaseArtifact,
+                    'files' => $filesArtifact !== null && $filesFilename !== null ? $filesArtifact : null,
+                ],
+                'metadata' => [
+                    'scope' => $filesFilename !== null ? 'database_and_private_files' : 'database_only',
+                    'manifest_operation_id' => $manifest->id,
+                    'manifest_committed' => true,
+                    'requested_via_recovery' => true,
+                ],
+                'error_message' => null,
+                'created_at' => now()->toIso8601String(),
+                'started_at' => null,
+                'completed_at' => null,
+                'updated_at' => now()->toIso8601String(),
+            ];
+
+            try {
+                app(BackupManifestStore::class)->createRecoveryOperation($operation);
+            } catch (Throwable $exception) {
+                if (str_contains($exception->getMessage(), 'already active or requires rollback')) {
+                    throw ValidationException::withMessages([
+                        'operation' => ['Another recovery restore is active or requires rollback.'],
+                    ]);
+                }
+                throw $exception;
+            }
+
+            try {
+                RestoreBackupJob::dispatch($id)->onConnection('redis');
+            } catch (Throwable $exception) {
+                app(BackupManifestStore::class)->updateRecoveryOperation($id, [
+                    'status' => self::STATUS_FAILED,
+                    'error_message' => $this->safeError($exception),
+                    'completed_at' => now()->toIso8601String(),
+                ]);
+                throw $exception;
+            }
+
+            return new BackupOperation([
+                'id' => $id,
+                'type' => self::TYPE_RESTORE,
+                'status' => self::STATUS_QUEUED,
+            ]);
         }
 
         try {
@@ -332,6 +393,7 @@ class BackupService
 
     public function runBackup(string $operationId): void
     {
+        $this->rejectIfRecoveryNeedsResolution();
         $operation = BackupOperation::query()->findOrFail($operationId);
         $this->markRunning($operation);
         $this->heartbeat($operationId, 'starting');
@@ -406,6 +468,23 @@ class BackupService
 
     public function runRestore(string $operationId): void
     {
+        $recoveryOperation = app(BackupManifestStore::class)->recoveryOperation($operationId);
+        if ($recoveryOperation !== null) {
+            $original = [
+                'id' => $recoveryOperation['id'],
+                'requested_by' => null,
+                'type' => $recoveryOperation['type'],
+                'artifacts' => $recoveryOperation['artifacts'],
+                'metadata' => $recoveryOperation['metadata'],
+                'started_at' => $recoveryOperation['started_at'] ?? now()->toIso8601String(),
+                'recovery_sidecar' => true,
+            ];
+            $this->executeRestore($original);
+
+            return;
+        }
+
+        $this->rejectIfRecoveryNeedsResolution();
         $operation = BackupOperation::query()->findOrFail($operationId);
         $this->markRunning($operation);
         $original = [
@@ -416,6 +495,17 @@ class BackupService
             'metadata' => $operation->metadata,
             'started_at' => $operation->started_at,
         ];
+        $this->executeRestore($original);
+    }
+
+    /** @param array<string, mixed> $original */
+    private function executeRestore(array $original): void
+    {
+        $operationId = (string) $original['id'];
+        $isRecoverySidecar = (bool) ($original['recovery_sidecar'] ?? false);
+        if ($isRecoverySidecar) {
+            $this->persistOperation($original, self::STATUS_RUNNING, null, (array) ($original['metadata'] ?? []));
+        }
         $this->heartbeat($operationId, 'starting');
 
         $temporaryFiles = [];
@@ -443,34 +533,39 @@ class BackupService
             // A database-only restore needs only a database rollback point.
             // Requiring a private-files archive in that scope can block a safe
             // DB recovery because the unrelated files volume is unavailable.
+            $databaseExists = $this->targetDatabaseExists();
             $beforeDatabase = $this->artifactNames('database');
             $beforeFiles = $this->artifactNames('files');
-            $preBackupCommand = $filesName !== null ? 'db:full-backup' : 'db:backup';
-            $preBackupExit = Artisan::call($preBackupCommand, [
-                '--dir' => $this->backupDirectory(),
-                '--keep' => (string) config('backup.keep', 14),
-            ]);
-            if ($preBackupExit !== 0) {
-                throw new \RuntimeException('Pre-restore backup failed; restore was not started.');
-            }
+            $preRestoreDatabase = null;
+            $preRestoreFiles = null;
+            if ($databaseExists) {
+                $preBackupCommand = $filesName !== null ? 'db:full-backup' : 'db:backup';
+                $preBackupExit = Artisan::call($preBackupCommand, [
+                    '--dir' => $this->backupDirectory(),
+                    '--keep' => (string) config('backup.keep', 14),
+                ]);
+                if ($preBackupExit !== 0) {
+                    throw new \RuntimeException('Pre-restore backup failed; restore was not started.');
+                }
 
-            $preRestoreDatabase = $this->newestArtifact(array_diff($this->artifactNames('database'), $beforeDatabase));
-            $preRestoreFiles = $filesName !== null
-                ? $this->newestArtifact(array_diff($this->artifactNames('files'), $beforeFiles))
-                : null;
-            if ($preRestoreDatabase === null || ($filesName !== null && $preRestoreFiles === null)) {
-                throw new \RuntimeException('Pre-restore backup did not publish the required rollback artifacts.');
-            }
+                $preRestoreDatabase = $this->newestArtifact(array_diff($this->artifactNames('database'), $beforeDatabase));
+                $preRestoreFiles = $filesName !== null
+                    ? $this->newestArtifact(array_diff($this->artifactNames('files'), $beforeFiles))
+                    : null;
+                if ($preRestoreDatabase === null || ($filesName !== null && $preRestoreFiles === null)) {
+                    throw new \RuntimeException('Pre-restore backup did not publish the required rollback artifacts.');
+                }
 
-            $metadata = array_merge($metadata, [
-                'restore_phase' => 'preflight_complete',
-                'pre_restore_artifacts' => [
+                $metadata['pre_restore_artifacts'] = [
                     'database' => $this->describeArtifact($preRestoreDatabase, 'database'),
                     'files' => $preRestoreFiles !== null
                         ? $this->describeArtifact($preRestoreFiles, 'files')
                         : null,
-                ],
-            ]);
+                ];
+            } else {
+                $metadata['rollback_unavailable_reason'] = 'target_database_missing';
+            }
+            $metadata['restore_phase'] = 'preflight_complete';
             $this->persistOperation($original, self::STATUS_RUNNING, null, $metadata);
             $this->heartbeat($operationId, 'preflight_complete');
 
@@ -532,7 +627,9 @@ class BackupService
             $metadata['restore_phase'] = 'completed';
             $metadata['rollback_required'] = false;
             $this->persistOperation($original, self::STATUS_COMPLETED, null, $metadata);
-            $this->auditFromSnapshot($original, 'backup.restore_completed', $metadata);
+            if (! $isRecoverySidecar) {
+                $this->auditFromSnapshot($original, 'backup.restore_completed', $metadata);
+            }
         } catch (Throwable $exception) {
             $error = $this->safeError($exception);
             $rollbackRequired = $destructiveStarted;
@@ -558,18 +655,20 @@ class BackupService
                     'restore_error' => $error,
                 ]);
             }
-            try {
-                $this->auditFromSnapshot(
-                    $original,
-                    $rollbackRequired ? 'backup.restore_rollback_required' : 'backup.restore_failed',
-                    ['error' => $error, 'metadata' => $failureMetadata],
-                );
-            } catch (Throwable $auditException) {
-                Log::error('Could not record failed restore audit event.', [
-                    'operation_id' => $operationId,
-                    'error' => $this->safeError($auditException),
-                    'restore_error' => $error,
-                ]);
+            if (! $isRecoverySidecar) {
+                try {
+                    $this->auditFromSnapshot(
+                        $original,
+                        $rollbackRequired ? 'backup.restore_rollback_required' : 'backup.restore_failed',
+                        ['error' => $error, 'metadata' => $failureMetadata],
+                    );
+                } catch (Throwable $auditException) {
+                    Log::error('Could not record failed restore audit event.', [
+                        'operation_id' => $operationId,
+                        'error' => $this->safeError($auditException),
+                        'restore_error' => $error,
+                    ]);
+                }
             }
             throw $exception;
         } finally {
@@ -600,6 +699,20 @@ class BackupService
     /** @param array<string, mixed> $extraMetadata */
     public function markFailed(string $operationId, Throwable $exception, array $extraMetadata = []): void
     {
+        $recoveryOperation = app(BackupManifestStore::class)->recoveryOperation($operationId);
+        if ($recoveryOperation !== null) {
+            if ($recoveryOperation['status'] !== self::STATUS_ROLLBACK_REQUIRED) {
+                app(BackupManifestStore::class)->updateRecoveryOperation($operationId, [
+                    'status' => self::STATUS_FAILED,
+                    'error_message' => $this->safeError($exception),
+                    'metadata' => array_merge((array) ($recoveryOperation['metadata'] ?? []), $extraMetadata),
+                    'completed_at' => now()->toIso8601String(),
+                ]);
+            }
+
+            return;
+        }
+
         try {
             $operation = BackupOperation::query()->find($operationId);
             if ($operation === null || $operation->status === self::STATUS_ROLLBACK_REQUIRED) {
@@ -626,6 +739,21 @@ class BackupService
 
     public function heartbeat(string $operationId, ?string $phase = null): void
     {
+        $recoveryOperation = app(BackupManifestStore::class)->recoveryOperation($operationId);
+        if ($recoveryOperation !== null) {
+            $metadata = (array) ($recoveryOperation['metadata'] ?? []);
+            if ($phase !== null) {
+                $metadata['heartbeat_phase'] = $phase;
+                $metadata['heartbeat_at'] = now()->toIso8601String();
+            }
+            app(BackupManifestStore::class)->updateRecoveryOperation($operationId, [
+                'metadata' => $metadata,
+                'updated_at' => now()->toIso8601String(),
+            ]);
+
+            return;
+        }
+
         try {
             $operation = BackupOperation::query()->find($operationId);
             if ($operation === null) {
@@ -783,29 +911,53 @@ class BackupService
 
     public function rollback(string $operationId): void
     {
-        $operation = BackupOperation::query()->findOrFail($operationId);
-        if ($operation->status !== self::STATUS_ROLLBACK_REQUIRED) {
-            throw ValidationException::withMessages([
-                'operation' => ['Only a restore marked rollback-required can be recovered.'],
-            ]);
+        $recoveryOperation = app(BackupManifestStore::class)->recoveryOperation($operationId);
+        if ($recoveryOperation !== null) {
+            if (($recoveryOperation['status'] ?? null) !== self::STATUS_ROLLBACK_REQUIRED) {
+                throw ValidationException::withMessages([
+                    'operation' => ['Only a restore marked rollback-required can be recovered.'],
+                ]);
+            }
+            $snapshot = [
+                'id' => $recoveryOperation['id'],
+                'requested_by' => null,
+                'type' => $recoveryOperation['type'],
+                'artifacts' => $recoveryOperation['artifacts'],
+                'metadata' => $recoveryOperation['metadata'],
+                'started_at' => $recoveryOperation['started_at'] ?? null,
+                'recovery_sidecar' => true,
+            ];
+            $metadata = is_array($recoveryOperation['metadata'] ?? null) ? $recoveryOperation['metadata'] : [];
+        } else {
+            $operation = BackupOperation::query()->findOrFail($operationId);
+            if ($operation->status !== self::STATUS_ROLLBACK_REQUIRED) {
+                throw ValidationException::withMessages([
+                    'operation' => ['Only a restore marked rollback-required can be recovered.'],
+                ]);
+            }
+            $snapshot = [
+                'id' => $operation->id,
+                'requested_by' => $operation->requested_by,
+                'type' => $operation->type,
+                'artifacts' => $operation->artifacts,
+                'metadata' => $operation->metadata,
+                'started_at' => $operation->started_at,
+            ];
+            $metadata = is_array($operation->metadata) ? $operation->metadata : [];
         }
-
-        $snapshot = [
-            'id' => $operation->id,
-            'requested_by' => $operation->requested_by,
-            'type' => $operation->type,
-            'artifacts' => $operation->artifacts,
-            'metadata' => $operation->metadata,
-            'started_at' => $operation->started_at,
-        ];
-        $metadata = is_array($operation->metadata) ? $operation->metadata : [];
         $preRestore = is_array($metadata['pre_restore_artifacts'] ?? null)
             ? $metadata['pre_restore_artifacts']
             : [];
         $databaseArtifact = is_array($preRestore['database'] ?? null) ? $preRestore['database'] : null;
         $filesArtifact = is_array($preRestore['files'] ?? null) ? $preRestore['files'] : null;
         if ($databaseArtifact === null) {
-            throw new \RuntimeException('Rollback metadata does not contain a database artifact.');
+            throw ValidationException::withMessages([
+                'operation' => ['No rollback database copy is available for this restore.'],
+            ]);
+        }
+        if (($snapshot['recovery_sidecar'] ?? false) === true) {
+            $metadata['restore_phase'] = 'rollback_running';
+            $this->persistOperation($snapshot, self::STATUS_RUNNING, null, $metadata);
         }
 
         $temporaryFiles = [];
@@ -855,7 +1007,9 @@ class BackupService
             $metadata['rollback_required'] = false;
             $metadata['rollback_completed_at'] = now()->toIso8601String();
             $this->persistOperation($snapshot, self::STATUS_ROLLED_BACK, null, $metadata);
-            $this->auditFromSnapshot($snapshot, 'backup.restore_rolled_back', ['metadata' => $metadata]);
+            if (($snapshot['recovery_sidecar'] ?? false) !== true) {
+                $this->auditFromSnapshot($snapshot, 'backup.restore_rolled_back', ['metadata' => $metadata]);
+            }
         } catch (Throwable $exception) {
             $error = $this->safeError($exception);
             $metadata['restore_phase'] = 'rollback_required';
@@ -873,14 +1027,16 @@ class BackupService
                     'rollback_error' => $error,
                 ]);
             }
-            try {
-                $this->auditFromSnapshot($snapshot, 'backup.rollback_failed', ['error' => $error]);
-            } catch (Throwable $auditException) {
-                Log::error('Could not record rollback failure audit event.', [
-                    'operation_id' => $operationId,
-                    'error' => $this->safeError($auditException),
-                    'rollback_error' => $error,
-                ]);
+            if (($snapshot['recovery_sidecar'] ?? false) !== true) {
+                try {
+                    $this->auditFromSnapshot($snapshot, 'backup.rollback_failed', ['error' => $error]);
+                } catch (Throwable $auditException) {
+                    Log::error('Could not record rollback failure audit event.', [
+                        'operation_id' => $operationId,
+                        'error' => $this->safeError($auditException),
+                        'rollback_error' => $error,
+                    ]);
+                }
             }
             throw $exception;
         } finally {
@@ -1118,6 +1274,24 @@ class BackupService
 
     private function persistOperation(array $original, string $status, ?string $error, array $metadata): void
     {
+        if (($original['recovery_sidecar'] ?? false) === true) {
+            app(BackupManifestStore::class)->updateRecoveryOperation((string) $original['id'], [
+                'status' => $status,
+                'metadata' => array_merge($metadata, [
+                    'rollback_available' => is_array($metadata['pre_restore_artifacts']['database'] ?? null),
+                ]),
+                'error_message' => $error,
+                'started_at' => $original['started_at'] ?? now()->toIso8601String(),
+                'completed_at' => in_array($status, [
+                    self::STATUS_COMPLETED,
+                    self::STATUS_FAILED,
+                    self::STATUS_ROLLED_BACK,
+                ], true) ? now()->toIso8601String() : null,
+            ]);
+
+            return;
+        }
+
         $requestedBy = $original['requested_by'] ?? null;
         // `where('id', ...)`, not `whereKey()`: Query\Builder has no whereKey, so
         // the call fell through to __call and became a dynamic
@@ -1171,6 +1345,7 @@ class BackupService
 
     private function rejectIfOperationActive(): void
     {
+        $this->rejectIfRecoveryNeedsResolution();
         $active = BackupOperation::query()
             ->whereIn('status', [
                 self::STATUS_QUEUED,
@@ -1178,6 +1353,38 @@ class BackupService
                 self::STATUS_ROLLBACK_REQUIRED,
             ])
             ->exists();
+
+        if ($active) {
+            throw ValidationException::withMessages([
+                'operation' => ['Another backup or restore operation is active or requires rollback.'],
+            ]);
+        }
+    }
+
+    private function rejectIfRecoveryNeedsResolution(): void
+    {
+        if (app(BackupManifestStore::class)->activeRecoveryOperation() !== null) {
+            throw ValidationException::withMessages([
+                'operation' => ['A recovery restore is active or requires resolution.'],
+            ]);
+        }
+    }
+
+    private function rejectDatabaseOperationIfAvailable(): void
+    {
+        try {
+            $active = BackupOperation::query()
+                ->whereIn('status', [
+                    self::STATUS_QUEUED,
+                    self::STATUS_RUNNING,
+                    self::STATUS_ROLLBACK_REQUIRED,
+                ])
+                ->exists();
+        } catch (Throwable) {
+            DB::purge();
+
+            return;
+        }
 
         if ($active) {
             throw ValidationException::withMessages([
@@ -1213,17 +1420,23 @@ class BackupService
         ?string $backupOperationId,
         ?string $databaseFilename,
         ?string $filesFilename,
+        bool $sidecarOnly = false,
     ): array {
         $manifest = null;
         if ($backupOperationId !== null && trim($backupOperationId) !== '') {
-            $manifest = BackupOperation::query()
-                ->whereKey(trim($backupOperationId))
-                ->where('type', self::TYPE_BACKUP)
-                ->where('status', self::STATUS_COMPLETED)
-                ->first();
-            if ($manifest === null) {
+            if ($sidecarOnly) {
                 $external = app(BackupManifestStore::class)->find(trim($backupOperationId));
                 $manifest = $external !== null ? $this->sidecarModel($external) : null;
+            } else {
+                $manifest = BackupOperation::query()
+                    ->whereKey(trim($backupOperationId))
+                    ->where('type', self::TYPE_BACKUP)
+                    ->where('status', self::STATUS_COMPLETED)
+                    ->first();
+                if ($manifest === null) {
+                    $external = app(BackupManifestStore::class)->find(trim($backupOperationId));
+                    $manifest = $external !== null ? $this->sidecarModel($external) : null;
+                }
             }
         } else {
             $databaseFilename = $databaseFilename !== null
@@ -1232,19 +1445,22 @@ class BackupService
             $filesFilename = $filesFilename !== null && $filesFilename !== ''
                 ? $this->validateArtifactName($filesFilename, 'files')
                 : null;
-            $manifest = BackupOperation::query()
-                ->where('type', self::TYPE_BACKUP)
-                ->where('status', self::STATUS_COMPLETED)
-                ->latest()
-                ->get()
-                ->first(function (BackupOperation $candidate) use ($databaseFilename, $filesFilename): bool {
-                    $artifacts = is_array($candidate->artifacts) ? $candidate->artifacts : [];
-                    $database = is_array($artifacts['database'] ?? null) ? $artifacts['database'] : null;
-                    $files = is_array($artifacts['files'] ?? null) ? $artifacts['files'] : null;
-                    return $database !== null
-                        && ($databaseFilename === null || ($database['name'] ?? null) === $databaseFilename)
-                        && ($filesFilename === null || ($files['name'] ?? null) === $filesFilename);
-                });
+            if (! $sidecarOnly) {
+                $manifest = BackupOperation::query()
+                    ->where('type', self::TYPE_BACKUP)
+                    ->where('status', self::STATUS_COMPLETED)
+                    ->latest()
+                    ->get()
+                    ->first(function (BackupOperation $candidate) use ($databaseFilename, $filesFilename): bool {
+                        $artifacts = is_array($candidate->artifacts) ? $candidate->artifacts : [];
+                        $database = is_array($artifacts['database'] ?? null) ? $artifacts['database'] : null;
+                        $files = is_array($artifacts['files'] ?? null) ? $artifacts['files'] : null;
+
+                        return $database !== null
+                            && ($databaseFilename === null || ($database['name'] ?? null) === $databaseFilename)
+                            && ($filesFilename === null || ($files['name'] ?? null) === $filesFilename);
+                    });
+            }
             if ($manifest === null && $databaseFilename !== null) {
                 $external = app(BackupManifestStore::class)->find($databaseFilename);
                 $manifest = $external !== null ? $this->sidecarModel($external) : null;
@@ -1314,6 +1530,7 @@ class BackupService
     private function newestArtifact(array $names): ?string
     {
         usort($names, fn (string $a, string $b): int => filemtime($this->backupDirectory().DIRECTORY_SEPARATOR.$b) <=> filemtime($this->backupDirectory().DIRECTORY_SEPARATOR.$a));
+
         return $names[0] ?? null;
     }
 
@@ -1329,6 +1546,7 @@ class BackupService
     {
         $path = $this->safeArtifactPath($filename, $kind);
         $checksum = hash_file('sha256', $path);
+
         return [
             'name' => $filename,
             'kind' => $kind,
@@ -1380,12 +1598,13 @@ class BackupService
      * place a verdict has to be true of the bytes about to be replayed — a
      * list-time hash is already stale by the time an operator clicks Restore.
      *
-     * @param array<string, mixed> $artifact
+     * @param  array<string, mixed>  $artifact
      * @return array<string, mixed>
      */
     private function decorateArtifact(array $artifact): array
     {
         $availability = $this->artifactAvailability($artifact);
+
         return array_merge($artifact, [
             'availability' => $availability,
             'integrity' => match ($availability) {
@@ -1442,6 +1661,7 @@ class BackupService
     {
         $path = $this->backupDirectory().DIRECTORY_SEPARATOR.$filename;
         $mtime = is_file($path) ? filemtime($path) : false;
+
         return $mtime === false ? null : now()->setTimestamp($mtime)->toIso8601String();
     }
 
@@ -1454,6 +1674,7 @@ class BackupService
                 $kind.'_filename' => ['The selected backup artifact is invalid.'],
             ]);
         }
+
         return $filename;
     }
 
@@ -1520,6 +1741,7 @@ class BackupService
         if (is_file($this->backupDirectory().DIRECTORY_SEPARATOR.$filename)) {
             $path = $this->safeArtifactPath($filename, $kind);
             $this->assertArtifactIntegrity($path, $kind, $expected);
+
             return;
         }
 
@@ -1550,6 +1772,7 @@ class BackupService
                 $kind.'_filename' => ['The selected backup artifact could not be verified.'],
             ]);
         }
+
         return $path;
     }
 
@@ -1560,11 +1783,11 @@ class BackupService
         string $operationId,
         array &$temporaryFiles,
         ?array $expected = null,
-    ): string
-    {
+    ): string {
         if (is_file($this->backupDirectory().DIRECTORY_SEPARATOR.$filename)) {
             $path = $this->safeArtifactPath($filename, $kind);
             $this->assertArtifactIntegrity($path, $kind, $expected);
+
             return $path;
         }
 
@@ -1594,6 +1817,7 @@ class BackupService
         }
         $temporaryFiles[] = $temporary;
         $this->assertArtifactIntegrity($temporary, $kind, $expected);
+
         return $temporary;
     }
 
@@ -1603,7 +1827,7 @@ class BackupService
         $process = new Process(['bash', $script, '--yes', $path], null, $this->databaseEnvironment(), null, 3600);
         $process->run();
         if (! $process->isSuccessful()) {
-            throw new \RuntimeException('Database restore failed. The pre-restore backup is available.');
+            throw new \RuntimeException('Database restore failed; check whether a rollback copy is available.');
         }
     }
 
@@ -1630,6 +1854,33 @@ class BackupService
         ];
     }
 
+    private function targetDatabaseExists(): bool
+    {
+        $environment = $this->databaseEnvironment();
+        $database = $environment['DB_DATABASE'];
+        if (preg_match('/\A[A-Za-z0-9_-]+\z/', $database) !== 1) {
+            throw new \RuntimeException('Target database configuration is invalid; restore was not started.');
+        }
+
+        $databaseLiteral = str_replace("'", "''", $database);
+        $process = new Process([
+            'psql',
+            '--no-psqlrc',
+            '--host='.$environment['DB_HOST'],
+            '--port='.$environment['DB_PORT'],
+            '--username='.$environment['DB_USERNAME'],
+            '--dbname=postgres',
+            '-tAc',
+            "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = '{$databaseLiteral}')",
+        ], null, ['PGPASSWORD' => $environment['DB_PASSWORD']], null, 15);
+        $process->run();
+        if (! $process->isSuccessful()) {
+            throw new \RuntimeException('Cannot reach the PostgreSQL server; restore was not started.');
+        }
+
+        return trim($process->getOutput()) === 't';
+    }
+
     private function scriptPath(string $name): string
     {
         foreach ([base_path('scripts/'.$name), base_path('../scripts/'.$name)] as $candidate) {
@@ -1652,6 +1903,7 @@ class BackupService
         if (! is_dir($directory)) {
             @mkdir($directory, 0775, true);
         }
+
         return rtrim($directory, DIRECTORY_SEPARATOR);
     }
 
@@ -1743,6 +1995,7 @@ class BackupService
         }
 
         $metadata = json_decode(trim($process->getOutput()), true);
+
         return is_array($metadata) ? [
             'size' => isset($metadata['size']) ? (int) $metadata['size'] : null,
             'sha256' => isset($metadata['sha256']) && is_string($metadata['sha256'])
@@ -1754,6 +2007,7 @@ class BackupService
     private function s3Key(string $filename): string
     {
         $prefix = trim((string) config('backup.s3_prefix', ''), '/');
+
         return $prefix === '' ? $filename : $prefix.'/'.$filename;
     }
 
@@ -1771,6 +2025,7 @@ class BackupService
                 $environment[$environmentKey] = (string) $value;
             }
         }
+
         return $environment;
     }
 

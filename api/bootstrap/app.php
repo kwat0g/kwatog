@@ -193,10 +193,24 @@ return Application::configure(basePath: dirname(__DIR__))
             DashboardLayoutConflictException::class,
             RoutingVersionConflictException::class,
         ]);
+
+        $exceptions->respond(function ($response, Throwable $exception, Request $request) {
+            if ($request->is('api/v1/recovery/*')) {
+                $response->headers->set('Cache-Control', 'no-store, private');
+            }
+
+            return $response;
+        });
     })
     ->booted(function () {
         RateLimiter::for('auth', fn (Request $r) => Limit::perMinute(5)
             ->by($r->ip().'|'.$r->input('email', '')));
+
+        RateLimiter::for('recovery-login', fn (Request $r) => Limit::perMinute(5)
+            ->by($r->ip()));
+
+        RateLimiter::for('recovery-read', fn (Request $r) => Limit::perMinute(60)
+            ->by($r->ip()));
 
         RateLimiter::for('api', function (Request $r): Limit {
             $userId = optional($r->user())->getAuthIdentifier();
