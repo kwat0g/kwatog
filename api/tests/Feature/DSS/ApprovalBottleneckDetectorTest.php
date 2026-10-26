@@ -34,7 +34,7 @@ class ApprovalBottleneckDetectorTest extends TestCase
 
     public function test_clean_slate_emits_nothing(): void
     {
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_flags_stuck_approvals_aggregated_per_role(): void
@@ -43,7 +43,9 @@ class ApprovalBottleneckDetectorTest extends TestCase
         $this->pendingRecord('department_head', 40);
         $this->pendingRecord('department_head', 1); // fresh: not stuck
 
-        $emissions = $this->detector()->detect();
+        $scan = $this->detector()->detect();
+        $this->assertSame(2, $scan->rowsScanned);
+        $emissions = $scan->emissions;
         $byKey = [];
         foreach ($emissions as $emission) {
             $byKey[$emission->rationale['role_slug']] = $emission;
@@ -64,7 +66,7 @@ class ApprovalBottleneckDetectorTest extends TestCase
     {
         $this->pendingRecord('finance_officer', 60);
 
-        $emissions = $this->detector()->detect();
+        $emissions = $this->detector()->detect()->emissions;
 
         $this->assertCount(1, $emissions);
         $this->assertSame('critical', $emissions[0]->severity);
@@ -76,7 +78,7 @@ class ApprovalBottleneckDetectorTest extends TestCase
         $this->pendingRecord('department_head', 30, ['action' => 'approved']);
         $this->pendingRecord('department_head', 30, ['is_current' => false]);
 
-        $this->assertSame([], $this->detector()->detect());
+        $this->assertSame([], $this->detector()->detect()->emissions);
     }
 
     public function test_detector_contract_metadata(): void

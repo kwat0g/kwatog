@@ -7,6 +7,7 @@ namespace App\Modules\DSS\Detectors;
 use App\Common\Services\SettingsService;
 use App\Modules\DSS\Contracts\DetectorEmission;
 use App\Modules\DSS\Contracts\DetectorInterface;
+use App\Modules\DSS\Contracts\DetectorScanResult;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\NonConformanceReport;
 
@@ -57,11 +58,12 @@ class NcrSlaBreachDetector implements DetectorInterface
     }
 
     /** @return list<DetectorEmission> */
-    public function detect(array $context = []): array
+    public function detect(array $context = []): DetectorScanResult
     {
         $maxEvidence = max(1, (int) ($context['max_evidence'] ?? $this->defaultParams()['max_evidence_per_severity']));
 
         $emissions = [];
+        $rowsScanned = 0;
 
         foreach (['critical', 'high', 'medium', 'low'] as $severity) {
             $slaHours = $this->settings->requiredInt("quality.ncr.sla_{$severity}_hours", 1);
@@ -90,6 +92,7 @@ class NcrSlaBreachDetector implements DetectorInterface
                         }
                     }
                 });
+            $rowsScanned += $count;
 
             if ($count === 0) {
                 continue;
@@ -113,6 +116,6 @@ class NcrSlaBreachDetector implements DetectorInterface
             );
         }
 
-        return $emissions;
+        return new DetectorScanResult($emissions, $rowsScanned);
     }
 }
