@@ -156,7 +156,6 @@ class NotificationServiceTest extends TestCase
 
         $notice = new PasswordResetLinkNotification('https://ogami.test/reset?token=opaque', 30);
         $this->service->sendLaravelNotification([$inactive, $deleted], $notice);
-        $this->service->notify([$inactive, $deleted], $notice, 'password.reset');
 
         Notification::assertNotSentTo($inactive, PasswordResetLinkNotification::class);
         Notification::assertNotSentTo($deleted, PasswordResetLinkNotification::class);

@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-27
-**Current gate:** Phase 2 approved. PRs #391–#400 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, and #400 as `313dfbf0`. PR #401 aligns Production, MRP, and Maintenance channel access and is ready for merge. Original-head Leave API tests passed **34 tests / 160 assertions**; post-rebase SPA tests passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
+**Current gate:** Phase 2 approved. PRs #391–#401 are merged; #395 merged as `d7795f26`, #396 as `a4d6e31c`, #397 as `84ff7bfa`, #398 as `bd3817ff`, #399 as `aa993b56`, #400 as `313dfbf0`, and #401 as `a8fd87df`. PR #402 reconciles the remaining native Laravel notification dispatches with the central service and is ready for merge. Original-head Leave API tests passed **34 tests / 160 assertions**; post-rebase SPA tests passed **7 tests**, targeted ESLint, PHP 8.3 syntax, and `git diff --check` passed. API tests were not rerun against shared `ogami_test`. CI is waived per the user instruction. Full-project recipient and badge verification remain open.
 
 ## Phase status
 
@@ -49,7 +49,8 @@
 | F-12. Chain broadcast payload minimization | `notifications/minimize-chain-broadcast-payload` | [#398](https://github.com/kwat0g/kwatog/pull/398) | merged as `bd3817ff`; original-head API 4/6 and SPA 2 tests passed; post-rebase SPA 2, ESLint, PHP syntax, and diff checks passed; API test not rerun against shared DB |
 | F-12. Chain channel detail access | `notifications/scope-purchase-order-chain-channel` | [#399](https://github.com/kwat0g/kwatog/pull/399) | merged as `aa993b56`; original-head broadcast authorization tests passed 11/32; post-rebase PHP 8.3 syntax and `git diff --check` passed; API test not rerun against shared DB |
 | F-12. Payroll progress channel access | `notifications/scope-payroll-progress-channel` | [#400](https://github.com/kwat0g/kwatog/pull/400) | merged as `313dfbf0`; original-head authorization test passed 12/36; post-rebase diff check passed; API test skipped to avoid shared DB; PHP unavailable |
-| F-12. Operational channel route authorization | `notifications/scope-operational-channels` | [#401](https://github.com/kwat0g/kwatog/pull/401) | ready; original-head authorization test passed 16/48; post-rebase `git diff --check` passed; API test skipped to avoid shared DB; PHP unavailable |
+| F-12. Operational channel route authorization | `notifications/scope-operational-channels` | [#401](https://github.com/kwat0g/kwatog/pull/401) | merged as `a8fd87df`; original-head authorization test passed 16/48; post-rebase `git diff --check` passed; API test skipped to avoid shared DB; PHP unavailable |
+| 1.2. Laravel notification dispatch guard | `notifications/centralize-laravel-notifications-reconciled` | [#402](https://github.com/kwat0g/kwatog/pull/402) | ready; existing sends already use central service on current main; focused tests passed on original head; post-rebase API tests skipped to avoid shared DB |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
@@ -459,11 +460,18 @@ See `FINDINGS.md`. PR #380 corrected late-supplier recipient scope; #381 adds th
 - Original-head `BroadcastAuthorizationTest.php`: **12 passed / 36 assertions**; PHP syntax, targeted Pint, and `git diff --check` passed. After rebase, only `git diff --check` was available. API tests were not rerun against shared `ogami_test`; PHP is unavailable in this workspace.
 - No unauthorized payroll subscription was proven; run metadata/headcount audience remains a policy question.
 
-## Separate finding fix: F-12 operational channel access (PR #401, ready for merge)
+## Separate finding fix: F-12 operational channel access (PR #401, merged as `a8fd87df`)
 
 - Production dashboard subscription now requires its module, parent read, and dashboard read permissions. Work Order subscription requires the Production module, parent read permission, Work Order detail permission, and a live visible record. Machine subscription requires the MRP module, machine permission, and a live visible record. Maintenance dashboard requires its module and read permission.
 - The existing channels emit refresh-only events; event timing and payload remain unchanged. Original-head `BroadcastAuthorizationTest.php`: **16 passed / 48 assertions**. After rebase, `git diff --check` passed; PHP is unavailable and API tests were not rerun against shared `ogami_test`.
 - Existing dashboard channels remain area-wide refresh pings with no record content.
+
+## Centralize remaining Laravel notification dispatches (PR #402, ready for merge)
+
+- Current main already routes all seven reported email-notification sends through `NotificationService::sendLaravelNotification()` with their existing classes, channels, recipients, and timing. No production call-site changes remain in this rebased PR; it reconciles and strengthens the dispatch guard/test coverage.
+- `NotificationCatalogTest` retains its object-level `->notify()` inventory, rejects native dispatches outside `NotificationService`, and checks mail-only channels. `NotificationServiceTest` verifies explicit-recipient deduplication and inactive-recipient exclusion; stale coverage for the removed `notify()` wrapper is removed.
+- Original-head results: `NotificationServiceTest` **9 passed / 28 assertions**; `NotificationCatalogTest` **9 passed / 74 assertions**; password-reset, employee-welcome, and admin-welcome targeted tests passed. After rebase, API tests were skipped to avoid shared `ogami_test`; `git diff --check` is the static check.
+- Recipient resolution policy, subject access checks, preferences for native email notifications, and lifecycle handling remain separate work.
 
 ## Outstanding proof / risks
 
