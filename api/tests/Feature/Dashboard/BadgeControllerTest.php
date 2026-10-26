@@ -924,7 +924,7 @@ class BadgeControllerTest extends TestCase
         return [
             'inquiries', 'open_complaints', 'pending_inspections', 'pending_grn',
             'mrb_holds', 'shipments', 'mrp_plans', 'pending_returns',
-            'draft_invoices', 'overdue_bills', 'training_upcoming', 'open_postings',
+            'draft_invoices', 'overdue_bills', 'unpaid_bills', 'training_upcoming', 'open_postings',
         ];
     }
 
@@ -1157,5 +1157,31 @@ class BadgeControllerTest extends TestCase
         } finally {
             Carbon::setTestNow();
         }
+    }
+
+    public function test_unpaid_bill_badge_matches_the_open_balance_list(): void
+    {
+        $finance = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        Bill::factory()->create(['status' => 'unpaid', 'balance' => 500]);
+        Bill::factory()->create(['status' => 'partial', 'amount_paid' => 500, 'balance' => 500]);
+        Bill::factory()->create(['status' => 'partial', 'amount_paid' => 1000, 'balance' => 0]);
+        Bill::factory()->create(['status' => 'paid', 'amount_paid' => 1000, 'balance' => 0]);
+        Bill::factory()->create(['status' => 'draft', 'balance' => 500]);
+        Bill::factory()->create(['status' => 'cancelled', 'balance' => 500]);
+
+        $badgeCount = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')
+            ->assertOk()
+            ->json('data.unpaid_bills.count');
+        $unpaidList = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/bills?signal=unpaid')
+            ->assertOk();
+
+        $this->assertSame(2, $badgeCount);
+        $this->assertSame($badgeCount, $unpaidList->json('meta.total'));
+        $this->assertSame(['partial', 'unpaid'], collect($unpaidList->json('data'))->pluck('status')->sort()->values()->all());
+        $this->assertSame([500.0, 500.0], collect($unpaidList->json('data'))->pluck('balance')->map(fn ($balance) => (float) $balance)->sort()->values()->all());
     }
 }

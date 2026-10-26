@@ -89,16 +89,25 @@ it('opens the pending-QC filter when GRN has a positive badge', () => {
 });
 
 it('opens overdue bills when the AP badge is positive', () => {
-  badgeMock.getBadge.mockImplementation((key) =>
-    key === 'overdue_bills'
-      ? {
-          count: 2,
-          severity: 'warning',
-          label: 'Bills (AP)',
-          description: 'Overdue bills payable',
-        }
-      : undefined,
-  );
+  badgeMock.getBadge.mockImplementation((key) => {
+    if (key === 'overdue_bills') {
+      return {
+        count: 2,
+        severity: 'warning',
+        label: 'Overdue',
+        description: 'Overdue bills payable',
+      };
+    }
+    if (key === 'unpaid_bills') {
+      return {
+        count: 5,
+        severity: 'warning',
+        label: 'Unpaid',
+        description: 'Open bills with an unpaid balance',
+      };
+    }
+    return undefined;
+  });
   render(
     <MemoryRouter initialEntries={['/accounting/bills']}>
       <Sidebar roleSlug="finance_officer" />
@@ -110,6 +119,29 @@ it('opens overdue bills when the AP badge is positive', () => {
     'href',
     '/accounting/bills?overdue=1',
   );
+  fireEvent.click(screen.getByRole('button', { name: /View all Accounts Payable Bills signals/ }));
+  expect(screen.getByRole('link', { name: 'Overdue bills payable: 2' })).toHaveAttribute(
+    'href',
+    '/accounting/bills?overdue=1',
+  );
+  expect(screen.getByRole('link', { name: 'Open bills with an unpaid balance: 5' })).toHaveAttribute(
+    'href',
+    '/accounting/bills?signal=unpaid',
+  );
+  const signalButton = screen.getByRole('button', { name: /View all Accounts Payable Bills signals/ });
+  fireEvent.mouseEnter(signalButton);
+  expect(screen.getByRole('link', { name: 'Overdue bills payable: 2' })).toBeVisible();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Accounts Payable Bills signals' })).not.toBeInTheDocument();
+  fireEvent.blur(signalButton);
+  fireEvent.focus(signalButton);
+  expect(screen.getByRole('dialog', { name: 'Accounts Payable Bills signals' })).toBeVisible();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  act(() => useSidebarStore.getState().setCollapsed(true));
+  fireEvent.click(signalButton);
+  expect(screen.getByRole('link', { name: 'Open bills with an unpaid balance: 5' })).toBeVisible();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(signalButton).toHaveFocus();
 });
 
 it('opens the to-inspect queue when inspections has a positive badge', () => {

@@ -48,6 +48,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Shipment;
 use Closure;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -100,6 +101,7 @@ class BadgeService
         'pending_returns' => 'return_management',
         'draft_invoices' => 'accounting',
         'overdue_bills' => 'accounting',
+        'unpaid_bills' => 'accounting',
         'pending_budgets' => 'budgeting',
         'pending_transfers' => 'budgeting',
     ];
@@ -198,6 +200,14 @@ class BadgeService
      */
     private function definitions(User $user): array
     {
+        $billSignalCounts = null;
+        $countBillSignals = function () use (&$billSignalCounts): object {
+            return $billSignalCounts ??= DB::query()
+                ->selectSub(Bill::query()->overdue()->selectRaw('COUNT(*)'), 'overdue')
+                ->selectSub(Bill::query()->unpaid()->selectRaw('COUNT(*)'), 'unpaid')
+                ->first() ?? (object) ['overdue' => 0, 'unpaid' => 0];
+        };
+
         return [
             // Reuse the board's filtered queue so sidebar count matches the cards shown there.
             'approvals' => [
@@ -526,9 +536,16 @@ class BadgeService
             // Finance > Bills (AP) — payable bills past their due date.
             'overdue_bills' => [
                 'permissions' => ['accounting.bills.view'],
-                'label'       => 'Bills (AP)',
+                'label'       => 'Overdue',
                 'description' => 'Overdue bills payable',
-                'counter'     => fn (): int => Bill::query()->overdue()->count(),
+                'counter'     => fn (): int => (int) $countBillSignals()->overdue,
+            ],
+
+            'unpaid_bills' => [
+                'permissions' => ['accounting.bills.view'],
+                'label'       => 'Unpaid',
+                'description' => 'Open bills with an unpaid balance',
+                'counter'     => fn (): int => (int) $countBillSignals()->unpaid,
             ],
 
             // Finance > Budgeting — submitted budgets awaiting a checker.
