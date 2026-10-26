@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Modules\Auth\Models\Permission;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Jobs\SendPayslipEmailJob;
 use App\Modules\Payroll\Mail\PayslipMail;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayslipPdfService;
+use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Mail\Markdown;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -101,6 +105,53 @@ class SendPayslipEmailJobTest extends TestCase
         $this->assertSame(Payroll::EMAIL_FAILED, $failed->payslip_email_status);
         $this->assertNull($failed->payslip_email_queued_at);
         $this->assertSame('SMTP unavailable', $failed->payslip_email_last_error);
+    }
+
+    public function test_delivery_failure_notifies_only_active_users_with_own_payslip_access(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $employee = Employee::factory()->create();
+        $user = User::factory()->withRole('employee')->create(['employee_id' => $employee->id]);
+        $restrictedEmployee = Employee::factory()->create();
+        $restrictedUser = User::factory()->withRole('employee')->create(['employee_id' => $restrictedEmployee->id]);
+        DB::table('user_permission_overrides')->insert([
+            'user_id' => $restrictedUser->id,
+            'permission_id' => Permission::query()->where('slug', 'payroll.view')->value('id'),
+            'type' => 'revoke',
+            'granted_by' => $user->id,
+            'reason' => 'Payroll access revoked for failure recipient test.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->saveQuietly();
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'payslip_email_status' => Payroll::EMAIL_QUEUED,
+            'payslip_email_queued_at' => now(),
+        ]);
+        $restrictedPayroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $restrictedEmployee->id,
+            'payslip_email_status' => Payroll::EMAIL_QUEUED,
+            'payslip_email_queued_at' => now(),
+        ]);
+
+        (new SendPayslipEmailJob($payroll->id))->failed(new \RuntimeException('SMTP unavailable'));
+        (new SendPayslipEmailJob($restrictedPayroll->id))->failed(new \RuntimeException('SMTP unavailable'));
+
+        $notice = DB::table('notifications')->where('notifiable_id', $user->id)
+            ->where('type', 'email.delivery_failed')->first();
+        $this->assertNotNull($notice);
+        $data = json_decode((string) $notice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/self-service/payslips/'.$payroll->hash_id, $data['link_to']);
+        $this->assertSame($payroll->hash_id, $data['entity_id']);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $restrictedUser->id,
+            'type' => 'email.delivery_failed',
+        ]);
     }
 
     public function test_job_cancels_a_queued_payslip_when_the_period_is_voided(): void

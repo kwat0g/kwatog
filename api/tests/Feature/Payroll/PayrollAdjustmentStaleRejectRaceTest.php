@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
@@ -86,7 +87,7 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
         $this->assertSame(PayrollAdjustmentStatus::Approved, $adjustment->refresh()->status);
     }
 
-    public function test_create_and_approve_notify_payroll_adjustment_actors(): void
+    public function test_admin_is_not_fallback_and_requester_without_view_access_gets_no_outcome(): void
     {
         $period = PayrollPeriod::factory()->create();
         $period->forceFill(['status' => PayrollPeriodStatus::Finalized])->save();
@@ -115,7 +116,7 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
             'amount' => '500.00',
             'reason' => 'Missed overtime line',
         ], $requester);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $approver->id,
             'type' => 'approval.action_required',
         ]);
@@ -134,17 +135,13 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
         $requester->flushPermissionsCache();
 
         $service->approve($adjustment, $approver);
-        $this->assertDatabaseHas('notifications', [
+        $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $requester->id,
             'type' => 'approval.completed',
         ]);
-        $outcome = DB::table('notifications')->where('notifiable_id', $requester->id)
-            ->where('type', 'approval.completed')->first();
-        $this->assertNotNull($outcome);
-        $this->assertNull(json_decode((string) $outcome->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 
-    public function test_rejecting_payroll_adjustment_notifies_requester(): void
+    public function test_adjustment_notice_reaches_explicit_viewable_approver_and_excludes_admin(): void
     {
         $period = PayrollPeriod::factory()->create();
         $period->forceFill(['status' => PayrollPeriodStatus::Finalized])->save();
@@ -153,7 +150,110 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
             'payroll_period_id' => $period->id,
             'employee_id' => $employee->id,
         ]);
-        $requester = User::factory()->withRole('system_admin')->create();
+        $requester = User::factory()->withRole('hr_officer')->create(['employee_id' => $employee->id]);
+        $approver = User::factory()->withRole('finance_officer')->create();
+        $admin = User::factory()->withRole('system_admin')->create();
+        foreach (['payroll.adjustments.approve', 'payroll.adjustments.view'] as $permissionSlug) {
+            UserPermissionOverride::create([
+                'user_id' => $approver->id,
+                'permission_id' => Permission::query()->where('slug', $permissionSlug)->firstOrFail()->id,
+                'type' => 'grant',
+                'granted_by' => $admin->id,
+                'reason' => 'Explicit payroll adjustment review assignment.',
+            ]);
+        }
+        $approver->flushPermissionsCache();
+        $service = app(PayrollAdjustmentService::class);
+        $adjustment = $service->create([
+            'original_payroll_id' => $payroll->id,
+            'type' => 'underpayment',
+            'amount' => '500.00',
+            'reason' => 'Missed overtime line',
+        ], $requester);
+
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $approver->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $admin->id,
+            'type' => 'approval.action_required',
+        ]);
+        $pending = DB::table('notifications')->where('notifiable_id', $approver->id)
+            ->where('type', 'approval.action_required')->first();
+        $this->assertSame('/payroll/adjustments/'.$adjustment->hash_id, json_decode((string) $pending->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
+    }
+
+    public function test_adjustment_notice_excludes_delegate_who_can_only_act_for_requester(): void
+    {
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized])->save();
+        $employee = Employee::factory()->create();
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $requester = User::factory()->withRole('hr_officer')->create(['employee_id' => $employee->id]);
+        $delegate = User::factory()->withRole('employee')->create();
+        $rejector = User::factory()->withRole('finance_officer')->create();
+        $admin = User::factory()->withRole('system_admin')->create();
+
+        foreach ([
+            [$requester, 'payroll.adjustments.approve'],
+            [$delegate, 'payroll.adjustments.view'],
+            [$rejector, 'payroll.adjustments.reject'],
+            [$rejector, 'payroll.adjustments.view'],
+        ] as [$user, $permissionSlug]) {
+            UserPermissionOverride::create([
+                'user_id' => $user->id,
+                'permission_id' => Permission::query()->where('slug', $permissionSlug)->firstOrFail()->id,
+                'type' => 'grant',
+                'granted_by' => $admin->id,
+                'reason' => 'Record-specific delegation authorization test.',
+            ]);
+            $user->flushPermissionsCache();
+        }
+        ApprovalDelegation::create([
+            'delegator_user_id' => $requester->id,
+            'delegate_user_id' => $delegate->id,
+            'role_slug' => 'hr_officer',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+        $this->assertFalse(ApprovalDelegation::canActForPermission(
+            $delegate,
+            'payroll.adjustments.approve',
+            [(int) $requester->id],
+        ));
+
+        app(PayrollAdjustmentService::class)->create([
+            'original_payroll_id' => $payroll->id,
+            'type' => 'underpayment',
+            'amount' => '500.00',
+            'reason' => 'Missed overtime line',
+        ], $requester);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $delegate->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $rejector->id,
+            'type' => 'approval.action_required',
+        ]);
+    }
+
+    public function test_rejecting_payroll_adjustment_notifies_requester_with_view_access(): void
+    {
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized])->save();
+        $employee = Employee::factory()->create();
+        $payroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $requester = User::factory()->withRole('hr_officer')->create(['employee_id' => $employee->id]);
         $approver = User::factory()->withRole('system_admin')->create();
         $service = app(PayrollAdjustmentService::class);
         $adjustment = $service->create([
@@ -169,5 +269,8 @@ class PayrollAdjustmentStaleRejectRaceTest extends TestCase
             'notifiable_id' => $requester->id,
             'type' => 'approval.rejected',
         ]);
+        $outcome = DB::table('notifications')->where('notifiable_id', $requester->id)
+            ->where('type', 'approval.rejected')->first();
+        $this->assertSame('/payroll/adjustments/'.$adjustment->hash_id, json_decode((string) $outcome->data, true, flags: JSON_THROW_ON_ERROR)['link_to']);
     }
 }

@@ -6,6 +6,8 @@ namespace Tests\Feature\Payroll;
 
 use App\Common\Models\AuditLog;
 use App\Common\Models\ApprovalDelegation;
+use App\Modules\Admin\Models\UserPermissionOverride;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
@@ -129,6 +131,53 @@ class PayrollMakerCheckerTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'notifiable_type' => User::class,
             'notifiable_id' => $delegate->id,
+            'type' => 'approval.action_required',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $finance->id,
+            'type' => 'approval.action_required',
+        ]);
+    }
+
+    public function test_system_admin_is_not_used_as_payroll_approval_fallback(): void
+    {
+        $admin = $this->userWithRole('system_admin');
+        $period = PayrollPeriod::factory()->create(['created_by' => null]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
+
+        app(PayrollPeriodService::class)->notifyPendingApproval($period);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $admin->id,
+            'type' => 'approval.action_required',
+        ]);
+    }
+
+    public function test_payroll_maker_is_not_notified_about_their_own_approval_task(): void
+    {
+        $maker = $this->userWithRole('finance_officer');
+        $admin = $this->userWithRole('system_admin');
+        UserPermissionOverride::create([
+            'user_id' => $maker->id,
+            'permission_id' => Permission::query()->where('slug', 'payroll.periods.self_approve_override')->firstOrFail()->id,
+            'type' => 'grant',
+            'granted_by' => $admin->id,
+            'reason' => 'Actor-exclusion notification test.',
+        ]);
+        $maker->flushPermissionsCache();
+        $period = PayrollPeriod::factory()->create(['created_by' => $maker->id]);
+        $period->forceFill([
+            'status' => PayrollPeriodStatus::Computed->value,
+            'computed_by' => $maker->id,
+        ])->save();
+
+        app(PayrollPeriodService::class)->notifyPendingApproval($period);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_type' => User::class,
+            'notifiable_id' => $maker->id,
             'type' => 'approval.action_required',
         ]);
     }

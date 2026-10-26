@@ -9,6 +9,7 @@ const CreatePayrollPeriodPage = lazy(() => import('@/pages/payroll/periods/creat
 const PayrollPeriodDetailPage = lazy(() => import('@/pages/payroll/periods/detail'));
 const PayrollEmployeeDetailPage = lazy(() => import('@/pages/payroll/periods/employee-detail'));
 const PayrollAdjustmentsPage = lazy(() => import('@/pages/payroll/adjustments'));
+const PayrollAdjustmentDetailPage = lazy(() => import('@/pages/payroll/adjustments/detail'));
 const CreatePayrollAdjustmentPage = lazy(() => import('@/pages/payroll/adjustments/create'));
 // The full-year payroll pipeline was removed from scope; the periods list and
 // Finance dashboard provide the required operational summaries.
@@ -38,6 +39,10 @@ export const payrollRoutes = (
  <Route
  path="/payroll/adjustments"
  element={<PermissionGuard permission="payroll.adjustments.view"><PayrollAdjustmentsPage /></PermissionGuard>}
+ />
+ <Route
+ path="/payroll/adjustments/:id"
+ element={<PermissionGuard permission="payroll.adjustments.view"><PayrollAdjustmentDetailPage /></PermissionGuard>}
  />
  <Route
  path="/payroll/adjustments/create"

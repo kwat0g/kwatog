@@ -31,9 +31,11 @@ class NotifyEmployeesOnPayrollFinalizedTest extends TestCase
         $period = PayrollPeriod::factory()->create(['status' => 'finalized']);
         $failedEmployee = Employee::factory()->create();
         $validEmployee = Employee::factory()->create();
+        $otherValidEmployee = Employee::factory()->create();
         $revokedEmployee = Employee::factory()->create();
         $failedUser = User::factory()->create(['employee_id' => $failedEmployee->id, 'is_active' => true]);
         $validUser = User::factory()->create(['employee_id' => $validEmployee->id, 'is_active' => true]);
+        $otherValidUser = User::factory()->create(['employee_id' => $otherValidEmployee->id, 'is_active' => true]);
         $revokedUser = User::factory()->create(['employee_id' => $revokedEmployee->id, 'is_active' => true]);
         DB::table('user_permission_overrides')->insert([
             'user_id' => $revokedUser->id,
@@ -51,11 +53,17 @@ class NotifyEmployeesOnPayrollFinalizedTest extends TestCase
             'error_message' => 'Unable to compute government deductions.',
             'net_pay' => '0.00',
         ]);
-        Payroll::factory()->create([
+        $validPayroll = Payroll::factory()->create([
             'payroll_period_id' => $period->id,
             'employee_id' => $validEmployee->id,
             'error_message' => null,
             'net_pay' => '1000.00',
+        ]);
+        $otherValidPayroll = Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $otherValidEmployee->id,
+            'error_message' => null,
+            'net_pay' => '1100.00',
         ]);
         Payroll::factory()->create([
             'payroll_period_id' => $period->id,
@@ -74,6 +82,20 @@ class NotifyEmployeesOnPayrollFinalizedTest extends TestCase
             'notifiable_id' => $validUser->id,
             'type' => 'chain.payslip_ready',
         ]);
+        $validNotice = DB::table('notifications')->where('notifiable_id', $validUser->id)
+            ->where('type', 'chain.payslip_ready')->first();
+        $validData = json_decode((string) $validNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/self-service/payslips/'.$validPayroll->hash_id, $validData['link_to']);
+        $this->assertSame($validPayroll->hash_id, $validData['entity_id']);
+        $this->assertDatabaseHas('notifications', [
+            'notifiable_id' => $otherValidUser->id,
+            'type' => 'chain.payslip_ready',
+        ]);
+        $otherValidNotice = DB::table('notifications')->where('notifiable_id', $otherValidUser->id)
+            ->where('type', 'chain.payslip_ready')->first();
+        $otherValidData = json_decode((string) $otherValidNotice->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame('/self-service/payslips/'.$otherValidPayroll->hash_id, $otherValidData['link_to']);
+        $this->assertNotSame($validData['link_to'], $otherValidData['link_to']);
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $revokedUser->id,
             'type' => 'chain.payslip_ready',

@@ -7,6 +7,7 @@ namespace App\Modules\Payroll\Listeners;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
@@ -24,14 +25,19 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
                 return;
             }
 
-            $userIds = DB::table('payrolls')
+            $payrolls = Payroll::query()
                 ->where('payroll_period_id', $period->id)
-                ->whereNull('payrolls.error_message')
-                ->join('employees', 'payrolls.employee_id', '=', 'employees.id')
-                ->join('users', 'users.employee_id', '=', 'employees.id')
-                ->pluck('users.id');
+                ->where(fn ($query) => $query->whereNull('error_message')->orWhere('error_message', ''))
+                ->with('employee.user')
+                ->get()
+                ->filter(function (Payroll $payroll): bool {
+                    $user = $payroll->employee?->user;
 
-            if ($userIds->isEmpty()) {
+                    return $user !== null && $user->is_active && $user->hasPermission('payroll.view');
+                })
+                ->values();
+
+            if ($payrolls->isEmpty()) {
                 return;
             }
 
@@ -40,41 +46,34 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
             // returned to PENDING) must not stack a second "payslip ready"
             // inbox row per employee. Skip recipients who already hold this
             // period's notice.
-            $periodHashId = method_exists($period, 'getHashIdAttribute') ? $period->hash_id : null;
-            if ($periodHashId) {
-                $alreadyNotified = DB::table('notifications')
-                    ->where('type', 'chain.payslip_ready')
-                    ->where('notifiable_type', User::class)
-                    ->whereIn('notifiable_id', $userIds)
-                    ->whereRaw("data->>'entity_id' = ?", [$periodHashId])
-                    ->distinct()
-                    ->pluck('notifiable_id');
-
-                $userIds = $userIds->diff($alreadyNotified);
-            }
-
-            if ($userIds->isEmpty()) {
-                return;
-            }
-
-            $users = User::query()
-                ->whereIn('id', $userIds)
-                ->where('is_active', true)
-                ->get()
-                ->filter(fn (User $user): bool => $user->hasPermission('payroll.view'))
-                ->values();
-            if ($users->isEmpty()) {
-                return;
-            }
+            $periodHashId = $period->hash_id;
+            $payrollHashIds = $payrolls->map(fn (Payroll $payroll): string => $payroll->hash_id);
+            $alreadyNotified = DB::table('notifications')
+                ->where('type', 'chain.payslip_ready')
+                ->where('notifiable_type', User::class)
+                ->whereIn('notifiable_id', $payrolls->map(fn (Payroll $payroll): int => (int) $payroll->employee->user->id))
+                ->where(function ($query) use ($periodHashId, $payrollHashIds): void {
+                    $query->whereRaw("data->>'entity_id' = ?", [$periodHashId])
+                        ->orWhereIn(DB::raw("data->>'entity_id'"), $payrollHashIds);
+                })
+                ->distinct()
+                ->pluck('notifiable_id');
             $periodLabel = $this->periodLabel($period);
 
-            $this->notifications->send($users, 'chain.payslip_ready', [
-                'title' => 'Payslip Ready',
-                'message' => "Your payslip for {$periodLabel} is ready.",
-                'link_to' => '/self-service/payslips',
-                'entity_type' => 'payroll_period',
-                'entity_id' => method_exists($period, 'getHashIdAttribute') ? $period->hash_id : null,
-            ]);
+            foreach ($payrolls as $payroll) {
+                $user = $payroll->employee->user;
+                if ($alreadyNotified->contains($user->id)) {
+                    continue;
+                }
+
+                $this->notifications->send($user, 'chain.payslip_ready', [
+                    'title' => 'Payslip Ready',
+                    'message' => "Your payslip for {$periodLabel} is ready.",
+                    'link_to' => "/self-service/payslips/{$payroll->hash_id}",
+                    'entity_type' => 'payroll',
+                    'entity_id' => $payroll->hash_id,
+                ], "payroll-payslip-ready:{$payroll->id}");
+            }
         } catch (\Throwable $e) {
             Log::warning('NotifyEmployeesOnPayrollFinalized failed', ['error' => $e->getMessage()]);
             throw $e;
