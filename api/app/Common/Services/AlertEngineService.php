@@ -482,10 +482,10 @@ class AlertEngineService
                         $recipients = $recipients->merge(User::where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', 'maintenance_tech'))->get());
                     }
                     $recipients = $recipients->filter(fn (User $user): bool => $user->hasPermission('production.view') && $user->hasPermission('production.work_orders.view'))->values();
-                    app(NotificationService::class)->sendInApp($recipients, 'production.assignment.review', [
+                    app(NotificationService::class)->sendForSubject($wo, $recipients, 'production.assignment.review', [
                         'title' => 'Assignment needs review: '.$wo->wo_number, 'message' => $message,
                         'link_to' => '/production/work-orders/'.$wo->hash_id, 'entity_type' => 'work_order', 'entity_id' => $wo->hash_id,
-                    ], 'assignment-review-'.$slot->id.'-'.sha1($message));
+                    ], 'assignment-review-'.$slot->id.'-'.sha1($message), emailEnabled: false);
                     if ($wo->sales_order_id && $wo->planned_end && ($slot->scheduled_end->gt($wo->planned_end) || $slot->scheduled_end->lt(now()))) {
                         $sales = User::where('is_active', true)->whereHas('role', fn ($q) => $q->where('slug', 'sales_officer'))->get();
                         app(NotificationService::class)->sendInApp($sales, 'production.assignment.review', ['title' => 'Delivery risk: '.$wo->wo_number, 'message' => 'Production assignment needs review. Agreed delivery date remains unchanged.', 'link_to' => '/crm/sales-orders/'.$wo->salesOrder->hash_id, 'entity_type' => 'sales_order', 'entity_id' => $wo->salesOrder->hash_id], 'assignment-delivery-risk-'.$slot->id.'-'.sha1($message));

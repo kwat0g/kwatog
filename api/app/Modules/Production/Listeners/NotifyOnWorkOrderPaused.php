@@ -52,7 +52,7 @@ class NotifyOnWorkOrderPaused implements ShouldQueue
 
             $reason = $event->reason ? " Reason: {$event->reason}." : '';
 
-            $this->notifications->send($audience, 'production.wo_paused', [
+            $this->notifications->sendForSubject($wo, $audience, 'production.wo_paused', [
                 'title' => "Work Order {$wo->wo_number} Paused",
                 'message' => "Production is stopped.{$reason}",
                 'link_to' => "/production/work-orders/{$wo->hash_id}",
