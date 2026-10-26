@@ -33,7 +33,7 @@
 | F-18. Pricing notification role audience | `notifications/fix-pricing-notification-audience` | [#341](https://github.com/kwat0g/kwatog/pull/341) | merged as `aa8d28b2` |
 | F-05. CRM inquiry badge filter parity | `notifications/fix-inquiry-badge-parity` | [#342](https://github.com/kwat0g/kwatog/pull/342) | merged as `2c0a78dd` |
 | F-36. CRM inquiry triage audience | `notifications/triage-inquiry-badge` | [#384](https://github.com/kwat0g/kwatog/pull/384) | merged as `cc377cc4` |
-| F-37. MRB held-list badge | `notifications/mrb-holds-sidebar` | [#385](https://github.com/kwat0g/kwatog/pull/385) | pending |
+| F-37. MRB held-list badge | `notifications/mrb-holds-sidebar` | [#385](https://github.com/kwat0g/kwatog/pull/385) | `ff9f03c5` |
 | F-06. Notification event catalog coverage | `notifications/fix-event-catalog-coverage` | [#343](https://github.com/kwat0g/kwatog/pull/343) | merged as `2f921b21` |
 | F-08. Notification deep-link anchors | `notifications/fix-notification-link-anchors` | [#344](https://github.com/kwat0g/kwatog/pull/344) | merged as `07279606` |
 | F-08. Notification destination validation | `notifications/fix-notification-row-anchors` | [#378](https://github.com/kwat0g/kwatog/pull/378) | merged as `a143fbb4` |
