@@ -531,12 +531,12 @@ See `FINDINGS.md`. Remaining high-priority static mismatches include notificatio
 - PHP syntax passes for all four changed PHP files. Pint passes the registry and new unit test; it flags `unary_operator_spaces` in `StockAdjustmentService.php` and `ordered_imports` in the existing feature test, so no broad formatting was applied. `git diff --check` passes. Test runs used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #418 is based on Bill subject gate PR #417. API CI fails before PHPUnit on inherited F-22 (`PdfRenderService::ensureDompdfDirs()` duplicate); finding-lifecycle passes.
 
 
-## Phase 3 Purchasing supplier-listing subject access gate (draft PR pending)
+## Phase 3 Purchasing supplier-listing subject access gate (draft PR [#419](https://github.com/kwat0g/kwatog/pull/419))
 
 - Registered `SupplierItemListing` with its list-route access rule: Purchasing must be enabled and the recipient must hold `purchasing.supplier_listings.view`. The review route allows `purchasing.supplier_listings.review`, but the list route requires the view permission; a review-only recipient is denied by the notification gate.
 - `supplier_listing_submitted` now uses `sendForSubject()`. Existing `ApprovalDelegation::approvalAudience('purchasing.supplier_listings.review')`, list-view filter, message, list link, and event timing stay unchanged. The internal event remains separate from supplier-portal notices.
 - `NotificationServiceSubjectAccessTest.php`, `SupplierItemListingTest.php`, and `SupplierListingBulkTest.php`: **29 passed / 150 assertions**. Covers subject metadata, module disablement, rejection of review-only access, and the current reviewer audience. Two test mocks now use partial mocks so `ApprovalDelegation::approvalAudience()` can call the real `usersWithPermission()` helper; previously the mocks swallowed that lookup and the service caught the resulting exception.
-- PHP syntax, Pint on all five changed files, and `git diff --check` pass. Test run used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR and CI status remain pending.
+- PHP syntax, Pint on all five changed files, and `git diff --check` pass. Test run used the temporary F-22 workaround and restored `PdfRenderService.php` exactly. Draft PR #419 is based on stock-adjustment subject gate PR #418; CI status is pending.
 
 ## Outstanding proof / risks
 
