@@ -1,6 +1,6 @@
 # Notification and badge remediation progress
 
-**Updated:** 2026-10-25
+**Updated:** 2026-10-26
 **Current gate:** Phase 2 approved; Phase 3 foundation in progress on `notifications/phase3-central-contract`.
 
 ## Phase status
@@ -14,7 +14,7 @@
 | 4. Frontend | Not started | Blocked by approved registry/link contracts. |
 | 5. Migration | Not started | No event or badge migrated. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted Phase 3 unit 1 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Targeted Phase 3 unit 1 tests ran; role-leak, badge parity, frontend interaction, and full-suite verification remain open. Playwright accessibility and visual-baseline jobs passed on run `40370063996` after `ci/playwright-browser-install` removed the apt dependency install. Vitest passed on retry after one visibility assertion failure. |
 
 ## Coverage ledger
 
