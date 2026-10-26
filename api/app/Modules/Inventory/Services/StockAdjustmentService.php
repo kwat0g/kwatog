@@ -372,14 +372,16 @@ class StockAdjustmentService
     private function notifyRequester(StockAdjustment $adjustment, string $type, string $title): void
     {
         $requester = User::query()->whereKey($adjustment->requested_by)->where('is_active', true)->first();
-        if (! $requester) {
+        if (! $requester
+            || (! $requester->hasPermission('inventory.adjust')
+                && ! $requester->hasPermission('inventory.adjust.approve'))) {
             return;
         }
 
         app(NotificationService::class)->send($requester, $type, [
             'title' => $title,
             'message' => $type === 'approval.rejected' ? 'Your stock adjustment was rejected.' : 'Your stock adjustment was approved.',
-            'link_to' => $requester->hasPermission('inventory.adjust') ? '/inventory/stock-adjustments' : null,
+            'link_to' => '/inventory/stock-adjustments',
             'entity_type' => 'stock_adjustment',
             'entity_id' => $adjustment->hash_id,
         ], "stock-adjustment:decision:{$adjustment->id}:{$type}");

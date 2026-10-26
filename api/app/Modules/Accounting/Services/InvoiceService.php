@@ -327,13 +327,11 @@ class InvoiceService
             ])->save();
 
             $requester = User::query()->whereKey($lockedInvoice->created_by)->where('is_active', true)->first();
-            if ($requester) {
+            if ($requester && $requester->hasPermission('accounting.invoices.view')) {
                 app(NotificationService::class)->send($requester, 'approval.completed', [
                     'title' => 'Prebill invoice approved',
                     'message' => 'Your manual invoice was approved for prebilling.',
-                    'link_to' => $requester->hasPermission('accounting.invoices.view')
-                        ? "/accounting/invoices/{$lockedInvoice->hash_id}"
-                        : null,
+                    'link_to' => "/accounting/invoices/{$lockedInvoice->hash_id}",
                     'entity_type' => 'invoice',
                     'entity_id' => $lockedInvoice->hash_id,
                 ], "prebill:decision:{$lockedInvoice->id}:{$lockedInvoice->prebill_approved_at->timestamp}");

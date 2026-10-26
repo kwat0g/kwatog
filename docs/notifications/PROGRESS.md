@@ -1,7 +1,7 @@
 # Notification and badge remediation progress
 
 **Updated:** 2026-10-26
-**Current gate:** Phase 2 approved; Phase 3 units 1–3 merged; F-17 no-fallback fix in PR #335.
+**Current gate:** Phase 2 approved; Phase 3 units 1–3 and F-17 merged; F-16 outcome-access fix in PR #336.
 
 ## Phase status
 
@@ -10,11 +10,11 @@
 | 0. Discovery | Draft complete | `00-discovery.md`: 23 modules, 129 in-app service call sites, 27 direct `Mail::to` sites, scheduled trigger table, static route-target scan, 14 broadcast classes, 73 internal routes, 19 portal routes, nine compact-shell links, 29 badge definitions. Static source review plus aggregate-only local DB query. |
 | 1. Inventory / leak analysis | Draft complete; runtime proof outstanding | `01-inventory.md`: source audience expressions, direct delivery paths, 17-role static selector-risk matrix, 77 email-failure wrapper call sites, payload/link/dedupe expressions, badge audit, root causes, module coverage. No seeded-role scenarios or badge/list comparisons run. |
 | 2. Policy and plan | Approved | User approved the proposed defaults on 2026-10-25. |
-| 3. Backend foundation | In progress | Units 1–3 merged (#332–#334); F-17 no-fallback fix is in PR #335. Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
+| 3. Backend foundation | In progress | Units 1–3 and F-17 merged (#332–#335); F-16 outcome-access fix is in PR #336. Core approval notices use route action permission and record access; realtime events carry IDs/types only. Global authorization coverage, links, signal registry, and remaining event families remain open. |
 | 4. Frontend | Partial | PR #334 hydrates realtime toast titles through the owner-scoped endpoint. Bell/Center behavior, links, accessibility, and multi-signal sidebar remain open. |
 | 5. Migration | Partial | Core `ApprovalService` action-required notices migrated in #333. Remaining dispatch sites and all sidebar signals remain open. |
 | 6. Extras | Not started | No extra features started. |
-| 7. Verification | Partial | Targeted unit 1–3 tests passed on earlier commits. The final PO visibility regression and post-rebase unit 3 have no test result; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
+| 7. Verification | Partial | Targeted unit 1–3 and F-16 tests passed on earlier commits. Post-rebase PR #334 and #336 tests have no result; role-leak, badge parity, frontend interaction, and full-suite verification remain open. |
 
 ## Phase 3 PR stack
 
@@ -23,7 +23,8 @@
 | 1. Versioned payload contract | `notifications/phase3-central-contract` | [#332](https://github.com/kwat0g/kwatog/pull/332) | `a8a479e0` |
 | 2. Core approval recipients | `notifications/phase3-recipient-resolver` | [#333](https://github.com/kwat0g/kwatog/pull/333) | merged as `1b4ba8aa` |
 | 3. Realtime payload security | `notifications/phase3-realtime-payload` | [#334](https://github.com/kwat0g/kwatog/pull/334) | merged as `00eef8df` |
-| F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | `50abb689`, `9b1c78c5` |
+| F-17. Custom approval escalation audience | `notifications/fix-custom-approval-escalation-audience` | [#335](https://github.com/kwat0g/kwatog/pull/335) | merged as `89b9b1df` |
+| F-16. Submitter outcome access | `notifications/fix-approval-outcome-access` | [#336](https://github.com/kwat0g/kwatog/pull/336) | `e00d08f3` |
 
 ## Coverage ledger
 
@@ -42,7 +43,7 @@
 
 ## Current confirmed findings
 
-See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge scopes, profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. F-16 remains open for decision notices to submitters who cannot open the record; this unit covers action-required notices only. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
+See `FINDINGS.md`. Highest priority static mismatches: approval and PR badge scopes, profile badge attached to wrong route, permission-gate mismatches, missing metadata for three emitted event patterns, notification links/UI behavior, and configured-role audiences without record scope. PR #336 adds subject-view gates to the six inventoried decision-notice senders; its targeted tests were not rerun after rebase. No public channel or all-users notification dispatch found. No runtime cross-role leak has been proven.
 
 ## Phase 3 unit 1 verification
 
